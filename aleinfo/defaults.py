@@ -1,23 +1,9 @@
 import os
 import sys
-from pathlib import Path
 
-# Set debug here so we don't have to remove debug_toolbar from the
-# default middleware list.  If we don't include debug_toolbar in the
-# default middleware list we'd have to figure out where exactly in the
-# list we should add it in the development mode.  This can be tricky
-# because we can't foresee what the list could be made up of.  And
-# debug_toolbar needs to be as early as possible but after encoders,
-# such as gzip, which may or may not be present.
-DEBUG = False
+DEBUG = os.environ.get('DEBUG', '0') == '1'
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-# read machine-specific configuration from settings.ini
-# from configparser import ConfigParser
-# config = ConfigParser()
-# settings_file_path = BASE_DIR / "settings.ini"
-# config.read(settings_file_path)
-# SEQUENCING_URL = config.get("OTHER", "SEQUENCING_URL")
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 SEQUENCING_URL = os.environ.get('SEQUENCING_URL', 'https://aquaticus.ucsd.edu/aledata/')
 
@@ -36,10 +22,11 @@ DATABASES = {
     }
 }
 
-# settings in settings.ini
-# temporarily placed here till it's settled whether we want to keep settings.ini
+# XXX(lyschoening) what does this refer to?
 OTHER_USERNAME = os.environ.get('OTHER_DATABASE_USERNAME', 'other_database_username')
 OTHER_PASSWORD = os.environ.get('OTHER_DATABASE_', 'other_database_password')
+
+ALE_DATA_ROOT_DIR = os.environ.get('ALE_DATA_ROOT_DIR', 'ale_data_root_dir')
 
 ALLOWED_HOSTS = [os.environ.get('DJANGO_SERVER_HOST', 'localhost')]
 
@@ -101,10 +88,13 @@ STATICFILES_FINDERS = (
     #    'django.contrib.staticfiles.finders.DefaultStorageFinder',
 )
 
+# Make this unique, and don't share it with anybody.
+SECRET_KEY = os.environ.get('SECRET_KEY', '<DJANGO_KEY_REDACTED>')
+
 SEQ_TEMPLATE_PATH = os.path.join(BASE_DIR, 'seq/templates')
 FILTER_TEMPLATE_PATH = os.path.join(BASE_DIR, 'filter/templates')
 FIXATION_TEMPLATE_PATH = os.path.join(BASE_DIR, 'fixation/templates')
-LOGIN_TEMPLATE_PATH = os.path.join(BASE_DIR, 'login/templates')
+LOGIN_TEMPLATE_PATH = os.path.join(BASE_DIR, 'accounts/templates')
 EXPORT_TEMPLATE_PATH = os.path.join(BASE_DIR, 'export/templates')
 COMPARE_TEMPLATE_PATH = os.path.join(BASE_DIR, 'compare/templates')
 COMMON_TEMPLATE_PATH = os.path.join(BASE_DIR, 'common/templates')
@@ -183,7 +173,7 @@ INSTALLED_APPS = (
     'metadata',
     'about',
     'enrichment',
-    'login',
+    'accounts',
     'compare',
     'export',
     'common',
@@ -191,6 +181,7 @@ INSTALLED_APPS = (
     'search',
     'duplications',
     'genes',
+    'debug_toolbar',
 )
 
 # A sample logging configuration. The only tangible logging
@@ -239,3 +230,4 @@ CACHES = {
 PUBLIC = os.environ.get('PUBLIC', '0') == '1'
 PUBLIC_USERNAME = os.environ.get('PUBLIC_USERNAME', 'public')
 PUBLIC_PASSWORD = os.environ.get('PUBLIC_PASSWORD', 'REDACTED-CREDENTIAL')
+
