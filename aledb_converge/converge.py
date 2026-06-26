@@ -1,6 +1,6 @@
 import collections
-from filter.util import filter_observed_mutations
-from genes.util import get_gene_list
+from aledb_filter.util import filter_observed_mutations
+from aledb_common.util import get_gene_list
 
 __author__ = "Patrick Phaneuf"
 

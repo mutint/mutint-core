@@ -3,10 +3,10 @@ from django.http import HttpResponse, Http404, HttpResponseForbidden
 from django.template import loader
 from django.utils.safestring import mark_safe
 from django.conf import settings
-from seq.util import get_ordered_reseq_queryset
-import seq.views.common
-from seq.views import common
-from stats.util import get_histogram_jsons,\
+from aledb_seq.util import get_ordered_reseq_queryset
+import aledb_seq.views.common
+from aledb_seq.views import common
+from aledb_stats.util import get_histogram_jsons,\
     get_needle_plot_data,\
     get_mutation_type_count_dict, \
     get_observed_mutation_type_count_dict,\
@@ -15,16 +15,16 @@ from stats.util import get_histogram_jsons,\
     get_ale_flask_isolate_count_list,\
     get_reseq_experiment_info_list,\
     MAX_HISTOGRAM_SIZE
-from common.util import get_user_context
-from stats.util import get_observed_mutation_list
+from aledb_common.util import get_user_context
+from aledb_stats.util import get_observed_mutation_list
 import logging
-from bibliome.models import Publication
+from aledb_common.context_registry import get_experiment_context
 from logs.aledb_logger import user_extra, join_extras
 
 logger = logging.getLogger(__name__)
 
 __author__ = 'pphaneuf'
-STATS_TEMPLATE = "stats.html"
+STATS_TEMPLATE = "aledb_stats.html"
 
 
 # TODO: used by multiple views. Also implemented within ale_exp_filter.py; implement in one location.
@@ -40,16 +40,12 @@ def stats(request):
         experiment = common.get_ale_experiment(request)
         if experiment:
             context.update(experiment.experiment_context())
+            context.update(get_experiment_context(experiment))
 
-        try:
-            pub_qryset = Publication.objects.filter(ale_experiment=experiment)
-        except Publication.DoesNotExist:
-            pub_qryset = None
-
-        experiment = seq.views.common.get_ale_experiment(request)
+        experiment = aledb_seq.views.common.get_ale_experiment(request)
         exp_name = experiment.name
         ale_experiment_id = experiment.ale_id
-        ale_number = seq.views.common.get_ale_id(request)
+        ale_number = aledb_seq.views.common.get_ale_id(request)
 
         ale_id = common.get_ale_id(request)
         reseq_queryset = get_ordered_reseq_queryset(experiment.ale_id, ale_id)
@@ -102,7 +98,6 @@ def stats(request):
                         "flask_sum": flask_sum,
                         "isolate_sum": isolate_sum,
                         "max_histogram_size": MAX_HISTOGRAM_SIZE,
-                        "pub_qryset": pub_qryset,
                         "notes": experiment.notes,
                         })
 

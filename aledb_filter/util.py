@@ -1,10 +1,10 @@
 
-from filter.models import AleExperimentFilter, GlobalFilter
-import seq.models
+from aledb_filter.models import AleExperimentFilter, GlobalFilter
+import aledb_seq.models
 from django.db.models import Q
 from django.core.exceptions import ObjectDoesNotExist
-from genes.util import get_gene_list
-from common.util import is_int
+from aledb_common.util import get_gene_list
+from aledb_common.util import is_int
 
 __author__ = 'Patrick Phaneuf, Muyao :)'
 
@@ -167,7 +167,7 @@ def _get_ignored_gene_list_from_str(ignored_genes):
 
 def _mutation_exists(mut_id):
     try:
-        seq.models.Mutation.objects.get(id=mut_id)
+        aledb_seq.models.Mutation.objects.get(id=mut_id)
         return True
     except ObjectDoesNotExist:
         return False

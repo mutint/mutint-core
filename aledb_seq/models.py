@@ -1,14 +1,14 @@
 from django.db import models
-from genes.util import get_gene_list
-from seq.util import get_ecocyc_gene_list
+from aledb_common.util import get_gene_list
+from aledb_seq.util import get_ecocyc_gene_list
 from django.utils.safestring import mark_safe
 
 blank_field = {"blank": True, "null": True}
 
 
-# TODO: Refactor: figure out how to get a ResequencingExperiment to return its list of observed mutations and remove functionality from seq.views.common
+# TODO: Refactor: figure out how to get a ResequencingExperiment to return its list of observed mutations and remove functionality from aledb_seq.views.common
 class ResequencingExperiment(models.Model):
-    tech_rep = models.ForeignKey("ale.TechnicalReplicate", on_delete=models.CASCADE,
+    tech_rep = models.ForeignKey("aledb_experiment.TechnicalReplicate", on_delete=models.CASCADE,
                                  null=True)
     person = models.CharField(max_length=200,
                               blank=True)

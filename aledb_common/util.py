@@ -38,3 +38,19 @@ def is_int(s):
         return True
     except ValueError:
         return False
+
+
+# Gene annotation parsing — used across aledb_seq, aledb_filter, aledb_converge, aledb_stats
+GENE_RANGE_ANNOTATION_DELIMITER = ", "
+INTRAGENIC_LEFT_CHAR = ']'
+INTRAGENIC_RIGHT_CHAR = '['
+
+
+def get_gene_list(annotated_gene_list_str):
+    """Parse a breseq gene annotation string into a clean list of gene names."""
+    annotated_gene_list = annotated_gene_list_str.split(GENE_RANGE_ANNOTATION_DELIMITER)
+    clean_gene_list = []
+    for gene in annotated_gene_list:
+        gene = gene.replace(INTRAGENIC_LEFT_CHAR, '').replace(INTRAGENIC_RIGHT_CHAR, '')
+        clean_gene_list.append(gene)
+    return clean_gene_list

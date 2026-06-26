@@ -1,15 +1,15 @@
 from django.conf import settings
 from django.contrib.auth.models import User
-import seq.views.common
+import aledb_seq.views.common
 import re
 from enum import Enum
 from django.utils.html import strip_tags
-from seq.util import get_ecocyc_gene_list
-from filter.util import filter_observed_mutations
-from genes.util import get_gene_list
-from common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
-from ale.models import TechnicalReplicate, AleExperiment
-from ale.permissions import can_add_global_filter, can_add_experiment_filter
+from aledb_seq.util import get_ecocyc_gene_list
+from aledb_filter.util import filter_observed_mutations
+from aledb_common.util import get_gene_list
+from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
+from aledb_experiment.models import TechnicalReplicate, AleExperiment
+from aledb_experiment.permissions import can_add_global_filter, can_add_experiment_filter
 
 
 EXPERIMENT_MAPPING_FILTERING_SHOW_FLAG = "show"
@@ -77,10 +77,10 @@ class TableType(Enum):
     # COMBINE_FIXATION_MUTATIONS = 8
 
 
-if hasattr(settings, seq.views.common.SETTINGS_SEQUENCING_URL):
+if hasattr(settings, aledb_seq.views.common.SETTINGS_SEQUENCING_URL):
     resequencing_report_url = settings.SEQUENCING_URL
 else:
-    resequencing_report_url = seq.views.common.DEFAULT_RESEQ_REPORT_URL
+    resequencing_report_url = aledb_seq.views.common.DEFAULT_RESEQ_REPORT_URL
 
 
 def get_table_header(user, reseq_dict, experiment: AleExperiment = None):

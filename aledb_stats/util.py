@@ -1,14 +1,14 @@
 import re
 from django.db.models import Count
-from genes.util import get_gene_list
+from aledb_common.util import get_gene_list
 from operator import itemgetter
 from collections import Counter
-from seq.models import UnassignedMissingCoverageEvidence
-from seq.util import get_all_observed_mutations, get_reseq_ordered_dict
-from seq.views.common import MUTATION_TYPE_LIST, COLORS, DEFAULT_COLOR, FUNCTIONAL_CHANGE_TYPE_LIST
-from stats.models import StaticData
-from filter.util import filter_observed_mutations
-import stats.models
+from aledb_seq.models import UnassignedMissingCoverageEvidence
+from aledb_seq.util import get_all_observed_mutations, get_reseq_ordered_dict
+from aledb_seq.views.common import MUTATION_TYPE_LIST, COLORS, DEFAULT_COLOR, FUNCTIONAL_CHANGE_TYPE_LIST
+from aledb_stats.models import StaticData
+from aledb_filter.util import filter_observed_mutations
+import aledb_stats.models
 import logging
 
 
@@ -64,7 +64,7 @@ def get_needle_plot_data(experiment_id):
 def generate_static_data(ale_id):
     observed_mutation_list = get_observed_mutation_list(ale_id)
     mutation_needle_data = generate_needle_plot_data(observed_mutation_list)
-    static_data_orm, created = stats.models.StaticData.objects.get_or_create(id=ale_id)
+    static_data_orm, created = aledb_stats.models.StaticData.objects.get_or_create(id=ale_id)
     static_data_orm.mut_needle_data = mutation_needle_data
     static_data_orm.histogram_data = generate_histogram_jsons(observed_mutation_list)
     static_data_orm.save()
