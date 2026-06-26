@@ -1,5 +1,5 @@
 from django.core.management import BaseCommand
-from builder.ale_experiment import delete_ale_experiments
+from aledb_import.ale_experiment import delete_ale_experiments
 
 
 class Command(BaseCommand):

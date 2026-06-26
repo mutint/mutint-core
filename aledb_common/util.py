@@ -1,9 +1,7 @@
 import subprocess
-
-from filter.models import AleExperimentFilter
 import logging
-from ale.models import TechnicalReplicate
-import seq.models
+
+from aledb_experiment.models import TechnicalReplicate
 from django.core.cache import cache
 
 __author__ = 'Patrick Phaneuf, Denny Gosting'

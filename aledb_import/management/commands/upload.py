@@ -1,5 +1,5 @@
 from django.core.management import BaseCommand
-from builder.ale_experiment import upload_ale_collection
+from aledb_import.ale_experiment import upload_ale_collection
 
 
 class Command(BaseCommand):
