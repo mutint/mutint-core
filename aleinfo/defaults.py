@@ -48,7 +48,6 @@ INSTALLED_APPS = [
     'aledb_common',
     'aledb_dashboard',
     'aledb_search',
-    'aledb_genes',
     'aledb_bibliome',
     'aledb_home',
     'aledb_interop_query',

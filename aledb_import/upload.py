@@ -3,17 +3,17 @@ import re
 import sys
 import traceback
 from bs4 import BeautifulSoup
-from builder.gdparse.gdparse import gdparse
+from aledb_import.gdparse.gdparse import gdparse
 import collections
 import numbers
-from seq.models import Mutation, \
+from aledb_seq.models import Mutation, \
     ObservedMutation, \
     UnassignedMissingCoverageEvidence, \
     ResequencingExperiment
 import os
-from genes.util import get_annotated_gene_list
-from filter.models import AleExperimentFilter
-import filter.models
+from aledb_import.gene_annotation import get_annotated_gene_list
+from aledb_filter.models import AleExperimentFilter
+import aledb_filter.models
 from django.conf import settings
 import logging
 
@@ -36,7 +36,7 @@ GATK_MUT_FREQ_ATTR_KEY = ''
 GD_MUT_HTML = 'html_mutation'
 GD_MUT_ANNOTATION_HTML = "html_mutation_annotation"
 GD_MUT_SEQ_ID_ATTR_KEY = 'seq_id'
-DEFAULT_CLONAL_FREQ = 0
+DEFAULT_CLONAL_FREQ = 1.0
 DEFAULT_GATK_FREQ = 0
 BRESEQ_REPORT_COLUMN_KEY_EVIDENCE = "evidence"
 BRESEQ_RESULT_RELATIVE_PATH = ""
@@ -286,7 +286,7 @@ def _database_mutations(sample_type,
     if is_wild_type is True:
         exp_filter, created = AleExperimentFilter.objects.get_or_create(
             ale_experiment=experiment,
-            defaults=filter.models.get_default_experiment_filter_params(experiment))
+            defaults=aledb_filter.models.get_default_experiment_filter_params(experiment))
         exp_filter.starting_strain_mutations = ','.join(str(mut) for mut in wild_type_mutation_list)
         exp_filter.save()
 
