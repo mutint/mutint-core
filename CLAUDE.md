@@ -10,33 +10,33 @@ ALEdb is a Django 5 web application for managing Adaptive Laboratory Evolution (
 
 **Local dev setup** (SQLite, no MySQL or Docker needed):
 ```bash
-./start-local.sh          # creates .venv, installs deps, runs migrations, starts server
+./aledb start             # runs migrations, creates admin user, opens browser, starts server
 ```
 
 **Run all tests**:
 ```bash
-DJANGO_SETTINGS_MODULE=aleinfo.settings_local python manage.py test
+./aledb test
 # or via the wrapper:
 ./test.sh
 ```
 
 **Run a single test**:
 ```bash
-DJANGO_SETTINGS_MODULE=aleinfo.settings_local python manage.py test aledb_import.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
+./aledb test aledb_import.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
 ```
 
 **Coverage**:
 ```bash
-coverage run manage.py test && coverage report
+coverage run ./aledb test && coverage report
 ```
 
 **Django management commands** (local):
 ```bash
-python3 manage.py shell
-python3 manage.py makemigrations && python3 manage.py migrate
-python3 manage.py upload path1 path2   # upload ALE experiments
-python3 manage.py delete 4 20 19       # delete experiments by ID
-python3 manage.py collectstatic
+./aledb shell
+./aledb makemigrations && ./aledb migrate
+./aledb upload path1 path2   # upload ALE experiments
+./aledb delete 4 20 19       # delete experiments by ID
+./aledb collectstatic
 ```
 
 **Docker (production deployment)**:
@@ -80,14 +80,14 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 ### Settings Structure
 
 - `aleinfo/defaults.py` — Base settings. MySQL default; SQLite fallback when `FORCE_SQLITE=1` or running tests.
-- `aleinfo/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `start-local.sh`.
+- `aleinfo/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./aledb start`.
 - `aleinfo/settings_private.py` — Production with auth enforcement and `aledb_accounts`.
 - `aleinfo/settings_public.py` — Public read-only deployment.
 - Select with `DJANGO_SETTINGS_MODULE`.
 
 ### Data Flow: Uploading an Experiment
 
-1. `python3 manage.py upload <path>` calls `aledb_import.ale_experiment.upload_experiment()`
+1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_experiment()`
 2. Reads breseq output dirs; parses `.gd` files via `aledb_import.gdparse.gdparse()`
 3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances
 4. Triggers `aledb_fixation.util`, `aledb_converge.util`, and `aledb_stats.util` to recompute derived data
