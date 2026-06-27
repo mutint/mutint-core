@@ -124,7 +124,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'local-dev-only-insecure-key-ch
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
