@@ -1,7 +1,1 @@
-from django.conf import settings
-
-
-def global_settings(request):
-    return {
-        'GOOGLE_ANALYTICS_TAG': settings.GOOGLE_ANALYTICS_TAG,
-    }
+from aledb_common.context_processors import global_settings  # noqa: F401
