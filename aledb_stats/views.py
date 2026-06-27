@@ -24,7 +24,7 @@ from logs.aledb_logger import user_extra, join_extras
 logger = logging.getLogger(__name__)
 
 __author__ = 'pphaneuf'
-STATS_TEMPLATE = "aledb_stats.html"
+STATS_TEMPLATE = "stats.html"
 
 
 # TODO: used by multiple views. Also implemented within ale_exp_filter.py; implement in one location.
