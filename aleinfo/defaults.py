@@ -43,7 +43,7 @@ INSTALLED_APPS = [
     'aledb_metadata',
     'aledb_about',
     'aledb_converge',
-    'aledb_accounts',
+    'aledb_accounts_noauth',
     'aledb_export',
     'aledb_common',
     'aledb_dashboard',
