@@ -16,8 +16,6 @@ ALEdb is a Django 5 web application for managing Adaptive Laboratory Evolution (
 **Run all tests**:
 ```bash
 ./aledb test
-# or via the wrapper:
-./test.sh
 ```
 
 **Run a single test**:
