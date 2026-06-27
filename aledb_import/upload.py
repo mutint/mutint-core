@@ -4,6 +4,7 @@ import sys
 import traceback
 from bs4 import BeautifulSoup
 from aledb_import.gdparse.gdparse import gdparse
+from aledb_common.util import _find_between
 import collections
 import numbers
 from aledb_seq.models import Mutation, \
@@ -347,10 +348,3 @@ def _get_unassigned_missing_coverage_rows(mutations_html):
     return mutation_rows
 
 
-def _find_between(s, first, last):
-    try:
-        start = s.index(first) + len(first)
-        end = s.index(last, start)
-        return s[start:end]
-    except ValueError:
-        return ""

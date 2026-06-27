@@ -6,14 +6,12 @@ from enum import Enum
 from django.utils.html import strip_tags
 from aledb_seq.util import get_ecocyc_gene_list
 from aledb_filter.util import filter_observed_mutations
-from aledb_common.util import get_gene_list
+from aledb_common.util import get_gene_list, _find_between
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
 from aledb_experiment.models import TechnicalReplicate, AleExperiment
 from aledb_experiment.permissions import can_add_global_filter, can_add_experiment_filter
 
 
-EXPERIMENT_MAPPING_FILTERING_SHOW_FLAG = "show"
-EXPERIMENT_MAPPING_FILTERING_REMOVE_FLAG = "remove"
 HTML_MUTATION_TABLE_ROW = """<a href="javascript:void(0)" style="float:right" onclick="deleteRow.call(this)"><img src="/static/img/close-icon.gif" width="12" height="11"></a>"""
 HTML_EMPTY_MUTATION_CELL = """<span class="empty"></span>"""
 HTML_MUTATION_PRESENT_FALSE_CELL_HTML = """<span class="false">%d/%d</span>"""
@@ -31,9 +29,6 @@ REP_DROPDOWN = '<div class="dropdown tag_dropdown"><button class="btn btn-defaul
              '</ul>'
 REP_TAG = '</div><div class="tag_dropdown">%s</div>'
 
-_button_save_to_experiment_filter = """<button class="btn btn-default btn-xs type="button" id="experiment_filter_button" onclick="save_to_experiment_filter(%d, %d); return false;"><i class="fa fa-filter" aria-hidden="true"></i></button>"""
-# the dropdown cell in the mutation table
-# _menu_item_save_to_global_filter = """<li><a onclick="save_to_global_filter(%d)" style="cursor:pointer">Save to Global Filter</a></li>"""
 _button_save_to_experiment_filter = """<button class="btn btn-default btn-xs type="button" id="experiment_filter_button" onclick="save_to_experiment_filter(%d, %d); return false;"><i class="fa fa-filter" aria-hidden="true"></i></button>"""
 _menu_item_save_to_experiment_filter = """<li><a onclick="save_to_experiment_filter(%d, %d)" style="cursor:pointer">Save to Experiment Filter</a></li>"""
 _table_cell_dropdown_template = """<div class="dropdown">
@@ -55,10 +50,6 @@ def _build_table_cell_for_dropdown(mutation, ale_experiment):
     """
     menuitems = ''
     filter_button = ''
-    # all tables have a 'Save to Global Filter' menuitem
-    #menuitems = _menu_item_save_to_global_filter % (mutation.id)
-
-    # some other tables have a 'Save to Experiment Filter' menuitem
     if ale_experiment:
         filter_button += _button_save_to_experiment_filter % (ale_experiment.ale_id, mutation.id)
         menuitems += _menu_item_save_to_experiment_filter % (ale_experiment.ale_id, mutation.id)
@@ -72,9 +63,6 @@ class TableType(Enum):
     FIXATING_MUTATIONS = 3
     SEARCH = 4
     SHARED = 5
-    # COMBINE = 6
-    # COMBINE_ENRICHMENT_MUTATIONS = 7
-    # COMBINE_FIXATION_MUTATIONS = 8
 
 
 if hasattr(settings, aledb_seq.views.common.SETTINGS_SEQUENCING_URL):
@@ -209,9 +197,7 @@ def _initialize_table(experiment_id_idx_mapping, mutations):
     return [[HTML_EMPTY_MUTATION_CELL] * len(experiment_id_idx_mapping) for _ in range(len(mutations))]
 
 
-# get resequencing_experiment urls
 def get_experiment_urls(reseq_dict):
-    # experiment_urls = dict((i.id, resequencing_report_url + i.location) for i in reseq_dict.values())
     experiment_urls = {}
     for reseq in reseq_dict.values():
         if reseq.location != "":
@@ -220,7 +206,6 @@ def get_experiment_urls(reseq_dict):
 
 
 def get_experiment_root_urls(reseq_dict):
-    # experiment_urls = dict((i.id, resequencing_report_url + i.location) for i in reseq_dict.values())
     experiment_urls = {}
     for reseq in reseq_dict.values():
         if reseq.experiment_location != "":
@@ -229,7 +214,6 @@ def get_experiment_root_urls(reseq_dict):
 
 
 def get_gatk_urls(reseq_dict):
-    # experiment_urls = dict((i.id, resequencing_report_url + i.location) for i in reseq_dict.values())
     gatk_urls = {}
     for reseq in reseq_dict.values():
         if reseq.location != "":
@@ -286,15 +270,6 @@ def _contains_mutation(filtered_observed_mutations_row):
         if "true" in observed_mutation_entry:
             contains_mutation = True
     return contains_mutation
-
-
-def _find_between(s, first, last):
-    try:
-        start = s.index(first) + len(first)
-        end = s.index(last, start)
-        return s[start:end]
-    except:
-        return ""
 
 
 def _get_mutation_tags(tags):

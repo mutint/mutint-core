@@ -11,7 +11,7 @@ from aledb_converge.models import ConvergeMutation
 import aledb_seq.models
 import aledb_seq.views.common
 from aledb_import.gdparse.gdparse import gdparse
-from aledb_common.util import clear_dashboard_cache
+from aledb_common.util import clear_dashboard_cache, _find_between
 import aledb_metadata.parser
 from aledb_dashboard.timeline_util import create_event
 from aledb_dashboard.util import rebuild_dashboard_data
@@ -287,8 +287,6 @@ def create_ale_experiment(breseq_output_group_root_abs_path,
             root_abs_path = breseq_output_group_root_abs_path.replace("/breseq","")
         breseq_output_group_root_abs_path = root_abs_path + "/breseq/"
 
-        clear_dashboard_cache()  # TODO: remove, since no longer using cache.
-
         breseq_output_group_root_abs_path = aledb_import.util.sanitize_path(breseq_output_group_root_abs_path)
         try:
             project = aledb_experiment.models.Project.objects.get(name=proj_name)
@@ -385,8 +383,6 @@ def create_ensemble_ale_experiment(breseq_output_group_root_abs_path,
         if "/breseq" in breseq_output_group_root_abs_path:
             root_abs_path = breseq_output_group_root_abs_path.replace("/breseq","")
         breseq_output_group_root_abs_path = root_abs_path + "/breseq/"
-
-        clear_dashboard_cache()  # TODO: remove, since no longer using cache.
 
         breseq_output_group_root_abs_path = aledb_import.util.sanitize_path(breseq_output_group_root_abs_path)
         try:
@@ -749,10 +745,3 @@ def _parse_genbank(genbank_path):
     return gene_dict
 
 
-def _find_between(s, first, last):
-    try:
-        start = s.index(first) + len(first)
-        end = s.index(last, start)
-        return s[start:end]
-    except ValueError:
-        return ""

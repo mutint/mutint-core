@@ -46,6 +46,15 @@ INTRAGENIC_LEFT_CHAR = ']'
 INTRAGENIC_RIGHT_CHAR = '['
 
 
+def _find_between(s, first, last):
+    try:
+        start = s.index(first) + len(first)
+        end = s.index(last, start)
+        return s[start:end]
+    except ValueError:
+        return ""
+
+
 def get_gene_list(annotated_gene_list_str):
     """Parse a breseq gene annotation string into a clean list of gene names."""
     annotated_gene_list = annotated_gene_list_str.split(GENE_RANGE_ANNOTATION_DELIMITER)
