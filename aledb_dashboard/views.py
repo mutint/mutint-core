@@ -10,7 +10,7 @@ from aledb_dashboard.timeline_util import get_timeline
 from aledb_stats.views import get_histogram_item_count
 from aledb_dashboard.models import BarCharts
 from aledb_stats.util import MAX_HISTOGRAM_SIZE
-from logs.aledb_logger import user_extra, join_extras
+from aledb_common.logger import user_extra, join_extras
 import logging
 
 DEFAULT_IGNORED_MUTATIONS = "[]"

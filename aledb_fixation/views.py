@@ -11,7 +11,7 @@ from aledb_common.util import get_user_context
 from aledb_seq.util import get_reseq_ordered_dict
 from aledb_fixation.util import get_fixed_obs_mut_qryset
 import aledb_common.constants
-from logs.aledb_logger import user_extra, join_extras
+from aledb_common.logger import user_extra, join_extras
 import logging
 
 

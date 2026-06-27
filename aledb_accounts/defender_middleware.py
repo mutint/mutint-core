@@ -8,7 +8,7 @@ from django.core import mail
 
 from defender import utils
 import functools, logging
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 
 
 logger = logging.getLogger(__name__)

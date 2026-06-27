@@ -8,7 +8,7 @@ from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN, DEFAULT_MUTATION_FREQ
 from aledb_filter.util import get_ignored_mut_id_list_from_str
 from aledb_common.util import clear_dashboard_cache, get_user_context
 from aledb_seq.util import get_mutation_objects
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 from aledb_experiment import permissions
 import logging
 

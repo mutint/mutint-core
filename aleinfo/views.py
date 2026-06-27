@@ -5,7 +5,7 @@ from aledb_experiment.permissions import can_view_experiment
 from aledb_experiment.models import AleExperiment
 from aledb_seq.models import ResequencingExperiment
 from aledb_seq.views.common import get_ale_experiment
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 import logging
 import os, json
 

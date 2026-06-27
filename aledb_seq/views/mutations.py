@@ -16,7 +16,7 @@ from aledb_filter.util import get_global_filter
 from aleinfo.views import show_amplifiction_data
 import json
 import aledb_common.constants
-from logs.aledb_logger import user_extra, join_extras
+from aledb_common.logger import user_extra, join_extras
 import logging
 
 __author__ = 'pphaneuf'

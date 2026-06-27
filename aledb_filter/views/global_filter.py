@@ -4,7 +4,7 @@ from aledb_filter.forms.filter import FilterForm
 from aledb_filter.util import get_ignored_mut_id_list_from_str, get_global_filter
 from aledb_common.util import clear_dashboard_cache, get_user_context
 from aledb_seq.util import get_mutation_objects
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 from aledb_experiment import permissions
 import logging
 

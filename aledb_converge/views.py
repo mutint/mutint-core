@@ -11,7 +11,7 @@ from aledb_common.constants import \
     REFSEQ_COLUMN_IN_MUT_TABLE
 import aledb_common.constants
 from aledb_converge.util import get_converge_obs_mut_qryset
-from logs.aledb_logger import user_extra, join_extras
+from aledb_common.logger import user_extra, join_extras
 import logging
 
 logger = logging.getLogger(__name__)

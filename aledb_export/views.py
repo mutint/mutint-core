@@ -7,7 +7,7 @@ from aledb_experiment.models import Project
 from zipfile import ZipFile
 import io, csv
 from aledb_export.util import get_csv_str
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 import logging
 import re
 from tempfile import NamedTemporaryFile

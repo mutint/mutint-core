@@ -3,7 +3,7 @@ from django.http import HttpResponse
 from aledb_common.util import get_user_context
 
 from django.template import loader
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 import logging
 
 

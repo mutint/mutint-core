@@ -3,7 +3,7 @@ from django.http import HttpResponse
 from aledb_common.util import get_user_context
 
 from django.template import loader
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
 from aledb_dashboard.views import get_general_count_dict
 # from aledb_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, STRAINS, REF_SEQS

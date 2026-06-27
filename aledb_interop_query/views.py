@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from aledb_filter.models import AleExperimentFilter
 from aledb_filter.util import filter_observed_mutations, _get_global_filter_genes_muts, _get_exp_filter_genes_muts
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 from aledb_metadata.views import get_ordered_reseq_queryset, get_reseq_info_list
 from aledb_seq.models import ObservedMutation
 

@@ -18,7 +18,7 @@ from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 from django.core.serializers.json import DjangoJSONEncoder
 import json
 
-from logs.aledb_logger import user_extra, join_extras
+from aledb_common.logger import user_extra, join_extras
 import logging
 
 logger = logging.getLogger(__name__)

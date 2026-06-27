@@ -3,7 +3,7 @@ from django.conf import settings
 from re import compile
 import logging
 
-from logs.aledb_logger import user_extra
+from aledb_common.logger import user_extra
 EXEMPT_URLS = [compile(settings.LOGIN_URL.lstrip('/'))]
 if hasattr(settings, 'LOGIN_EXEMPT_URLS'):
     EXEMPT_URLS += [compile(expr) for expr in settings.LOGIN_EXEMPT_URLS]

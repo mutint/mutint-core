@@ -19,7 +19,7 @@ from aledb_common.util import get_user_context
 from aledb_stats.util import get_observed_mutation_list
 import logging
 from aledb_common.context_registry import get_experiment_context
-from logs.aledb_logger import user_extra, join_extras
+from aledb_common.logger import user_extra, join_extras
 
 logger = logging.getLogger(__name__)
 
