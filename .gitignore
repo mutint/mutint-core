@@ -30,6 +30,12 @@ config.sh
 coverage.xml
 core
 
+#Python
+.venv
+
+#Local Artifacts
+aledb_local.sqlite3
+
 # Operator-local audit working docs. Contain live credential values + detailed
 # operational notes from the pre-publish security audit. The publish-safe
 # versions of this content live as docs/operations/audit_summary.md (the
