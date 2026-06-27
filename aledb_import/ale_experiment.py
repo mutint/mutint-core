@@ -4,8 +4,7 @@ import traceback
 import aledb_experiment.models
 import aledb_import.upload
 import aledb_import.util
-from aledb_fixation.models import FixatedMutation
-import aledb_fixation.util
+from aledb_common.plugin_registry import run_post_experiment_hooks
 import aledb_converge.util
 from aledb_converge.models import ConvergeMutation
 import aledb_seq.models
@@ -136,14 +135,9 @@ def insert_starting_strain_flask(starting_strain_breseq_output_abs_path, ale_exp
                                   freezer_box_orm)
 
     rebuild_converge_mutations(experiment_orm.ale_id)
-    rebuild_fixated_mutations(experiment_orm.ale_id)
+    run_post_experiment_hooks(experiment_orm.ale_id)
     rebuild_dashboard_data()
 
-
-def rebuild_all_fixated_mutations():
-    ale_experiment_queryset = aledb_experiment.models.AleExperiment.objects.all()
-    for ale_experiment in ale_experiment_queryset:
-        rebuild_fixated_mutations(ale_experiment.ale_id)
 
 
 def rebuild_all_converged_mutations():
@@ -349,7 +343,7 @@ def create_ale_experiment(breseq_output_group_root_abs_path,
         default_filter_params = aledb_filter.models.get_default_experiment_filter_params(experiment)
         AleExperimentFilter.objects.get_or_create(**default_filter_params)
         rebuild_converge_mutations(experiment.ale_id)
-        rebuild_fixated_mutations(experiment.ale_id)
+        run_post_experiment_hooks(experiment.ale_id)
         generate_static_data(experiment.ale_id)
         rebuild_dashboard_data()
 
@@ -457,7 +451,7 @@ def create_ensemble_ale_experiment(breseq_output_group_root_abs_path,
         default_filter_params = aledb_filter.models.get_default_experiment_filter_params(experiment)
         AleExperimentFilter.objects.get_or_create(**default_filter_params)
         rebuild_converge_mutations(experiment.ale_id)
-        rebuild_fixated_mutations(experiment.ale_id)
+        run_post_experiment_hooks(experiment.ale_id)
         generate_static_data(experiment.ale_id)
         rebuild_dashboard_data()
 
@@ -465,27 +459,6 @@ def create_ensemble_ale_experiment(breseq_output_group_root_abs_path,
         return True
     except Exception as e:
         logger.exception(e)
-
-
-def rebuild_fixated_mutations(ale_experiment_id):
-    _delete_fixated_mutations(ale_experiment_id)
-    _create_fixated_mutations(ale_experiment_id)
-
-
-def _delete_fixated_mutations(ale_experiment_id):
-    FixatedMutation.objects.filter(ale_experiment=ale_experiment_id).delete()
-
-
-def _create_fixated_mutations(ale_experiment_id):
-    """
-    Find all fixated mutations for an ALE experiment and populate database table with them.
-    Using only Django ORM to make commit to database.
-    """
-    ale_experiment = aledb_experiment.models.AleExperiment.objects.get(ale_id=ale_experiment_id)
-    fixed_mut_dict = aledb_fixation.util.get_fixed_mut_dict(ale_experiment_id)
-    for fixed_mut, fixed_obs_mut_series_list in fixed_mut_dict.items():
-        FixatedMutation.objects.create(ale_experiment=ale_experiment, mutation=fixed_mut,
-                                       fixed_observed_mutation_series=str(fixed_obs_mut_series_list))
 
 
 def rebuild_converge_mutations(ale_experiment_id):

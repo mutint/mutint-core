@@ -1,5 +1,6 @@
 from django.urls import include, re_path
 from django.contrib import admin
+from aledb_common.plugin_registry import get_plugin_urlpatterns
 
 
 def get_core_urlpatterns():
@@ -36,7 +37,6 @@ def get_core_urlpatterns():
         re_path(r'^converge/', include('aledb_converge.urls')),
         re_path(r'^export', include('aledb_export.urls')),
         re_path(r'^filter/', include('aledb_filter.urls')),
-        re_path(r'^fixation/', include('aledb_fixation.urls')),
         re_path(r'^interop-query/', include('aledb_interop_query.urls')),
         re_path(r'^metadata/', include('aledb_metadata.urls')),
         re_path(r'^mutations/', include('aledb_seq.urls')),
@@ -45,4 +45,5 @@ def get_core_urlpatterns():
         re_path(r'^aledata/(?P<page_name>.*)$', protected_file_serve),
     ]
 
+    urlpatterns += get_plugin_urlpatterns()
     return urlpatterns

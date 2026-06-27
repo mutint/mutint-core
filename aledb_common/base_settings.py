@@ -71,7 +71,6 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_import',
             'aledb_seq',
             'aledb_filter',
-            'aledb_fixation',
             'aledb_stats',
             'aledb_metadata',
             'aledb_about',
