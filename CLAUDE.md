@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ALEdb is a Django 5 web application for managing Adaptive Laboratory Evolution (ALE) experiments. It stores experimental data, parses genomic sequencing output (breseq `.gd` files), and provides analysis tools for mutations, convergence, and enrichment.
 
+### Role of this repo
+
+`aledb-core` serves two purposes:
+
+1. **Standalone app** — run directly from this repo for a self-contained ALEdb instance (SQLite, local dev via `./aledb start`).
+2. **Git submodule** — embedded in an assembled project (e.g. `mutint`) that adds custom Django apps without modifying aledb-core. The assembled project provides its own `config/` package (settings, URLs, wsgi) and uses helpers from `aledb_common` to inherit core settings and URL patterns:
+   - `aledb_common.base_settings.get_base_settings()` — returns all core settings as a dict
+   - `aledb_common.urls.get_core_urlpatterns()` — returns all core URL patterns
+
+See `DEVELOPER.md` for the full submodule integration guide.
+
 ## Commands
 
 **Local dev setup** (SQLite, no MySQL or Docker needed):
@@ -77,7 +88,7 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 ### Settings Structure
 
-- `config/defaults.py` — Base settings. MySQL default; SQLite fallback when `FORCE_SQLITE=1` or running tests.
+- `config/defaults.py` — Delegates to `aledb_common.base_settings.get_base_settings()`; adds `ROOT_URLCONF` and `WSGI_APPLICATION`. SQLite fallback when `FORCE_SQLITE=1` or running tests.
 - `config/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./aledb start`.
 - `config/settings_private.py` — Production with auth enforcement and `aledb_accounts`.
 - `config/settings_public.py` — Public read-only deployment.
