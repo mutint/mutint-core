@@ -8,16 +8,21 @@ ALEdb is a Django 5 web application for managing Adaptive Laboratory Evolution (
 
 ## Commands
 
-**Run all tests** (auto-uses SQLite, no MySQL needed):
+**Local dev setup** (SQLite, no MySQL or Docker needed):
 ```bash
+./start-local.sh          # creates .venv, installs deps, runs migrations, starts server
+```
+
+**Run all tests**:
+```bash
+DJANGO_SETTINGS_MODULE=aleinfo.settings_local python manage.py test
+# or via the wrapper:
 ./test.sh
-# or directly:
-python3 manage.py test
 ```
 
 **Run a single test**:
 ```bash
-python3 manage.py test builder.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
+DJANGO_SETTINGS_MODULE=aleinfo.settings_local python manage.py test aledb_import.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
 ```
 
 **Coverage**:
@@ -25,70 +30,72 @@ python3 manage.py test builder.tests.test_ale_experiment.TestEnrichment.test_res
 coverage run manage.py test && coverage report
 ```
 
-**Django management commands** (within Docker container `aledb-web`):
+**Django management commands** (local):
 ```bash
-python3 manage.py shell               # Django REPL
+python3 manage.py shell
 python3 manage.py makemigrations && python3 manage.py migrate
-python3 manage.py upload path1 path2  # upload ALE experiments
-python3 manage.py delete 4 20 19      # delete experiments by ID
+python3 manage.py upload path1 path2   # upload ALE experiments
+python3 manage.py delete 4 20 19       # delete experiments by ID
 python3 manage.py collectstatic
 ```
 
-**Docker (primary deployment)**:
+**Docker (production deployment)**:
 ```bash
 docker-compose -f docker-compose-prod-asgi-host-nginx.yml up --build -d
 docker-compose -f docker-compose-prod-asgi-host-nginx.yml down
 docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 ```
 
-**Local dev without MySQL**: Set `FORCE_SQLITE=1` in `.docker/one.env` and restart containers.
-
 ## Architecture
 
 ### Django Apps
 
-Each directory at the repo root is a Django app. Key apps:
+All apps use the `aledb_*` namespace. Key apps:
 
-- **`ale/`** — Core data models: `AleExperiment`, `Project`, `AleId`, `Flask`, `Isolate`, `Media`, `FreezerBox`. This is the central schema everything else references.
-- **`builder/`** — Experiment upload pipeline. `ale_experiment.py` is the main entry point; it reads breseq output directories, calls `gdparse/` to parse `.gd` mutation files, then triggers fixation/convergence/stats recomputation.
-- **`seq/`** — Mutation models and views (accessible at `/mutations/`).
-- **`fixation/`** — Fixated mutation computation.
-- **`converge/`** — Convergence analysis across experiments.
-- **`filter/`** — Experiment filtering UI and models.
-- **`pipeline/`** — Azure Batch pipeline management for running breseq on raw sequencing data.
-- **`metadata/`** — Parses XPMD metadata files associated with experiments.
-- **`export/`** and **`md_export/`** — Data export in various formats.
-- **`stats/`** — Precomputed static statistics (`StaticData` model).
-- **`genes/`** — Gene annotation data.
-- **`enrichment/`** — Gene set enrichment analysis.
-- **`search/`** — Cross-experiment search.
-- **`bibliome/`** — Publication/bibliography management.
-- **`dashboard/`** — Dashboard views and timeline events.
-- **`accounts/`** — User auth with brute-force protection (`django-defender`).
-- **`common/`** — Shared utilities and global static files (`common/staticfiles/`).
+- **`aledb_experiment/`** — Core data models: `AleExperiment`, `Project`, `AleId`, `Flask`, `Isolate`, `Media`, `FreezerBox`. Central schema everything else references.
+- **`aledb_import/`** — Experiment upload pipeline. `ale_experiment.py` is the main entry point; reads breseq output dirs, calls `gdparse/` to parse `.gd` files, then triggers fixation/convergence/stats recomputation.
+- **`aledb_seq/`** — Mutation models and views (accessible at `/mutations/`).
+- **`aledb_fixation/`** — Fixated mutation computation.
+- **`aledb_converge/`** — Convergence analysis across experiments.
+- **`aledb_filter/`** — Experiment filtering UI and models.
+- **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
+- **`aledb_export/`** — Data export in various formats.
+- **`aledb_stats/`** — Precomputed static statistics (`StaticData` model).
+- **`aledb_search/`** — Cross-experiment search.
+- **`aledb_bibliome/`** — Publication/bibliography management.
+- **`aledb_dashboard/`** — Dashboard views and timeline events.
+- **`aledb_accounts_noauth/`** — Default auth stub: Django's built-in login/logout, no enforcement. Swap for `aledb_accounts` (brute-force protection) or any other auth app by changing `INSTALLED_APPS`.
+- **`aledb_accounts/`** — Enhanced auth with `django-defender` brute-force protection. Optional; used in production (`settings_private.py`).
+- **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), context registry, and global static files.
 - **`aleinfo/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
+
+### Pluggable App Slots
+
+Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
+
+**Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in its `urls.py` is auto-discovered by `aleinfo/urls.py`. Default: `aledb_accounts_noauth`. Production: `aledb_accounts`.
+
+**Experiment context providers** — registered via `aledb_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `aledb_bibliome` to inject publication data into experiment views without a hard dependency.
 
 ### Settings Structure
 
-- `aleinfo/defaults.py` — Base settings (all env vars read here). Contains the `DATABASES` dict for MySQL (default) and five sequencing-machine databases (ucsd_machine_one/two, dtu_machine_one/two/three).
-- `aleinfo/settings_public.py` / `settings_private.py` — Extend defaults for public vs. private deployment. Select with `DJANGO_SETTINGS_MODULE`.
-- Tests and `FORCE_SQLITE=1` automatically switch `DATABASES['default']` to SQLite.
+- `aleinfo/defaults.py` — Base settings. MySQL default; SQLite fallback when `FORCE_SQLITE=1` or running tests.
+- `aleinfo/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `start-local.sh`.
+- `aleinfo/settings_private.py` — Production with auth enforcement and `aledb_accounts`.
+- `aleinfo/settings_public.py` — Public read-only deployment.
+- Select with `DJANGO_SETTINGS_MODULE`.
 
 ### Data Flow: Uploading an Experiment
 
-1. `python3 manage.py upload <path>` calls `builder.ale_experiment.upload_experiment()`
-2. Reads breseq output dirs; parses `.gd` files via `builder.gdparse.gdparse()`
-3. Creates `ale`, `seq`, and `metadata` model instances
-4. Triggers `fixation.util`, `converge.util`, and `stats.util` to recompute derived data
-5. Updates dashboard cache via `dashboard.util.rebuild_dashboard_data()`
+1. `python3 manage.py upload <path>` calls `aledb_import.ale_experiment.upload_experiment()`
+2. Reads breseq output dirs; parses `.gd` files via `aledb_import.gdparse.gdparse()`
+3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances
+4. Triggers `aledb_fixation.util`, `aledb_converge.util`, and `aledb_stats.util` to recompute derived data
+5. Updates dashboard cache via `aledb_dashboard.util.rebuild_dashboard_data()`
 
-### Permissions
+### Infrastructure (production)
 
-Uses `django-guardian` for object-level permissions. `VIEW_PROJECT` permission gates access to non-public projects. `ale/permissions.py` has the grant helpers.
-
-### Infrastructure
-
-- ASGI server: Daphne + Django Channels (WebSocket support)
+- ASGI server: Daphne + Django Channels
 - Reverse proxy: nginx
 - Cache/sessions: Redis (`django-defender` brute-force tracking)
 - File storage: Azure Blob Storage mounted via blobfuse at `/data/aledata/`
