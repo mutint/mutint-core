@@ -13,7 +13,7 @@ from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 from aledb_experiment import permissions, models
 from aledb_filter.models import AleExperimentFilter
 from aledb_filter.util import get_global_filter
-from aleinfo.views import show_amplifiction_data
+from config.views import show_amplifiction_data
 import json
 import aledb_common.constants
 from aledb_common.logger import user_extra, join_extras

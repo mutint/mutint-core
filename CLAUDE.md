@@ -67,22 +67,22 @@ All apps use the `aledb_*` namespace. Key apps:
 - **`aledb_accounts_noauth/`** — Default auth stub: Django's built-in login/logout, no enforcement. Swap for `aledb_accounts` (brute-force protection) or any other auth app by changing `INSTALLED_APPS`.
 - **`aledb_accounts/`** — Enhanced auth with `django-defender` brute-force protection. Optional; used in production (`settings_private.py`).
 - **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), context registry, and global static files.
-- **`aleinfo/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
+- **`config/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
 
 ### Pluggable App Slots
 
 Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
-**Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in its `urls.py` is auto-discovered by `aleinfo/urls.py`. Default: `aledb_accounts_noauth`. Production: `aledb_accounts`.
+**Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in its `urls.py` is auto-discovered by `config/urls.py`. Default: `aledb_accounts_noauth`. Production: `aledb_accounts`.
 
 **Experiment context providers** — registered via `aledb_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `aledb_bibliome` to inject publication data into experiment views without a hard dependency.
 
 ### Settings Structure
 
-- `aleinfo/defaults.py` — Base settings. MySQL default; SQLite fallback when `FORCE_SQLITE=1` or running tests.
-- `aleinfo/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./aledb start`.
-- `aleinfo/settings_private.py` — Production with auth enforcement and `aledb_accounts`.
-- `aleinfo/settings_public.py` — Public read-only deployment.
+- `config/defaults.py` — Base settings. MySQL default; SQLite fallback when `FORCE_SQLITE=1` or running tests.
+- `config/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./aledb start`.
+- `config/settings_private.py` — Production with auth enforcement and `aledb_accounts`.
+- `config/settings_public.py` — Public read-only deployment.
 - Select with `DJANGO_SETTINGS_MODULE`.
 
 ### Data Flow: Uploading an Experiment

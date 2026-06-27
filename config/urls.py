@@ -3,7 +3,7 @@ from django.urls import include, re_path, path
 from django.conf import settings
 from django.contrib import admin
 from django.apps import apps as django_apps
-from aleinfo.views import protected_file_serve
+from config.views import protected_file_serve
 
 _auth_cfg = next(
     (cfg for cfg in django_apps.get_app_configs() if getattr(cfg, 'auth_app', False)),

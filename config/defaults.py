@@ -81,10 +81,10 @@ AUTHENTICATION_BACKENDS = (
 )
 
 LOGIN_URL = '/accounts/login/'
-ROOT_URLCONF = 'aleinfo.urls'
+ROOT_URLCONF = 'config.urls'
 LOGIN_REDIRECT_URL = 'experiments_view'
 LOGOUT_REDIRECT_URL = 'experiments_view'
-WSGI_APPLICATION = 'aleinfo.wsgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
 
 USE_X_FORWARDED_PORT = os.environ.get('USE_X_FORWARDED_PORT', '0') == '1'
 
@@ -136,7 +136,7 @@ TEMPLATES = [
                 'django.template.context_processors.static',
                 'django.template.context_processors.tz',
                 'django.contrib.messages.context_processors.messages',
-                'aleinfo.context_processors.global_settings',
+                'config.context_processors.global_settings',
             ],
             'debug': DEBUG,
         },

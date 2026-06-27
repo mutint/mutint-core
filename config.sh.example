@@ -2,7 +2,7 @@
 
 export DEBUG=1
 export PUBLIC=0
-export DJANGO_SETTINGS_MODULE=aleinfo.settings_private
+export DJANGO_SETTINGS_MODULE=config.settings_private
 
 export SEQUENCING_URL=http://aledb.org/aledata/
 export MYSQL_DATABASE=ale_db

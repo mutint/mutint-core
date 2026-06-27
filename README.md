@@ -52,7 +52,7 @@ The full scrub plan and verification is documented in
 ## Repository contents
 
 - **Django web application** — UI and REST API for the ALE database
-  (`aleinfo/`, `alewebsite/`, `seq/`, etc.).
+  (`config/`, `alewebsite/`, `seq/`, etc.).
 - **Sequencing pipeline** (`pipeline/`) — variant-calling and analysis
   scripts driven from Azure Batch.
 - **Deployment configuration** — Docker Compose stacks for production
@@ -81,7 +81,7 @@ guide.
     - [Set up host NGINX for VM server for networking](#set-up-host-nginx-for-vm-server-for-networking)
     - [For production: connect azure-storage-container as a local folder:](#for-production-connect-azure-storage-container-as-a-local-folder)
     - [Make necessary configuration changes:](#make-necessary-configuration-changes)
-      - [aleinfo/defaults.py](#aleinfodefaultspy)
+      - [config/defaults.py](#configdefaultspy)
     - [Environment Configuration (`.docker/one.env`)](#environment-configuration-dockeroneenv)
   - [Running services:](#running-services)
     - [Start / attach tmux's persistent sessions](#start--attach-tmuxs-persistent-sessions)
@@ -329,9 +329,9 @@ eout=240 -o negative_timeout=120
 Add the VM's IP to MySQL server whitelist: [link](https://portal.azure.com/#@dtudk.onmicrosoft.com/resource/subscriptions/aee8556f-d2fd-4efd-a6bd-f341a90fa76e/resourceGroups/rg-ALEdb/providers/Microsoft.DBforMySQL/flexibleServers/ale/networking)
 
 
-#### aleinfo/defaults.py
+#### config/defaults.py
 ```bash
-#Add IP address to ALLOWED_HOSTS in aleinfo/defaults.py
+#Add IP address to ALLOWED_HOSTS in config/defaults.py
 # for direct access like https://20.82.182.70 (VM's IP), the IP need to be added to ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS, e.g.,:
 -ALLOWED_HOSTS = [os.environ.get('DJANGO_SERVER_HOST', 'localhost'), 'localhost', '127.0.0.1', '35.236.92.37', '0.0.0.0',
 +ALLOWED_HOSTS = [os.environ.get('DJANGO_SERVER_HOST', 'localhost'), 'localhost', '127.0.0.1', '35.236.92.37', '0.0.0.0', '4.231.249.59'
@@ -349,7 +349,7 @@ Key values to modify:
 DEBUG=0 # set 1 for viewing error on browser
 PUBLIC=0 # Obsoleted, keep at 0
 FORCE_SQLITE=0 # set 1 to launch service with 'empty' SQLite service hosted by Django
-DJANGO_SETTINGS_MODULE=aleinfo.settings_public
+DJANGO_SETTINGS_MODULE=config.settings_public
 DJANGO_SERVER_HOST=127.0.0.1
 # add your IP to whitelist on:
 # https://portal.azure.com/#@dtudk.onmicrosoft.com/resource/subscriptions/aee8556f-d2fd-4efd-a6bd-f341a90fa76e/resourceGroups/rg-ALEdb/providers/Microsoft.DBforMySQL/flexibleServers/ale/networking
@@ -387,7 +387,7 @@ tmux attach -t aledb
 >   DEBUG=0 # set 1 for viewing error on browser
 >   PUBLIC=0 # Obsoleted, keep at 0
 >   FORCE_SQLITE=0 # set 1 to launch service with 'empty' SQLite service hosted by Django
->   DJANGO_SETTINGS_MODULE=aleinfo.settings_public
+>   DJANGO_SETTINGS_MODULE=config.settings_public
 >   DJANGO_SERVER_HOST=127.0.0.1
 >   # add your IP to whitelist on:
 >   # https://portal.azure.com/#@dtudk.onmicrosoft.com/resource/subscriptions/aee8556f-d2fd-4efd-a6bd-f341a90fa76e/resourceGroups/rg-ALEdb/providers/Microsoft.DBforMySQL/flexibleServers/ale/networking
@@ -466,7 +466,7 @@ sudo docker-compose -f docker-compose-prod-asgi-host-nginx.yml down
 >   DEBUG=0 # set 1 for viewing error on browser
 >   PUBLIC=0 # Obsoleted, keep at 0
 >   FORCE_SQLITE=0 # set 1 to launch service with 'empty' SQLite service hosted by Django
->   DJANGO_SETTINGS_MODULE=aleinfo.settings_public
+>   DJANGO_SETTINGS_MODULE=config.settings_public
 >   DJANGO_SERVER_HOST=127.0.0.1
 >   # different MYSQL setting:
 >   MYSQL_DATABASE=aledb_private
