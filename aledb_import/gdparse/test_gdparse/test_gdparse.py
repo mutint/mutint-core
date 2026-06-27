@@ -1,4 +1,4 @@
-from builder.gdparse.gdparse import gdparse
+from aledb_import.gdparse.gdparse import gdparse
 import unittest
 import os
 

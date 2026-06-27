@@ -4,18 +4,18 @@ from django.template import loader
 from django.utils.safestring import mark_safe
 from django.core.serializers.json import DjangoJSONEncoder
 from django_ajax.decorators import ajax
-import seq.views.common
-from seq.views import mutation_table_builder
-from seq.util import get_all_observed_mutations_filtered, get_reseq_ordered_dict
-from seq.models import ResequencingExperiment
-from common.util import get_user_context
-from common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
-from ale import permissions, models
-from filter.models import AleExperimentFilter
-from filter.util import get_global_filter
+import aledb_seq.views.common
+from aledb_seq.views import mutation_table_builder
+from aledb_seq.util import get_all_observed_mutations_filtered, get_reseq_ordered_dict
+from aledb_seq.models import ResequencingExperiment
+from aledb_common.util import get_user_context
+from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+from aledb_experiment import permissions, models
+from aledb_filter.models import AleExperimentFilter
+from aledb_filter.util import get_global_filter
 from aleinfo.views import show_amplifiction_data
 import json
-import common.constants
+import aledb_common.constants
 from logs.aledb_logger import user_extra, join_extras
 import logging
 
@@ -30,12 +30,12 @@ def amplification_data(request):
     try:
         start_time = time.time()
         context = get_user_context(request.user)
-        experiment = seq.views.common.get_ale_experiment(request)
+        experiment = aledb_seq.views.common.get_ale_experiment(request)
 
         exp_name = experiment.name
-        ale_no = seq.views.common.get_ale_id(request)
-        sample_type = seq.views.common.get_sample_type(request)
-        aleid_ale_id_list = seq.views.common.get_aleid_ale_id_list(experiment.ale_id, True)
+        ale_no = aledb_seq.views.common.get_ale_id(request)
+        sample_type = aledb_seq.views.common.get_sample_type(request)
+        aleid_ale_id_list = aledb_seq.views.common.get_aleid_ale_id_list(experiment.ale_id, True)
 
         ordered_reseq_dict = get_reseq_ordered_dict(experiment.ale_id, ale_no, sample_type, request)
 
@@ -64,7 +64,7 @@ def amplification_data(request):
                         "template_header": "Mutations",
                         "hidden_columns": hidden_columns,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
-                        "tag_dropdown": common.constants.TAGS,
+                        "tag_dropdown": aledb_common.constants.TAGS,
                         "show_global_filtered": show_global_filtered,
                         "show_exp_filtered": show_exp_filtered,
                         })
@@ -84,12 +84,12 @@ def mutation_table(request):
     try:
         start_time = time.time()
         context = get_user_context(request.user)
-        experiment = seq.views.common.get_ale_experiment(request)
+        experiment = aledb_seq.views.common.get_ale_experiment(request)
 
         exp_name = experiment.name
-        ale_no = seq.views.common.get_ale_id(request)
-        sample_type = seq.views.common.get_sample_type(request)
-        aleid_ale_id_list = seq.views.common.get_aleid_ale_id_list(experiment.ale_id, True)
+        ale_no = aledb_seq.views.common.get_ale_id(request)
+        sample_type = aledb_seq.views.common.get_sample_type(request)
+        aleid_ale_id_list = aledb_seq.views.common.get_aleid_ale_id_list(experiment.ale_id, True)
 
         ordered_reseq_dict = get_reseq_ordered_dict(experiment.ale_id, ale_no, sample_type, request)
 
@@ -118,7 +118,7 @@ def mutation_table(request):
                         "template_header": "Mutations",
                         "hidden_columns": hidden_columns,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
-                        "tag_dropdown": common.constants.TAGS,
+                        "tag_dropdown": aledb_common.constants.TAGS,
                         "show_global_filtered": show_global_filtered,
                         "show_exp_filtered": show_exp_filtered,
                         })
@@ -182,7 +182,7 @@ def add_to_exp_filter(request):
 def save_mut_tag(request):
     mut_id = request.POST['mut_id']
     selected_tag = request.POST.get('tag_name')
-    mutation = seq.models.Mutation.objects.get(id=mut_id)
+    mutation = aledb_seq.models.Mutation.objects.get(id=mut_id)
     if mutation.tags:
         tag_list = mutation.tags.split(',')
         if selected_tag in tag_list:

@@ -1,5 +1,5 @@
-from seq.util import get_all_observed_mutations, get_mutations_from_observed_muations
-from filter.util import filter_observed_mutations
+from aledb_seq.util import get_all_observed_mutations, get_mutations_from_observed_muations
+from aledb_filter.util import filter_observed_mutations
 
 __author__ = "Patrick Phaneuf"
 

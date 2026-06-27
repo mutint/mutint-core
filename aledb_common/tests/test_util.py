@@ -1,6 +1,6 @@
 import unittest
 
-from common.util import get_git_hash
+from aledb_common.util import get_git_hash
 
 __author__ = 'Patrick Phaneuf'
 

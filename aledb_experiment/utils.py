@@ -1,8 +1,8 @@
 from django.contrib.auth.models import User, Group
-from ale.models import Project, AleExperiment, RecentExperiments, AleId
+from aledb_experiment.models import Project, AleExperiment, RecentExperiments, AleId
 from guardian.models import GroupObjectPermission, UserObjectPermission
 from django.core.exceptions import ObjectDoesNotExist
-from ale.permissions import VIEW_PROJECT, can_view_project
+from aledb_experiment.permissions import VIEW_PROJECT, can_view_project
 
 
 def _get_projects_with_permissions(permission_codename):

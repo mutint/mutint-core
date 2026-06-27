@@ -1,8 +1,8 @@
 from django.test import TestCase
-from seq.models import Mutation, ObservedMutation, ResequencingExperiment
-from converge import converge
-from filter.models import AleExperimentFilter, GlobalFilter
-from ale.models import \
+from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_converge import converge
+from aledb_filter.models import AleExperimentFilter, GlobalFilter
+from aledb_experiment.models import \
     AleExperiment, \
     Instrument, \
     AleId, \

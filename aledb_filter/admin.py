@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from filter.models import AleExperimentFilter
+from aledb_filter.models import AleExperimentFilter
 from guardian.admin import GuardedModelAdmin
 
 

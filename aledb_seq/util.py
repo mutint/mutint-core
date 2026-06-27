@@ -1,13 +1,13 @@
 import collections
-import seq.models
-from common.util import is_int
-from filter.util import filter_observed_mutations
+import aledb_seq.models
+from aledb_common.util import is_int
+from aledb_filter.util import filter_observed_mutations
 
 HTML_ECOCYC = """<a href = "https://ecocyc.org/ECOLI/substring-search?type=GENE&object={gene}">{gene}</a>"""
 
 
 def get_observed_mutation_queryset(experiment_id):
-    return seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id)
+    return aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id)
 
 
 def get_all_observed_mutations_filtered(experiment_id, filter_type=None,
@@ -19,11 +19,11 @@ def get_all_observed_mutations_filtered(experiment_id, filter_type=None,
 
 
 def get_all_observed_mutations(reseq_id_list):
-    return seq.models.ObservedMutation.objects.filter(sequencing_experiment_id__in=reseq_id_list)
+    return aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment_id__in=reseq_id_list)
 
 
 def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None):
-    reseq_qryset = seq.models.ResequencingExperiment.objects.select_related(
+    reseq_qryset = aledb_seq.models.ResequencingExperiment.objects.select_related(
         'tech_rep__isolate__flask__ale_id__ale_experiment', 'tech_rep__isolate__flask__media'
     ).order_by(
         'tech_rep__isolate__flask__ale_id__ale_experiment__name',
@@ -107,19 +107,19 @@ def get_mutation_objects(mutations_id_str):
     mutations = []
     if mutations_id_str and len(mutations_id_str)>0:
         mutations_ids = [mut_id for mut_id in mutations_id_str.split(',') if is_int(mut_id)]
-        mutations = [mutation for mutation in seq.models.Mutation.objects.filter(id__in=mutations_ids)]
+        mutations = [mutation for mutation in aledb_seq.models.Mutation.objects.filter(id__in=mutations_ids)]
     return mutations
 
 
 def get_ref_sequences():
     return sorted(
-        seq.models.Mutation.objects.exclude(reseq_reference__isnull=True).exclude(reseq_reference='')
+        aledb_seq.models.Mutation.objects.exclude(reseq_reference__isnull=True).exclude(reseq_reference='')
         .values_list('reseq_reference', flat=True).distinct()
     )
 
 
 def get_matching_observed_mutation_ids(mutation_id, experiment_id):
-    local_observed_mutations = seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id, mutation__id=mutation_id).order_by(
+    local_observed_mutations = aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id, mutation__id=mutation_id).order_by(
         'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__name',
         'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_id',
         'sequencing_experiment__tech_rep__isolate__flask__flask_number',

@@ -1,7 +1,7 @@
 import os
 import os.path
 import sys
-from metadata.parser import parse_metadata_post_experiment_upload
+from aledb_metadata.parser import parse_metadata_post_experiment_upload
 
 
 METADATA_DIR_NAME = "metadata"

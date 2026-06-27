@@ -1,7 +1,7 @@
 from django.test import TestCase
-from dashboard.util import rebuild_sample_counts
-from dashboard.models import SampleCounts
-from ale.models import AleExperiment, Instrument, AleId, Flask, Media, Isolate, FreezerBox
+from aledb_dashboard.util import rebuild_sample_counts
+from aledb_dashboard.models import SampleCounts
+from aledb_experiment.models import AleExperiment, Instrument, AleId, Flask, Media, Isolate, FreezerBox
 
 
 class TestDashboard(TestCase):

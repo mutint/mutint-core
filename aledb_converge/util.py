@@ -1,7 +1,7 @@
-from seq.util import get_all_observed_mutations, get_reseq_ordered_dict
-from seq.models import ObservedMutation
-from converge.models import ConvergeMutation
-from converge import converge
+from aledb_seq.util import get_all_observed_mutations, get_reseq_ordered_dict
+from aledb_seq.models import ObservedMutation
+from aledb_converge.models import ConvergeMutation
+from aledb_converge import converge
 from django.db.models import Q
 
 

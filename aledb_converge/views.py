@@ -2,15 +2,15 @@ import time
 from django.http import HttpResponse
 from django.template import loader
 from django.utils.safestring import mark_safe
-from common.util import get_user_context
-from seq.util import get_reseq_ordered_dict
-import seq.views.common
-from seq.views import mutation_table_builder  # TODO: The mutation table build should use the factory pattern.
-from common.constants import \
+from aledb_common.util import get_user_context
+from aledb_seq.util import get_reseq_ordered_dict
+import aledb_seq.views.common
+from aledb_seq.views import mutation_table_builder  # TODO: The mutation table build should use the factory pattern.
+from aledb_common.constants import \
     REQUEST_MUTATION_ID, \
     REFSEQ_COLUMN_IN_MUT_TABLE
-import common.constants
-from converge.util import get_converge_obs_mut_qryset
+import aledb_common.constants
+from aledb_converge.util import get_converge_obs_mut_qryset
 from logs.aledb_logger import user_extra, join_extras
 import logging
 
@@ -24,12 +24,12 @@ def converge_mutations(request):
     try:
         start_time = time.time()
         context = get_user_context(request.user)
-        experiment = seq.views.common.get_ale_experiment(request)
+        experiment = aledb_seq.views.common.get_ale_experiment(request)
 
         exp_name = experiment.name
         ale_experiment_id = experiment.ale_id
-        ale_number = seq.views.common.get_ale_id(request)
-        ale_qrtset = seq.views.common.get_aleid_ale_id_list(ale_experiment_id, True)
+        ale_number = aledb_seq.views.common.get_ale_id(request)
+        ale_qrtset = aledb_seq.views.common.get_aleid_ale_id_list(ale_experiment_id, True)
 
         reseq_ordered_dict = get_reseq_ordered_dict(ale_experiment_id, ale_number, request)
 
@@ -52,7 +52,7 @@ def converge_mutations(request):
                         "template_header": "Converged Mutations",
                         "hidden_columns": hidden_columns,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
-                        "tag_dropdown": common.constants.TAGS
+                        "tag_dropdown": aledb_common.constants.TAGS
                         })
         logger.info("converge performance",
                              extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))

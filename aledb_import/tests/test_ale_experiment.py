@@ -1,10 +1,10 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 
-from stats.models import StaticData
-from ale.models import Project, AleExperiment
-from seq.models import Mutation, ResequencingExperiment, ObservedMutation
-from builder.ale_experiment import find_user, create_ale_experiment, try_creating_project, find_experiment_paths, \
+from aledb_stats.models import StaticData
+from aledb_experiment.models import Project, AleExperiment
+from aledb_seq.models import Mutation, ResequencingExperiment, ObservedMutation
+from aledb_import.ale_experiment import find_user, create_ale_experiment, try_creating_project, find_experiment_paths, \
     delete_ale_experiments, upload_ale_collection
 from datetime import datetime
 import os

@@ -1,5 +1,5 @@
-from bibliome.models import Publication
-from ale.models import AleExperiment
+from aledb_bibliome.models import Publication
+from aledb_experiment.models import AleExperiment
 
 
 def create_publication(title_str, url_str, ale_exp_pk):

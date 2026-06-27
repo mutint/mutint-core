@@ -5,11 +5,11 @@ from django.http import HttpResponse
 from django.template import loader
 
 from django.conf import settings
-from seq.views import common
-from common.util import get_user_context
-from seq.util import get_ordered_reseq_queryset
+from aledb_seq.views import common
+from aledb_common.util import get_user_context
+from aledb_seq.util import get_ordered_reseq_queryset
 
-from common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID
+from aledb_common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID
 from logs.aledb_logger import user_extra, join_extras
 import logging
 

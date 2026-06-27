@@ -1,6 +1,6 @@
 from django.urls import include, re_path
 
-from about import views
+from aledb_about import views
 
 __author__ = 'Patrick Phaneuf'
 

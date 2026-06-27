@@ -1,9 +1,9 @@
 from django import forms
 
-from filter.models import AleExperimentFilter
+from aledb_filter.models import AleExperimentFilter
 
-from filter.common import DEFAULT_MUTATION_FREQ_MIN
-from filter.common import DEFAULT_MUTATION_FREQ_MAX
+from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN
+from aledb_filter.common import DEFAULT_MUTATION_FREQ_MAX
 
 
 # TODO: Add CharField.

@@ -1,17 +1,17 @@
 from django.test import TestCase
-from seq.models import Mutation
-from seq.models import ObservedMutation
-from seq.models import ResequencingExperiment
-from filter.models import AleExperimentFilter, GlobalFilter
-from ale.models import TechnicalReplicate,\
+from aledb_seq.models import Mutation
+from aledb_seq.models import ObservedMutation
+from aledb_seq.models import ResequencingExperiment
+from aledb_filter.models import AleExperimentFilter, GlobalFilter
+from aledb_experiment.models import TechnicalReplicate,\
     Isolate,\
     Flask,\
     AleId,\
     AleExperiment,\
     Media,\
     FreezerBox
-from ale.models import Instrument
-from filter.util import filter_observed_mutations
+from aledb_experiment.models import Instrument
+from aledb_filter.util import filter_observed_mutations
 
 
 __author__ = 'Patrick Phaneuf'

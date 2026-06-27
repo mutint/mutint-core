@@ -1,12 +1,17 @@
 import os
+from datetime import datetime
+from django.contrib.auth.models import User
 from django.test import TestCase
-from seq.models import Mutation
-from builder.upload import _is_missing_coverage_type
-from builder.upload import _parse_average_read_length
-from builder.upload import _parse_read_count
-from builder.upload import _get_mutation_freq
-from builder.upload import add_breseq_results
-from builder.gdparse.gdparse.gdparse import GDParser
+from aledb_seq.models import Mutation
+from aledb_import.upload import _is_missing_coverage_type
+from aledb_import.upload import _parse_average_read_length
+from aledb_import.upload import _parse_read_count
+from aledb_import.upload import _get_mutation_freq
+from aledb_import.upload import add_breseq_results
+from aledb_import.gdparse.gdparse.gdparse import GDParser
+from aledb_experiment.models import (AleExperiment, Instrument, Project,
+                                     AleId, Flask, Isolate, TechnicalReplicate,
+                                     Media, FreezerBox)
 
 
 __author__ = 'Patrick Phaneuf'
@@ -16,6 +21,16 @@ class TestUpload(TestCase):
 
     def setUp(self):
         self.current_location = os.path.dirname(os.path.realpath(__file__))
+        user = User.objects.create(username='testuser', first_name='Test', last_name='User', email='t@t.com', date_joined=datetime.now())
+        project = Project.objects.create(name='test', user=user, date=datetime.now(), status='In progress', is_public=False)
+        instrument = Instrument.objects.create(name='default')
+        experiment = AleExperiment.objects.create(name='test_exp', instrument=instrument, person='Test', project=project)
+        media = Media.objects.create(description='default', substrate='', temperature=37.0, volume=20.0, stirring_speed=200)
+        fbox = FreezerBox.objects.create(name='box1', number=1)
+        ale_id = AleId.objects.create(ale_experiment=experiment, ale_id=1)
+        flask = Flask.objects.create(flask_number=1, ale_id=ale_id, media=media)
+        isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False, reseq_reference='', reseq_date='', breseq_version='', freezer_box=fbox, person='Test')
+        TechnicalReplicate.objects.create(tech_rep_number=1, isolate=isolate)
 
     def test_add_breseq_results_no_HTML_in_DB(self):
         breseq_output_dir_path = self.current_location + "/no_HTML_in_DB_test/"
@@ -96,16 +111,16 @@ class TestUpload(TestCase):
 
         mutation_dict = {'seq_id': 'NC_000913',
                          'parent_ids': [71],
-                         'frequency': 0.89,
+                         'frequency_output': 0.89,
                          'position': 231861,
                          'new_seq': 'T',
                          'type': 'SNP'}
-        
+
         expected_freq = 0.89
 
         output_freq = _get_mutation_freq(mutation_dict)
 
-        self.assertEquals(expected_freq, output_freq)
+        self.assertEquals(expected_freq, output_freq[0])
 
     def test_get_mutation_freq_missing(self):
 
@@ -115,11 +130,11 @@ class TestUpload(TestCase):
                          'new_seq': 'T',
                          'type': 'SNP'}
 
-        expected_freq = 1
+        expected_freq = 1.0
 
         output_freq = _get_mutation_freq(mutation_dict)
 
-        self.assertEquals(expected_freq, output_freq)
+        self.assertEquals(expected_freq, output_freq[0])
 
     def test_is_missing_coverage_type_True(self):
 

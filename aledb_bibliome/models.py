@@ -1,6 +1,6 @@
 from django.db import models
 
-from ale.models import AleExperiment
+from aledb_experiment.models import AleExperiment
 
 
 class Publication(models.Model):

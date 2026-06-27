@@ -1,8 +1,8 @@
-import ale.common
-import ale.models
-from ale.models import AleExperiment
-from ale.permissions import can_view_project
-from common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID, REQUEST_SAMPLE_TYPE
+import aledb_experiment.common
+import aledb_experiment.models
+from aledb_experiment.models import AleExperiment
+from aledb_experiment.permissions import can_view_project
+from aledb_common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID, REQUEST_SAMPLE_TYPE
 from django.http import Http404, HttpResponseForbidden, HttpResponseBadRequest
 
 
@@ -36,9 +36,9 @@ SEQ_COLORS = _set_colors(len(FUNCTIONAL_CHANGE_TYPE_LIST) - 1)
 
 def get_aleid_ale_id_list(experiment_id, exclude_starting_strain=False):
     if experiment_id:
-        aleid_queryset = ale.models.AleId.objects.filter(ale_experiment__ale_id=experiment_id)
+        aleid_queryset = aledb_experiment.models.AleId.objects.filter(ale_experiment__ale_id=experiment_id)
     else:
-        aleid_queryset = ale.models.AleId.objects.all()
+        aleid_queryset = aledb_experiment.models.AleId.objects.all()
 
     if exclude_starting_strain:
         aleid_queryset = aleid_queryset.exclude(ale_id=ale.common.STARTING_STRAIN_ALE_ID)
@@ -78,7 +78,7 @@ def get_ale_experiment_name(request):
 
     if ale_experiment_id is not None and ale_experiment_id != "all":
 
-        ale_experiment = ale.models.AleExperiment.objects.filter(ale_id=ale_experiment_id)
+        ale_experiment = aledb_experiment.models.AleExperiment.objects.filter(ale_id=ale_experiment_id)
 
         # TODO: should only ever be returning 1 experiment. Implement error handling for more than one returned.
         ale_experiment_name = ale_experiment[0].name

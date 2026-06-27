@@ -4,16 +4,17 @@ from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.template import loader
 from django.shortcuts import render
-from seq.models import ObservedMutation
+from aledb_seq.models import ObservedMutation
 from django.db.models import Q
-import operator, collections, common
+import operator, collections
+import aledb_common as common
 from functools import reduce
-from seq.views import mutation_table_builder
-from ale.utils import get_user_projects, get_strains
-from seq.util import get_ref_sequences
-from filter.util import filter_observed_mutations
-from common.util import get_user_context
-from common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+from aledb_seq.views import mutation_table_builder
+from aledb_experiment.utils import get_user_projects, get_strains
+from aledb_seq.util import get_ref_sequences
+from aledb_filter.util import filter_observed_mutations
+from aledb_common.util import get_user_context
+from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 from django.core.serializers.json import DjangoJSONEncoder
 import json
 
@@ -74,7 +75,7 @@ def search(request):
                         "table_header": mark_safe(table_header),
                         "mutation_count": len(table_body),
                         "observed_mutation_count": len(observed_mutations),
-                        "tag_dropdown": common.constants.TAGS,
+                        "tag_dropdown": aledb_common.constants.TAGS,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
                         })
         logger.info("search performance", extra=join_extras(

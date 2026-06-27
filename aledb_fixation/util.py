@@ -1,7 +1,7 @@
-from seq.util import get_reseq_ordered_dict
-from fixation import fixation
-from fixation.models import FixatedMutation
-from seq.models import ObservedMutation
+from aledb_seq.util import get_reseq_ordered_dict
+from aledb_fixation import fixation
+from aledb_fixation.models import FixatedMutation
+from aledb_seq.models import ObservedMutation
 import ast
 
 

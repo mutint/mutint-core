@@ -1,11 +1,11 @@
 from django.http import HttpResponse
 from django.template import loader
-from filter.forms.filter import FilterForm
-from filter.util import get_ignored_mut_id_list_from_str, get_global_filter
-from common.util import clear_dashboard_cache, get_user_context
-from seq.util import get_mutation_objects
+from aledb_filter.forms.filter import FilterForm
+from aledb_filter.util import get_ignored_mut_id_list_from_str, get_global_filter
+from aledb_common.util import clear_dashboard_cache, get_user_context
+from aledb_seq.util import get_mutation_objects
 from logs.aledb_logger import user_extra
-from ale import permissions
+from aledb_experiment import permissions
 import logging
 
 __author__ = 'Denny Gosting, Patrick Phaneuf'

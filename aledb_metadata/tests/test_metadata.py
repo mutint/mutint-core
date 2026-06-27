@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
-from ale.models import AleExperiment,\
+from aledb_experiment.models import AleExperiment,\
     Instrument,\
     Isolate,\
     TechnicalReplicate,\
@@ -9,10 +9,10 @@ from ale.models import AleExperiment,\
     AleId,\
     FreezerBox,\
     Project
-from metadata.parser import parse_metadata_post_experiment_upload, _get_media_supplement_description
+from aledb_metadata.parser import parse_metadata_post_experiment_upload, _get_media_supplement_description
 from datetime import datetime
 import os
-from metadata.xpmdvalidator.validate import is_valid
+from aledb_metadata.xpmdvalidator.validate import is_valid
 import csv
 
 ALE_EXP_PRIMARY_EXP = 1  # I'm assuming will always be 1 due to rebuild of DB with the unit testing.

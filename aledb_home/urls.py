@@ -1,6 +1,6 @@
 from django.urls import include, re_path
 
-from home import views
+from aledb_home import views
 
 __author__ = 'Muyao'
 

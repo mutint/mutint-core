@@ -1,15 +1,15 @@
 from django.http import HttpResponse
 from django.template import loader
-from seq.views import common
-from filter.forms.filter import FilterForm
-from filter.models import AleExperimentFilter
-import filter.models
-from filter.common import DEFAULT_MUTATION_FREQ_MIN, DEFAULT_MUTATION_FREQ_MAX
-from filter.util import get_ignored_mut_id_list_from_str
-from common.util import clear_dashboard_cache, get_user_context
-from seq.util import get_mutation_objects
+from aledb_seq.views import common
+from aledb_filter.forms.filter import FilterForm
+from aledb_filter.models import AleExperimentFilter
+import aledb_filter.models
+from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN, DEFAULT_MUTATION_FREQ_MAX
+from aledb_filter.util import get_ignored_mut_id_list_from_str
+from aledb_common.util import clear_dashboard_cache, get_user_context
+from aledb_seq.util import get_mutation_objects
 from logs.aledb_logger import user_extra
-from ale import permissions
+from aledb_experiment import permissions
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def mutation_filter(request):
 
         filter_form_model, created = AleExperimentFilter.objects.get_or_create(
             ale_experiment=experiment,
-            defaults=filter.models.get_default_experiment_filter_params(experiment))
+            defaults=aledb_filter.models.get_default_experiment_filter_params(experiment))
 
         if request.method == 'POST':
             # check user permissions

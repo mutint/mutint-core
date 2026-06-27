@@ -1,10 +1,10 @@
-from fixation.util import get_fixed_obs_mut_qryset
-from seq.views.mutation_table_builder import get_mutation_table_data, HTML_MUTATION_TABLE_HEADER
+from aledb_fixation.util import get_fixed_obs_mut_qryset
+from aledb_seq.views.mutation_table_builder import get_mutation_table_data, HTML_MUTATION_TABLE_HEADER
 from django.utils.html import strip_tags
-from converge.util import get_converge_obs_mut_qryset
+from aledb_converge.util import get_converge_obs_mut_qryset
 
-from filter.util import filter_observed_mutations
-from seq.util import get_observed_mutation_queryset, get_ordered_reseq_dict
+from aledb_filter.util import filter_observed_mutations
+from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_dict
 
 MUT_TYPE_STR = "mut"
 FIXED_MUT_TYPE_STR = "fixed_mut"

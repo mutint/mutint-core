@@ -1,6 +1,6 @@
 from django.shortcuts import render
 
-from common.util import get_user_context
+from aledb_common.util import get_user_context
 from logs.aledb_logger import user_extra
 import logging
 

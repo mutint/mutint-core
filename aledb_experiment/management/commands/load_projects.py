@@ -1,5 +1,5 @@
 import pandas as pd
-from ale.models import AleExperiment, Project
+from aledb_experiment.models import AleExperiment, Project
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand
 from django.contrib.auth.hashers import make_password

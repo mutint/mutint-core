@@ -2,11 +2,11 @@ import os
 from django.test import TestCase
 
 from django.contrib.auth.models import User
-from ale.models import Project
+from aledb_experiment.models import Project
 from datetime import datetime
-from bibliome.models import Publication
-from bibliome.publication import create_publication
-from builder.ale_experiment import create_ale_experiment
+from aledb_bibliome.models import Publication
+from aledb_bibliome.publication import create_publication
+from aledb_import.ale_experiment import create_ale_experiment
 
 __author__ = 'Muyao'
 
@@ -20,7 +20,7 @@ class TestBibliome(TestCase):
                                         is_active=True, is_staff=True, date_joined=datetime.now())
         Project.objects.create(name="test_project", user=self.user, date=datetime.now(),
                                status="In progress", is_public=False)
-        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/../../builder/tests/breseq/"
+        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/../../aledb_import/tests/breseq/"
         create_ale_experiment(test_report_path, "Patrick", "test", "test_project")
         expected_publication_count = 1
         create_publication("test_publication_journal", "aledb.org", 1)

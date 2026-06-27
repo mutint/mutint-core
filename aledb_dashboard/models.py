@@ -1,5 +1,4 @@
 from django.db import models
-from django_mysql.models import Model
 from jsonfield import JSONField
 
 
@@ -59,6 +58,6 @@ class SampleCounts(models.Model):
 def bar_chart_json_default(): return {"":""}
 
 
-class BarCharts(Model):
+class BarCharts(models.Model):
     mut_gene_json = JSONField(default=bar_chart_json_default)
     mut_json = JSONField(default=bar_chart_json_default)

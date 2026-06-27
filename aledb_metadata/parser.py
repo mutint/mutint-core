@@ -3,10 +3,10 @@ import re
 import csv
 import json
 
-from ale.models import TechnicalReplicate
-from ale.models import Media
-from ale.models import Project
-from metadata.xpmdvalidator.validate import is_valid
+from aledb_experiment.models import TechnicalReplicate
+from aledb_experiment.models import Media
+from aledb_experiment.models import Project
+from aledb_metadata.xpmdvalidator.validate import is_valid
 
 __author__ = 'Denny Gosting, Patrick Phaneuf, Muyao'
 
@@ -132,6 +132,9 @@ def _get_media_supplement_description(metadata_dict):
 
 
 def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_key):
+    if not os.path.isdir(metadata_path):
+        return
+
     if not is_valid(metadata_path, "metadata/xpmdvalidator/Json_schema.json"):
         print ("Invalid metadata!", metadata_path)
 

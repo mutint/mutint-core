@@ -1,5 +1,5 @@
 from django.core.management import BaseCommand
-from bibliome.publication import add_publication_to_experiment
+from aledb_bibliome.publication import add_publication_to_experiment
 
 
 class Command(BaseCommand):

@@ -1,8 +1,8 @@
 from django.urls import include, re_path
 
-import fixation.views
+import aledb_fixation.views
 
 
 urlpatterns = [
-    re_path('^$', fixation.views.fixating_mutations, name='fixation')
+    re_path('^$', aledb_fixation.views.fixating_mutations, name='fixation')
 ]

@@ -1,9 +1,9 @@
 import unittest
 
-from builder.util import sanitize_path
-from builder.util import AleName
-from builder.util import parse_ale_name
-from builder.util import get_ale_isolate_name_from_path
+from aledb_import.util import sanitize_path
+from aledb_import.util import AleName
+from aledb_import.util import parse_ale_name
+from aledb_import.util import get_ale_isolate_name_from_path
 
 __author__ = 'Patrick Phaneuf'
 

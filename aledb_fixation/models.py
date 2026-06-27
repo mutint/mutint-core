@@ -1,8 +1,8 @@
 from django.db import models
 
-from ale.models import AleExperiment
+from aledb_experiment.models import AleExperiment
 
-from seq.models import Mutation
+from aledb_seq.models import Mutation
 
 
 class FixatedMutation(models.Model):

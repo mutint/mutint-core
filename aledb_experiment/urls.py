@@ -1,5 +1,5 @@
 from django.urls import include, re_path
-from ale.views import projects, experiments, project_detail, experiment_detail
+from aledb_experiment.views import projects, experiments, project_detail, experiment_detail
 
 urlpatterns = [
     re_path(r'^projects', projects, name="projects_view"),

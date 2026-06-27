@@ -1,18 +1,18 @@
 from django.test import TestCase
-from seq.models import Mutation
-from seq.models import ObservedMutation
-from seq.models import ResequencingExperiment
-from ale.models import AleId
-from filter.models import AleExperimentFilter
-from filter.models import GlobalFilter
-from ale.models import AleExperiment
-from ale.models import Instrument
-from ale.models import Isolate
-from ale.models import TechnicalReplicate
-from ale.models import Flask
-from ale.models import Media
-from ale.models import FreezerBox
-from fixation import fixation
+from aledb_seq.models import Mutation
+from aledb_seq.models import ObservedMutation
+from aledb_seq.models import ResequencingExperiment
+from aledb_experiment.models import AleId
+from aledb_filter.models import AleExperimentFilter
+from aledb_filter.models import GlobalFilter
+from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Instrument
+from aledb_experiment.models import Isolate
+from aledb_experiment.models import TechnicalReplicate
+from aledb_experiment.models import Flask
+from aledb_experiment.models import Media
+from aledb_experiment.models import FreezerBox
+from aledb_fixation import fixation
 import collections
 
 

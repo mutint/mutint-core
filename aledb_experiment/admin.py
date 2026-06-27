@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from ale.models import Project, AleExperiment, Media
+from aledb_experiment.models import Project, AleExperiment, Media
 from guardian.admin import GuardedModelAdmin
 
 

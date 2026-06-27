@@ -1,9 +1,9 @@
-from dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts, BarCharts
-from seq.models import ObservedMutation, Mutation
-from filter.util import filter_observed_mutations
-from seq.util import get_mutations_from_observed_muations
-from seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST, UNANNOTATED
-from ale.models import AleId, Isolate, Flask
+from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts, BarCharts
+from aledb_seq.models import ObservedMutation, Mutation
+from aledb_filter.util import filter_observed_mutations
+from aledb_seq.util import get_mutations_from_observed_muations
+from aledb_seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST, UNANNOTATED
+from aledb_experiment.models import AleId, Isolate, Flask
 from django.db.models import Q
 
 

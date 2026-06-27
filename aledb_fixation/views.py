@@ -2,15 +2,15 @@ import time
 from django.http import HttpResponse
 from django.template import loader
 from django.utils.safestring import mark_safe
-import seq.views.common
-from seq.views import mutation_table_builder
-from common.constants import \
+import aledb_seq.views.common
+from aledb_seq.views import mutation_table_builder
+from aledb_common.constants import \
     REQUEST_MUTATION_ID, \
     REFSEQ_COLUMN_IN_MUT_TABLE
-from common.util import get_user_context
-from seq.util import get_reseq_ordered_dict
-from fixation.util import get_fixed_obs_mut_qryset
-import common.constants
+from aledb_common.util import get_user_context
+from aledb_seq.util import get_reseq_ordered_dict
+from aledb_fixation.util import get_fixed_obs_mut_qryset
+import aledb_common.constants
 from logs.aledb_logger import user_extra, join_extras
 import logging
 
@@ -26,11 +26,11 @@ def fixating_mutations(request):
     try:
         start_time = time.time()
         context = get_user_context(request.user)
-        experiment = seq.views.common.get_ale_experiment(request)
+        experiment = aledb_seq.views.common.get_ale_experiment(request)
         exp_name = experiment.name
         ale_experiment_id = experiment.ale_id
-        ale_number = seq.views.common.get_ale_id(request)
-        ale_qryset = seq.views.common.get_aleid_ale_id_list(ale_experiment_id, True)
+        ale_number = aledb_seq.views.common.get_ale_id(request)
+        ale_qryset = aledb_seq.views.common.get_aleid_ale_id_list(ale_experiment_id, True)
 
         reseq_ordered_dict = get_reseq_ordered_dict(ale_experiment_id, ale_number, request)
 
@@ -59,7 +59,7 @@ def fixating_mutations(request):
                         "template_header": "Fixating Mutations",
                         "hidden_columns": hidden_columns,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
-                        "tag_dropdown": common.constants.TAGS})
+                        "tag_dropdown": aledb_common.constants.TAGS})
 
         logger.info("fixation performance",
                              extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))

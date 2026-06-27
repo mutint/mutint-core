@@ -1,4 +1,4 @@
-from dashboard.models import TimelineEvent
+from aledb_dashboard.models import TimelineEvent
 
 __author__ = 'dgosting'
 

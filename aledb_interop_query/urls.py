@@ -1,6 +1,6 @@
 from django.urls import include, re_path
 
-from interop_query import views
+from aledb_interop_query import views
 
 __author__ = 'dgosting'
 
