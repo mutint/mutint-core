@@ -1,26 +1,21 @@
 from aledb_common.plugin_registry import get_export_handler
 from aledb_seq.views.mutation_table_builder import get_mutation_table_data, HTML_MUTATION_TABLE_HEADER
 from django.utils.html import strip_tags
-from aledb_converge.util import get_converge_obs_mut_qryset
 
 from aledb_filter.util import filter_observed_mutations
 from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_dict
 
 MUT_TYPE_STR = "mut"
-FIXED_MUT_TYPE_STR = "fixed_mut"
-CONVERGED_MUT_TYPE_STR = "converged_mut"
 
 
 def get_csv_str(exp_id, mut_type_str):
-    if mut_type_str == FIXED_MUT_TYPE_STR:
-        handler = get_export_handler(FIXED_MUT_TYPE_STR)
+    if mut_type_str == MUT_TYPE_STR:
+        obs_mut_qryset = get_observed_mutation_queryset(exp_id)
+    else:
+        handler = get_export_handler(mut_type_str)
         if handler is None:
             return []
         obs_mut_qryset = handler(exp_id)
-    elif mut_type_str == CONVERGED_MUT_TYPE_STR:
-        obs_mut_qryset = get_converge_obs_mut_qryset(exp_id)
-    else:
-        obs_mut_qryset = get_observed_mutation_queryset(exp_id)
 
     observed_mutations = filter_observed_mutations(obs_mut_qryset, exp_id)
     reseq_ordered_dict = get_ordered_reseq_dict(observed_mutations)

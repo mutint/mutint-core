@@ -74,7 +74,6 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_stats',
             'aledb_metadata',
             'aledb_about',
-            'aledb_converge',
             'aledb_accounts_noauth',
             'aledb_export',
             'aledb_common',
