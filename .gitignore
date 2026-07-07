@@ -7,7 +7,6 @@
 *.ini
 docker-compose-prod-asgi-host-ports-nginx.yml
 *.conf
-*/migrations
 static/
 config.sh
 .ropeproject/
