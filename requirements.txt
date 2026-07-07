@@ -10,6 +10,10 @@ django-filter==23.2
 django-guardian==2.4.0
 django-tables2==2.6.0
 djangoajax==3.3
+# GenomeDiff (.gd) parser/writer used by the drag-and-drop mutation import.
+# Requires the INT mutation type + ordered Record serializer fixes from
+# https://github.com/barricklab/genomediff (dev: `pip install -e /path/to/genomediff`).
+genomediff>=0.4.1
 jsonfield==3.1.0
 jsonschema==4.19.1
 lxml==4.9.3

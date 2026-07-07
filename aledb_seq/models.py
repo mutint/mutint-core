@@ -109,9 +109,38 @@ class Mutation(models.Model):
 
     reference_error = models.BooleanField(default=False)
 
+    # Verbatim parsed GenomeDiff mutation record (type, id, parent_ids and all
+    # type-specific + optional key=value fields), stored losslessly so a mutation
+    # can be round-tripped back to a .gd line for gdtools APPLY. Null for mutations
+    # imported before this field existed (e.g. via the breseq-directory CLI path).
+    gd_data = models.JSONField(**blank_field)
+
     def __unicode__(self):
         return u"%d %s" % (self.position,
                            self.sequence_change)
+
+    def to_gd_line(self) -> str:
+        """Reconstruct this mutation's GenomeDiff line (for gdtools APPLY).
+
+        Prefers the verbatim ``gd_data``; falls back to a best-effort line built
+        from the scalar columns for legacy rows where ``gd_data`` is null (that
+        fallback is not guaranteed APPLY-complete — the discrete alleles were not
+        captured for those rows)."""
+        from genomediff.records import Record, TYPE_SPECIFIC_FIELDS
+
+        if self.gd_data:
+            data = dict(self.gd_data)
+            record_type = data.pop('type', self.mutation_type)
+            record_id = data.pop('id', self.id)
+            parent_ids = data.pop('parent_ids', None)
+            return str(Record(record_type, record_id, parent_ids=parent_ids, **data))
+
+        if self.mutation_type not in TYPE_SPECIFIC_FIELDS:
+            return ""
+        attributes = {'seq_id': self.reseq_reference, 'position': self.position}
+        if self.feature_length is not None:
+            attributes['size'] = self.feature_length
+        return str(Record(self.mutation_type, self.id, parent_ids=None, **attributes))
 
     def is_ecocyc_gene(self) -> bool:
         return self.reseq_reference == 'NC_000913'

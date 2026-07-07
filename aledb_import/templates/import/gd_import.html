@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Import GenomeDiff files{% endblock %}
+
+{% block header %}<b>Import GenomeDiff (.gd) mutations</b>{% endblock %}
+
+{% block content %}
+<div class="col-lg-8">
+    <p>Drop breseq <code>.gd</code> files (or a folder of them) below to load their
+       <b>mutation</b> entries. Each file's <code>A-F-I-R</code> identity is taken from its
+       filename (e.g. <code>3-30000-1-1.gd</code>).</p>
+
+    <form id="gd-form">
+        <div class="form-group">
+            <label for="gd-project">Project</label>
+            <input type="text" class="form-control" id="gd-project" name="project" required>
+        </div>
+        <div class="form-group">
+            <label for="gd-experiment">Experiment name</label>
+            <input type="text" class="form-control" id="gd-experiment" name="experiment" required>
+        </div>
+        <div class="form-group">
+            <label for="gd-person">Person <small>(optional)</small></label>
+            <input type="text" class="form-control" id="gd-person" name="person">
+        </div>
+
+        <div id="dropzone" style="border: 2px dashed #999; border-radius: 6px; padding: 2.5em;
+             text-align: center; color: #666; background: #fafafa; cursor: pointer;">
+            <p style="margin: 0; font-size: 1.1em;">Drag &amp; drop <b>.gd</b> files or a folder here,
+               or click to choose files.</p>
+            <input type="file" id="file-input" accept=".gd" multiple style="display: none;">
+            <input type="file" id="dir-input" webkitdirectory directory multiple style="display: none;">
+            <p style="margin-top: 1em;">
+                <button type="button" class="btn btn-default btn-sm" id="pick-files">Choose files</button>
+                <button type="button" class="btn btn-default btn-sm" id="pick-folder">Choose folder</button>
+            </p>
+        </div>
+
+        <ul id="file-list" style="margin-top: 1em;"></ul>
+        <button type="submit" class="btn btn-primary" id="gd-submit" disabled>Import</button>
+    </form>
+
+    <div id="gd-result" style="margin-top: 1.5em;"></div>
+</div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+
+    var selectedFiles = [];
+    var dropzone = document.getElementById("dropzone");
+    var fileInput = document.getElementById("file-input");
+    var dirInput = document.getElementById("dir-input");
+    var fileListEl = document.getElementById("file-list");
+    var submitBtn = document.getElementById("gd-submit");
+    var resultEl = document.getElementById("gd-result");
+
+    function isGd(name) {
+        return name && name.toLowerCase().slice(-3) === ".gd";
+    }
+
+    function addFiles(files) {
+        for (var i = 0; i < files.length; i++) {
+            if (isGd(files[i].name)) {
+                selectedFiles.push(files[i]);
+            }
+        }
+        renderList();
+    }
+
+    function renderList() {
+        fileListEl.innerHTML = "";
+        selectedFiles.forEach(function (f) {
+            var li = document.createElement("li");
+            li.textContent = f.name;
+            fileListEl.appendChild(li);
+        });
+        submitBtn.disabled = selectedFiles.length === 0;
+    }
+
+    // --- Folder picker / file picker ---
+    document.getElementById("pick-files").addEventListener("click", function () { fileInput.click(); });
+    document.getElementById("pick-folder").addEventListener("click", function () { dirInput.click(); });
+    dropzone.addEventListener("click", function (e) {
+        if (e.target === dropzone || e.target.tagName === "P") { fileInput.click(); }
+    });
+    fileInput.addEventListener("change", function () { addFiles(fileInput.files); });
+    dirInput.addEventListener("change", function () { addFiles(dirInput.files); });
+
+    // --- Drag & drop, including dropped folders (DataTransfer entries) ---
+    ["dragenter", "dragover"].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+            e.preventDefault();
+            dropzone.style.background = "#eef6ff";
+        });
+    });
+    ["dragleave", "drop"].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+            e.preventDefault();
+            dropzone.style.background = "#fafafa";
+        });
+    });
+
+    function readEntry(entry, collected) {
+        return new Promise(function (resolve) {
+            if (entry.isFile) {
+                entry.file(function (file) {
+                    if (isGd(file.name)) { collected.push(file); }
+                    resolve();
+                }, function () { resolve(); });
+            } else if (entry.isDirectory) {
+                var reader = entry.createReader();
+                var readBatch = function () {
+                    reader.readEntries(function (entries) {
+                        if (!entries.length) { resolve(); return; }
+                        Promise.all(entries.map(function (en) {
+                            return readEntry(en, collected);
+                        })).then(readBatch);
+                    }, function () { resolve(); });
+                };
+                readBatch();
+            } else {
+                resolve();
+            }
+        });
+    }
+
+    dropzone.addEventListener("drop", function (e) {
+        var items = e.dataTransfer.items;
+        if (items && items.length && items[0].webkitGetAsEntry) {
+            var collected = [];
+            var promises = [];
+            for (var i = 0; i < items.length; i++) {
+                var entry = items[i].webkitGetAsEntry();
+                if (entry) { promises.push(readEntry(entry, collected)); }
+            }
+            Promise.all(promises).then(function () { addFiles(collected); });
+        } else {
+            addFiles(e.dataTransfer.files);
+        }
+    });
+
+    // --- Submit via fetch ---
+    function getCookie(name) {
+        var match = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
+        return match ? match.pop() : "";
+    }
+
+    document.getElementById("gd-form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (!selectedFiles.length) { return; }
+        submitBtn.disabled = true;
+        resultEl.innerHTML = "<p>Importing " + selectedFiles.length + " file(s)…</p>";
+
+        var data = new FormData();
+        data.append("project", document.getElementById("gd-project").value);
+        data.append("experiment", document.getElementById("gd-experiment").value);
+        data.append("person", document.getElementById("gd-person").value);
+        selectedFiles.forEach(function (f) { data.append("gd_files", f, f.name); });
+
+        fetch(window.location.pathname, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCookie("csrftoken") },
+            body: data
+        }).then(function (resp) {
+            return resp.json().then(function (json) { return { ok: resp.ok, json: json }; });
+        }).then(function (r) {
+            renderResult(r.ok, r.json);
+            submitBtn.disabled = false;
+        }).catch(function (err) {
+            resultEl.innerHTML = "<div class='alert alert-danger'>Upload failed: " + err + "</div>";
+            submitBtn.disabled = false;
+        });
+    });
+
+    function renderResult(ok, json) {
+        if (!ok) {
+            resultEl.innerHTML = "<div class='alert alert-danger'>" +
+                (json.error || "Import failed.") + "</div>";
+            return;
+        }
+        var rows = (json.files || []).map(function (f) {
+            return "<tr><td>" + f.file + "</td><td>" + f.mutations + "</td><td>" +
+                (f.error ? "<span style='color:#a00'>" + f.error + "</span>" : "ok") + "</td></tr>";
+        }).join("");
+        resultEl.innerHTML =
+            "<div class='alert alert-success'>Imported <b>" + json.total_mutations +
+            "</b> mutations into experiment <b>" + json.experiment + "</b> (#" +
+            json.experiment_id + "). " +
+            "<a href='/mutations?ale_experiment_id=" + json.experiment_id + "'>View mutations</a></div>" +
+            "<table class='table table-condensed'><thead><tr><th>File</th><th>Mutations</th>" +
+            "<th>Status</th></tr></thead><tbody>" + rows + "</tbody></table>";
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,288 @@
+"""Import breseq GenomeDiff (.gd) mutation entries directly from uploaded files.
+
+This is the HTML-free counterpart to ``aledb_import.upload._database_mutations``:
+the CLI upload path reads a full breseq output directory (``.gd`` + ``index.html``
++ ``summary.html``), while this path takes bare ``.gd`` files dropped in the web
+UI and reads everything it needs from the GenomeDiff itself.
+
+Parsing uses the ``genomediff`` package. Each mutation's full parsed record is
+stored verbatim in ``Mutation.gd_data`` so it can be round-tripped back to a
+``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
+
+Imported mutations are attached to the normal experiment hierarchy
+(``AleExperiment -> AleId -> Flask -> Isolate -> TechnicalReplicate ->
+ResequencingExperiment -> ObservedMutation``) so they appear in the existing
+mutation tables, stats, and dashboards with no extra plumbing. The chain is
+synthesized the same way the CLI does it: default Instrument/Media/FreezerBox
+placeholders, and the A-F-I-R identity parsed from each filename.
+"""
+
+import logging
+import os
+from decimal import Decimal, InvalidOperation
+
+from django.db import transaction
+
+import aledb_metadata.parser as metadata_defaults
+from aledb_experiment.models import (
+    AleExperiment,
+    AleId,
+    Flask,
+    FreezerBox,
+    Instrument,
+    Isolate,
+    Media,
+    Project,
+    TechnicalReplicate,
+)
+from aledb_import.gene_annotation import get_annotated_gene_list
+from aledb_import.util import AleName, parse_ale_name
+from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+
+from genomediff import GenomeDiff
+from genomediff.records import TYPE_SPECIFIC_FIELDS
+
+logger = logging.getLogger("aledb_import.gd_import")
+
+
+def import_gd_files(uploaded_files, project_name, experiment_name, person, is_public=False):
+    """Import a batch of dropped ``.gd`` files into a single AleExperiment.
+
+    ``uploaded_files`` is an iterable of file-like objects each exposing ``.name``
+    and ``.read()`` (e.g. Django ``UploadedFile``). Each file's A-F-I-R identity is
+    parsed from its filename. Returns a JSON-serializable summary dict.
+    """
+    context = _prepare_experiment(project_name, experiment_name, person, is_public)
+
+    file_results = []
+    total_mutations = 0
+    for uploaded in uploaded_files:
+        filename = os.path.basename(getattr(uploaded, "name", "") or "unnamed.gd")
+        try:
+            with transaction.atomic():
+                count = _import_one_file(uploaded, filename, context, person)
+            file_results.append({"file": filename, "mutations": count, "error": None})
+            total_mutations += count
+        except Exception as exc:  # one bad file must not poison the batch
+            logger.exception("GenomeDiff import failed for %s", filename)
+            file_results.append({"file": filename, "mutations": 0, "error": str(exc)})
+
+    experiment = context["experiment"]
+    if total_mutations:
+        _run_post_processing(experiment)
+
+    return {
+        "experiment_id": experiment.ale_id,
+        "experiment": experiment.name,
+        "total_mutations": total_mutations,
+        "files": file_results,
+    }
+
+
+def _prepare_experiment(project_name, experiment_name, person, is_public):
+    """Get/create the target project, experiment, and the shared placeholder
+    Media / FreezerBox / Instrument, mirroring ``ale_experiment.create_ale_experiment``."""
+    from aledb_import.ale_experiment import try_creating_project
+
+    try:
+        project = Project.objects.get(name=project_name)
+    except Project.DoesNotExist:
+        project = try_creating_project(project_name, person, is_public)
+
+    instrument, _ = Instrument.objects.get_or_create(
+        name=metadata_defaults.DEFAULT_INSTRUMENT_NAME)
+    experiment, _ = AleExperiment.objects.get_or_create(
+        name=experiment_name, instrument=instrument, person=person, project=project)
+    media, _ = Media.objects.get_or_create(
+        description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
+        substrate=metadata_defaults.DEFAULT_MEDIA_SUBSTRATE,
+        temperature=metadata_defaults.DEFAULT_TEMPERATURE,
+        volume=metadata_defaults.DEFAULT_VOLUME,
+        stirring_speed=metadata_defaults.DEFAULT_STIRRING_SPEED)
+    freezer_box, _ = FreezerBox.objects.get_or_create(
+        name=metadata_defaults.DEFAULT_FREEZER_BOX_NAME,
+        number=metadata_defaults.DEFAULT_FREEZER_BOX_NUMBER)
+
+    return {"experiment": experiment, "media": media, "freezer_box": freezer_box}
+
+
+def _import_one_file(uploaded, filename, context, person):
+    document = _parse_document(uploaded)
+
+    sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
+    ale_number = parse_ale_name(sample_name, AleName.Ale)
+    flask_number = parse_ale_name(sample_name, AleName.Flask)
+    isolate_number = parse_ale_name(sample_name, AleName.Isolate)
+    tech_rep_number = parse_ale_name(sample_name, AleName.TechnicalReplicate)
+
+    seq_experiment = _get_or_create_chain(
+        context, document, ale_number, flask_number, isolate_number,
+        tech_rep_number, person, sample_name)
+
+    return _database_gd_mutations(seq_experiment, document)
+
+
+def _parse_document(uploaded):
+    """Parse an uploaded ``.gd`` into a ``genomediff.GenomeDiff``.
+
+    Decodes bytes to text and drops blank lines (the genomediff parser raises on
+    a line it can't match, and a bare newline matches nothing)."""
+    raw = uploaded.read()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    lines = [line for line in raw.splitlines() if line.strip()]
+    return GenomeDiff.read(iter(lines))
+
+
+def _get_or_create_chain(context, document, ale_number, flask_number,
+                         isolate_number, tech_rep_number, person, sample_name):
+    """Synthesize the experiment chain down to a ResequencingExperiment, reading
+    reference/date/type hints from the GenomeDiff header (no breseq HTML)."""
+    experiment = context["experiment"]
+    metadata = document.metadata
+
+    reseq_reference = metadata.get("REFSEQ", "") or ""
+    reseq_date = metadata.get("CREATED", "") or ""
+    # breseq marks population (polymorphism) runs with -p in the command line.
+    is_population = " -p" in (metadata.get("COMMAND", "") or "")
+
+    ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id=ale_number)
+    flask, _ = Flask.objects.get_or_create(
+        flask_number=flask_number, ale_id=ale_id, media=context["media"])
+    isolate, _ = Isolate.objects.get_or_create(
+        flask=flask,
+        isolate_number=isolate_number,
+        is_population=is_population,
+        reseq_reference=reseq_reference[:200],
+        reseq_date=reseq_date[:200],
+        freezer_box=context["freezer_box"],
+        person=person)
+    tech_rep, _ = TechnicalReplicate.objects.get_or_create(
+        tech_rep_number=tech_rep_number, isolate=isolate)
+    seq_experiment, _ = ResequencingExperiment.objects.get_or_create(
+        tech_rep=tech_rep, sample_name=sample_name, person=person)
+    return seq_experiment
+
+
+def _database_gd_mutations(seq_experiment, document):
+    """Create Mutation + ObservedMutation rows from the parsed mutations.
+
+    Re-importing the same sample is idempotent: existing ObservedMutations for this
+    ResequencingExperiment are cleared first, and Mutations are deduplicated via
+    get_or_create (shared across experiments)."""
+    ObservedMutation.objects.filter(sequencing_experiment=seq_experiment).delete()
+
+    observed_mutations = []
+    for record in document.mutations:
+        attributes = dict(record.attributes)
+        gd_data = {
+            "type": record.type,
+            "id": record.id,
+            "parent_ids": record.parent_ids,
+            **attributes,
+        }
+        gene_list = get_annotated_gene_list(
+            attributes.get("gene_name"), attributes.get("gene_product"))
+        gene_str = ", ".join(gene_list)
+        sequence_change = _synthesize_sequence_change(record)[:200]
+
+        mutation, created = Mutation.objects.get_or_create(
+            position=attributes.get("position"),
+            reseq_reference=attributes.get("seq_id"),
+            mutation_type=record.type,
+            feature_length=attributes.get("size"),
+            sequence_change=sequence_change,
+            gene=gene_str,
+            defaults={
+                "gd_data": gd_data,
+                "product": attributes.get("gene_product") or "",
+                "protein_change": "",
+            })
+        if not created and not mutation.gd_data:
+            # Backfill a pre-existing (e.g. CLI-imported) row so it becomes APPLY-complete.
+            mutation.gd_data = gd_data
+            mutation.save(update_fields=["gd_data"])
+
+        observed_mutations.append(ObservedMutation(
+            sequencing_experiment=seq_experiment,
+            mutation=mutation,
+            present=True,
+            breseq_present=True,
+            frequency=_coerce_frequency(attributes.get("frequency"))))
+
+    ObservedMutation.objects.bulk_create(observed_mutations)
+    return len(observed_mutations)
+
+
+def export_gd_text(seq_experiment):
+    """Reconstruct a GenomeDiff (.gd) file for a ResequencingExperiment's mutations.
+
+    The result is a valid ``.gd`` accepted by ``gdtools APPLY`` (resolution of MOB
+    ``repeat_name`` / CON/INT ``region`` still requires the reference genbank named
+    in ``#=REFSEQ``)."""
+    lines = ["#=GENOME_DIFF\t1.0"]
+    isolate = seq_experiment.tech_rep.isolate if seq_experiment.tech_rep else None
+    reseq_reference = getattr(isolate, "reseq_reference", "") or ""
+    if reseq_reference:
+        lines.append("#=REFSEQ\t%s" % reseq_reference)
+
+    observed = (ObservedMutation.objects
+                .filter(sequencing_experiment=seq_experiment)
+                .select_related("mutation")
+                .order_by("mutation__position"))
+    for observed_mutation in observed:
+        gd_line = observed_mutation.mutation.to_gd_line()
+        if gd_line:
+            lines.append(gd_line)
+    return "\n".join(lines) + "\n"
+
+
+def _synthesize_sequence_change(record):
+    """Build a short human-readable allele description used for display and as the
+    dedup discriminator (the discrete alleles themselves live in ``gd_data``)."""
+    attributes = record.attributes
+    mutation_type = record.type
+    if mutation_type in ("SNP", "INS", "SUB"):
+        return str(attributes.get("new_seq", ""))
+    if mutation_type == "DEL":
+        return "del %s bp" % attributes.get("size", "?")
+    if mutation_type == "MOB":
+        sign = "+" if attributes.get("strand") == 1 else "-"
+        return "%s (%s) +%s bp" % (
+            attributes.get("repeat_name", ""), sign, attributes.get("duplication_size", 0))
+    if mutation_type == "AMP":
+        return "%s bp x%s" % (attributes.get("size", "?"), attributes.get("new_copy_number", "?"))
+    if mutation_type == "INV":
+        return "inv %s bp" % attributes.get("size", "?")
+    if mutation_type in ("CON", "INT"):
+        return str(attributes.get("region", ""))
+    return " ".join(
+        str(attributes.get(field))
+        for field in TYPE_SPECIFIC_FIELDS.get(mutation_type, ())
+        if attributes.get(field) is not None)
+
+
+def _coerce_frequency(value):
+    """ObservedMutation.frequency is Decimal(5,4); default clonal 1.0."""
+    if value is None:
+        return Decimal("1.0")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return Decimal("1.0")
+
+
+def _run_post_processing(experiment):
+    """Recompute derived data so imported mutations surface everywhere the CLI
+    path's do (filters, plugin rebuilds, stats, dashboard)."""
+    import aledb_filter.models
+    from aledb_common.plugin_registry import run_post_experiment_hooks
+    from aledb_dashboard.util import rebuild_dashboard_data
+    from aledb_filter.models import AleExperimentFilter
+    from aledb_stats.util import generate_static_data
+
+    AleExperimentFilter.objects.get_or_create(
+        **aledb_filter.models.get_default_experiment_filter_params(experiment))
+    run_post_experiment_hooks(experiment.ale_id)
+    generate_static_data(experiment.ale_id)
+    rebuild_dashboard_data()
