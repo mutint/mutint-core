@@ -21,8 +21,15 @@ See `DEVELOPER.md` for the full submodule integration guide.
 
 **Local dev setup** (SQLite, no MySQL or Docker needed):
 ```bash
-./aledb start             # runs migrations, creates admin user, opens browser, starts server
+./aledb start             # first run: auto-creates a venv at env/main and installs
+                          #   requirements, then re-execs under it; runs migrations,
+                          #   creates admin user, opens browser, starts server
+./aledb install           # (re)install deps into env/main without starting the server
 ```
+
+`./aledb` bootstraps its own virtualenv at `env/main/` (sentinel `env/main/.installed`)
+and re-execs under `env/main/bin/python` — no manual `python -m venv` / `activate` needed.
+This mirrors mutint's `./mutint` entry script. `env/` is git-ignored.
 
 **Run all tests**:
 ```bash

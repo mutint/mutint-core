@@ -144,6 +144,17 @@ settings. All Django management commands work: `./aledb migrate`, `./aledb shell
 
 ## First-time setup and running
 
+If your entry script bootstraps its own venv (like standalone aledb-core's `./aledb` and
+mutint's `./mutint`, which auto-create `env/main/` and install dependencies on first run),
+just run:
+
+```bash
+./aledb start    # first run: creates env/main, installs deps, then migrate + superuser +
+                 # browser + runserver. Use `./aledb install` to (re)install deps only.
+```
+
+Otherwise, provision a venv manually first:
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt

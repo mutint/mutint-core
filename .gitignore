@@ -32,6 +32,9 @@ core
 #Python
 .venv
 
+# Managed environments — env/ holds the venv (env/main) and any future venvs/conda envs
+env/
+
 #Local Artifacts
 aledb_local.sqlite3
 

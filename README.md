@@ -17,7 +17,8 @@ cd aledb-core
 ```
 
 `./aledb start` will:
-1. Create a Python virtual environment and install dependencies
+1. Create a Python virtual environment at `env/main/` and install dependencies (run once
+   on first invocation; use `./aledb install` to (re)install deps without starting)
 2. Run database migrations (SQLite, no external database needed)
 3. Create a default admin user (`admin` / `admin`)
 4. Open your browser to `http://127.0.0.1:8000`
