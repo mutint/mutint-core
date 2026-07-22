@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: latin-1 -*-
 """
 Implements the GDParser class (that parses GenomeDiff files) and associated subroutines and exceptions.
