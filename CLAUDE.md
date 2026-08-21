@@ -72,7 +72,15 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 All apps use the `aledb_*` namespace. Key apps:
 
 - **`aledb_experiment/`** — Core data models: `AleExperiment`, `Project`, `AleId`, `Flask`, `Isolate`, `Media`, `FreezerBox`. Central schema everything else references.
-- **`aledb_import/`** — Experiment upload pipeline. `ale_experiment.py` is the main entry point; reads breseq output dirs, calls `gdparse/` to parse `.gd` files, then triggers fixation/convergence/stats recomputation.
+- **`aledb_import/`** — Experiment upload pipeline, with **two `.gd` parsers on two paths**:
+  - CLI / breseq-directory upload — `ale_experiment.py` is the entry point; reads breseq output
+    dirs (`annotated.gd` + `index.html` + `summary.html`) and parses with the vendored
+    hand-rolled `gdparse/gdparse/gdparse.py` (`GDParser`), then triggers fixation/convergence/stats
+    recomputation.
+  - Web drag-and-drop upload — `gd_import.py` takes bare `.gd` files and parses with the
+    external `genomediff` package (`GenomeDiff.read`). Each record is stored verbatim in
+    `Mutation.gd_data` and round-tripped back out by `Mutation.to_gd_line()` (`aledb_seq/models.py`)
+    for `gdtools APPLY`. Note `gdparse` has no `INT` type; `genomediff` does.
 - **`aledb_seq/`** — Mutation models and views (accessible at `/mutations/`).
 - **`aledb_fixation/`** — Fixated mutation computation.
 - **`aledb_converge/`** — Convergence analysis across experiments.
@@ -108,6 +116,7 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_experiment()`
 2. Reads breseq output dirs; parses `.gd` files via `aledb_import.gdparse.gdparse()`
+   (the web drag-and-drop path instead goes through `aledb_import.gd_import` / the `genomediff` package)
 3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances
 4. Triggers `aledb_fixation.util`, `aledb_converge.util`, and `aledb_stats.util` to recompute derived data
 5. Updates dashboard cache via `aledb_dashboard.util.rebuild_dashboard_data()`
