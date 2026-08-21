@@ -64,11 +64,17 @@ If `ALE_DATA_ROOT_DIR` is not set, the app runs normally but links to sequencing
 
 ### Sequencing URL prefix (`SEQUENCING_URL`)
 
-By default, ALEdb builds sequencing result links using its own `/aledata/` route (served by Django). If your sequencing files are hosted externally — for example, served by nginx directly from a mounted volume — set `SEQUENCING_URL` to the public URL prefix for those files:
+`SEQUENCING_URL` is the URL prefix ALEdb puts in front of a sample's stored `location` when it builds a link to that sample's breseq report. If your sequencing files are hosted externally — for example, served by nginx directly from a mounted volume — set it to the public URL prefix for those files:
 
 ```bash
 export SEQUENCING_URL=https://example.org/aledata/
 ```
+
+To serve them through Django's own `/aledata/` route instead, point `SEQUENCING_URL` at it
+explicitly — `export SEQUENCING_URL=http://127.0.0.1:8000/aledata/`. There is no implicit
+fallback: when `SEQUENCING_URL` is empty, or when a sample has no stored `location`, the
+sample name renders as plain text with no link. `.gd` files imported through the web uploader
+always fall in the latter case, since a bare `.gd` has no breseq HTML report to link to.
 
 Leave this unset for local development.
 
@@ -81,7 +87,7 @@ All configuration is via environment variables. The defaults are suitable for lo
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ALE_DATA_ROOT_DIR` | `ale_data_root_dir` | Filesystem path to the directory containing breseq output directories. ALEdb serves files from here at `/aledata/`. |
-| `SEQUENCING_URL` | _(empty)_ | Public URL prefix for sequencing result links. Leave empty to use Django's built-in `/aledata/` route. |
+| `SEQUENCING_URL` | _(empty)_ | Public URL prefix for sequencing result links. Leave empty to render sample names as plain text with no report link. Note this does **not** fall back to the `/aledata/` route — set it explicitly (e.g. `http://127.0.0.1:8000/aledata/`) if you want links to go through Django. |
 | `DJANGO_SECRET_KEY` | insecure dev key | Django secret key. Must be set to a long random string in any non-local deployment. |
 | `DEBUG` | `0` | Set to `1` to enable Django debug mode (shows error tracebacks in the browser). |
 | `DJANGO_SERVER_HOST` | `localhost` | Hostname added to `ALLOWED_HOSTS`. Set to your server's hostname or IP for non-local deployments. |

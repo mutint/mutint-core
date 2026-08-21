@@ -29,6 +29,12 @@ def _uploaded(path):
         return SimpleUploadedFile(os.path.basename(path), handle.read())
 
 
+def _uploaded_as(path, name):
+    """Same fixture content under a different filename, to exercise name parsing."""
+    with open(path, "rb") as handle:
+        return SimpleUploadedFile(name, handle.read())
+
+
 class GdImportTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create(
@@ -112,3 +118,110 @@ class GdImportTestCase(TestCase):
         export = self.client.get("/import/gd/%d/export" % reseq.id)
         self.assertEqual(export.status_code, 200)
         self.assertIn("#=GENOME_DIFF", export.content.decode("utf-8"))
+
+    # --- sample identity from the filename -------------------------------------------
+
+    # Real-world names like "Ara-1_500gen_762B" carry no A-F-I-R identity. They used to run
+    # through parse_ale_name, whose bare `except: return 1` mapped every one of them onto
+    # ALE 1 / flask 1 / isolate 1 / rep 1 -- so a 22-file upload collapsed into one sample.
+    NON_AFIR_NAMES = [
+        "Ara-1_500gen_762B.gd",
+        "Ara-1_1000gen_964C.gd",
+        "Ara-1_50000gen_11331.gd",
+    ]
+
+    def _import_named(self, names, experiment="gd exp"):
+        return gd_import.import_gd_files(
+            [_uploaded_as(CLEAN_GD, name) for name in names],
+            project_name="gd project", experiment_name=experiment, person="tester")
+
+    def test_non_afir_filenames_get_distinct_isolates(self):
+        summary = self._import_named(self.NON_AFIR_NAMES)
+
+        self.assertEqual(len(summary["files"]), len(self.NON_AFIR_NAMES))
+        self.assertIsNone(summary["files"][0]["error"])
+
+        # One sample per file, each individually addressable.
+        self.assertEqual(ResequencingExperiment.objects.count(), len(self.NON_AFIR_NAMES))
+        self.assertEqual(
+            sorted(ResequencingExperiment.objects.values_list("sample_name", flat=True)),
+            sorted(name[:-3] for name in self.NON_AFIR_NAMES))
+
+        isolates = Isolate.objects.all()
+        self.assertEqual(isolates.count(), len(self.NON_AFIR_NAMES))
+        self.assertEqual(
+            sorted(isolates.values_list("isolate_number", flat=True)),
+            list(range(1, len(self.NON_AFIR_NAMES) + 1)))
+
+        # ...all still hanging off a single ALE 1 / flask 1.
+        self.assertEqual(AleId.objects.count(), 1)
+        self.assertEqual(AleId.objects.get().ale_id, 1)
+        self.assertEqual(Flask.objects.count(), 1)
+        self.assertEqual(Flask.objects.get().flask_number, 1)
+
+    def test_non_afir_reimport_is_idempotent(self):
+        self._import_named(self.NON_AFIR_NAMES)
+        self._import_named(self.NON_AFIR_NAMES)
+
+        # Auto-numbering must reuse the existing chain, not allocate a second isolate.
+        self.assertEqual(ResequencingExperiment.objects.count(), len(self.NON_AFIR_NAMES))
+        self.assertEqual(Isolate.objects.count(), len(self.NON_AFIR_NAMES))
+        self.assertEqual(ObservedMutation.objects.count(),
+                         Mutation.objects.count() * len(self.NON_AFIR_NAMES))
+
+    def test_afir_filename_still_uses_filename_numbering(self):
+        """The strict parser must not regress names that genuinely are A-F-I-R."""
+        self._import_named(["3-30000-1-1.gd"])
+
+        self.assertEqual(AleId.objects.get().ale_id, 3)
+        self.assertEqual(Flask.objects.get().flask_number, 30000)
+        self.assertEqual(Isolate.objects.get().isolate_number, 1)
+        self.assertEqual(TechnicalReplicate.objects.get().tech_rep_number, 1)
+
+    def test_summary_reports_the_real_experiment_pk(self):
+        """The post-import "View mutations" link is built from this id."""
+        summary = self._import_named(self.NON_AFIR_NAMES[:1])
+
+        experiment = AleExperiment.objects.get()
+        self.assertEqual(summary["experiment_id"], experiment.ale_id)
+        self.assertEqual(summary["experiment"], experiment.name)
+
+    def test_gd_imported_rows_have_no_report_location(self):
+        """No breseq HTML exists for a bare .gd, so link-builders must get a falsy value
+        rather than a location that renders as the string "None"."""
+        self._import_named(self.NON_AFIR_NAMES[:1])
+
+        self.assertFalse(ResequencingExperiment.objects.get().location)
+
+    # --- the pages the post-import link lands on ---------------------------------------
+
+    def test_imported_experiment_pages_render(self):
+        """/stats and /mutations must render for a gd-imported experiment.
+
+        Regression guard for three defects that all surfaced on these two pages: the
+        NULL `location` rendering as the literal string "None" in an href, the
+        `!= ""` guards that let that href through, and the `ale.common` NameError that
+        turned /mutations into a 500 page for every experiment."""
+        summary = self._import_named(self.NON_AFIR_NAMES)
+        experiment_id = summary["experiment_id"]
+        self.client.force_login(self.user)
+
+        stats = self.client.get("/stats/", {"ale_experiment_id": experiment_id})
+        self.assertEqual(stats.status_code, 200)
+        stats_html = stats.content.decode("utf-8")
+        self.assertNotIn("Noneindex.html", stats_html)
+        self.assertNotIn('href="None', stats_html)
+        # Every sample is listed, as plain text rather than a dead report link.
+        for name in self.NON_AFIR_NAMES:
+            self.assertIn(name[:-3], stats_html)
+
+        mutations = self.client.get("/mutations/", {"ale_experiment_id": experiment_id})
+        self.assertEqual(mutations.status_code, 200)
+        mutations_html = mutations.content.decode("utf-8")
+        self.assertNotIn("Page not available", mutations_html)
+        self.assertNotIn("name 'ale' is not defined", mutations_html)
+
+        metadata = self.client.get("/metadata/", {"ale_experiment_id": experiment_id})
+        self.assertEqual(metadata.status_code, 200)
+        self.assertNotIn('href="None', metadata.content.decode("utf-8"))
+

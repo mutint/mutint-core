@@ -41,7 +41,7 @@ def get_aleid_ale_id_list(experiment_id, exclude_starting_strain=False):
         aleid_queryset = aledb_experiment.models.AleId.objects.all()
 
     if exclude_starting_strain:
-        aleid_queryset = aleid_queryset.exclude(ale_id=ale.common.STARTING_STRAIN_ALE_ID)
+        aleid_queryset = aleid_queryset.exclude(ale_id=aledb_experiment.common.STARTING_STRAIN_ALE_ID)
     return aleid_queryset.values_list("ale_id", flat=True)
 
 
@@ -88,7 +88,7 @@ def get_ale_experiment_name(request):
 
 def filter_out_wt_reseq(reseq_ordered_dict):
     for key, value in reseq_ordered_dict.items():
-        if value.ale_id == ale.common.STARTING_STRAIN_ALE_ID:
+        if value.ale_id == aledb_experiment.common.STARTING_STRAIN_ALE_ID:
             del reseq_ordered_dict[key]
             break
     return reseq_ordered_dict
@@ -100,7 +100,7 @@ def get_wt_reseq_id(seq_experiment_ordered_dict):
 
     for key, value in seq_experiment_ordered_dict.items():
 
-        if value.ale_id == ale.common.STARTING_STRAIN_ALE_ID:
+        if value.ale_id == aledb_experiment.common.STARTING_STRAIN_ALE_ID:
 
             wt_id = key
 

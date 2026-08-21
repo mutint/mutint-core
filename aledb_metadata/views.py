@@ -25,7 +25,7 @@ META_DATA_TEMPLATE = "metadata/index.html"
 if hasattr(settings, "SEQUENCING_URL"):
     reseq_report_url = settings.SEQUENCING_URL
 else:
-    reseq_report_url = common.DEFAULT_RESEQ_REPORT_URL
+    reseq_report_url = ""
 
 
 def metadata(request):

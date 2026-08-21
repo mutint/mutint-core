@@ -68,7 +68,7 @@ class TableType(Enum):
 if hasattr(settings, aledb_seq.views.common.SETTINGS_SEQUENCING_URL):
     resequencing_report_url = settings.SEQUENCING_URL
 else:
-    resequencing_report_url = aledb_seq.views.common.DEFAULT_RESEQ_REPORT_URL
+    resequencing_report_url = ""
 
 
 def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
@@ -197,26 +197,36 @@ def _initialize_table(experiment_id_idx_mapping, mutations):
     return [[HTML_EMPTY_MUTATION_CELL] * len(experiment_id_idx_mapping) for _ in range(len(mutations))]
 
 
+# A sample only gets a report link when SEQUENCING_URL is configured AND the reseq row
+# carries a location. .gd files imported through the web uploader have no breseq HTML
+# report, so location is None for them; omitting the id here is how callers know to
+# render the sample name as plain text instead of a dead link.
 def get_experiment_urls(reseq_dict):
     experiment_urls = {}
+    if not resequencing_report_url:
+        return experiment_urls
     for reseq in reseq_dict.values():
-        if reseq.location != "":
+        if reseq.location:
             experiment_urls[reseq.id] = resequencing_report_url + reseq.location
     return experiment_urls
 
 
 def get_experiment_root_urls(reseq_dict):
     experiment_urls = {}
+    if not resequencing_report_url:
+        return experiment_urls
     for reseq in reseq_dict.values():
-        if reseq.experiment_location != "":
-            experiment_urls[reseq.id] = str(resequencing_report_url) + str(reseq.experiment_location) + '/' + str(reseq.sample_name) + '.html'
+        if reseq.experiment_location:
+            experiment_urls[reseq.id] = resequencing_report_url + reseq.experiment_location + '/' + str(reseq.sample_name) + '.html'
     return experiment_urls
 
 
 def get_gatk_urls(reseq_dict):
     gatk_urls = {}
+    if not resequencing_report_url:
+        return gatk_urls
     for reseq in reseq_dict.values():
-        if reseq.location != "":
+        if reseq.location:
             location_to_return = reseq.gatk_location or "default"
             gatk_urls[reseq.id] = resequencing_report_url + location_to_return
     return gatk_urls
@@ -254,7 +264,16 @@ def _get_table_mutation_entry(observed_mutation, experiment_url_dict, gatk_url_d
                                                                   gatk_details_url, float(observed_mutation.frequency_gatk))
 
         else:
-            table_entry = """<span class="true">%.2f/%.2f</span>""" % (observed_mutation.frequency, observed_mutation.frequency_gatk)
+            # No breseq report to link to (e.g. a .gd imported through the web uploader,
+            # which sets frequency but never frequency_gatk). Show whichever frequencies
+            # exist rather than formatting None with %.2f.
+            frequencies = [f for f in (observed_mutation.frequency,
+                                       observed_mutation.frequency_gatk) if f is not None]
+            if frequencies:
+                table_entry = """<span class="true">%s</span>""" % (
+                    "/".join("%.2f" % float(f) for f in frequencies))
+            else:
+                table_entry = """<span class="true">&#10003;</span>"""
 
     # TODO: Figure out what this is supposed to do.
     elif observed_mutation.present is False:

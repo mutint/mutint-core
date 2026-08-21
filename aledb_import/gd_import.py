@@ -22,6 +22,7 @@ import os
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import Max
 
 import aledb_metadata.parser as metadata_defaults
 from aledb_experiment.models import (
@@ -110,16 +111,38 @@ def _import_one_file(uploaded, filename, context, person):
     document = _parse_document(uploaded)
 
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
-    ale_number = parse_ale_name(sample_name, AleName.Ale)
-    flask_number = parse_ale_name(sample_name, AleName.Flask)
-    isolate_number = parse_ale_name(sample_name, AleName.Isolate)
-    tech_rep_number = parse_ale_name(sample_name, AleName.TechnicalReplicate)
+    afir = _parse_afir(sample_name)
 
-    seq_experiment = _get_or_create_chain(
-        context, document, ale_number, flask_number, isolate_number,
-        tech_rep_number, person, sample_name)
+    if afir is None:
+        # Filename carries no A-F-I-R identity (e.g. "Ara-1_500gen_762B"). Give the sample
+        # its own isolate rather than letting every such file collapse onto 1-1-1-1.
+        seq_experiment = _get_or_create_autonumbered_chain(
+            context, document, person, sample_name)
+    else:
+        ale_number, flask_number, isolate_number, tech_rep_number = afir
+        seq_experiment = _get_or_create_chain(
+            context, document, ale_number, flask_number, isolate_number,
+            tech_rep_number, person, sample_name)
 
     return _database_gd_mutations(seq_experiment, document)
+
+
+def _parse_afir(sample_name):
+    """Return ``(ale, flask, isolate, tech_rep)`` if the name is A-F-I-R, else ``None``.
+
+    ``util.parse_ale_name`` silently returns 1 for any field it cannot read, which is the
+    behaviour the CLI path relies on but which here would map every non-conforming filename
+    onto the same sample. This is the strict counterpart: all four fields must be present
+    and integral, or the caller falls back to auto-numbering."""
+    split = sample_name.split("-")
+    if len(split) <= AleName.TechnicalReplicate:
+        return None
+    try:
+        return tuple(
+            int(split[i]) for i in (
+                AleName.Ale, AleName.Flask, AleName.Isolate, AleName.TechnicalReplicate))
+    except ValueError:
+        return None
 
 
 def _parse_document(uploaded):
@@ -162,6 +185,44 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     seq_experiment, _ = ResequencingExperiment.objects.get_or_create(
         tech_rep=tech_rep, sample_name=sample_name, person=person)
     return seq_experiment
+
+
+def _get_or_create_autonumbered_chain(context, document, person, sample_name):
+    """Chain for a sample whose filename has no A-F-I-R identity.
+
+    Everything hangs off ALE 1 / Flask 1, but each distinct sample gets its own isolate so
+    the samples stay individually addressable. Re-importing a sample must not allocate a
+    second isolate, so an existing chain for this sample name is reused."""
+    experiment = context["experiment"]
+
+    existing = ResequencingExperiment.objects.filter(
+        sample_name=sample_name,
+        tech_rep__isolate__flask__ale_id__ale_experiment=experiment).first()
+    if existing is not None:
+        return existing
+
+    metadata = document.metadata
+    ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id=1)
+    flask, _ = Flask.objects.get_or_create(
+        flask_number=1, ale_id=ale_id, media=context["media"])
+
+    next_isolate_number = (Isolate.objects.filter(flask=flask).aggregate(
+        Max("isolate_number"))["isolate_number__max"] or 0) + 1
+
+    isolate = Isolate.objects.create(
+        flask=flask,
+        isolate_number=next_isolate_number,
+        # ale_flask_isolate_str() prefers the description, so this is what makes the
+        # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3 R1".
+        description=sample_name[:300],
+        is_population=" -p" in (metadata.get("COMMAND", "") or ""),
+        reseq_reference=(metadata.get("REFSEQ", "") or "")[:200],
+        reseq_date=(metadata.get("CREATED", "") or "")[:200],
+        freezer_box=context["freezer_box"],
+        person=person)
+    tech_rep = TechnicalReplicate.objects.create(tech_rep_number=1, isolate=isolate)
+    return ResequencingExperiment.objects.create(
+        tech_rep=tech_rep, sample_name=sample_name, person=person)
 
 
 def _database_gd_mutations(seq_experiment, document):

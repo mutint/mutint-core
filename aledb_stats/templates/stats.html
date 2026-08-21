@@ -193,7 +193,7 @@
             {% for experiment_info_tuple in experiments_info_list %}
                 <tr class="experiment_stats">
                     <td class="sample_name">
-                        {% if experiment_info_tuple.0.location != "" %}
+                        {% if resequencing_report_url and experiment_info_tuple.0.location %}
                             <a href="{{ resequencing_report_url }}{{ experiment_info_tuple.0.location }}index.html">{{ experiment_info_tuple.0.ale_flask_isolate_str }}</a>
                         {% else %}
                             {{ experiment_info_tuple.0.ale_flask_isolate_str }}

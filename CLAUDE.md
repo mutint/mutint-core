@@ -81,6 +81,11 @@ All apps use the `aledb_*` namespace. Key apps:
     external `genomediff` package (`GenomeDiff.read`). Each record is stored verbatim in
     `Mutation.gd_data` and round-tripped back out by `Mutation.to_gd_line()` (`aledb_seq/models.py`)
     for `gdtools APPLY`. Note `gdparse` has no `INT` type; `genomediff` does.
+    Sample identity comes from the filename: a strict A-F-I-R name (`3-30000-1-1.gd`) is
+    parsed as such, and anything else (`Ara-1_500gen_762B.gd`) gets its own auto-numbered
+    isolate under ALE 1 / flask 1, with `Isolate.description` set to the filename so it
+    displays by name. Do not route this through `util.parse_ale_name`, whose bare
+    `except: return 1` would collapse every non-conforming file onto the same sample.
 - **`aledb_seq/`** — Mutation models and views (accessible at `/mutations/`).
 - **`aledb_fixation/`** — Fixated mutation computation.
 - **`aledb_converge/`** — Convergence analysis across experiments.
