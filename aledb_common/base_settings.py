@@ -161,6 +161,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
                         'django.template.context_processors.tz',
                         'django.contrib.messages.context_processors.messages',
                         'aledb_common.context_processors.global_settings',
+                        'aledb_common.context_processors.plugin_exports',
                     ],
                     'debug': debug,
                 },
