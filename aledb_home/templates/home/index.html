@@ -145,21 +145,11 @@
                         </h2>
                         {% if ale_experiment_id %}
                             <a href="/stats?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
-                               role="button">Stats</a> |
-                            <a href="/metadata?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
-                               role="button">Metadata</a> |
-                            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
-                               role="button">Mutations</a> |
-                            <a href="/converge?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
-                               role="button">Converged Mutations</a> |
-                            <a href="/fixation?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
-                               role="button">Fixed Mutations</a> |
-                            <a href="/filter?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
-                               role="button">Filter</a>
-                        {% endif %}
-                        {% if ale_experiment_id and user.is_authenticated %}
-                            |<a href="/mutations/amplifications?ale_experiment_id={{ ale_experiment_id }}"
-                                class="btn-primary2" role="button">Amplifications</a>
+                               role="button">Stats</a>
+                            {% for item in nav_experiment_items %}
+                                | <a href="{{ item.url }}?ale_experiment_id={{ ale_experiment_id }}"
+                                     class="btn-primary2" role="button">{{ item.label }}</a>
+                            {% endfor %}
                         {% endif %}
                     </div>
                 </div>

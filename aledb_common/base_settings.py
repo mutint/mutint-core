@@ -67,18 +67,21 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'bootstrap4',
             'debug_toolbar',
             'guardian',
-            'aledb_experiment',
+            # Order is load-bearing: sidebar entries render in INSTALLED_APPS
+            # order (see aledb_common/nav_registry.py). To move a nav entry,
+            # move its app here. Apps contributing no nav follow.
+            'aledb_about',           # nav: About
+            'aledb_dashboard',       # nav: Dashboard
+            'aledb_search',          # nav: Search
+            'aledb_experiment',      # nav: Projects, Experiments
+            'aledb_metadata',        # nav: Metadata
+            'aledb_seq',             # nav: Mutations, Amplifications
+            'aledb_filter',          # nav: Filter
             'aledb_import',
-            'aledb_seq',
-            'aledb_filter',
             'aledb_stats',
-            'aledb_metadata',
-            'aledb_about',
             'aledb_accounts_noauth',
             'aledb_export',
             'aledb_common',
-            'aledb_dashboard',
-            'aledb_search',
             'aledb_bibliome',
             'aledb_home',
             'aledb_interop_query',
@@ -162,6 +165,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
                         'django.contrib.messages.context_processors.messages',
                         'aledb_common.context_processors.global_settings',
                         'aledb_common.context_processors.plugin_exports',
+                        'aledb_common.context_processors.nav_items',
                     ],
                     'debug': debug,
                 },
