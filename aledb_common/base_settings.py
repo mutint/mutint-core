@@ -77,7 +77,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_metadata',        # nav: Metadata
             'aledb_seq',             # nav: Mutations, Amplifications
             'aledb_filter',          # nav: Filter
-            'aledb_import',
+            'aledb_import',          # nav: Import
             'aledb_stats',
             'aledb_accounts_noauth',
             'aledb_export',
