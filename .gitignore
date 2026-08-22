@@ -38,6 +38,12 @@ env/
 #Local Artifacts
 aledb_local.sqlite3
 
+# Managed file store. ALEDB_STORE_DIR defaults to <base_dir>/aledb_store
+# (aledb_common/base_settings.py), so an unconfigured instance writes uploaded references,
+# .gd files and alignments straight into the checkout. Anchored: only the one at the repo
+# root is the default's, and it is real instance data rather than build output.
+/aledb_store/
+
 # Operator-local audit working docs. Contain live credential values + detailed
 # operational notes from the pre-publish security audit. The publish-safe
 # versions of this content live as docs/operations/audit_summary.md (the
