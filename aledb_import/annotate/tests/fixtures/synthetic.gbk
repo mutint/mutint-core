@@ -1,0 +1,188 @@
+LOCUS       SYN001                  6000 bp    DNA     linear   UNK 01-JAN-1980
+DEFINITION  Synthetic reference for annotation tests.
+ACCESSION   SYN001
+VERSION     SYN001
+KEYWORDS    .
+SOURCE      .
+  ORGANISM  .
+            .
+FEATURES             Location/Qualifiers
+     source          1..6000
+                     /organism="synthetic construct"
+                     /mol_type="genomic DNA"
+     CDS             101..400
+                     /gene="thrA"
+                     /locus_tag="b0001"
+                     /product="aspartokinase I"
+                     /transl_table=11
+     CDS             complement(501..800)
+                     /gene="thrB"
+                     /locus_tag="b0002"
+                     /product="homoserine kinase"
+                     /transl_table=11
+     CDS             complement(1001..1600)
+                     /gene="araJ"
+                     /locus_tag="b0003"
+                     /product="predicted transporter"
+                     /transl_table=11
+     CDS             complement(1701..2000)
+                     /gene="divA"
+                     /locus_tag="b0004"
+                     /product="divergent gene A"
+                     /transl_table=11
+     CDS             2101..2400
+                     /gene="divB"
+                     /locus_tag="b0005"
+                     /product="divergent gene B"
+                     /transl_table=11
+     CDS             join(2501..2600,2701..2801)
+                     /gene="splA"
+                     /locus_tag="b0006"
+                     /product="spliced gene, plus strand"
+                     /transl_table=11
+     CDS             complement(join(3001..3101,3201..3300))
+                     /gene="splB"
+                     /locus_tag="b0007"
+                     /product="spliced gene, minus strand"
+                     /transl_table=11
+     tRNA            3501..3574
+                     /gene="trnA"
+                     /locus_tag="b0008"
+                     /product="tRNA-Ala"
+     CDS             3701..4000
+                     /gene="pseuA"
+                     /locus_tag="b0009"
+                     /product="pseudogene, decayed"
+                     /transl_table=11
+                     /pseudo=""
+     repeat_region   4201..4400
+                     /mobile_element_type="insertion sequence:IS150"
+     repeat_region   complement(4601..4800)
+                     /mobile_element_type="insertion sequence:IS150"
+     CDS             <5001..5300
+                     /gene="fuzA"
+                     /locus_tag="b0010"
+                     /product="partial gene"
+                     /transl_table=11
+     CDS             5401..5700
+                     /gene="ovlA"
+                     /locus_tag="b0011"
+                     /product="overlapping gene A"
+                     /transl_table=11
+     CDS             complement(5500..5799)
+                     /gene="ovlB"
+                     /locus_tag="b0012"
+                     /product="overlapping gene B"
+                     /transl_table=11
+     CDS             5851..>5900
+                     /gene="fuzB"
+                     /locus_tag="b0013"
+                     /product="partial gene, open 3-prime end"
+                     /transl_table=11
+     CDS             5911..5999
+                     /gene="truncA"
+                     /locus_tag="b0014"
+                     /product="truncated reading frame"
+                     /transl_table=11
+ORIGIN
+        1 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+       61 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      121 atcggcatac gcatcggcat cggcatcggc atcggcattt gcatcggcat cggcatcggc
+      181 atcggcattt gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      241 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      301 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      361 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      421 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      481 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      541 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      601 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      661 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      721 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      781 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      841 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      901 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+      961 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1021 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1081 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1141 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1201 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1261 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1321 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1381 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1441 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1501 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1561 atcggcatcg gcatcggcat cggcatcggc atcggtatcg gcatcggcat cggcatcggc
+     1621 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1681 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1741 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1801 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1861 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1921 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     1981 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2041 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2101 gtgggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2161 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2221 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2281 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2341 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2401 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2461 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2521 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2581 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2641 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2701 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2761 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2821 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2881 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     2941 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3001 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3061 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3121 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3181 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3241 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3301 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3361 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3421 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3481 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3541 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3601 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3661 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3721 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3781 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3841 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3901 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     3961 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4021 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4081 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4141 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4201 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4261 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4321 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4381 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4441 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4501 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4561 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4621 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4681 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4741 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4801 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4861 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4921 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     4981 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5041 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5101 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5161 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5221 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5281 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5341 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5401 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5461 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5521 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5581 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5641 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5701 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5761 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5821 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5881 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggcatcggc
+     5941 atcggcatcg gcatcggcat cggcatcggc atcggcatcg gcatcggcat cggctacggc
+//

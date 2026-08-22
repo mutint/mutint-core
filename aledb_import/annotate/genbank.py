@@ -1,0 +1,160 @@
+"""
+GenBank -> the annotation feature model.
+
+Biopython does the record, location and sequence parsing. What it does not do is
+breseq's feature post-processing -- name precedence, IS-name trimming, the
+repeat/gene split, separator escaping -- so that layer is ported explicitly from
+reference_sequence.cpp:2397-2508.
+"""
+
+import os
+import warnings
+
+from Bio import BiopythonParserWarning, SeqIO
+
+from aledb_import.annotate.model import (
+    DEFAULT_REPEAT_NAME,
+    DEFAULT_REPEAT_PRODUCT,
+    GENE_TYPES,
+    MULTIPLE_SEPARATOR,
+    REPEAT_TYPES,
+    AnnotatedSequence,
+    Feature,
+    FeatureLocation,
+    ReferenceSequences,
+    make_safe,
+    trim_repeat_name,
+)
+
+
+def _first_qualifier(feature, key):
+    values = feature.qualifiers.get(key)
+    if not values:
+        return ''
+    value = values[0]
+    return '' if value is None else str(value)
+
+
+def _locations_from_biopython(bio_location, feature):
+    """
+    Biopython's location model -> breseq's sublocation list.
+
+    A CompoundLocation already yields its parts 5'->3' in the feature's own
+    orientation, which is what breseq builds by reversing after complementing.
+    """
+    from Bio.SeqFeature import AfterPosition, BeforePosition
+
+    locations = []
+    for part in bio_location.parts:
+        strand = -1 if part.strand == -1 else 1
+        locations.append(FeatureLocation(
+            start_1=int(part.start) + 1,
+            end_1=int(part.end),
+            strand=strand,
+            start_is_indeterminate=isinstance(part.start, BeforePosition),
+            end_is_indeterminate=isinstance(part.end, AfterPosition),
+            feature=feature,
+        ))
+    return locations
+
+
+def _build_feature(bio_feature):
+    feature_type = bio_feature.type
+    if feature_type not in GENE_TYPES and feature_type not in REPEAT_TYPES:
+        return None
+
+    product = _first_qualifier(bio_feature, 'product')
+    if not product:
+        product = _first_qualifier(bio_feature, 'note')
+
+    feature = Feature(feature_type, product=product)
+
+    if feature.is_repeat():
+        name = DEFAULT_REPEAT_NAME
+        mobile_element = (_first_qualifier(bio_feature, 'mobile_element')
+                          or _first_qualifier(bio_feature, 'mobile_element_type'))
+        if mobile_element:
+            name = trim_repeat_name(mobile_element)
+        else:
+            # Each fallback only applies while the name is still the default.
+            for qualifier in ('rpt_family', 'rpt_type', 'label', 'note'):
+                value = _first_qualifier(bio_feature, qualifier)
+                if value:
+                    name = value
+                    break
+        feature.name = name
+        feature.product = product or DEFAULT_REPEAT_PRODUCT
+    else:
+        feature.name = (_first_qualifier(bio_feature, 'gene')
+                        or _first_qualifier(bio_feature, 'locus_tag')
+                        or _first_qualifier(bio_feature, 'label')
+                        or _first_qualifier(bio_feature, 'note')
+                        or 'unknown')
+        feature.locus_tag = _first_qualifier(bio_feature, 'locus_tag')
+        feature.pseudogene = 'pseudo' in bio_feature.qualifiers
+        transl_table = _first_qualifier(bio_feature, 'transl_table')
+        if transl_table:
+            try:
+                feature.translation_table = int(transl_table)
+            except ValueError:
+                pass
+
+    feature.name = make_safe(feature.name)
+    feature.locus_tag = make_safe(feature.locus_tag)
+    feature.product = feature.product.replace(MULTIPLE_SEPARATOR, ';')
+
+    feature.locations = _locations_from_biopython(bio_feature.location, feature)
+    return feature
+
+
+def parse_records(path):
+    """
+    Parse a GenBank file, quietly.
+
+    breseq-produced references routinely have truncated LOCUS lines and
+    lower-case molecule types, which Biopython warns about and then handles
+    correctly anyway. Those warnings would be noise in the upload log.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', BiopythonParserWarning)
+        return list(SeqIO.parse(path, 'genbank'))
+
+
+def load_genbank(*paths):
+    """Load one or more GenBank files into a ReferenceSequences."""
+    references = ReferenceSequences()
+
+    for path in paths:
+        for record in parse_records(path):
+            seq_id = record.id or record.name
+            annotated = AnnotatedSequence(seq_id, str(record.seq).upper())
+            for bio_feature in record.features:
+                feature = _build_feature(bio_feature)
+                if feature is not None:
+                    annotated.features.append(feature)
+            annotated.update_feature_lists()
+            references.add(annotated)
+            if record.name and record.name not in references.sequences:
+                references.sequences[record.name] = annotated
+
+    if not references.sequences:
+        raise ValueError('No GenBank records found in: %s' % ', '.join(paths))
+    return references
+
+
+def read_seq_ids(path):
+    """Just the contig ids a GenBank file defines."""
+    return [record.id or record.name for record in parse_records(path)]
+
+
+def looks_like_genbank(path):
+    if not os.path.isfile(path):
+        return False
+    try:
+        with open(path, 'r', errors='replace') as handle:
+            for line in handle:
+                if line.strip():
+                    return line.startswith('LOCUS')
+    except OSError:
+        return False
+    return False
