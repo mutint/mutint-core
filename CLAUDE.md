@@ -218,6 +218,9 @@ Creation and deletion are nested under the objects they act on:
   experiment **by primary key**, so two experiments may share a name and two people may add to
   the same one — unlike `_prepare_experiment`, whose name+person lookup forks an experiment per
   person. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
+  There is **no unscoped form of this page and no sidebar entry for it** — `aledb_import`
+  registers no nav item. Both existed briefly and could only ever land on a page with no
+  experiment to add to; without a usable `ale_experiment_id` the route is now a plain 404.
 - Everything records the logged-in user; there are no person fields to fill in.
 
 **Deletion is soft.** `Project` and `AleExperiment` carry `deleted_at`/`deleted_by`

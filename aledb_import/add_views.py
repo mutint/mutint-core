@@ -8,7 +8,7 @@ auto-detect, without this module knowing it exists.
 
 import logging
 
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -24,6 +24,9 @@ logger = logging.getLogger("aledb_import.add_views")
 def add_view(request):
     """GET renders the drop page for `?ale_experiment_id=<pk>`.
 
+    Always scoped to one experiment; there is no unscoped form of this page. Without a
+    usable id it is a 404.
+
     There is no POST here: uploads go through the chunked session endpoints, which is what
     lets a multi-GB drop work at all.
     """
@@ -31,8 +34,11 @@ def add_view(request):
     try:
         experiment = AleExperiment.objects.get(pk=experiment_id)
     except (AleExperiment.DoesNotExist, ValueError, TypeError):
-        return render(request, "import/add_no_experiment.html",
-                      get_user_context(request.user), status=404)
+        # There used to be an explanatory page here, reached from an "Add data" sidebar
+        # entry. Both are gone: the only way in is an experiment's own Add data button, so
+        # arriving without a usable id now means a stale link, not a user who took a wrong
+        # turn in the nav.
+        raise Http404("No such experiment.")
 
     if not can_edit_project(request.user, experiment.project):
         return render(request, "403.html", get_user_context(request.user), status=403)

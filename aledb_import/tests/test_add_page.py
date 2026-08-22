@@ -90,10 +90,20 @@ class AddPageTestCase(TestCase):
 
         self.assertIn("Replace annotation", dropdown())
 
-    def test_missing_experiment_explains_rather_than_500s(self):
+    def test_missing_experiment_is_a_404(self):
+        """The page is only ever scoped to one experiment; there is no unscoped form."""
         self.assertEqual(self.client.get("/import/add/").status_code, 404)
         self.assertEqual(
             self.client.get("/import/add/", {"ale_experiment_id": 999999}).status_code, 404)
+        self.assertEqual(
+            self.client.get("/import/add/", {"ale_experiment_id": "nonsense"}).status_code, 404)
+
+    def test_no_add_data_entry_in_the_sidebar(self):
+        """It could only ever have led to /import/add/ with nothing to add to."""
+        from aledb_common.nav_registry import get_nav_items
+
+        labels = [item["label"] for item in get_nav_items()]
+        self.assertNotIn("Add data", labels)
 
     def test_someone_elses_experiment_is_forbidden(self):
         stranger = User.objects.create(username="stranger", email="s@e.com", is_active=True)
