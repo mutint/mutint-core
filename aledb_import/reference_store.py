@@ -2,7 +2,7 @@
 
 One code path for both ways a reference arrives:
 
-* the two-step route, where a user uploads a GenBank, GFF3, or FASTA before importing; and
+* an explicit upload -- a GenBank, GFF3, or FASTA dropped on the Add page; and
 * a breseq folder, which carries ``data/reference.gff3`` and ``data/reference.fasta``.
 
 Both are normalized first (see ``reference.normalize_reference``), so the stored artifacts
@@ -36,9 +36,10 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
 
     Sameness is decided on the **sequence** alone -- see
     ``ExperimentReference.matches_sequence``. When the sequence matches but the annotation
-    differs, ``update_annotation`` decides what happens: an explicit upload through the
-    two-step route refreshes the stored GFF3, while a breseq folder import leaves the
-    experiment's existing annotation alone rather than letting import order decide it.
+    differs, ``update_annotation`` decides what happens: an explicit reference or
+    ``replace_annotation`` upload refreshes the stored GFF3, while a breseq folder import
+    leaves the experiment's existing annotation alone rather than letting import order
+    decide it.
 
     Returns ``(ExperimentReference, created)``. Raises ReferenceMismatch when the sequence
     differs and ``replace`` is not set.

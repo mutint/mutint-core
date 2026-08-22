@@ -157,17 +157,47 @@ def _parse_read_count(read_row_input):
     return int(read_row_input.replace(",", ""))
 
 
+def _relative_to_data_root(path):
+    """`path` relative to ALE_DATA_ROOT_DIR, or unchanged when it lies outside that root.
+
+    Replaces two older forms that both misbehave when the root does not occur in `path`:
+    `path.replace(root, "")` silently strips the root from the *middle* of a path, and
+    `path[path.find(root) + len(root):]` drops `len(root) - 1` leading characters, because
+    `find` returns -1. ALE_DATA_ROOT_DIR defaults to the relative literal
+    'ale_data_root_dir' (base_settings.py), so "does not occur" is the normal case.
+
+    The trailing separator is preserved: `location` is concatenated with a filename by
+    `mutation_table_builder.get_experiment_urls` and by stats.html.
+    """
+    if not ale_data_root_dir:
+        return path
+    root = os.path.abspath(ale_data_root_dir)
+    try:
+        if os.path.commonpath([os.path.abspath(path), root]) != root:
+            return path
+    except ValueError:
+        # Different drives, or one path relative and one absolute -- not under the root.
+        return path
+    relative = os.path.relpath(path, root)
+    if path.endswith(("/", os.sep)):
+        relative += os.sep
+    return relative
+
+
 def _get_reseq_experiment_with_stats(experiment_path, sample_name, technical_replicate_id, person):
     breseq_folder = '%s/breseq/%s/output/' % (experiment_path, sample_name)
+    # Stays empty when there is no breseq HTML report to link to. `location` is what the
+    # mutation table and stats page turn into a report URL, so a path to a report that does
+    # not exist is worse than no path at all.
     breseq_path = ""
     gatk_folder = '%s/gatk/%s/' % (experiment_path, sample_name)
 
     index_file_path = breseq_folder + HTML_INDEX_FILE_NAME
     if os.path.isfile(index_file_path):
-        breseq_path = breseq_folder[breseq_folder.find(ale_data_root_dir) + len(ale_data_root_dir):]
-    reseq, created = ResequencingExperiment.objects.get_or_create(location=breseq_folder.replace(ale_data_root_dir, ""),
-                                                                  gatk_location=gatk_folder.replace(ale_data_root_dir, ""),
-                                                                  experiment_location=experiment_path.replace(ale_data_root_dir, ""),
+        breseq_path = _relative_to_data_root(breseq_folder)
+    reseq, created = ResequencingExperiment.objects.get_or_create(location=breseq_path,
+                                                                  gatk_location=_relative_to_data_root(gatk_folder),
+                                                                  experiment_location=_relative_to_data_root(experiment_path),
                                                                   sample_name=sample_name,
                                                                   tech_rep_id=technical_replicate_id,
                                                                   person=person)

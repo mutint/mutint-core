@@ -82,8 +82,31 @@ def detect_reference(staged_root, paths):
 
 
 def handle_reference(experiment, staged_root, paths, user):
+    return _ingest_reference(experiment, staged_root, paths, annotation_only=False)
+
+
+def handle_replace_annotation(experiment, staged_root, paths, user):
+    """Refresh an established reference's gene annotation, leaving its sequence alone.
+
+    The narrow half of what the retired `/import/reference/` page could do. That page also
+    accepted `replace=True`, which overwrote a *different* genome; this deliberately does not.
+    Sameness of sequence is the invariant every sample is hash-checked against, so a UI that
+    can quietly break it is worse than no UI at all -- `reference_store.establish_or_check`
+    still takes `replace=` for a shell operator who genuinely needs it.
+    """
+    return _ingest_reference(experiment, staged_root, paths, annotation_only=True)
+
+
+def _ingest_reference(experiment, staged_root, paths, annotation_only):
     from aledb_import import reference as reference_io
     from aledb_import import reference_store
+
+    if annotation_only and not reference_store.has_reference(experiment):
+        return {"files": [{"file": p, "mutations": 0,
+                           "error": ("this experiment has no reference genome yet; set the "
+                                     "sequence first, then replace its annotation")}
+                          for p in paths],
+                "total_mutations": 0}
 
     results = []
     for relative in paths:
@@ -94,6 +117,14 @@ def handle_reference(experiment, staged_root, paths, user):
             reference_store.establish_or_check(
                 experiment, gff3_text, sequences, update_annotation=True)
             results.append({"file": relative, "mutations": 0, "error": None})
+        except reference_store.ReferenceMismatch:
+            # Named separately from the blanket handler below: this is the one failure a user
+            # can act on, and the hash-vs-hash text establish_or_check raises does not say so.
+            logger.info("annotation replacement refused for %s: sequence differs", relative)
+            results.append({"file": relative, "mutations": 0,
+                            "error": ("the sequence in this file is not this experiment's "
+                                      "reference genome; annotation can only be replaced "
+                                      "for the same sequence")})
         except Exception as exc:
             logger.exception("reference import failed for %s", relative)
             results.append({"file": relative, "mutations": 0, "error": str(exc)})
@@ -168,6 +199,20 @@ def register_core_import_handlers():
         detect=detect_reference,
         handle=handle_reference,
         description="Sets the reference every sample in the experiment is checked against.")
+    register_import_handler(
+        name="replace_annotation",
+        label="Replace annotation (same genome)",
+        patterns=REFERENCE_PATTERNS,
+        # Deliberately one step behind `reference`, which claims the same files: in
+        # auto-detect the lower priority takes them all and this one claims nothing, so it is
+        # reachable only by being named explicitly. That is what makes it a special option
+        # rather than a second thing that fires whenever a GenBank is dropped.
+        priority=PRIORITY_REFERENCE + 1,
+        detect=detect_reference,
+        handle=handle_replace_annotation,
+        requires_reference=True,
+        description="Refresh the gene annotation from a new GenBank or GFF3. The sequence "
+                    "must be identical; only the features are replaced.")
     register_import_handler(
         name="breseq_folder",
         label="breseq result folder",

@@ -1,52 +1,18 @@
-import logging
+"""What is left of the standalone import views: the .gd export download.
 
-from django.http import HttpResponse, JsonResponse
-from django.template import loader
-from django.views.decorators.csrf import ensure_csrf_cookie
+`gd_import_view` (`/import/`) and `reference_views.reference_upload_view`
+(`/import/reference/`) lived here until they were retired. Both were unlinked, both went
+through the name-based `_prepare_experiment`, whose (name, instrument, person, project)
+get_or_create forks a second experiment whenever the person differs, and neither had any
+authorization. The Add page (`add_views.py`) plus the chunked session endpoints replaced
+them; reference *annotation* replacement, the one capability only the reference page had,
+is now the `replace_annotation` import type in `handlers.py`.
+"""
 
-from aledb_common.util import get_user_context
+from django.http import HttpResponse
+
 from aledb_import import gd_import
-from aledb_import.forms import GenomeDiffUploadForm
 from aledb_seq.models import ResequencingExperiment
-
-logger = logging.getLogger(__name__)
-
-
-@ensure_csrf_cookie
-def gd_import_view(request):
-    """Drag-and-drop import of breseq GenomeDiff (.gd) files.
-
-    GET renders the dropzone page. POST accepts a multipart batch of ``.gd`` files
-    under ``gd_files`` plus target project/experiment/person fields and returns a
-    JSON summary of what was imported.
-    """
-    if request.method == "POST":
-        form = GenomeDiffUploadForm(request.POST)
-        uploaded_files = request.FILES.getlist("gd_files")
-        if not form.is_valid():
-            return JsonResponse({"error": "Invalid form.", "details": form.errors}, status=400)
-        gd_files = [f for f in uploaded_files if f.name.lower().endswith(".gd")]
-        if not gd_files:
-            return JsonResponse({"error": "No .gd files were uploaded."}, status=400)
-
-        person = form.cleaned_data["person"] or request.user.get_username()
-        try:
-            summary = gd_import.import_gd_files(
-                gd_files,
-                project_name=form.cleaned_data["project"],
-                experiment_name=form.cleaned_data["experiment"],
-                person=person)
-        except gd_import.ReferenceRequired as exc:
-            # A missing precondition is the caller's error, not a server fault.
-            return JsonResponse({"error": str(exc)}, status=400)
-        except Exception as exc:
-            logger.exception("GenomeDiff batch import failed")
-            return JsonResponse({"error": str(exc)}, status=500)
-        return JsonResponse(summary)
-
-    context = get_user_context(request.user)
-    template = loader.get_template("import/gd_import.html")
-    return HttpResponse(template.render(context, request), content_type="text/html")
 
 
 def gd_export_view(request, reseq_id):

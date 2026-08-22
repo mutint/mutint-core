@@ -1,23 +1,7 @@
 from django.contrib.auth.models import User, Group
 from aledb_experiment.models import Project, AleExperiment, RecentExperiments, AleId, live
-from guardian.models import GroupObjectPermission, UserObjectPermission
 from django.core.exceptions import ObjectDoesNotExist
-from aledb_experiment.permissions import VIEW_PROJECT, can_view_project
-
-
-def _get_projects_with_permissions(permission_codename):
-    """
-    get set of projects that have object-level permissions set
-    :return: set of project ids (set of str)
-    """
-    group_permissions = GroupObjectPermission.objects.filter(content_type__app_label='ale',
-                                                             content_type__model='project',
-                                                             permission__codename=permission_codename)
-    user_permissions = UserObjectPermission.objects.filter(content_type__app_label='ale',
-                                                           content_type__model='project',
-                                                           permission__codename=permission_codename)
-    project_ids = {p.object_pk for p in group_permissions} | {p.object_pk for p in user_permissions}
-    return project_ids
+from aledb_experiment.permissions import can_view_project
 
 
 def get_user_projects(user: User):
@@ -28,20 +12,14 @@ def get_user_projects(user: User):
     """
     if user.is_superuser:
         return live(Project.objects.all())
-    else:
-        restricted_proj_ids = _get_projects_with_permissions(VIEW_PROJECT)
-        all_projects = live(Project.objects.all())
-        if restricted_proj_ids is None or len(restricted_proj_ids) == 0:
-            return all_projects
-        myprojects = []
-        for project in all_projects:
-            if project.is_public:
-                myprojects.append(project)
-            elif can_view_project(user, project):
-                myprojects.append(project)
-            elif user.has_perm(VIEW_PROJECT, project):
-                myprojects.append(project)
-        return myprojects
+
+    # There was a short circuit here: when *no* project anywhere had a grant, this returned
+    # every project. Combined with the stale app label -- which made that set always empty --
+    # it is what showed every project to every user, anonymous ones included. It is not a
+    # safe fallback even with the label fixed: a database whose grants have not been issued
+    # yet would still hand out everything.
+    return [project for project in live(Project.objects.all())
+            if project.is_public or can_view_project(user, project)]
 
 
 def get_all_user_exps(user):

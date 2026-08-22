@@ -3,13 +3,14 @@ import shutil
 import tempfile
 from io import StringIO
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, User
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from aledb_common import store
 from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.permissions import grant_access_to_project
 from aledb_experiment.utils import get_all_user_exps, get_user_projects
 
 
@@ -142,6 +143,75 @@ class SoftDeleteTestCase(TestCase):
         first = self.client.post(url).json()["deleted_at"]
         second = self.client.post(url).json()["deleted_at"]
         self.assertEqual(first, second)
+
+    def test_owner_can_delete_their_own_project(self):
+        response = self.client.post("/ale/project/%d/delete/" % self.project.id)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["project_id"], self.project.id)
+        self.project.refresh_from_db()
+        self.assertIsNotNone(self.project.deleted_at)
+        self.assertEqual(self.project.deleted_by_id, self.user.id)
+        # Soft: the row survives for `purge_deleted` to remove later.
+        self.assertTrue(Project.objects.filter(pk=self.project.id).exists())
+
+    def test_project_delete_is_idempotent(self):
+        url = "/ale/project/%d/delete/" % self.project.id
+        first = self.client.post(url).json()["deleted_at"]
+        second = self.client.post(url).json()["deleted_at"]
+        self.assertEqual(first, second)
+
+
+class ProjectVisibilityTestCase(TestCase):
+    """Who sees which projects.
+
+    Every one of these passed vacuously before: the object-permission queries filtered on
+    `content_type__app_label='ale'` while the label is `aledb_experiment`, so they matched
+    nothing and `get_user_projects` returned every project to everybody.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create(
+            username="owner", email="o@e.com", is_active=True)
+        self.stranger = User.objects.create(
+            username="stranger", email="s@e.com", is_active=True)
+
+        self.private = Project.objects.create(
+            name="private", user=self.owner, is_public=False)
+        grant_access_to_project(self.private, [self.owner])
+        self.public = Project.objects.create(
+            name="public", user=self.owner, is_public=True)
+
+    def test_the_owner_sees_their_granted_project(self):
+        self.assertIn(self.private, list(get_user_projects(self.owner)))
+
+    def test_a_stranger_does_not_see_a_private_project(self):
+        visible = list(get_user_projects(self.stranger))
+        self.assertNotIn(self.private, visible)
+        self.assertIn(self.public, visible)
+
+    def test_an_anonymous_user_sees_only_public_projects(self):
+        self.assertEqual(list(get_user_projects(AnonymousUser())), [self.public])
+
+    def test_a_superuser_sees_everything(self):
+        admin = User.objects.create(
+            username="admin", email="a@e.com", is_active=True, is_superuser=True)
+        visible = list(get_user_projects(admin))
+        self.assertIn(self.private, visible)
+        self.assertIn(self.public, visible)
+
+    def test_staff_keep_their_blanket_view_access(self):
+        """Deliberately retained: load_projects creates every imported user as staff."""
+        staff = User.objects.create(
+            username="staff", email="st@e.com", is_active=True, is_staff=True)
+        self.assertIn(self.private, list(get_user_projects(staff)))
+
+    def test_a_project_with_no_grant_is_invisible_to_everyone_but_its_superusers(self):
+        """Why the backfill migration has to land with the filter fix: an ungranted
+        private project is not visible to the owner it names."""
+        orphan = Project.objects.create(
+            name="ungranted", user=self.owner, is_public=False)
+        self.assertNotIn(orphan, list(get_user_projects(self.owner)))
 
 
 class PurgeDeletedTestCase(TestCase):

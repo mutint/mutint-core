@@ -29,7 +29,8 @@ PRIORITY_DATA = 50
 
 
 def register_import_handler(name, label, patterns, handle,
-                            priority=PRIORITY_DATA, detect=None, description=""):
+                            priority=PRIORITY_DATA, detect=None, description="",
+                            requires_reference=False):
     """Register an import type.
 
     name        stable slug; the value the Add page's dropdown submits
@@ -44,6 +45,10 @@ def register_import_handler(name, label, patterns, handle,
     detect      optional callable(staged_root, paths) -> claimed paths, for handlers
                 whose shape is not expressible as suffixes (breseq folders need to
                 see a whole directory). Defaults to suffix matching on `patterns`.
+    requires_reference
+                the type only makes sense once the experiment has a reference genome.
+                Serialised to the client so the Add page can leave it out of the
+                dropdown until there is one; the handler still enforces it server-side.
     """
     if any(handler["name"] == name for handler in _import_handlers):
         raise ValueError("import handler %r is already registered" % (name,))
@@ -55,6 +60,7 @@ def register_import_handler(name, label, patterns, handle,
         "handle": handle,
         "detect": detect,
         "description": description,
+        "requires_reference": requires_reference,
     })
 
 
@@ -77,6 +83,7 @@ def get_import_types():
         "label": h["label"],
         "patterns": h["patterns"],
         "description": h["description"],
+        "requires_reference": h["requires_reference"],
     } for h in get_import_handlers()]
 
 

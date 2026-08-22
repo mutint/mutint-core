@@ -3,7 +3,6 @@ import shutil
 import tempfile
 
 from django.contrib.auth.models import User
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
 from aledb_common import store
@@ -121,13 +120,18 @@ class NormalizationTestCase(TestCase):
                          reference_io.normalize_reference(b))
 
 
-class ReferenceUploadEndpointTestCase(TestCase):
+class ReferenceStoreTestCase(TestCase):
+    """What `/import/reference/` used to assert over HTTP, asserted on the store directly.
+
+    The page is gone (see `aledb_import/views.py`); `establish_or_check` is where its
+    behaviour actually lived, and the Add page's `reference` / `replace_annotation` types now
+    reach it. The routing half of those types is covered in `test_import_registry`.
+    """
+
     def setUp(self):
-        self.user = User.objects.create(
-            username="tester", email="t@e.com", is_active=True, is_staff=True)
-        self.user.set_password("pw")
-        self.user.save()
-        self.client.force_login(self.user)
+        # _prepare_experiment -> try_creating_project -> find_user, which prompts on stdin
+        # for a name that matches no User. The user has to exist first.
+        User.objects.create(username="tester", email="t@e.com", is_active=True)
 
         self.tmp = tempfile.mkdtemp()
         self.store = tempfile.mkdtemp()
@@ -137,149 +141,118 @@ class ReferenceUploadEndpointTestCase(TestCase):
         patcher.enable()
         self.addCleanup(patcher.disable)
 
-    def _post(self, filename, content, experiment="ref exp", **extra):
-        data = {"project": "ref project", "experiment": experiment, "person": "tester",
-                "reference": SimpleUploadedFile(filename, content)}
-        data.update(extra)
-        return self.client.post("/import/reference/", data)
+    def _experiment(self, name="ref exp"):
+        from aledb_import.gd_import import _prepare_experiment
+        return _prepare_experiment("ref project", name, "tester", False)["experiment"]
+
+    def _write(self, filename, content):
+        path = os.path.join(self.tmp, filename)
+        with open(path, "wb") as handle:
+            handle.write(content)
+        return path
+
+    def _establish(self, experiment, filename, content, **kwargs):
+        path = self._write(filename, content)
+        gff3_text, sequences = reference_io.normalize_reference(path, filename)
+        return reference_store.establish_or_check(
+            experiment, gff3_text, sequences, **kwargs)
 
     def _genbank_bytes(self):
         path = write_genbank(os.path.join(self.tmp, "ref.gbk"))
         with open(path, "rb") as handle:
             return handle.read()
 
-    def test_page_renders(self):
-        response = self.client.get("/import/reference/")
-        self.assertEqual(response.status_code, 200)
+    def _stored_gff3(self, reference):
+        with open(store.experiment_reference_path(
+                reference.ale_experiment_id, store.REFERENCE_GFF3), encoding="utf-8") as handle:
+            return handle.read()
 
-    def test_genbank_upload_sets_the_reference(self):
-        response = self._post("REL606.gbk", self._genbank_bytes())
+    def test_genbank_sets_the_reference(self):
+        reference, created = self._establish(
+            self._experiment(), "REL606.gbk", self._genbank_bytes())
 
-        self.assertEqual(response.status_code, 200, response.content)
-        body = response.json()
-        self.assertTrue(body["created"])
-        self.assertEqual(body["genes"], 1)
-        self.assertEqual(body["total_length"], len(breseq_fixture.SEQUENCE_A))
-        self.assertEqual([s["id"] for s in body["sequences"]], ["test_ref"])
+        self.assertTrue(created)
+        self.assertEqual(reference.total_length, len(breseq_fixture.SEQUENCE_A))
+        self.assertEqual([s["id"] for s in reference.seq_ids], ["test_ref"])
+        self.assertIn("Name=thrA", self._stored_gff3(reference))
 
-        reference = ExperimentReference.objects.get()
         for artifact in (store.REFERENCE_GFF3, store.REFERENCE_FASTA, store.REFERENCE_FAI):
             self.assertTrue(os.path.isfile(store.experiment_reference_path(
                 reference.ale_experiment_id, artifact)), artifact)
 
-    def test_fasta_upload_sets_a_reference_with_no_genes(self):
-        response = self._post(
-            "ref.fasta", breseq_fixture.fasta_text(SEQUENCES).encode("utf-8"))
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()["genes"], 0)
+    def test_fasta_sets_a_reference_with_no_genes(self):
+        reference, _ = self._establish(
+            self._experiment(), "ref.fasta",
+            breseq_fixture.fasta_text(SEQUENCES).encode("utf-8"))
 
-    def test_gff3_upload_matches_the_genbank_of_the_same_genome(self):
-        """Uploading either format must leave the experiment in the same state."""
-        self._post("REL606.gbk", self._genbank_bytes(), experiment="from gbk")
-        self._post("REL606.gff3",
-                   breseq_fixture.gff3_text(SEQUENCES).encode("utf-8"),
-                   experiment="from gff")
+        self.assertNotIn("\tgene\t", self._stored_gff3(reference))
 
-        gbk_ref, gff_ref = ExperimentReference.objects.order_by("ale_experiment_id")
+    def test_gff3_matches_the_genbank_of_the_same_genome(self):
+        """Whichever format it arrived as, the same genome must hash the same."""
+        gbk_ref, _ = self._establish(
+            self._experiment("from gbk"), "REL606.gbk", self._genbank_bytes())
+        gff_ref, _ = self._establish(
+            self._experiment("from gff"), "REL606.gff3",
+            breseq_fixture.gff3_text(SEQUENCES).encode("utf-8"))
+
         self.assertEqual(gbk_ref.gff3_sha256, gff_ref.gff3_sha256)
         self.assertEqual(gbk_ref.fasta_sha256, gff_ref.fasta_sha256)
 
-    def test_unreadable_reference_is_a_400(self):
-        response = self._post("notes.txt", b"just some notes\n")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("not recognisable", response.json()["error"])
+    def test_unreadable_reference_is_refused(self):
+        with self.assertRaises(reference_io.ReferenceFormatError) as caught:
+            self._establish(self._experiment(), "notes.txt", b"just some notes\n")
+        self.assertIn("not recognisable", str(caught.exception))
 
-    def test_missing_fields_are_a_400(self):
-        response = self.client.post("/import/reference/", {"project": "p"})
-        self.assertEqual(response.status_code, 400)
+    def test_a_different_sequence_is_refused_unless_replace_is_set(self):
+        experiment = self._experiment()
+        self._establish(experiment, "REL606.gbk", self._genbank_bytes())
+        other = breseq_fixture.fasta_text(
+            [("test_ref", breseq_fixture.SEQUENCE_B)]).encode("utf-8")
 
-    def test_a_different_reference_is_refused_unless_replace_is_set(self):
-        self._post("REL606.gbk", self._genbank_bytes())
+        with self.assertRaises(reference_store.ReferenceMismatch):
+            self._establish(experiment, "other.fasta", other)
 
-        other = [("test_ref", breseq_fixture.SEQUENCE_B)]
-        response = self._post(
-            "other.fasta", breseq_fixture.fasta_text(other).encode("utf-8"))
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("replace", response.json()["error"])
-
-        response = self._post(
-            "other.fasta", breseq_fixture.fasta_text(other).encode("utf-8"), replace="on")
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.json()["created"])
+        # `replace` is the shell-only escape hatch: no UI passes it, deliberately.
+        reference, created = self._establish(
+            experiment, "other.fasta", other, replace=True)
+        self.assertFalse(created)
         self.assertEqual(ExperimentReference.objects.count(), 1)
-        self.assertEqual(ExperimentReference.objects.get().total_length,
-                         len(breseq_fixture.SEQUENCE_B))
+        self.assertEqual(reference.total_length, len(breseq_fixture.SEQUENCE_B))
 
     def test_reuploading_the_same_reference_is_accepted(self):
-        self._post("REL606.gbk", self._genbank_bytes())
-        response = self._post("REL606.gbk", self._genbank_bytes())
-        self.assertEqual(response.status_code, 200)
+        experiment = self._experiment()
+        self._establish(experiment, "REL606.gbk", self._genbank_bytes())
+        self._establish(experiment, "REL606.gbk", self._genbank_bytes())
         self.assertEqual(ExperimentReference.objects.count(), 1)
 
     def test_same_sequence_with_new_annotation_refreshes_it(self):
         """Sequence is the invariant, so this is the same reference -- but an explicit
         upload of richer annotation is a request to use that annotation."""
-        self._post("plain.fasta", breseq_fixture.fasta_text(SEQUENCES).encode("utf-8"))
-        before = ExperimentReference.objects.get()
+        experiment = self._experiment()
+        before, _ = self._establish(
+            experiment, "plain.fasta",
+            breseq_fixture.fasta_text(SEQUENCES).encode("utf-8"),
+            update_annotation=True)
+        before_gff3_sha = before.gff3_sha256
         self.assertEqual(before.total_length, len(breseq_fixture.SEQUENCE_A))
 
-        response = self._post("REL606.gbk", self._genbank_bytes())
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()["genes"], 1)
+        after, created = self._establish(
+            experiment, "REL606.gbk", self._genbank_bytes(), update_annotation=True)
 
-        after = ExperimentReference.objects.get()
+        self.assertFalse(created)
         self.assertEqual(after.pk, before.pk)
         self.assertEqual(after.fasta_sha256, before.fasta_sha256)   # same genome
-        self.assertNotEqual(after.gff3_sha256, before.gff3_sha256)  # richer annotation
-
+        self.assertNotEqual(after.gff3_sha256, before_gff3_sha)     # richer annotation
         # The stored GFF3 on disk was refreshed too, not just the hash.
-        with open(store.experiment_reference_path(
-                after.ale_experiment_id, store.REFERENCE_GFF3), encoding="utf-8") as handle:
-            self.assertIn("Name=thrA", handle.read())
+        self.assertIn("Name=thrA", self._stored_gff3(after))
 
+    def test_without_update_annotation_the_stored_one_is_left_alone(self):
+        """A breseq folder import must not let drop order redefine the annotation."""
+        experiment = self._experiment()
+        before, _ = self._establish(
+            experiment, "plain.fasta",
+            breseq_fixture.fasta_text(SEQUENCES).encode("utf-8"))
+        before_gff3_sha = before.gff3_sha256
 
-class BareGdRequiresAReferenceTestCase(TestCase):
-    """The two-step route exists so bare .gd import has a reference to sit against."""
-
-    def setUp(self):
-        self.user = User.objects.create(
-            username="tester", email="t@e.com", is_active=True, is_staff=True)
-        self.user.set_password("pw")
-        self.user.save()
-        self.client.force_login(self.user)
-
-        self.tmp = tempfile.mkdtemp()
-        self.store = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.addCleanup(shutil.rmtree, self.store, True)
-        patcher = override_settings(ALEDB_STORE_DIR=self.store)
-        patcher.enable()
-        self.addCleanup(patcher.disable)
-
-        fixture_dir = os.path.join(
-            os.path.dirname(__file__), "..", "gdparse", "test_gdparse")
-        with open(os.path.join(fixture_dir, "3-30000-1-1.gd"), "rb") as handle:
-            self.gd_bytes = handle.read()
-
-    def _import_gd(self, experiment):
-        return self.client.post("/import/", {
-            "project": "step project", "experiment": experiment, "person": "tester",
-            "gd_files": SimpleUploadedFile("3-30000-1-1.gd", self.gd_bytes)})
-
-    def test_import_without_a_reference_is_refused(self):
-        response = self._import_gd("no reference yet")
-        # A missing precondition is the caller's error, not a server fault.
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("reference genome", response.json()["error"])
-
-    def test_import_succeeds_after_step_one(self):
-        step_one = self.client.post("/import/reference/", {
-            "project": "step project", "experiment": "two step",
-            "person": "tester",
-            "reference": SimpleUploadedFile(
-                "ref.fasta", breseq_fixture.fasta_text(SEQUENCES).encode("utf-8"))})
-        self.assertEqual(step_one.status_code, 200, step_one.content)
-
-        response = self._import_gd("two step")
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertGreater(response.json()["total_mutations"], 0)
+        after, _ = self._establish(experiment, "REL606.gbk", self._genbank_bytes())
+        self.assertEqual(after.gff3_sha256, before_gff3_sha)

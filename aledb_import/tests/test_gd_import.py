@@ -53,7 +53,7 @@ class GdImportTestCase(TestCase):
     def _ensure_reference(self, experiment="gd exp", project="gd project"):
         """A bare .gd carries no reference, so the experiment must already have one.
 
-        This is what the two-step route at /import/reference/ does for a real user.
+        This is what dropping a GenBank, GFF3 or FASTA on the Add page does for a real user.
         """
         context = gd_import._prepare_experiment(project, experiment, "tester", False)
         sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
@@ -121,21 +121,50 @@ class GdImportTestCase(TestCase):
         self.assertEqual(ResequencingExperiment.objects.count(), 1)
         self.assertEqual(ObservedMutation.objects.count(), Mutation.objects.count())
 
-    def test_web_upload_endpoint(self):
-        self._ensure_reference("web exp", project="web project")
-        self.client.force_login(self.user)
-        response = self.client.post("/import/", {
-            "project": "web project",
-            "experiment": "web exp",
-            "person": "tester",
-            "gd_files": _uploaded(CLEAN_GD),
-        })
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertGreater(payload["total_mutations"], 0)
-        self.assertEqual(Mutation.objects.count(), payload["total_mutations"])
+    def test_web_upload_through_the_chunked_session(self):
+        """The route a .gd actually takes now that /import/ is gone: create, chunk, finalize.
 
-        # Export endpoint returns a downloadable .gd.
+        Session ownership is by primary key, so the experiment is built the way the Add page
+        reaches it rather than by name.
+        """
+        import json
+
+        experiment = self._ensure_reference("web exp", project="web project")
+        experiment.project.user = self.user
+        experiment.project.save(update_fields=["user"])
+        self.client.force_login(self.user)
+
+        with open(CLEAN_GD, "rb") as handle:
+            payload = handle.read()
+
+        created = self.client.post(
+            "/import/uploads/",
+            data=json.dumps({"ale_experiment_id": experiment.ale_id,
+                             "import_type": "genomediff",
+                             "files": [{"path": "3-30000-1-1.gd", "size": len(payload)}]}),
+            content_type="application/json")
+        self.assertEqual(created.status_code, 200, created.content)
+        upload_id = created.json()["upload_id"]
+
+        chunked = self.client.post(
+            "/import/uploads/%s/chunk" % upload_id,
+            {"path": "3-30000-1-1.gd", "offset": "0",
+             "chunk": SimpleUploadedFile("chunk", payload)})
+        self.assertEqual(chunked.status_code, 200, chunked.content)
+
+        finalized = self.client.post("/import/uploads/%s/finalize" % upload_id)
+        self.assertEqual(finalized.status_code, 200, finalized.content)
+        summary = finalized.json()
+        self.assertGreater(summary["total_mutations"], 0)
+        self.assertEqual(Mutation.objects.count(), summary["total_mutations"])
+
+    def test_gd_export_endpoint(self):
+        """Outlived /import/: the export download is still routed."""
+        experiment = self._ensure_reference("export exp", project="export project")
+        gd_import.import_gd_files(
+            [_uploaded(CLEAN_GD)], project_name="export project",
+            experiment_name="export exp", person="tester")
+
         reseq = ResequencingExperiment.objects.get()
         export = self.client.get("/import/gd/%d/export" % reseq.id)
         self.assertEqual(export.status_code, 200)

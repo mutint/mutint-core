@@ -193,7 +193,7 @@ def _establish_or_check_reference(experiment, gff3_path, fasta_path):
 
     The sample's own two reference files are cross-checked against each other first, then
     normalized -- so this compares on the same canonical form as a reference uploaded
-    through the two-step route, rather than on breseq's raw output.
+    through an explicit reference upload, rather than on breseq's raw output.
     """
     _validated_sequences(gff3_path, fasta_path)
     gff3_text, sequences = reference_io.normalize_reference(gff3_path, GFF3_RELATIVE_PATH)

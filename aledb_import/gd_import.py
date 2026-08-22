@@ -59,17 +59,17 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
     parsed from its filename. Returns a JSON-serializable summary dict.
 
     A ``.gd`` carries no reference genome, so it cannot establish the reference every
-    sample in an experiment shares -- the experiment must already have one, set through the
-    two-step route at ``/import/reference/``. ``require_reference=False`` is for callers
-    that manage that invariant themselves.
+    sample in an experiment shares -- the experiment must already have one, set by dropping a
+    GenBank, GFF3 or FASTA on the Add page. ``require_reference=False`` is for callers that
+    manage that invariant themselves.
     """
     from aledb_import.reference_store import has_reference
 
     context = _prepare_experiment(project_name, experiment_name, person, is_public)
     if require_reference and not has_reference(context["experiment"]):
         raise ReferenceRequired(
-            "Experiment %r has no reference genome. A .gd carries none, so set one first "
-            "at /import/reference/, or import a breseq result folder instead."
+            "Experiment %r has no reference genome. A .gd carries none, so add one "
+            "(GenBank, GFF3 or FASTA) first, or import a breseq result folder instead."
             % (context["experiment"].name,))
 
     file_results = []

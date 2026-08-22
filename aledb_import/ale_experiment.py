@@ -1,6 +1,4 @@
 import os
-import sys
-import traceback
 import aledb_experiment.models
 import aledb_import.upload
 import aledb_import.util
@@ -332,7 +330,8 @@ def create_ale_experiment(breseq_output_group_root_abs_path,
                                          experiment,
                                          default_media,
                                          freezer_box,
-                                         is_wild_type=False)
+                                         is_wild_type=False,
+                                         experiment_root=root_abs_path)
 
         default_filter_params = aledb_filter.models.get_default_experiment_filter_params(experiment)
         AleExperimentFilter.objects.get_or_create(**default_filter_params)
@@ -434,11 +433,10 @@ def create_ensemble_ale_experiment(breseq_output_group_root_abs_path,
                                              freezer_box,
                                              is_wild_type=False,
                                              filename=ensemble_gd_filename)
-            except:
-                print("Sample Failed")
-                e = sys.exc_info()[0]
-                print("Error: %s" % e)
-                traceback.print_exc()
+            except Exception:
+                # Was a bare `except:` that printed and moved on, so a missing ensemble .gd
+                # left the whole upload reporting success with zero mutations imported.
+                logger.exception("ensemble sample %s failed to import", ale_isolate_name)
 
 
         default_filter_params = aledb_filter.models.get_default_experiment_filter_params(experiment)
@@ -486,7 +484,8 @@ def _create_and_commit_ale_entry(person,
                                  media,
                                  freezer_box,
                                  is_wild_type,
-                                 filename=ANNOTATION_GENOMIC_DIFF_FILE_NAME):
+                                 filename=ANNOTATION_GENOMIC_DIFF_FILE_NAME,
+                                 experiment_root=None):
     """
     is_wild_type was implemented because initially, we wanted to ignore
     mutations that were already thought to be in the wild type strain,
@@ -546,9 +545,15 @@ def _create_and_commit_ale_entry(person,
     created = aledb_experiment.models.TechnicalReplicate.objects.get_or_create(tech_rep_number=technical_replicate_number,
                                                                   isolate=isolate)
     afir = str(ale_number)+'-'+str(flask_number)+'-'+str(isolate_number)+'-'+str(technical_replicate_number)
+    # `output_dir_path` locates this sample's .gd and log.txt; `add_breseq_results` instead
+    # wants the *experiment root*, because it re-derives `<root>/breseq/<sample>/output/`
+    # itself. Passing the already-qualified output dir here produced the doubled path
+    # `<root>/breseq/<s>/output//breseq/<s>/output/`, which never exists -- silently disabling
+    # every HTML scrape (read counts, coverage) and the `index.html` check behind `location`.
     aledb_import.upload.add_breseq_results(technical_replicate_id=technical_replicate.id,
                                       person=person,
-                                      experiment_path=output_dir_path,
+                                      experiment_path=(experiment_root if experiment_root is not None
+                                                       else output_dir_path),
                                       mutation_gd_parser=mutation_gd_parser,
                                       reseq_ref_name=reseq_ref_name,
                                       sample_name=afir,

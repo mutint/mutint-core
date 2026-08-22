@@ -66,8 +66,29 @@ class AddPageTestCase(TestCase):
     def test_types_endpoint_returns_the_registry(self):
         body = self.client.get("/import/types/").json()
         names = [t["name"] for t in body["types"]]
-        self.assertEqual(names[:3], ["reference", "breseq_folder", "genomediff"])
+        self.assertEqual(
+            names[:4], ["reference", "replace_annotation", "breseq_folder", "genomediff"])
         self.assertIn(".gbk", body["types"][0]["patterns"])
+        # Unfiltered here: this endpoint has no experiment to scope by.
+        self.assertTrue(body["types"][1]["requires_reference"])
+
+    def test_replace_annotation_is_offered_only_once_a_reference_exists(self):
+        """It cannot do anything before there is a sequence to hold fixed, so offering it
+        would just be a way to get an error message."""
+        def dropdown():
+            return self.client.get(
+                "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+            ).content.decode("utf-8")
+
+        self.assertNotIn("Replace annotation", dropdown())
+
+        from aledb_import import reference_store
+        from aledb_import.tests import breseq_fixture
+        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        reference_store.establish_or_check(
+            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
+
+        self.assertIn("Replace annotation", dropdown())
 
     def test_missing_experiment_explains_rather_than_500s(self):
         self.assertEqual(self.client.get("/import/add/").status_code, 404)
@@ -97,6 +118,10 @@ class AddPageTestCase(TestCase):
         projects = self.client.get("/ale/projects/").content.decode("utf-8")
         self.assertIn("New project", projects)
         self.assertIn("First experiment", projects)   # optional experiment in the same step
+        self.assertIn("delete-selected", projects)
+        self.assertIn("This is permanent.", projects)
+        # aledbConfirmDelete calls swal(), which base.html does not load.
+        self.assertIn("sweetalert", projects)
 
         experiments = self.client.get("/ale/experiments/").content.decode("utf-8")
         self.assertIn("delete-selected", experiments)

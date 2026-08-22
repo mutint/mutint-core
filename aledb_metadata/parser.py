@@ -5,7 +5,6 @@ import json
 
 from aledb_experiment.models import TechnicalReplicate
 from aledb_experiment.models import Media
-from aledb_experiment.models import Project
 from aledb_metadata.xpmdvalidator.validate import is_valid
 
 __author__ = 'Denny Gosting, Patrick Phaneuf, Muyao'
@@ -245,6 +244,11 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
             tech_rep.description = experiment_details
             tech_rep.save()
 
-            project, created = Project.objects.get_or_create(name=metadata_dict[PROJECT])
+            # There was a `Project.objects.get_or_create(name=metadata_dict[PROJECT])` here
+            # whose result was never used. Its only effect was a side effect: creating a
+            # Project with no `user` -- a column that is NOT NULL, so the create branch
+            # raised IntegrityError -- and with no guardian grant, which is what
+            # `can_view_project` actually reads. The experiment's project is already set by
+            # the import that called this; metadata does not get to invent another one.
 
 

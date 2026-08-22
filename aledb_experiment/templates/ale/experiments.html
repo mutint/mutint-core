@@ -115,12 +115,19 @@
         }
         window.aledbConfirmDelete(ids.length + " experiment(s)").then(function (confirmed) {
             if (!confirmed) { return; }
-            Promise.all(ids.map(function (id) {
+            // allSettled, not all: deleting requires ownership of the experiment's project,
+            // so a mixed selection legitimately 403s on some rows. Promise.all would abort on
+            // the first of those after others had already been deleted, and never reload.
+            Promise.allSettled(ids.map(function (id) {
                 return window.aledbPost("/ale/experiment/" + id + "/delete/", {});
-            })).then(function () {
+            })).then(function (results) {
+                var failed = results.filter(function (r) { return r.status === "rejected"; });
+                if (failed.length) {
+                    document.getElementById("del-error").textContent =
+                        failed.length + " of " + ids.length + " could not be deleted: " +
+                        failed[0].reason.message;
+                }
                 window.location.reload();
-            }).catch(function (err) {
-                document.getElementById("del-error").textContent = err.message;
             });
         });
     });

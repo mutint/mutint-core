@@ -44,7 +44,8 @@ class ImportRegistryRoutingTestCase(TestCase):
 
     def test_core_types_are_registered_in_priority_order(self):
         names = [t["name"] for t in import_registry.get_import_types()]
-        self.assertEqual(names[:3], ["reference", "breseq_folder", "genomediff"])
+        self.assertEqual(
+            names[:4], ["reference", "replace_annotation", "breseq_folder", "genomediff"])
         # Reference must run before anything that is checked against it.
         handlers = import_registry.get_import_handlers()
         by_name = {h["name"]: h["priority"] for h in handlers}
@@ -123,6 +124,55 @@ class ImportRegistryRoutingTestCase(TestCase):
     def test_unknown_type_is_an_error(self):
         with self.assertRaises(ValueError):
             self._run(import_type="no_such_type")
+
+    # --- replace_annotation -----------------------------------------------------------
+
+    def test_replace_annotation_never_fires_on_auto_detect(self):
+        """It claims the same files as `reference`, so only its lower priority keeps the
+        two apart. Auto-detect must establish the reference, not replace an annotation."""
+        write_genbank(os.path.join(self.drop, "REL606.gbk"))
+        summary = self._run()
+
+        self.assertIsNone(summary["files"][0]["error"])
+        self.assertEqual(ExperimentReference.objects.count(), 1)
+
+    def test_replace_annotation_refuses_when_there_is_no_reference_yet(self):
+        write_genbank(os.path.join(self.drop, "REL606.gbk"))
+        summary = self._run(import_type="replace_annotation")
+
+        self.assertIn("no reference genome yet", summary["files"][0]["error"])
+        self.assertEqual(ExperimentReference.objects.count(), 0)
+
+    def test_replace_annotation_refreshes_the_annotation_of_the_same_genome(self):
+        self._write("ref.fasta", breseq_fixture.fasta_text(SEQUENCES))
+        self._run(import_type="reference")
+        before = ExperimentReference.objects.get()
+
+        os.remove(os.path.join(self.drop, "ref.fasta"))
+        write_genbank(os.path.join(self.drop, "REL606.gbk"))
+        summary = self._run(import_type="replace_annotation")
+
+        self.assertIsNone(summary["files"][0]["error"])
+        after = ExperimentReference.objects.get()
+        self.assertEqual(after.pk, before.pk)
+        self.assertEqual(after.fasta_sha256, before.fasta_sha256)      # same genome
+        self.assertNotEqual(after.gff3_sha256, before.gff3_sha256)     # new annotation
+
+    def test_replace_annotation_refuses_a_different_genome(self):
+        """The whole point of the narrowed option: the sequence may not move."""
+        write_genbank(os.path.join(self.drop, "REL606.gbk"))
+        self._run(import_type="reference")
+        before = ExperimentReference.objects.get()
+
+        os.remove(os.path.join(self.drop, "REL606.gbk"))
+        self._write("other.fasta", breseq_fixture.fasta_text(
+            [("test_ref", breseq_fixture.SEQUENCE_B)]))
+        summary = self._run(import_type="replace_annotation")
+
+        self.assertIn("annotation can only be replaced", summary["files"][0]["error"])
+        after = ExperimentReference.objects.get()
+        self.assertEqual(after.fasta_sha256, before.fasta_sha256)
+        self.assertEqual(after.gff3_sha256, before.gff3_sha256)
 
 
 class PluggableImportTypeTestCase(TestCase):

@@ -1,4 +1,4 @@
-from guardian.models import GroupObjectPermission, UserObjectPermission
+from guardian.models import UserObjectPermission
 from guardian.shortcuts import assign_perm
 
 from aledb_experiment.models import AleExperiment
@@ -7,29 +7,6 @@ import logging
 VIEW_PROJECT = 'view_project'
 
 logger = logging.getLogger(__name__)
-
-
-def _project_has_permissions(project, permission_codename):
-    """
-    Define if a project has permissions set
-    :param project:
-    :return:
-    """
-    if project.is_public:
-        return False
-    group_permissions = GroupObjectPermission.objects.filter(content_type__app_label='ale',
-                                                             content_type__model='project',
-                                                             object_pk=project.id,
-                                                             permission__codename=permission_codename)
-    if group_permissions:
-        return True
-    user_permissions = UserObjectPermission.objects.filter(content_type__app_label='ale',
-                                                           content_type__model='project',
-                                                           object_pk=project.id,
-                                                           permission__codename=permission_codename)
-    if user_permissions:
-        return True
-    return False
 
 
 def get_users_with_access_to_project(project):
@@ -47,13 +24,25 @@ def grant_access_to_project(project, user_list):
 
 
 def can_view_project(user, project):
-    ok = user.is_superuser or project.is_public or user.has_perm(VIEW_PROJECT, project)
-    if not ok and user.is_staff:
-        if _project_has_permissions(project, VIEW_PROJECT):
-            ok = user.has_perm(VIEW_PROJECT, project)
-        else:
-            ok = True
-    return ok
+    """Superusers, public projects, anyone holding the guardian grant -- and all staff.
+
+    `user.has_perm` goes through guardian's own backend, which resolves the content type
+    from the instance, so that clause was always correct.
+
+    The staff clause is a deliberate blanket grant. It used to be conditional -- staff were
+    let through only on projects that had no grant at all -- but the query behind that test
+    filtered on `content_type__app_label='ale'` while the label is `aledb_experiment`, so it
+    matched nothing and staff were let through on *everything*. Correcting the label without
+    also flattening this would have quietly reversed it, cutting staff off from every project
+    the backfill migration granted. `load_projects` creates every imported user with
+    `is_staff=True`, so that is most of the user base. Narrowing who counts as staff is a
+    separate decision from fixing the lookup.
+    """
+    if user.is_superuser or project.is_public:
+        return True
+    if user.has_perm(VIEW_PROJECT, project):
+        return True
+    return bool(user.is_staff)
 
 
 def can_edit_project(user, project):
@@ -78,10 +67,6 @@ def can_delete_experiment(user, experiment):
     if user.is_superuser:
         return True
     return can_edit_project(user, experiment.project) if experiment else False
-
-
-def can_view_experiment(user, resequence_data_location):
-    return True
 
 
 def can_add_global_filter(user):

@@ -37,14 +37,20 @@ def add_view(request):
     if not can_edit_project(request.user, experiment.project):
         return render(request, "403.html", get_user_context(request.user), status=403)
 
+    has_reference = _has_reference(experiment)
+
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
-        "import_types": get_import_types(),
-        "has_reference": _has_reference(experiment),
+        # Filtered here rather than in the template so the dropdown and the JSON the page
+        # classifies a drop with cannot disagree. `/import/types/` stays unfiltered -- it has
+        # no experiment to scope by, and the handler enforces the requirement anyway.
+        "import_types": [t for t in get_import_types()
+                         if has_reference or not t["requires_reference"]],
+        "has_reference": has_reference,
     })
     return render(request, "import/add.html", context)
 

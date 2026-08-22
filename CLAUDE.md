@@ -61,14 +61,15 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 158 run, 4 failures + 4 errors.** All eight are pre-existing and unrelated to any
-recent work; treat any *other* failure as yours. They are:
+**Baseline: 181 run, 2 failures + 4 errors.** All six are pre-existing and unrelated to any
+recent work; treat any *other* failure as yours. All six are in
+`aledb_metadata.tests.test_metadata.TestParser`:
 
-- `aledb_metadata.tests.test_metadata.TestParser` — five (four errors, one failure)
-- `test_reseq_URL` — `upload.py` computes `breseq_path` and then never uses it, so `location`
-  is set even when no `index.html` exists
-- `test_upload_ALE_collection` — the fixture has no root-level ensemble `.gd`
-- `test_xpmd_validator`
+- four errors — `test_get_media_supplement_description`, and three sharing one cause,
+  `KeyError: 'R'` at `aledb_metadata/parser.py:149`
+- two failures — `test_creating_media_with_metadata_upload`, `test_xpmd_validator`
+
+`test_reseq_URL` and `test_upload_ALE_collection` used to be on this list and now pass.
 
 ### Gotchas when writing tests
 
@@ -77,7 +78,9 @@ recent work; treat any *other* failure as yours. They are:
   or use `gd_import.prepare_experiment_by_id`, which never resolves a person.
 - **`Project.objects.create()` leaves the owner unable to view it.** `can_view_project` consults
   the django-guardian grant, never `Project.user`. Use the `/ale/projects/create/` view, or call
-  `grant_access_to_project` yourself, or the project's own pages will 403 in the test.
+  `grant_access_to_project` yourself, or the project's own pages will 403 in the test — and it
+  will not appear in `get_user_projects` either. That used to be masked: the grant lookups
+  filtered on a stale app label and `get_user_projects` fell through to returning everything.
 - **Override the store.** Anything touching `ALEDB_STORE_DIR` needs
   `override_settings(ALEDB_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
 - **Template content outside a `{% block %}` is silently discarded** in a child template. A
@@ -107,6 +110,30 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 
 ## Architecture
 
+### `/aledata/` serves the legacy data root
+
+`aledb_common/views.py` serves `ALE_DATA_ROOT_DIR` at `/aledata/` — breseq HTML reports,
+GATK output and amplification images for CLI-uploaded experiments. It is separate from
+`ALEDB_STORE_DIR`, which holds web-uploaded data and is served by
+`aledb_seq/views/alignments.py`.
+
+The route takes a client-supplied path, so it works in three steps and all three matter:
+
+1. **Containment.** The path is joined to `DOC_ROOT`, `abspath`-normalised, and required to
+   stay inside the root via `os.path.commonpath`. `normpath` alone is not enough — it happily
+   walks above the root.
+2. **Ownership by prefix.** A sample's stored `location` (`<exp>/breseq/<s>/output/`),
+   `gatk_location` and `experiment_location` are the roots its files sit under, so the
+   requested path's own directory prefixes are matched against those three columns. A path
+   under no stored prefix is a 404: this route serves experiment data, not the filesystem.
+3. **`can_view_project`** on the owning experiment. There is no exemption for any file type.
+
+It previously had a branch keyed on `'.html' in page_name or '.ba' in page_name` that skipped
+authorization outright — substring tests, so every `.bam`/`.bai` matched too — and its
+"permission check" elsewhere was `can_view_experiment`, a stub returning `True`. Both are
+gone. Streaming and byte ranges come from `aledb_common/fileserve.py`, shared with the
+alignment routes.
+
 ### Django Apps
 
 All apps use the `aledb_*` namespace. Key apps:
@@ -127,8 +154,8 @@ All apps use the `aledb_*` namespace. Key apps:
     stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
     records the shared reference as `ExperimentReference`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
-    range support by `aledb_seq/views/alignments.py` — deliberately not through `/aledata/`,
-    which has no authorization and reads whole files into memory.
+    range support by `aledb_seq/views/alignments.py`, which resolves every path from a
+    primary key rather than from anything the client sends.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
     `output/annotated.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
@@ -137,20 +164,28 @@ All apps use the `aledb_*` namespace. Key apps:
     *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the
     sole invariant (`ExperimentReference.matches_sequence`) — differing annotation never
     rejects, and a folder import leaves the stored annotation alone so import order cannot
-    redefine it; only an explicit re-upload through `/import/reference/` refreshes it. A bare `.gd` is *skipped* here —
+    redefine it; only the explicit `replace_annotation` import type refreshes it. A bare `.gd` is *skipped* here —
     it has no reference for that check to apply to.
-  - **Two-step import** — `reference_views.py` (`/import/reference/`) takes a GenBank, GFF3,
-    or FASTA and gives an experiment its reference, so bare `.gd` files can then be imported
-    into it. `import_gd_files` refuses (`ReferenceRequired` → 400) when the target experiment
-    has none.
+  - **References arrive with the data.** There is no separate reference page: the `reference`
+    import type (priority 10) runs before anything hash-checked against it, so a GenBank,
+    GFF3 or FASTA dropped alongside `.gd` files in one drop is established first whatever
+    order the files are listed in. `import_gd_files` still raises `ReferenceRequired` for
+    non-registry callers when the target experiment has none.
+  - **`replace_annotation`** (priority 11) is the narrow survivor of the retired
+    `/import/reference/` page: it refreshes an established reference's annotation while
+    holding the *sequence* fixed, and refuses a file whose sequence differs. It claims the
+    same files as `reference` and only its higher priority number keeps auto-detect from ever
+    picking it, so it is reachable only by being named explicitly. It is hidden from the Add
+    page's dropdown until the experiment has a reference (`requires_reference=True`).
+    `establish_or_check(..., replace=True)`, which overwrites a *different* genome, is
+    deliberately reachable from the shell only.
   - **Normalization is the linchpin** (`reference.py`, `reference_store.py`): every reference,
     however it arrives, is converted to one canonical pair — a genes-only GFF3 plus a FASTA —
     before being stored or hashed. Without it a GenBank and the GFF3 breseq derived from the
     same genome would hash differently and the shared-reference check would reject valid data.
     GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
     Biopython has no GFF3 parser. Alignments are served with HTTP range support by
-    `aledb_seq/views/alignments.py`, deliberately not through `/aledata/`, which has no
-    authorization and reads whole files into memory.
+    `aledb_seq/views/alignments.py`.
     Sample identity comes from the filename: a strict A-F-I-R name (`3-30000-1-1.gd`) is
     parsed as such, and anything else (`Ara-1_500gen_762B.gd`) gets its own auto-numbered
     isolate under ALE 1 / flask 1, with `Isolate.description` set to the filename so it
