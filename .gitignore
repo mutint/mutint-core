@@ -49,3 +49,10 @@ aledb_local.sqlite3
 # versions of this content live as docs/operations/audit_summary.md (the
 # inventory + outcome) and docs/operations/git_history_scrub.md (the runbook).
 /audit_local/
+
+# Claude Code local state. `worktrees/` holds embedded git repos -- `git add -A` picks them
+# up as gitlinks, which is how one nearly landed in a commit. `settings.local.json` is
+# machine-local by convention; a shared .claude/settings.json can still be committed.
+.claude/worktrees/
+.claude/settings.local.json
+.claude/.DS_Store
