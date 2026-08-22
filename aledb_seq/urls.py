@@ -1,5 +1,6 @@
 from django.urls import include, re_path
 import aledb_seq.views.alignments
+import aledb_seq.views.browse
 import aledb_seq.views.mutations
 
 
@@ -10,6 +11,9 @@ urlpatterns = [
     re_path(r'^add_to_exp_filter', aledb_seq.views.mutations.add_to_exp_filter, name='mutation_to_exp_filter'),
     re_path(r'^toggle-mut-tag/', aledb_seq.views.mutations.save_mut_tag, name='toggle_mut_tag'),
     re_path(r'^toggle-rep-tag', aledb_seq.views.mutations.save_rep_tag, name='toggle_rep_tag'),
+
+    # igv.js at one observed mutation's position, linked from the mutation table's cells.
+    re_path(r'^browse$', aledb_seq.views.browse.browse_mutation, name='browse_mutation'),
 
     # Managed-store files, addressed by primary key and streamed with Range support.
     re_path(r'^alignments/(?P<reseq_id>\d+)/bam$',

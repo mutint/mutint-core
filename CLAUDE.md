@@ -113,6 +113,28 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 
 ## Architecture
 
+### The genome browser
+
+`aledb_seq/views/browse.py` renders igv.js for one `ObservedMutation` at
+`/mutations/browse?observed_mut_id=<pk>`, linked from every mutation-table frequency cell whose
+sample has `bam_stored`. It is the first consumer of the alignment routes, which had been built
+and tested with nothing pointing at them.
+
+Two things are easy to get wrong and fail *silently* — an empty track, no error:
+
+- **Every track needs an explicit `format:`.** The routes end `/bam`, `/fasta`, `/gff3` and
+  carry no file extension; igv.js otherwise infers format from the extension.
+- **Every indexed track needs an explicit `indexURL:`.** The store renames breseq's
+  `data/reference.bam.bai` to `aligned.bam.bai`, so igv.js's default `<url>.bai` derivation
+  would be wrong even if the URLs had extensions.
+
+`igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
+only — it is ~1.4 MB and no other page needs it.
+
+The cell markup is coupled to two things that substring-test it: `_contains_mutation` decides
+whether a row renders by looking for `true`, and `table_template.js` colours a cell by testing
+for `class="true"`. Keep that class on the anchor, and keep `true` out of the empty-cell literal.
+
 ### Django Apps
 
 All apps use the `aledb_*` namespace. Key apps:

@@ -47,6 +47,21 @@ To delete experiments by ID:
 ./aledb delete 4 20 19
 ```
 
+### Viewing alignments
+
+Click a frequency number in the mutation table to open a genome browser (igv.js) at that
+mutation's position, showing the read pileup for that sample. Other samples in the experiment
+can be added as extra tracks to compare them at the same locus.
+
+A sample only has an alignment if it was imported as a **breseq result folder** — that is what
+carries `data/reference.bam`. A sample imported from a bare `.gd` has mutation calls but no
+reads, and its frequencies render as plain text rather than links.
+
+The browser reads BAM/BAI directly over HTTP range requests from
+`/mutations/alignments/<id>/{bam,bai}`, with the reference from
+`/mutations/reference/<experiment_id>/{fasta,fai,gff3}`. Every request is permission-checked
+like any other page, so a browser session sees exactly the experiments its user can view.
+
 ### breseq result import (`ALEDB_STORE_DIR`)
 
 Dropping breseq result folders on `/import/add/` uploads five files per sample --

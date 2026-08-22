@@ -78,6 +78,44 @@ class AmplificationsRemovedTestCase(TestCase):
         self.assertIn("AMP", types)
         self.assertIn("SNP", types)   # and it did not become AMP-only by accident
 
+    # --- the browser link on a frequency cell -------------------------------------------
+
+    def test_a_cell_links_to_the_browser_when_the_sample_has_an_alignment(self):
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)[0]
+        reseq_dict[observed.sequencing_experiment_id].bam_stored = True
+
+        cell = _get_table_mutation_entry(observed, reseq_dict)
+
+        self.assertIn("/mutations/browse?observed_mut_id=%d" % observed.id, cell)
+        # class="true" is load-bearing: _contains_mutation substring-tests it to decide
+        # whether the row renders, and table_template.js tests it to colour the cell.
+        self.assertIn('class="true"', cell)
+
+    def test_a_cell_is_plain_text_when_the_sample_has_no_alignment(self):
+        """Linking would only lead to a page explaining the alignment's absence."""
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)[0]
+        reseq_dict[observed.sequencing_experiment_id].bam_stored = False
+
+        cell = _get_table_mutation_entry(observed, reseq_dict)
+
+        self.assertNotIn("browse", cell)
+        self.assertIn('class="true"', cell)
+
+    def test_an_empty_cell_never_contains_the_true_marker(self):
+        """_contains_mutation substring-tests for `true`; an empty cell carrying it would
+        make a row of nothing render as a row of mutations."""
+        from aledb_seq.views.mutation_table_builder import HTML_EMPTY_MUTATION_CELL
+
+        self.assertNotIn("true", HTML_EMPTY_MUTATION_CELL)
+
     def test_excluding_by_type_still_works_for_the_plugin_tables(self):
         """filter_type is now unused by core, but fixation and converge still pass it
         through get_table_body. Its values read backwards: 'AMP' means exclude AMP."""

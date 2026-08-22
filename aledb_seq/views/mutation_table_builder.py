@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 import re
 from enum import Enum
+from django.urls import reverse
 from django.utils.html import strip_tags
 from aledb_seq.util import get_ecocyc_gene_list
 from aledb_filter.util import filter_observed_mutations
@@ -139,7 +140,7 @@ def get_mutation_table_data(reseq_dict, observed_mutations):
     # Initialize all sample mutation table cells as empty.
     table_entry_list = _initialize_table(experiment_id_idx_mapping_dict, mutation_index_dict)
     for observed_mutation in observed_mutations:
-        new_entry = _get_table_mutation_entry(observed_mutation)
+        new_entry = _get_table_mutation_entry(observed_mutation, reseq_dict)
         if new_entry is not None and observed_mutation.sequencing_experiment_id in reseq_dict.keys():
             table_entry_list[mutation_index_dict[observed_mutation.mutation_id]][
                 experiment_id_idx_mapping_dict[observed_mutation.sequencing_experiment_id]] = new_entry
@@ -181,13 +182,13 @@ def _get_experiment_id_idx_mapping_dict(seq_experiment_dict):
     return experiment_id_idx_mapping
 
 
-def _get_table_mutation_entry(observed_mutation):
+def _get_table_mutation_entry(observed_mutation, reseq_dict):
     """One mutation-table cell.
 
-    This used to have a second branch, taken when the sample had a breseq HTML report, that
-    wrapped the frequencies in links to that report and to a CNVnator coverage plot. Both
-    were built from the per-row path columns, which are gone; what remains is the branch
-    every web-imported experiment already rendered.
+    The frequency links to the genome browser when the sample has a stored alignment, so a
+    cell is the way in to the pileup at that position. `class="true"` is load-bearing and
+    must survive on both branches: `_contains_mutation` below substring-tests it to decide
+    whether a row renders at all, and table_template.js tests it to colour the cell.
     """
     table_entry = ""
     if observed_mutation.breseq_present or observed_mutation.gatk_present:
@@ -196,10 +197,10 @@ def _get_table_mutation_entry(observed_mutation):
         frequencies = [f for f in (observed_mutation.frequency,
                                    observed_mutation.frequency_gatk) if f is not None]
         if frequencies:
-            table_entry = """<span class="true">%s</span>""" % (
-                "/".join("%.2f" % float(f) for f in frequencies))
+            label = "/".join("%.2f" % float(f) for f in frequencies)
         else:
-            table_entry = """<span class="true">&#10003;</span>"""
+            label = "&#10003;"
+        table_entry = _cell_html(observed_mutation, reseq_dict, label)
 
     # TODO: Figure out what this is supposed to do.
     elif observed_mutation.present is False:
@@ -207,6 +208,21 @@ def _get_table_mutation_entry(observed_mutation):
                                                                observed_mutation.wt_reads)
 
     return table_entry
+
+
+def _cell_html(observed_mutation, reseq_dict, label):
+    """The cell's markup: a browser link when there is an alignment to show, else plain text.
+
+    Only the breseq-folder importer stores a BAM, so a bare .gd or legacy CLI sample has none
+    and gets no link -- linking would just send the user to a page explaining its absence.
+    `reseq_dict` holds already-loaded rows, so `bam_stored` costs no query.
+    """
+    reseq = reseq_dict.get(observed_mutation.sequencing_experiment_id)
+    if reseq is None or not reseq.bam_stored:
+        return """<span class="true">%s</span>""" % label
+
+    return """<a class="true" href="%s?observed_mut_id=%d" title="View the pileup at this position">%s</a>""" % (
+        reverse("browse_mutation"), observed_mutation.id, label)
 
 
 def _contains_mutation(filtered_observed_mutations_row):

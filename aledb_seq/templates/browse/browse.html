@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <p>
+            <b>{{ mutation.mutation_type }}</b> at
+            <b>{{ mutation.reseq_reference }}:{{ mutation.position }}</b>
+            {% if mutation.gene %}in <b>{{ mutation.gene }}</b>{% endif %}
+            &mdash; sample <b>{{ sample_name }}</b>
+            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
+               style="margin-left: 1em;">&laquo; back to mutations</a>
+        </p>
+
+        {% if not reference %}
+            <div class="alert alert-warning">
+                This experiment has no reference genome, so there is nothing to align against.
+                Add one (GenBank, GFF3 or FASTA) from the experiment's <b>Add data</b> page.
+            </div>
+        {% elif not has_alignment %}
+            <div class="alert alert-warning">
+                No alignment is stored for sample <b>{{ sample_name }}</b>, so there is no
+                pileup to show. Alignments arrive with a breseq result folder &mdash; a sample
+                imported from a bare <code>.gd</code> file carries mutation calls but no reads.
+            </div>
+        {% else %}
+            {% if other_tracks %}
+                <div style="margin-bottom: 0.75em;">
+                    <label for="add-track" style="font-weight: normal;">Add another sample:</label>
+                    <select id="add-track" style="max-width: 24em;">
+                        <option value="">Choose a sample&hellip;</option>
+                        {% for other in other_tracks %}
+                            <option value="{{ other.id }}"
+                                    data-url="{{ other.url }}"
+                                    data-index-url="{{ other.indexURL }}">{{ other.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+            <div id="igv-browser" style="border: 1px solid #ddd;"></div>
+        {% endif %}
+    </div>
+</div>
+
+{% if reference and has_alignment %}
+    {# ~1.4 MB, so it is loaded on this page only rather than from base.html. #}
+    <script src="{% static "js/igv.min.js" %}"></script>
+    {{ reference|json_script:"igv-reference" }}
+    {{ track|json_script:"igv-track" }}
+    <script type="text/javascript">
+    (function () {
+        "use strict";
+        var reference = JSON.parse(document.getElementById("igv-reference").textContent);
+        var track = JSON.parse(document.getElementById("igv-track").textContent);
+
+        // `format` is explicit on every track: these URLs end in /bam, /fasta, /gff3 and have
+        // no file extension, and igv.js otherwise infers format from the extension. So is
+        // every indexURL -- the store renames the index to aligned.bam.bai, so igv.js's
+        // default "<url>.bai" guess would miss.
+        function alignmentTrack(t) {
+            return {
+                type: "alignment",
+                format: "bam",
+                name: t.name,
+                url: t.url,
+                indexURL: t.indexURL
+            };
+        }
+
+        igv.createBrowser(document.getElementById("igv-browser"), {
+            reference: {
+                id: reference.id,
+                name: reference.name,
+                fastaURL: reference.fastaURL,
+                indexURL: reference.indexURL,
+                tracks: [{
+                    name: "Genes",
+                    type: "annotation",
+                    format: "gff3",
+                    url: reference.gff3URL,
+                    displayMode: "EXPANDED",
+                    indexed: false
+                }]
+            },
+            locus: "{{ locus|escapejs }}",
+            tracks: [alignmentTrack(track)]
+        }).then(function (browser) {
+            var chooser = document.getElementById("add-track");
+            if (!chooser) { return; }
+            chooser.addEventListener("change", function () {
+                var option = chooser.options[chooser.selectedIndex];
+                if (!option.value) { return; }
+                browser.loadTrack(alignmentTrack({
+                    name: option.textContent.trim(),
+                    url: option.getAttribute("data-url"),
+                    indexURL: option.getAttribute("data-index-url")
+                }));
+                // Loaded once; drop it from the list so it cannot be added twice.
+                option.parentNode.removeChild(option);
+                chooser.selectedIndex = 0;
+            });
+        });
+    })();
+    </script>
+{% endif %}
+{% endblock %}
