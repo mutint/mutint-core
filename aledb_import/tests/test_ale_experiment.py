@@ -41,7 +41,7 @@ class TestEnrichment(TestCase):
         expected_experiment_count = 1
         self.assertEqual(expected_experiment_count, AleExperiment.objects.all().count())
         expected_histogram_length = 68
-        self.assertEquals(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
+        self.assertEqual(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
 
     def test_create_ALE_experiment_with_wildtype(self):
         test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/breseq/"
@@ -58,15 +58,15 @@ class TestEnrichment(TestCase):
         expected_experiment_count = 1
         self.assertEqual(expected_experiment_count, AleExperiment.objects.all().count())
         expected_histogram_length = 68
-        self.assertEquals(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
+        self.assertEqual(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
 
     def test_find_user(self):
-        self.assertEquals(self.user, find_user("pphaneuf"))
-        self.assertEquals(self.user, find_user("Patrick"))
+        self.assertEqual(self.user, find_user("pphaneuf"))
+        self.assertEqual(self.user, find_user("Patrick"))
         f1 = sys.stdin
         f = io.StringIO('who\npatrick')
         sys.stdin = f
-        self.assertEquals(self.user, find_user("Krusty Krab"))
+        self.assertEqual(self.user, find_user("Krusty Krab"))
         f.close()
         sys.stdin = f1
 
@@ -76,7 +76,7 @@ class TestEnrichment(TestCase):
         f1 = sys.stdin
         f = io.StringIO('patrick\n-1\n0\nY\n0\nY')
         sys.stdin = f
-        self.assertEquals(self.user, find_user("Krusty Krab"))
+        self.assertEqual(self.user, find_user("Krusty Krab"))
         f.close()
         sys.stdin = f1
 
@@ -84,13 +84,13 @@ class TestEnrichment(TestCase):
         patrick = self.user
         try_creating_project("Created Project", "Patrick Phaneuf", is_pub=False)
         created_project = Project.objects.get(name="Created Project")
-        self.assertEquals(created_project.name, "Created Project")
-        self.assertEquals(created_project.user, patrick)
+        self.assertEqual(created_project.name, "Created Project")
+        self.assertEqual(created_project.user, patrick)
         expected_project_count = 2
-        self.assertEquals(expected_project_count, Project.objects.all().count())
+        self.assertEqual(expected_project_count, Project.objects.all().count())
 
     def test_find_experiment_paths(self):
-        self.assertEquals(find_experiment_paths(os.path.dirname(os.path.realpath(__file__))).sort(),
+        self.assertEqual(find_experiment_paths(os.path.dirname(os.path.realpath(__file__))).sort(),
                           ['/app/builder/tests/test_file_structure',
                            '/app/builder/tests/test_file_structure/messy'].sort())
 
@@ -107,4 +107,4 @@ class TestEnrichment(TestCase):
         expected_experiment_count = 0
         self.assertEqual(expected_experiment_count, AleExperiment.objects.all().count())
         expected_histogram_count = 0
-        self.assertEquals(expected_histogram_count, StaticData.objects.all().count())
+        self.assertEqual(expected_histogram_count, StaticData.objects.all().count())

@@ -41,7 +41,7 @@ class TestFilter(TestCase):
 
         filter_settings = AleExperimentFilter.objects.create(ale_experiment=ale_exp, ignored_genes="geneA")
         obs_muts = filter_observed_mutations(ObservedMutation.objects.all(), ale_exp.ale_id)
-        self.assertEquals(len(obs_muts), 0)
+        self.assertEqual(len(obs_muts), 0)
 
     def test_mutation_filter_one_gene_mutation_many_gene_filter(self):
         ale_exp = AleExperiment.objects.create(instrument=Instrument.objects.create())
@@ -66,7 +66,7 @@ class TestFilter(TestCase):
         filter_settings = AleExperimentFilter.objects.create(ale_experiment=ale_exp,
                                                              ignored_genes="rcsF, –/–, rrlH, rrlD, rrsH, rrlA, gltP/yjcO, rsxC, eco/mqo")
         obs_muts = filter_observed_mutations(ObservedMutation.objects.all(), ale_exp.ale_id)
-        self.assertEquals(len(obs_muts), 0)
+        self.assertEqual(len(obs_muts), 0)
 
     def test_mutation_filter_many_gene_mutation_one_gene_filter(self):
         ale_exp = AleExperiment.objects.create(instrument=Instrument.objects.create())
@@ -92,7 +92,7 @@ class TestFilter(TestCase):
                                                              ignored_genes="geneA")
 
         obs_muts = filter_observed_mutations(ObservedMutation.objects.all(), ale_exp.ale_id)
-        self.assertEquals(len(obs_muts), 1)
+        self.assertEqual(len(obs_muts), 1)
 
     def test_mutation_filter_many_gene_mutation_many_gene_filter(self):
         ale_exp = AleExperiment.objects.create(instrument=Instrument.objects.create())
@@ -118,7 +118,7 @@ class TestFilter(TestCase):
                                                              ignored_genes="geneB, geneA")
 
         obs_muts = filter_observed_mutations(ObservedMutation.objects.all(), ale_exp.ale_id)
-        self.assertEquals(len(obs_muts), 0)
+        self.assertEqual(len(obs_muts), 0)
 
     def test_filter_observed_mutations_get_ale_exp_filter_from_observed_mutations(self):
         ale_exp1 = AleExperiment.objects.create(ale_id=1,

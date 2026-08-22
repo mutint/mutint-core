@@ -18,7 +18,7 @@ class TestUtil(unittest.TestCase):
 
         expected = "asdf/qwer/"
 
-        self.assertEquals(sanitized_path, expected)
+        self.assertEqual(sanitized_path, expected)
 
     def test_santize_path_already_sanitized(self):
 
@@ -28,7 +28,7 @@ class TestUtil(unittest.TestCase):
 
         expected = "asdf/qwer/"
 
-        self.assertEquals(sanitized_path, expected)
+        self.assertEqual(sanitized_path, expected)
 
     def test_parse_ale_name_ale(self):
 

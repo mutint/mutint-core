@@ -118,7 +118,7 @@ class TestUpload(TestCase):
 
         output_freq = _get_mutation_freq(mutation_dict)
 
-        self.assertEquals(expected_freq, output_freq[0])
+        self.assertEqual(expected_freq, output_freq[0])
 
     def test_get_mutation_freq_missing(self):
 
@@ -132,7 +132,7 @@ class TestUpload(TestCase):
 
         output_freq = _get_mutation_freq(mutation_dict)
 
-        self.assertEquals(expected_freq, output_freq[0])
+        self.assertEqual(expected_freq, output_freq[0])
 
     def test_is_missing_coverage_type_True(self):
 
