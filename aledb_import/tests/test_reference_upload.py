@@ -82,7 +82,14 @@ class NormalizationTestCase(TestCase):
         self.assertEqual(reference_store.digest(from_gbk[0]),
                          reference_store.digest(from_gff[0]))
 
-    def test_normalized_gff3_keeps_only_genes(self):
+    def test_normalized_gff3_is_breseq_dialect(self):
+        """The canonical form keeps what annotation needs, in breseq's spelling.
+
+        It used to be reduced to bare `gene` rows carrying a name and a product.
+        That was enough to hash and to draw, but not to annotate: breseq's gene
+        list excludes type `gene` outright, so a reduced file annotates every
+        mutation as intergenic. See aledb_import/annotate/gff3.py.
+        """
         gff3_text, _sequences = reference_io.normalize_reference(
             write_genbank(os.path.join(self.tmp, "ref.gbk")))
 
@@ -91,11 +98,45 @@ class NormalizationTestCase(TestCase):
         feature_rows = [line for line in annotation.splitlines()
                         if line and not line.startswith("#")]
         self.assertEqual(len(feature_rows), 1)
-        self.assertIn("\tgene\t", feature_rows[0])
-        self.assertNotIn("\tCDS\t", gff3_text)
-        # The CDS's product was carried onto the gene it shares coordinates with.
-        self.assertIn("product=aspartokinase", feature_rows[0])
+
+        # Coding type preserved, so a SNP here can be translated.
+        self.assertIn("\tCDS\t", feature_rows[0])
+        self.assertNotIn("\tgene\t", gff3_text)
+        # breseq's attribute spelling: Note for the product, plus the table.
+        self.assertIn("Note=aspartokinase", feature_rows[0])
         self.assertIn("Name=thrA", feature_rows[0])
+        self.assertIn("transl_table=", feature_rows[0])
+
+    def test_the_normalized_form_can_be_annotated_against(self):
+        """The point of the exercise: reload the stored form and it still works."""
+        from aledb_import.annotate.loader import load_reference
+
+        path = os.path.join(self.tmp, "normalized.gff3")
+        gff3_text, _sequences = reference_io.normalize_reference(
+            write_genbank(os.path.join(self.tmp, "ref.gbk")))
+        with open(path, "w") as handle:
+            handle.write(gff3_text)
+
+        references = load_reference(path)
+        genes = references["test_ref"].gene_locations
+        self.assertEqual(1, len(genes))
+        self.assertEqual("thrA", genes[0].feature.name)
+        self.assertEqual("CDS", genes[0].feature.type)
+
+    def test_normalization_is_idempotent(self):
+        """Re-normalizing the canonical form reproduces it exactly.
+
+        If it did not, re-importing a stored reference would look like an
+        annotation change and churn gff3_sha256.
+        """
+        path = os.path.join(self.tmp, "normalized.gff3")
+        once, _sequences = reference_io.normalize_reference(
+            write_genbank(os.path.join(self.tmp, "ref.gbk")))
+        with open(path, "w") as handle:
+            handle.write(once)
+
+        twice, _sequences = reference_io.normalize_reference(path)
+        self.assertEqual(once, twice)
 
     def test_fasta_only_reference_has_sequence_and_no_genes(self):
         path = self._write("ref.fasta", breseq_fixture.fasta_text(SEQUENCES))

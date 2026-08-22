@@ -212,7 +212,7 @@ def _establish_or_check_reference(experiment, gff3_path, fasta_path):
 
     try:
         reference, _created = reference_store.establish_or_check(
-            experiment, gff3_text, sequences, source_path=gff3_path)
+            experiment, gff3_text, sequences)
     except reference_store.ReferenceMismatch as exc:
         raise SampleError(str(exc))
     return reference

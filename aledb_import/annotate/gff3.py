@@ -73,8 +73,17 @@ def _first(attributes, key):
 
 
 def _accession(attributes):
-    """reference_sequence.cpp:1544-1551 -- accession > locus_tag > ID > Alias."""
-    for key in ('accession', 'locus_tag', 'ID', 'Alias'):
+    """The locus tag: accession > locus_tag > Alias.
+
+    breseq (reference_sequence.cpp:1544-1551) also falls back to ``ID``. We do not,
+    deliberately. ``ID`` is GFF3's row-identity field -- it is what groups the rows
+    of a spliced gene -- and third-party writers fill it with serials like
+    ``gene1`` or ``PROKKA_00001``. Reading those as locus tags puts a synthetic
+    identifier into every mutation's annotation. Nothing is lost on breseq's own
+    files, which set ``Alias`` and ``ID`` to the same locus tag, nor on NCBI or
+    Prokka output, which carry a real ``locus_tag``.
+    """
+    for key in ('accession', 'locus_tag', 'Alias'):
         if attributes.get(key):
             return _joined(attributes, key)
     return ''
@@ -153,7 +162,7 @@ def _parse_fasta(lines):
     return sequences
 
 
-def _build_feature(row):
+def _build_feature(row, promote_gene_rows=False):
     attributes = row['attributes']
     feature_type = row['type']
     pseudo = False
@@ -161,6 +170,12 @@ def _build_feature(row):
     if feature_type == PSEUDO_CDS_TYPE:
         feature_type = 'CDS'
         pseudo = True
+    elif promote_gene_rows and feature_type == 'gene':
+        # A file annotated only with `gene` rows -- some third-party GFF3s are --
+        # has nothing else to offer, so treat them as coding rather than
+        # returning no genes at all. breseq's own GFF3 never needs this: it
+        # always writes CDS/tRNA/fCDS.
+        feature_type = 'CDS' 
 
     if feature_type not in GENE_TYPES and feature_type not in REPEAT_TYPES:
         return None
@@ -227,6 +242,9 @@ def load_gff3(*paths):
         for seq_id, sequence in sequences:
             contigs[seq_id] = AnnotatedSequence(seq_id, sequence.upper())
 
+        promote_gene_rows = not any(
+            row['type'] in GENE_TYPES or row['type'] == PSEUDO_CDS_TYPE for row in rows)
+
         # (seq_id, ID, type) -> feature, so later rows extend the same feature.
         by_id = {}
         for row in rows:
@@ -241,7 +259,7 @@ def load_gff3(*paths):
                 feature.locations.append(_location_for(row, feature))
                 continue
 
-            feature = _build_feature(row)
+            feature = _build_feature(row, promote_gene_rows)
             if feature is None:
                 continue
             feature.locations.append(_location_for(row, feature))
@@ -270,3 +288,121 @@ def looks_like_gff3(path):
     except OSError:
         return False
     return False
+
+
+# --- writing ------------------------------------------------------------------------
+#
+# The canonical stored form. Rendering the loaded model back out in breseq's own
+# dialect means one artifact serves three jobs at once: it is what the store
+# hashes, what igv.js draws as the gene track, and what annotation reads. A
+# GenBank and breseq's GFF3 of the same genome load to equivalent models (see
+# tests/test_gff3.py), so they render to identical text -- which is the property
+# the shared-reference check rests on.
+
+# Fixed order, so two inputs that agree on content agree byte for byte.
+ATTRIBUTE_ORDER = ('Alias', 'ID', 'Name', 'Note', 'Pseudo', 'transl_table',
+                   'indeterminate_coordinate')
+
+GFF3_ATTRIBUTE_ESCAPES = (
+    ('%', '%25'), (';', '%3B'), ('=', '%3D'), ('&', '%26'), (',', '%2C'),
+    ('\t', '%09'), ('\n', '%0A'), ('\r', '%0D'),
+)
+
+
+def escape(value):
+    """GFF3 percent-encoding. `%` first, so nothing is double-encoded."""
+    for plain, encoded in GFF3_ATTRIBUTE_ESCAPES:
+        value = value.replace(plain, encoded)
+    return value
+
+
+def _feature_id(feature, index):
+    """A stable identifier, shared by every row of a spliced feature."""
+    return feature.get_locus_tag() or feature.name or 'feature%d' % index
+
+
+def _feature_rows(seq_id, feature, index):
+    attributes = {}
+    if not feature.is_repeat():
+        # Rows of one feature are grouped on reload by shared ID, which is how a
+        # spliced gene keeps its sublocations. Repeats deliberately carry no ID
+        # -- breseq does not give them one, and every copy of an IS family shares
+        # a name, so an ID would merge them into one multi-location feature and
+        # update_feature_lists() drops those.
+        attributes['ID'] = _feature_id(feature, index)
+        if feature.get_locus_tag():
+            attributes['Alias'] = feature.get_locus_tag()
+    if feature.name:
+        attributes['Name'] = feature.name
+    if feature.product:
+        attributes['Note'] = feature.product
+
+    feature_type = feature.type
+    if not feature.is_repeat():
+        if feature.pseudogene:
+            # breseq writes a pseudo CDS as fCDS and reads it back as CDS+Pseudo.
+            if feature_type == 'CDS':
+                feature_type = PSEUDO_CDS_TYPE
+            attributes['Pseudo'] = 'true'
+        if feature_type in ('CDS', PSEUDO_CDS_TYPE):
+            attributes['transl_table'] = str(feature.translation_table)
+
+    rows = []
+    for position, location in enumerate(feature.locations):
+        row_attributes = dict(attributes)
+        # Only the outermost ends of the feature can be indeterminate.
+        indeterminate = []
+        if position == 0 and location.stranded_start_is_indeterminate():
+            indeterminate.append('start')
+        if position == len(feature.locations) - 1 and location.stranded_end_is_indeterminate():
+            indeterminate.append('end')
+        if indeterminate:
+            row_attributes['indeterminate_coordinate'] = ','.join(indeterminate)
+
+        rendered = ';'.join(
+            '%s=%s' % (key, escape(row_attributes[key]))
+            for key in ATTRIBUTE_ORDER if key in row_attributes)
+        rows.append('\t'.join([
+            seq_id, 'aledb', feature_type, str(location.start_1), str(location.end_1),
+            '.', '+' if location.strand == 1 else '-', '0', rendered]))
+    return rows
+
+
+def _sort_key(feature):
+    starts = [location.start_1 for location in feature.locations]
+    return (min(starts) if starts else 0, feature.type, feature.name,
+            feature.get_locus_tag())
+
+
+def render_breseq_gff3(references, line_length=70):
+    """Render loaded reference sequences as breseq-dialect GFF3 with inline FASTA.
+
+    Deterministic: contigs and features are emitted in a fixed order, so the same
+    genome renders to the same bytes whatever format it arrived in.
+    """
+    contigs = []
+    seen = set()
+    for seq_id in sorted(references.seq_ids()):
+        contig = references[seq_id]
+        if id(contig) in seen:
+            continue  # a contig is registered under several aliases
+        seen.add(id(contig))
+        contigs.append(contig)
+    contigs.sort(key=lambda contig: contig.seq_id)
+
+    lines = ['##gff-version 3']
+    for contig in contigs:
+        lines.append('##sequence-region\t%s\t1\t%d' % (contig.seq_id, len(contig)))
+
+    for contig in contigs:
+        features = [f for f in contig.features if f.locations]
+        features.sort(key=_sort_key)
+        for index, feature in enumerate(features, start=1):
+            lines.extend(_feature_rows(contig.seq_id, feature, index))
+
+    lines.append('##FASTA')
+    for contig in contigs:
+        lines.append('>%s' % contig.seq_id)
+        for offset in range(0, len(contig.sequence), line_length):
+            lines.append(contig.sequence[offset:offset + line_length])
+    return '\n'.join(lines) + '\n'

@@ -9,7 +9,6 @@ Layout::
     <store>/experiments/<ale_experiment_pk>/reference/reference.gff3
                                             reference/reference.fasta
                                             reference/reference.fasta.fai
-                                            reference/reference.source
     <store>/samples/<resequencing_experiment_pk>/sample.gd
                                                  aligned.bam
                                                  aligned.bam.bai
@@ -28,15 +27,6 @@ REFERENCE_GFF3 = "reference.gff3"
 REFERENCE_FASTA = "reference.fasta"
 REFERENCE_FAI = "reference.fasta.fai"
 
-# The reference exactly as it was supplied, kept verbatim and never hashed.
-#
-# The normalized gff3/fasta pair above is genes-only and flattened -- that is
-# what lets two spellings of one genome hash alike -- so it cannot serve
-# annotation, which needs the CDS/tRNA distinction, translation tables,
-# pseudogene flags, spliced locations and repeat regions. This is what an
-# experiment is re-annotated from. Stored without an extension because the
-# format varies; aledb_import.annotate.loader sniffs it.
-REFERENCE_SOURCE = "reference.source"
 
 SAMPLE_GD = "sample.gd"
 SAMPLE_BAM = "aligned.bam"
@@ -54,7 +44,7 @@ def experiment_reference_dir(ale_experiment_id):
 
 def experiment_reference_path(ale_experiment_id, filename):
     """Path to one reference artifact. ``filename`` must be one of the module constants."""
-    if filename not in (REFERENCE_GFF3, REFERENCE_FASTA, REFERENCE_FAI, REFERENCE_SOURCE):
+    if filename not in (REFERENCE_GFF3, REFERENCE_FASTA, REFERENCE_FAI):
         raise ValueError("unknown reference artifact: %r" % (filename,))
     return os.path.join(experiment_reference_dir(ale_experiment_id), filename)
 

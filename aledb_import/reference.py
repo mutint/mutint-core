@@ -8,12 +8,15 @@ Two things live here:
   section is far simpler to parse than GenBank, so a small reader is the better trade.
 * a pure-Python ``.fai`` writer, so indexing a FASTA needs no samtools/pysam.
 
-GenBank, when a user supplies one instead, is parsed with Biopython (see ``read_genbank``).
+GenBank input is handled by ``aledb_import.annotate``, which normalization delegates to.
 """
 
 import hashlib
 import io
 import os
+
+from aledb_import.annotate import gff3 as annotate_gff3
+from aledb_import.annotate import loader as annotate_loader
 
 FASTA_DIRECTIVE = "##FASTA"
 
@@ -83,30 +86,6 @@ def read_gff3(path):
             })
 
     sequences = list(parse_fasta(io.StringIO("\n".join(fasta_lines)))) if fasta_lines else []
-    return {"features": features, "sequences": sequences}
-
-
-def read_genbank(path):
-    """Return the same shape as ``read_gff3`` for a GenBank file, via Biopython."""
-    from Bio import SeqIO
-
-    features = []
-    sequences = []
-    for record in SeqIO.parse(path, "genbank"):
-        sequences.append((record.id.split()[0] if record.id else "", str(record.seq)))
-        for feature in record.features:
-            qualifiers = {k: ",".join(str(x) for x in v)
-                          for k, v in (feature.qualifiers or {}).items()}
-            features.append({
-                "seq_id": record.id,
-                "source": "genbank",
-                "type": feature.type,
-                # Biopython locations are 0-based half-open; GFF3 is 1-based inclusive.
-                "start": int(feature.location.start) + 1,
-                "end": int(feature.location.end),
-                "strand": "+" if feature.location.strand != -1 else "-",
-                "attributes": qualifiers,
-            })
     return {"features": features, "sequences": sequences}
 
 
@@ -199,19 +178,18 @@ def _parse_gff_attributes(field):
 #
 # A reference can arrive as GenBank, GFF3, or bare FASTA, and the same genome can be
 # expressed differently by each -- and by different breseq versions. Everything is therefore
-# converted to one canonical form before it is stored or hashed: a GFF3 carrying *only* gene
-# features, plus a FASTA. Without that, two spellings of the same reference would hash
-# differently and the "all samples share a reference" check would reject valid data.
+# converted to one canonical form before it is stored or hashed: breseq's own GFF3
+# dialect, with an inline FASTA. Without that, two spellings of the same reference would
+# hash differently and the "all samples share a reference" check would reject valid data.
+#
+# breseq's dialect rather than a reduced one because the stored file has three jobs: it is
+# what the hash guards, what igv.js draws, and what annotation reads. Only the last needs
+# the CDS/tRNA distinction, translation tables, pseudogene flags, spliced locations and
+# repeat regions -- and without them annotation cannot compute a single codon.
 
 FORMAT_GENBANK = "genbank"
 FORMAT_GFF3 = "gff3"
 FORMAT_FASTA = "fasta"
-
-GENE_TYPES = ("gene",)
-# Used only when a file carries no `gene` features at all -- a CDS-only annotation is
-# common in trimmed references.
-GENE_FALLBACK_TYPES = ("CDS", "cds")
-PRODUCT_TYPES = ("CDS", "cds", "tRNA", "rRNA", "ncRNA")
 
 NORMALIZED_LINE_LENGTH = 70
 
@@ -249,65 +227,68 @@ def detect_format(path, original_name=None):
 def normalize_reference(path, original_name=None):
     """Return ``(gff3_text, sequences)`` in canonical form.
 
-    ``sequences`` is ``[(seq_id, uppercase_sequence), ...]``; ``gff3_text`` carries only gene
-    features and an inline ``##FASTA`` block, so the pair is self-describing.
+    ``sequences`` is ``[(seq_id, uppercase_sequence), ...]``; ``gff3_text`` is
+    breseq-dialect GFF3 with an inline ``##FASTA`` block, so the pair is
+    self-describing.
+
+    The canonical form is breseq's own GFF3 rather than a reduced one, because the
+    stored file has three jobs: it is what the shared-reference check hashes, what
+    igv.js draws as the gene track, and what annotation reads. A reduced form can
+    do the first two but not the third -- flattening a spliced gene or dropping the
+    CDS/tRNA distinction leaves nothing to compute a codon from.
+
+    It is produced by loading the reference into the annotation feature model and
+    rendering it back out, so both input formats go through exactly one code path
+    and a GenBank and breseq's GFF3 of the same genome necessarily agree.
     """
     fmt = detect_format(path, original_name)
 
-    if fmt == FORMAT_GENBANK:
-        parsed = read_genbank(path)
-    elif fmt == FORMAT_GFF3:
-        parsed = read_gff3(path)
-    else:
+    if fmt == FORMAT_FASTA:
+        # No features to model; a bare FASTA is sequence only.
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
-            parsed = {"features": [], "sequences": list(parse_fasta(handle))}
+            sequences = [(seq_id, sequence.upper())
+                         for seq_id, sequence in parse_fasta(handle)]
+        if not sequences:
+            raise ReferenceFormatError(
+                "%s carries no sequence" % (original_name or os.path.basename(path),))
+        return _render_sequence_only_gff3(sequences), sequences
 
-    sequences = [(seq_id, sequence.upper()) for seq_id, sequence in parsed["sequences"]]
+    try:
+        references = annotate_loader.load_reference(path, original_name=original_name)
+    except (annotate_loader.UnsupportedReferenceFormat, ValueError) as error:
+        raise ReferenceFormatError(str(error))
+
+    sequences = _sequences_of(references)
     if not sequences:
         raise ReferenceFormatError(
             "%s carries no sequence; a GFF3 needs an inline ##FASTA section"
             % (original_name or os.path.basename(path),))
 
-    genes = _extract_genes(parsed["features"])
-    return _render_normalized_gff3(genes, sequences), sequences
+    return annotate_gff3.render_breseq_gff3(references), sequences
 
 
-def _extract_genes(features):
-    """Pull gene rows out of parsed features, in a stable order."""
-    genes = [f for f in features if f.get("type") in GENE_TYPES]
-    if not genes:
-        genes = [f for f in features if f.get("type") in GENE_FALLBACK_TYPES]
+def _sequences_of(references):
+    """``[(seq_id, sequence), ...]`` for the distinct contigs, in a stable order."""
+    contigs = []
+    seen = set()
+    for seq_id in sorted(references.seq_ids()):
+        contig = references[seq_id]
+        if id(contig) in seen:
+            continue  # contigs are registered under several aliases
+        seen.add(id(contig))
+        contigs.append(contig)
+    contigs.sort(key=lambda contig: contig.seq_id)
+    return [(contig.seq_id, contig.sequence) for contig in contigs]
 
-    # GenBank puts /product on the CDS, not the gene, so borrow it by coordinates.
-    products = {}
-    for feature in features:
-        if feature.get("type") in PRODUCT_TYPES:
-            product = _first_attribute(feature, ("product", "Note", "note"))
-            if product:
-                key = (feature.get("seq_id"), feature.get("start"), feature.get("end"))
-                products.setdefault(key, product)
 
-    rendered = []
-    for feature in genes:
-        seq_id = feature.get("seq_id") or ""
-        start, end = feature.get("start"), feature.get("end")
-        if start is None or end is None:
-            continue
-        name = _first_attribute(
-            feature, ("Name", "name", "gene", "gene_name", "locus_tag", "ID")) or ""
-        product = (_first_attribute(feature, ("product", "Note", "note"))
-                   or products.get((seq_id, start, end), ""))
-        rendered.append({
-            "seq_id": seq_id,
-            "start": int(start),
-            "end": int(end),
-            "strand": feature.get("strand") if feature.get("strand") in ("+", "-") else ".",
-            "name": name,
-            "product": product,
-        })
-
-    rendered.sort(key=lambda g: (g["seq_id"], g["start"], g["end"], g["name"]))
-    return rendered
+def _render_sequence_only_gff3(sequences):
+    """A reference with no annotation at all: headers plus the sequence."""
+    lines = ["##gff-version 3"]
+    for seq_id, sequence in sequences:
+        lines.append("##sequence-region\t%s\t1\t%d" % (seq_id, len(sequence)))
+    lines.append("##FASTA")
+    lines.append(render_fasta(sequences).rstrip("\n"))
+    return "\n".join(lines) + "\n"
 
 
 def render_fasta(sequences):
@@ -322,38 +303,3 @@ def render_fasta(sequences):
         for offset in range(0, len(sequence), NORMALIZED_LINE_LENGTH):
             lines.append(sequence[offset:offset + NORMALIZED_LINE_LENGTH])
     return "\n".join(lines) + "\n"
-
-
-def _render_normalized_gff3(genes, sequences):
-    lines = ["##gff-version 3"]
-    for seq_id, sequence in sequences:
-        lines.append("##sequence-region\t%s\t1\t%d" % (seq_id, len(sequence)))
-
-    for index, gene in enumerate(genes, start=1):
-        attributes = "ID=gene%d" % index
-        if gene["name"]:
-            attributes += ";Name=%s" % _escape_attribute(gene["name"])
-        if gene["product"]:
-            attributes += ";product=%s" % _escape_attribute(gene["product"])
-        lines.append("\t".join([
-            gene["seq_id"], "aledb", "gene", str(gene["start"]), str(gene["end"]),
-            ".", gene["strand"], ".", attributes]))
-
-    lines.append("##FASTA")
-    lines.append(render_fasta(sequences).rstrip("\n"))
-    return "\n".join(lines) + "\n"
-
-
-def _first_attribute(feature, keys):
-    attributes = feature.get("attributes") or {}
-    for key in keys:
-        value = attributes.get(key)
-        if value:
-            return str(value).strip()
-    return ""
-
-
-def _escape_attribute(value):
-    # GFF3 reserves these inside the attribute column.
-    return (value.replace("%", "%25").replace(";", "%3B")
-                 .replace("=", "%3D").replace("\t", " ").replace("\n", " "))

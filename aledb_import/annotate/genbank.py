@@ -58,8 +58,8 @@ def _locations_from_biopython(bio_location, feature):
     return locations
 
 
-def _build_feature(bio_feature):
-    feature_type = bio_feature.type
+def _build_feature(bio_feature, promoted_type=None):
+    feature_type = promoted_type or bio_feature.type
     if feature_type not in GENE_TYPES and feature_type not in REPEAT_TYPES:
         return None
 
@@ -120,6 +120,38 @@ def parse_records(path):
         return list(SeqIO.parse(path, 'genbank'))
 
 
+def _gene_feature_labels(bio_features):
+    """``(start, end, strand) -> (name, locus_tag)`` from plain ``gene`` features.
+
+    A GenBank locus is normally two features: a ``gene`` and a ``CDS`` at the same
+    coordinates. breseq annotates against the CDS and ignores the gene, which is
+    right when the CDS repeats /gene and /locus_tag -- but some files put the name
+    only on the gene feature, and then the CDS would come through as "unknown".
+    """
+    labels = {}
+    for bio_feature in bio_features:
+        if bio_feature.type != 'gene':
+            continue
+        key = (int(bio_feature.location.start), int(bio_feature.location.end),
+               bio_feature.location.strand)
+        labels.setdefault(key, (_first_qualifier(bio_feature, 'gene'),
+                                _first_qualifier(bio_feature, 'locus_tag')))
+    return labels
+
+
+def _borrow_labels(feature, bio_feature, labels):
+    """Fill a gene's missing name or locus tag from the gene feature beside it."""
+    key = (int(bio_feature.location.start), int(bio_feature.location.end),
+           bio_feature.location.strand)
+    name, locus_tag = labels.get(key, ('', ''))
+    if name and feature.name == 'unknown':
+        feature.name = make_safe(name)
+    if locus_tag and not feature.locus_tag:
+        feature.locus_tag = make_safe(locus_tag)
+        if feature.name == 'unknown':
+            feature.name = make_safe(locus_tag)
+
+
 def load_genbank(*paths):
     """Load one or more GenBank files into a ReferenceSequences."""
     references = ReferenceSequences()
@@ -128,9 +160,20 @@ def load_genbank(*paths):
         for record in parse_records(path):
             seq_id = record.id or record.name
             annotated = AnnotatedSequence(seq_id, str(record.seq).upper())
+            labels = _gene_feature_labels(record.features)
+
+            # A file annotated only with `gene` features has nothing else to
+            # offer; treat them as coding rather than returning no genes at all.
+            has_real_genes = any(f.type in GENE_TYPES for f in record.features)
+
             for bio_feature in record.features:
-                feature = _build_feature(bio_feature)
+                promoted = None
+                if not has_real_genes and bio_feature.type == 'gene':
+                    promoted = 'CDS'
+                feature = _build_feature(bio_feature, promoted_type=promoted)
                 if feature is not None:
+                    if not feature.is_repeat():
+                        _borrow_labels(feature, bio_feature, labels)
                     annotated.features.append(feature)
             annotated.update_feature_lists()
             references.add(annotated)

@@ -5,10 +5,9 @@ Django. An import path hands over the GD records it just parsed, and gets back
 mutations carrying the same gene, codon and amino-acid fields `gdtools ANNOTATE`
 would have written.
 
-Annotation reads the reference as it was supplied (`store.REFERENCE_SOURCE`), not
-the normalized gff3/fasta pair the store hashes: that pair is genes-only and
-flattened, so it cannot tell a CDS from a tRNA or a spliced gene from a
-contiguous one. See `aledb_import.annotate.loader`.
+Annotation reads the experiment's stored reference -- the same canonical GFF3 the
+store hashes and igv.js draws. It is written in breseq's own dialect precisely so
+one artifact can serve all three; see `aledb_import.reference.normalize_reference`.
 
 Annotation is deliberately **additive**. It fills the columns that were empty
 (`protein_change` has always been ""), and never rewrites `sequence_change`,
@@ -50,7 +49,7 @@ def reference_sequences_for(experiment):
     Memoised per process: parsing a bacterial genome takes a couple of seconds and
     every sample in an import annotates against the same reference.
     """
-    path = reference_store.annotation_source_path(experiment.ale_id)
+    path = reference_store.annotation_reference_path(experiment.ale_id)
     if not path:
         return None
 

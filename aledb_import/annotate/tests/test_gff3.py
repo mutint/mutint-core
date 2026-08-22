@@ -14,6 +14,8 @@ differently from GenBank.
 """
 
 import os
+import shutil
+import tempfile
 
 from django.test import SimpleTestCase
 
@@ -165,3 +167,70 @@ class FormatDetectionTest(SimpleTestCase):
         self.addCleanup(os.unlink, path)
         with self.assertRaises(UnsupportedReferenceFormat):
             detect_format(path)
+
+
+class NormalizedFormRoundTripTest(SimpleTestCase):
+    """Annotation must survive the trip through the stored canonical form.
+
+    This is what the whole "store breseq-dialect GFF3" decision buys. The old
+    reduced form -- bare `gene` rows with a name and a product -- lost it
+    completely: breseq's gene list excludes type `gene`, so every mutation came
+    back intergenic with no neighbours.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from aledb_import import reference as reference_io
+
+        cls.tmp = tempfile.mkdtemp()
+        gff3_text, _sequences = reference_io.normalize_reference(GENBANK)
+        cls.normalized = os.path.join(cls.tmp, 'normalized.gff3')
+        with open(cls.normalized, 'w') as handle:
+            handle.write(gff3_text)
+
+        cls.direct = _annotate_with(GENBANK)
+        cls.through_store = _annotate_with(cls.normalized)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def test_annotation_is_unchanged_by_normalization(self):
+        differences = []
+        for direct, stored in zip(self.direct, self.through_store):
+            for key in sorted(set(direct) | set(stored)):
+                if str(direct.get(key, '')) != str(stored.get(key, '')):
+                    differences.append(
+                        '%s %s: %s: direct=%r stored=%r'
+                        % (direct.get('type'), direct.get('position'), key,
+                           direct.get(key, ''), stored.get(key, '')))
+        self.assertEqual([], differences, '\n'.join(differences))
+
+    def test_the_things_the_reduced_form_used_to_lose(self):
+        by_position = {m.get('position'): m for m in self.through_store}
+        # coding vs non-coding, which needs the CDS/tRNA distinction
+        self.assertEqual('nonsense', by_position[130]['snp_type'])
+        self.assertEqual('noncoding', by_position[3520]['snp_type'])
+        self.assertEqual('pseudogene', by_position[3750]['snp_type'])
+        # a codon, which needs the spliced locations and the translation table
+        self.assertEqual('TAC', by_position[130]['codon_ref_seq'])
+        # a locus tag, which the reduced form folded away
+        self.assertEqual('b0001', by_position[130]['locus_tag'])
+        # a repeat family, which the reduced form dropped entirely
+        self.assertEqual('200', by_position[1300]['repeat_size'])
+
+    def test_products_are_not_double_escaped(self):
+        """A comma in a product survives one normalization, and every later one.
+
+        read_gff3 did not unescape, so breseq's `%2C` was re-escaped to `%252C`
+        and grew another level every time the file went round again.
+        """
+        from aledb_import.annotate.gff3 import load_gff3
+
+        spliced = [f for f in load_gff3(self.normalized)['SYN001'].features
+                   if f.name == 'splA']
+        self.assertEqual('spliced gene, plus strand', spliced[0].product)
+        with open(self.normalized) as handle:
+            self.assertNotIn('%25', handle.read())

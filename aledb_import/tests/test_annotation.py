@@ -60,22 +60,22 @@ class AnnotatedImportTestCase(TestCase):
             "syn project", "syn exp", "tester", False)
         gff3_text, sequences = reference.normalize_reference(self.reference_path)
         reference_store.establish_or_check(
-            context["experiment"], gff3_text, sequences,
-            source_path=self.reference_path)
+            context["experiment"], gff3_text, sequences)
         return context["experiment"]
 
     def mutation_at(self, position):
         return Mutation.objects.get(ale_experiment=self.experiment, position=position)
 
-    def test_the_reference_source_is_kept_for_reannotation(self):
+    def test_annotation_reads_the_one_stored_reference(self):
+        # The same file the store hashes and igv.js draws -- there is no second
+        # artifact kept alongside it.
         path = store.experiment_reference_path(
-            self.experiment.ale_id, store.REFERENCE_SOURCE)
+            self.experiment.ale_id, store.REFERENCE_GFF3)
         self.assertTrue(os.path.isfile(path))
-        self.assertEqual(path, reference_store.annotation_source_path(self.experiment.ale_id))
+        self.assertEqual(
+            path, reference_store.annotation_reference_path(self.experiment.ale_id))
 
-    def test_keeping_the_source_does_not_change_the_hashes(self):
-        # The source sits beside the normalized pair and is never hashed, so the
-        # shared-reference check is unaffected by its presence.
+    def test_the_stored_reference_still_hashes_as_expected(self):
         stored = ExperimentReference.objects.get()
         expected_gff3, sequences = reference.normalize_reference(self.reference_path)
         self.assertEqual(reference_store.digest(expected_gff3), stored.gff3_sha256)
@@ -170,7 +170,11 @@ class AnnotatedFromGenbankTestCase(AnnotatedImportTestCase):
 
 
 class UnannotatedImportTestCase(TestCase):
-    """Without a stored reference source, import still works -- just unannotated."""
+    """Import still succeeds when annotation cannot run; it just does not annotate.
+
+    A .gd can legitimately arrive before a usable reference does, so a missing or
+    mismatched reference means "not annotated yet", not "this import is invalid".
+    """
 
     def setUp(self):
         annotation.clear_cache()
@@ -185,21 +189,45 @@ class UnannotatedImportTestCase(TestCase):
         self.addCleanup(patcher.disable)
 
         context = gd_import._prepare_experiment("syn project", "syn exp", "tester", False)
-        gff3_text, sequences = reference.normalize_reference(SYNTHETIC_GFF3)
-        # No source_path: this is what an experiment whose reference predates the
-        # annotation work looks like.
-        reference_store.establish_or_check(context["experiment"], gff3_text, sequences)
         self.experiment = context["experiment"]
 
+    def _establish(self, path):
+        gff3_text, sequences = reference.normalize_reference(path)
+        reference_store.establish_or_check(self.experiment, gff3_text, sequences)
+
+    def _import(self):
         gd_import.import_gd_files(
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
             project_name="syn project", experiment_name="syn exp", person="tester")
 
-    def test_mutations_are_imported(self):
-        self.assertEqual(36, Mutation.objects.count())
+    def _categories(self):
+        return set(Mutation.objects.values_list("mutation_category", flat=True))
 
-    def test_they_are_simply_not_annotated(self):
-        self.assertIsNone(reference_store.annotation_source_path(self.experiment.ale_id))
-        categories = set(Mutation.objects.values_list("mutation_category", flat=True))
-        self.assertLessEqual(categories, {None, ""})
-        self.assertFalse(Mutation.objects.filter(annotation__isnull=False).exists())
+    def test_a_reference_row_whose_stored_file_is_gone(self):
+        # Possible for experiments predating the store, or after a store wipe.
+        self._establish(SYNTHETIC_GFF3)
+        os.unlink(store.experiment_reference_path(
+            self.experiment.ale_id, store.REFERENCE_GFF3))
+
+        self._import()
+
+        self.assertIsNone(
+            reference_store.annotation_reference_path(self.experiment.ale_id))
+        self.assertEqual(36, Mutation.objects.count())
+        self.assertLessEqual(self._categories(), {None, ""})
+
+    def test_mutations_that_match_no_contig_in_the_reference(self):
+        # A reference for a different genome: the sequence is fine, but no
+        # mutation's seq_id is in it, so there is nothing to annotate against.
+        other = os.path.join(self.store, "other.gff3")
+        with open(other, "w") as handle:
+            handle.write(
+                "##gff-version 3\n##sequence-region\tOTHER\t1\t12\n"
+                "OTHER\tx\tCDS\t1\t9\t.\t+\t0\tID=g1;Name=g1\n"
+                "##FASTA\n>OTHER\nACGTACGTACGT\n")
+        self._establish(other)
+
+        self._import()
+
+        self.assertEqual(36, Mutation.objects.count())
+        self.assertLessEqual(self._categories(), {None, ""})
