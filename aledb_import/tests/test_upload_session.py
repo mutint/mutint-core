@@ -12,6 +12,7 @@ from aledb_import import breseq_folder
 from aledb_import.models import STATE_FINALIZED, UploadSession
 from aledb_import.tests import breseq_fixture
 from aledb_import.upload_session import UploadError, sanitize_relative_path
+from aledb_experiment.models import Project
 from aledb_seq.models import ExperimentReference, ResequencingExperiment
 
 
@@ -53,11 +54,19 @@ class UploadSessionEndpointTestCase(TestCase):
         patcher.enable()
         self.addCleanup(patcher.disable)
 
-    def _create(self, files, project="p", experiment="e"):
+        # Uploads target an experiment by primary key and require edit rights on its project.
+        self.project = Project.objects.create(name="p", user=self.user)
+        from aledb_experiment.views import _create_experiment
+        self.experiment = _create_experiment(self.project, "e", self.user)
+
+    def _create(self, files, experiment_id=None, import_type=""):
         return self.client.post(
             "/import/uploads/",
-            data=json.dumps({"project": project, "experiment": experiment,
-                             "person": "tester", "files": files}),
+            data=json.dumps({
+                "ale_experiment_id": (self.experiment.ale_id if experiment_id is None
+                                      else experiment_id),
+                "import_type": import_type,
+                "files": files}),
             content_type="application/json")
 
     def _chunk(self, upload_id, path, offset, payload):
@@ -68,9 +77,24 @@ class UploadSessionEndpointTestCase(TestCase):
 
     # --- session lifecycle -------------------------------------------------------------
 
-    def test_create_requires_project_and_experiment(self):
-        response = self._create([{"path": "a.gd", "size": 1}], project="")
+    def test_create_requires_a_known_experiment(self):
+        self.assertEqual(
+            self._create([{"path": "a.gd", "size": 1}], experiment_id=999999).status_code,
+            404)
+
+    def test_create_rejects_an_unknown_import_type(self):
+        response = self._create([{"path": "a.gd", "size": 1}], import_type="nope")
         self.assertEqual(response.status_code, 400)
+        self.assertIn("Unknown import type", response.json()["error"])
+
+    def test_cannot_upload_into_someone_elses_experiment(self):
+        stranger = User.objects.create(username="stranger", email="s@e.com", is_active=True)
+        stranger.set_password("pw")
+        stranger.save()
+        self.client.force_login(stranger)
+
+        response = self._create([{"path": "a.gd", "size": 1}])
+        self.assertEqual(response.status_code, 403)
 
     def test_create_rejects_a_traversal_path_in_the_manifest(self):
         response = self._create([{"path": "../escape.gd", "size": 1}])
@@ -170,8 +194,9 @@ class UploadSessionEndpointTestCase(TestCase):
                 payload = handle.read()
             entries.append((sample_name + "/" + relative.replace(os.sep, "/"), payload))
 
-        upload_id = self._create(
-            [{"path": p, "size": len(b)} for p, b in entries]).json()["upload_id"]
+        created = self._create([{"path": p, "size": len(b)} for p, b in entries])
+        self.assertEqual(created.status_code, 200, created.content)
+        upload_id = created.json()["upload_id"]
         for path, payload in entries:
             response = self._chunk(upload_id, path, 0, payload)
             self.assertEqual(response.status_code, 200, response.content)

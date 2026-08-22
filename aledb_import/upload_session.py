@@ -22,7 +22,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from aledb_common import store
-from aledb_import import breseq_folder
+from aledb_common.import_registry import get_import_handler, run_import
+from aledb_experiment.models import AleExperiment
+from aledb_experiment.permissions import can_edit_project
 from aledb_import.models import (
     STATE_FAILED,
     STATE_FINALIZED,
@@ -83,17 +85,23 @@ def staged_path(session, raw_path):
 
 @require_POST
 def create_upload_session(request):
-    """Open a session. Body: {project, experiment, person, files:[{path,size}]}."""
+    """Open a session. Body: {ale_experiment_id, import_type, files:[{path,size}]}."""
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
     except ValueError:
         return JsonResponse({"error": "Body must be JSON."}, status=400)
 
-    project = (payload.get("project") or "").strip()
-    experiment = (payload.get("experiment") or "").strip()
-    if not project or not experiment:
+    try:
+        experiment = AleExperiment.objects.get(pk=payload.get("ale_experiment_id"))
+    except (AleExperiment.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Unknown experiment."}, status=404)
+    if not can_edit_project(request.user, experiment.project):
+        return JsonResponse({"error": "You cannot add to this experiment."}, status=403)
+
+    import_type = (payload.get("import_type") or "").strip()
+    if import_type and get_import_handler(import_type) is None:
         return JsonResponse(
-            {"error": "Both project and experiment are required."}, status=400)
+            {"error": "Unknown import type: %s" % import_type}, status=400)
 
     files = payload.get("files") or []
     if not isinstance(files, list) or not files:
@@ -115,12 +123,10 @@ def create_upload_session(request):
     except (UploadError, TypeError, ValueError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
-    person = (payload.get("person") or "").strip() or request.user.get_username()
     session = UploadSession.objects.create(
         user=request.user if request.user.is_authenticated else None,
-        project_name=project,
-        experiment_name=experiment,
-        person=person,
+        ale_experiment=experiment,
+        import_type=import_type,
         manifest=manifest,
         declared_bytes=declared)
     store.ensure_dir(store.staging_dir(session.id))
@@ -185,11 +191,10 @@ def finalize_upload(request, upload_id):
 
     root = store.staging_dir(session.id)
     try:
-        summary = breseq_folder.import_breseq_folders(
-            root,
-            project_name=session.project_name,
-            experiment_name=session.experiment_name,
-            person=session.person)
+        # The registry decides what each file is and which handler takes it, so a plugin's
+        # import type is reachable here with no change to this view.
+        summary = run_import(session.ale_experiment, root, request.user,
+                             import_type=session.import_type or None)
     except Exception as exc:
         logger.exception("breseq folder finalize failed for session %s", session.id)
         session.state = STATE_FAILED

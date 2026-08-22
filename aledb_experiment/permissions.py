@@ -56,6 +56,30 @@ def can_view_project(user, project):
     return ok
 
 
+def can_edit_project(user, project):
+    """Who may create under, or delete, a project.
+
+    Deliberately built on `Project.user` and `is_superuser` rather than the guardian grant:
+    the two `content_type__app_label='ale'` lookups in this module are stale (the app label is
+    `aledb_experiment`), so they always return empty and cannot be trusted for a destructive
+    action. `Project.user` is set at creation and is unambiguous.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return project is not None and project.user_id == user.id
+
+
+def can_delete_experiment(user, experiment):
+    """An experiment is deletable by whoever may edit the project holding it."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return can_edit_project(user, experiment.project) if experiment else False
+
+
 def can_view_experiment(user, resequence_data_location):
     return True
 

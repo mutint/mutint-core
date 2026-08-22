@@ -67,7 +67,11 @@ def delete_ale_experiments(ale_experiment_primary_key_list):
         print("Deleting Experiment #" + str(exp_id) + ":", ale_experiment_to_delete.name)
         message = "Experiment %s was deleted" % ale_experiment_to_delete.name
         ale_experiment_to_delete.delete()
-        StaticData.objects.get(id=exp_id).delete()
+        # StaticData has no FK -- it is tied to the experiment only by the convention
+        # StaticData.id == AleExperiment.ale_id -- and it only exists once post-processing
+        # has run. An experiment with no mutations has none, and `get()` raised here *after*
+        # the experiment row was already deleted, leaving the delete half-finished.
+        StaticData.objects.filter(id=exp_id).delete()
         create_event(title="Experiment Deleted",
                      message=message,
                      icon='<i class="fa fa-times" aria-hidden="true"></i>',

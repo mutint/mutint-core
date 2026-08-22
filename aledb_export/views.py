@@ -3,7 +3,7 @@ from zipstream import ZipStream, ZIP_DEFLATED
 from django.shortcuts import get_object_or_404
 from aledb_experiment.utils import get_all_user_exps
 from aledb_experiment.permissions import can_view_project
-from aledb_experiment.models import Project
+from aledb_experiment.models import Project, live
 from zipfile import ZipFile
 import io, csv
 from aledb_export.util import get_csv_str
@@ -30,7 +30,7 @@ def export(request):
         if project_id != 'null':
             project = get_object_or_404(Project, pk=int(project_id))
             if project and can_view_project(request.user, project):
-                experiments = project.aleexperiment_set.all()
+                experiments = live(project.aleexperiment_set.all())
             else:
                 return HttpResponse(status=403)
         else:
@@ -84,7 +84,7 @@ def export_experiment_index(request):
         if project_id != 'null':
             project = get_object_or_404(Project, pk=int(project_id))
             if project and can_view_project(request.user, project):
-                experiments = project.aleexperiment_set.all()
+                experiments = live(project.aleexperiment_set.all())
             else:
                 return HttpResponse(status=403)
         else:

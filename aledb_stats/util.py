@@ -29,8 +29,13 @@ def get_observed_mutation_list(ale_experiment_id):
 
 
 def get_histogram_jsons(ale_experiment_id, histogram_item_count):
-    genes = StaticData.objects.get(id=ale_experiment_id).histogram_data[:histogram_item_count]
-    return genes
+    # StaticData is written by generate_static_data, which only runs once an experiment has
+    # mutations. A newly created, still-empty experiment has none -- and its stats page is
+    # exactly where the "Add data" button lives, so this must render rather than 500.
+    static_data = StaticData.objects.filter(id=ale_experiment_id).first()
+    if static_data is None or not static_data.histogram_data:
+        return []
+    return static_data.histogram_data[:histogram_item_count]
 
 
 def generate_histogram_jsons(observed_mutation_list):
@@ -54,8 +59,8 @@ def generate_needle_plot_data(obs_mut_list):
 
 
 def get_needle_plot_data(experiment_id):
-    data = StaticData.objects.get(id=experiment_id).mut_needle_data
-    return data
+    static_data = StaticData.objects.filter(id=experiment_id).first()
+    return static_data.mut_needle_data if static_data else []
 
 
 def generate_static_data(ale_id):

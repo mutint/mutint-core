@@ -98,13 +98,28 @@ def find_loose_gd_files(root, sample_dirs):
 
 
 def import_breseq_folders(root, project_name, experiment_name, person, is_public=False):
-    """Import every breseq sample under ``root``.
+    """Name-addressed entry point, kept for the CLI and existing callers.
 
-    Returns the standard summary dict, the same shape the single-POST ``.gd`` endpoint
-    returns, so both import paths render through one client code path. Loose ``.gd`` files
-    are reported as skipped rather than imported -- see ``find_loose_gd_files``.
+    Web callers use :func:`import_samples_into` instead, which takes the experiment itself --
+    see ``gd_import.prepare_experiment_by_id`` for why identity by primary key matters.
     """
     context = _prepare_experiment(project_name, experiment_name, person, is_public)
+    return _import_samples(context, root, person, report_loose_gd=True)
+
+
+def import_samples_into(experiment, root, person):
+    """Import every breseq sample under ``root`` into an existing experiment.
+
+    Loose ``.gd`` files are left alone here: the import registry routes those to the
+    genomediff handler, so claiming them would import the same file twice.
+    """
+    from aledb_import.gd_import import prepare_experiment_by_id
+
+    context = prepare_experiment_by_id(experiment.ale_id)
+    return _import_samples(context, root, person, report_loose_gd=False)
+
+
+def _import_samples(context, root, person, report_loose_gd):
     experiment = context["experiment"]
 
     sample_dirs = find_sample_dirs(root)
@@ -122,14 +137,15 @@ def import_breseq_folders(root, project_name, experiment_name, person, is_public
             logger.exception("breseq folder import failed for %s", sample_name)
             file_results.append({"file": sample_name, "mutations": 0, "error": str(exc)})
 
-    for gd_path in find_loose_gd_files(root, sample_dirs):
-        file_results.append({
-            "file": os.path.basename(gd_path),
-            "mutations": 0,
-            "error": ("a bare .gd has no reference genome, which every sample in an "
-                      "experiment must share; import it into an experiment whose "
-                      "reference is already established"),
-        })
+    if report_loose_gd:
+        for gd_path in find_loose_gd_files(root, sample_dirs):
+            file_results.append({
+                "file": os.path.basename(gd_path),
+                "mutations": 0,
+                "error": ("a bare .gd has no reference genome, which every sample in an "
+                          "experiment must share; import it into an experiment whose "
+                          "reference is already established"),
+            })
 
     if total_mutations:
         _run_post_processing(experiment)

@@ -124,6 +124,30 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
     return {"experiment": experiment, "media": media, "freezer_box": freezer_box}
 
 
+def prepare_experiment_by_id(ale_experiment_id):
+    """Context for adding to an *existing* experiment, identified by primary key.
+
+    The web paths use this rather than `_prepare_experiment`, whose name-based
+    get_or_create keys on (name, instrument, person, project) -- so the same experiment name
+    with a different person silently forks into a second experiment. Keying on the pk means
+    two people can add to one experiment, and two experiments may share a name.
+
+    It also avoids `try_creating_project` -> `find_user`, which prompts on stdin and therefore
+    cannot run inside a web request.
+    """
+    experiment = AleExperiment.objects.get(pk=ale_experiment_id)
+    media, _ = Media.objects.get_or_create(
+        description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
+        substrate=metadata_defaults.DEFAULT_MEDIA_SUBSTRATE,
+        temperature=metadata_defaults.DEFAULT_TEMPERATURE,
+        volume=metadata_defaults.DEFAULT_VOLUME,
+        stirring_speed=metadata_defaults.DEFAULT_STIRRING_SPEED)
+    freezer_box, _ = FreezerBox.objects.get_or_create(
+        name=metadata_defaults.DEFAULT_FREEZER_BOX_NAME,
+        number=metadata_defaults.DEFAULT_FREEZER_BOX_NUMBER)
+    return {"experiment": experiment, "media": media, "freezer_box": freezer_box}
+
+
 def _import_one_file(uploaded, filename, context, person):
     document = _parse_document(uploaded)
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename

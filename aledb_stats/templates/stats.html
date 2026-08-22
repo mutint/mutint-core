@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ ale_project_name }}: {{ ale_experiment_name }} experiment stats{% endblock %}
 {% block scripts_and_style %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
     <style type="text/css">
         table.dataTable tr.odd {
             background-color: lightgrey;
@@ -52,6 +53,15 @@
 
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - Experiment Stats{% endblock %}
+{% block experiment_actions %}
+    <div style="margin-top: 0.6em;">
+        <a class="btn btn-primary btn-sm" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
+            + Add data</a>
+        <button type="button" class="btn btn-danger btn-sm" id="delete-experiment"
+                data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
+    </div>
+{% endblock %}
+
 {% block content %}
     <div class="panel panel-default">
         <div class="panel-heading">Notes</div>
@@ -251,5 +261,39 @@
             </tr>
         </table>
     </div>
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var button = document.getElementById("delete-experiment");
+    if (!button) { return; }
 
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
+        return match ? decodeURIComponent(match[2]) : "";
+    }
+
+    button.addEventListener("click", function () {
+        swal({
+            title: "Delete this experiment?",
+            text: "Are you sure you want to delete. This is permanent.",
+            icon: "warning",
+            buttons: true,
+            dangerMode: true
+        }).then(function (confirmed) {
+            if (!confirmed) { return; }
+            fetch("/ale/experiment/" + button.dataset.experimentId + "/delete/", {
+                method: "POST",
+                headers: { "X-CSRFToken": getCookie("csrftoken") }
+            }).then(function (resp) {
+                return resp.json().then(function (body) {
+                    if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
+                    window.location.href = "/ale/experiments/";
+                });
+            }).catch(function (err) {
+                swal("", err.message || "Delete failed", "error");
+            });
+        });
+    });
+})();
+</script>
 {% endblock %}

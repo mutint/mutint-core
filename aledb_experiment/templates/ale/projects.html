@@ -15,6 +15,30 @@
 {% block title %}Project List{% endblock %}
 {% block header %}Project List{% endblock %}
 {% block content %}
+    <div style="margin-bottom: 1em;">
+        <button type="button" class="btn btn-primary btn-sm" id="new-project">+ New project</button>
+    </div>
+
+    <div id="new-project-form" style="display: none; margin-bottom: 1.5em; padding: 1em;
+         border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="np-name">Project name</label>
+            <input type="text" class="form-control" id="np-name" required>
+        </div>
+        <div class="form-group">
+            <label for="np-experiment">First experiment <small>(optional)</small></label>
+            <input type="text" class="form-control" id="np-experiment"
+                   placeholder="Leave blank to create the project only">
+        </div>
+        <div class="checkbox">
+            <label><input type="checkbox" id="np-public"> Public</label>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" id="np-save">Create</button>
+        <button type="button" class="btn btn-default btn-sm" id="np-cancel">Cancel</button>
+        <div id="np-error" style="color: #a00; margin-top: 0.5em;"></div>
+    </div>
+
 
     <table id="project_table" class="table table-bordered" style="width: 100%;">
         <thead class="alert-success">
@@ -41,5 +65,62 @@
             {% endfor %}
         </tbody>
     </table>
-{% endblock %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
+        return match ? decodeURIComponent(match[2]) : "";
+    }
+    window.aledbPost = function (url, data) {
+        var form = new FormData();
+        Object.keys(data || {}).forEach(function (k) { form.append(k, data[k]); });
+        return fetch(url, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCookie("csrftoken") },
+            body: form
+        }).then(function (resp) {
+            return resp.json().then(function (body) {
+                if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
+                return body;
+            });
+        });
+    };
+    window.aledbConfirmDelete = function (what) {
+        return swal({
+            title: "Delete " + what + "?",
+            text: "Are you sure you want to delete. This is permanent.",
+            icon: "warning",
+            buttons: true,
+            dangerMode: true
+        });
+    };
+})();
+</script>
 
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var panel = document.getElementById("new-project-form");
+    document.getElementById("new-project").addEventListener("click", function () {
+        panel.style.display = panel.style.display === "none" ? "block" : "none";
+    });
+    document.getElementById("np-cancel").addEventListener("click", function () {
+        panel.style.display = "none";
+    });
+    document.getElementById("np-save").addEventListener("click", function () {
+        var data = { name: document.getElementById("np-name").value,
+                     experiment: document.getElementById("np-experiment").value };
+        if (document.getElementById("np-public").checked) { data.is_public = "1"; }
+        window.aledbPost("/ale/projects/create/", data).then(function (body) {
+            // Straight into the new experiment when one was created with the project.
+            window.location.href = body.experiment_id
+                ? "/import/add/?ale_experiment_id=" + body.experiment_id
+                : "/ale/projects/";
+        }).catch(function (err) {
+            document.getElementById("np-error").textContent = err.message;
+        });
+    });
+})();
+</script>
+{% endblock %}

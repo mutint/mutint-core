@@ -7,6 +7,48 @@ blank_field = {"blank": True, "null": True}
 VIEW_PROJECT = 'view_project'
 
 
+class SoftDeleteMixin(models.Model):
+    """Deletion marks a row rather than destroying it.
+
+    Only the top objects -- Project and AleExperiment -- carry the flag. Children are reached
+    by traversing the FK chain when the purge command finally removes them, so a deletion is
+    one row written rather than a cascade of them.
+
+    Nothing filters these out automatically: `objects` stays unfiltered so the import paths'
+    get_or_create and the CLI keep seeing every row. The user-facing list views exclude deleted
+    rows explicitly via `live()`.
+    """
+
+    deleted_at = models.DateTimeField(db_index=True, **blank_field)
+    deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
+                                   **blank_field)
+
+    class Meta:
+        abstract = True
+
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None
+
+    def soft_delete(self, user=None, when=None):
+        from django.utils import timezone
+        self.deleted_at = when or timezone.now()
+        self.deleted_by = user if (user and user.is_authenticated) else None
+        self.save(update_fields=["deleted_at", "deleted_by"])
+        return self
+
+    def restore(self):
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=["deleted_at", "deleted_by"])
+        return self
+
+
+def live(queryset):
+    """Exclude soft-deleted rows from a user-facing queryset."""
+    return queryset.filter(deleted_at__isnull=True)
+
+
 class Instrument(models.Model):
 
     name = models.CharField(max_length=200)
@@ -18,7 +60,7 @@ class Instrument(models.Model):
         return self.name
 
 
-class Project(models.Model):
+class Project(SoftDeleteMixin):
     name = models.CharField(max_length=50)
     user = models.ForeignKey(User, default=None, on_delete=models.DO_NOTHING, help_text="project owner")
     date = models.DateTimeField(auto_now_add=True, help_text="project created date")
@@ -31,7 +73,7 @@ class Project(models.Model):
         return self.user.get_full_name()
 
     def experiments(self):
-        return AleExperiment.objects.filter(project=self)
+        return live(AleExperiment.objects.filter(project=self))
 
     def __str__(self):
         return self.name
@@ -54,7 +96,7 @@ def get_projects(user: User):
     return projects
 
 
-class AleExperiment(models.Model):
+class AleExperiment(SoftDeleteMixin):
     ale_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=200)
     person = models.CharField(max_length=200)

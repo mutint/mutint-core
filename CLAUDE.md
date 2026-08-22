@@ -46,6 +46,46 @@ This mirrors mutint's `./mutint` entry script. `env/` is git-ignored.
 coverage run ./aledb test && coverage report
 ```
 
+### Testing notes
+
+**The suite is fast: ~13 seconds for the whole thing.** Per-app it is 0-8s; most of that is
+Django starting up, not the tests. The test database is in-memory SQLite, so runs do not
+contend for a file and can be repeated freely.
+
+**If a test run appears to hang, it is almost certainly not the tests.** Two things cause it:
+
+1. *Chaining the run onto slow setup.* `patch files && migrate && ./aledb test` can blow a
+   command timeout in the earlier steps, and the run looks stuck when it never really started.
+   Run `./aledb test` as its own command.
+2. *Killing your own shell.* `ps aux | grep "[z]sh -c source" | xargs kill` matches the wrapper
+   of the command currently running it, so it kills itself and exits 144. If you want to clear
+   a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
+
+**Baseline: 158 run, 4 failures + 4 errors.** All eight are pre-existing and unrelated to any
+recent work; treat any *other* failure as yours. They are:
+
+- `aledb_metadata.tests.test_metadata.TestParser` — five (four errors, one failure)
+- `test_reseq_URL` — `upload.py` computes `breseq_path` and then never uses it, so `location`
+  is set even when no `index.html` exists
+- `test_upload_ALE_collection` — the fixture has no root-level ensemble `.gd`
+- `test_xpmd_validator`
+
+### Gotchas when writing tests
+
+- **`find_user()` prompts on stdin.** Anything reaching `try_creating_project` with a person
+  name that matches no `User` raises `EOFError` under the test runner. Create the `User` first,
+  or use `gd_import.prepare_experiment_by_id`, which never resolves a person.
+- **`Project.objects.create()` leaves the owner unable to view it.** `can_view_project` consults
+  the django-guardian grant, never `Project.user`. Use the `/ale/projects/create/` view, or call
+  `grant_access_to_project` yourself, or the project's own pages will 403 in the test.
+- **Override the store.** Anything touching `ALEDB_STORE_DIR` needs
+  `override_settings(ALEDB_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
+- **Template content outside a `{% block %}` is silently discarded** in a child template. A
+  `<script>` appended after `{% endblock %}` never renders and no error is raised — assert on
+  the rendered HTML rather than trusting the file.
+- **A soft-deleted row is still in `objects`.** `objects` is deliberately unfiltered; assert
+  through `aledb_experiment.models.live()` or the list helpers when checking visibility.
+
 **Django management commands** (local):
 ```bash
 ./aledb shell
@@ -128,8 +168,46 @@ All apps use the `aledb_*` namespace. Key apps:
 - **`aledb_dashboard/`** — Dashboard views and timeline events.
 - **`aledb_accounts_noauth/`** — Default auth stub: Django's built-in login/logout, no enforcement. Swap for `aledb_accounts` (brute-force protection) or any other auth app by changing `INSTALLED_APPS`.
 - **`aledb_accounts/`** — Enhanced auth with `django-defender` brute-force protection. Optional; used in production (`settings_private.py`).
-- **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), context registry, and global static files.
+- **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), context registry, **import registry**, and global static files.
 - **`config/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
+
+### Adding and deleting through the UI
+
+Creation and deletion are nested under the objects they act on:
+
+- `/ale/projects/` — **+ New project**, optionally creating its first experiment in the same
+  step. `/ale/experiments/` — delete selected rows.
+- An experiment's page (`/stats?ale_experiment_id=<pk>`) carries **+ Add data** and **Delete**,
+  rendered through `{% block experiment_actions %}` in `aledb_common/templates/base.html`.
+- `/import/add/?ale_experiment_id=<pk>` is the one place data goes in. It is scoped to an
+  experiment **by primary key**, so two experiments may share a name and two people may add to
+  the same one — unlike `_prepare_experiment`, whose name+person lookup forks an experiment per
+  person. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
+- Everything records the logged-in user; there are no person fields to fill in.
+
+**Deletion is soft.** `Project` and `AleExperiment` carry `deleted_at`/`deleted_by`
+(`SoftDeleteMixin`); only those two are flagged, and children are reached by traversal when
+`./aledb purge_deleted --older-than <days>` finally removes them. `objects` is deliberately
+unfiltered — a filtered default manager would silence the import paths' `get_or_create` — so
+user-facing lists exclude deleted rows explicitly via `aledb_experiment.models.live()`.
+
+### Import types are pluggable
+
+`aledb_common/import_registry.py` is a fourth registry alongside the plugin, nav, and export
+ones. An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
+page's type dropdown and in auto-detect, with no edit to core:
+
+```python
+register_import_handler(name='my_type', label='My measurements (.tsv)',
+                        patterns=['.tsv'], handle=my_import, priority=50)
+```
+
+Unlike `nav_registry`, this one **has explicit ordering**: `priority` decides which handler runs
+first, because a reference genome must be established before mutations that are hash-checked
+against it. Core registers `reference` (10), `breseq_folder` (50) and `genomediff` (60) in
+`aledb_import/handlers.py`. A handler whose shape is not a suffix match supplies its own
+`detect` — breseq folders are directory-shaped, and both the reference and genomediff handlers
+exclude files that live inside one.
 
 ### Pluggable App Slots
 

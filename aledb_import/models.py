@@ -35,9 +35,13 @@ class UploadSession(models.Model):
     updated = models.DateTimeField(auto_now=True)
     state = models.CharField(max_length=16, choices=STATE_CHOICES, default=STATE_OPEN)
 
-    project_name = models.CharField(max_length=200)
-    experiment_name = models.CharField(max_length=200)
-    person = models.CharField(max_length=200, blank=True)
+    # The target is the experiment itself, by primary key. Earlier versions carried
+    # project/experiment/person as free text and resolved by name, which forked an experiment
+    # whenever the person differed -- see gd_import.prepare_experiment_by_id.
+    ale_experiment = models.ForeignKey("aledb_experiment.AleExperiment", null=True, blank=True,
+                                       on_delete=models.CASCADE)
+    # Empty means auto-detect; otherwise the name of a registered import handler.
+    import_type = models.CharField(max_length=64, blank=True)
 
     # [{"path": "<sample>/data/reference.bam", "size": 123}, ...] as declared by the client.
     # Paths are sanitized before use; this is a record of what was promised, not a trusted map.

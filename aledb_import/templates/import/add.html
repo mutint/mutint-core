@@ -1,0 +1,426 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Add to {{ experiment.name }}{% endblock %}
+
+{% block header %}
+    <b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>:
+       {{ experiment.name }}</b> &mdash; Add data
+{% endblock %}
+
+{% block content %}
+<div class="col-lg-8">
+    <p>Everything you drop here goes into <b>{{ experiment.name }}</b> (experiment
+       #{{ experiment.ale_id }}).</p>
+
+    {% if not has_reference %}
+        <div class="alert alert-warning">
+            This experiment has no reference genome yet. Drop one
+            (GenBank, GFF3 or FASTA) &mdash; on its own, or alongside your data in the same drop.
+            A breseq folder brings its own; bare <code>.gd</code> files do not.
+        </div>
+    {% endif %}
+
+    <form id="add-form">
+        {% csrf_token %}
+        <input type="hidden" id="add-experiment-id" value="{{ experiment.ale_id }}">
+
+        <div class="form-group">
+            <label for="add-type">Import type</label>
+            <select class="form-control" id="add-type">
+                <option value="">Auto-detect</option>
+                {% for type in import_types %}
+                    <option value="{{ type.name }}">{{ type.label }}</option>
+                {% endfor %}
+            </select>
+            <small class="help-block" id="add-type-help">
+                Auto-detect works out what each file is. Pick a type to force it &mdash; anything
+                that type does not recognise is then reported rather than routed elsewhere.
+            </small>
+        </div>
+
+        <div id="dropzone" style="border: 2px dashed #999; border-radius: 6px; padding: 2.5em;
+             text-align: center; color: #666; background: #fafafa; cursor: pointer;">
+            <p style="margin: 0; font-size: 1.1em;">Drag &amp; drop files or folders here,
+               or click to choose.</p>
+            <input type="file" id="dir-input" webkitdirectory directory multiple style="display: none;">
+            <input type="file" id="file-input" multiple style="display: none;">
+            <p style="margin-top: 1em;">
+                <button type="button" class="btn btn-default btn-sm" id="pick-folder">Choose folder</button>
+                <button type="button" class="btn btn-default btn-sm" id="pick-files">Choose files</button>
+            </p>
+        </div>
+
+        <ul id="file-list" style="margin-top: 1em;"></ul>
+
+        <div id="add-progress" style="display: none; margin-top: 1em;">
+            <div class="progress" style="margin-bottom: 0.4em;">
+                <div id="add-progress-bar" class="progress-bar" role="progressbar"
+                     style="width: 0%;">0%</div>
+            </div>
+            <small id="add-progress-text" style="color: #666;"></small>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="add-submit" disabled>Add</button>
+        <a class="btn btn-default" href="/stats?ale_experiment_id={{ experiment.ale_id }}">Back to experiment</a>
+    </form>
+
+    <div id="add-result" style="margin-top: 1.5em;"></div>
+</div>
+
+{{ import_types|json_script:"import-types-data" }}
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+
+    // Every import type the server knows about, including any a plugin registered. The client
+    // uses `patterns` only to preview what will happen; the server re-classifies at finalize
+    // and its answer is the one that counts.
+    var IMPORT_TYPES = JSON.parse(
+        document.getElementById("import-types-data").textContent);
+    var EXPERIMENT_ID = document.getElementById("add-experiment-id").value;
+    var CHUNK_BYTES = 8 * 1024 * 1024;
+    var MAX_CHUNK_RETRIES = 3;
+
+    var selected = [];
+    var dropzone = document.getElementById("dropzone");
+    var dirInput = document.getElementById("dir-input");
+    var fileInput = document.getElementById("file-input");
+    var typeSelect = document.getElementById("add-type");
+    var fileListEl = document.getElementById("file-list");
+    var submitBtn = document.getElementById("add-submit");
+    var resultEl = document.getElementById("add-result");
+    var progressEl = document.getElementById("add-progress");
+    var progressBar = document.getElementById("add-progress-bar");
+    var progressText = document.getElementById("add-progress-text");
+
+    function matches(path, patterns) {
+        var lower = (path || "").toLowerCase();
+        for (var i = 0; i < patterns.length; i++) {
+            if (lower.slice(-patterns[i].length) === patterns[i]) { return true; }
+        }
+        return false;
+    }
+
+    // Preview only. A file inside a breseq folder matches several types' patterns; the server
+    // resolves that by priority and by each handler's own detect.
+    function classify(path) {
+        var chosen = typeSelect.value;
+        var candidates = chosen
+            ? IMPORT_TYPES.filter(function (t) { return t.name === chosen; })
+            : IMPORT_TYPES;
+        for (var i = 0; i < candidates.length; i++) {
+            if (matches(path, candidates[i].patterns)) { return candidates[i]; }
+        }
+        return null;
+    }
+
+    function humanBytes(n) {
+        var units = ["B", "KB", "MB", "GB", "TB"];
+        var i = 0;
+        while (n >= 1024 && i < units.length - 1) { n = n / 1024; i++; }
+        return (i === 0 ? n : n.toFixed(1)) + " " + units[i];
+    }
+
+    function addEntries(entries) {
+        entries.forEach(function (entry) { selected.push(entry); });
+        renderList();
+    }
+
+    function renderList() {
+        fileListEl.innerHTML = "";
+        var buckets = {};
+        var unknown = 0;
+        var total = 0;
+
+        selected.forEach(function (entry) {
+            total += entry.file.size;
+            var type = classify(entry.path);
+            if (type) {
+                buckets[type.label] = (buckets[type.label] || 0) + 1;
+            } else {
+                unknown += 1;
+            }
+        });
+
+        Object.keys(buckets).sort().forEach(function (label) {
+            var li = document.createElement("li");
+            li.textContent = label + " — " + buckets[label] + " file(s)";
+            fileListEl.appendChild(li);
+        });
+        if (unknown) {
+            var li = document.createElement("li");
+            li.textContent = unknown + " file(s) not recognised — will be reported, not imported";
+            li.style.color = "#a00";
+            fileListEl.appendChild(li);
+        }
+        if (selected.length) {
+            var totalLi = document.createElement("li");
+            totalLi.style.listStyle = "none";
+            totalLi.style.marginTop = "0.5em";
+            totalLi.textContent = "Total to upload: " + humanBytes(total);
+            fileListEl.appendChild(totalLi);
+        }
+        submitBtn.disabled = selected.length === 0;
+    }
+
+    typeSelect.addEventListener("change", renderList);
+
+    // --- pickers and drop ---
+    function fromInput(fileList) {
+        var out = [];
+        for (var i = 0; i < fileList.length; i++) {
+            var f = fileList[i];
+            out.push({ file: f, path: f.webkitRelativePath || f.name });
+        }
+        return out;
+    }
+    document.getElementById("pick-folder").addEventListener("click", function () { dirInput.click(); });
+    document.getElementById("pick-files").addEventListener("click", function () { fileInput.click(); });
+    dropzone.addEventListener("click", function (e) {
+        if (e.target === dropzone || e.target.tagName === "P") { dirInput.click(); }
+    });
+    dirInput.addEventListener("change", function () { addEntries(fromInput(dirInput.files)); });
+    fileInput.addEventListener("change", function () { addEntries(fromInput(fileInput.files)); });
+
+    ["dragenter", "dragover"].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+            e.preventDefault(); dropzone.style.background = "#eef6ff";
+        });
+    });
+    ["dragleave", "drop"].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+            e.preventDefault(); dropzone.style.background = "#fafafa";
+        });
+    });
+
+    // entry.fullPath is what lets the server reconstruct sample folders.
+    function readEntry(entry, collected) {
+        return new Promise(function (resolve) {
+            if (entry.isFile) {
+                entry.file(function (file) {
+                    collected.push({ file: file,
+                                     path: (entry.fullPath || file.name).replace(/^\//, "") });
+                    resolve();
+                }, function () { resolve(); });
+            } else if (entry.isDirectory) {
+                var reader = entry.createReader();
+                var readBatch = function () {
+                    reader.readEntries(function (entries) {
+                        if (!entries.length) { resolve(); return; }
+                        Promise.all(entries.map(function (en) {
+                            return readEntry(en, collected);
+                        })).then(readBatch);
+                    }, function () { resolve(); });
+                };
+                readBatch();
+            } else { resolve(); }
+        });
+    }
+
+    dropzone.addEventListener("drop", function (e) {
+        var items = e.dataTransfer.items;
+        if (items && items.length && items[0].webkitGetAsEntry) {
+            var collected = [];
+            var promises = [];
+            for (var i = 0; i < items.length; i++) {
+                var entry = items[i].webkitGetAsEntry();
+                if (entry) { promises.push(readEntry(entry, collected)); }
+            }
+            Promise.all(promises).then(function () { addEntries(collected); });
+        } else {
+            addEntries(fromInput(e.dataTransfer.files));
+        }
+    });
+
+    // --- upload ---
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
+        return match ? decodeURIComponent(match[2]) : "";
+    }
+
+    function setProgress(done, total, label) {
+        progressEl.style.display = "block";
+        var pct = total ? Math.floor((done / total) * 100) : 0;
+        progressBar.style.width = pct + "%";
+        progressBar.textContent = pct + "%";
+        progressText.textContent = label;
+    }
+
+    // XHR rather than fetch: fetch reports no upload progress at all.
+    function postChunk(uploadId, path, offset, blob, onProgress) {
+        return new Promise(function (resolve, reject) {
+            var form = new FormData();
+            form.append("path", path);
+            form.append("offset", String(offset));
+            form.append("chunk", blob, "chunk");
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/import/uploads/" + uploadId + "/chunk");
+            xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+            if (onProgress) {
+                xhr.upload.onprogress = function (e) {
+                    if (e.lengthComputable) { onProgress(e.loaded); }
+                };
+            }
+            xhr.onload = function () {
+                var body = {};
+                try { body = JSON.parse(xhr.responseText || "{}"); } catch (err) { body = {}; }
+                if (xhr.status >= 200 && xhr.status < 300) { resolve(body); }
+                else {
+                    var error = new Error(body.error || ("HTTP " + xhr.status));
+                    error.status = xhr.status;
+                    error.expectedOffset = body.expected_offset;
+                    reject(error);
+                }
+            };
+            xhr.onerror = function () { reject(new Error("Network error")); };
+            xhr.send(form);
+        });
+    }
+
+    function postJson(url, payload) {
+        return fetch(url, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCookie("csrftoken"),
+                       "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (resp) {
+            return resp.json().then(function (body) {
+                if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
+                return body;
+            });
+        });
+    }
+
+    function uploadAll(uploadId, entries) {
+        var totalBytes = entries.reduce(function (s, e) { return s + e.file.size; }, 0);
+        var doneBytes = 0;
+
+        return entries.reduce(function (chain, entry) {
+            return chain.then(function () {
+                var offset = 0;
+                var settled = doneBytes;
+
+                function nextChunk(attempt) {
+                    if (offset >= entry.file.size) {
+                        doneBytes = settled + entry.file.size;
+                        return Promise.resolve();
+                    }
+                    var end = Math.min(offset + CHUNK_BYTES, entry.file.size);
+                    var blob = entry.file.slice(offset, end);
+                    var base = offset;
+                    return postChunk(uploadId, entry.path, offset, blob, function (loaded) {
+                        setProgress(settled + base + loaded, totalBytes, "Uploading " + entry.path);
+                    }).then(function () {
+                        offset = end;
+                        doneBytes = settled + offset;
+                        setProgress(doneBytes, totalBytes, "Uploading " + entry.path);
+                        return nextChunk(0);
+                    }).catch(function (err) {
+                        if (err.status === 409 && typeof err.expectedOffset === "number") {
+                            offset = err.expectedOffset;
+                            return nextChunk(0);
+                        }
+                        if (attempt < MAX_CHUNK_RETRIES) { return nextChunk(attempt + 1); }
+                        throw new Error(entry.path + ": " + err.message);
+                    });
+                }
+                return nextChunk(0);
+            });
+        }, Promise.resolve());
+    }
+
+    document.getElementById("add-form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (!selected.length) { return; }
+
+        submitBtn.disabled = true;
+        resultEl.innerHTML = "";
+        setProgress(0, 1, "Preparing…");
+
+        var uploadId = null;
+        postJson("/import/uploads/", {
+            ale_experiment_id: EXPERIMENT_ID,
+            import_type: typeSelect.value,
+            files: selected.map(function (entry) {
+                return { path: entry.path, size: entry.file.size };
+            })
+        }).then(function (session) {
+            uploadId = session.upload_id;
+            return uploadAll(uploadId, selected);
+        }).then(function () {
+            setProgress(1, 1, "Importing…");
+            return postJson("/import/uploads/" + uploadId + "/finalize", {});
+        }).then(function (summary) {
+            progressEl.style.display = "none";
+            renderSummary(summary);
+        }).catch(function (err) {
+            progressEl.style.display = "none";
+            renderError(err.message || String(err));
+        }).then(function () {
+            submitBtn.disabled = false;
+        });
+    });
+
+    // textContent throughout: filenames and error strings are user-supplied.
+    function renderError(message) {
+        var div = document.createElement("div");
+        div.className = "alert alert-danger";
+        div.textContent = message || "Import failed.";
+        resultEl.innerHTML = "";
+        resultEl.appendChild(div);
+    }
+
+    function renderSummary(summary) {
+        resultEl.innerHTML = "";
+
+        var alert = document.createElement("div");
+        alert.className = "alert alert-success";
+        alert.appendChild(document.createTextNode(
+            "Added to " + summary.experiment + " (#" + summary.experiment_id + "): "
+            + summary.total_mutations + " mutations. "));
+        var link = document.createElement("a");
+        link.href = "/stats?ale_experiment_id=" + encodeURIComponent(summary.experiment_id);
+        link.textContent = "View experiment";
+        alert.appendChild(link);
+        resultEl.appendChild(alert);
+
+        var table = document.createElement("table");
+        table.className = "table table-condensed";
+        var thead = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        ["File", "Mutations", "Status"].forEach(function (label) {
+            var th = document.createElement("th");
+            th.textContent = label;
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement("tbody");
+        (summary.files || []).forEach(function (f) {
+            var tr = document.createElement("tr");
+            var nameTd = document.createElement("td");
+            nameTd.textContent = f.file;
+            var countTd = document.createElement("td");
+            countTd.textContent = f.mutations;
+            var statusTd = document.createElement("td");
+            if (f.error) {
+                statusTd.textContent = f.error;
+                statusTd.style.color = "#a00";
+            } else {
+                statusTd.textContent = "ok";
+            }
+            tr.appendChild(nameTd);
+            tr.appendChild(countTd);
+            tr.appendChild(statusTd);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        resultEl.appendChild(table);
+    }
+})();
+</script>
+{% endblock %}
