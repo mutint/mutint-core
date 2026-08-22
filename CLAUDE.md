@@ -81,6 +81,36 @@ All apps use the `aledb_*` namespace. Key apps:
     external `genomediff` package (`GenomeDiff.read`). Each record is stored verbatim in
     `Mutation.gd_data` and round-tripped back out by `Mutation.to_gd_line()` (`aledb_seq/models.py`)
     for `gdtools APPLY`. Note `gdparse` has no `INT` type; `genomediff` does.
+  - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
+    `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
+    `output/annotated.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`;
+    stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
+    records the shared reference as `ExperimentReference`. Samples whose reference does not
+    hash-match the experiment's are rejected individually. Alignments are served with HTTP
+    range support by `aledb_seq/views/alignments.py` — deliberately not through `/aledata/`,
+    which has no authorization and reads whole files into memory.
+  - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
+    `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
+    `output/annotated.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
+    storing them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`).
+    The shared reference is recorded as `ExperimentReference`; a sample whose reference
+    *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the
+    sole invariant (`ExperimentReference.matches_sequence`) — differing annotation never
+    rejects, and a folder import leaves the stored annotation alone so import order cannot
+    redefine it; only an explicit re-upload through `/import/reference/` refreshes it. A bare `.gd` is *skipped* here —
+    it has no reference for that check to apply to.
+  - **Two-step import** — `reference_views.py` (`/import/reference/`) takes a GenBank, GFF3,
+    or FASTA and gives an experiment its reference, so bare `.gd` files can then be imported
+    into it. `import_gd_files` refuses (`ReferenceRequired` → 400) when the target experiment
+    has none.
+  - **Normalization is the linchpin** (`reference.py`, `reference_store.py`): every reference,
+    however it arrives, is converted to one canonical pair — a genes-only GFF3 plus a FASTA —
+    before being stored or hashed. Without it a GenBank and the GFF3 breseq derived from the
+    same genome would hash differently and the shared-reference check would reject valid data.
+    GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
+    Biopython has no GFF3 parser. Alignments are served with HTTP range support by
+    `aledb_seq/views/alignments.py`, deliberately not through `/aledata/`, which has no
+    authorization and reads whole files into memory.
     Sample identity comes from the filename: a strict A-F-I-R name (`3-30000-1-1.gd`) is
     parsed as such, and anything else (`Ara-1_500gen_762B.gd`) gets its own auto-numbered
     isolate under ALE 1 / flask 1, with `Isolate.description` set to the filename so it

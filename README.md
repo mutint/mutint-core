@@ -62,6 +62,91 @@ ALEdb serves files from this directory at the `/aledata/` URL path. For example,
 
 If `ALE_DATA_ROOT_DIR` is not set, the app runs normally but links to sequencing result files will not resolve.
 
+### breseq result import (`ALEDB_STORE_DIR`)
+
+Dropping breseq result folders on `/import/` uploads five files per sample --
+`output/annotated.gd`, `data/reference.gff3`, `data/reference.fasta`,
+`data/reference.bam`, `data/reference.bam.bai` -- and nothing else, so the bulk of a run
+never leaves your machine. They are stored under `ALEDB_STORE_DIR`, keyed by database id:
+
+```
+<store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
+<store>/samples/<reseq_id>/{sample.gd,aligned.bam,aligned.bam.bai}
+```
+
+Every sample in an experiment must share a reference; the first import establishes it and a
+later mismatch rejects that sample while the rest of the batch proceeds. Alignments are
+served with HTTP range support, so a genome browser can read them:
+
+```
+/mutations/alignments/<reseq_id>/bam
+/mutations/alignments/<reseq_id>/bai
+/mutations/reference/<experiment_id>/{fasta,fai,gff3}
+```
+
+Access is gated by project permissions. This is separate from `ALE_DATA_ROOT_DIR` and
+`/aledata/`, which continue to serve breseq HTML reports for CLI-uploaded experiments.
+
+### breseq result import (`ALEDB_STORE_DIR`)
+
+Dropping breseq result folders on `/import/` uploads five files per sample and nothing else,
+so the bulk of a run never leaves your machine:
+
+```
+<sample>/output/annotated.gd
+<sample>/data/reference.gff3   <sample>/data/reference.fasta
+<sample>/data/reference.bam    <sample>/data/reference.bam.bai
+```
+
+Large folders are uploaded in chunks with progress, so a multi-GB drop never depends on a
+single long request. Files are stored under `ALEDB_STORE_DIR`, keyed by database id:
+
+```
+<store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
+<store>/samples/<reseq_id>/{sample.gd,aligned.bam,aligned.bam.bai}
+```
+
+**Every sample in an experiment shares one reference genome.** The first import establishes
+it; a later sample whose reference does not match is rejected individually while the rest of
+the batch imports.
+
+**The sequence is the sole invariant.** Two samples belong to the same experiment when their
+reference *sequence* is identical; annotation may legitimately differ in detail between
+breseq runs, and that alone never causes a rejection. A folder import never rewrites the
+experiment's annotation -- import order should not decide it -- but re-uploading through
+`/import/reference/` does, since that is an explicit request.
+
+References are **normalized** before being stored or hashed: whatever arrives is converted to
+one canonical pair -- a GFF3 of genes only, plus a FASTA -- so a GenBank and the GFF3 breseq
+derived from the same genome compare equal rather than looking like two different references.
+
+### Two-step import: set a reference first (`/import/reference/`)
+
+A bare `.gd` carries no reference, so it cannot establish one. To import `.gd` files, first
+give the experiment a reference at `/import/reference/`, which accepts:
+
+| Format | Extensions | Notes |
+|--------|-----------|-------|
+| GenBank | `.gbk` `.gb` `.gbff` | sequence and annotation; parsed with Biopython |
+| GFF3 | `.gff` `.gff3` | must include its `##FASTA` section |
+| FASTA | `.fa` `.fasta` `.fna` | sequence only, no genes |
+
+Uploading a *different* reference to an experiment that already has one is refused unless you
+tick "replace". Importing a `.gd` into an experiment with no reference returns a 400 telling
+you to set one first.
+
+Alignments are served with HTTP range support, so a genome browser can read them, gated by
+project permissions:
+
+```
+/mutations/alignments/<reseq_id>/bam
+/mutations/alignments/<reseq_id>/bai
+/mutations/reference/<experiment_id>/{fasta,fai,gff3}
+```
+
+This store is separate from `ALE_DATA_ROOT_DIR` and `/aledata/`, which continue to serve
+breseq HTML reports for CLI-uploaded experiments.
+
 ### Sequencing URL prefix (`SEQUENCING_URL`)
 
 `SEQUENCING_URL` is the URL prefix ALEdb puts in front of a sample's stored `location` when it builds a link to that sample's breseq report. If your sequencing files are hosted externally — for example, served by nginx directly from a mounted volume — set it to the public URL prefix for those files:
@@ -88,6 +173,10 @@ All configuration is via environment variables. The defaults are suitable for lo
 |----------|---------|-------------|
 | `ALE_DATA_ROOT_DIR` | `ale_data_root_dir` | Filesystem path to the directory containing breseq output directories. ALEdb serves files from here at `/aledata/`. |
 | `SEQUENCING_URL` | _(empty)_ | Public URL prefix for sequencing result links. Leave empty to render sample names as plain text with no report link. Note this does **not** fall back to the `/aledata/` route — set it explicitly (e.g. `http://127.0.0.1:8000/aledata/`) if you want links to go through Django. |
+| `ALEDB_STORE_DIR` | `<repo>/aledb_store` | Managed store that ALEdb owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it are derived from database ids, never from client input. |
+| `ALEDB_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./aledb reap_uploads` removes it. |
+| `ALEDB_STORE_DIR` | `<repo>/aledb_store` | Managed store ALEdb owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it derive from database ids, never from client input. |
+| `ALEDB_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./aledb reap_uploads` removes it. |
 | `DJANGO_SECRET_KEY` | insecure dev key | Django secret key. Must be set to a long random string in any non-local deployment. |
 | `DEBUG` | `0` | Set to `1` to enable Django debug mode (shows error tracebacks in the browser). |
 | `DJANGO_SERVER_HOST` | `localhost` | Hostname added to `ALLOWED_HOSTS`. Set to your server's hostname or IP for non-local deployments. |

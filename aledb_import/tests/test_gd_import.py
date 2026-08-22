@@ -1,14 +1,17 @@
 import os
+import shutil
+import tempfile
 from datetime import datetime
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from aledb_experiment.models import (
     AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
 )
-from aledb_import import gd_import
+from aledb_import import gd_import, reference_store
+from aledb_import.tests import breseq_fixture
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 
 from genomediff import GenomeDiff
@@ -41,7 +44,25 @@ class GdImportTestCase(TestCase):
             username="tester", first_name="Test", last_name="User",
             email="t@e.com", is_active=True, is_staff=True, date_joined=datetime.now())
 
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+    def _ensure_reference(self, experiment="gd exp", project="gd project"):
+        """A bare .gd carries no reference, so the experiment must already have one.
+
+        This is what the two-step route at /import/reference/ does for a real user.
+        """
+        context = gd_import._prepare_experiment(project, experiment, "tester", False)
+        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        gff3_text = breseq_fixture.gff3_text(sequences)
+        reference_store.establish_or_check(context["experiment"], gff3_text, sequences)
+        return context["experiment"]
+
     def _import(self, path, experiment="gd exp"):
+        self._ensure_reference(experiment)
         return gd_import.import_gd_files(
             [_uploaded(path)], project_name="gd project",
             experiment_name=experiment, person="tester")
@@ -101,6 +122,7 @@ class GdImportTestCase(TestCase):
         self.assertEqual(ObservedMutation.objects.count(), Mutation.objects.count())
 
     def test_web_upload_endpoint(self):
+        self._ensure_reference("web exp", project="web project")
         self.client.force_login(self.user)
         response = self.client.post("/import/", {
             "project": "web project",
@@ -131,6 +153,7 @@ class GdImportTestCase(TestCase):
     ]
 
     def _import_named(self, names, experiment="gd exp"):
+        self._ensure_reference(experiment)
         return gd_import.import_gd_files(
             [_uploaded_as(CLEAN_GD, name) for name in names],
             project_name="gd project", experiment_name=experiment, person="tester")

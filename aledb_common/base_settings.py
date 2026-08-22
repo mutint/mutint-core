@@ -46,6 +46,16 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         'SEQUENCING_URL': os.environ.get('SEQUENCING_URL', ''),
         'ALE_DATA_ROOT_DIR': os.environ.get('ALE_DATA_ROOT_DIR', 'ale_data_root_dir'),
 
+        # Managed store that aledb-core owns and operates: uploaded .gd, BAM/BAI, and the
+        # per-experiment reference. Unlike ALE_DATA_ROOT_DIR (bring-your-own breseq tree,
+        # served by /aledata/), every path under here is derived from a database primary key,
+        # so no client-supplied path ever reaches the filesystem.
+        'ALEDB_STORE_DIR': os.environ.get(
+            'ALEDB_STORE_DIR', os.path.join(base_dir, 'aledb_store')),
+        # Chunked uploads staged but never finalized are reaped after this many hours.
+        'ALEDB_UPLOAD_SESSION_TTL_HOURS': int(
+            os.environ.get('ALEDB_UPLOAD_SESSION_TTL_HOURS', '24')),
+
         'ALLOWED_HOSTS': [os.environ.get('DJANGO_SERVER_HOST', 'localhost'), 'localhost', '127.0.0.1'],
         'SESSION_EXPIRE_AT_BROWSER_CLOSE': True,
         'SESSION_COOKIE_AGE': 604800,

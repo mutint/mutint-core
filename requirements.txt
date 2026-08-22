@@ -16,6 +16,10 @@ djangoajax==3.3
 # depend on, but only 0.4.1 was ever published to PyPI.
 # (dev: `pip install -e /path/to/genomediff`)
 genomediff @ git+https://github.com/barricklab/genomediff-python.git@32f77e9
+# GenBank/FASTA parsing for uploaded reference genomes (aledb_import/reference.py).
+# Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
+# breseq's data/reference.gff3 is read by a small in-repo parser instead.
+biopython>=1.81
 jsonfield==3.1.0
 jsonschema==4.19.1
 lxml==4.9.3

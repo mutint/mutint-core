@@ -2,6 +2,7 @@ import logging
 
 from django.http import HttpResponse, JsonResponse
 from django.template import loader
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from aledb_common.util import get_user_context
 from aledb_import import gd_import
@@ -11,6 +12,7 @@ from aledb_seq.models import ResequencingExperiment
 logger = logging.getLogger(__name__)
 
 
+@ensure_csrf_cookie
 def gd_import_view(request):
     """Drag-and-drop import of breseq GenomeDiff (.gd) files.
 
@@ -34,6 +36,9 @@ def gd_import_view(request):
                 project_name=form.cleaned_data["project"],
                 experiment_name=form.cleaned_data["experiment"],
                 person=person)
+        except gd_import.ReferenceRequired as exc:
+            # A missing precondition is the caller's error, not a server fault.
+            return JsonResponse({"error": str(exc)}, status=400)
         except Exception as exc:
             logger.exception("GenomeDiff batch import failed")
             return JsonResponse({"error": str(exc)}, status=500)

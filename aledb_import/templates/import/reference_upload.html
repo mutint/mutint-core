@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Set an experiment's reference genome{% endblock %}
+
+{% block header %}<b>Set an experiment's reference genome</b>{% endblock %}
+
+{% block content %}
+<div class="col-lg-8">
+    <p>Give an experiment its reference genome. Do this first when you plan to import bare
+       <code>.gd</code> files &mdash; a <code>.gd</code> carries no reference of its own, and every
+       sample in an experiment must share one.</p>
+
+    <p>You can upload any of:</p>
+    <ul>
+        <li><b>GenBank</b> (<code>.gbk</code>, <code>.gb</code>, <code>.gbff</code>) &mdash; sequence and annotation</li>
+        <li><b>GFF3</b> (<code>.gff</code>, <code>.gff3</code>) &mdash; must include its <code>##FASTA</code> section</li>
+        <li><b>FASTA</b> (<code>.fa</code>, <code>.fasta</code>, <code>.fna</code>) &mdash; sequence only, no genes</li>
+    </ul>
+
+    <p><small>Whatever you upload is normalized to one canonical pair &mdash; a GFF3 of genes only,
+       plus a FASTA &mdash; so the same genome always compares equal regardless of the format it
+       arrived in. Importing a breseq folder into this experiment later will check its reference
+       against this one.</small></p>
+
+    <form id="ref-form">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="ref-project">Project</label>
+            <input type="text" class="form-control" id="ref-project" name="project" required>
+        </div>
+        <div class="form-group">
+            <label for="ref-experiment">Experiment name</label>
+            <input type="text" class="form-control" id="ref-experiment" name="experiment" required>
+        </div>
+        <div class="form-group">
+            <label for="ref-person">Person <small>(optional)</small></label>
+            <input type="text" class="form-control" id="ref-person" name="person">
+        </div>
+        <div class="form-group">
+            <label for="ref-file">Reference genome</label>
+            <input type="file" id="ref-file" name="reference"
+                   accept=".gbk,.gb,.gbff,.genbank,.gff,.gff3,.fa,.fasta,.fna,.fas" required>
+            <small class="help-block">Up to {{ max_reference_mb }} MB.</small>
+        </div>
+        <div class="checkbox">
+            <label><input type="checkbox" id="ref-replace" name="replace">
+                Replace this experiment's existing reference</label>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="ref-submit">Set reference</button>
+    </form>
+
+    <div id="ref-result" style="margin-top: 1.5em;"></div>
+</div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+
+    var form = document.getElementById("ref-form");
+    var submitBtn = document.getElementById("ref-submit");
+    var resultEl = document.getElementById("ref-result");
+
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
+        return match ? decodeURIComponent(match[2]) : "";
+    }
+
+    // textContent throughout: filenames and error strings are user-supplied and must not
+    // be interpreted as markup.
+    function renderError(message) {
+        var div = document.createElement("div");
+        div.className = "alert alert-danger";
+        div.textContent = message || "Could not set the reference.";
+        resultEl.innerHTML = "";
+        resultEl.appendChild(div);
+    }
+
+    function renderSuccess(body) {
+        resultEl.innerHTML = "";
+
+        var alert = document.createElement("div");
+        alert.className = "alert alert-success";
+        alert.appendChild(document.createTextNode(
+            (body.created ? "Reference set for " : "Reference updated for ")));
+        var name = document.createElement("b");
+        name.textContent = body.experiment;
+        alert.appendChild(name);
+        alert.appendChild(document.createTextNode(" (#" + body.experiment_id + ") from "));
+        var source = document.createElement("code");
+        source.textContent = body.source_name;
+        alert.appendChild(source);
+        alert.appendChild(document.createTextNode(
+            ". " + body.total_length.toLocaleString() + " bp, " + body.genes + " genes."));
+        resultEl.appendChild(alert);
+
+        var list = document.createElement("ul");
+        (body.sequences || []).forEach(function (seq) {
+            var li = document.createElement("li");
+            li.textContent = seq.id + " — " + seq.length.toLocaleString() + " bp";
+            list.appendChild(li);
+        });
+        resultEl.appendChild(list);
+
+        var next = document.createElement("p");
+        next.appendChild(document.createTextNode("Next: "));
+        var link = document.createElement("a");
+        link.href = "/import/";
+        link.textContent = "import breseq result folders";
+        next.appendChild(link);
+        next.appendChild(document.createTextNode(" into this experiment."));
+        resultEl.appendChild(next);
+    }
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var fileInput = document.getElementById("ref-file");
+        if (!fileInput.files.length) { return; }
+
+        var data = new FormData();
+        data.append("project", document.getElementById("ref-project").value);
+        data.append("experiment", document.getElementById("ref-experiment").value);
+        data.append("person", document.getElementById("ref-person").value);
+        data.append("reference", fileInput.files[0], fileInput.files[0].name);
+        if (document.getElementById("ref-replace").checked) {
+            data.append("replace", "on");
+        }
+
+        submitBtn.disabled = true;
+        resultEl.innerHTML = "";
+        var pending = document.createElement("p");
+        pending.textContent = "Normalizing " + fileInput.files[0].name + "…";
+        resultEl.appendChild(pending);
+
+        fetch("/import/reference/", {
+            method: "POST",
+            headers: { "X-CSRFToken": getCookie("csrftoken") },
+            body: data
+        }).then(function (resp) {
+            return resp.json().then(function (body) {
+                if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
+                return body;
+            });
+        }).then(renderSuccess).catch(function (err) {
+            renderError(err.message || String(err));
+        }).then(function () {
+            submitBtn.disabled = false;
+        });
+    });
+})();
+</script>
+{% endblock %}

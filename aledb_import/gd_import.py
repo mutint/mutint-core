@@ -46,14 +46,31 @@ from genomediff.records import TYPE_SPECIFIC_FIELDS
 logger = logging.getLogger("aledb_import.gd_import")
 
 
-def import_gd_files(uploaded_files, project_name, experiment_name, person, is_public=False):
+class ReferenceRequired(Exception):
+    """The target experiment has no reference genome, and a .gd cannot supply one."""
+
+
+def import_gd_files(uploaded_files, project_name, experiment_name, person, is_public=False,
+                    require_reference=True):
     """Import a batch of dropped ``.gd`` files into a single AleExperiment.
 
     ``uploaded_files`` is an iterable of file-like objects each exposing ``.name``
     and ``.read()`` (e.g. Django ``UploadedFile``). Each file's A-F-I-R identity is
     parsed from its filename. Returns a JSON-serializable summary dict.
+
+    A ``.gd`` carries no reference genome, so it cannot establish the reference every
+    sample in an experiment shares -- the experiment must already have one, set through the
+    two-step route at ``/import/reference/``. ``require_reference=False`` is for callers
+    that manage that invariant themselves.
     """
+    from aledb_import.reference_store import has_reference
+
     context = _prepare_experiment(project_name, experiment_name, person, is_public)
+    if require_reference and not has_reference(context["experiment"]):
+        raise ReferenceRequired(
+            "Experiment %r has no reference genome. A .gd carries none, so set one first "
+            "at /import/reference/, or import a breseq result folder instead."
+            % (context["experiment"].name,))
 
     file_results = []
     total_mutations = 0
@@ -109,13 +126,23 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
 
 def _import_one_file(uploaded, filename, context, person):
     document = _parse_document(uploaded)
-
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
+    _, count = import_document_as_sample(document, sample_name, context, person)
+    return count
+
+
+def import_document_as_sample(document, sample_name, context, person):
+    """Build the experiment chain for ``sample_name`` and write the document's mutations.
+
+    Shared by the bare-.gd upload, where the sample name comes from the filename, and the
+    breseq folder import, where it comes from the sample directory -- so both derive sample
+    identity through exactly one rule. Returns ``(seq_experiment, mutation_count)``.
+    """
     afir = _parse_afir(sample_name)
 
     if afir is None:
-        # Filename carries no A-F-I-R identity (e.g. "Ara-1_500gen_762B"). Give the sample
-        # its own isolate rather than letting every such file collapse onto 1-1-1-1.
+        # Name carries no A-F-I-R identity (e.g. "Ara-1_500gen_762B"). Give the sample
+        # its own isolate rather than letting every such name collapse onto 1-1-1-1.
         seq_experiment = _get_or_create_autonumbered_chain(
             context, document, person, sample_name)
     else:
@@ -124,7 +151,7 @@ def _import_one_file(uploaded, filename, context, person):
             context, document, ale_number, flask_number, isolate_number,
             tech_rep_number, person, sample_name)
 
-    return _database_gd_mutations(seq_experiment, document)
+    return seq_experiment, _database_gd_mutations(seq_experiment, document)
 
 
 def _parse_afir(sample_name):

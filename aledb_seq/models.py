@@ -34,6 +34,10 @@ class ResequencingExperiment(models.Model):
                                       default=0)
     percentage_mapped = models.FloatField(blank=True,
                                           default=0)
+    # Whether this sample's alignment lives in the managed store. Deliberately a flag and
+    # not a path: the location is derived from this row's pk by aledb_common.store, unlike
+    # `location` above, which stores a path per row.
+    bam_stored = models.BooleanField(default=False)
 
     @property
     def ale_experiment(self):
@@ -180,3 +184,39 @@ class ObservedMutation(models.Model):
     def get_experiment_id(self):
         return self.sequencing_experiment.tech_rep.isolate.flask.ale_id.ale_experiment_id
 
+
+
+class ExperimentReference(models.Model):
+    """The single reference genome shared by every sample in an experiment.
+
+    breseq writes `data/reference.gff3` and `data/reference.fasta` alongside each run, so the
+    reference arrives with the results rather than being uploaded separately. The first
+    imported sample establishes it; every later sample must hash-match or be rejected, which
+    is what keeps an experiment from silently ending up with mixed references.
+
+    The files themselves live in the managed store, at a path derived from
+    `ale_experiment_id` -- see aledb_common.store.
+    """
+
+    ale_experiment = models.OneToOneField("aledb_experiment.AleExperiment",
+                                          on_delete=models.CASCADE,
+                                          related_name="reference")
+    gff3_sha256 = models.CharField(max_length=64)
+    fasta_sha256 = models.CharField(max_length=64)
+    # [{"id": "NC_000913", "length": 4629812}, ...] in the order they appear in the FASTA.
+    seq_ids = models.JSONField(default=list)
+    total_length = models.BigIntegerField(default=0)
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return "Reference for %s" % (self.ale_experiment_id,)
+
+    def matches_sequence(self, fasta_sha256):
+        """Whether a reference is *the same reference* as this one.
+
+        The sequence is the sole invariant. Two breseq runs against the same genome can
+        legitimately carry annotation that differs in detail -- a newer feature table, an
+        extra locus -- and rejecting those would refuse valid data. `gff3_sha256` is kept
+        for provenance, not for this comparison.
+        """
+        return self.fasta_sha256 == fasta_sha256
