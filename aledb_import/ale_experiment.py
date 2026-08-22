@@ -291,7 +291,7 @@ def _parse_genbank(genbank_path):
 
                 record = True
 
-            elif line.startswith("gene ") and current_gene is not "":
+            elif line.startswith("gene ") and current_gene != "":
 
                 gene_dict[current_gene] = dict(gene_info)
 
