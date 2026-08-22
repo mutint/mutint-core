@@ -10,7 +10,6 @@ urlpatterns = [
     re_path(r'^add_to_exp_filter', aledb_seq.views.mutations.add_to_exp_filter, name='mutation_to_exp_filter'),
     re_path(r'^toggle-mut-tag/', aledb_seq.views.mutations.save_mut_tag, name='toggle_mut_tag'),
     re_path(r'^toggle-rep-tag', aledb_seq.views.mutations.save_rep_tag, name='toggle_rep_tag'),
-    re_path(r'^evidence', aledb_seq.views.mutations.save_rep_tag, name='toggle_rep_tag'),
 
     # Managed-store files, addressed by primary key and streamed with Range support.
     re_path(r'^alignments/(?P<reseq_id>\d+)/bam$',

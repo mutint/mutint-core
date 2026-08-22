@@ -4,8 +4,6 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from aledb_seq.models import Mutation
 from aledb_import.upload import _is_missing_coverage_type
-from aledb_import.upload import _parse_average_read_length
-from aledb_import.upload import _parse_read_count
 from aledb_import.upload import _get_mutation_freq
 from aledb_import.upload import add_breseq_results
 from aledb_import.gdparse.gdparse.gdparse import GDParser
@@ -169,23 +167,3 @@ class TestUpload(TestCase):
         is_missing_coverage = _is_missing_coverage_type(evidence)
 
         self.assertFalse(is_missing_coverage)
-
-    def test_parse_average_read_length(self):
-
-        input = u'164.0 bases'
-
-        expected = u'164.0'
-
-        output = _parse_average_read_length(input)
-
-        self.assertEquals(output, expected)
-
-    def test_parse_read_count(self):
-
-        input = u'11,956,043'
-
-        expected = 11956043
-
-        output = _parse_read_count(input)
-
-        self.assertEquals(output, expected)

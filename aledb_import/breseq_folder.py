@@ -183,7 +183,19 @@ def _import_one_sample(sample_dir, sample_name, context, person):
     shutil.copyfile(bai_path, os.path.join(sample_store, store.SAMPLE_BAI))
 
     seq_experiment.bam_stored = True
-    seq_experiment.save(update_fields=["bam_stored"])
+    updated = ["bam_stored"]
+
+    # data/summary.json is optional -- a drop without it still imports, just with zeroed
+    # statistics, which is what every web upload had before it was collected at all.
+    from aledb_import.upload import _read_breseq_summary
+
+    statistics = _read_breseq_summary(sample_dir)
+    if statistics:
+        for field, value in statistics.items():
+            setattr(seq_experiment, field, value)
+        updated.extend(statistics)
+
+    seq_experiment.save(update_fields=updated)
 
     return count
 

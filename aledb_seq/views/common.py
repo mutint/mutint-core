@@ -9,7 +9,6 @@ from django.http import Http404, HttpResponseForbidden, HttpResponseBadRequest
 __author__ = 'Patrick Phaneuf'
 
 
-SETTINGS_SEQUENCING_URL = "SEQUENCING_URL"
 
 UNANNOTATED = 'unannotated'
 MUTATION_TYPE_LIST = ['SNP', 'SUB', 'DEL', 'INS', 'MOB', 'AMP', 'CON', 'INV', UNANNOTATED]

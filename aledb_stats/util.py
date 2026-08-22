@@ -135,7 +135,6 @@ def get_reseq_experiment_info_list(reseq_experiments):
     reseq_experiments_info_list = []
     for reseq in reseq_experiments:
         mc_list = UnassignedMissingCoverageEvidence.objects.filter(sequencing_experiment_id=reseq.id)
-        mapped_read_count = int((reseq.percentage_mapped / 100) * reseq.reads)
         species = reseq.tech_rep.isolate.flask.ale_id.species
         strain = reseq.tech_rep.isolate.flask.ale_id.strain
         knockouts = reseq.tech_rep.isolate.flask.ale_id.description
@@ -144,12 +143,14 @@ def get_reseq_experiment_info_list(reseq_experiments):
             clonal_or_population = "population"
         media_temperature = reseq.tech_rep.isolate.flask.media.temperature
         media_description = reseq.tech_rep.isolate.flask.media.description
-        substrate = reseq.tech_rep.isolate.flask.media.substrate
+        # carbon_source, not substrate: the metadata parser stopped writing `substrate`
+        # in 2019 when media moved to per-component columns, so it is None for anything
+        # imported with metadata.
+        substrate = reseq.tech_rep.isolate.flask.media.carbon_source
 
         # Using tuple because immutable; mc_list must remain associated with particular experiment.
         experiment_info_tuple = (reseq,
                                  mc_list,
-                                 mapped_read_count,
                                  clonal_or_population,
                                  media_temperature,
                                  media_description,

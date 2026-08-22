@@ -1,12 +1,10 @@
-from django.conf import settings
 from django.contrib.auth.models import User
-import aledb_seq.views.common
 import re
 from enum import Enum
 from django.utils.html import strip_tags
 from aledb_seq.util import get_ecocyc_gene_list
 from aledb_filter.util import filter_observed_mutations
-from aledb_common.util import get_gene_list, _find_between
+from aledb_common.util import get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
 from aledb_experiment.models import TechnicalReplicate, AleExperiment
 from aledb_experiment.permissions import can_add_global_filter, can_add_experiment_filter
@@ -15,7 +13,6 @@ from aledb_experiment.permissions import can_add_global_filter, can_add_experime
 HTML_MUTATION_TABLE_ROW = """<a href="javascript:void(0)" style="float:right" onclick="deleteRow.call(this)"><img src="/static/img/close-icon.gif" width="12" height="11"></a>"""
 HTML_EMPTY_MUTATION_CELL = """<span class="empty"></span>"""
 HTML_MUTATION_PRESENT_FALSE_CELL_HTML = """<span class="false">%d/%d</span>"""
-HTML_MUTATION_PRESENT_TRUE_CELL_HTML = """<a class="true" href="%s">%.2f</a>/<a class="true" href="%s" target="_blank">%.2f</a>"""
 
 EXPANDABLE_COLUMN_PLUS_SIGN = """<i onclick="expand_collapse_gene_entry(this)" class="fa fa-plus pull-left" aria-hidden="true" data-toggle="collapse" data-target="#%s"></i>"""
 EXPANDABLE_GENE_ENTRY = """<div class="collapse pull-left" id="%s">%s</div>"""
@@ -65,16 +62,8 @@ class TableType(Enum):
     SHARED = 5
 
 
-if hasattr(settings, aledb_seq.views.common.SETTINGS_SEQUENCING_URL):
-    resequencing_report_url = settings.SEQUENCING_URL
-else:
-    resequencing_report_url = ""
-
-
 def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
     base_table_header = HTML_MUTATION_TABLE_HEADER
-    experiment_urls = get_experiment_root_urls(reseq_dict)
-    gatk_urls = get_gatk_urls(reseq_dict)
     table_header_list = []
 
     for reseq_id in reseq_dict:
@@ -83,10 +72,9 @@ def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
         if not experiment:
             sample_name = reseq.exp_ale_flask_isolate_str
 
+        # Plain text: this used to link to <experiment_location>/<sample>.html, a breseq
+        # report page that no longer exists.
         sample_header_html = sample_name
-        if reseq_id in experiment_urls.keys():
-            sample_header_html = """<a href="%s" target="_blank">%s</a>"""
-            sample_header_html = sample_header_html % (experiment_urls[reseq_id], sample_name)
         if can_add_global_filter(user) or can_add_experiment_filter(user, experiment):
             dropdown_html = _get_replicate_tag_dropdown_entries(reseq.tech_rep)
             sample_header_html += (REP_DROPDOWN % dropdown_html)
@@ -147,14 +135,11 @@ def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, expe
 def get_mutation_table_data(reseq_dict, observed_mutations):
     mutation_map = {obs_mut.mutation.id: obs_mut.mutation for obs_mut in observed_mutations}
     mutation_index_dict = dict((mutation_id, i) for i, mutation_id in enumerate(mutation_map.keys()))
-    # resequencing_experiment urls
-    experiment_url_dict = get_experiment_urls(reseq_dict)
-    gatk_url_dict = get_gatk_urls(reseq_dict)
     experiment_id_idx_mapping_dict = _get_experiment_id_idx_mapping_dict(reseq_dict)
     # Initialize all sample mutation table cells as empty.
     table_entry_list = _initialize_table(experiment_id_idx_mapping_dict, mutation_index_dict)
     for observed_mutation in observed_mutations:
-        new_entry = _get_table_mutation_entry(observed_mutation, experiment_url_dict, gatk_url_dict)
+        new_entry = _get_table_mutation_entry(observed_mutation)
         if new_entry is not None and observed_mutation.sequencing_experiment_id in reseq_dict.keys():
             table_entry_list[mutation_index_dict[observed_mutation.mutation_id]][
                 experiment_id_idx_mapping_dict[observed_mutation.sequencing_experiment_id]] = new_entry
@@ -191,83 +176,30 @@ def _initialize_table(experiment_id_idx_mapping, mutations):
     return [[HTML_EMPTY_MUTATION_CELL] * len(experiment_id_idx_mapping) for _ in range(len(mutations))]
 
 
-# A sample only gets a report link when SEQUENCING_URL is configured AND the reseq row
-# carries a location. .gd files imported through the web uploader have no breseq HTML
-# report, so location is None for them; omitting the id here is how callers know to
-# render the sample name as plain text instead of a dead link.
-def get_experiment_urls(reseq_dict):
-    experiment_urls = {}
-    if not resequencing_report_url:
-        return experiment_urls
-    for reseq in reseq_dict.values():
-        if reseq.location:
-            experiment_urls[reseq.id] = resequencing_report_url + reseq.location
-    return experiment_urls
-
-
-def get_experiment_root_urls(reseq_dict):
-    experiment_urls = {}
-    if not resequencing_report_url:
-        return experiment_urls
-    for reseq in reseq_dict.values():
-        if reseq.experiment_location:
-            experiment_urls[reseq.id] = resequencing_report_url + reseq.experiment_location + '/' + str(reseq.sample_name) + '.html'
-    return experiment_urls
-
-
-def get_gatk_urls(reseq_dict):
-    gatk_urls = {}
-    if not resequencing_report_url:
-        return gatk_urls
-    for reseq in reseq_dict.values():
-        if reseq.location:
-            location_to_return = reseq.gatk_location or "default"
-            gatk_urls[reseq.id] = resequencing_report_url + location_to_return
-    return gatk_urls
-
-
 def _get_experiment_id_idx_mapping_dict(seq_experiment_dict):
     experiment_id_idx_mapping = dict((reseq_exp_id, idx) for idx, reseq_exp_id in enumerate(seq_experiment_dict.keys()))
     return experiment_id_idx_mapping
 
 
-def _get_table_mutation_entry(observed_mutation, experiment_url_dict, gatk_url_dict):
+def _get_table_mutation_entry(observed_mutation):
+    """One mutation-table cell.
+
+    This used to have a second branch, taken when the sample had a breseq HTML report, that
+    wrapped the frequencies in links to that report and to a CNVnator coverage plot. Both
+    were built from the per-row path columns, which are gone; what remains is the branch
+    every web-imported experiment already rendered.
+    """
     table_entry = ""
     if observed_mutation.breseq_present or observed_mutation.gatk_present:
-        #there's a chance for null values in frequency
-        if observed_mutation.sequencing_experiment_id in experiment_url_dict:
-            url = experiment_url_dict[observed_mutation.sequencing_experiment_id]
-            evidence_url = url + _find_between(observed_mutation.evidence, "\"", "\"")
-            breseq_details_url = '/mutations/details?observed_mut_id=' + str(observed_mutation.id)
-            gatk_url = gatk_url_dict[observed_mutation.sequencing_experiment_id]
-            #gatk_raw_file_loc = 'details?location=' + gatk_url +'evidence/'+ str(observed_mutation.mutation.position) + '.html'
-            gatk_details_url = '/mutations/details?observed_mut_id=' + str(observed_mutation.id)
-            #gatk_evidence = gatk_detail_url
-
-            if observed_mutation.mutation.feature_length is None:
-                feature_length = 0
-            else:
-                feature_length = int(observed_mutation.mutation.feature_length)
-            if observed_mutation.mutation.mutation_type == "AMP" or (observed_mutation.mutation.mutation_type == "DEL" and feature_length > 190):
-                gatk_cnv_evidence = gatk_url + 'coverage_evidence/' + str(observed_mutation.mutation.reseq_reference) + '/' + str(observed_mutation.mutation.position) + '.png'
-                table_entry = HTML_MUTATION_PRESENT_TRUE_CELL_HTML % (breseq_details_url, float(observed_mutation.frequency),
-                                                                      gatk_cnv_evidence,
-                                                                      float(observed_mutation.frequency_gatk))
-            else:
-                table_entry = HTML_MUTATION_PRESENT_TRUE_CELL_HTML % (breseq_details_url, float(observed_mutation.frequency),
-                                                                  gatk_details_url, float(observed_mutation.frequency_gatk))
-
+        # A .gd imported through the web uploader sets frequency but never frequency_gatk,
+        # so show whichever frequencies exist rather than formatting None with %.2f.
+        frequencies = [f for f in (observed_mutation.frequency,
+                                   observed_mutation.frequency_gatk) if f is not None]
+        if frequencies:
+            table_entry = """<span class="true">%s</span>""" % (
+                "/".join("%.2f" % float(f) for f in frequencies))
         else:
-            # No breseq report to link to (e.g. a .gd imported through the web uploader,
-            # which sets frequency but never frequency_gatk). Show whichever frequencies
-            # exist rather than formatting None with %.2f.
-            frequencies = [f for f in (observed_mutation.frequency,
-                                       observed_mutation.frequency_gatk) if f is not None]
-            if frequencies:
-                table_entry = """<span class="true">%s</span>""" % (
-                    "/".join("%.2f" % float(f) for f in frequencies))
-            else:
-                table_entry = """<span class="true">&#10003;</span>"""
+            table_entry = """<span class="true">&#10003;</span>"""
 
     # TODO: Figure out what this is supposed to do.
     elif observed_mutation.present is False:

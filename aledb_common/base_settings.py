@@ -43,12 +43,10 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         'DEBUG': debug,
 
         'GOOGLE_ANALYTICS_TAG': os.environ.get('GOOGLE_ANALYTICS_TAG', ''),
-        'SEQUENCING_URL': os.environ.get('SEQUENCING_URL', ''),
-        'ALE_DATA_ROOT_DIR': os.environ.get('ALE_DATA_ROOT_DIR', 'ale_data_root_dir'),
 
         # Managed store that aledb-core owns and operates: uploaded .gd, BAM/BAI, and the
-        # per-experiment reference. Unlike ALE_DATA_ROOT_DIR (bring-your-own breseq tree,
-        # served by /aledata/), every path under here is derived from a database primary key,
+        # per-experiment reference. Every path under here is derived from a database
+        # primary key,
         # so no client-supplied path ever reaches the filesystem.
         'ALEDB_STORE_DIR': os.environ.get(
             'ALEDB_STORE_DIR', os.path.join(base_dir, 'aledb_store')),

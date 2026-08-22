@@ -5,7 +5,7 @@ import json
 
 from aledb_experiment.models import TechnicalReplicate
 from aledb_experiment.models import Media
-from aledb_metadata.xpmdvalidator.validate import is_valid
+from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 
 __author__ = 'Denny Gosting, Patrick Phaneuf, Muyao'
 
@@ -134,7 +134,7 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
     if not os.path.isdir(metadata_path):
         return
 
-    if not is_valid(metadata_path, "metadata/xpmdvalidator/Json_schema.json"):
+    if not is_valid(metadata_path, SCHEMA_PATH):
         print ("Invalid metadata!", metadata_path)
 
     for f in os.listdir(metadata_path):

@@ -273,8 +273,6 @@ class Isolate(models.Model):
     breseq_version = models.CharField(max_length=200, **blank_field)
     library_prep = models.CharField(max_length=200, **blank_field)
 
-    def seq_location(self):
-        return self.resequencingexperiment_set.values_list("location")[0][0]
 
     def __unicode__(self):
         if self.flask.ale_id.description is not None:

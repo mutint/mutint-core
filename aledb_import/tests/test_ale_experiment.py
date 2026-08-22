@@ -60,20 +60,6 @@ class TestEnrichment(TestCase):
         expected_histogram_length = 68
         self.assertEquals(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
 
-    def test_reseq_URL(self):
-        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/test_reseq_url/"
-        create_ale_experiment(test_report_path, "Patrick", "test", "test_project")
-        reseq_qryset = ResequencingExperiment.objects.all()
-        empty_count = 0
-        not_empty_count = 0
-        for reseq in reseq_qryset:
-            if reseq.location == "":
-                empty_count += 1
-            if "3-72-1-1" in reseq.location:
-                not_empty_count += 1
-        self.assertEqual(empty_count, 1)
-        self.assertEqual(not_empty_count, 1)
-
     def test_find_user(self):
         self.assertEquals(self.user, find_user("pphaneuf"))
         self.assertEquals(self.user, find_user("Patrick"))

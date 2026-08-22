@@ -1,10 +1,7 @@
 """One contract for serving a file off disk: content type, streaming, and byte ranges.
 
-Extracted from ``aledb_seq.views.alignments`` so ``/aledata/`` serves files the same way the
-alignment routes do. Before that there were two: the alignment routes streamed with range
-support, while ``/aledata/`` did ``HttpResponse(f.read())`` -- the whole file into memory, no
-``Accept-Ranges``, and a content-type guess built from ``endswith('txt')`` (no dot), which
-also mislabelled CSV as ``text/html``.
+Extracted from ``aledb_seq.views.alignments`` when the legacy ``/aledata/`` route shared it.
+That route is gone; this stays as the one file-serving contract for the alignment routes.
 
 Range support is hand-rolled because Django 4.2 implements it in neither ``FileResponse`` nor
 ``django.views.static.serve``, and a genome browser cannot read a BAM without byte ranges.

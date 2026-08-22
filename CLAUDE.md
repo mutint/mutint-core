@@ -61,18 +61,21 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 181 run, 2 failures + 4 errors.** All six are pre-existing and unrelated to any
-recent work; treat any *other* failure as yours. All six are in
-`aledb_metadata.tests.test_metadata.TestParser`:
+**Baseline: 195 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
-- four errors — `test_get_media_supplement_description`, and three sharing one cause,
-  `KeyError: 'R'` at `aledb_metadata/parser.py:149`
-- two failures — `test_creating_media_with_metadata_upload`, `test_xpmd_validator`
-
-`test_reseq_URL` and `test_upload_ALE_collection` used to be on this list and now pass.
+It was not green for years. The last six were all in
+`aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
+code without migrating what depended on it: `14966400` switched the metadata schema to short
+keys (`A`/`F`/`I`/`R`) plus JSON blobs but migrated only the `test3/` fixtures, and `19dfc7a9`
+stopped the parser writing `Media.substrate` while the tests kept asserting on it.
 
 ### Gotchas when writing tests
 
+- **Metadata is validated on CLI upload.** `aledb_metadata/xpmdvalidator/validate.py` used to
+  open with an unconditional `return True`, so every metadata directory passed. It is live now:
+  a fixture that does not satisfy `Json_schema.json` will fail
+  `_check_and_extract_parameters_from_metadata` and the upload returns early. Build metadata
+  fixtures from `aledb_metadata/tests/test3/`, which is the canonical shape.
 - **`find_user()` prompts on stdin.** Anything reaching `try_creating_project` with a person
   name that matches no `User` raises `EOFError` under the test runner. Create the `User` first,
   or use `gd_import.prepare_experiment_by_id`, which never resolves a person.
@@ -109,30 +112,6 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 ```
 
 ## Architecture
-
-### `/aledata/` serves the legacy data root
-
-`aledb_common/views.py` serves `ALE_DATA_ROOT_DIR` at `/aledata/` — breseq HTML reports,
-GATK output and CNVnator coverage plots for CLI-uploaded experiments. It is separate from
-`ALEDB_STORE_DIR`, which holds web-uploaded data and is served by
-`aledb_seq/views/alignments.py`.
-
-The route takes a client-supplied path, so it works in three steps and all three matter:
-
-1. **Containment.** The path is joined to `DOC_ROOT`, `abspath`-normalised, and required to
-   stay inside the root via `os.path.commonpath`. `normpath` alone is not enough — it happily
-   walks above the root.
-2. **Ownership by prefix.** A sample's stored `location` (`<exp>/breseq/<s>/output/`),
-   `gatk_location` and `experiment_location` are the roots its files sit under, so the
-   requested path's own directory prefixes are matched against those three columns. A path
-   under no stored prefix is a 404: this route serves experiment data, not the filesystem.
-3. **`can_view_project`** on the owning experiment. There is no exemption for any file type.
-
-It previously had a branch keyed on `'.html' in page_name or '.ba' in page_name` that skipped
-authorization outright — substring tests, so every `.bam`/`.bai` matched too — and its
-"permission check" elsewhere was `can_view_experiment`, a stub returning `True`. Both are
-gone. Streaming and byte ranges come from `aledb_common/fileserve.py`, shared with the
-alignment routes.
 
 ### Django Apps
 
@@ -292,5 +271,4 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 - ASGI server: Daphne + Django Channels
 - Reverse proxy: nginx
 - Cache/sessions: Redis (`django-defender` brute-force tracking)
-- File storage: Azure Blob Storage mounted via blobfuse at `/data/aledata/`
-- `SEQUENCING_URL` env var controls the public-facing URL prefix for sequencing result files
+- File storage: `ALEDB_STORE_DIR`, keyed by database id (`aledb_common/store.py`)

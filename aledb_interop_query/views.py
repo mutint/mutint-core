@@ -297,7 +297,6 @@ def _serialize_metadata(metadata_list):
         for tup in m.get('reseq_info_list', []):
             exp = tup[0]
             flat.append({
-                'location':                exp.location,
                 'ale_flask_isolate_str':   exp.ale_flask_isolate_str,
                 'clonal_or_population':    tup[1],
                 'tech_rep_description':    tup[2],

@@ -14,7 +14,7 @@ from aledb_filter.models import AleExperimentFilter
 import aledb_filter.models
 from aledb_stats.util import generate_static_data
 import logging
-from aledb_metadata.xpmdvalidator.validate import is_valid
+from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment.models import AleExperiment, Project
 from django.contrib.auth.models import User
 from datetime import datetime
@@ -194,7 +194,7 @@ def _check_and_extract_parameters_from_metadata(metadata_path):
         logger.info("invalid metadata path")
         print("invalid path:", metadata_path)
         return False
-    if not is_valid(metadata_path, "metadata/xpmdvalidator/Json_schema.json"):
+    if not is_valid(metadata_path, SCHEMA_PATH):
         return False
     return aledb_metadata.parser.extract_experiment_parameters(metadata_path)
 

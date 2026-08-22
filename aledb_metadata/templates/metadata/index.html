@@ -51,11 +51,7 @@
         {% for reseq_info_tuple in reseq_info_list %}
             <tr class="experiment_stats">
                 <td class="sample_name">
-                    {% if reseq_report_url and reseq_info_tuple.0.location %}
-                        <a href="{{ reseq_report_url }}{{ reseq_info_tuple.0.location }}">{{ reseq_info_tuple.0.ale_flask_isolate_str }}</a>
-                    {% else %}
-                        {{ reseq_info_tuple.0.ale_flask_isolate_str }}
-                    {% endif %}
+                    {{ reseq_info_tuple.0.ale_flask_isolate_str }}
                 </td>
                 <td class="clonal_or_population">{{ reseq_info_tuple.1 }}</td>
                 <td class="tech_rep_description">{{ reseq_info_tuple.2 }}</td>

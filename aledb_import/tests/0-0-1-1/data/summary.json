@@ -1,0 +1,16 @@
+{
+  "reads": {
+    "total_reads": 2353696,
+    "total_bases": 328436570,
+    "total_fraction_aligned_reads": 0.955735575027531
+  },
+  "references": {
+    "reference": {
+      "REL606": {
+        "coverage_average": 68.0388108058057,
+        "length": 4573116,
+        "junction_only": false
+      }
+    }
+  }
+}

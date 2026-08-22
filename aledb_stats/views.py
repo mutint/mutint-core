@@ -28,10 +28,6 @@ STATS_TEMPLATE = "stats.html"
 
 
 # TODO: used by multiple views. Also implemented within ale_exp_filter.py; implement in one location.
-if hasattr(settings, "SEQUENCING_URL"):
-    resequencing_report_url = settings.SEQUENCING_URL
-else:
-    resequencing_report_url = ""
 
 
 def stats(request):
@@ -87,7 +83,6 @@ def stats(request):
                         "observed_mutation_type_count_dict": observed_mutation_type_count_dict,
                         "observed_mutation_sum": sum(observed_mutation_type_count_dict.values()),
                         "experiments_info_list": experiments_info_list,
-                        "resequencing_report_url": resequencing_report_url,
                         "needle_plot_data": mark_safe(list(needle_plot_data)),
                         "genes": mark_safe(genes_json),
                         "gene_color_set": mark_safe(common.GENE_COLORS),

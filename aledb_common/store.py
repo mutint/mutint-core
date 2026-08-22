@@ -2,7 +2,7 @@
 
 Every path here is derived from a database primary key. That is the whole point: no
 client-supplied path component ever reaches the filesystem, so the traversal exposure that
-``/aledata/`` carries (``DOC_ROOT + page_name`` with no normalisation) cannot exist here.
+a client-supplied path would carry cannot exist here.
 
 Layout::
 
@@ -14,7 +14,8 @@ Layout::
                                                  aligned.bam.bai
     <store>/staging/<upload_session_id>/...      (transient; removed on finalize)
 
-Contrast ``ResequencingExperiment.location``, which stores a path per row that travels with
+Paths are never stored per row: three such columns used to exist and were removed with the
+breseq HTML report support, because a stored path travels with
 each breseq result. Nothing here is stored in the database.
 """
 

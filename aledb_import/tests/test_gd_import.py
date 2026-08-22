@@ -238,22 +238,15 @@ class GdImportTestCase(TestCase):
         self.assertEqual(summary["experiment_id"], experiment.ale_id)
         self.assertEqual(summary["experiment"], experiment.name)
 
-    def test_gd_imported_rows_have_no_report_location(self):
-        """No breseq HTML exists for a bare .gd, so link-builders must get a falsy value
-        rather than a location that renders as the string "None"."""
-        self._import_named(self.NON_AFIR_NAMES[:1])
-
-        self.assertFalse(ResequencingExperiment.objects.get().location)
-
     # --- the pages the post-import link lands on ---------------------------------------
 
     def test_imported_experiment_pages_render(self):
         """/stats and /mutations must render for a gd-imported experiment.
 
-        Regression guard for three defects that all surfaced on these two pages: the
-        NULL `location` rendering as the literal string "None" in an href, the
-        `!= ""` guards that let that href through, and the `ale.common` NameError that
-        turned /mutations into a 500 page for every experiment."""
+        Regression guard for the `ale.common` NameError that turned /mutations into a 500
+        page for every experiment. This also used to guard a NULL `location` rendering as
+        the literal string "None" in an href; there are no report links left to get that
+        wrong."""
         summary = self._import_named(self.NON_AFIR_NAMES)
         experiment_id = summary["experiment_id"]
         self.client.force_login(self.user)
@@ -261,8 +254,6 @@ class GdImportTestCase(TestCase):
         stats = self.client.get("/stats/", {"ale_experiment_id": experiment_id})
         self.assertEqual(stats.status_code, 200)
         stats_html = stats.content.decode("utf-8")
-        self.assertNotIn("Noneindex.html", stats_html)
-        self.assertNotIn('href="None', stats_html)
         # Every sample is listed, as plain text rather than a dead report link.
         for name in self.NON_AFIR_NAMES:
             self.assertIn(name[:-3], stats_html)
@@ -275,5 +266,4 @@ class GdImportTestCase(TestCase):
 
         metadata = self.client.get("/metadata/", {"ale_experiment_id": experiment_id})
         self.assertEqual(metadata.status_code, 200)
-        self.assertNotIn('href="None', metadata.content.decode("utf-8"))
 

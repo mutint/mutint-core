@@ -18,15 +18,6 @@ class ResequencingExperiment(models.Model):
                                             default=0)
     mutations = models.ManyToManyField("Mutation",
                                        through="ObservedMutation")
-    location = models.CharField(max_length=200,
-                                blank=True,
-                                null=True)
-    experiment_location = models.CharField(max_length=200,
-                                blank=True,
-                                null=True)
-    gatk_location = models.CharField(max_length=200,
-                                blank=True,
-                                null=True)
     sample_name = models.CharField(max_length=200,
                                 blank=True,
                                 null=True)
@@ -35,8 +26,10 @@ class ResequencingExperiment(models.Model):
     percentage_mapped = models.FloatField(blank=True,
                                           default=0)
     # Whether this sample's alignment lives in the managed store. Deliberately a flag and
-    # not a path: the location is derived from this row's pk by aledb_common.store, unlike
-    # `location` above, which stores a path per row.
+    # not a path: the location is derived from this row's pk by aledb_common.store. Three
+    # per-row path columns used to live here -- location, experiment_location,
+    # gatk_location -- pointing into a bring-your-own breseq tree. They were only ever used
+    # to build breseq HTML report URLs, and went with that feature.
     bam_stored = models.BooleanField(default=False)
 
     @property
@@ -71,17 +64,17 @@ class ResequencingExperiment(models.Model):
 
 
 class UnassignedMissingCoverageEvidence(models.Model):
-    reads_left_url = models.CharField(max_length=500, **blank_field)
-    reads_right_url = models.CharField(max_length=500, **blank_field)
-    coverage = models.CharField(max_length=500, **blank_field)
+    """An MC evidence record from the GenomeDiff.
+
+    Eight further columns -- reads_left_url, reads_right_url, coverage, size, reads_left,
+    reads_right, gene, description -- were scraped out of breseq's index.html and attached
+    here. Nothing ever read any of them, and they went with the HTML report support. These
+    three come from the GenomeDiff itself, so the count on the stats page still works.
+    """
+
     seq_id = models.CharField(max_length=100)
     start = models.CharField(max_length=100)
     end = models.CharField(max_length=100)
-    size = models.CharField(max_length=200)
-    reads_left = models.CharField(max_length=100, **blank_field)
-    reads_right = models.CharField(max_length=100, **blank_field)
-    gene = models.CharField(max_length=50, **blank_field)
-    description = models.CharField(max_length=500, **blank_field)
     sequencing_experiment = models.ForeignKey(ResequencingExperiment,
                                               on_delete=models.CASCADE)
 
@@ -168,12 +161,6 @@ class ObservedMutation(models.Model):
     mutated_reads = models.IntegerField(null=True)
     other_reads = models.IntegerField(null=True)
     reference_genome_likelihood = models.FloatField(null=True)
-    evidence = models.CharField(max_length=400,
-                                blank=True,
-                                null=True)
-    gatk_evidence = models.CharField(max_length=400,
-                                     blank=True,
-                                     null=True)
     frequency = models.DecimalField(null=True,
                                     max_digits=5,
                                     decimal_places=4)

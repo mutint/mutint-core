@@ -3,8 +3,7 @@
 Every path here is derived from a primary key, so no client-supplied path component reaches
 the filesystem, and authorization uses the model that actually exists -- ``can_view_project``.
 
-The streaming and byte-range machinery moved to ``aledb_common.fileserve``, which
-``/aledata/`` now shares, so both routes answer a Range header the same way.
+The streaming and byte-range machinery lives in ``aledb_common.fileserve``.
 """
 
 from django.http import Http404, HttpResponseForbidden

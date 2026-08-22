@@ -22,10 +22,6 @@ META_DATA_TEMPLATE = "metadata/index.html"
 
 
 # TODO: used by multiple views. Also implemented within ale_exp_filter.py; implement in one location.
-if hasattr(settings, "SEQUENCING_URL"):
-    reseq_report_url = settings.SEQUENCING_URL
-else:
-    reseq_report_url = ""
 
 
 def metadata(request):
@@ -44,7 +40,6 @@ def metadata(request):
 
         context = get_user_context(request.user)
         context.update({"reseq_info_list": reseq_info_list,
-                        "reseq_report_url": reseq_report_url,
                         "ale_experiment_name": experiment.name,
                         "ale_project_name": experiment.project.name,
                         "ale_project_id": experiment.project.id,

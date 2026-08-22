@@ -31,6 +31,9 @@ REFERENCE_PATTERNS = [
 
 BRESEQ_PATTERNS = [
     "output/annotated.gd",
+    # ~10 KB, and the only source of the sample's read/coverage statistics now that they are
+    # no longer scraped out of summary.html. Optional: a sample without it still imports.
+    "data/summary.json",
     "data/reference.gff3",
     "data/reference.fasta",
     "data/reference.bam",

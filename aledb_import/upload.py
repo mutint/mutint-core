@@ -1,7 +1,5 @@
-from os.path import join
+import json
 import re
-import sys
-import traceback
 from bs4 import BeautifulSoup
 from aledb_import.gdparse.gdparse import gdparse
 from aledb_common.util import _find_between
@@ -20,12 +18,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-HTML_SUMMARY_FILE_NAME = "summary.html"
-HTML_INDEX_FILE_NAME = "index.html"
-CLONAL_HTML_CLASSES_TO_PARSE_FOR_MUTATIONS = ["normal_table_row"]
-POPULATION_HTML_CLASSES_TO_PARSE_FOR_MUTATIONS = ["normal_table_row", "polymorphism_table_row"]
-AVERAGE_READ_LENGTH_INDEX = 5
-READ_COUNT_INDEX = 2
+# breseq writes this beside output/, not inside it.
+SUMMARY_JSON_RELATIVE_PATH = os.path.join("data", "summary.json")
 GD_MUT_POS_ATTR_KEY = 'position'
 GD_SIZE_TYPES = ['SUB', 'DEL', 'INV', 'INT', 'AMP', 'CON']
 GD_CNV_LENGTH_ATTR_KEY = 'size'
@@ -39,10 +33,7 @@ GD_MUT_ANNOTATION_HTML = "html_mutation_annotation"
 GD_MUT_SEQ_ID_ATTR_KEY = 'seq_id'
 DEFAULT_CLONAL_FREQ = 1.0
 DEFAULT_GATK_FREQ = 0
-BRESEQ_REPORT_COLUMN_KEY_EVIDENCE = "evidence"
 BRESEQ_RESULT_RELATIVE_PATH = ""
-
-ale_data_root_dir = settings.ALE_DATA_ROOT_DIR
 
 
 def add_breseq_results(technical_replicate_id,
@@ -53,26 +44,20 @@ def add_breseq_results(technical_replicate_id,
                        sample_name,
                        experiment=None,
                        is_wild_type=False):
+    """Import one sample's mutations, missing-coverage evidence and statistics.
+
+    The clonal/population distinction used to be read out of the GenomeDiff here and passed
+    down, purely to pick which CSS classes to scrape out of index.html. With the HTML gone
+    it has no remaining use on this path.
     """
-    Figures out if the sample is clonal or population,
-    and calls the appropriate "add" function.
-    Read the output/log.txt file for " -p " option, which indicates that
-    sample was processed as a population.
-    """
-    breseq_output_dir_path = '%s/breseq/%s/output/' % (experiment_path, sample_name)
     reseq = _get_reseq_experiment_with_stats(experiment_path,
                                              sample_name,
                                              technical_replicate_id,
                                              person)
 
-    sample_reseq_type = gdparse.SampleType.CLONAL  # arbitrary default, though could have side-effects.
-    if gdparse.RESEQ_TYPE_KEY in mutation_gd_parser.meta_data.keys():
-        sample_reseq_type = mutation_gd_parser.meta_data[gdparse.RESEQ_TYPE_KEY]
     sample_mutation_dict = mutation_gd_parser.data[gdparse.MUTATION_KEY]
 
-    _database_mutations(sample_reseq_type,
-                        breseq_output_dir_path,
-                        experiment_path,
+    _database_mutations(experiment_path,
                         sample_name,
                         reseq,
                         sample_mutation_dict,
@@ -81,18 +66,7 @@ def add_breseq_results(technical_replicate_id,
 
     sample_evidence_dict = mutation_gd_parser.data[gdparse.EVIDENCE_KEY]
 
-    _database_unassigned_missing_coverage(reseq,
-                                          sample_evidence_dict,
-                                          breseq_output_dir_path)
-
-
-def _get_beautifulsoup_html(output_folder, html_file_name):
-    output_file_path = join(output_folder, html_file_name)
-    bs_html_file = None
-    if os.path.isfile(output_file_path):
-        with open(output_file_path) as infile:
-            bs_html_file = BeautifulSoup(infile, "html.parser")
-    return bs_html_file
+    _database_unassigned_missing_coverage(reseq, sample_evidence_dict)
 
 
 def _is_missing_coverage_type(evidence_dict):
@@ -103,148 +77,113 @@ def _is_missing_coverage_type(evidence_dict):
 
 
 # Should be able to re-use this with populations.
-def _database_unassigned_missing_coverage(seq_experiment, evidence_dict, breseq_folder):
-    mutations_html = _get_beautifulsoup_html(breseq_folder, HTML_INDEX_FILE_NAME)
-    mutation_rows = _get_unassigned_missing_coverage_rows(mutations_html)
-    missing_coverage_dict = {}
-    for row_num, row in enumerate(mutation_rows):
-        attrs = row.findChildren("td")
-        if not attrs:
-            continue
-        position = attrs[4].get_text()
-        missing_coverage_dict[position] = [attrs[0].find("a")['href'],  # reads_left_url
-                                           attrs[1].find("a")['href'],  # reads_right_url
-                                           attrs[2].find("a")['href'],  # coverage
-                                           attrs[6].get_text(),  # size
-                                           attrs[7].get_text(),  # reads_left
-                                           attrs[8].get_text(),  # reads_right
-                                           attrs[9].get_text(),  # gene
-                                           attrs[10].get_text()]  # description
+def _database_unassigned_missing_coverage(seq_experiment, evidence_dict):
+    """Record MC evidence from the GenomeDiff.
+
+    This used to also scrape index.html for reads_left_url / coverage / size / gene /
+    description and attach them to the row. Nothing ever read those columns, and they are
+    gone along with the rest of the breseq HTML report support.
+    """
     for key in evidence_dict:
         if _is_missing_coverage_type(evidence_dict[key]):
-            # TODO: make literals into constants
-            # Followed example given by ObservedMutations.
-            # Seems like I have to use a mix of both Django and Alchemy ORM members.
-            # Shouldn't have to do this.
-            # TODO: Keyerrors only exist because the missing_coverage dict does not have the starting strain (wild type) html file
-            try:
-                html_attrs = missing_coverage_dict[str(evidence_dict[key]['start'])]
-                UnassignedMissingCoverageEvidence.objects.get_or_create(seq_id=evidence_dict[key]['seq_id'],
-                                                                        start=evidence_dict[key]['start'],
-                                                                        end=evidence_dict[key]['end'],
-                                                                        sequencing_experiment=seq_experiment,
-                                                                        reads_left_url=html_attrs[0],
-                                                                        reads_right_url=html_attrs[1],
-                                                                        coverage=html_attrs[2],
-                                                                        size=html_attrs[3],
-                                                                        reads_left=html_attrs[4],
-                                                                        reads_right=html_attrs[5],
-                                                                        gene=html_attrs[6],
-                                                                        description=html_attrs[7])
-            except KeyError:
-                UnassignedMissingCoverageEvidence.objects.create(seq_id=evidence_dict[key]['seq_id'],
-                                                                 start=evidence_dict[key]['start'],
-                                                                 end=evidence_dict[key]['end'],
-                                                                 sequencing_experiment=seq_experiment)
+            UnassignedMissingCoverageEvidence.objects.get_or_create(
+                seq_id=evidence_dict[key]['seq_id'],
+                start=evidence_dict[key]['start'],
+                end=evidence_dict[key]['end'],
+                sequencing_experiment=seq_experiment)
 
 
-def _parse_average_read_length(read_row_input):
-    output = re.findall("\d+.\d+", read_row_input)[0]
-    return output
+def _read_breseq_summary(sample_root):
+    """The four sample statistics from breseq's ``data/summary.json``, or None if absent.
 
+    Replaces scraping them out of ``summary.html`` with BeautifulSoup. The JSON carries the
+    same numbers as real values, so there is no table-index guessing and no dependence on the
+    HTML report existing at all.
 
-def _parse_read_count(read_row_input):
-    return int(read_row_input.replace(",", ""))
-
-
-def _relative_to_data_root(path):
-    """`path` relative to ALE_DATA_ROOT_DIR, or unchanged when it lies outside that root.
-
-    Replaces two older forms that both misbehave when the root does not occur in `path`:
-    `path.replace(root, "")` silently strips the root from the *middle* of a path, and
-    `path[path.find(root) + len(root):]` drops `len(root) - 1` leading characters, because
-    `find` returns -1. ALE_DATA_ROOT_DIR defaults to the relative literal
-    'ale_data_root_dir' (base_settings.py), so "does not occur" is the normal case.
-
-    The trailing separator is preserved: `location` is concatenated with a filename by
-    `mutation_table_builder.get_experiment_urls` and by stats.html.
+    Note the location: ``<sample>/data/summary.json``, a sibling of ``output/`` -- not inside
+    it, which is where the HTML lived.
     """
-    if not ale_data_root_dir:
-        return path
-    root = os.path.abspath(ale_data_root_dir)
+    path = os.path.join(sample_root, SUMMARY_JSON_RELATIVE_PATH)
+    if not os.path.isfile(path):
+        return None
+
     try:
-        if os.path.commonpath([os.path.abspath(path), root]) != root:
-            return path
-    except ValueError:
-        # Different drives, or one path relative and one absolute -- not under the root.
-        return path
-    relative = os.path.relpath(path, root)
-    if path.endswith(("/", os.sep)):
-        relative += os.sep
-    return relative
+        with open(path, encoding="utf-8") as handle:
+            summary = json.load(handle)
+    except (ValueError, OSError):
+        # Logged rather than swallowed: the old scrape had a bare `except: None` that left
+        # the statistics silently at zero.
+        logger.exception("could not read breseq summary %s", path)
+        return None
+
+    reads = summary.get("reads") or {}
+    total_reads = reads.get("total_reads") or 0
+    total_bases = reads.get("total_bases") or 0
+
+    return {
+        "reads": total_reads,
+        "average_read_length": (total_bases / total_reads) if total_reads else 0,
+        "percentage_mapped": (reads.get("total_fraction_aligned_reads") or 0) * 100,
+        "mean_coverage": _mean_coverage(summary),
+    }
+
+
+def _mean_coverage(summary):
+    """Length-weighted mean coverage across the reference sequences.
+
+    One reference -- the usual case -- reduces to exactly that reference's
+    ``coverage_average``. Junction-only entries are not real sequence and are skipped.
+    """
+    references = ((summary.get("references") or {}).get("reference") or {})
+
+    weighted = 0.0
+    total_length = 0
+    for reference in references.values():
+        if reference.get("junction_only"):
+            continue
+        length = reference.get("length") or 0
+        coverage = reference.get("coverage_average") or 0
+        weighted += coverage * length
+        total_length += length
+
+    return (weighted / total_length) if total_length else 0
 
 
 def _get_reseq_experiment_with_stats(experiment_path, sample_name, technical_replicate_id, person):
-    breseq_folder = '%s/breseq/%s/output/' % (experiment_path, sample_name)
-    # Stays empty when there is no breseq HTML report to link to. `location` is what the
-    # mutation table and stats page turn into a report URL, so a path to a report that does
-    # not exist is worse than no path at all.
-    breseq_path = ""
-    gatk_folder = '%s/gatk/%s/' % (experiment_path, sample_name)
+    """Get or create the sample's row and fill in its sequencing statistics.
 
-    index_file_path = breseq_folder + HTML_INDEX_FILE_NAME
-    if os.path.isfile(index_file_path):
-        breseq_path = _relative_to_data_root(breseq_folder)
-    reseq, created = ResequencingExperiment.objects.get_or_create(location=breseq_path,
-                                                                  gatk_location=_relative_to_data_root(gatk_folder),
-                                                                  experiment_location=_relative_to_data_root(experiment_path),
-                                                                  sample_name=sample_name,
-                                                                  tech_rep_id=technical_replicate_id,
-                                                                  person=person)
-    statistics_html = _get_beautifulsoup_html(breseq_folder, HTML_SUMMARY_FILE_NAME)
-    if statistics_html:
-        row_read_info = statistics_html.find("tr", attrs={"class": "highlight_table_row"}).findChildren("td")
-        reseq.reads = _parse_read_count(row_read_info[READ_COUNT_INDEX].text)
-        reseq.average_read_length = _parse_average_read_length(row_read_info[AVERAGE_READ_LENGTH_INDEX].text)
-        try:
-            reseq.percentage_mapped = float(row_read_info[7].text.replace("%", ""))
-        except:
-            None
-        # average coverage is 3rd table, 2nd row (could also be more rows), 5th column
-        mean_coverage = statistics_html.findChildren("table")[2].findChildren("tr")[1].findChildren("td")[4].text
-        try:
-            mean_coverage = float(mean_coverage)
-        except:
-            mean_coverage = 0
+    The row used to be keyed on three stored paths as well -- `location`, `gatk_location`,
+    `experiment_location` -- which meant it forked a duplicate whenever a path changed, e.g.
+    when the breseq HTML report appeared or ALE_DATA_ROOT_DIR moved. Keying on
+    (sample_name, tech_rep, person) matches what the web importer already does and gives one
+    row per technical replicate, which is the intended meaning.
+    """
+    reseq, created = ResequencingExperiment.objects.get_or_create(
+        sample_name=sample_name,
+        tech_rep_id=technical_replicate_id,
+        person=person)
 
-        reseq.mean_coverage = mean_coverage
+    statistics = _read_breseq_summary('%s/breseq/%s' % (experiment_path, sample_name))
+    if statistics:
+        for field, value in statistics.items():
+            setattr(reseq, field, value)
 
     reseq.save()
     return reseq
 
 
-def _database_mutations(sample_type,
-                        breseq_folder,
-                        experiment_path,
+def _database_mutations(experiment_path,
                         sample_name,
                         seq_experiment,
                         mutation_dict,
                         experiment,
                         is_wild_type):
 
-    breseq_mutations_html = _get_beautifulsoup_html(breseq_folder, HTML_INDEX_FILE_NAME)
-    breseq_column_type_index_dict = _get_mutation_header_dict(breseq_mutations_html)
-    breseq_html_mut_resultset = _get_html_mutations_resultset(breseq_mutations_html, sample_type)
-
     observed_mutation_list = []
 
     # Only used if is_wild_type is True. Doesn't affect functionality otherwise
     # TODO: if this is the case, needs a conditional so not always executed.
     wild_type_mutation_list = []
-    breseq_mut_num = 0
-
-    #TODO:sorting by position doesn't work when there are multiple reference files!
-    sorted_mutation_keys = sorted(mutation_dict, key=lambda k: mutation_dict[k].get(GD_MUT_POS_ATTR_KEY))
 
     for mut_num in sorted(mutation_dict.keys()):
         breseq_gene_annotation = mutation_dict[mut_num].get(GD_MUT_GENE_NAME_ATTR_KEY)
@@ -276,38 +215,16 @@ def _database_mutations(sample_type,
         mut.save()
         if is_wild_type is True:
             wild_type_mutation_list.append(mut.id)
-        evidence = ""
 
         frequencies = _get_mutation_freq(mutation_dict[mut_num])
 
-        breseq_frequency = frequencies[0]
-        if breseq_frequency > 0:
-            breseq_mut_num = breseq_mut_num + 1
-            try:
-                if breseq_html_mut_resultset:
-                    # mutations are in the same order in the html and output.gd
-                    # files so we can index the ids with row_num
-                    html_mut_idx = breseq_mut_num - 1
-                    html_row = breseq_html_mut_resultset[html_mut_idx]
-                    html_mut_attrs = html_row.findChildren("td")
-                    evidence = html_mut_attrs[
-                        breseq_column_type_index_dict[BRESEQ_REPORT_COLUMN_KEY_EVIDENCE]].renderContents()
-            except Exception as e:
-                logger.exception("html_mut_resultset failed during handling of " + str(html_mut_idx), extra=breseq_html_mut_resultset)
-        if mutation_dict[mut_num].get(GD_MUT_TYPE_ATTR_KEY) == "AMP":
-            gatk_evidence = str(mutation_dict[mut_num].get(GD_MUT_POS_ATTR_KEY)) + '.png'
-
-        elif mutation_dict[mut_num].get(GD_MUT_TYPE_ATTR_KEY) == "DEL" and int(mutation_dict[mut_num].get(GD_CNV_LENGTH_ATTR_KEY)) > 190:
-            gatk_evidence = str(mutation_dict[mut_num].get(GD_MUT_POS_ATTR_KEY)) + '.png'
-        else:
-            gatk_evidence = str(mutation_dict[mut_num].get(GD_MUT_POS_ATTR_KEY)) + '.html'
-
+        # `evidence` and `gatk_evidence` used to be filled in here -- the former scraped out
+        # of index.html, the latter a filename guess. Neither was ever read back, and both
+        # columns are gone with the rest of the breseq HTML report support.
         observed_mutation = ObservedMutation(sequencing_experiment=seq_experiment,
                                              mutation=mut,
                                              breseq_present=True,
                                              gatk_present=True,
-                                             evidence=evidence,
-                                             gatk_evidence=gatk_evidence,
                                              frequency=frequencies[0],
                                              frequency_gatk=frequencies[1])
         observed_mutation_list.append(observed_mutation)
@@ -340,41 +257,3 @@ def _get_mutation_freq(mutation_dict):
                     frequency_gatk = 0
 
     return [frequency, frequency_gatk]
-
-
-def _get_mutation_header_dict(mutations_html):
-    header_dict = None
-    if mutations_html:
-        mutation_table = mutations_html.find("th", attrs={"class": "mutation_header_row"}).parent.parent
-        table_header_rows = mutation_table.findChildren("th")
-        header_dict = collections.defaultdict()
-        for row_idx in range(1, len(table_header_rows)):
-            column_name = table_header_rows[row_idx].getText()
-            header_dict[column_name] = row_idx - 1
-    return header_dict
-
-
-def _get_html_mutations_resultset(mutations_html, sample_type):
-    mutation_rows = None
-    if mutations_html:
-        # parse the mutation html file to find the correct table
-        mutation_table = mutations_html.find("th", attrs={"class": "mutation_header_row"}).parent.parent
-        if sample_type == gdparse.SampleType.CLONAL:
-            html_class_to_parse = CLONAL_HTML_CLASSES_TO_PARSE_FOR_MUTATIONS
-        else:
-            html_class_to_parse = POPULATION_HTML_CLASSES_TO_PARSE_FOR_MUTATIONS
-        mutation_rows = mutation_table.findChildren("tr", attrs={"class": html_class_to_parse})
-    return mutation_rows
-
-
-def _get_unassigned_missing_coverage_rows(mutations_html):
-    try:
-        mutation_table = mutations_html.find("th", attrs={"class": "missing_coverage_header_row"}).parent.parent
-
-        mutation_rows = mutation_table.findChildren("tr")
-    except AttributeError:
-        mutation_rows = []
-
-    return mutation_rows
-
-
