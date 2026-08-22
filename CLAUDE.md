@@ -211,7 +211,17 @@ All apps use the `aledb_*` namespace. Key apps:
 Creation and deletion are nested under the objects they act on:
 
 - `/ale/projects/` — **+ New project**, optionally creating its first experiment in the same
-  step. `/ale/experiments/` — delete selected rows.
+  step, and delete selected rows.
+- `/ale/experiments/` — **+ New experiment** (a project picker plus a name) and delete selected
+  rows. `/ale/project/<pk>/` carries the same **+ New experiment**, with the project implicit.
+  Both POST `/ale/experiments/create/` and land on the new experiment's Add page. The picker
+  lists only projects `can_edit_project` allows, so it never offers one the POST would 403 on;
+  a user with no editable project is shown **+ New project** instead.
+- Shared JS for those controls — `aledbPost`, `aledbConfirmDelete`, `aledbTogglePanel` — lives in
+  `aledb_common/staticfiles/js/aledb_crud.js`, loaded from `base.html`. It was duplicated inline
+  in two templates before. A page using `aledbPost` must render `{% csrf_token %}` somewhere:
+  that is what sets the cookie it reads. `aledbConfirmDelete` calls `swal()`, which `base.html`
+  does **not** load — pull sweetalert in per template.
 - An experiment's page (`/stats?ale_experiment_id=<pk>`) carries **+ Add data** and **Delete**,
   rendered through `{% block experiment_actions %}` in `aledb_common/templates/base.html`.
 - `/import/add/?ale_experiment_id=<pk>` is the one place data goes in. It is scoped to an

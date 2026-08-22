@@ -162,6 +162,96 @@ class SoftDeleteTestCase(TestCase):
         self.assertEqual(first, second)
 
 
+class NewExperimentControlTestCase(TestCase):
+    """Creating an experiment under a project that already exists.
+
+    `experiment_create` existed and was permission-checked from the start, but nothing in
+    the UI called it: the experiments page's "+ New experiment" was a link to /ale/projects/,
+    which can only make an experiment alongside a *new* project. There was no way to add a
+    second experiment to an existing one.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(
+            username="owner", email="o@e.com", is_active=True)
+        self.user.set_password("pw")
+        self.user.save()
+        self.client.force_login(self.user)
+
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+        self.project = Project.objects.get(pk=created["project_id"])
+
+    def test_the_experiments_page_offers_a_project_to_create_under(self):
+        html = self.client.get("/ale/experiments/").content.decode("utf-8")
+
+        self.assertIn('id="new-experiment"', html)
+        self.assertIn('id="ne-project"', html)
+        self.assertIn("P", html)
+        # No longer a link that dead-ends on the project list.
+        self.assertNotIn('href="/ale/projects/">+ New experiment', html)
+
+    def test_the_project_page_offers_one_with_the_project_implicit(self):
+        html = self.client.get(
+            "/ale/project/%d/" % self.project.id).content.decode("utf-8")
+
+        self.assertIn('id="new-experiment"', html)
+        self.assertIn('id="ne-name"', html)
+        self.assertNotIn('id="ne-project"', html)   # implicit: it is the page you are on
+
+    def test_creating_one_returns_it_and_it_shows_up(self):
+        response = self.client.post(
+            "/ale/experiments/create/", {"project": self.project.id, "name": "second"})
+
+        self.assertEqual(response.status_code, 200, response.content)
+        body = response.json()
+        self.assertEqual(body["experiment"], "second")
+        self.assertEqual(body["project_id"], self.project.id)
+
+        experiment = AleExperiment.objects.get(pk=body["experiment_id"])
+        self.assertEqual(experiment.project_id, self.project.id)
+        self.assertEqual(experiment.person, "owner")
+        self.assertIn(experiment, list(self.project.experiments()))
+
+    def test_a_second_experiment_may_share_a_name(self):
+        """Experiments are identified by pk, so a duplicate name is allowed."""
+        for _ in range(2):
+            response = self.client.post(
+                "/ale/experiments/create/", {"project": self.project.id, "name": "dup"})
+            self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            AleExperiment.objects.filter(name="dup").count(), 2)
+
+    def test_a_nameless_experiment_is_refused(self):
+        response = self.client.post(
+            "/ale/experiments/create/", {"project": self.project.id, "name": "   "})
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_stranger_cannot_create_under_someone_elses_project(self):
+        stranger = User.objects.create(
+            username="stranger", email="s@e.com", is_active=True)
+        stranger.set_password("pw")
+        stranger.save()
+        self.client.force_login(stranger)
+
+        response = self.client.post(
+            "/ale/experiments/create/", {"project": self.project.id, "name": "sneaky"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_a_project_you_cannot_edit_is_not_offered(self):
+        """The dropdown lists only what the POST would accept."""
+        stranger = User.objects.create(
+            username="stranger", email="s@e.com", is_active=True, is_staff=True)
+        stranger.set_password("pw")
+        stranger.save()
+        self.client.force_login(stranger)
+
+        html = self.client.get("/ale/experiments/").content.decode("utf-8")
+        # Staff may *view* every project, but may not create under this one.
+        self.assertNotIn('id="ne-project"', html)
+        self.assertIn("+ New project", html)
+
+
 class ProjectVisibilityTestCase(TestCase):
     """Who sees which projects.
 

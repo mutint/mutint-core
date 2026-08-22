@@ -55,6 +55,25 @@
             <img src='{% static "img/Ajax-loader.gif" %}'>
         </div>
         <br>
+        {% if can_edit %}
+        <div style="margin-bottom: 1em;">
+            <button type="button" class="btn btn-primary btn-sm" id="new-experiment">+ New experiment</button>
+        </div>
+
+        <div id="new-experiment-form" style="display: none; margin-bottom: 1.5em; padding: 1em;
+             border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="ne-name">Experiment name</label>
+                <input type="text" class="form-control" id="ne-name"
+                       placeholder="New experiment in {{ project.name }}" required>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="ne-save">Create</button>
+            <button type="button" class="btn btn-default btn-sm" id="ne-cancel">Cancel</button>
+            <div id="ne-error" style="color: #a00; margin-top: 0.5em;"></div>
+        </div>
+        {% endif %}
+
         <table id="exp_table" class="table table-striped table-bordered" style="width: 100%;">
             <thead class="alert-success">
             <tr>
@@ -89,4 +108,28 @@
         </table>
     </div>
 
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("new-experiment")) { return; }
+    window.aledbTogglePanel("new-experiment", "new-experiment-form", "ne-cancel");
+
+    document.getElementById("ne-save").addEventListener("click", function () {
+        var name = document.getElementById("ne-name").value.trim();
+        if (!name) {
+            document.getElementById("ne-error").textContent = "An experiment name is required.";
+            return;
+        }
+        // The project is implicit here -- it is the page you are on.
+        window.aledbPost("/ale/experiments/create/", {
+            project: "{{ project.id }}",
+            name: name
+        }).then(function (body) {
+            window.location.href = "/import/add/?ale_experiment_id=" + body.experiment_id;
+        }).catch(function (err) {
+            document.getElementById("ne-error").textContent = err.message;
+        });
+    });
+})();
+</script>
 {% endblock %}

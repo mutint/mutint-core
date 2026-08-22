@@ -129,10 +129,27 @@ class AddPageTestCase(TestCase):
         self.assertIn("New project", projects)
         self.assertIn("First experiment", projects)   # optional experiment in the same step
         self.assertIn("delete-selected", projects)
-        self.assertIn("This is permanent.", projects)
         # aledbConfirmDelete calls swal(), which base.html does not load.
         self.assertIn("sweetalert", projects)
 
         experiments = self.client.get("/ale/experiments/").content.decode("utf-8")
         self.assertIn("delete-selected", experiments)
-        self.assertIn("This is permanent.", experiments)
+
+    def test_both_list_pages_load_the_shared_crud_helpers(self):
+        """aledbPost / aledbConfirmDelete / aledbTogglePanel moved out of the templates
+        into one static file; a page that lost the script would fail silently on click."""
+        from django.contrib.staticfiles import finders
+
+        path = finders.find("js/aledb_crud.js")
+        self.assertIsNotNone(path)
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        for helper in ("aledbPost", "aledbConfirmDelete", "aledbTogglePanel"):
+            self.assertIn(helper, source)
+        self.assertIn("This is permanent.", source)
+
+        for url in ("/ale/projects/", "/ale/experiments/"):
+            html = self.client.get(url).content.decode("utf-8")
+            self.assertIn("js/aledb_crud.js", html, url)
+            # And no longer inline, in two byte-identical copies.
+            self.assertNotIn("window.aledbPost = function", html)

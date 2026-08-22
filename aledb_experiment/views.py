@@ -3,7 +3,7 @@ from aledb_experiment.models import live
 from django.shortcuts import redirect
 from .models import Project, AleExperiment
 from .utils import get_user_projects, get_all_user_exps
-from .permissions import can_view_project
+from .permissions import can_edit_project, can_view_project
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,17 +27,34 @@ def projects(request):
     return render(request, template_name, {'project_dic': project_dic.items()})
 
 
+def _editable_projects(user):
+    """Projects the user may create an experiment under.
+
+    Viewable is not enough: `experiment_create` gates on `can_edit_project`, so offering a
+    project here that the POST would 403 on is just a slower error.
+    """
+    return [project for project in get_user_projects(user)
+            if can_edit_project(user, project)]
+
+
 def experiments(request):
     experiment_list = get_all_user_exps(request.user)
     template_name = "ale/experiments.html"
-    return render(request, template_name, {'experiments': experiment_list})
+    return render(request, template_name, {
+        'experiments': experiment_list,
+        'editable_projects': _editable_projects(request.user),
+    })
 
 
 def project_detail(request, pk):
     project = get_object_or_404(Project, pk=pk)
     if can_view_project(request.user, project):
         experiments = live(project.aleexperiment_set.all())
-        return render(request, "ale/project_detail.html", {"project": project, "experiments": experiments})
+        return render(request, "ale/project_detail.html", {
+            "project": project,
+            "experiments": experiments,
+            "can_edit": can_edit_project(request.user, project),
+        })
     return render(request, "403.html")
 
 
