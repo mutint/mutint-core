@@ -1,110 +1,212 @@
-from django.test import TestCase
-from django.contrib.auth.models import User
+"""
+``./aledb upload`` and the shell helpers around it.
 
-from aledb_stats.models import StaticData
-from aledb_experiment.models import Project, AleExperiment
-from aledb_seq.models import Mutation, ResequencingExperiment, ObservedMutation
-from aledb_import.ale_experiment import find_user, create_ale_experiment, try_creating_project, find_experiment_paths, \
-    delete_ale_experiments, upload_ale_collection
-from datetime import datetime
-import os
-import sys
+The upload itself is now a thin wrapper: it reads the experiment's metadata for
+the project / experiment / person, hands the breseq folders to the same importer
+a web drop uses, and then parses the metadata. So what is worth asserting here is
+that a CLI upload really does produce what a web upload produces -- annotated
+mutations, stored .gd, stored alignment -- rather than re-testing the importer.
+"""
+
 import io
+import os
+import shutil
+import sys
+import tempfile
+from datetime import datetime
 
-class TestEnrichment(TestCase):
-    # TODO: the unit test below no longer works: need to find out why.
-    """
-    def test_rebuild_counts_only_builds_one(self):
-        self.assertEqual(ObservedMutationCounts.objects.count(), 0)
-        self.assertEqual(UniqueMutationCounts.objects.count(), 0)
-        rebuild_dashboard_data()
-        self.assertEqual(ObservedMutationCounts.objects.count(), 1)
-        self.assertEqual(UniqueMutationCounts.objects.count(), 1)
-        rebuild_dashboard_data()
-        self.assertEqual(ObservedMutationCounts.objects.count(), 1)
-        self.assertEqual(UniqueMutationCounts.objects.count(), 1)
-    """
+from django.contrib.auth.models import User
+from django.test import TestCase, override_settings
+
+from aledb_experiment.models import AleExperiment, Project
+from aledb_import import annotation
+from aledb_import.ale_experiment import (
+    delete_ale_experiments,
+    find_experiment_paths,
+    find_user,
+    try_creating_project,
+    upload_ale_collection,
+)
+from aledb_import.tests import breseq_fixture
+from aledb_seq.models import (
+    ExperimentReference,
+    Mutation,
+    ObservedMutation,
+    ResequencingExperiment,
+)
+from aledb_stats.models import StaticData
+
+METADATA_FIXTURE = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)),
+    "test_file_structure", "messy", "metadata")
+
+
+class UploadCommandTestCase(TestCase):
+    """A collection on disk, imported the way ``./aledb upload <path>`` does."""
 
     def setUp(self):
-        self.user = User.objects.create(username="pphaneuf", password="test123",
-                                        first_name="Patrick", last_name="Phaneuf", email="email@email.com",
-                                        is_active = True, is_staff = True, date_joined = datetime.now())
-        Project.objects.create(name="test_project", user=self.user, date=datetime.now(),
-        status = "In progress", is_public = False)
+        annotation.clear_cache()
+        self.addCleanup(annotation.clear_cache)
+        self.user = User.objects.create(
+            username="pphaneuf", password="test123", first_name="Patrick",
+            last_name="Phaneuf", email="email@email.com", is_active=True,
+            is_staff=True, date_joined=datetime.now())
 
-    def test_create_ALE_experiment(self):
-        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/breseq/"
-        self.assertFalse(create_ale_experiment(test_report_path+"/invalid_part", "Patrick", "test", "test_project"))
-        create_ale_experiment(test_report_path, "Patrick", "test", "test_project")
-        expected_mutation_count = 27
-        self.assertEqual(expected_mutation_count, Mutation.objects.all().count())
-        expected_experiment_count = 1
-        self.assertEqual(expected_experiment_count, AleExperiment.objects.all().count())
-        expected_histogram_length = 68
-        self.assertEqual(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
 
-    def test_create_ALE_experiment_with_wildtype(self):
-        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/breseq/"
-        create_ale_experiment(test_report_path, "Patrick", "test", "test_project",
-                              os.path.dirname(os.path.realpath(__file__)) + "/breseq/1-10000-1-1")
-        expected_mutation_count = 0
-        self.assertEqual(expected_mutation_count, Mutation.objects.all().count())
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.experiment_dir = os.path.join(self.root, "SSW Glu Ac")
+        breseq_fixture.write_sample(
+            os.path.join(self.experiment_dir, "breseq"), "1-10000-1-1")
+        shutil.copytree(METADATA_FIXTURE, os.path.join(self.experiment_dir, "metadata"))
 
-    def test_upload_ALE_collection(self):
-        test_path = os.path.dirname(os.path.realpath(__file__)) + "/test_file_structure/messy"
-        upload_ale_collection(test_path)
-        expected_mutation_count = 27
-        self.assertEqual(expected_mutation_count, Mutation.objects.all().count())
-        expected_experiment_count = 1
-        self.assertEqual(expected_experiment_count, AleExperiment.objects.all().count())
-        expected_histogram_length = 68
-        self.assertEqual(expected_histogram_length, len(StaticData.objects.get(id=1).histogram_data))
+    def upload(self):
+        upload_ale_collection(self.root)
 
-    def test_find_user(self):
+    def test_it_finds_the_experiment_and_imports_it(self):
+        self.upload()
+        self.assertEqual(1, AleExperiment.objects.count())
+        self.assertEqual(1, ResequencingExperiment.objects.count())
+        self.assertEqual(2, Mutation.objects.count())
+
+    def test_mutations_land_the_same_way_a_web_upload_leaves_them(self):
+        self.upload()
+
+        # Owned by the experiment, attributed to breseq, and carrying the .gd
+        # record -- none of which the old CLI importer produced.
+        experiment = AleExperiment.objects.get()
+        self.assertEqual(2, Mutation.objects.filter(ale_experiment=experiment).count())
+        self.assertEqual(2, ObservedMutation.objects.filter(source="breseq").count())
+        self.assertFalse(Mutation.objects.filter(gd_data__isnull=True).exists())
+
+    def test_the_reference_is_established_from_the_sample(self):
+        self.upload()
+        reference = ExperimentReference.objects.get()
+        self.assertEqual(AleExperiment.objects.get(), reference.ale_experiment)
+        self.assertTrue(reference.fasta_sha256)
+
+    def test_mutations_are_annotated(self):
+        self.upload()
+        # breseq_fixture's reference carries one gene, thrA, spanning 50..150.
+        mutation = Mutation.objects.get(position=100)
+        self.assertEqual("thrA", mutation.gene_name)
+        self.assertTrue(mutation.mutation_category)
+        self.assertIsNotNone(mutation.annotation)
+
+    def test_the_alignment_is_stored(self):
+        self.upload()
+        self.assertTrue(ResequencingExperiment.objects.get().bam_stored)
+
+    def test_metadata_is_applied_after_the_import(self):
+        self.upload()
+        isolate = ResequencingExperiment.objects.get().tech_rep.isolate
+        self.assertTrue(isolate.flask.ale_id.ale_experiment.project)
+
+    def test_derived_data_is_rebuilt(self):
+        self.upload()
+        self.assertTrue(StaticData.objects.exists())
+
+    def test_a_directory_with_no_metadata_is_skipped(self):
+        shutil.rmtree(os.path.join(self.experiment_dir, "metadata"))
+        self.upload()
+        self.assertEqual(0, Mutation.objects.count())
+
+
+class DeleteExperimentsTestCase(TestCase):
+
+    def setUp(self):
+        annotation.clear_cache()
+        self.addCleanup(annotation.clear_cache)
+        self.user = User.objects.create(
+            username="pphaneuf", password="test123", first_name="Patrick",
+            last_name="Phaneuf", email="email@email.com", is_active=True,
+            is_staff=True, date_joined=datetime.now())
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        experiment_dir = os.path.join(self.root, "SSW Glu Ac")
+        breseq_fixture.write_sample(os.path.join(experiment_dir, "breseq"), "1-10000-1-1")
+        shutil.copytree(METADATA_FIXTURE, os.path.join(experiment_dir, "metadata"))
+        upload_ale_collection(self.root)
+
+    def test_deleting_an_experiment_takes_its_mutations_with_it(self):
+        self.assertEqual(2, Mutation.objects.count())
+        experiment = AleExperiment.objects.get()
+
+        delete_ale_experiments([experiment.ale_id])
+
+        self.assertEqual(0, AleExperiment.objects.count())
+        self.assertEqual(0, ObservedMutation.objects.count())
+        self.assertEqual(0, Mutation.objects.count())
+        self.assertEqual(0, StaticData.objects.count())
+
+
+class FindExperimentPathsTestCase(TestCase):
+
+    def test_a_directory_needs_both_breseq_and_metadata(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+
+        complete = os.path.join(root, "complete")
+        os.makedirs(os.path.join(complete, "breseq"))
+        os.makedirs(os.path.join(complete, "metadata"))
+        os.makedirs(os.path.join(root, "no-metadata", "breseq"))
+        os.makedirs(os.path.join(root, "no-breseq", "metadata"))
+
+        self.assertEqual([complete], find_experiment_paths(root))
+
+
+class ShellHelpersTestCase(TestCase):
+    """find_user and try_creating_project, which only the CLI reaches."""
+
+    def setUp(self):
+        self.user = User.objects.create(
+            username="pphaneuf", password="test123", first_name="Patrick",
+            last_name="Phaneuf", email="email@email.com", is_active=True,
+            is_staff=True, date_joined=datetime.now())
+        Project.objects.create(name="test_project", user=self.user,
+                               date=datetime.now(), status="In progress",
+                               is_public=False)
+
+    def test_find_user_by_username_and_by_first_name(self):
         self.assertEqual(self.user, find_user("pphaneuf"))
         self.assertEqual(self.user, find_user("Patrick"))
-        f1 = sys.stdin
-        f = io.StringIO('who\npatrick')
-        sys.stdin = f
-        self.assertEqual(self.user, find_user("Krusty Krab"))
-        f.close()
-        sys.stdin = f1
 
-        self.user2 = User.objects.create(username="krusty", password="test123",
-                                        first_name="Patrick", last_name="Faneuph", email="email2@email2.com",
-                                        is_active=True, is_staff=True, date_joined=datetime.now())
-        f1 = sys.stdin
-        f = io.StringIO('patrick\n-1\n0\nY\n0\nY')
-        sys.stdin = f
-        self.assertEqual(self.user, find_user("Krusty Krab"))
-        f.close()
-        sys.stdin = f1
+    def test_find_user_prompts_when_the_name_matches_nobody(self):
+        # It reads stdin, which is why nothing web-facing may call it.
+        original = sys.stdin
+        sys.stdin = io.StringIO("who\npatrick")
+        try:
+            self.assertEqual(self.user, find_user("Krusty Krab"))
+        finally:
+            sys.stdin = original
+
+    def test_find_user_disambiguates_between_two_matches(self):
+        User.objects.create(username="krusty", password="test123",
+                            first_name="Patrick", last_name="Faneuph",
+                            email="email2@email2.com", is_active=True,
+                            is_staff=True, date_joined=datetime.now())
+        original = sys.stdin
+        sys.stdin = io.StringIO("patrick\n-1\n0\nY\n0\nY")
+        try:
+            self.assertEqual(self.user, find_user("Krusty Krab"))
+        finally:
+            sys.stdin = original
 
     def test_try_creating_project(self):
-        patrick = self.user
         try_creating_project("Created Project", "Patrick Phaneuf", is_pub=False)
-        created_project = Project.objects.get(name="Created Project")
-        self.assertEqual(created_project.name, "Created Project")
-        self.assertEqual(created_project.user, patrick)
-        expected_project_count = 2
-        self.assertEqual(expected_project_count, Project.objects.all().count())
 
-    def test_find_experiment_paths(self):
-        self.assertEqual(find_experiment_paths(os.path.dirname(os.path.realpath(__file__))).sort(),
-                          ['/app/builder/tests/test_file_structure',
-                           '/app/builder/tests/test_file_structure/messy'].sort())
-
-    def test_delete_experiments(self):
-        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/breseq/"
-        expected_observed_mutation_count = 0
-        self.assertEqual(expected_observed_mutation_count, ObservedMutation.objects.all().count())
-        create_ale_experiment(test_report_path, "Patrick", "test", "test_project")
-        delete_ale_experiments([1])
-        expected_observed_mutation_count = 0
-        self.assertEqual(expected_observed_mutation_count, ObservedMutation.objects.all().count())
-        expected_mutation_count = 0
-        self.assertEqual(expected_mutation_count, Mutation.objects.all().count())
-        expected_experiment_count = 0
-        self.assertEqual(expected_experiment_count, AleExperiment.objects.all().count())
-        expected_histogram_count = 0
-        self.assertEqual(expected_histogram_count, StaticData.objects.all().count())
+        created = Project.objects.get(name="Created Project")
+        self.assertEqual("Created Project", created.name)
+        self.assertEqual(self.user, created.user)
+        self.assertEqual(2, Project.objects.count())

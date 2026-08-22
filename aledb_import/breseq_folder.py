@@ -16,10 +16,11 @@ Every sample in an experiment must agree on the reference. The first one establi
 a later mismatch rejects that sample and the batch continues, matching how the bare-.gd
 importer already isolates per-file failures.
 
-``annotated.gd`` rather than ``output.gd`` is deliberate: gdtools ANNOTATE has already
-written ``gene_name`` / ``gene_product``, which is what ``_database_gd_mutations`` reads to
-populate ``Mutation.gene`` / ``.product``. Rebuilding annotation internally from the stored
-reference is future work; storing the reference here is what makes it possible.
+``output.gd`` is preferred, with ``annotated.gd`` accepted as a fallback. It used to be the
+other way round, because the importer read ``gene_name`` / ``gene_product`` straight out of
+the file and only ``gdtools ANNOTATE`` put them there. Annotation is now derived from the
+stored reference (``aledb_import.annotation``), so breseq's own output is enough -- and it
+is what a breseq run actually produces without an extra gdtools step.
 """
 
 import logging
@@ -30,6 +31,7 @@ from django.db import transaction
 
 from aledb_common import store
 from aledb_import import reference as reference_io
+from aledb_import.breseq_summary import read_breseq_summary
 from aledb_import import reference_store
 from aledb_import.gd_import import (
     _parse_document,
@@ -40,7 +42,13 @@ from aledb_import.gd_import import (
 
 logger = logging.getLogger("aledb_import.breseq_folder")
 
-GD_RELATIVE_PATH = os.path.join("output", "annotated.gd")
+# In preference order. breseq always writes output.gd; annotated.gd only exists if
+# someone ran gdtools ANNOTATE afterwards, which is no longer needed.
+GD_RELATIVE_PATHS = (
+    os.path.join("output", "output.gd"),
+    os.path.join("output", "annotated.gd"),
+)
+GD_RELATIVE_PATH = GD_RELATIVE_PATHS[0]
 GFF3_RELATIVE_PATH = os.path.join("data", "reference.gff3")
 FASTA_RELATIVE_PATH = os.path.join("data", "reference.fasta")
 BAM_RELATIVE_PATH = os.path.join("data", "reference.bam")
@@ -51,6 +59,7 @@ BAI_RELATIVE_PATH = os.path.join("data", "reference.bam.bai")
 # is often the bulk of the run, so it never leaves the user's machine.
 SAMPLE_FILES = (
     GD_RELATIVE_PATH,
+    GD_RELATIVE_PATHS[1],
     GFF3_RELATIVE_PATH,
     FASTA_RELATIVE_PATH,
     BAM_RELATIVE_PATH,
@@ -62,6 +71,15 @@ class SampleError(Exception):
     """A problem with one sample. Rejects that sample; the batch continues."""
 
 
+def find_gd_file(sample_dir):
+    """The sample's .gd, preferring breseq's own output.gd. None if it has neither."""
+    for relative in GD_RELATIVE_PATHS:
+        candidate = os.path.join(sample_dir, relative)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def find_sample_dirs(root):
     """Return sample directories under ``root``, sorted, at any nesting depth.
 
@@ -71,7 +89,7 @@ def find_sample_dirs(root):
     """
     found = []
     for dirpath, dirnames, _filenames in os.walk(root):
-        if os.path.isfile(os.path.join(dirpath, GD_RELATIVE_PATH)):
+        if find_gd_file(dirpath):
             found.append(dirpath)
             # Samples do not nest inside one another.
             dirnames[:] = []
@@ -161,7 +179,9 @@ def _import_samples(context, root, person, report_loose_gd):
 def _import_one_sample(sample_dir, sample_name, context, person):
     experiment = context["experiment"]
 
-    gd_path = os.path.join(sample_dir, GD_RELATIVE_PATH)
+    gd_path = find_gd_file(sample_dir)
+    if gd_path is None:
+        raise SampleError("%s has no %s" % (sample_name, " or ".join(GD_RELATIVE_PATHS)))
     gff3_path = _require(sample_dir, GFF3_RELATIVE_PATH, sample_name)
     fasta_path = _require(sample_dir, FASTA_RELATIVE_PATH, sample_name)
     bam_path = _require(sample_dir, BAM_RELATIVE_PATH, sample_name)
@@ -187,9 +207,7 @@ def _import_one_sample(sample_dir, sample_name, context, person):
 
     # data/summary.json is optional -- a drop without it still imports, just with zeroed
     # statistics, which is what every web upload had before it was collected at all.
-    from aledb_import.upload import _read_breseq_summary
-
-    statistics = _read_breseq_summary(sample_dir)
+    statistics = read_breseq_summary(sample_dir)
     if statistics:
         for field, value in statistics.items():
             setattr(seq_experiment, field, value)

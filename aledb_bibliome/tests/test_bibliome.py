@@ -2,11 +2,10 @@ import os
 from django.test import TestCase
 
 from django.contrib.auth.models import User
-from aledb_experiment.models import Project
+from aledb_experiment.models import AleExperiment, Instrument, Project
 from datetime import datetime
 from aledb_bibliome.models import Publication
 from aledb_bibliome.publication import create_publication
-from aledb_import.ale_experiment import create_ale_experiment
 
 __author__ = 'Muyao'
 
@@ -18,10 +17,14 @@ class TestBibliome(TestCase):
         self.user = User.objects.create(username="pphaneuf", password="test123",
                                         first_name="Patrick", last_name="Phaneuf", email="email@email.com",
                                         is_active=True, is_staff=True, date_joined=datetime.now())
-        Project.objects.create(name="test_project", user=self.user, date=datetime.now(),
-                               status="In progress", is_public=False)
-        test_report_path = os.path.dirname(os.path.realpath(__file__)) + "/../../aledb_import/tests/breseq/"
-        create_ale_experiment(test_report_path, "Patrick", "test", "test_project")
+        project = Project.objects.create(
+            name="test_project", user=self.user, date=datetime.now(),
+            status="In progress", is_public=False)
+        # A publication only needs an experiment to hang off; this used to run a
+        # whole breseq import to get one.
+        AleExperiment.objects.create(
+            name="test", person="Patrick", project=project,
+            instrument=Instrument.objects.create(name="test_instrument"))
         expected_publication_count = 1
         create_publication("test_publication_journal", "aledb.org", 1)
         self.assertEqual(expected_publication_count, Publication.objects.all().count())

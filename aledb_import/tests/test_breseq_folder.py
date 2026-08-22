@@ -196,3 +196,50 @@ class BreseqFolderImportTestCase(TestCase):
         self.assertEqual(ResequencingExperiment.objects.count(), 1)
         self.assertEqual(ExperimentReference.objects.count(), 1)
         self.assertEqual(Mutation.objects.count(), mutations)
+
+
+class BreseqGdFilenameTestCase(TestCase):
+    """Which .gd a sample folder is read from.
+
+    breseq writes output/output.gd. annotated.gd only exists if someone ran
+    gdtools ANNOTATE afterwards, which this codebase no longer needs -- but
+    folders produced back when it did must still import.
+    """
+
+    def setUp(self):
+        self.drop = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.drop, True)
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+        User.objects.create(username="tester", first_name="Test", last_name="User",
+                            email="t@e.com", is_active=True, is_staff=True)
+
+    def _import(self, name="exp"):
+        return breseq_folder.import_breseq_folders(
+            self.drop, project_name="p", experiment_name=name, person="tester")
+
+    def test_output_gd_is_preferred(self):
+        breseq_fixture.write_sample(self.drop, "1-1-1-1")
+        self.assertEqual(
+            os.path.join(self.drop, "1-1-1-1", "output", "output.gd"),
+            breseq_folder.find_gd_file(os.path.join(self.drop, "1-1-1-1")))
+        self.assertEqual(2, self._import()["total_mutations"])
+
+    def test_annotated_gd_still_works(self):
+        breseq_fixture.write_sample(
+            self.drop, "1-1-1-1",
+            gd_relative_path=os.path.join("output", "annotated.gd"))
+        self.assertEqual(2, self._import()["total_mutations"])
+
+    def test_output_gd_wins_when_both_are_present(self):
+        sample = breseq_fixture.write_sample(self.drop, "1-1-1-1")
+        legacy = os.path.join(sample, "output", "annotated.gd")
+        with open(legacy, "w") as handle:
+            handle.write(breseq_fixture.GD_TEXT.replace("\t100\t", "\t150\t"))
+
+        self._import()
+        self.assertTrue(Mutation.objects.filter(position=100).exists())
+        self.assertFalse(Mutation.objects.filter(position=150).exists())

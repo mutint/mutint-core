@@ -140,18 +140,27 @@ for `class="true"`. Keep that class on the anchor, and keep `true` out of the em
 All apps use the `aledb_*` namespace. Key apps:
 
 - **`aledb_experiment/`** — Core data models: `AleExperiment`, `Project`, `AleId`, `Flask`, `Isolate`, `Media`, `FreezerBox`. Central schema everything else references.
-- **`aledb_import/`** — Experiment upload pipeline, with **two `.gd` parsers on two paths**:
-  - CLI / breseq-directory upload — `ale_experiment.py` is the entry point; reads breseq output
-    dirs (`annotated.gd` + `index.html` + `summary.html`) and parses with the vendored
-    hand-rolled `gdparse/gdparse/gdparse.py` (`GDParser`), then triggers fixation/convergence/stats
-    recomputation.
-  - Web drag-and-drop upload — `gd_import.py` takes bare `.gd` files and parses with the
-    external `genomediff` package (`GenomeDiff.read`). Each record is stored verbatim in
-    `Mutation.gd_data` and round-tripped back out by `Mutation.to_gd_line()` (`aledb_seq/models.py`)
-    for `gdtools APPLY`. Note `gdparse` has no `INT` type; `genomediff` does.
+- **`aledb_import/`** — Experiment upload pipeline. **Every path ends in `gd_import`**, so a
+  CLI upload and a web drop produce identical rows:
+  - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
+    the one place mutations are stored. Each record is kept verbatim in `Mutation.gd_data`
+    and round-tripped back out by `Mutation.to_gd_line()` (`aledb_seq/models.py`) for
+    `gdtools APPLY`, so nothing but the raw record may go in that field.
+  - CLI upload — `./aledb upload <path>` walks for `<exp>/breseq/` + `<exp>/metadata/`,
+    hands the folders to `breseq_folder`, then parses the metadata. It used to be a second
+    importer that read `annotated.gd` plus the breseq HTML report and shared no code with
+    the web paths; that is gone, along with `upload.py`.
+  - The vendored `gdparse/gdparse/gdparse.py` (`GDParser`) survives only for the annotation
+    test fixtures. Note it has no `INT` type; `genomediff` does.
+  - **Annotation is internal** (`annotation.py` + `annotate/`). Gene, codon and amino-acid
+    fields are derived from the experiment's stored reference at import, not read out of
+    the `.gd`, so breseq's plain `output.gd` is enough and `gdtools ANNOTATE` is not needed.
+    `./aledb reannotate <id> [--ref FILE]` recomputes them when a better reference arrives.
+    The annotator is a port of breseq's own, checked against `gdtools` output.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
-    `output/annotated.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`;
+    `output/output.gd` (or `annotated.gd`) plus `data/reference.{gff3,fasta}` and
+    `data/reference.bam{,.bai}`;
     stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
     records the shared reference as `ExperimentReference`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
@@ -159,7 +168,8 @@ All apps use the `aledb_*` namespace. Key apps:
     primary key rather than from anything the client sends.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
-    `output/annotated.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
+    `output/output.gd` (or `annotated.gd`) plus `data/reference.{gff3,fasta}` and
+    `data/reference.bam{,.bai}`,
     storing them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`).
     The shared reference is recorded as `ExperimentReference`; a sample whose reference
     *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the
@@ -281,9 +291,9 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 ### Data Flow: Uploading an Experiment
 
-1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_experiment()`
-2. Reads breseq output dirs; parses `.gd` files via `aledb_import.gdparse.gdparse()`
-   (the web drag-and-drop path instead goes through `aledb_import.gd_import` / the `genomediff` package)
+1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_ale_collection()`
+2. Hands each `<exp>/breseq/` to `aledb_import.breseq_folder`, which parses via
+   `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes
 3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances
 4. Triggers `aledb_fixation.util`, `aledb_converge.util`, and `aledb_stats.util` to recompute derived data
 5. Updates dashboard cache via `aledb_dashboard.util.rebuild_dashboard_data()`

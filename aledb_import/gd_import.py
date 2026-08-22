@@ -1,6 +1,8 @@
 """Import breseq GenomeDiff (.gd) mutation entries directly from uploaded files.
 
-This is the HTML-free counterpart to ``aledb_import.upload._database_mutations``:
+This is the one place mutations are stored. It used to be the HTML-free counterpart
+to a second, breseq-directory-shaped importer; that one is gone and ``./aledb upload``
+comes through here too:
 the CLI upload path reads a full breseq output directory (``.gd`` + ``index.html``
 + ``summary.html``), while this path takes bare ``.gd`` files dropped in the web
 UI and reads everything it needs from the GenomeDiff itself.
@@ -39,7 +41,12 @@ from aledb_experiment.models import (
 from aledb_import import annotation
 from aledb_import.gene_annotation import get_annotated_gene_list
 from aledb_import.util import AleName, parse_ale_name
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import (
+    Mutation,
+    ObservedMutation,
+    ResequencingExperiment,
+    UnassignedMissingCoverageEvidence,
+)
 
 from genomediff import GenomeDiff
 from genomediff.records import TYPE_SPECIFIC_FIELDS
@@ -346,7 +353,28 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             frequency=_coerce_frequency(attributes.get("frequency"))))
 
     ObservedMutation.objects.bulk_create(observed_mutations)
+    _database_missing_coverage(seq_experiment, document)
     return len(observed_mutations)
+
+
+def _database_missing_coverage(seq_experiment, document):
+    """Record MC (missing coverage) evidence from the .gd.
+
+    aledb_stats reads these to report uncovered regions per sample. Only the
+    breseq-directory CLI path used to write them, so a web-imported sample had
+    none; both paths go through here now.
+    """
+    UnassignedMissingCoverageEvidence.objects.filter(
+        sequencing_experiment=seq_experiment).delete()
+    for record in document.evidence:
+        if record.type != "MC":
+            continue
+        attributes = record.attributes
+        UnassignedMissingCoverageEvidence.objects.get_or_create(
+            seq_id=attributes.get("seq_id"),
+            start=attributes.get("start"),
+            end=attributes.get("end"),
+            sequencing_experiment=seq_experiment)
 
 
 def export_gd_text(seq_experiment):

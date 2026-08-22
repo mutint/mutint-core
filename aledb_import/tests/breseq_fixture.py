@@ -50,13 +50,18 @@ def gff3_text(sequences):
 
 def write_sample(root, sample_name, sequences=None, gd_text=None,
                  include_bai=True, gff3_override=None, fasta_override=None,
-                 bam_bytes=None):
-    """Create one breseq sample folder under ``root``; returns its path."""
+                 bam_bytes=None, gd_relative_path=None):
+    """Create one breseq sample folder under ``root``; returns its path.
+
+    ``gd_relative_path`` writes the mutations somewhere other than breseq's
+    ``output/output.gd`` -- used to cover the ``output/annotated.gd`` fallback.
+    """
     sequences = sequences or [("test_ref", SEQUENCE_A)]
     sample_dir = os.path.join(root, sample_name)
 
     for relative, content in (
-        (GD_RELATIVE_PATH, gd_text if gd_text is not None else GD_TEXT),
+        (gd_relative_path or GD_RELATIVE_PATH,
+         gd_text if gd_text is not None else GD_TEXT),
         (GFF3_RELATIVE_PATH,
          gff3_override if gff3_override is not None else gff3_text(sequences)),
         (FASTA_RELATIVE_PATH,

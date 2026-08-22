@@ -30,6 +30,9 @@ REFERENCE_PATTERNS = [
 ]
 
 BRESEQ_PATTERNS = [
+    # breseq's own output; annotated.gd is accepted too, for folders produced when
+    # gdtools ANNOTATE was still a required step. See aledb_import.breseq_folder.
+    "output/output.gd",
     "output/annotated.gd",
     # ~10 KB, and the only source of the sample's read/coverage statistics now that they are
     # no longer scraped out of summary.html. Optional: a sample without it still imports.
@@ -49,8 +52,9 @@ def detect_breseq_folders(staged_root, paths):
     """Claim every file belonging to a directory that looks like a breseq sample.
 
     Directory-shaped rather than suffix-shaped, which is why this handler supplies its own
-    detect: a sample is a directory containing output/annotated.gd, and the reference and BAM
-    beside it belong to that sample rather than to the reference or genomediff handlers.
+    detect: a sample is a directory containing output/output.gd (or output/annotated.gd), and
+    the reference and BAM beside it belong to that sample rather than to the reference or
+    genomediff handlers.
     """
     from aledb_import.breseq_folder import find_sample_dirs
 
