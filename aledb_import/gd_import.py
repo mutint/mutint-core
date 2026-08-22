@@ -92,7 +92,7 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
 
     experiment = context["experiment"]
     if total_mutations:
-        _run_post_processing(experiment)
+        run_post_processing(experiment)
 
     return {
         "experiment_id": experiment.ale_id,
@@ -407,9 +407,12 @@ def _coerce_frequency(value):
         return Decimal("1.0")
 
 
-def _run_post_processing(experiment):
+def run_post_processing(experiment):
     """Recompute derived data so imported mutations surface everywhere the CLI
-    path's do (filters, plugin rebuilds, stats, dashboard)."""
+    path's do (filters, plugin rebuilds, stats, dashboard).
+
+    Public because re-annotation needs it too: changing a mutation's annotation
+    changes what convergence, fixation and the dashboard counts see."""
     import aledb_filter.models
     from aledb_common.plugin_registry import run_post_experiment_hooks
     from aledb_dashboard.util import rebuild_dashboard_data

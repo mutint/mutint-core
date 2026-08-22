@@ -34,7 +34,7 @@ from aledb_import import reference_store
 from aledb_import.gd_import import (
     _parse_document,
     _prepare_experiment,
-    _run_post_processing,
+    run_post_processing,
     import_document_as_sample,
 )
 
@@ -148,7 +148,7 @@ def _import_samples(context, root, person, report_loose_gd):
             })
 
     if total_mutations:
-        _run_post_processing(experiment)
+        run_post_processing(experiment)
 
     return {
         "experiment_id": experiment.ale_id,

@@ -76,13 +76,21 @@ def annotate_records(records, experiment):
     references = reference_sequences_for(experiment)
     if references is None:
         return False
+    return annotate_records_with(records, references, experiment.ale_id)
 
+
+def annotate_records_with(records, references, experiment_id=None):
+    """Annotate records against an already-loaded reference. Returns True if it ran.
+
+    Records naming a contig the reference does not have are left alone rather
+    than annotated against nothing.
+    """
     known = set(references.seq_ids())
     annotatable = [r for r in records if r.get('seq_id') in known]
     if not annotatable:
         logger.warning(
             "experiment %s: no mutation matches a reference sequence (%s)",
-            experiment.ale_id, ", ".join(sorted(known)[:5]))
+            experiment_id, ", ".join(sorted(known)[:5]))
         return False
 
     annotate_mutations(annotatable, references)
@@ -129,6 +137,44 @@ def display_values(record):
     if product:
         values['product'] = product
     return values
+
+
+def sample_groups(experiment, mutations):
+    """The experiment's mutations, grouped by the sample they were observed in.
+
+    Annotation is per sample because breseq's same-codon SNP merge is: two
+    consensus SNPs sharing a codon only inform each other if they were seen
+    together. A mutation observed in several samples is annotated once, with the
+    first group that contains it, so the result does not depend on iteration
+    order.
+    """
+    from aledb_seq.models import ObservedMutation
+
+    by_id = {mutation.pk: mutation for mutation in mutations}
+    observed = (ObservedMutation.objects
+                .filter(mutation__ale_experiment=experiment)
+                .values_list("sequencing_experiment_id", "mutation_id")
+                .order_by("sequencing_experiment_id", "mutation_id"))
+
+    groups, assigned = {}, set()
+    for sample_id, mutation_id in observed.iterator():
+        if mutation_id in assigned or mutation_id not in by_id:
+            continue
+        assigned.add(mutation_id)
+        groups.setdefault(sample_id, []).append(by_id[mutation_id])
+
+    orphans = [m for pk, m in by_id.items() if pk not in assigned]
+    if orphans:
+        groups[None] = orphans
+    return list(groups.values())
+
+
+def differs(mutation, record):
+    """Whether re-annotating would change anything stored for this mutation."""
+    values = {}
+    values.update(annotation_values(record))
+    values.update(display_values(record))
+    return any(getattr(mutation, field) != value for field, value in values.items())
 
 
 def apply_to(mutation, record, save=True):
