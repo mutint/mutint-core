@@ -19,6 +19,7 @@ from aledb_common.util import get_user_context
 from aledb_stats.util import get_observed_mutation_list
 import logging
 from aledb_common.context_registry import get_experiment_context
+from aledb_experiment.models import AleExperiment
 from aledb_common.logger import user_extra, join_extras
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,9 @@ def stats(request):
 
         return HttpResponse(template.render(context, request), content_type="text/html")
 
+    except AleExperiment.DoesNotExist:
+        return common.no_experiment_selected(
+            request, get_user_context(request.user), logger, "statistics")
     except Exception as e:
         logger.exception("stats broke", extra=user_extra(request))
         template = loader.get_template("500.html")

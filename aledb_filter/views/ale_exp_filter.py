@@ -1,5 +1,6 @@
 from django.http import HttpResponse
 from django.template import loader
+from aledb_experiment.models import AleExperiment
 from aledb_seq.views import common
 from aledb_filter.forms.filter import FilterForm
 from aledb_filter.models import AleExperimentFilter
@@ -51,8 +52,10 @@ def mutation_filter(request):
             "ignored_mutations": ignored_mutations,
             "starting_strain_mutations": starting_strain_mutations})
         return HttpResponse(template.render(context, request), content_type="text/html")
+    except AleExperiment.DoesNotExist:
+        return common.no_experiment_selected(request, context, logger, "filter settings")
     except Exception as e:
-        logger.exception("stats broke", extra=user_extra(request))
+        logger.exception("mutation filter broke", extra=user_extra(request))
         template = loader.get_template("500.html")
         context['err_message'] = str(e)
         return HttpResponse(template.render(context, request), content_type="text/html")

@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.template import loader
 
 from django.conf import settings
+from aledb_experiment.models import AleExperiment
 from aledb_seq.views import common
 from aledb_common.util import get_user_context
 from aledb_seq.util import get_ordered_reseq_queryset
@@ -25,7 +26,7 @@ META_DATA_TEMPLATE = "metadata/index.html"
 
 
 def metadata(request):
-    logger.info("fixation usage", extra=user_extra(request))
+    logger.info("metadata usage", extra=user_extra(request))
 
     try:
         start_time = time.time()
@@ -50,8 +51,10 @@ def metadata(request):
         template = loader.get_template(META_DATA_TEMPLATE)
         logger.info("metadata performance", extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))
         return HttpResponse(template.render(context, request), content_type="text/html")
+    except AleExperiment.DoesNotExist:
+        return common.no_experiment_selected(request, context, logger, "metadata")
     except Exception as e:
-        logger.exception("stats broke", extra=user_extra(request))
+        logger.exception("metadata broke", extra=user_extra(request))
         template = loader.get_template("500.html")
         context['err_message'] = str(e)
         return HttpResponse(template.render(context, request), content_type="text/html")

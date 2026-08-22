@@ -3,7 +3,9 @@ import aledb_experiment.models
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_view_project
 from aledb_common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID, REQUEST_SAMPLE_TYPE
-from django.http import Http404, HttpResponseForbidden, HttpResponseBadRequest
+from aledb_common.logger import user_extra
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseBadRequest
+from django.template import loader
 
 
 __author__ = 'Patrick Phaneuf'
@@ -67,6 +69,24 @@ def get_ale_experiment(request):
         if can_view_project(request.user, experiment.project):
             return experiment
     raise ValueError("You don't have permission to view the experiment")
+
+
+def no_experiment_selected(request, context, logger, what):
+    """Render the "pick an experiment first" page.
+
+    Every experiment-scoped page reaches `get_ale_experiment` with whatever is in
+    `?ale_experiment_id`, so opening one without a usable id raises DoesNotExist.
+    That is how these pages open, not a breakage: caught by a view's catch-all it
+    logs an ERROR-level traceback and shows the reader Django's raw "AleExperiment
+    matching query does not exist". Catch it ahead of the catch-all instead and
+    hand it here, so a genuine ERROR in the log still means something is wrong.
+
+    `logger` is the calling view's, so the record still names the page it came from.
+    """
+    logger.info("%s with no experiment selected" % what, extra=user_extra(request))
+    context["err_message"] = "Select an experiment to see its %s." % what
+    template = loader.get_template("500.html")
+    return HttpResponse(template.render(context, request), content_type="text/html")
 
 
 def get_ale_experiment_name(request):

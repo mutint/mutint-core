@@ -20,6 +20,7 @@ from django.urls import reverse
 import aledb_seq.views.common
 from aledb_common.logger import join_extras, user_extra
 from aledb_common.util import get_user_context
+from aledb_experiment.models import AleExperiment
 from aledb_filter.util import filter_observed_mutations
 from aledb_seq.breseq_report import build_rows
 from aledb_seq.models import ExperimentReference, ObservedMutation
@@ -64,12 +65,15 @@ def breseq_table(request):
         })
 
         logger.info("breseq report",
-                    join_extras(user_extra(request),
-                                {"time taken": time.time() - started, "rows": len(rows)}))
+                    extra=join_extras(user_extra(request),
+                                      {"time taken": time.time() - started, "rows": len(rows)}))
         template = loader.get_template("breseq_table/breseq_table.html")
         return HttpResponse(template.render(context, request), content_type="text/html")
+    except AleExperiment.DoesNotExist:
+        return aledb_seq.views.common.no_experiment_selected(
+            request, context, logger, "breseq report")
     except Exception as error:
-        logger.exception("breseq report broke", user_extra(request))
+        logger.exception("breseq report broke", extra=user_extra(request))
         context["err_message"] = str(error)
         template = loader.get_template("500.html")
         return HttpResponse(template.render(context, request), content_type="text/html")
