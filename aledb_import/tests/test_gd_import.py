@@ -102,17 +102,36 @@ class GdImportTestCase(TestCase):
 
         self.assertEqual(_canonical(original), _canonical(reparsed))
 
-    def test_mutations_are_deduplicated_across_experiments(self):
+    def test_each_experiment_owns_its_mutations(self):
+        """Mutations are deduplicated within an experiment, not across them.
+
+        They used to be shared globally, which meant re-annotating one experiment
+        against a new reference would rewrite another experiment's annotation."""
         self._import(CLEAN_GD, experiment="exp one")
-        mutation_count = Mutation.objects.count()
+        per_experiment = Mutation.objects.count()
 
         self._import(CLEAN_GD, experiment="exp two")
 
-        # Same mutations, shared; a second observation set under a second experiment.
-        self.assertEqual(Mutation.objects.count(), mutation_count)
         self.assertEqual(AleExperiment.objects.count(), 2)
         self.assertEqual(ResequencingExperiment.objects.count(), 2)
-        self.assertEqual(ObservedMutation.objects.count(), mutation_count * 2)
+        self.assertEqual(ObservedMutation.objects.count(), per_experiment * 2)
+
+        # Each experiment has its own copies, and no row is shared.
+        self.assertEqual(Mutation.objects.count(), per_experiment * 2)
+        for experiment in AleExperiment.objects.all():
+            self.assertEqual(
+                per_experiment,
+                Mutation.objects.filter(ale_experiment=experiment).count())
+
+    def test_mutations_are_still_deduplicated_within_an_experiment(self):
+        self._import(CLEAN_GD, experiment="exp one")
+        per_experiment = Mutation.objects.count()
+
+        # The same file again, as a second sample of the same experiment.
+        self._import_named(["4-30000-1-1.gd"], experiment="exp one")
+
+        self.assertEqual(Mutation.objects.count(), per_experiment)
+        self.assertEqual(ObservedMutation.objects.count(), per_experiment * 2)
 
     def test_reimport_same_sample_is_idempotent(self):
         self._import(CLEAN_GD)

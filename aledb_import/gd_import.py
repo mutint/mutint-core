@@ -36,6 +36,7 @@ from aledb_experiment.models import (
     Project,
     TechnicalReplicate,
 )
+from aledb_import import annotation
 from aledb_import.gene_annotation import get_annotated_gene_list
 from aledb_import.util import AleName, parse_ale_name
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
@@ -44,6 +45,10 @@ from genomediff import GenomeDiff
 from genomediff.records import TYPE_SPECIFIC_FIELDS
 
 logger = logging.getLogger("aledb_import.gd_import")
+
+# Which caller produced an observation. Recorded per row so other variant
+# callers can be added alongside breseq later.
+BRESEQ_SOURCE = "breseq"
 
 
 class ReferenceRequired(Exception):
@@ -175,7 +180,8 @@ def import_document_as_sample(document, sample_name, context, person):
             context, document, ale_number, flask_number, isolate_number,
             tech_rep_number, person, sample_name)
 
-    return seq_experiment, _database_gd_mutations(seq_experiment, document)
+    return seq_experiment, _database_gd_mutations(
+        seq_experiment, document, context.get("experiment"))
 
 
 def _parse_afir(sample_name):
@@ -276,29 +282,44 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         tech_rep=tech_rep, sample_name=sample_name, person=person)
 
 
-def _database_gd_mutations(seq_experiment, document):
+def _database_gd_mutations(seq_experiment, document, experiment=None):
     """Create Mutation + ObservedMutation rows from the parsed mutations.
 
     Re-importing the same sample is idempotent: existing ObservedMutations for this
     ResequencingExperiment are cleared first, and Mutations are deduplicated via
-    get_or_create (shared across experiments)."""
+    get_or_create (per experiment).
+
+    When the experiment has a reference, the records are annotated first, so gene,
+    codon and amino-acid fields come from the reference rather than from whatever
+    the .gd happened to carry. A .gd dropped before any reference simply imports
+    unannotated; `./aledb reannotate` fills it in once one arrives."""
     ObservedMutation.objects.filter(sequencing_experiment=seq_experiment).delete()
 
+    records = list(document.mutations)
+    verbatim = [{
+        "type": record.type,
+        "id": record.id,
+        "parent_ids": record.parent_ids,
+        **dict(record.attributes),
+    } for record in records]
+
+    # Annotate copies: gd_data is contractually verbatim, and to_gd_line() splats
+    # every key of it onto the line it emits for gdtools APPLY.
+    annotated = [dict(entry) for entry in verbatim]
+    if experiment is not None:
+        annotation.annotate_records(annotated, experiment)
+
     observed_mutations = []
-    for record in document.mutations:
+    for record, gd_data, annotated_record in zip(records, verbatim, annotated):
         attributes = dict(record.attributes)
-        gd_data = {
-            "type": record.type,
-            "id": record.id,
-            "parent_ids": record.parent_ids,
-            **attributes,
-        }
         gene_list = get_annotated_gene_list(
-            attributes.get("gene_name"), attributes.get("gene_product"))
+            annotated_record.get("gene_name") or attributes.get("gene_name"),
+            annotated_record.get("gene_product") or attributes.get("gene_product"))
         gene_str = ", ".join(gene_list)
         sequence_change = _synthesize_sequence_change(record)[:200]
 
         mutation, created = Mutation.objects.get_or_create(
+            ale_experiment=experiment,
             position=attributes.get("position"),
             reseq_reference=attributes.get("seq_id"),
             mutation_type=record.type,
@@ -314,12 +335,14 @@ def _database_gd_mutations(seq_experiment, document):
             # Backfill a pre-existing (e.g. CLI-imported) row so it becomes APPLY-complete.
             mutation.gd_data = gd_data
             mutation.save(update_fields=["gd_data"])
+        annotation.apply_to(mutation, annotated_record)
 
         observed_mutations.append(ObservedMutation(
             sequencing_experiment=seq_experiment,
             mutation=mutation,
             present=True,
             breseq_present=True,
+            source=BRESEQ_SOURCE,
             frequency=_coerce_frequency(attributes.get("frequency"))))
 
     ObservedMutation.objects.bulk_create(observed_mutations)

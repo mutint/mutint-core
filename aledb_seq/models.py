@@ -99,6 +99,38 @@ class Mutation(models.Model):
     reseq_reference = models.CharField(max_length=200, **blank_field)
     tags = models.CharField(max_length=500, **blank_field)
 
+    # Mutations belong to one experiment. Two experiments that call the same
+    # variant get their own rows, so re-annotating one against a new reference
+    # cannot silently rewrite another's annotation.
+    ale_experiment = models.ForeignKey("aledb_experiment.AleExperiment",
+                                       related_name="mutations",
+                                       on_delete=models.CASCADE, db_index=True,
+                                       **blank_field)
+
+    # ---- breseq annotation, generated at import by aledb_import.annotate -----
+    #
+    # Split by how it is used, not by how it arrived. These six are filtered,
+    # counted and sorted on, so they are real columns; snp_type and
+    # mutation_category are indexed because that is what replaces
+    # aledb_dashboard.util substring-matching the rendered protein_change.
+    snp_type = models.CharField(max_length=100, db_index=True, **blank_field)
+    mutation_category = models.CharField(max_length=100, db_index=True, **blank_field)
+    gene_name = models.TextField(**blank_field)
+    locus_tag = models.TextField(**blank_field)
+    start_position = models.IntegerField(**blank_field)
+    end_position = models.IntegerField(**blank_field)
+
+    # Everything else breseq annotates -- gene_position, gene_strand, the codon_*
+    # and aa_* fields, genes_overlapping/inactivated/promoter and their locus_tag
+    # counterparts, transl_table. Nothing queries these; they are read whole, per
+    # row, to render a mutation. Keeping them here means a new annotation field
+    # needs no migration.
+    #
+    # Deliberately NOT folded into gd_data: to_gd_line() splats every gd_data key
+    # onto the line it emits for gdtools APPLY, and display markup has no place
+    # there.
+    annotation = models.JSONField(**blank_field)
+
     # "reference_error" was created to indicate mutations that are generated only because
     # the reference isn't realistic and not because the organism is actually
     # different from the original strain. This is why setting this value to
@@ -167,6 +199,11 @@ class ObservedMutation(models.Model):
     frequency_gatk = models.DecimalField(null=True,
                                          max_digits=5,
                                          decimal_places=4)
+    # Which caller produced this observation. Imports record "breseq"; other
+    # callers can be added alongside. Left null on rows imported before this
+    # existed, which came from a gdtools COMPARE merge of breseq and
+    # GATK/CNVnator, so "breseq" would misrepresent them.
+    source = models.CharField(max_length=50, db_index=True, blank=True, null=True)
 
     def get_experiment_id(self):
         return self.sequencing_experiment.tech_rep.isolate.flask.ale_id.ale_experiment_id

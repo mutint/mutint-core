@@ -118,7 +118,8 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only):
             gff3_text, sequences = reference_io.normalize_reference(
                 full, os.path.basename(relative))
             reference_store.establish_or_check(
-                experiment, gff3_text, sequences, update_annotation=True)
+                experiment, gff3_text, sequences, update_annotation=True,
+                source_path=full)
             results.append({"file": relative, "mutations": 0, "error": None})
         except reference_store.ReferenceMismatch:
             # Named separately from the blanket handler below: this is the one failure a user
