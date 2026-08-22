@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}"/>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            // Submitting on change keeps the picker usable without a button; the
+            // <noscript> fallback below covers the case where this never runs.
+            $('#reseq_picker').change(function () {
+                $(this).closest('form').submit();
+            });
+        });
+    </script>
+{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    <div class="row breseq-picker">
+        <form action="" method="get">
+            <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id }}"/>
+            <b>Sample:</b>
+            <select name="reseq_id" id="reseq_picker">
+                {% for reseq in reseq_list %}
+                    <option value="{{ reseq.id }}"
+                            {% if reseq.id == selected_reseq_id %}selected="selected"{% endif %}>
+                        {{ reseq.ale_flask_isolate_str }}
+                    </option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit" class="btn btn-default btn-xs">Show</button></noscript>
+            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
+               class="breseq-crosslink">all samples &raquo;</a>
+        </form>
+    </div>
+
+    {% if not selected_reseq %}
+        <p>This experiment has no resequencing samples to show.</p>
+    {% else %}
+        <div class="row">
+            <table class="table breseq-table">
+                <thead>
+                    <tr>
+                        <th>evidence</th>
+                        <th>seq&nbsp;id</th>
+                        <th>position</th>
+                        <th>mutation</th>
+                        {% if is_population %}<th>freq</th>{% endif %}
+                        <th>annotation</th>
+                        <th>gene</th>
+                        <th>description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr class="{{ row.row_class }}">
+                        <td class="breseq-evidence">
+                            {% if row.evidence_url %}
+                                <a href="{{ row.evidence_url }}"
+                                   title="Show the read alignment here">{{ row.mutation_type }}</a>
+                            {% else %}
+                                {{ row.mutation_type }}
+                            {% endif %}
+                        </td>
+                        <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
+                        <td class="breseq-position">{{ row.position|safe }}</td>
+                        <td class="breseq-mutation">{{ row.mutation|safe }}</td>
+                        {% if is_population %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}
+                        <td class="breseq-annotation">{{ row.annotation|safe }}</td>
+                        <td class="breseq-gene">{{ row.gene|safe }}</td>
+                        <td class="breseq-description">{{ row.description|safe }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8">No mutations passed the current filters for this sample.</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="breseq-legend">
+            {% if reference %}
+                Annotated against the experiment's reference
+                (<code>{{ reference.total_length }}</code>&nbsp;bp).
+            {% else %}
+                This experiment has no reference genome, so nothing here is annotated.
+            {% endif %}
+            {% if unannotated_count %}
+                <div class="breseq-unannotated">
+                    {{ unannotated_count }} of {{ rows|length }} mutations were imported before a
+                    reference was available and are shown without breseq formatting. Run
+                    <code>./aledb reannotate {{ ale_experiment_id }}</code> to fill them in.
+                </div>
+            {% endif %}
+            <div>
+                Amino acid changes are coloured by effect:
+                <span class="snp_type_synonymous">synonymous</span>,
+                <span class="snp_type_nonsynonymous">nonsynonymous</span>,
+                <span class="snp_type_nonsense">nonsense</span>.
+                The changed base in a codon is
+                <span class="mutation_in_codon">underlined red</span>.
+                {% if is_population %}
+                    Rows shaded green are polymorphic &mdash; below 100% frequency.
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
