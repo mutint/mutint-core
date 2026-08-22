@@ -13,7 +13,6 @@ from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 from aledb_experiment import permissions, models
 from aledb_filter.models import AleExperimentFilter
 from aledb_filter.util import get_global_filter
-from config.views import show_amplifiction_data
 import json
 import aledb_common.constants
 from aledb_common.logger import user_extra, join_extras
@@ -23,60 +22,6 @@ __author__ = 'pphaneuf'
 
 
 logger = logging.getLogger(__name__)
-
-
-def amplification_data(request):
-    logger.info("amplification mutation usage", user_extra(request))
-    try:
-        start_time = time.time()
-        context = get_user_context(request.user)
-        experiment = aledb_seq.views.common.get_ale_experiment(request)
-
-        exp_name = experiment.name
-        ale_no = aledb_seq.views.common.get_ale_id(request)
-        sample_type = aledb_seq.views.common.get_sample_type(request)
-        aleid_ale_id_list = aledb_seq.views.common.get_aleid_ale_id_list(experiment.ale_id, True)
-
-        ordered_reseq_dict = get_reseq_ordered_dict(experiment.ale_id, ale_no, sample_type, request)
-
-        table_header = mutation_table_builder.get_table_header(request.user, ordered_reseq_dict, experiment)
-
-        show_global_filtered = request.GET.get('show_global_filtered', '') == '1'
-        show_exp_filtered = request.GET.get('show_exp_filtered', '') == '1'
-
-        table_body = _get_table_body(experiment, ordered_reseq_dict, request.user, filter_type="NOT_AMP",
-                                     skip_global_filter=show_global_filtered, skip_experiment_filter=show_exp_filtered)
-
-        hidden_columns = request.GET.get('hidden_columns', "")
-
-        template = loader.get_template("base_table_template.html")
-
-        context.update({"ales": aleid_ale_id_list,
-                        "ale_experiment_name": exp_name,
-                        "ale_no": ale_no,
-                        "ale_project_name": experiment.project.name,
-                        "ale_project_id": experiment.project.id,
-                        "sample_type": sample_type,
-                        "ale_experiment_id": experiment.ale_id,
-                        "table_body": mark_safe(json.dumps(table_body, cls=DjangoJSONEncoder)),
-                        "title": exp_name + " Mutations",
-                        "table_header": table_header,
-                        "template_header": "Mutations",
-                        "hidden_columns": hidden_columns,
-                        "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
-                        "tag_dropdown": aledb_common.constants.TAGS,
-                        "show_global_filtered": show_global_filtered,
-                        "show_exp_filtered": show_exp_filtered,
-                        })
-        logger.info("mutation performance",
-                    extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))
-
-        return HttpResponse(template.render(context, request), content_type="text/html")
-    except Exception as e:
-        logger.exception("amplifications broke", extra=user_extra(request))
-        template = loader.get_template("500.html")
-        context['err_message'] = str(e)
-        return HttpResponse(template.render(context, request), content_type="text/html")
 
 
 def mutation_table(request):
@@ -98,7 +43,11 @@ def mutation_table(request):
         show_global_filtered = request.GET.get('show_global_filtered', '') == '1'
         show_exp_filtered = request.GET.get('show_exp_filtered', '') == '1'
 
-        table_body = _get_table_body(experiment, ordered_reseq_dict, request.user, filter_type="AMP",
+        # No filter_type: every mutation type renders here, AMP included. This used to pass
+        # filter_type="AMP", which -- the value naming is inverted, it means *exclude* --
+        # kept AMP rows out, and /mutations/amplifications was the only place they appeared.
+        # That page is gone, so excluding them here would hide them entirely.
+        table_body = _get_table_body(experiment, ordered_reseq_dict, request.user,
                                      skip_global_filter=show_global_filtered, skip_experiment_filter=show_exp_filtered)
 
         hidden_columns = request.GET.get('hidden_columns', "")

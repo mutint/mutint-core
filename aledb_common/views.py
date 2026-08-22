@@ -1,5 +1,11 @@
 """Serving files out of ALE_DATA_ROOT_DIR at ``/aledata/``.
 
+This module is now solely that route. It also held ``show_amplifiction_data``, which listed
+``<exp>/amplifications/`` or ``<exp>/breseq/dups/`` as links into ``/aledata/``. Nothing had
+routed to it since 2021, when the Amplifications page became a copy of the mutation table
+instead; the page itself is gone now too, so the listing and its ``file_list.html`` template
+went with it.
+
 This route used to be the suite's soft spot. It concatenated ``DOC_ROOT + page_name`` with no
 normalisation, so ``/aledata/../../../../etc/passwd.html`` escaped the root; it had a branch
 (``'.html' in page_name or '.ba' in page_name``) that skipped the permission call entirely,
@@ -24,18 +30,14 @@ import os
 
 from django.conf import settings
 from django.db.models import Q
-from django.http import Http404, HttpResponse, HttpResponseForbidden
-from django.template import loader
+from django.http import Http404, HttpResponseForbidden
 
 from aledb_common.fileserve import serve_file
 from aledb_common.logger import user_extra
-from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_view_project
 from aledb_seq.models import ResequencingExperiment
-from aledb_seq.views.common import get_ale_experiment
 
 DOC_ROOT = settings.ALE_DATA_ROOT_DIR
-EXCLUDE_ALE_EXP_DIRS = ['bop27']
 
 INDEX_FILE_NAME = "index.html"
 
@@ -121,53 +123,3 @@ def _may_view(user, experiment):
     if project is None:
         return True
     return can_view_project(user, project)
-
-
-def show_amplifiction_data(request):
-    try:
-        experiment = get_ale_experiment(request)
-        data_dirs = _get_exp_data_folder_name(experiment)
-        amp_file_dirs = []
-        file_url_dict = {}
-        for data_dir in data_dirs:
-            dir1 = data_dir + "/amplifications/"
-            dir2 = data_dir + "/breseq/dups/"
-            dir = ''
-            if os.path.isdir(os.path.join(DOC_ROOT, dir1.lstrip("/"))):
-                dir = dir1
-            elif os.path.isdir(os.path.join(DOC_ROOT, dir2.lstrip("/"))):
-                dir = dir2
-            if dir:
-                file_list = os.listdir(os.path.join(DOC_ROOT, dir.lstrip("/")))
-                base_url = "/aledata/" + dir
-                for file in file_list:
-                    url = base_url + file + '/' + file + '.html'
-                    amp_file_dirs.append(dir + file)
-                    file_url_dict[file] = url
-        if len(amp_file_dirs) > 0:
-            template = loader.get_template('file_list.html')
-            context = experiment.experiment_context()
-            context.update({'file_urls': file_url_dict,
-                            'subtitle': "Amplification Files",
-                            'title': 'Amplifictions'})
-            return HttpResponse(template.render(context, request), content_type="text/html")
-        else:
-            logger.info("no amplification files for experiment %s", experiment.ale_id)
-            raise Http404
-    except Http404:
-        raise
-    except Exception:
-        logger.exception("amplification listing failed", extra=user_extra(request))
-        raise Http404
-
-
-def _get_exp_data_folder_name(experiment: AleExperiment) -> []:
-    reseqs = ResequencingExperiment.objects.filter(
-        tech_rep__isolate__flask__ale_id__ale_experiment_id=experiment.ale_id)
-    dirs = []
-    for reseq in reseqs:
-        if '/' in reseq.location:
-            dir = reseq.location[:reseq.location.find('/breseq')]
-            if dir not in dirs:
-                dirs.append(dir)
-    return dirs

@@ -9,4 +9,3 @@ class SeqConfig(AppConfig):
             EXPERIMENT_SECTION, register_nav_item,
         )
         register_nav_item('Mutations', url='/mutations', section=EXPERIMENT_SECTION)
-        register_nav_item('Amplifications', url='/mutations/amplifications', section=EXPERIMENT_SECTION)

@@ -113,7 +113,7 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 ### `/aledata/` serves the legacy data root
 
 `aledb_common/views.py` serves `ALE_DATA_ROOT_DIR` at `/aledata/` — breseq HTML reports,
-GATK output and amplification images for CLI-uploaded experiments. It is separate from
+GATK output and CNVnator coverage plots for CLI-uploaded experiments. It is separate from
 `ALEDB_STORE_DIR`, which holds web-uploaded data and is served by
 `aledb_seq/views/alignments.py`.
 
@@ -224,6 +224,11 @@ Creation and deletion are nested under the objects they act on:
   does **not** load — pull sweetalert in per template.
 - An experiment's page (`/stats?ale_experiment_id=<pk>`) carries **+ Add data** and **Delete**,
   rendered through `{% block experiment_actions %}` in `aledb_common/templates/base.html`.
+- There is no Amplifications page. `/mutations/amplifications` was a copy of `mutation_table`
+  differing in one argument, and it was the only page showing `AMP` mutations, because
+  `/mutations` passed `filter_type="AMP"` — a value that means **exclude** AMP, not include it.
+  Both are gone and `/mutations` now renders every mutation type. `AMP` was never a separate
+  feature: it is one of eight breseq/GenomeDiff types, first-class throughout the pipeline.
 - `/import/add/?ale_experiment_id=<pk>` is the one place data goes in. It is scoped to an
   experiment **by primary key**, so two experiments may share a name and two people may add to
   the same one — unlike `_prepare_experiment`, whose name+person lookup forks an experiment per

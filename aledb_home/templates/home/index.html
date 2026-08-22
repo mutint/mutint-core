@@ -123,10 +123,6 @@
                         <li><a href="/filter?ale_experiment_id={{ ale_experiment_id }}">&nbsp;&nbsp;&nbsp;Filter</a>
                         </li>
                     {% endif %}
-                    {% if ale_experiment_id and user.is_authenticated %}
-                        <li><a href="/mutations/amplifications?ale_experiment_id={{ ale_experiment_id }}">&nbsp;&nbsp;&nbsp;Amplifications</a>
-                        </li>
-                    {% endif %}
                 </ul>
             </div>
             <div id="sidebarbutton" title="Collapse sidebar" onclick="toggle_sidebar()"
