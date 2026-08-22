@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 195 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 360 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -112,6 +112,44 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 ```
 
 ## Architecture
+
+### Branding: aledb-core has none
+
+`/` is the project list, the sidebar carries no name or version, there is no icon upper-right,
+and no institution is credited. All of that was ALEdb's and now lives in the `aledb-deploy`
+repo. A deployment adds its own through three seams, none of which aledb-core knows the content
+of:
+
+- `ALEDB_BRANDING` (`aledb_common/base_settings.py`) — `{'name', 'version', 'logo'}`, empty by
+  default. `base.html` renders each only `{% if %}` it is set, so an unset value renders nothing
+  rather than an empty element.
+- `templates/home/splash.html` — `aledb_home.views.home` looks it up and falls back to
+  `aledb_experiment.views.projects` on `TemplateDoesNotExist`. Rendered in place, not
+  redirected, so `/` stays `/`.
+- `templates/branding/footer.html` — the "hosted and maintained by…" footer, included by the
+  dashboard and About pages. Core ships it **empty**; it existed as four pasted copies before.
+
+More generally, `TEMPLATES['DIRS']` now leads with the project's `templates/` dir and
+`STATICFILES_DIRS` with its `staticfiles/`, so a deployment overrides any core template or asset
+by path. The source dir is `staticfiles/`, not `static/` — `static/` is `STATIC_ROOT`, and
+Django raises `ImproperlyConfigured` if it appears in `STATICFILES_DIRS`. The entry is also
+omitted when the directory is absent, or every `./aledb check` reports `staticfiles.W004`.
+
+**The `Powered by ALEdb vX.Y.Z` watermark is not part of this** and has no setting. It is
+aledb-core's attribution and renders on every deployment, branded or not.
+
+### Versioning
+
+`aledb_common/version.py` is the single source of truth — before this it existed only as the
+literal `ALEdb 1.1.0` inside `base.html`. Bump with `./aledb version --bump patch|minor|major`,
+which rewrites that file and leaves the `git tag v<version>` to you.
+
+`version` is a name Django reserves: `ManagementUtility.execute()` answers it with Django's own
+version before app commands are ever consulted, so the management command alone is not enough.
+`aledb_common/cli.py` dispatches it directly. Delete that branch and `./aledb version` silently
+starts printing Django's version instead — `aledb_common/tests/test_version.py` goes through
+`manage()` rather than `call_command` precisely to catch that.
+
 
 ### The breseq report page
 

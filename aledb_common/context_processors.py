@@ -1,5 +1,23 @@
 from django.conf import settings
 
+from aledb_common.version import __version__
+
+
+def branding(request):
+    """Two separate things, deliberately.
+
+    `branding` is the deployment's identity -- its name, version and logo. It is
+    whatever ALEDB_BRANDING says and is empty by default, so an unconfigured
+    aledb-core renders no name and no icon at all.
+
+    `aledb_version` is aledb-core's own version, which is not configurable: it
+    feeds the "Powered by ALEdb" watermark that every deployment carries.
+    """
+    return {
+        'branding': getattr(settings, 'ALEDB_BRANDING', {}),
+        'aledb_version': __version__,
+    }
+
 
 def global_settings(request):
     return {

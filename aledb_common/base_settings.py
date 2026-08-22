@@ -37,12 +37,27 @@ def get_base_settings(base_dir, aledb_core_dir=None):
     if aledb_core_dir is None:
         aledb_core_dir = base_dir
 
+    # A deployment drops its own templates and static assets here to override
+    # aledb-core's -- see the ALEDB_BRANDING and landing-page notes below. An
+    # assembled project reaches this function through aledb-core's config/defaults.py,
+    # which passes the aledb-core directory as base_dir, so it must re-point both of
+    # these at its own root after calling us.
+    project_templates = os.path.join(base_dir, 'templates')
+    project_staticfiles = os.path.join(base_dir, 'staticfiles')
+
     debug = os.environ.get('DEBUG', '0') == '1'
 
     settings = {
         'DEBUG': debug,
 
         'GOOGLE_ANALYTICS_TAG': os.environ.get('GOOGLE_ANALYTICS_TAG', ''),
+
+        # The deployment's own identity: {'name': ..., 'version': ..., 'logo': ...},
+        # where logo is a path under a staticfiles dir. Empty by default, and an empty
+        # value renders nothing -- aledb-core carries no deployment branding of its own.
+        # Separate from aledb_common.version, which is the platform's version and is
+        # always shown in the "Powered by ALEdb" watermark.
+        'ALEDB_BRANDING': {},
 
         # Managed store that aledb-core owns and operates: uploaded .gd, BAM/BAI, and the
         # per-experiment reference. Every path under here is derived from a database
@@ -140,9 +155,14 @@ def get_base_settings(base_dir, aledb_core_dir=None):
 
         'STATIC_ROOT': os.path.join(base_dir, 'static'),
         'STATIC_URL': '/static/',
-        'STATICFILES_DIRS': [
-            os.path.join(aledb_core_dir, 'aledb_common', 'staticfiles'),
-        ],
+        # The project's own staticfiles/ comes first so a deployment can supply its
+        # own logo. Deliberately not named static/ -- that is STATIC_ROOT, and Django
+        # refuses a STATICFILES_DIRS entry equal to it. Listed only when it exists,
+        # or a project without one trips staticfiles.W004 on every check.
+        'STATICFILES_DIRS': (
+            ([project_staticfiles] if os.path.isdir(project_staticfiles) else [])
+            + [os.path.join(aledb_core_dir, 'aledb_common', 'staticfiles')]
+        ),
         'STATICFILES_FINDERS': (
             'django.contrib.staticfiles.finders.FileSystemFinder',
             'django.contrib.staticfiles.finders.AppDirectoriesFinder',
@@ -159,7 +179,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         'TEMPLATES': [
             {
                 'BACKEND': 'django.template.backends.django.DjangoTemplates',
-                'DIRS': [],
+                'DIRS': [project_templates],
                 'APP_DIRS': True,
                 'OPTIONS': {
                     'context_processors': [
@@ -174,6 +194,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
                         'aledb_common.context_processors.global_settings',
                         'aledb_common.context_processors.plugin_exports',
                         'aledb_common.context_processors.nav_items',
+                        'aledb_common.context_processors.branding',
                     ],
                     'debug': debug,
                 },

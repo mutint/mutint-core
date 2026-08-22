@@ -80,7 +80,9 @@
     <div class="navbar-default" role="navigation" style=" z-index:999; float: left; top:0; left:0">
         <div class="sidebar" style="width: 17vw" id="sidebar">
             <div class="navbar-header">
-                <a class="navbar-brand" href="/">ALEdb 1.1.0</a>
+                {% if branding.name or branding.version %}
+                    <a class="navbar-brand" href="/">{{ branding.name }} {{ branding.version }}</a>
+                {% endif %}
             </div>
             <ul class="nav in" id="side-menu" style="padding-top: 6em;">
                 {% if user.is_authenticated %}
@@ -111,6 +113,10 @@
                         </li>
                     {% endfor %}
                 {% endif %}
+                <li class="aledb-watermark">
+                    Powered by ALEdb v{{ aledb_version }}
+                    <img src="{% static "img/fav.png" %}" alt="">
+                </li>
             </ul>
         </div>
     </div>
@@ -129,8 +135,10 @@
                         <h2>{% block header %}
                             <b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}
                             </b>{% endblock %}
-                            <a href="/home"><img src="{% static "img/aledb_header.png" %}"
+                            {% if branding.logo %}
+                                <a href="/"><img src="{% static branding.logo %}"
                                                  style="max-width: 10%; max-height: 10%; float: right"></a>
+                            {% endif %}
                         </h2>
                         {% if ale_experiment_id %}
                             <a href="/stats?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
