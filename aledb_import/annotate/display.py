@@ -17,6 +17,8 @@ ALEdb needs them twice over:
   * The per-sample breseq-style table renders the HTML directly.
 """
 
+from html import unescape
+
 from bs4 import BeautifulSoup
 
 MAX_NUCLEOTIDES_TO_SHOW = 20  # settings.cpp:1411
@@ -408,6 +410,14 @@ def text_from_html(html):
     """
     if not html:
         return ''
+    if '<' not in html:
+        # Nothing to strip, so decode the entities and stop. Not an optimisation:
+        # BeautifulSoup guesses that a short, tagless string containing a path
+        # separator is a filename someone meant to open, and warns
+        # MarkupResemblesLocatorWarning. Plenty of these fields are exactly that
+        # shape -- "coding (14/1677 nt)", "intergenic (-1/+1)" -- so a reannotate
+        # run printed the warning while returning the right answer.
+        return unescape(html).replace('\xa0', ' ').strip()
     return BeautifulSoup(html, 'lxml').text.replace('\xa0', ' ').strip()
 
 

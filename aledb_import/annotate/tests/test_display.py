@@ -6,8 +6,13 @@ two branches for it and the port originally took the wrong one.
 """
 
 import unittest
+import warnings
 
-from aledb_import.annotate.display import MAX_GENES_BEFORE_SUMMARY, add_html_fields
+from bs4 import BeautifulSoup
+
+from aledb_import.annotate.display import (
+    MAX_GENES_BEFORE_SUMMARY, add_html_fields, text_from_html,
+)
 
 
 def _deletion_over(gene_count):
@@ -70,3 +75,72 @@ class GeneListCollapseTestCase(unittest.TestCase):
         self.assertNotIn("&#8209;", product.split("<noscript>")[0])
         self.assertIn('class="breseq_gene_list"', product)
         self.assertIn('class="breseq_gene_toggle"', product)
+
+
+def _via_beautifulsoup(value):
+    """The implementation text_from_html used for every input, kept here as the
+    reference the short-circuit has to agree with."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return BeautifulSoup(value, "lxml").text.replace("\xa0", " ").strip()
+
+
+# Shapes taken from a real database: an intergenic mutation joins two gene
+# products with "/", which is what BeautifulSoup reads as a path separator.
+TAGLESS = [
+    "hypothetical protein/hypothetical protein",
+    "nitrate/nitrite transporter",
+    "potassium transporter/IS150 hypothetical protein",
+    "intergenic&nbsp;(+6/&#8209;50)",
+    "coding (14/1677 nt)",
+    "predicted DNA&#8209;binding transcriptional regulator/hypothetical protein",
+    "A&rarr;C",
+    "&Delta;8,224&nbsp;bp",
+    "+G",
+]
+
+TAGGED = [
+    "<i>thrA</i>&nbsp;&rarr;",
+    '<font class="snp_type_nonsynonymous">F239L</font>&nbsp;(TTT&rarr;TTG)&nbsp;',
+    "<b>23 genes</b> <span hidden><i>manB</i>, <i>manC</i></span>",
+]
+
+
+class TextFromHtmlTestCase(unittest.TestCase):
+    """Flattening an html_* field to the text stored on Mutation.
+
+    BeautifulSoup guesses that a short, tagless string containing a path
+    separator is a filename someone meant to open, and warns. Many of these
+    fields are exactly that shape, so `./aledb reannotate` printed
+    MarkupResemblesLocatorWarning while returning the right answer -- 682 of
+    11,642 values on a real database.
+    """
+
+    def test_tagless_input_does_not_warn(self):
+        for value in TAGLESS:
+            with self.subTest(value=value):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    text_from_html(value)
+                self.assertEqual(
+                    [], [w for w in caught
+                         if "MarkupResemblesLocator" in w.category.__name__])
+
+    def test_it_still_agrees_with_beautifulsoup(self):
+        """The short-circuit is why there is no warning, so it must not change a
+        single answer: these feed Mutation.sequence_change and .protein_change,
+        which are meant to keep their shape."""
+        for value in TAGLESS + TAGGED:
+            with self.subTest(value=value):
+                self.assertEqual(_via_beautifulsoup(value), text_from_html(value))
+
+    def test_entities_are_still_decoded_without_a_parser(self):
+        self.assertEqual("A\u2192C", text_from_html("A&rarr;C"))
+        self.assertEqual("\u03948,224 bp", text_from_html("&Delta;8,224&nbsp;bp"))
+
+    def test_markup_is_still_stripped(self):
+        self.assertEqual("thrA \u2192", text_from_html("<i>thrA</i>&nbsp;&rarr;"))
+
+    def test_empty_input(self):
+        self.assertEqual("", text_from_html(""))
+        self.assertEqual("", text_from_html(None))
