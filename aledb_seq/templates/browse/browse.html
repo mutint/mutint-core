@@ -81,15 +81,25 @@
         // MIN_BROWSER_HEIGHT the box stops shrinking and scrolls instead -- a short window
         // should not squeeze the reads down to nothing.
         var MIN_BROWSER_HEIGHT = 400;   // px; roughly coverage plus a few rows of reads
-        var BOTTOM_MARGIN = 16;         // px of page left below the box
+        var MIN_TRACK_HEIGHT = 100;     // px; the reads' own floor on a short window
         var BOTTOM_INSET = 4;           // px kept clear of the container's own border
 
         var container = document.getElementById("igv-browser");
+        var igvBrowser = null;
+
+        // #aledb-content's own bottom padding sits below the container and has to fit in
+        // the viewport too, or the page scrolls by exactly that much. It is measured
+        // rather than named as a constant here: the BOTTOM_MARGIN = 16 that used to stand
+        // in for it was a guess at the 25px in common.css, and left the box 9px too tall.
+        var frame = container.closest("#aledb-content") || document.body;
 
         function fitContainer() {
             var top = container.getBoundingClientRect().top;
-            container.style.height = Math.max(
-                MIN_BROWSER_HEIGHT, window.innerHeight - top - BOTTOM_MARGIN) + "px";
+            var target = Math.max(MIN_BROWSER_HEIGHT, window.innerHeight - top);
+            container.style.height = target + "px";
+            var below = frame.getBoundingClientRect().bottom
+                - container.getBoundingClientRect().bottom;
+            container.style.height = Math.max(MIN_BROWSER_HEIGHT, target - below) + "px";
         }
 
         // The space the ruler, the genes and the coverage row take is measured after the
@@ -97,7 +107,10 @@
         // displayMode, with how many genes are in view, and with igv's own styling. The
         // measurement is off the track's own element -- the container's scrollHeight is no
         // use, because igv's root stretches to fill it and so always reports the same.
-        function growReadsIntoSpareSpace(browser) {
+        // It fits both ways. A resize that shrinks the container has to take the height
+        // back off the reads again, or the box keeps an inner scrollbar it has no need of;
+        // that is why there is a floor here rather than a `spare < 1` early return.
+        function fitReadsToContainer(browser) {
             var alignments = browser.findTracks(function (t) {
                 return t.type === "alignment";
             });
@@ -108,15 +121,30 @@
             var view = alignments[0].trackView;
             var spare = container.getBoundingClientRect().bottom
                 - view.axis.getBoundingClientRect().bottom - BOTTOM_INSET;
-            if (spare < 1) { return; }
+            var height = Math.max(MIN_TRACK_HEIGHT, alignments[0].height + spare);
+            if (Math.abs(height - alignments[0].height) < 1) { return; }
 
-            view.setTrackHeight(alignments[0].height + spare, true);
+            view.setTrackHeight(height, true);
             view.checkContentHeight();
             view.repaintViews();
         }
 
+        var resizeTimer = null;
+
+        function onResize() {
+            fitContainer();
+            // The reads are refitted once the drag settles rather than on every tick:
+            // setTrackHeight repaints, and repainting a pileup per resize event is slow
+            // enough to see. The container itself is only a style write, so it keeps up.
+            if (resizeTimer) { clearTimeout(resizeTimer); }
+            resizeTimer = setTimeout(function () {
+                resizeTimer = null;
+                if (igvBrowser) { fitReadsToContainer(igvBrowser); }
+            }, 150);
+        }
+
         fitContainer();
-        window.addEventListener("resize", fitContainer);
+        window.addEventListener("resize", onResize);
 
         igv.createBrowser(container, {
             reference: {
@@ -136,7 +164,8 @@
             locus: "{{ locus|escapejs }}",
             tracks: [alignmentTrack(track)]
         }).then(function (browser) {
-            growReadsIntoSpareSpace(browser);
+            igvBrowser = browser;
+            fitReadsToContainer(browser);
 
             var chooser = document.getElementById("add-track");
             if (!chooser) { return; }

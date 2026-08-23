@@ -76,18 +76,44 @@
     padding-top: 0.5em;
 }
 
-.sidebar_arrows {
-    position: relative;
+/* The collapse strip beside the sidebar: one viewport tall, sticking alongside
+   .sidebar-panel above it, with the arrow centred in it.
+
+   Its height used to come from an inline `line-height: 100vh` on the arrow -- one
+   character in a 100vh line box -- inside a float carrying `margin: 5em 0`. That made
+   the strip 100vh + 169px (5em against font-size: 1.2em of Bootstrap's 14px body, twice,
+   plus a stray 1px of padding), and since #wrapper's clearfix takes the height of its
+   tallest float *including* its margins, every page in the app scrolled 169px past the
+   fold with nothing in that space -- measured, not estimated. It showed worst on
+   /mutations/browse, which fits igv.js to the viewport and so has no content of its
+   own to hide the gap behind.
+   Height belongs on the strip; the arrow is just a glyph to centre in it. */
+#sidebarbutton {
+    float: left;
+    position: sticky;
     top: 0;
-    height: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    background-color: #f8f8f8;
+    border-radius: 0 5px 5px 0;
+    color: #444;
+    font-size: 1.2em;
+    cursor: pointer;
+}
+
+/* On the strip, not on .sidebar_arrows: the arrow is one glyph tall now, and hovering
+   should still light up the whole strip you are about to click. */
+#sidebarbutton:hover {
+    background-image: linear-gradient(to right, #f8f8f8, #c4dce8);
+}
+
+.sidebar_arrows {
+    text-align: center;
     border-radius: 1vw;
     border-left-style: none;
     border-right-style: solid;
     border-color: #f8f8f8;
-}
-
-.sidebar_arrows:hover {
-    background-image: linear-gradient(to right, #f8f8f8, #c4dce8);
 }
 
 .fab-container {
