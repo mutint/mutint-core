@@ -28,9 +28,14 @@ PRIORITY_REFERENCE = 10
 PRIORITY_DATA = 50
 
 
+UNAVAILABLE_HIDE = "hide"
+UNAVAILABLE_DISABLE = "disable"
+
+
 def register_import_handler(name, label, patterns, handle,
                             priority=PRIORITY_DATA, detect=None, description="",
-                            requires_reference=False):
+                            requires_reference=False, unavailable=UNAVAILABLE_HIDE,
+                            only_without_reference=False):
     """Register an import type.
 
     name        stable slug; the value the Add page's dropdown submits
@@ -46,9 +51,18 @@ def register_import_handler(name, label, patterns, handle,
                 whose shape is not expressible as suffixes (breseq folders need to
                 see a whole directory). Defaults to suffix matching on `patterns`.
     requires_reference
-                the type only makes sense once the experiment has a reference genome.
-                Serialised to the client so the Add page can leave it out of the
-                dropdown until there is one; the handler still enforces it server-side.
+                the type cannot run until the experiment has a reference genome.
+                Serialised to the client so the Add page can act on it; the handler
+                still enforces it server-side either way.
+    unavailable how the Add page presents the type when requires_reference is not
+                met: "hide" leaves it out of the dropdown, "disable" shows it greyed
+                with the reason. Hide something nobody would go looking for; disable
+                something they will arrive holding and need an answer about.
+    only_without_reference
+                the inverse: the type stops being offered once a reference exists,
+                because establishing one is a one-time act. Nothing enforces this
+                server-side -- re-establishing the same genome is harmless, it is
+                just not a thing worth offering.
     """
     if any(handler["name"] == name for handler in _import_handlers):
         raise ValueError("import handler %r is already registered" % (name,))
@@ -61,6 +75,8 @@ def register_import_handler(name, label, patterns, handle,
         "detect": detect,
         "description": description,
         "requires_reference": requires_reference,
+        "unavailable": unavailable,
+        "only_without_reference": only_without_reference,
     })
 
 
@@ -76,6 +92,28 @@ def get_import_handler(name):
     return None
 
 
+def get_import_types_for(has_reference):
+    """The dropdown's contents for one experiment.
+
+    Each entry gains `disabled` and `unavailable_reason`; entries that should not
+    appear at all are dropped. Computed here rather than in the template so the
+    dropdown and the JSON the page classifies a drop with cannot disagree.
+    """
+    offered = []
+    for entry in get_import_types():
+        if entry["only_without_reference"] and has_reference:
+            continue
+        blocked = entry["requires_reference"] and not has_reference
+        if blocked and entry["unavailable"] == UNAVAILABLE_HIDE:
+            continue
+        entry = dict(entry)
+        entry["disabled"] = blocked
+        entry["unavailable_reason"] = (
+            "needs a reference genome first" if blocked else "")
+        offered.append(entry)
+    return offered
+
+
 def get_import_types():
     """The dropdown's contents: JSON-safe, no callables."""
     return [{
@@ -84,6 +122,8 @@ def get_import_types():
         "patterns": h["patterns"],
         "description": h["description"],
         "requires_reference": h["requires_reference"],
+        "unavailable": h["unavailable"],
+        "only_without_reference": h["only_without_reference"],
     } for h in get_import_handlers()]
 
 

@@ -43,6 +43,9 @@ BRESEQ_PATTERNS = [
     "data/reference.bam.bai",
 ]
 
+# replace_annotation takes features, not sequence, so a FASTA has nothing it can use.
+ANNOTATION_PATTERNS = [".gbk", ".gb", ".gbff", ".genbank", ".gff", ".gff3"]
+
 GENOMEDIFF_PATTERNS = [".gd"]
 
 
@@ -74,6 +77,13 @@ def handle_breseq_folders(experiment, staged_root, paths, user):
 
 
 # --- reference genomes --------------------------------------------------------------------
+
+def detect_annotation(staged_root, paths):
+    """As detect_reference, but only files that carry annotation."""
+    inside_a_sample = set(detect_breseq_folders(staged_root, paths))
+    return [p for p in paths
+            if p not in inside_a_sample and matches_patterns(p, ANNOTATION_PATTERNS)]
+
 
 def detect_reference(staged_root, paths):
     """Reference files at the drop root, never ones inside a breseq sample.
@@ -205,17 +215,23 @@ def register_core_import_handlers():
         priority=PRIORITY_REFERENCE,
         detect=detect_reference,
         handle=handle_reference,
+        # Establishing a reference is a one-time act. Once the experiment has one,
+        # offering this again invites the two things it will not do: replacing the
+        # annotation (that is replace_annotation) and swapping in a different genome
+        # (deliberately shell-only). Auto-detect still routes a reference dropped
+        # alongside data, which is how a first drop establishes one.
+        only_without_reference=True,
         description="Sets the reference every sample in the experiment is checked against.")
     register_import_handler(
         name="replace_annotation",
-        label="Replace annotation (same genome)",
-        patterns=REFERENCE_PATTERNS,
+        label="Replace annotation (GenBank / GFF3)",
+        patterns=ANNOTATION_PATTERNS,
         # Deliberately one step behind `reference`, which claims the same files: in
         # auto-detect the lower priority takes them all and this one claims nothing, so it is
         # reachable only by being named explicitly. That is what makes it a special option
         # rather than a second thing that fires whenever a GenBank is dropped.
         priority=PRIORITY_REFERENCE + 1,
-        detect=detect_reference,
+        detect=detect_annotation,
         handle=handle_replace_annotation,
         requires_reference=True,
         description="Refresh the gene annotation from a new GenBank or GFF3. The sequence "
@@ -235,4 +251,9 @@ def register_core_import_handlers():
         priority=PRIORITY_DATA + 10,
         detect=detect_genomediff,
         handle=handle_genomediff,
+        # Shown but greyed out until there is a reference, rather than hidden: a bare
+        # .gd is a thing people will arrive holding, and the useful answer is "get a
+        # reference in first", not a dropdown that silently lacks the entry.
+        requires_reference=True,
+        unavailable="disable",
         description="Mutations only. Needs the experiment to already have a reference.")

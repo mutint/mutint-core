@@ -127,8 +127,11 @@ class AddPageTestCase(TestCase):
     def test_list_pages_offer_create_and_delete(self):
         projects = self.client.get("/ale/projects/").content.decode("utf-8")
         self.assertIn("New project", projects)
-        self.assertIn("First experiment", projects)   # optional experiment in the same step
         self.assertIn("delete-selected", projects)
+        # The form moved to a page of its own; the list only links to it.
+        self.assertIn('href="/ale/projects/new/"', projects)
+        new_project = self.client.get("/ale/projects/new/").content.decode("utf-8")
+        self.assertIn("First experiment", new_project)   # optional, in the same step
         # aledbConfirmDelete calls swal(), which base.html does not load.
         self.assertIn("sweetalert", projects)
 
@@ -157,3 +160,97 @@ class AddPageTestCase(TestCase):
             self.assertIn("js/aledb_crud.js", html, url)
             # And no longer inline, in two byte-identical copies.
             self.assertNotIn("window.aledbPost = function", html)
+
+
+class ImportTypesOfferedTestCase(TestCase):
+    """Which import types the Add page offers, and in what state.
+
+    Three different rules, because the reasons differ:
+
+      reference           establishing one is a one-time act, so it stops being
+                          offered once the experiment has one
+      replace_annotation  meaningless before there is a genome to hold fixed, so it
+                          is absent until then
+      genomediff          needs a reference, but is a thing people arrive holding --
+                          so it is shown greyed with the reason, not hidden
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+        from aledb_experiment.models import AleExperiment
+        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+
+    def _establish_reference(self):
+        from aledb_import import reference_store
+        from aledb_import.tests import breseq_fixture
+        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        reference_store.establish_or_check(
+            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
+
+    def _html(self):
+        return self.client.get(
+            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+        ).content.decode("utf-8")
+
+    # --- with no reference yet -----------------------------------------------
+
+    def test_reference_is_offered(self):
+        self.assertIn("Reference genome", self._html())
+
+    def test_replace_annotation_is_absent(self):
+        self.assertNotIn("Replace annotation", self._html())
+
+    def test_genomediff_is_shown_but_disabled(self):
+        html = self._html()
+        self.assertIn("GenomeDiff mutations", html)
+        self.assertIn("needs a reference genome first", html)
+        offered = html.split('id="add-type"')[1].split("</select>")[0]
+        gd = [line for line in offered.splitlines() if 'value="genomediff"' in line]
+        self.assertTrue(gd and "disabled" in gd[0], gd)
+
+    def test_the_page_says_a_reference_is_needed(self):
+        self.assertIn("no reference genome yet", self._html())
+
+    def test_breseq_folders_stay_available(self):
+        """A breseq folder carries its own reference, so it is never blocked."""
+        html = self._html()
+        folder = [line for line in html.splitlines() if 'value="breseq_folder"' in line]
+        self.assertTrue(folder and "disabled" not in folder[0], folder)
+
+    # --- once a reference exists ---------------------------------------------
+
+    def test_reference_stops_being_offered(self):
+        self._establish_reference()
+        self.assertNotIn("Reference genome", self._html())
+
+    def test_replace_annotation_appears(self):
+        self._establish_reference()
+        self.assertIn("Replace annotation", self._html())
+
+    def test_replace_annotation_names_the_formats_it_takes(self):
+        """A FASTA carries no annotation, so the label must not imply it does."""
+        self._establish_reference()
+        html = self._html()
+        self.assertIn("Replace annotation (GenBank / GFF3)", html)
+
+    def test_genomediff_becomes_selectable(self):
+        self._establish_reference()
+        html = self._html()
+        gd = [line for line in html.splitlines() if 'value="genomediff"' in line]
+        self.assertTrue(gd and "disabled" not in gd[0], gd)
+        self.assertNotIn("needs a reference genome first", html)
+
+    def test_the_unscoped_types_endpoint_stays_unfiltered(self):
+        """It has no experiment to scope by, and the handlers enforce the rules anyway."""
+        names = [t["name"] for t in self.client.get("/import/types/").json()["types"]]
+        self.assertIn("reference", names)
+        self.assertIn("replace_annotation", names)
+        self.assertIn("genomediff", names)

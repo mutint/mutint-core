@@ -30,12 +30,18 @@
             <select class="form-control" id="add-type">
                 <option value="">Auto-detect</option>
                 {% for type in import_types %}
-                    <option value="{{ type.name }}">{{ type.label }}</option>
+                    <option value="{{ type.name }}"{% if type.disabled %} disabled{% endif %}>
+                        {{ type.label }}{% if type.disabled %} &mdash; {{ type.unavailable_reason }}{% endif %}
+                    </option>
                 {% endfor %}
             </select>
             <small class="help-block" id="add-type-help">
                 Auto-detect works out what each file is. Pick a type to force it &mdash; anything
                 that type does not recognise is then reported rather than routed elsewhere.
+                {% if not has_reference %}
+                    This experiment has no reference genome yet. Drop one first, or drop a
+                    breseq result folder, which brings its own.
+                {% endif %}
             </small>
         </div>
 

@@ -159,13 +159,18 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertNotEqual(after.gff3_sha256, before.gff3_sha256)     # new annotation
 
     def test_replace_annotation_refuses_a_different_genome(self):
-        """The whole point of the narrowed option: the sequence may not move."""
+        """The whole point of the narrowed option: the sequence may not move.
+
+        Carried by a GFF3 rather than a FASTA -- the check is on the sequence, but
+        replace_annotation only claims formats that actually carry annotation, so a
+        FASTA never reaches it (see the test below).
+        """
         write_genbank(os.path.join(self.drop, "REL606.gbk"))
         self._run(import_type="reference")
         before = ExperimentReference.objects.get()
 
         os.remove(os.path.join(self.drop, "REL606.gbk"))
-        self._write("other.fasta", breseq_fixture.fasta_text(
+        self._write("other.gff3", breseq_fixture.gff3_text(
             [("test_ref", breseq_fixture.SEQUENCE_B)]))
         summary = self._run(import_type="replace_annotation")
 
@@ -173,6 +178,20 @@ class ImportRegistryRoutingTestCase(TestCase):
         after = ExperimentReference.objects.get()
         self.assertEqual(after.fasta_sha256, before.fasta_sha256)
         self.assertEqual(after.gff3_sha256, before.gff3_sha256)
+
+    def test_replace_annotation_does_not_claim_a_fasta(self):
+        """A FASTA is sequence with no features, so there is no annotation in one to
+        install. It used to be accepted and then rejected on the sequence check, which
+        told the reader the wrong thing about why."""
+        write_genbank(os.path.join(self.drop, "REL606.gbk"))
+        self._run(import_type="reference")
+
+        os.remove(os.path.join(self.drop, "REL606.gbk"))
+        self._write("same.fasta", breseq_fixture.fasta_text(
+            [("test_ref", breseq_fixture.SEQUENCE_A)]))
+        summary = self._run(import_type="replace_annotation")
+
+        self.assertIn("not recognised", summary["files"][0]["error"])
 
 
 class PluggableImportTypeTestCase(TestCase):

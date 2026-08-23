@@ -12,7 +12,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from aledb_common.import_registry import get_import_types
+from aledb_common.import_registry import get_import_types, get_import_types_for
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_edit_project
@@ -51,11 +51,10 @@ def add_view(request):
         "experiment": experiment,
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
-        # Filtered here rather than in the template so the dropdown and the JSON the page
-        # classifies a drop with cannot disagree. `/import/types/` stays unfiltered -- it has
-        # no experiment to scope by, and the handler enforces the requirement anyway.
-        "import_types": [t for t in get_import_types()
-                         if has_reference or not t["requires_reference"]],
+        # Scoped here rather than in the template so the dropdown and the JSON the page
+        # classifies a drop with cannot disagree. `/import/types/` stays unscoped -- it has
+        # no experiment to scope by, and the handlers enforce their requirements anyway.
+        "import_types": get_import_types_for(has_reference),
         "has_reference": has_reference,
     })
     return render(request, "import/add.html", context)
