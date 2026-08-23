@@ -74,11 +74,31 @@ class BreseqTablePageTestCase(TestCase):
         self.assertEqual(36, len(rows))
         self.assertTrue(all(row["annotated"] for row in rows))
 
-    def test_it_names_the_columns_breseq_uses(self):
+    def test_it_names_the_columns_for_what_they_hold(self):
+        """Type and Reference, not breseq's evidence and seq id.
+
+        Those named the .gd field rather than the column: the first renders
+        mutation_type, the second the reference sequence name.
+        """
         content = self.content()
-        for column in ("evidence", "position", "mutation", "annotation", "gene",
-                       "description"):
-            self.assertIn("<th>%s</th>" % column, content.replace("seq&nbsp;id", "seq id"))
+        for header in ("Type", "Reference", "Position", "Mutation", "Annotation",
+                       "Gene", "Description"):
+            self.assertIn(">%s</th>" % header, content)
+        for old_name in ("<th>evidence</th>", "<th>seq&nbsp;id</th>", "<th>position</th>"):
+            self.assertNotIn(old_name, content)
+
+    def test_every_header_carries_its_column_class(self):
+        """This is what lets alignment be stated once and hold for both.
+
+        Without it the headers fall back to Bootstrap's th { text-align: left }
+        while the cells beneath align independently -- invisible to any test that
+        only checks header text, which is how the two drifted apart.
+        """
+        content = self.content()
+        for column in ("evidence", "seq-id", "position", "mutation", "annotation",
+                       "gene", "description"):
+            self.assertIn('<th class="breseq-%s">' % column, content)
+            self.assertIn('<td class="breseq-%s">' % column, content)
 
     # --- breseq's markup ------------------------------------------------------
 
@@ -125,16 +145,56 @@ class BreseqTablePageTestCase(TestCase):
 
     # --- frequency column -----------------------------------------------------
 
-    def test_a_clonal_sample_has_no_frequency_column(self):
-        self.assertNotIn("<th>freq</th>", self.content())
-
-    def test_a_population_sample_has_one(self):
+    def _make_population(self):
         isolate = self.reseq.tech_rep.isolate
         isolate.is_population = True
         isolate.save()
+
+    def test_a_clonal_sample_has_no_frequency_column(self):
+        """Asserted by header count, not by matching markup.
+
+        This was assertNotIn("<th>freq</th>"), which after the headers were
+        renamed passed for a population sample too -- green while testing nothing.
+        """
+        self.assertEqual(7, self.content().count("<th "))
+        self.assertNotIn("Freq", self.content())
+
+    def test_a_population_sample_has_one(self):
+        self._make_population()
         content = self.content()
-        self.assertIn("<th>freq</th>", content)
+        self.assertEqual(8, content.count("<th "))
+        self.assertIn('<th class="breseq-freq">Freq</th>', content)
         self.assertIn("100%", content)
+
+    # --- the empty state ------------------------------------------------------
+
+    def _empty_the_table(self):
+        """Filter every mutation out, so the {% empty %} branch renders."""
+        from aledb_filter.models import AleExperimentFilter
+        AleExperimentFilter.objects.update_or_create(
+            ale_experiment=self.experiment,
+            defaults={"ignored_genes": ", ".join(
+                Mutation.objects.values_list("gene", flat=True).distinct())})
+
+    def test_the_empty_message_spans_exactly_the_columns_rendered(self):
+        """The colspan was hardcoded to 8 while a clonal sample has 7 columns,
+        because Freq is conditional -- so the message ran past the table.
+
+        Compared against the headers actually rendered rather than against 7 and 8,
+        so adding a ninth column fails here instead of silently drifting again. The
+        markup still states the count twice; this is the guard.
+        """
+        for population in (False, True):
+            with self.subTest(population=population):
+                isolate = self.reseq.tech_rep.isolate
+                isolate.is_population = population
+                isolate.save()
+                self._empty_the_table()
+                content = self.content()
+
+                self.assertIn("No mutations passed the current filters", content)
+                headers = content.count("<th ")
+                self.assertIn('colspan="%d"' % headers, content)
 
     def test_a_polymorphic_call_is_shaded(self):
         isolate = self.reseq.tech_rep.isolate

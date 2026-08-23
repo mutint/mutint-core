@@ -13,10 +13,6 @@ same information, without breseq's markup.
 
 from aledb_import.annotate.display import add_html_fields, commify
 
-# breseq's own column order.
-COLUMNS = ("evidence", "seq_id", "position", "mutation", "freq", "annotation",
-           "gene", "description")
-
 
 def gd_entry(mutation):
     """The annotated GD record for a Mutation, or None if it has no annotation.

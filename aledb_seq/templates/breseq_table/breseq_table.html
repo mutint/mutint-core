@@ -12,6 +12,21 @@
                 $(this).closest('form').submit();
             });
         });
+
+        // The Show/Hide button on a large deletion's gene list, as breseq's report
+        // has. Delegated from the table rather than bound per row: the markup comes
+        // from aledb_import.annotate.display, which emits no element ids -- breseq
+        // numbers each block and wires an inline onclick to a global function, which
+        // needs ids that stay unique inside a page it does not own.
+        document.addEventListener('click', function (event) {
+            var button = event.target.closest('.breseq_gene_toggle');
+            if (!button) { return; }
+            var list = button.parentNode.querySelector('.breseq_gene_list');
+            if (!list) { return; }
+            var showing = !list.hasAttribute('hidden');
+            if (showing) { list.setAttribute('hidden', ''); } else { list.removeAttribute('hidden'); }
+            button.textContent = showing ? 'Show' : 'Hide';
+        });
     </script>
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
@@ -40,16 +55,24 @@
     {% else %}
         <div class="row">
             <table class="table breseq-table">
+                {% comment %} Each th carries its column's class so alignment is stated once,
+                   in the stylesheet, and applies to the header and its cells together. Without
+                   them every header fell back to Bootstrap's th { text-align: left } while the
+                   cells beneath went their own way.
+
+                   "Type" and "Reference" are what these columns hold: the first renders
+                   mutation_type (SNP, DEL, ...), the second the reference sequence name.
+                   breseq's own field names, evidence and seq id, named the .gd field. {% endcomment %}
                 <thead>
                     <tr>
-                        <th>evidence</th>
-                        <th>seq&nbsp;id</th>
-                        <th>position</th>
-                        <th>mutation</th>
-                        {% if is_population %}<th>freq</th>{% endif %}
-                        <th>annotation</th>
-                        <th>gene</th>
-                        <th>description</th>
+                        <th class="breseq-evidence">Type</th>
+                        <th class="breseq-seq-id">Reference</th>
+                        <th class="breseq-position">Position</th>
+                        <th class="breseq-mutation">Mutation</th>
+                        {% if is_population %}<th class="breseq-freq">Freq</th>{% endif %}
+                        <th class="breseq-annotation">Annotation</th>
+                        <th class="breseq-gene">Gene</th>
+                        <th class="breseq-description">Description</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -73,7 +96,9 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8">No mutations passed the current filters for this sample.</td>
+                        {% comment %} Seven columns on a clonal sample: Freq is conditional. This
+                           was hardcoded to 8, so the message ran a column past the table. {% endcomment %}
+                        <td colspan="{% if is_population %}8{% else %}7{% endif %}">No mutations passed the current filters for this sample.</td>
                     </tr>
                 {% endfor %}
                 </tbody>
