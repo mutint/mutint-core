@@ -45,8 +45,9 @@ class AddPageTestCase(TestCase):
             "/import/add/", {"ale_experiment_id": self.experiment.ale_id})
         html = response.content.decode("utf-8")
 
-        self.assertIn("Auto-detect", html)
-        for label in ("Reference genome", "breseq result folder", "GenomeDiff mutations"):
+        # No Auto-detect: the type is chosen, never guessed.
+        self.assertNotIn("Auto-detect", html)
+        for label in ("Reference genome", "breseq data folders", "GenomeDiff mutations"):
             self.assertIn(label, html)
 
     def test_a_plugin_type_reaches_the_dropdown(self):

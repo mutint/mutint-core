@@ -28,7 +28,7 @@
         <div class="form-group">
             <label for="add-type">Import type</label>
             <select class="form-control" id="add-type">
-                <option value="">Auto-detect</option>
+                <option value="" disabled selected>Choose what you are importing&hellip;</option>
                 {% for type in import_types %}
                     <option value="{{ type.name }}"{% if type.disabled %} disabled{% endif %}>
                         {{ type.label }}{% if type.disabled %} &mdash; {{ type.unavailable_reason }}{% endif %}
@@ -36,8 +36,9 @@
                 {% endfor %}
             </select>
             <small class="help-block" id="add-type-help">
-                Auto-detect works out what each file is. Pick a type to force it &mdash; anything
-                that type does not recognise is then reported rather than routed elsewhere.
+                Say what you are dropping. Anything the chosen type does not recognise is
+                reported rather than routed elsewhere, so nothing is imported as something
+                it is not.
                 {% if not has_reference %}
                     This experiment has no reference genome yet. Drop one first, or drop a
                     breseq result folder, which brings its own.
@@ -113,9 +114,8 @@
     // resolves that by priority and by each handler's own detect.
     function classify(path) {
         var chosen = typeSelect.value;
-        var candidates = chosen
-            ? IMPORT_TYPES.filter(function (t) { return t.name === chosen; })
-            : IMPORT_TYPES;
+        if (!chosen) { return null; }
+        var candidates = IMPORT_TYPES.filter(function (t) { return t.name === chosen; });
         for (var i = 0; i < candidates.length; i++) {
             if (matches(path, candidates[i].patterns)) { return candidates[i]; }
         }
@@ -141,10 +141,10 @@
         var total = 0;
 
         selected.forEach(function (entry) {
-            total += entry.file.size;
             var type = classify(entry.path);
             if (type) {
                 buckets[type.label] = (buckets[type.label] || 0) + 1;
+                total += entry.file.size;   // only the files that will be sent
             } else {
                 unknown += 1;
             }
@@ -155,11 +155,20 @@
             li.textContent = label + " — " + buckets[label] + " file(s)";
             fileListEl.appendChild(li);
         });
-        if (unknown) {
+        if (unknown && typeSelect.value) {
             var li = document.createElement("li");
-            li.textContent = unknown + " file(s) not recognised — will be reported, not imported";
-            li.style.color = "#a00";
+            li.textContent = unknown + " other file(s) in the selection will be skipped";
+            li.style.color = "#666";
             fileListEl.appendChild(li);
+        }
+        if (selected.length && !typeSelect.value) {
+            // Nothing to preview against until a type is chosen, and saying so is more
+            // use than listing every file as unrecognised.
+            var pick = document.createElement("li");
+            pick.style.listStyle = "none";
+            pick.textContent = "Choose what you are importing to see how these files will be read.";
+            pick.style.color = "#a00";
+            fileListEl.appendChild(pick);
         }
         if (selected.length) {
             var totalLi = document.createElement("li");
@@ -168,7 +177,9 @@
             totalLi.textContent = "Total to upload: " + humanBytes(total);
             fileListEl.appendChild(totalLi);
         }
-        submitBtn.disabled = selected.length === 0;
+        // Nothing to do if the selection holds nothing the chosen type reads.
+        submitBtn.disabled = selected.length === 0 || !typeSelect.value ||
+            Object.keys(buckets).length === 0;
     }
 
     typeSelect.addEventListener("change", renderList);
@@ -346,16 +357,23 @@
         resultEl.innerHTML = "";
         setProgress(0, 1, "Preparing…");
 
+        // Only what the chosen type claims. A breseq tree carries a great deal this
+        // importer never reads -- per-sample .tab histograms alone run to tens of MB --
+        // and uploading it meant a long wait followed by a page of "not recognised"
+        // warnings for files nobody asked to import.
+        var toUpload = selected.filter(function (entry) { return classify(entry.path); });
+        if (!toUpload.length) { submitBtn.disabled = false; return; }
+
         var uploadId = null;
         postJson("/import/uploads/", {
             ale_experiment_id: EXPERIMENT_ID,
             import_type: typeSelect.value,
-            files: selected.map(function (entry) {
+            files: toUpload.map(function (entry) {
                 return { path: entry.path, size: entry.file.size };
             })
         }).then(function (session) {
             uploadId = session.upload_id;
-            return uploadAll(uploadId, selected);
+            return uploadAll(uploadId, toUpload);
         }).then(function () {
             setProgress(1, 1, "Importing…");
             return postJson("/import/uploads/" + uploadId + "/finalize", {});

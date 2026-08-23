@@ -19,8 +19,8 @@ from aledb_seq.models import ExperimentReference, ResequencingExperiment
 class SanitizePathTestCase(TestCase):
     def test_accepts_ordinary_relative_paths(self):
         self.assertEqual(
-            sanitize_relative_path("s1/output/annotated.gd"),
-            os.path.join("s1", "output", "annotated.gd"))
+            sanitize_relative_path("s1/data/output.gd"),
+            os.path.join("s1", "data", "output.gd"))
 
     def test_normalizes_backslashes_and_dot_segments(self):
         self.assertEqual(
@@ -59,7 +59,9 @@ class UploadSessionEndpointTestCase(TestCase):
         from aledb_experiment.views import _create_experiment
         self.experiment = _create_experiment(self.project, "e", self.user)
 
-    def _create(self, files, experiment_id=None, import_type=""):
+    def _create(self, files, experiment_id=None, import_type="genomediff"):
+        """import_type is required now, so the helper supplies one by default --
+        auto-detect used to be the fallback and is gone."""
         return self.client.post(
             "/import/uploads/",
             data=json.dumps({
@@ -103,7 +105,7 @@ class UploadSessionEndpointTestCase(TestCase):
         self.assertEqual(UploadSession.objects.count(), 0)
 
     def test_create_returns_an_id_and_declared_total(self):
-        response = self._create([{"path": "s1/output/annotated.gd", "size": 10},
+        response = self._create([{"path": "s1/data/output.gd", "size": 10},
                                  {"path": "s1/data/reference.bam", "size": 90}])
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -154,7 +156,7 @@ class UploadSessionEndpointTestCase(TestCase):
 
     def test_chunk_path_traversal_is_refused(self):
         upload_id = self._create(
-            [{"path": "s1/output/annotated.gd", "size": 4}]).json()["upload_id"]
+            [{"path": "s1/data/output.gd", "size": 4}]).json()["upload_id"]
 
         response = self._chunk(upload_id, "../../escaped.gd", 0, b"data")
         self.assertEqual(response.status_code, 400)
@@ -163,19 +165,19 @@ class UploadSessionEndpointTestCase(TestCase):
 
     def test_another_user_cannot_write_into_the_session(self):
         upload_id = self._create(
-            [{"path": "s1/output/annotated.gd", "size": 4}]).json()["upload_id"]
+            [{"path": "s1/data/output.gd", "size": 4}]).json()["upload_id"]
 
         other = User.objects.create(username="other", email="o@e.com", is_active=True)
         other.set_password("pw")
         other.save()
         self.client.force_login(other)
 
-        response = self._chunk(upload_id, "s1/output/annotated.gd", 0, b"data")
+        response = self._chunk(upload_id, "s1/data/output.gd", 0, b"data")
         self.assertEqual(response.status_code, 403)
 
     def test_unknown_session_is_404(self):
         response = self._chunk("00000000-0000-4000-8000-000000000000",
-                               "s1/output/annotated.gd", 0, b"data")
+                               "s1/data/output.gd", 0, b"data")
         self.assertEqual(response.status_code, 404)
 
     # --- finalize ----------------------------------------------------------------------
@@ -194,7 +196,8 @@ class UploadSessionEndpointTestCase(TestCase):
                 payload = handle.read()
             entries.append((sample_name + "/" + relative.replace(os.sep, "/"), payload))
 
-        created = self._create([{"path": p, "size": len(b)} for p, b in entries])
+        created = self._create([{"path": p, "size": len(b)} for p, b in entries],
+                               import_type="breseq_folder")
         self.assertEqual(created.status_code, 200, created.content)
         upload_id = created.json()["upload_id"]
         for path, payload in entries:
@@ -224,5 +227,5 @@ class UploadSessionEndpointTestCase(TestCase):
         upload_id = self._upload_sample_folder()
         self.client.post("/import/uploads/%s/finalize" % upload_id, {})
 
-        response = self._chunk(upload_id, "s1/output/annotated.gd", 0, b"data")
+        response = self._chunk(upload_id, "s1/data/output.gd", 0, b"data")
         self.assertEqual(response.status_code, 409)

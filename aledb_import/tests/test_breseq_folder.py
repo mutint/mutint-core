@@ -179,7 +179,7 @@ class BreseqFolderImportTestCase(TestCase):
                 sample_name="Ara-1_500gen_762B").exists())
 
     def test_gd_inside_a_sample_folder_is_not_double_imported(self):
-        """output/annotated.gd belongs to its sample, not the loose-.gd sweep."""
+        """A sample's data/output.gd belongs to it, not to the loose-.gd sweep."""
         breseq_fixture.write_sample(self.drop, "s1")
         summary = self._import()
         self.assertEqual(len(summary["files"]), 1)
@@ -201,9 +201,12 @@ class BreseqFolderImportTestCase(TestCase):
 class BreseqGdFilenameTestCase(TestCase):
     """Which .gd a sample folder is read from.
 
-    breseq writes output/output.gd. annotated.gd only exists if someone ran
-    gdtools ANNOTATE afterwards, which this codebase no longer needs -- but
-    folders produced back when it did must still import.
+    data/output.gd, and nothing else. The trees being imported are curated ones
+    that keep only data/ -- the calls beside the reference they were made against
+    -- so output/ is not consulted. annotated.gd is not read either: it existed
+    only because the importer needed gdtools ANNOTATE to have written
+    gene_name/gene_product into the file, and annotation comes from the stored
+    reference now.
     """
 
     def setUp(self):
@@ -221,25 +224,19 @@ class BreseqGdFilenameTestCase(TestCase):
         return breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name=name, person="tester")
 
-    def test_output_gd_is_preferred(self):
+    def test_the_gd_is_read_from_data(self):
         breseq_fixture.write_sample(self.drop, "1-1-1-1")
         self.assertEqual(
-            os.path.join(self.drop, "1-1-1-1", "output", "output.gd"),
+            os.path.join(self.drop, "1-1-1-1", "data", "output.gd"),
             breseq_folder.find_gd_file(os.path.join(self.drop, "1-1-1-1")))
         self.assertEqual(2, self._import()["total_mutations"])
 
-    def test_annotated_gd_still_works(self):
+    def test_a_gd_under_output_is_not_a_sample(self):
+        """output/ is not consulted, so a tree with only that is not a sample folder
+        -- it is reported rather than half-imported without its reference."""
         breseq_fixture.write_sample(
             self.drop, "1-1-1-1",
-            gd_relative_path=os.path.join("output", "annotated.gd"))
-        self.assertEqual(2, self._import()["total_mutations"])
-
-    def test_output_gd_wins_when_both_are_present(self):
-        sample = breseq_fixture.write_sample(self.drop, "1-1-1-1")
-        legacy = os.path.join(sample, "output", "annotated.gd")
-        with open(legacy, "w") as handle:
-            handle.write(breseq_fixture.GD_TEXT.replace("\t100\t", "\t150\t"))
-
-        self._import()
-        self.assertTrue(Mutation.objects.filter(position=100).exists())
-        self.assertFalse(Mutation.objects.filter(position=150).exists())
+            gd_relative_path=os.path.join("output", "output.gd"))
+        self.assertIsNone(
+            breseq_folder.find_gd_file(os.path.join(self.drop, "1-1-1-1")))
+        self.assertEqual(0, self._import()["total_mutations"])

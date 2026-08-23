@@ -1,26 +1,29 @@
 """Import a staged tree of breseq result folders.
 
-A sample is any directory containing ``output/annotated.gd``. Alongside it, breseq writes
-``data/`` holding the reference and the alignment, which is what lets this path store a BAM
-and validate the reference -- neither of which a bare ``.gd`` upload can do.
+A sample is any directory containing ``data/output.gd``. Everything this importer reads
+lives in that ``data/`` folder -- the reference and the alignment beside the calls made
+against them -- which is what lets this path store a BAM and validate the reference,
+neither of which a bare ``.gd`` upload can do.
 
 Per sample::
 
-    <sample>/output/annotated.gd        parsed for mutations
+    <sample>/data/output.gd             parsed for mutations
     <sample>/data/reference.gff3        the reference, hashed
     <sample>/data/reference.fasta       the reference sequence, hashed
     <sample>/data/reference.bam         copied into the store
     <sample>/data/reference.bam.bai     copied into the store
 
+``output/`` is not consulted. A stock breseq run writes its .gd there, but the trees being
+imported are curated ones that keep only ``data/``.
+
 Every sample in an experiment must agree on the reference. The first one establishes it;
 a later mismatch rejects that sample and the batch continues, matching how the bare-.gd
 importer already isolates per-file failures.
 
-``output.gd`` is preferred, with ``annotated.gd`` accepted as a fallback. It used to be the
-other way round, because the importer read ``gene_name`` / ``gene_product`` straight out of
-the file and only ``gdtools ANNOTATE`` put them there. Annotation is now derived from the
-stored reference (``aledb_import.annotation``), so breseq's own output is enough -- and it
-is what a breseq run actually produces without an extra gdtools step.
+``annotated.gd`` is no longer read. It existed because the importer took ``gene_name`` /
+``gene_product`` straight out of the file and only ``gdtools ANNOTATE`` put them there;
+annotation is derived from the stored reference now (``aledb_import.annotation``), so
+breseq's own ``output.gd`` is enough and the extra gdtools step is not needed.
 """
 
 import logging
@@ -42,13 +45,12 @@ from aledb_import.gd_import import (
 
 logger = logging.getLogger("aledb_import.breseq_folder")
 
-# In preference order. breseq always writes output.gd; annotated.gd only exists if
-# someone ran gdtools ANNOTATE afterwards, which is no longer needed.
-GD_RELATIVE_PATHS = (
-    os.path.join("output", "output.gd"),
-    os.path.join("output", "annotated.gd"),
-)
-GD_RELATIVE_PATH = GD_RELATIVE_PATHS[0]
+# One path, not a preference list. Everything this importer reads lives in data/ --
+# the .gd beside the reference it was called against, the alignment, and the summary --
+# so output/ is not consulted at all. annotated.gd is gone with it: it only ever existed
+# because the importer needed gdtools ANNOTATE to have written gene_name/gene_product
+# into the file, and annotation is derived from the stored reference now.
+GD_RELATIVE_PATH = os.path.join("data", "output.gd")
 GFF3_RELATIVE_PATH = os.path.join("data", "reference.gff3")
 FASTA_RELATIVE_PATH = os.path.join("data", "reference.fasta")
 BAM_RELATIVE_PATH = os.path.join("data", "reference.bam")
@@ -59,7 +61,6 @@ BAI_RELATIVE_PATH = os.path.join("data", "reference.bam.bai")
 # is often the bulk of the run, so it never leaves the user's machine.
 SAMPLE_FILES = (
     GD_RELATIVE_PATH,
-    GD_RELATIVE_PATHS[1],
     GFF3_RELATIVE_PATH,
     FASTA_RELATIVE_PATH,
     BAM_RELATIVE_PATH,
@@ -72,12 +73,9 @@ class SampleError(Exception):
 
 
 def find_gd_file(sample_dir):
-    """The sample's .gd, preferring breseq's own output.gd. None if it has neither."""
-    for relative in GD_RELATIVE_PATHS:
-        candidate = os.path.join(sample_dir, relative)
-        if os.path.isfile(candidate):
-            return candidate
-    return None
+    """The sample's data/output.gd, or None if it has none."""
+    candidate = os.path.join(sample_dir, GD_RELATIVE_PATH)
+    return candidate if os.path.isfile(candidate) else None
 
 
 def find_sample_dirs(root):
@@ -181,7 +179,7 @@ def _import_one_sample(sample_dir, sample_name, context, person):
 
     gd_path = find_gd_file(sample_dir)
     if gd_path is None:
-        raise SampleError("%s has no %s" % (sample_name, " or ".join(GD_RELATIVE_PATHS)))
+        raise SampleError("%s has no %s" % (sample_name, GD_RELATIVE_PATH))
     gff3_path = _require(sample_dir, GFF3_RELATIVE_PATH, sample_name)
     fasta_path = _require(sample_dir, FASTA_RELATIVE_PATH, sample_name)
     bam_path = _require(sample_dir, BAM_RELATIVE_PATH, sample_name)

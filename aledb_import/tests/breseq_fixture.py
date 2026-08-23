@@ -53,8 +53,8 @@ def write_sample(root, sample_name, sequences=None, gd_text=None,
                  bam_bytes=None, gd_relative_path=None):
     """Create one breseq sample folder under ``root``; returns its path.
 
-    ``gd_relative_path`` writes the mutations somewhere other than breseq's
-    ``output/output.gd`` -- used to cover the ``output/annotated.gd`` fallback.
+    ``gd_relative_path`` writes the mutations somewhere other than
+    ``data/output.gd`` -- used to check that nowhere else counts as a sample.
     """
     sequences = sequences or [("test_ref", SEQUENCE_A)]
     sample_dir = os.path.join(root, sample_name)

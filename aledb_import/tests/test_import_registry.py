@@ -87,7 +87,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertEqual(ResequencingExperiment.objects.count(), 0)
 
     def test_breseq_sample_gd_is_not_also_claimed_as_a_bare_gd(self):
-        """output/annotated.gd belongs to its sample; claiming it twice would double-import."""
+        """data/output.gd belongs to its sample; claiming it twice would double-import."""
         breseq_fixture.write_sample(self.drop, "s1")
         summary = self._run()
 

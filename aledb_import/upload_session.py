@@ -98,8 +98,17 @@ def create_upload_session(request):
     if not can_edit_project(request.user, experiment.project):
         return JsonResponse({"error": "You cannot add to this experiment."}, status=403)
 
+    # Required, not optional. Auto-detect guessed from filename suffixes, which is
+    # exactly where it was least reliable: a breseq result folder carries a .gd, a
+    # .fasta, a .gff3 and a .bam, each of which several handlers claim, so what a
+    # drop became depended on handler priority rather than on what the person meant.
+    # Naming the type makes anything the handler does not claim a reported error
+    # instead of a file quietly routed somewhere else.
     import_type = (payload.get("import_type") or "").strip()
-    if import_type and get_import_handler(import_type) is None:
+    if not import_type:
+        return JsonResponse(
+            {"error": "Choose what you are importing."}, status=400)
+    if get_import_handler(import_type) is None:
         return JsonResponse(
             {"error": "Unknown import type: %s" % import_type}, status=400)
 
@@ -194,7 +203,7 @@ def finalize_upload(request, upload_id):
         # The registry decides what each file is and which handler takes it, so a plugin's
         # import type is reachable here with no change to this view.
         summary = run_import(session.ale_experiment, root, request.user,
-                             import_type=session.import_type or None)
+                             import_type=session.import_type)
     except Exception as exc:
         logger.exception("breseq folder finalize failed for session %s", session.id)
         session.state = STATE_FAILED

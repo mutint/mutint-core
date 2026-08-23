@@ -113,7 +113,7 @@ def upload_ale_experiment(experiment_path):
     the Add page uses, so a CLI upload and a web upload produce identical rows --
     annotated against the experiment's reference, carrying their .gd record, with the
     alignment stored. This used to be a second implementation that read
-    ``output/annotated.gd`` plus the breseq HTML report and shared nothing with it.
+    the sample's .gd plus the breseq HTML report and shared nothing with it.
     """
     parameters = _check_and_extract_parameters_from_metadata(
         os.path.join(experiment_path, "metadata"))

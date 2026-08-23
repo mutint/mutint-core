@@ -65,7 +65,7 @@ like any other page, so a browser session sees exactly the experiments its user 
 ### breseq result import (`ALEDB_STORE_DIR`)
 
 Dropping breseq result folders on `/import/add/` uploads five files per sample --
-`output/annotated.gd`, `data/reference.gff3`, `data/reference.fasta`,
+`data/output.gd`, `data/reference.gff3`, `data/reference.fasta`,
 `data/reference.bam`, `data/reference.bam.bai` -- and nothing else, so the bulk of a run
 never leaves your machine. They are stored under `ALEDB_STORE_DIR`, keyed by database id:
 
@@ -92,7 +92,7 @@ Dropping breseq result folders on `/import/add/` uploads five files per sample a
 so the bulk of a run never leaves your machine:
 
 ```
-<sample>/output/annotated.gd
+<sample>/data/output.gd
 <sample>/data/reference.gff3   <sample>/data/reference.fasta
 <sample>/data/reference.bam    <sample>/data/reference.bam.bai
 ```

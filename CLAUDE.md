@@ -244,7 +244,7 @@ All apps use the `aledb_*` namespace. Key apps:
     `gdtools APPLY`, so nothing but the raw record may go in that field.
   - CLI upload — `./aledb upload <path>` walks for `<exp>/breseq/` + `<exp>/metadata/`,
     hands the folders to `breseq_folder`, then parses the metadata. It used to be a second
-    importer that read `annotated.gd` plus the breseq HTML report and shared no code with
+    importer that read the .gd plus the breseq HTML report and shared no code with
     the web paths; that is gone, along with `upload.py`.
   - The vendored `gdparse/gdparse/gdparse.py` (`GDParser`) survives only for the annotation
     test fixtures. Note it has no `INT` type; `genomediff` does.
@@ -255,8 +255,8 @@ All apps use the `aledb_*` namespace. Key apps:
     The annotator is a port of breseq's own, checked against `gdtools` output.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
-    `output/output.gd` (or `annotated.gd`) plus `data/reference.{gff3,fasta}` and
-    `data/reference.bam{,.bai}`;
+    `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}` --
+    everything from the sample's `data/` folder, `output/` is not consulted;
     stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
     records the shared reference as `ExperimentReference`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
@@ -264,8 +264,7 @@ All apps use the `aledb_*` namespace. Key apps:
     primary key rather than from anything the client sends.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
-    `output/output.gd` (or `annotated.gd`) plus `data/reference.{gff3,fasta}` and
-    `data/reference.bam{,.bai}`,
+    `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
     storing them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`).
     The shared reference is recorded as `ExperimentReference`; a sample whose reference
     *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the

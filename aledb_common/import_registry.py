@@ -9,7 +9,7 @@ Apps register in ``AppConfig.ready()``::
     register_import_handler(
         name='breseq_folder',
         label='breseq result folder',
-        patterns=['output/annotated.gd', 'data/reference.bam'],
+        patterns=['data/output.gd', 'data/reference.bam'],
         priority=50,
         handle=import_breseq_folders_from_staging,
     )
