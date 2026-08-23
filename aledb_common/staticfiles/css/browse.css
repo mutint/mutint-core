@@ -1,0 +1,11 @@
+/* The genome browser page. Loaded from browse.html only -- igv.js is the only thing here. */
+
+/* igv.js sizes itself to its tracks, so the container has to be told how tall to be. The
+   height is set in JS (it depends on where the container lands under a header whose height
+   varies with branding and with the sample chooser); this is the floor for a short window
+   and the scroll that keeps an over-tall stack of tracks inside the box. */
+#igv-browser {
+    border: 1px solid #ddd;
+    min-height: 400px;
+    overflow-y: auto;
+}

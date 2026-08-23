@@ -59,25 +59,38 @@ class BrowseMutationTestCase(TestCase):
         self.assertIn("/mutations/reference/%d/fai" % self.experiment.ale_id, html)
         self.assertIn("js/igv.min.js", html)
 
-    def test_the_locus_is_a_window_around_the_position(self):
-        """A bare coordinate would put the mutation at the very edge of the view."""
-        from aledb_seq.views.browse import LOCUS_FLANK_BASES, _locus
+    def test_the_locus_buffers_the_whole_mutation_not_just_its_start(self):
+        """A deletion has to open showing the deletion, not 200 bp of its left junction."""
+        from aledb_seq.views.browse import LOCUS_BUFFER_BASES, _locus
 
         mutation = self.observed.mutation
         mutation.position = 5000          # clear of the contig start, so nothing is clamped
-        mutation.save(update_fields=["position"])
+        mutation.start_position, mutation.end_position = 5000, 25000
+        mutation.save(update_fields=["position", "start_position", "end_position"])
 
         contig, _, span = _locus(mutation).partition(":")
         start, _, end = span.partition("-")
 
         self.assertEqual(contig, mutation.reseq_reference)
-        self.assertEqual(int(start), 5000 - LOCUS_FLANK_BASES)
-        self.assertEqual(int(end), 5000 + LOCUS_FLANK_BASES)
+        self.assertEqual(int(start), 5000 - LOCUS_BUFFER_BASES)
+        self.assertEqual(int(end), 25000 + LOCUS_BUFFER_BASES)
+
+    def test_an_unannotated_mutation_is_measured_from_its_gd_data(self):
+        """Imported before a reference arrived, it has no extent columns -- but the same
+        breseq rule applies to the raw record, or a DEL would collapse to a point."""
+        from aledb_seq.views.browse import _extent
+
+        mutation = self.observed.mutation
+        mutation.start_position = mutation.end_position = None
+        mutation.gd_data = {"type": "DEL", "seq_id": "ref", "position": 5000, "size": 20001}
+        mutation.save(update_fields=["start_position", "end_position", "gd_data"])
+
+        self.assertEqual(_extent(mutation), (5000, 25000))
 
     def test_a_mutation_near_the_contig_start_does_not_go_below_one(self):
         mutation = self.observed.mutation
-        mutation.position = 5
-        mutation.save(update_fields=["position"])
+        mutation.start_position = mutation.end_position = mutation.position = 5
+        mutation.save(update_fields=["position", "start_position", "end_position"])
 
         from aledb_seq.views.browse import _locus
         self.assertIn(":1-", _locus(mutation))

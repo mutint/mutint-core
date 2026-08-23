@@ -16,14 +16,16 @@ from django.template import loader
 from django.urls import reverse
 
 from aledb_common.util import get_user_context
+from aledb_import.annotate.annotator import mutation_interval
 from aledb_experiment.permissions import can_view_project
 from aledb_seq.models import ExperimentReference, ObservedMutation
 
 logger = logging.getLogger(__name__)
 
-# How much context to show either side of the mutation. A bare coordinate would put the
-# position at the very edge of the view.
-LOCUS_FLANK_BASES = 100
+# How much context to show either side of the mutation's own extent. A view bounded by the
+# mutation alone would put its ends at the very edge, and for a deletion the two junctions
+# are the part worth seeing.
+LOCUS_BUFFER_BASES = 200
 
 
 def browse_mutation(request):
@@ -78,16 +80,36 @@ def _may_view(user, experiment):
 
 
 def _locus(mutation):
-    """`contig:start-end` centred on the mutation.
+    """`contig:start-end` spanning the whole mutation plus a buffer either side.
+
+    Bounded by the mutation's own extent rather than by its start position, so a 50 kb
+    deletion opens showing the deletion rather than 200 bp of its left junction.
 
     `Mutation.reseq_reference` is the GenomeDiff seq_id, i.e. the contig name -- not to be
     confused with `Isolate.reseq_reference`, which is the reference file's name. It matches
     the FASTA's sequence names because both take the first whitespace-delimited token of the
     header, the same rule samtools uses.
     """
-    start = max(1, mutation.position - LOCUS_FLANK_BASES)
-    end = mutation.position + LOCUS_FLANK_BASES
-    return "%s:%d-%d" % (mutation.reseq_reference, start, end)
+    start, end = _extent(mutation)
+    return "%s:%d-%d" % (mutation.reseq_reference,
+                         max(1, start - LOCUS_BUFFER_BASES),
+                         end + LOCUS_BUFFER_BASES)
+
+
+def _extent(mutation):
+    """The reference interval the mutation occupies, 1-based inclusive.
+
+    `start_position`/`end_position` are what the annotator already wrote from breseq's own
+    rule (`mutation_interval`, the port of `cDiffEntry::get_reference_coordinate_start`/
+    `_end`), so they are used as-is. A mutation imported before a reference was available
+    has neither, and is measured from its raw `gd_data` by that same function rather than by
+    a second derivation that could disagree with it.
+    """
+    if mutation.start_position and mutation.end_position:
+        return mutation.start_position, mutation.end_position
+    if mutation.gd_data:
+        return mutation_interval(mutation.gd_data)
+    return mutation.position, mutation.position
 
 
 def _reference_urls(experiment):

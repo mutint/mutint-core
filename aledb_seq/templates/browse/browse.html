@@ -2,6 +2,9 @@
 {% load static %}
 
 {% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <link href="{% static "css/browse.css" %}" rel="stylesheet">
+{% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
 
 {% block content %}
@@ -41,7 +44,7 @@
                     </select>
                 </div>
             {% endif %}
-            <div id="igv-browser" style="border: 1px solid #ddd;"></div>
+            <div id="igv-browser"></div>
         {% endif %}
     </div>
 </div>
@@ -71,7 +74,51 @@
             };
         }
 
-        igv.createBrowser(document.getElementById("igv-browser"), {
+        // igv.js lays its tracks out at their own heights and the container takes whatever
+        // that comes to, which on a tall window is a ~300 px strip of reads above a lot of
+        // empty page. So the container is stretched to the bottom of the viewport, and the
+        // reads are then grown into whatever of it the other tracks did not use. Below
+        // MIN_BROWSER_HEIGHT the box stops shrinking and scrolls instead -- a short window
+        // should not squeeze the reads down to nothing.
+        var MIN_BROWSER_HEIGHT = 400;   // px; roughly coverage plus a few rows of reads
+        var BOTTOM_MARGIN = 16;         // px of page left below the box
+        var BOTTOM_INSET = 4;           // px kept clear of the container's own border
+
+        var container = document.getElementById("igv-browser");
+
+        function fitContainer() {
+            var top = container.getBoundingClientRect().top;
+            container.style.height = Math.max(
+                MIN_BROWSER_HEIGHT, window.innerHeight - top - BOTTOM_MARGIN) + "px";
+        }
+
+        // The space the ruler, the genes and the coverage row take is measured after the
+        // fact rather than reserved by a constant: it moves with the gene track's
+        // displayMode, with how many genes are in view, and with igv's own styling. The
+        // measurement is off the track's own element -- the container's scrollHeight is no
+        // use, because igv's root stretches to fill it and so always reports the same.
+        function growReadsIntoSpareSpace(browser) {
+            var alignments = browser.findTracks(function (t) {
+                return t.type === "alignment";
+            });
+            // Only while it is the sole alignment track. Once a second sample is loaded the
+            // space is theirs to share and igv's own layout is the right answer.
+            if (alignments.length !== 1) { return; }
+
+            var view = alignments[0].trackView;
+            var spare = container.getBoundingClientRect().bottom
+                - view.axis.getBoundingClientRect().bottom - BOTTOM_INSET;
+            if (spare < 1) { return; }
+
+            view.setTrackHeight(alignments[0].height + spare, true);
+            view.checkContentHeight();
+            view.repaintViews();
+        }
+
+        fitContainer();
+        window.addEventListener("resize", fitContainer);
+
+        igv.createBrowser(container, {
             reference: {
                 id: reference.id,
                 name: reference.name,
@@ -89,6 +136,8 @@
             locus: "{{ locus|escapejs }}",
             tracks: [alignmentTrack(track)]
         }).then(function (browser) {
+            growReadsIntoSpareSpace(browser);
+
             var chooser = document.getElementById("add-track");
             if (!chooser) { return; }
             chooser.addEventListener("change", function () {
