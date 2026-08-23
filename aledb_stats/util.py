@@ -1,18 +1,14 @@
 import re
 from django.db.models import Count
-from aledb_common.util import get_gene_list
-from operator import itemgetter
-from collections import Counter
 from aledb_seq.models import UnassignedMissingCoverageEvidence
 from aledb_seq.util import get_all_observed_mutations, get_reseq_ordered_dict
-from aledb_seq.views.common import MUTATION_TYPE_LIST, COLORS, DEFAULT_COLOR, FUNCTIONAL_CHANGE_TYPE_LIST
+from aledb_seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST
 from aledb_stats.models import StaticData
 from aledb_filter.util import filter_observed_mutations
 import aledb_stats.models
 import logging
 
 
-MAX_HISTOGRAM_SIZE = 50
 logger = logging.getLogger(__name__)
 
 
@@ -26,26 +22,6 @@ def get_observed_mutation_list(ale_experiment_id):
     observed_mutation_query_set = get_all_observed_mutations(list(ordered_reseq_dict.keys()))
     observed_mutation_list = filter_observed_mutations(observed_mutation_query_set, ale_experiment_id)
     return observed_mutation_list
-
-
-def get_histogram_jsons(ale_experiment_id, histogram_item_count):
-    # StaticData is written by generate_static_data, which only runs once an experiment has
-    # mutations. A newly created, still-empty experiment has none -- and its stats page is
-    # exactly where the "Add data" button lives, so this must render rather than 500.
-    static_data = StaticData.objects.filter(id=ale_experiment_id).first()
-    if static_data is None or not static_data.histogram_data:
-        return []
-    return static_data.histogram_data[:histogram_item_count]
-
-
-def generate_histogram_jsons(observed_mutation_list):
-    mutations_dict = {obs_mut.mutation_id: obs_mut.mutation for obs_mut in observed_mutation_list
-                 if not (obs_mut.mutation.gene == '' or obs_mut.mutation.gene == '-' or obs_mut.mutation.gene == '-, -')}
-    gene_bar_chart_list = get_gene_bar_chart_list(mutations_dict.values())
-    genes = set_gene_bar_chart_colors(gene_bar_chart_list)
-
-    genes_json = list(genes)
-    return genes_json
 
 
 def generate_needle_plot_data(obs_mut_list):
@@ -68,7 +44,6 @@ def generate_static_data(ale_id):
     mutation_needle_data = generate_needle_plot_data(observed_mutation_list)
     static_data_orm, created = aledb_stats.models.StaticData.objects.get_or_create(id=ale_id)
     static_data_orm.mut_needle_data = mutation_needle_data
-    static_data_orm.histogram_data = generate_histogram_jsons(observed_mutation_list)
     static_data_orm.save()
 
 
@@ -162,37 +137,3 @@ def get_reseq_experiment_info_list(reseq_experiments):
     return reseq_experiments_info_list
 
 
-def get_gene_bar_chart_list(mutations):
-
-    gene_list = [[get_gene_list(mut.gene), mut.mutation_type]
-                 for mut in mutations]
-
-    mutation_type_gene_dict = {}
-
-    for pair in gene_list:
-        genes = set(pair[0])
-        try:
-            mutation_type_gene_dict[pair[1]] += [genes]
-        except KeyError:
-            mutation_type_gene_dict[pair[1]] = [genes]
-
-    final_list = []
-
-    for key, value in mutation_type_gene_dict.items():
-        flattened_list = sorted([item for sublist in value for item in sublist], reverse=True)
-        counted_list = Counter(flattened_list)
-        for k, v in counted_list.items():
-            new_dict = {'mutation__gene': k, 'the_count': v, 'mutation__mutation_type': key}
-            final_list.append(new_dict)
-    final_sorted_list = sorted(final_list, key=itemgetter('the_count'), reverse=True)
-
-    return final_sorted_list
-
-
-def set_gene_bar_chart_colors(genes):
-    for gene in genes:
-        if gene['mutation__mutation_type'] in MUTATION_TYPE_LIST:
-            gene['color'] = COLORS[MUTATION_TYPE_LIST.index(gene['mutation__mutation_type'])]
-        else:
-            gene['color'] = DEFAULT_COLOR
-    return genes

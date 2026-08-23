@@ -7,9 +7,6 @@ from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment, Project
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
 from aledb_dashboard.timeline_util import get_timeline
-from aledb_stats.views import get_histogram_item_count
-from aledb_dashboard.models import BarCharts
-from aledb_stats.util import MAX_HISTOGRAM_SIZE
 from aledb_common.logger import user_extra, join_extras
 import logging
 

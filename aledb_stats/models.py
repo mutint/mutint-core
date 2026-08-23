@@ -5,4 +5,3 @@ from jsonfield import JSONField
 class StaticData(models.Model):
     id = models.AutoField(primary_key=True)
     mut_needle_data = JSONField(default=dict)
-    histogram_data = JSONField(default=dict)

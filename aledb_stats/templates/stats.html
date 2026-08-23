@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ ale_project_name }}: {{ ale_experiment_name }} experiment stats{% endblock %}
+{% block title %}{{ ale_project_name }}: {{ ale_experiment_name }} experiment overview{% endblock %}
 {% block scripts_and_style %}
     <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
     <style type="text/css">
@@ -52,7 +52,7 @@
     </style>
 
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - Experiment Stats{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - Experiment Overview{% endblock %}
 {% block experiment_actions %}
     <div style="margin-top: 0.6em;">
         <a class="btn btn-primary btn-sm" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
@@ -221,39 +221,6 @@
     <h2>Mutation Needle Plot</h2>
     <div class="row">
         {% include 'muts_needle_plot.html' %} {# histograms use d3js import from this implementation #}
-        <hr>
-        <h2>Mutation Targets</h2>
-        <form action="" method="get">
-            <input type="hidden"
-                   name="ale_experiment_id"
-                   value="{{ ale_experiment_id }}">
-            <input type="number"
-                   name="number_of_top_genes"
-                   min="1"
-                   max="{{ max_histogram_size }}"
-                   value="{{ number_of_genes_to_show }}">
-            Entries to show
-            <input type="submit"
-                   class="btn btn-default"
-                   value="Show"><br>
-        </form>
-        <br>
-        <div class="chart"></div>
-        <table>
-            <tr>
-                <td>
-                    <script>
-                        var gene_data = {{ genes }};
-                        var color_set = {{ gene_color_set }};
-                        var mutation_types = {{ mutation_types }};
-                        var extra_padding = 0;
-                        function _get_label(datum) {
-                            return datum.mutation__gene;
-                        }
-                    </script>
-                </td>
-            </tr>
-        </table>
     </div>
 <script type="text/javascript">
 (function () {

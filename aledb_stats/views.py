@@ -6,15 +6,13 @@ from django.conf import settings
 from aledb_seq.util import get_ordered_reseq_queryset
 import aledb_seq.views.common
 from aledb_seq.views import common
-from aledb_stats.util import get_histogram_jsons,\
-    get_needle_plot_data,\
+from aledb_stats.util import get_needle_plot_data,\
     get_mutation_type_count_dict, \
     get_observed_mutation_type_count_dict,\
     get_protein_change_type_count_dict,\
     get_observed_protein_change_type_count_dict,\
     get_ale_flask_isolate_count_list,\
-    get_reseq_experiment_info_list,\
-    MAX_HISTOGRAM_SIZE
+    get_reseq_experiment_info_list
 from aledb_common.util import get_user_context
 from aledb_stats.util import get_observed_mutation_list
 import logging
@@ -66,9 +64,6 @@ def stats(request):
         observed_protein_change_type_count_dict = get_observed_protein_change_type_count_dict(obs_mutations)
         template = loader.get_template(STATS_TEMPLATE)
 
-        barchart_item_count = get_histogram_item_count(request)
-        genes_json = get_histogram_jsons(experiment.ale_id, barchart_item_count)
-
         needle_plot_data = get_needle_plot_data(experiment.ale_id)
         context.update({"ale_experiment_name": exp_name,
                         "ale_no": ale_number,
@@ -85,17 +80,12 @@ def stats(request):
                         "observed_mutation_sum": sum(observed_mutation_type_count_dict.values()),
                         "experiments_info_list": experiments_info_list,
                         "needle_plot_data": mark_safe(list(needle_plot_data)),
-                        "genes": mark_safe(genes_json),
-                        "gene_color_set": mark_safe(common.GENE_COLORS),
                         "seq_color_set": mark_safe(common.SEQ_COLORS),
-                        "mutation_types": mark_safe(common.MUTATION_TYPE_LIST),
                         "protein_types": mark_safe(common.FUNCTIONAL_CHANGE_TYPE_LIST),
-                        "number_of_genes_to_show": barchart_item_count,
                         "ale_flask_isolate_count_list": ale_flask_isolate_count_list,
                         "ale_sum": ale_sum,
                         "flask_sum": flask_sum,
                         "isolate_sum": isolate_sum,
-                        "max_histogram_size": MAX_HISTOGRAM_SIZE,
                         "notes": experiment.notes,
                         })
 
@@ -114,11 +104,3 @@ def stats(request):
         context['err_message'] = str(e)
         return HttpResponse(template.render(context, request), content_type="text/html")
 
-
-def get_histogram_item_count(request):
-    barchart_item_count = 20
-    if 'number_of_top_genes' in request.GET:
-        barchart_item_count_str = request.GET['number_of_top_genes']
-        if barchart_item_count_str and barchart_item_count_str.isdigit():
-            barchart_item_count = int(barchart_item_count_str)
-    return barchart_item_count

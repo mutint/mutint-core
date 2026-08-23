@@ -1,4 +1,4 @@
-from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts, BarCharts
+from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
 from aledb_seq.models import ObservedMutation, Mutation
 from aledb_filter.util import filter_observed_mutations
 from aledb_seq.util import get_mutations_from_observed_muations
