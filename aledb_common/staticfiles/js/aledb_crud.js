@@ -1,5 +1,9 @@
 /* Shared helpers for the create/delete controls on the project and experiment pages.
  *
+ * The create forms are Bootstrap modals, opened declaratively with data-toggle, so
+ * there is no panel-toggling helper here any more -- an inline panel expanded into
+ * the DataTable below it, which does not reflow, and the two overlapped.
+ *
  * Was duplicated inline, byte for byte, in ale/projects.html and ale/experiments.html;
  * ale/project_detail.html would have made a third copy. Loaded from base.html, so every
  * page has it.
@@ -38,20 +42,5 @@
             buttons: true,
             dangerMode: true
         });
-    };
-
-    /* Wire a "+ New ..." button to the panel it toggles. */
-    window.aledbTogglePanel = function (buttonId, panelId, cancelId) {
-        var panel = document.getElementById(panelId);
-        var button = document.getElementById(buttonId);
-        if (!panel || !button) { return; }
-        button.addEventListener("click", function () {
-            panel.style.display = panel.style.display === "none" ? "block" : "none";
-        });
-        if (cancelId && document.getElementById(cancelId)) {
-            document.getElementById(cancelId).addEventListener("click", function () {
-                panel.style.display = "none";
-            });
-        }
     };
 })();

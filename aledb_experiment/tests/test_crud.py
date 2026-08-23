@@ -162,6 +162,43 @@ class SoftDeleteTestCase(TestCase):
         self.assertEqual(first, second)
 
 
+class ProjectDetailIsReadOnlyTestCase(TestCase):
+    """The project page shows a project; it has never been able to change one.
+
+    The summary was four editable <input>s inside a <form> that posted nowhere, so
+    anything typed was silently discarded on reload -- and two of them even shared
+    name="user".
+    """
+
+    def setUp(self):
+        # Via the view, not Project.objects.create: the latter leaves the owner
+        # without the django-guardian grant, and the page then 403s.
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+        self.project = Project.objects.get(pk=created["project_id"])
+
+    def _html(self):
+        return self.client.get("/ale/project/%d/" % self.project.id).content.decode()
+
+    def test_the_summary_has_no_inputs(self):
+        summary = self._html().split('id="exp_table"')[0]
+        for field in ('id="name"', 'id="date"', 'id="user"', 'id="public"'):
+            self.assertNotIn(field, summary)
+
+    def test_it_still_shows_the_values(self):
+        html = self._html()
+        self.assertIn("Project Name", html)
+        self.assertIn("Created Date", html)
+        self.assertIn("Owner Name", html)
+        self.assertIn("Is public?", html)
+        self.assertIn("P", html)
+
+    def test_is_public_reads_as_words_not_a_python_bool(self):
+        self.assertIn("<dd>No</dd>", self._html())
+
+
 class NewExperimentControlTestCase(TestCase):
     """Creating an experiment under a project that already exists.
 
@@ -185,7 +222,7 @@ class NewExperimentControlTestCase(TestCase):
     def test_the_experiments_page_offers_a_project_to_create_under(self):
         html = self.client.get("/ale/experiments/").content.decode("utf-8")
 
-        self.assertIn('id="new-experiment"', html)
+        self.assertIn('data-target="#new-experiment-modal"', html)
         self.assertIn('id="ne-project"', html)
         self.assertIn("P", html)
         # No longer a link that dead-ends on the project list.
@@ -195,7 +232,10 @@ class NewExperimentControlTestCase(TestCase):
         html = self.client.get(
             "/ale/project/%d/" % self.project.id).content.decode("utf-8")
 
-        self.assertIn('id="new-experiment"', html)
+        # The control is a modal trigger: opened inline the form overlapped the
+        # experiments DataTable, whose scroll container does not reflow.
+        self.assertIn('data-target="#new-experiment-modal"', html)
+        self.assertIn('id="new-experiment-modal"', html)
         self.assertIn('id="ne-name"', html)
         self.assertNotIn('id="ne-project"', html)   # implicit: it is the page you are on
 
@@ -363,3 +403,77 @@ class PurgeDeletedTestCase(TestCase):
 
         self.assertFalse(os.path.exists(marker),
                          "stored files should not outlive the experiment")
+
+
+class SignedOutControlsTestCase(TestCase):
+    """Signed out, the create/delete controls are not offered at all.
+
+    They were rendered to everyone. Nothing unsafe followed -- every endpoint
+    refuses an anonymous caller -- but clicking them could only ever produce a
+    403 in the error line, which is a dead end dressed up as an action.
+    """
+
+    def setUp(self):
+        owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(owner)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+        self.project = Project.objects.get(pk=created["project_id"])
+        self.client.logout()
+
+    def _html(self, url):
+        return self.client.get(url).content.decode()
+
+    def test_the_project_list_offers_nothing(self):
+        html = self._html("/ale/projects/")
+        self.assertNotIn("+ New project", html)
+        self.assertNotIn('id="delete-selected"', html)
+        self.assertNotIn('id="new-project-modal"', html)
+
+    def test_the_experiment_list_offers_no_delete(self):
+        self.assertNotIn('id="delete-selected"', self._html("/ale/experiments/"))
+
+    def test_the_experiment_list_offers_no_create(self):
+        """Neither the create button nor the fallback that used to stand in for it.
+
+        With no editable projects the page offered "+ New project" instead, linking
+        to the project list -- which, signed out, no longer offers one either. A
+        link to a button that is not there is worse than no link.
+        """
+        html = self._html("/ale/experiments/")
+        self.assertNotIn('data-target="#new-experiment-modal"', html)
+        self.assertNotIn("+ New project", html)
+
+    def test_the_pages_still_render(self):
+        """Gating hides controls; it must not take the page with it. The delete
+        handlers call getElementById(...).addEventListener, which throws on null."""
+        for url in ("/ale/projects/", "/ale/experiments/"):
+            with self.subTest(url=url):
+                self.assertEqual(200, self.client.get(url).status_code)
+
+    def test_every_handler_guards_its_missing_control(self):
+        for url in ("/ale/projects/", "/ale/experiments/"):
+            with self.subTest(url=url):
+                html = self._html(url)
+                for call in ('document.getElementById("delete-selected").addEventListener',
+                             'document.getElementById("np-save").addEventListener',
+                             'document.getElementById("ne-save").addEventListener'):
+                    if call in html:
+                        control = call.split('"')[1]
+                        self.assertIn('if (!document.getElementById("%s")) { return; }' % control,
+                                      html)
+
+    def test_signed_in_they_come_back(self):
+        self.client.force_login(User.objects.get(username="owner"))
+        html = self._html("/ale/projects/")
+        self.assertIn("+ New project", html)
+        self.assertIn('id="delete-selected"', html)
+
+    def test_the_endpoints_refuse_anonymous_regardless(self):
+        """The gating is cosmetic; these are the checks that matter."""
+        for url, data in (("/ale/projects/create/", {"name": "x"}),
+                          ("/ale/experiments/create/",
+                           {"project": self.project.id, "name": "x"}),
+                          ("/ale/project/%d/delete/" % self.project.id, {})):
+            with self.subTest(url=url):
+                self.assertEqual(403, self.client.post(url, data).status_code)

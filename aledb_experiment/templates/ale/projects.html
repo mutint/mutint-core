@@ -30,33 +30,58 @@
 {% block title %}Project List{% endblock %}
 {% block header %}Project List{% endblock %}
 {% block content %}
+    {% comment %} Signed out, these do nothing but 403 -- project_create requires an
+       authenticated user and project_delete requires can_edit_project, which no
+       anonymous user satisfies. Offering them was an invitation to a dead end.
+       The server checks stand on their own; this only stops advertising them. {% endcomment %}
+    {% if user.is_authenticated %}
     <div style="margin-bottom: 1em;">
-        <button type="button" class="btn btn-primary btn-sm" id="new-project">+ New project</button>
+        <button type="button" class="btn btn-primary btn-sm"
+                data-toggle="modal" data-target="#new-project-modal">+ New project</button>
         <button type="button" class="btn btn-danger btn-sm" id="delete-selected">
             &minus; Delete selected</button>
         <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
         <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
     </div>
+    {% endif %}
 
-    <div id="new-project-form" style="display: none; margin-bottom: 1.5em; padding: 1em;
-         border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
-        {% csrf_token %}
-        <div class="form-group">
-            <label for="np-name">Project name</label>
-            <input type="text" class="form-control" id="np-name" required>
+    {% if user.is_authenticated %}
+    {% comment %} A modal rather than a panel in the flow. Opened inline it expanded into the
+       DataTable below, whose scrollY container keeps a fixed height and does not
+       reflow, so the form and the table overlapped. {% endcomment %}
+    <div class="modal fade" id="new-project-modal" tabindex="-1" role="dialog"
+         aria-labelledby="new-project-title">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="new-project-title">New project</h4>
+                </div>
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="np-name">Project name</label>
+                        <input type="text" class="form-control" id="np-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="np-experiment">First experiment <small>(optional)</small></label>
+                        <input type="text" class="form-control" id="np-experiment"
+                               placeholder="Leave blank to create the project only">
+                    </div>
+                    <div class="checkbox">
+                        <label><input type="checkbox" id="np-public"> Public</label>
+                    </div>
+                    <div id="np-error" style="color: #a00;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="np-save">Create</button>
+                </div>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="np-experiment">First experiment <small>(optional)</small></label>
-            <input type="text" class="form-control" id="np-experiment"
-                   placeholder="Leave blank to create the project only">
-        </div>
-        <div class="checkbox">
-            <label><input type="checkbox" id="np-public"> Public</label>
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="np-save">Create</button>
-        <button type="button" class="btn btn-default btn-sm" id="np-cancel">Cancel</button>
-        <div id="np-error" style="color: #a00; margin-top: 0.5em;"></div>
     </div>
+    {% endif %}
 
 
     <table id="project_table" class="table table-bordered" style="width: 100%;">
@@ -90,13 +115,7 @@
 <script type="text/javascript">
 (function () {
     "use strict";
-    var panel = document.getElementById("new-project-form");
-    document.getElementById("new-project").addEventListener("click", function () {
-        panel.style.display = panel.style.display === "none" ? "block" : "none";
-    });
-    document.getElementById("np-cancel").addEventListener("click", function () {
-        panel.style.display = "none";
-    });
+    if (!document.getElementById("np-save")) { return; }   // signed out
     document.getElementById("np-save").addEventListener("click", function () {
         var data = { name: document.getElementById("np-name").value,
                      experiment: document.getElementById("np-experiment").value };
@@ -115,6 +134,7 @@
 <script type="text/javascript">
 (function () {
     "use strict";
+    if (!document.getElementById("delete-selected")) { return; }   // signed out
     document.getElementById("delete-selected").addEventListener("click", function () {
         var table = $("#project_table").DataTable();
         var ids = [];

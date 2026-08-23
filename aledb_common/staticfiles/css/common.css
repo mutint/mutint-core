@@ -240,7 +240,11 @@ a:hover {
 /* aledb-core's attribution, closing the sidebar menu. Muted and small: it is a
    watermark, not a nav entry, and must not compete with the links above it. */
 .aledb-watermark {
-    padding: 1.5em 15px 0.75em;
+    /* Same box as `.nav > li > a` (10px 15px) so the text lines up with the
+       links above it -- the watermark is a bare <li> with no inner <a> to
+       inherit that from. Separation from the nav is margin, not extra padding. */
+    padding: 10px 15px;
+    margin-top: 1.5em;
     font-size: 11px;
     color: #999;
     white-space: nowrap;

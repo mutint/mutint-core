@@ -136,16 +136,20 @@ class AddPageTestCase(TestCase):
         self.assertIn("delete-selected", experiments)
 
     def test_both_list_pages_load_the_shared_crud_helpers(self):
-        """aledbPost / aledbConfirmDelete / aledbTogglePanel moved out of the templates
-        into one static file; a page that lost the script would fail silently on click."""
+        """aledbPost / aledbConfirmDelete moved out of the templates into one static
+        file; a page that lost the script would fail silently on click.
+
+        aledbTogglePanel was the third, and is gone: the create forms are modals now,
+        opened declaratively by Bootstrap, so nothing toggles an inline panel."""
         from django.contrib.staticfiles import finders
 
         path = finders.find("js/aledb_crud.js")
         self.assertIsNotNone(path)
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
-        for helper in ("aledbPost", "aledbConfirmDelete", "aledbTogglePanel"):
+        for helper in ("aledbPost", "aledbConfirmDelete"):
             self.assertIn(helper, source)
+        self.assertNotIn("aledbTogglePanel", source)
         self.assertIn("This is permanent.", source)
 
         for url in ("/ale/projects/", "/ale/experiments/"):

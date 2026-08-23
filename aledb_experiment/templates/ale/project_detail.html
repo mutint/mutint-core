@@ -23,29 +23,22 @@
 
 {% block content %}
 
+    {% comment %} Read-only: nothing here posts anywhere, and there is no edit view behind it.
+       These were editable text inputs, which invited changes that were silently
+       discarded on reload. Two of the three even shared name="user". {% endcomment %}
     <div class="row">
-        <form class="container">
-            <div class="form-group row">
-                <label for="name" class="col-sm-2 col-form-label text-right">Project Name:</label>
-                <div class="col-sm-3">
-                    <input type="text" value="{{ project.name }}" name="name" class="form-control" id="name">
-                </div>
-                <label for="date" class="col-sm-2 col-form-label text-right">Created Date:</label>
-                <div class="col-sm-3">
-                    <input type="date" value="{{ project.date_str }}" name="user" class="form-control" id="date">
-                </div>
-            </div>
-            <div class="form-group row">
-                <label for="user" class="col-sm-2 col-form-label text-right">Owner Name:</label>
-                <div class="col-sm-3">
-                    <input type="text" value="{{ project.owner }}" name="user" class="form-control" id="user">
-                </div>
-                <label for="public" class="col-sm-2 col-form-label text-right">Is public?</label>
-                <div class="col-sm-3">
-                    <input type="text" value="{{ project.is_public }}" name="public" class="form-control" id="public">
-                </div>
-            </div>
-        </form>
+        <div class="container">
+            <dl class="dl-horizontal project-summary">
+                <dt>Project Name</dt>
+                <dd>{{ project.name }}</dd>
+                <dt>Created Date</dt>
+                <dd>{{ project.date_str }}</dd>
+                <dt>Owner Name</dt>
+                <dd>{{ project.owner }}</dd>
+                <dt>Is public?</dt>
+                <dd>{{ project.is_public|yesno:"Yes,No" }}</dd>
+            </dl>
+        </div>
     </div>
 
     <div class="row">
@@ -57,20 +50,37 @@
         <br>
         {% if can_edit %}
         <div style="margin-bottom: 1em;">
-            <button type="button" class="btn btn-primary btn-sm" id="new-experiment">+ New experiment</button>
+            <button type="button" class="btn btn-primary btn-sm"
+                    data-toggle="modal" data-target="#new-experiment-modal">+ New experiment</button>
         </div>
 
-        <div id="new-experiment-form" style="display: none; margin-bottom: 1.5em; padding: 1em;
-             border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="ne-name">Experiment name</label>
-                <input type="text" class="form-control" id="ne-name"
-                       placeholder="New experiment in {{ project.name }}" required>
+        {% comment %} A modal rather than a panel in the flow: opened inline it pushed into the
+           DataTable below, whose scroll container does not reflow, and the two
+           overlapped. data-toggle also means the button works without our JS. {% endcomment %}
+        <div class="modal fade" id="new-experiment-modal" tabindex="-1" role="dialog"
+             aria-labelledby="new-experiment-title">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span></button>
+                        <h4 class="modal-title" id="new-experiment-title">New experiment</h4>
+                    </div>
+                    <div class="modal-body">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label for="ne-name">Experiment name</label>
+                            <input type="text" class="form-control" id="ne-name"
+                                   placeholder="New experiment in {{ project.name }}" required>
+                        </div>
+                        <div id="ne-error" style="color: #a00;"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="ne-save">Create</button>
+                    </div>
+                </div>
             </div>
-            <button type="button" class="btn btn-primary btn-sm" id="ne-save">Create</button>
-            <button type="button" class="btn btn-default btn-sm" id="ne-cancel">Cancel</button>
-            <div id="ne-error" style="color: #a00; margin-top: 0.5em;"></div>
         </div>
         {% endif %}
 
@@ -111,8 +121,7 @@
 <script type="text/javascript">
 (function () {
     "use strict";
-    if (!document.getElementById("new-experiment")) { return; }
-    window.aledbTogglePanel("new-experiment", "new-experiment-form", "ne-cancel");
+    if (!document.getElementById("ne-save")) { return; }
 
     document.getElementById("ne-save").addEventListener("click", function () {
         var name = document.getElementById("ne-name").value.trim();

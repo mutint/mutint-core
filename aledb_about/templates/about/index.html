@@ -2,14 +2,14 @@
 {% block title %}About{% endblock %}
 {% block header %}About{% endblock %}
 {% block content %}
-    {# aledb-core's own About page: what the platform is, not who is running it.
+    {% comment %} aledb-core's own About page: what the platform is, not who is running it.
 
        This used to be ALEdb's About page -- its publication, its PI, its contact
        address, its hosting institution. All of that is a deployment's, not the
        platform's, and it now lives in the ALEdb deployment's own
        templates/about/index.html. Any deployment overrides this page the same
        way: drop about/index.html in the project templates dir, which is searched
-       ahead of every app's. #}
+       ahead of every app's. {% endcomment %}
 
     <p>This site runs <b>aledb-core</b> {{ aledb_version }}, a platform for storing and
         exploring mutations from adaptive laboratory evolution (ALE) experiments. It
