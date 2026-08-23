@@ -161,6 +161,42 @@ def html_mutation_annotation(mutation):
     return annotation
 
 
+def _collapsed_gene_list(count, joined):
+    """A large deletion's gene list, behind a Show button -- output.cpp:4645-4657.
+
+    breseq has two branches here and the port only had the second: with JavaScript
+    it emits the count plus a hidden list and a button, and under --no-javascript it
+    emits the count, a <br> and the whole list. Taking the fallback meant a deletion
+    spanning hundreds of genes stretched the column until the rest of the table
+    scrolled off the page.
+
+    Two deliberate differences from breseq's markup, both to survive being embedded
+    in someone else's page rather than standing alone in a generated report:
+
+      - No element ids and no inline onclick. breseq numbers each block
+        `gene_hide_<type>_<id>` and wires it to global hideTog()/showTog(); a
+        delegated listener on the table needs neither, so nothing has to invent ids
+        that stay unique across a page it does not own.
+      - `breseq_gene_list`, not breseq's `hidden`: Bootstrap already defines
+        `.hidden` with `!important`, which this cannot toggle back off.
+
+    Underscores in those class names, not hyphens, and that is load-bearing. Every
+    field here goes through htmlize() on the way out (breseq does the same, to stop
+    a gene name like insB-14 wrapping mid-name), which rewrites "-" as a non-breaking
+    hyphen -- so a hyphenated class name arrives as breseq&#8209;gene&#8209;list and
+    matches no stylesheet. breseq's own generated classes are underscored for
+    unrelated reasons; this port has to be.
+
+    The <noscript> copy is breseq's, and is why the list is still readable with
+    scripting off -- the same reason breseq keeps its --no-javascript branch.
+    """
+    return ('<b>%d genes</b> '
+            '<noscript>%s</noscript>'
+            '<span class="breseq_gene_list" hidden>%s</span>'
+            '<button type="button" class="breseq_gene_toggle">Show</button>'
+            % (count, joined, joined))
+
+
 def _html_gene_fields(mutation):
     """output.cpp:4459-4580 -- the Gene and Description columns."""
     gene_name = _get(mutation, 'gene_name')
@@ -197,8 +233,7 @@ def _html_gene_fields(mutation):
         if len(names) < MAX_GENES_BEFORE_SUMMARY:
             html_product = joined
         else:
-            html_product = '<b>%d genes</b>%s%s' % (
-                len(names), HTML_MULTIPLE_SEPARATOR, joined)
+            html_product = _collapsed_gene_list(len(names), joined)
 
     else:
         names = gene_name.split(MULTIPLE_SEPARATOR)
