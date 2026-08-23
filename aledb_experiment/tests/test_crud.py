@@ -219,25 +219,34 @@ class NewExperimentControlTestCase(TestCase):
             "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
 
-    def test_the_experiments_page_offers_a_project_to_create_under(self):
+    def test_the_experiments_page_links_to_the_create_page(self):
+        """The control is a link to a page of its own, not a dialog over the table."""
         html = self.client.get("/ale/experiments/").content.decode("utf-8")
 
-        self.assertIn('data-target="#new-experiment-modal"', html)
-        self.assertIn('id="ne-project"', html)
-        self.assertIn("P", html)
+        self.assertIn('href="/ale/experiments/new/"', html)
         # No longer a link that dead-ends on the project list.
         self.assertNotIn('href="/ale/projects/">+ New experiment', html)
 
-    def test_the_project_page_offers_one_with_the_project_implicit(self):
+    def test_the_create_page_offers_a_project_to_create_under(self):
+        html = self.client.get("/ale/experiments/new/").content.decode("utf-8")
+
+        self.assertIn('id="ne-project"', html)
+        self.assertIn("P", html)
+
+    def test_the_project_page_links_to_the_create_page_with_itself_fixed(self):
         html = self.client.get(
             "/ale/project/%d/" % self.project.id).content.decode("utf-8")
 
-        # The control is a modal trigger: opened inline the form overlapped the
-        # experiments DataTable, whose scroll container does not reflow.
-        self.assertIn('data-target="#new-experiment-modal"', html)
-        self.assertIn('id="new-experiment-modal"', html)
+        self.assertIn('href="/ale/experiments/new/?project=%d"' % self.project.id, html)
+
+    def test_the_create_page_fixes_the_project_when_given_one(self):
+        """Arrived at from a project, the project is settled -- no picker to get wrong."""
+        html = self.client.get(
+            "/ale/experiments/new/", {"project": self.project.id}).content.decode("utf-8")
+
         self.assertIn('id="ne-name"', html)
-        self.assertNotIn('id="ne-project"', html)   # implicit: it is the page you are on
+        self.assertIn("P", html)
+        self.assertNotIn("<select", html)
 
     def test_creating_one_returns_it_and_it_shows_up(self):
         response = self.client.post(
@@ -279,17 +288,27 @@ class NewExperimentControlTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_a_project_you_cannot_edit_is_not_offered(self):
-        """The dropdown lists only what the POST would accept."""
+        """The picker lists only what the POST would accept."""
         stranger = User.objects.create(
             username="stranger", email="s@e.com", is_active=True, is_staff=True)
         stranger.set_password("pw")
         stranger.save()
         self.client.force_login(stranger)
 
+        # Staff may *view* every project, but may not create under this one, so the
+        # experiments page sends them to make one instead.
         html = self.client.get("/ale/experiments/").content.decode("utf-8")
-        # Staff may *view* every project, but may not create under this one.
-        self.assertNotIn('id="ne-project"', html)
+        self.assertNotIn('href="/ale/experiments/new/"', html)
         self.assertIn("+ New project", html)
+
+    def test_the_create_page_refuses_a_project_you_cannot_edit(self):
+        """Reachable by URL, so the page checks rather than trusting the link."""
+        stranger = User.objects.create(
+            username="stranger", email="s2@e.com", is_active=True, is_staff=True)
+        self.client.force_login(stranger)
+
+        response = self.client.get("/ale/experiments/new/", {"project": self.project.id})
+        self.assertEqual(403, response.status_code)
 
 
 class ProjectVisibilityTestCase(TestCase):
@@ -477,3 +496,71 @@ class SignedOutControlsTestCase(TestCase):
                           ("/ale/project/%d/delete/" % self.project.id, {})):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.post(url, data).status_code)
+
+
+class CreatePagesTestCase(TestCase):
+    """Creating is a page now, not a dialog.
+
+    The forms used to be modals over the list tables. A create form wants a
+    heading, room to explain its fields and a URL you can link someone to, and
+    none of that survives in a dialog over a DataTable -- which is also where the
+    overlap and double-toggle bugs came from.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+        self.project = Project.objects.get(pk=created["project_id"])
+
+    # --- they exist and render ------------------------------------------------
+
+    def test_the_project_page_renders(self):
+        response = self.client.get("/ale/projects/new/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, 'id="np-name"')
+        self.assertContains(response, 'id="np-save"')
+
+    def test_the_experiment_page_renders(self):
+        response = self.client.get("/ale/experiments/new/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, 'id="ne-name"')
+        self.assertContains(response, 'id="ne-save"')
+
+    def test_neither_is_a_modal(self):
+        for url in ("/ale/projects/new/", "/ale/experiments/new/"):
+            with self.subTest(url=url):
+                self.assertNotContains(self.client.get(url), "data-toggle=\"modal\"")
+
+    def test_both_offer_a_way_back(self):
+        for url in ("/ale/projects/new/", "/ale/experiments/new/"):
+            with self.subTest(url=url):
+                self.assertContains(self.client.get(url), "Cancel")
+
+    # --- signed out -----------------------------------------------------------
+
+    def test_signed_out_they_are_forbidden(self):
+        """Reachable by URL, so each page checks rather than relying on the button
+        being hidden."""
+        self.client.logout()
+        for url in ("/ale/projects/new/", "/ale/experiments/new/"):
+            with self.subTest(url=url):
+                self.assertEqual(403, self.client.get(url).status_code)
+
+    # --- the experiment page needs somewhere to put it ------------------------
+
+    def test_with_no_editable_project_it_sends_you_to_make_one(self):
+        stranger = User.objects.create(username="stranger", email="s@e.com", is_active=True)
+        self.client.force_login(stranger)
+
+        response = self.client.get("/ale/experiments/new/")
+        self.assertEqual(302, response.status_code)
+        self.assertEqual("/ale/projects/new/", response["Location"])
+
+    def test_creating_still_goes_through_the_same_endpoint(self):
+        """The pages are presentation; the permission checks stay on the POST."""
+        response = self.client.post(
+            "/ale/experiments/create/", {"project": self.project.id, "name": "second"})
+        self.assertEqual(200, response.status_code, response.content)
+        self.assertEqual("second", response.json()["experiment"])

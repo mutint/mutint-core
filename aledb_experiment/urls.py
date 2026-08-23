@@ -1,12 +1,14 @@
 from django.urls import include, re_path
 from aledb_experiment.views import (
-    experiment_create, experiment_delete, experiment_detail, experiments,
-    project_create, project_delete, project_detail, projects,
+    experiment_create, experiment_delete, experiment_detail, experiment_new, experiments,
+    project_create, project_delete, project_detail, project_new, projects,
 )
 
 urlpatterns = [
     # These must precede ^projects / ^experiments below: those patterns have no `$`, so
     # they are prefix matches that would otherwise swallow /ale/projects/create/.
+    re_path(r'^projects/new/$', project_new, name="project_new"),
+    re_path(r'^experiments/new/$', experiment_new, name="experiment_new"),
     re_path(r'^projects/create/$', project_create, name="project_create"),
     re_path(r'^experiments/create/$', experiment_create, name="experiment_create"),
     re_path(r'^project/(?P<pk>[0-9]+)/delete/$', project_delete, name="project_delete"),

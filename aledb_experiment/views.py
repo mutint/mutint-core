@@ -4,6 +4,7 @@ from django.shortcuts import redirect
 from .models import Project, AleExperiment
 from .utils import get_user_projects, get_all_user_exps
 from .permissions import can_edit_project, can_view_project
+from aledb_common.util import get_user_context
 import logging
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,45 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .permissions import can_delete_experiment, can_edit_project, grant_access_to_project
+
+
+
+def project_new(request):
+    """The create-a-project form, on a page of its own.
+
+    Pages rather than dialogs: a create form wants a heading, room to explain its
+    fields and a URL you can link someone to, and none of that survives in a modal
+    over a table. The POST still goes to project_create, which is where the
+    permission check lives.
+    """
+    if not request.user.is_authenticated:
+        return render(request, "403.html", get_user_context(request.user), status=403)
+    return render(request, "ale/project_new.html", get_user_context(request.user))
+
+
+def experiment_new(request):
+    """The create-an-experiment form. `?project=<pk>` fixes the project."""
+    if not request.user.is_authenticated:
+        return render(request, "403.html", get_user_context(request.user), status=403)
+
+    context = get_user_context(request.user)
+    editable = [p for p in get_user_projects(request.user)
+                if can_edit_project(request.user, p)]
+
+    project = None
+    requested = request.GET.get("project")
+    if requested:
+        project = get_object_or_404(Project, pk=requested)
+        if not can_edit_project(request.user, project):
+            return render(request, "403.html", context, status=403)
+
+    if project is None and not editable:
+        # Nothing to create under. The project page is where that starts, and it
+        # offers the button once you get there.
+        return redirect("/ale/projects/new/")
+
+    context.update({"project": project, "editable_projects": editable})
+    return render(request, "ale/experiment_new.html", context)
 
 
 @require_POST
