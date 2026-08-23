@@ -16,7 +16,7 @@ from unittest import mock
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from aledb_common.management.commands.version import bump, rewrite
+from aledb_common.management.commands.version import bump, components, rewrite
 from aledb_common.version import __version__
 
 
@@ -102,3 +102,71 @@ class VersionCommandTestCase(unittest.TestCase):
         printed = out.getvalue()
         self.assertIn("aledb-core %s" % __version__, printed)
         self.assertNotIn(django.get_version(), printed)
+
+
+class ComponentsTestCase(unittest.TestCase):
+    """An assembled project versions itself the way aledb-core does.
+
+    Discovery is by convention -- an installed app exposing __version__ from a
+    `version` submodule -- rather than a registry, because an app being in
+    INSTALLED_APPS already says it is part of this project.
+    """
+
+    def test_aledb_core_is_always_a_component(self):
+        self.assertIn("aledb-core", [name for name, _m, _v in components()])
+
+    def test_it_reports_aledb_cores_real_version(self):
+        found = {name: version for name, _m, version in components()}
+        self.assertEqual(__version__, found["aledb-core"])
+
+    def test_aledb_common_is_not_listed_twice(self):
+        """aledb_common holds core's version.py; without the skip it would appear
+        once as an app component and again as aledb-core itself."""
+        names = [name for name, _m, _v in components()]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertNotIn("aledb_common", names)
+
+
+class BumpTargetTestCase(unittest.TestCase):
+    """--component is required when the choice is ambiguous."""
+
+    def _bump(self, **kwargs):
+        out = StringIO()
+        call_command("version", bump="patch", stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_an_unknown_component_is_refused(self):
+        with self.assertRaises(CommandError) as caught:
+            self._bump(component="NoSuchThing")
+        self.assertIn("no such component", str(caught.exception))
+
+    def test_standalone_core_needs_no_component(self):
+        """Only aledb-core is installed here, so there is nothing to disambiguate.
+
+        Bumps a copy: pointing the command at the real version.py would leave the
+        working tree dirty and move the version the rest of the suite asserts on.
+        """
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory, True)
+        path = os.path.join(directory, "version.py")
+        with open(path, "w") as handle:
+            handle.write('__version__ = "%s"\n' % __version__)
+
+        with mock.patch("aledb_common.management.commands.version.components",
+                        return_value=[("aledb-core", mock.Mock(__file__=path), "1.1.0")]):
+            printed = self._bump()
+
+        self.assertIn("aledb-core 1.1.0 -> 1.1.1", printed)
+        with open(path) as handle:
+            self.assertIn('__version__ = "1.1.1"', handle.read())
+
+    def test_two_components_force_an_explicit_choice(self):
+        """Bumping the wrong repo's version is silent, and only shows up at release."""
+        two = [("MutInt", mock.Mock(__file__="/x/version.py"), "0.0.1"),
+               ("aledb-core", mock.Mock(__file__="/y/version.py"), "1.1.0")]
+        with mock.patch("aledb_common.management.commands.version.components",
+                        return_value=two):
+            with self.assertRaises(CommandError) as caught:
+                self._bump()
+        self.assertIn("--component is required", str(caught.exception))
+        self.assertIn("MutInt", str(caught.exception))

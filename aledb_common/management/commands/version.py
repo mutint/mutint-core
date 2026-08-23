@@ -1,17 +1,21 @@
-"""`./aledb version` -- print aledb-core's version, or bump it.
+"""`./aledb version` -- print the versions in play, or bump one.
 
-The version lives in aledb_common/version.py and is bumped deliberately, paired
-with a `v<version>` git tag on the release commit. This command only rewrites the
-file; tagging and committing are left to the release step, because this repo does
-not commit on its own.
+aledb-core's own lives in aledb_common/version.py. An assembled project versions
+itself the same way: put a version.py exposing __version__ in one of its apps and
+it is discovered here, so `./mutint version` reports MutInt's alongside the core
+it runs on. Bumping is deliberate and paired with a `v<version>` git tag; this
+command only rewrites the file, because these repos do not commit on their own.
 """
+import importlib
 import re
 
+from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
 
 from aledb_common import version as version_module
 
 PARTS = ("major", "minor", "patch")
+CORE = "aledb-core"
 _ASSIGNMENT = re.compile(r'^(__version__\s*=\s*)"([^"]+)"', re.MULTILINE)
 
 
@@ -44,22 +48,62 @@ def rewrite(path, new_version):
         handle.write(replaced)
 
 
+def components():
+    """Every versioned component, the assembled project's first.
+
+    aledb-core always has one. An installed app contributes one by exposing
+    `__version__` from a `version` submodule -- no registration, because the app
+    being installed is already the statement that it is part of this project.
+    """
+    found = []
+    for config in apps.get_app_configs():
+        if config.name == "aledb_common":
+            continue
+        try:
+            module = importlib.import_module("%s.version" % config.name)
+        except ImportError:
+            continue
+        version = getattr(module, "__version__", None)
+        if version:
+            found.append((getattr(module, "NAME", config.label), module, version))
+    return found + [(CORE, version_module, version_module.__version__)]
+
+
 class Command(BaseCommand):
-    help = "Print aledb-core's version, or bump it with --bump."
+    help = "Print the versions in play, or bump one with --bump."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--bump", choices=PARTS,
-            help="increment this part of the version and rewrite version.py")
+            help="increment this part of a version and rewrite its version.py")
+        parser.add_argument(
+            "--component",
+            help="which component to bump; only needed when more than one exists")
 
     def handle(self, *args, **options):
-        current = version_module.__version__
+        found = components()
         part = options.get("bump")
         if not part:
-            self.stdout.write("aledb-core %s" % current)
+            for name, _module, version in found:
+                self.stdout.write("%s %s" % (name, version))
             return
 
+        wanted = options.get("component")
+        if wanted:
+            matched = [c for c in found if c[0] == wanted]
+            if not matched:
+                raise CommandError("no such component: %s (have %s)"
+                                   % (wanted, ", ".join(c[0] for c in found)))
+        elif len(found) == 1:
+            matched = found
+        else:
+            # Refuse to guess: bumping the wrong repo's version is quiet and
+            # the mistake only surfaces at release.
+            raise CommandError(
+                "--component is required, one of: %s" % ", ".join(c[0] for c in found))
+
+        name, module, current = matched[0]
         new_version = bump(current, part)
-        rewrite(version_module.__file__, new_version)
-        self.stdout.write("%s -> %s" % (current, new_version))
+        rewrite(module.__file__, new_version)
+        self.stdout.write("%s %s -> %s" % (name, current, new_version))
         self.stdout.write("Tag the release commit: git tag v%s" % new_version)
