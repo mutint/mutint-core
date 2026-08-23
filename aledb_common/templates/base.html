@@ -82,14 +82,14 @@
 </head>
 <body style="background-color: white">
 <div id="wrapper">
-    <div class="navbar-default" role="navigation" style=" z-index:999; float: left; top:0; left:0">
+    <div class="navbar-default sidebar-panel" role="navigation" style="z-index:999;">
         <div class="sidebar" style="width: 17vw" id="sidebar">
             <div class="navbar-header">
                 {% if branding.name or branding.version %}
                     <a class="navbar-brand" href="/">{{ branding.name }} {{ branding.version }}</a>
                 {% endif %}
             </div>
-            <ul class="nav in" id="side-menu" style="padding-top: 6em;">
+            <ul class="nav in" id="side-menu">
                 {% if user.is_authenticated %}
                     <li><a href="#"><b>{{ user.username }}</b></a>
                     <li>

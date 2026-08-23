@@ -17,8 +17,34 @@
     background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
 }
 
+/* The sidebar stays put while the page scrolls. Sticky is on the outer panel,
+   not on .sidebar itself: a sticky box moves within its containing block, and
+   .sidebar's parent is only ever as tall as .sidebar, so there is nowhere for it
+   to travel. The panel's containing block is #wrapper, which is as tall as the
+   page content beside it. */
+/* #wrapper holds three floats and nothing else, so its height collapsed to zero.
+   A sticky box travels within its containing block, and a zero-height one gives it
+   nowhere to go -- the panel below reported position: sticky and stayed put. The
+   clearfix gives #wrapper the height of its tallest float, which is the page
+   content, and that is the room the panel sticks through. */
+#wrapper::after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.sidebar-panel {
+    float: left;
+    position: sticky;
+    top: 0;
+}
+
 .sidebar {
-    height: 100%;
+    /* Its own scrollbar once the menu is taller than the viewport, so a long
+       experiment section cannot push the watermark out of reach. */
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
     width: 0;
     position: relative;
     z-index: 1;
@@ -26,7 +52,28 @@
     left: 0;
     overflow-x: hidden;
     transition: 0.1s;
-    padding-top: 60px;
+    padding-top: 12px;
+    /* sb-admin-2 sets margin-top: 70px on .sidebar above 768px, leaving room for
+       the fixed top navbar its layout assumes. This app has no top navbar -- the
+       brand sits inside the sidebar -- so that was 70px of blank panel above the
+       first link. Same specificity, and common.css loads after it, so this wins. */
+    margin-top: 0;
+}
+
+/* Bootstrap floats .navbar-brand, so it contributes no height and the menu would
+   start underneath it. The old inline padding-top: 6em on #side-menu was clearing
+   that float by hand -- which also meant ~96px of blank panel when no branding is
+   configured and there is no brand to clear. Taking the float off instead lets the
+   brand occupy its own height, so the menu sits under it either way and the
+   spacing below is a real 0.5em rather than a guess. */
+.sidebar .navbar-header,
+.sidebar .navbar-brand {
+    float: none;
+    display: block;
+}
+
+#side-menu {
+    padding-top: 0.5em;
 }
 
 .sidebar_arrows {
