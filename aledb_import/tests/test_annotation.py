@@ -217,8 +217,13 @@ class UnannotatedImportTestCase(TestCase):
         self.assertLessEqual(self._categories(), {None, ""})
 
     def test_mutations_that_match_no_contig_in_the_reference(self):
-        # A reference for a different genome: the sequence is fine, but no
-        # mutation's seq_id is in it, so there is nothing to annotate against.
+        """Refused at import, not imported unannotated.
+
+        This used to import the lot and leave every record without annotation,
+        because the annotator silently skips a seq_id it cannot resolve. The
+        result was an experiment holding mutations on a contig its own reference
+        had never heard of, visible only as annotation that never appeared.
+        """
         other = os.path.join(self.store, "other.gff3")
         with open(other, "w") as handle:
             handle.write(
@@ -229,5 +234,4 @@ class UnannotatedImportTestCase(TestCase):
 
         self._import()
 
-        self.assertEqual(36, Mutation.objects.count())
-        self.assertLessEqual(self._categories(), {None, ""})
+        self.assertEqual(0, Mutation.objects.count())

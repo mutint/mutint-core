@@ -31,6 +31,22 @@ def digest(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def known_seq_ids(experiment):
+    """Every name the experiment's reference answers to, or None if it has none.
+
+    Names are compared exactly. breseq trims the version suffix when matching a GD's
+    seq_id to a contig -- REL606 and REL606.6 become the same thing -- and ALEdb
+    deliberately does not: it holds many experiments side by side, and two of them
+    may legitimately be against different versions of the same accession. Treating
+    those as one reference would attribute a mutation to the wrong genome, which is
+    a quieter and worse failure than refusing the import.
+    """
+    reference = ExperimentReference.objects.filter(ale_experiment=experiment).first()
+    if reference is None:
+        return None
+    return {entry["id"] for entry in (reference.seq_ids or []) if entry.get("id")}
+
+
 def establish_or_check(experiment, gff3_text, sequences, replace=False,
                        update_annotation=False):
     """Create the experiment's reference, or verify a later one is the same reference.

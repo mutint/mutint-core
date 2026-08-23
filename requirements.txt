@@ -11,11 +11,18 @@ django-guardian==2.4.0
 django-tables2==2.6.0
 djangoajax==3.3
 # GenomeDiff (.gd) parser/writer used by the drag-and-drop mutation import.
-# Pinned to a git SHA, not a PyPI version: 0.4.2 carries the INT mutation type and
-# the ordered Record.__str__ serializer that gd_import.py and Mutation.to_gd_line()
-# depend on, but only 0.4.1 was ever published to PyPI.
+# Pinned to a git SHA, not a PyPI version: only 0.4.1 was ever published there, and
+# what this depends on landed after it -- the INT mutation type, the ordered
+# Record.__str__ serializer gd_import.py and Mutation.to_gd_line() rely on, and now
+# breseq's SC/MP/DP/PD/MASK entry types plus tolerance of ones it has not seen.
+# Without that last part a current breseq output.gd fails to load in full.
+#
+# The SHA is the whole pin: 82cfd6d reports itself as 0.4.2, the same version as
+# 32f77e9, so pip will not upgrade an already-installed 0.4.2 on the strength of the
+# requirement alone. An existing environment needs
+#   pip install --force-reinstall --no-deps 'git+https://github.com/barricklab/genomediff-python.git@82cfd6d'
 # (dev: `pip install -e /path/to/genomediff`)
-genomediff @ git+https://github.com/barricklab/genomediff-python.git@32f77e9
+genomediff @ git+https://github.com/barricklab/genomediff-python.git@82cfd6d
 # GenBank/FASTA parsing for uploaded reference genomes (aledb_import/reference.py).
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.

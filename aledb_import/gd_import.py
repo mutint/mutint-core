@@ -58,6 +58,10 @@ logger = logging.getLogger("aledb_import.gd_import")
 BRESEQ_SOURCE = "breseq"
 
 
+class SeqIdMismatch(Exception):
+    """A .gd names a contig the experiment's reference does not have."""
+
+
 class ReferenceRequired(Exception):
     """The target experiment has no reference genome, and a .gd cannot supply one."""
 
@@ -174,6 +178,8 @@ def import_document_as_sample(document, sample_name, context, person):
     breseq folder import, where it comes from the sample directory -- so both derive sample
     identity through exactly one rule. Returns ``(seq_experiment, mutation_count)``.
     """
+    _check_seq_ids(document, context["experiment"], sample_name)
+
     afir = _parse_afir(sample_name)
 
     if afir is None:
@@ -213,7 +219,15 @@ def _parse_document(uploaded):
     """Parse an uploaded ``.gd`` into a ``genomediff.GenomeDiff``.
 
     Decodes bytes to text and drops blank lines (the genomediff parser raises on
-    a line it can't match, and a bare newline matches nothing)."""
+    a line it can't match, and a bare newline matches nothing).
+
+    Only mutations are read from the result. GenomeDiff spells a mutation with a
+    three-letter code and the parser classifies on that, so evidence (RA, MC, JC,
+    CN, UN, SC, PD) and validation entries never reach ``document.mutations``.
+    Nothing is filtered out of the text beforehand: reading an entry type the
+    parser does not recognise is genomediff's job, and it does not fail a file over
+    one -- see the unknown-type handling in its parser.
+    """
     raw = uploaded.read()
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8")
@@ -287,6 +301,40 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     tech_rep = TechnicalReplicate.objects.create(tech_rep_number=1, isolate=isolate)
     return ResequencingExperiment.objects.create(
         tech_rep=tech_rep, sample_name=sample_name, person=person)
+
+
+def _check_seq_ids(document, experiment, sample_name):
+    """Refuse a .gd whose contigs are not the experiment's reference.
+
+    Nothing checked this before, which is how an experiment ended up holding
+    mutations on `REL606` while its own reference was stored as `REL606.6`. The
+    annotator then quietly skipped every record whose seq_id it could not resolve,
+    so the failure showed up as missing annotation rather than as a rejected
+    import.
+
+    Matched exactly, with no version-suffix trimming -- see
+    ``reference_store.known_seq_ids`` for why ALEdb does not follow breseq here.
+    An experiment with no reference yet is not checked: a .gd cannot establish one,
+    and ``import_gd_files`` already refuses that case earlier with a better message.
+    """
+    from aledb_import.reference_store import known_seq_ids
+
+    known = known_seq_ids(experiment)
+    if not known:
+        return
+
+    found = {
+        str(record.attributes.get("seq_id"))
+        for record in document.mutations
+        if record.attributes.get("seq_id")
+    }
+    unknown = sorted(found - known)
+    if unknown:
+        raise SeqIdMismatch(
+            "%s names %s, which is not this experiment's reference (%s). The same "
+            "genome under a different name has to be renamed to match, and a "
+            "different genome belongs in its own experiment."
+            % (sample_name, ", ".join(unknown), ", ".join(sorted(known))))
 
 
 def _database_gd_mutations(seq_experiment, document, experiment=None):

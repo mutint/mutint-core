@@ -248,16 +248,19 @@ class ReferenceSequences(object):
 
     def add(self, annotated_sequence):
         """
-        Register a contig under its id, plus the aliases GD files use for it.
+        Register a contig under its id, exactly as written.
 
-        breseq trims the version suffix off accessions when matching GD seq_ids,
-        so both `NC_000913.3` and `NC_000913` have to resolve to the same contig.
+        A deliberate divergence from breseq, which trims the version suffix off an
+        accession when matching GD seq_ids so that `NC_000913.3` and `NC_000913`
+        resolve to the same contig. breseq annotates one run against one reference,
+        where that is a convenience. ALEdb holds many experiments side by side and
+        two of them may legitimately be against different versions of the same
+        accession; conflating those would annotate a mutation against the wrong
+        genome and say nothing about it. Names are matched exactly, and a .gd whose
+        seq_ids are not the reference's is refused at import instead -- see
+        ``aledb_import.reference_store.known_seq_ids``.
         """
-        seq_id = annotated_sequence.seq_id
-        self.sequences[seq_id] = annotated_sequence
-        base_id = seq_id.split('.')[0]
-        if base_id and base_id not in self.sequences:
-            self.sequences[base_id] = annotated_sequence
+        self.sequences[annotated_sequence.seq_id] = annotated_sequence
 
     def repeat_family_sequence(self, repeat_name, strand):
         """
@@ -268,11 +271,7 @@ class ReferenceSequences(object):
         MOB `repeat_size`, which mutation_size_change needs.
         """
         copies = []
-        seen = set()
         for annotated_sequence in self.sequences.values():
-            if id(annotated_sequence) in seen:
-                continue  # the same contig is registered under several aliases
-            seen.add(id(annotated_sequence))
             for location in annotated_sequence.repeat_locations:
                 feature = location.feature
                 if feature.name != repeat_name or feature.pseudogene:

@@ -56,7 +56,9 @@ class GdImportTestCase(TestCase):
         This is what dropping a GenBank, GFF3 or FASTA on the Add page does for a real user.
         """
         context = gd_import._prepare_experiment(project, experiment, "tester", False)
-        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        # Named for the contig the fixture .gd calls: a .gd may only be imported into
+        # an experiment whose reference has the same seq_ids, matched exactly.
+        sequences = [("REL606", breseq_fixture.SEQUENCE_A)]
         gff3_text = breseq_fixture.gff3_text(sequences)
         reference_store.establish_or_check(context["experiment"], gff3_text, sequences)
         return context["experiment"]
@@ -286,3 +288,61 @@ class GdImportTestCase(TestCase):
         metadata = self.client.get("/metadata/", {"ale_experiment_id": experiment_id})
         self.assertEqual(metadata.status_code, 200)
 
+
+
+class SeqIdMustMatchTheReferenceTestCase(TestCase):
+    """A .gd may only go into an experiment whose reference has the same contigs.
+
+    Nothing checked this, which is how an experiment came to hold mutations on
+    REL606 while its own stored reference was REL606.6. The annotator skips a
+    seq_id it cannot resolve, so it surfaced as annotation that never appeared
+    rather than as a refused import.
+
+    Matched exactly. breseq trims the version suffix when resolving a GD seq_id;
+    ALEdb holds many experiments side by side and two may be against different
+    versions of one accession, so conflating them would annotate against the wrong
+    genome.
+    """
+
+    def setUp(self):
+        User.objects.create(username="tester", first_name="Test", last_name="User",
+                            email="t@e.com", is_active=True, is_staff=True,
+                            date_joined=datetime.now())
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+    def _experiment_with_reference(self, seq_id):
+        context = gd_import._prepare_experiment("p", "e", "tester", False)
+        sequences = [(seq_id, breseq_fixture.SEQUENCE_A)]
+        reference_store.establish_or_check(
+            context["experiment"], breseq_fixture.gff3_text(sequences), sequences)
+        return context["experiment"]
+
+    def _import(self):
+        return gd_import.import_gd_files(
+            [_uploaded(CLEAN_GD)], project_name="p", experiment_name="e", person="tester")
+
+    def test_matching_seq_ids_import(self):
+        self._experiment_with_reference("REL606")
+        self.assertGreater(self._import()["total_mutations"], 0)
+
+    def test_a_different_contig_is_refused(self):
+        self._experiment_with_reference("SOMETHING_ELSE")
+        summary = self._import()
+
+        self.assertEqual(0, summary["total_mutations"])
+        self.assertEqual(0, Mutation.objects.count())
+        self.assertIn("REL606", summary["files"][0]["error"])
+        self.assertIn("SOMETHING_ELSE", summary["files"][0]["error"])
+
+    def test_a_version_suffix_is_not_trimmed_away(self):
+        """The case that started this: REL606.6 and REL606 are different names, and
+        ALEdb will not quietly treat them as one reference."""
+        self._experiment_with_reference("REL606.6")
+        summary = self._import()
+
+        self.assertEqual(0, summary["total_mutations"])
+        self.assertIn("REL606", summary["files"][0]["error"])
