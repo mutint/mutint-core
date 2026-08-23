@@ -35,8 +35,13 @@ core
 # Managed environments — env/ holds the venv (env/main) and any future venvs/conda envs
 env/
 
-#Local Artifacts
-aledb_local.sqlite3
+# Local database. base_settings.py creates aledb_local.sqlite3 by default and
+# dev.sqlite3 under FORCE_SQLITE=1 or a test run; naming them one at a time is
+# what let dev.sqlite3 sit untracked in the working tree for as long as it did.
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Managed file store. ALEDB_STORE_DIR defaults to <base_dir>/aledb_store
 # (aledb_common/base_settings.py), so an unconfigured instance writes uploaded references,
