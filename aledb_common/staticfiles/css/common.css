@@ -132,8 +132,13 @@ a:hover {
     padding: 12px 24px 12px 24px;
 }
 
-.btn {
-    float: right;
+/* No float here. This was `.btn { float: right }`, applied to every Bootstrap
+   button in the app -- 85 of them across 12 templates -- from a 2023 commit named
+   "updates" with no rationale. Floating takes a button out of the flow, so the
+   "+ New experiment" control landed at the right edge and rode up out of line with
+   the DataTables toolbar beneath it instead of stacking above it. Buttons that want
+   to sit right belong in a `.pull-right` container, one place at a time. */
+.btn + .btn {
     margin-left: 5px;
 }
 
