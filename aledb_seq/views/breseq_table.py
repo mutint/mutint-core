@@ -60,20 +60,20 @@ def breseq_table(request):
             "rows": rows,
             "unannotated_count": sum(1 for row in rows if not row["annotated"]),
             "reference": _reference(experiment),
-            "title": "%s breseq report" % experiment.name,
-            "template_header": "breseq Report",
+            "title": "%s samples" % experiment.name,
+            "template_header": "Samples",
         })
 
-        logger.info("breseq report",
+        logger.info("samples",
                     extra=join_extras(user_extra(request),
                                       {"time taken": time.time() - started, "rows": len(rows)}))
         template = loader.get_template("breseq_table/breseq_table.html")
         return HttpResponse(template.render(context, request), content_type="text/html")
     except AleExperiment.DoesNotExist:
         return aledb_seq.views.common.no_experiment_selected(
-            request, context, logger, "breseq report")
+            request, context, logger, "samples")
     except Exception as error:
-        logger.exception("breseq report broke", extra=user_extra(request))
+        logger.exception("samples broke", extra=user_extra(request))
         context["err_message"] = str(error)
         template = loader.get_template("500.html")
         return HttpResponse(template.render(context, request), content_type="text/html")

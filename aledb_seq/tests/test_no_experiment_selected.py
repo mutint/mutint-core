@@ -16,7 +16,7 @@ from django.test import TestCase
 # page, the logger it should report through, and what it calls itself
 PAGES = [
     ("/mutations/", "aledb_seq.views.mutations", "mutation table"),
-    ("/mutations/breseq", "aledb_seq.views.breseq_table", "breseq report"),
+    ("/mutations/breseq", "aledb_seq.views.breseq_table", "samples"),
     ("/stats/", "aledb_stats.views", "statistics"),
     ("/metadata/", "aledb_metadata.views", "metadata"),
     ("/filter/", "aledb_filter.views.ale_exp_filter", "filter settings"),
