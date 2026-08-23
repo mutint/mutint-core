@@ -83,7 +83,7 @@
             swal("", "Please select experiments and try again.", "warning");
             return;
         }
-        var url = "/export";
+        var url = "/export/";
         var params = {
                     'mut_type': mutation_type,
                     'project_id': project_id,
