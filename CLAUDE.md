@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 360 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 409 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -151,7 +151,7 @@ starts printing Django's version instead — `aledb_common/tests/test_version.py
 `manage()` rather than `call_command` precisely to catch that.
 
 
-### The breseq report page
+### The Samples page
 
 `aledb_seq/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
 column order and colouring, as the per-sample companion to `/mutations`, which pivots the
@@ -165,8 +165,49 @@ annotation lives in one JSON column rather than twenty scalar ones: rendering is
 merge, not a rebuild. It is server-rendered rather than fed to DataTables as a JSON blob,
 because the markup already exists by the time the view runs.
 
+It is called **Samples** in the nav and on the page; the route keeps the `breseq` name.
+
 A mutation imported before a reference was available has no annotation to render and falls
-back to the flat columns, with the page pointing at `./aledb reannotate`.
+back to the flat columns, with the page pointing at `./aledb reannotate`. That fallback is
+the usual reason the page looks plain: nothing is wrong with the rendering, the rows simply
+have no annotation yet. `Mutation.gd_data` is kept for every mutation, so `reannotate`
+recomputes them in place against the stored reference -- re-importing is not needed.
+
+### Creating and importing are pages, not dialogs
+
+`/ale/projects/new/`, `/ale/experiments/new/` and `/import/add/` are all full pages. The
+first two were modals over the list tables and are not any more: a create form wants a
+heading, room to explain its fields and a URL you can link someone to. The modals were also
+where two bugs lived -- an inline panel overlapped the DataTable beneath it, and Bootstrap's
+data-api was bound twice so a dialog opened and closed in the same millisecond.
+
+`?project=<pk>` on the experiment page fixes the project, so arriving from a project there
+is no picker to get wrong. Each page checks permission itself -- 403 signed out, 403 for a
+project you cannot edit -- rather than relying on the button being hidden. The POSTs still
+go to `project_create` / `experiment_create`, which is where the real checks live.
+
+### Which import types the Add page offers
+
+Three rules, because the reasons differ. All of them are declared on the handler and applied
+by `get_import_types_for(has_reference)`, never in the template, so the dropdown and the JSON
+the page classifies a drop with cannot disagree:
+
+- `only_without_reference` -- `reference` stops being offered once the experiment has one.
+  Establishing a reference is a one-time act; replacing the *annotation* is
+  `replace_annotation`, and swapping in a different genome is deliberately shell-only.
+- `requires_reference` with `unavailable="hide"` -- `replace_annotation` is absent until
+  there is a genome to hold fixed.
+- `requires_reference` with `unavailable="disable"` -- `genomediff` is shown greyed with the
+  reason. Hide what nobody would go looking for; disable what someone will arrive holding
+  and needs an answer about.
+
+`breseq_folder` is never blocked: it brings its own reference. Auto-detect is unaffected --
+a reference dropped alongside data still runs first on `priority`, which is how a first drop
+establishes one. `/import/types/` stays unscoped; it has no experiment to scope by.
+
+`replace_annotation` claims only GenBank and GFF3, not FASTA. A FASTA is sequence with no
+features, so there is nothing in one to install -- it used to be accepted and then rejected
+on the sequence check, which named the wrong reason.
 
 ### The genome browser
 
