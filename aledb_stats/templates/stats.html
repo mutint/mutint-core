@@ -201,10 +201,10 @@
                 <th>ALE, Flask, Isolate</th>
                 <th>Predicted Mutations</th>
                 <th>Unassigned Missing Coverage Evidence</th>
-                <th>Mean Coverage</th>
+                <th>Coverage</th>
                 <th>Total Reads</th>
-                <th>Percent Mapped</th>
-                <th>Average Read Length</th>
+                <th>Mapped</th>
+                <th>Read Length</th>
                 {% if can_edit %}<th></th>{% endif %}
             </tr>
             </thead>
@@ -216,10 +216,14 @@
                     </td>
                     <td class="mutation_count">{{ experiment_info_tuple.0.mutations.count }}</td>
                     <td class="missing_coverage_count">{{ experiment_info_tuple.1 | length }}</td>
-                    <td class="mean_coverage">{{ experiment_info_tuple.0.mean_coverage }}</td>
+                    {% comment %} floatformat:1 throughout: these are floats straight off
+                       summary.json and rendered raw they run to a dozen decimals, which is
+                       false precision and makes the column unreadable. The class names keep
+                       the fuller meaning the headings used to carry. {% endcomment %}
+                    <td class="mean_coverage">{{ experiment_info_tuple.0.mean_coverage|floatformat:1 }}</td>
                     <td class="total_reads">{{ experiment_info_tuple.0.reads }}</td>
-                    <td class="percent_reads_mapped">{{ experiment_info_tuple.0.percentage_mapped }}%</td>
-                    <td class="average_read_length">{{ experiment_info_tuple.0.average_read_length }}</td>
+                    <td class="percent_reads_mapped">{{ experiment_info_tuple.0.percentage_mapped|floatformat:1 }}%</td>
+                    <td class="average_read_length">{{ experiment_info_tuple.0.average_read_length|floatformat:1 }}</td>
                     {% comment %} This is the table where you notice a sample is
                        mislabelled, so it is the main way into the per-sample page. {% endcomment %}
                     {% if can_edit %}

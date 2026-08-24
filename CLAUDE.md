@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 532 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 538 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
