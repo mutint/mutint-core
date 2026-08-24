@@ -26,12 +26,6 @@
         </div>
 
         <div class="form-group">
-            <label for="ee-person">Person</label>
-            <input type="text" class="form-control" id="ee-person" maxlength="200"
-                   value="{{ experiment.person }}">
-        </div>
-
-        <div class="form-group">
             <label for="ee-doi">DOI <small>(space-separated for more than one)</small></label>
             <input type="text" class="form-control" id="ee-doi" value="{{ experiment.doi|default_if_none:'' }}">
         </div>
@@ -60,7 +54,6 @@
         window.aledbPost("/ale/experiment/{{ experiment.ale_id }}/update/", {
             name: document.getElementById("ee-name").value,
             project: project ? project.value : "",
-            person: document.getElementById("ee-person").value,
             doi: document.getElementById("ee-doi").value,
             notes: document.getElementById("ee-notes").value
         }).then(function () {

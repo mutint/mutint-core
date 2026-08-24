@@ -59,7 +59,7 @@ class SampleEditTestCase(TestCase):
         from aledb_experiment.samples import sample_coordinate
         ale, flask, isolate, rep = sample_coordinate(reseq)
         row = {"id": str(reseq.pk), "sample_name": reseq.sample_name or "",
-               "person": reseq.person or "", "ale": ale, "flask": flask,
+               "ale": ale, "flask": flask,
                "isolate": isolate, "rep": rep,
                "is_population": 1 if reseq.tech_rep.isolate.is_population else 0,
                "isolate_description": reseq.tech_rep.isolate.description or ""}
@@ -175,12 +175,35 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.sample = self.make_sample(1, 1, 1, 1, name="first")
 
     def test_renaming_a_sample_saves(self):
-        response = self.single(self.sample, sample_name="renamed", person="jeff")
+        response = self.single(self.sample, sample_name="renamed")
 
         self.assertEqual(200, response.status_code, response.content)
         self.sample.refresh_from_db()
         self.assertEqual("renamed", self.sample.sample_name)
-        self.assertEqual("jeff", self.sample.person)
+
+    def test_no_edit_page_can_change_who_the_sample_belongs_to(self):
+        """Changing an owner is its own workflow. The endpoint builds the row itself, so
+        a `person` in the POST is not merely ignored -- there is nowhere for it to go."""
+        self.sample.person = "original"
+        self.sample.save()
+
+        payload = self.row(self.sample, sample_name="renamed", person="impostor")
+        payload.pop("id")
+        response = self.client.post("/ale/sample/%d/update/" % self.sample.pk, payload)
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.sample.refresh_from_db()
+        self.assertEqual("renamed", self.sample.sample_name)
+        self.assertEqual("original", self.sample.person)
+
+    def test_a_bulk_save_leaves_person_alone(self):
+        self.sample.person = "original"
+        self.sample.save()
+
+        self.assertEqual(200, self.bulk([self.row(self.sample, ale=3)]).status_code)
+
+        self.sample.refresh_from_db()
+        self.assertEqual("original", self.sample.person)
 
     def test_the_isolate_description_saves(self):
         self.single(self.sample, isolate_description="colony from day 30")
@@ -539,3 +562,55 @@ class ExistingDuplicateNamesTestCase(SampleEditTestCase):
         self.assertEqual(200, response.status_code, response.content)
         self.first.refresh_from_db()
         self.assertEqual("distinct", self.first.sample_name)
+
+
+class TimePointLabellingTestCase(SampleEditTestCase):
+    """`Flask.flask_number` is the column; "time point" is what it means.
+
+    It is the only ordinal in the schema placing a sample along an ALE -- fixation sorts
+    by it and takes the last two to decide what has fixed -- so the edit pages call it
+    what it is. The internal name must not surface, including in a refusal.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.sample = self.make_sample(1, 30000, 1, 1, name="first")
+
+    def test_both_pages_label_it_time_point(self):
+        for url in ("/ale/sample/%d/edit/" % self.sample.pk,
+                    "/ale/experiment/%d/samples/" % self.experiment.ale_id):
+            with self.subTest(url=url):
+                # {% comment %} blocks never render, so the internal name in the
+                # template's own notes cannot make this pass by accident.
+                html = self.client.get(url).content.decode()
+                self.assertIn("Time point", html)
+                self.assertNotIn(">Flask<", html)
+                self.assertNotIn(">Flask</", html)
+
+    def test_the_time_point_input_has_no_stepper(self):
+        """type=number puts up/down arrows on a value that runs to five figures."""
+        html = self.client.get("/ale/sample/%d/edit/" % self.sample.pk).content.decode()
+        field = [line for line in html.splitlines() if 'id="se-flask"' in line][0]
+        self.assertIn('type="text"', field)
+        self.assertNotIn('type="number"', field)
+
+    def test_a_refusal_does_not_leak_the_column_name(self):
+        response = self.single(self.sample, flask="not a number")
+
+        self.assertEqual(400, response.status_code)
+        message = response.json()["error"]
+        self.assertIn("time point", message)
+        self.assertNotIn("flask", message.lower())
+
+    def test_a_fractional_time_point_is_refused_clearly(self):
+        """flask_number is an IntegerField, so a fraction cannot be stored. The plain
+        input invites one, which makes the wording of this refusal load-bearing."""
+        response = self.single(self.sample, flask="30000.5")
+
+        self.assertEqual(400, response.status_code)
+        self.assertIn("time point must be a whole number",
+                      response.json()["error"])
+
+    def test_a_large_time_point_saves(self):
+        self.assertEqual(200, self.single(self.sample, flask=123456).status_code)
+        self.assertEqual((1, 123456, 1, 1), self.coordinate(self.sample))

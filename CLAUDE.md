@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 524 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 532 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -287,6 +287,21 @@ POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls ev
 `ObservedMutation` in the database into Python -- nothing about a renumber changes a mutation
 count, and paying for the whole database on every rename is what would make this feel broken
 in production. A descriptive-only save rebuilds nothing.
+
+**`Flask.flask_number` is labelled "Time point" on the edit pages.** It is the only ordinal
+in the schema that places a sample along an ALE -- fixation sorts by it and takes the last two
+to decide what has fixed -- and real data carries values like 30000, so it is plainly being
+used to record cumulative divisions rather than a count of flasks. The column keeps its name;
+only the UI changed, including the validation message, which is the one place the internal
+name would otherwise reach a user. Its input is plain text, not `type="number"`: steppers are
+useless on a five-figure value. **It is still an `IntegerField`, so a fractional time point is
+refused** -- a real one needs a column change plus a decision about the A-F-I-R filename
+parsing that assumes integers.
+
+**No edit page touches `person`.** The field is absent from every form *and* from what the
+endpoints assemble, so it is not merely ignored -- there is nowhere for a posted value to go.
+Changing who owns or ran something is its own workflow: folding it into a details form means
+every save rewrites it, and a form that dropped the field would silently blank it.
 
 **The trap to know about:** a renumber often changes no visible label.
 `ale_flask_isolate_str` returns `Isolate.description` verbatim whenever it is set, and

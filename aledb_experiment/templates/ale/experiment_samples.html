@@ -12,7 +12,7 @@
         <p style="color: #666;">
             Everything saves in one step, or not at all. The <b>Shown as</b> column is what
             the sample is called throughout the site: it follows the isolate description
-            when there is one, and the A/F/I/R numbers when there is not &mdash; so
+            when there is one, and the numbers below when there is not &mdash; so
             renumbering a sample that carries a description changes no label until you
             clear it. The description and <b>Pop.</b> belong to the isolate, so they apply
             to every replicate of it.
@@ -25,12 +25,13 @@
                 <th>Shown as</th>
                 <th>Sample name</th>
                 <th width="70">ALE</th>
-                <th width="70">Flask</th>
+                {% comment %} The column behind this is Flask.flask_number and stays so;
+                   "Time point" is what it is used for -- fixation orders samples by it. {% endcomment %}
+                <th width="90">Time point</th>
                 <th width="70">Isolate</th>
                 <th width="70">Rep</th>
                 <th width="50">Pop.</th>
                 <th>Isolate description</th>
-                <th>Person</th>
                 <th width="50"></th>
             </tr>
             </thead>
@@ -46,7 +47,7 @@
                                value="{{ sample.reseq.sample_name|default_if_none:'' }}"></td>
                     <td><input type="number" min="0" class="form-control input-sm"
                                id="sb-ale-{{ sample.id }}" value="{{ sample.ale }}"></td>
-                    <td><input type="number" min="0" class="form-control input-sm"
+                    <td><input type="text" class="form-control input-sm"
                                id="sb-flask-{{ sample.id }}" value="{{ sample.flask }}"></td>
                     <td><input type="number" min="0" class="form-control input-sm"
                                id="sb-isolate-{{ sample.id }}" value="{{ sample.isolate }}"></td>
@@ -58,9 +59,6 @@
                     <td><input type="text" class="form-control input-sm" maxlength="300"
                                id="sb-isolate-description-{{ sample.id }}"
                                value="{{ sample.isolate_description }}"></td>
-                    <td><input type="text" class="form-control input-sm" maxlength="200"
-                               id="sb-person-{{ sample.id }}"
-                               value="{{ sample.reseq.person|default_if_none:'' }}"></td>
                     <td><a href="/ale/sample/{{ sample.id }}/edit/">Edit</a></td>
                 </tr>
             {% endfor %}
@@ -104,7 +102,6 @@
                 rows.push({
                     id: id,
                     sample_name: value("name", id),
-                    person: value("person", id),
                     ale: value("ale", id),
                     flask: value("flask", id),
                     isolate: value("isolate", id),

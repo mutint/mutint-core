@@ -295,11 +295,6 @@ def experiment_update(request, pk):
         return JsonResponse(
             {"error": "An experiment name is at most 200 characters."}, status=400)
 
-    person = (request.POST.get("person") or "").strip()
-    if len(person) > 200:
-        return JsonResponse({"error": "A person name is at most 200 characters."},
-                            status=400)
-
     project = experiment.project
     requested = (request.POST.get("project") or "").strip()
     if requested and str(requested) != str(experiment.project_id):
@@ -308,12 +303,14 @@ def experiment_update(request, pk):
             return JsonResponse({"error": "You cannot move it into that project."},
                                 status=403)
 
+    # `person` is deliberately absent, here and from the form. Who owns or created a
+    # thing is its own workflow; folding it into a details form means every save rewrites
+    # it, and a form that omitted the field would silently blank it.
     experiment.name = name
-    experiment.person = person
     experiment.notes = (request.POST.get("notes") or "").strip()
     experiment.doi = (request.POST.get("doi") or "").strip()
     experiment.project = project
-    experiment.save(update_fields=["name", "person", "notes", "doi", "project"])
+    experiment.save(update_fields=["name", "notes", "doi", "project"])
     return JsonResponse({"experiment_id": experiment.ale_id,
                          "experiment": experiment.name,
                          "project_id": project.id if project else None})

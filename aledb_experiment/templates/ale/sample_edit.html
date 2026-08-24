@@ -15,12 +15,6 @@
             </small>
         </div>
 
-        <div class="form-group">
-            <label for="se-person">Person</label>
-            <input type="text" class="form-control" id="se-person" maxlength="200"
-                   value="{{ sample.reseq.person|default_if_none:'' }}">
-        </div>
-
         <h4 style="margin-top: 2em;">Identity</h4>
         {% comment %} The coordinate and the displayed label are shown together on
            purpose. `ale_flask_isolate_str` returns the isolate description whenever it is
@@ -39,8 +33,14 @@
                 <input type="number" min="0" class="form-control" id="se-ale" value="{{ sample.ale }}">
             </div>
             <div class="col-sm-3 form-group">
-                <label for="se-flask">Flask</label>
-                <input type="number" min="0" class="form-control" id="se-flask" value="{{ sample.flask }}">
+                {% comment %} The column is Flask.flask_number and stays that way; "Time
+                   point" is what it is actually used for. It is the only ordinal in the
+                   schema that places a sample along an ALE, and fixation orders by it --
+                   it sorts flask numbers and takes the last two to decide what has fixed.
+                   Plain text rather than type="number": the steppers are meaningless on a
+                   value that runs to five figures. {% endcomment %}
+                <label for="se-flask">Time point</label>
+                <input type="text" class="form-control" id="se-flask" value="{{ sample.flask }}">
             </div>
             <div class="col-sm-3 form-group">
                 <label for="se-isolate">Isolate</label>
@@ -102,7 +102,6 @@
     document.getElementById("se-save").addEventListener("click", function () {
         var data = {
             sample_name: document.getElementById("se-name").value,
-            person: document.getElementById("se-person").value,
             ale: document.getElementById("se-ale").value,
             flask: document.getElementById("se-flask").value,
             isolate: document.getElementById("se-isolate").value,

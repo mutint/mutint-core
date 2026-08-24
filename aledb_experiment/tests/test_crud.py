@@ -690,15 +690,27 @@ class ExperimentEditTestCase(TestCase):
     def test_saving_changes_the_experiment(self):
         response = self.client.post(
             "/ale/experiment/%d/update/" % self.experiment.ale_id,
-            {"name": "Ara-1", "person": "jeff", "notes": "ran hot",
+            {"name": "Ara-1", "notes": "ran hot",
              "doi": "10.1/abc 10.1/def", "project": self.project.id})
 
         self.assertEqual(200, response.status_code, response.content)
         self.experiment.refresh_from_db()
         self.assertEqual("Ara-1", self.experiment.name)
-        self.assertEqual("jeff", self.experiment.person)
         self.assertEqual("ran hot", self.experiment.notes)
         self.assertEqual(["10.1/abc", "10.1/def"], self.experiment.doi_as_list())
+
+    def test_the_form_neither_offers_nor_accepts_a_person(self):
+        """Changing an owner is its own workflow. A details form that carried the field
+        would rewrite it on every save, and one that dropped it would blank it."""
+        self.assertNotContains(
+            self.client.get("/ale/experiment/%d/edit/" % self.experiment.ale_id),
+            'id="ee-person"')
+
+        self.client.post("/ale/experiment/%d/update/" % self.experiment.ale_id,
+                         {"name": "first", "person": "impostor"})
+
+        self.experiment.refresh_from_db()
+        self.assertEqual("owner", self.experiment.person)
 
     def test_it_moves_between_projects_you_own(self):
         other = Project.objects.get(pk=self.client.post(

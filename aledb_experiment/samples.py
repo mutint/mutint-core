@@ -259,7 +259,10 @@ def parse_rows(rows, samples_by_id):
         try:
             coordinate = (
                 _positive_int(row.get("ale"), "ALE number", row_label),
-                _positive_int(row.get("flask"), "flask number", row_label),
+                # "time point", not "flask number": the column is flask_number and stays
+                # so, but that is not what anyone calls it, and a refusal is the one place
+                # the internal name would surface to a user.
+                _positive_int(row.get("flask"), "time point", row_label),
                 _positive_int(row.get("isolate"), "isolate number", row_label),
                 _positive_int(row.get("rep"), "replicate number", row_label),
             )
