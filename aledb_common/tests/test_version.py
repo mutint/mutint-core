@@ -79,9 +79,18 @@ class RewriteTestCase(unittest.TestCase):
 class VersionCommandTestCase(unittest.TestCase):
 
     def test_it_prints_aledb_cores_version(self):
+        """Among whatever else is installed.
+
+        The command lists every component that exposes a version, which is the point of it
+        -- an assembled project adds its own, so `mutint-app 0.0.1` is a second line there.
+        This used to assertEqual on the whole output, which quietly meant "and nothing else
+        is installed" and failed the moment a bare `./mutint test` began running it.
+        """
         out = StringIO()
         call_command("version", stdout=out)
-        self.assertEqual("aledb-core %s" % __version__, out.getvalue().strip())
+
+        lines = out.getvalue().strip().splitlines()
+        self.assertIn("aledb-core %s" % __version__, lines)
 
     def test_the_cli_routes_around_djangos_reserved_name(self):
         """`version` is reserved: ManagementUtility answers it with Django's own

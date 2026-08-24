@@ -42,15 +42,24 @@ class BrandingTestCase(TestCase):
         self.client.force_login(self.user)
 
     # --- unbranded is the default --------------------------------------------
+    #
+    # Each of these pins ALEDB_BRANDING to the shipped default rather than reading whatever
+    # is configured. They are about what *core* does with no branding, and an assembled
+    # project legitimately sets its own -- so without the override they assert the deployment's
+    # configuration and fail in MutInt and aledb-deploy, which is exactly what they did once a
+    # bare `./mutint test` started running them.
 
+    @override_settings(ALEDB_BRANDING={})
     def test_no_deployment_name_by_default(self):
         content = self.client.get(INTERNAL_PAGE).content.decode()
         self.assertNotIn("navbar-brand", content)
         self.assertNotIn("ALEdb 1.1.0", content)
 
+    @override_settings(ALEDB_BRANDING={})
     def test_no_deployment_logo_by_default(self):
         self.assertNotIn("aledb_header.png", self.client.get(INTERNAL_PAGE).content.decode())
 
+    @override_settings(ALEDB_BRANDING={})
     def test_error_pages_carry_no_deployment_name(self):
         """The titles were hardcoded `ALEDB - 404`; unbranded they are just the code."""
         response = self.client.get("/no/such/page/here")
