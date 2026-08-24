@@ -79,6 +79,21 @@
     padding-right: 0;
 }
 
+/* The pagination dropped its last button onto a second line.
+
+   Bootstrap 3 builds `.pagination` as an inline-block `ul` whose `li`s are `display: inline`
+   and whose `a`s are floated. The shrink-to-fit width that gives the `ul` came out one
+   button short, so "Last" wrapped below "Next" -- on every page with a paged table, at any
+   window width, and regardless of how much empty space sat to its right. Laying the buttons
+   out as flex items sizes the row to its contents and takes the float arithmetic out of it;
+   the `li`s blockify as flex items, which is what the floats were emulating anyway.
+
+   Pre-existing, and unrelated to the alignment rules above -- measured identical before
+   them. */
+#aledb-content .dataTables_paginate .pagination {
+    display: inline-flex;
+}
+
 /* Same story one level up: a grid column used as a plain wrapper straight inside the
    content box -- the Add Data page does this -- carries a 15px gutter with no row to
    cancel it, so its content sat 15px RIGHT of the title. Outside a row a column is only a

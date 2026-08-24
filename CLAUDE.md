@@ -171,6 +171,17 @@ row that is a direct child, and a column used outside a row. A genuine multi-col
 its inter-column gutters -- only the outermost edges go -- so the Overview page's three panels
 still breathe. Measured across twelve pages with headless Chrome, all now at the same x.
 
+**The paginate control lays its buttons out with flex, not floats.** Bootstrap 3 builds
+`.pagination` as an inline-block `ul` whose `li`s are `display: inline` and whose `a`s are
+floated, and the shrink-to-fit width that gives the `ul` came out one button short -- so
+**"Last" sat on a second line** on every page with a paged table, at any window width, with
+any amount of empty space to its right. It is not a width problem and moving things around
+does not fix it; `display: inline-flex` on the `ul` sizes the row to its contents and takes
+the float arithmetic out of it.
+
+Worth knowing because it looks like a consequence of whatever was last changed nearby, and
+is not: it was measured identical before and after the alignment rules above.
+
 **That `display: flow-root` is set inline in `base.html`, not in `common.css`, and must stay
 there.** It is the whole of what keeps the content box off the sidebar, so a browser holding a
 cached older copy of `common.css` renders every page with the header on top of the sidebar --
