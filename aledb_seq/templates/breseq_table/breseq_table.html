@@ -50,6 +50,12 @@
         </div>
         <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
            class="breseq-crosslink">all samples &raquo;</a>
+        {% comment %} You are looking at one sample's mutations when you realise its
+           identity is wrong, so the edit page is one click from here. {% endcomment %}
+        {% if can_edit and selected_reseq_id %}
+        <a href="/ale/sample/{{ selected_reseq_id }}/edit/"
+           class="breseq-crosslink">edit this sample &raquo;</a>
+        {% endif %}
     </div>
 
     {% if not selected_reseq %}

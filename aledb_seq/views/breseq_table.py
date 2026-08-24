@@ -21,6 +21,7 @@ import aledb_seq.views.common
 from aledb_common.logger import join_extras, user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
+from aledb_experiment.permissions import can_edit_project
 from aledb_filter.util import filter_observed_mutations
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import ExperimentReference, ObservedMutation
@@ -62,6 +63,7 @@ def breseq_table(request):
             "reference": _reference(experiment),
             "title": "%s mutations" % experiment.name,
             "template_header": "Mutations",
+            "can_edit": can_edit_project(request.user, experiment.project),
         })
 
         logger.info("samples",

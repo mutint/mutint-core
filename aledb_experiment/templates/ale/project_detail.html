@@ -35,9 +35,20 @@
                 <dd>{{ project.date_str }}</dd>
                 <dt>Owner Name</dt>
                 <dd>{{ project.owner }}</dd>
+                <dt>Status</dt>
+                <dd>{{ project.get_status_display }}</dd>
                 <dt>Is public?</dt>
                 <dd>{{ project.is_public|yesno:"Yes,No" }}</dd>
+                {% comment %} Both of these were editable once and shown never. They are
+                   editable again on /edit/, so a save that changed one has to be visible
+                   somewhere -- otherwise it reads as having done nothing. {% endcomment %}
+                <dt>Description</dt>
+                <dd>{{ project.description|default:"&mdash;" }}</dd>
             </dl>
+            {% if can_edit %}
+            <a class="btn btn-default btn-sm"
+               href="/ale/project/{{ project.id }}/edit/">Edit project</a>
+            {% endif %}
         </div>
     </div>
 

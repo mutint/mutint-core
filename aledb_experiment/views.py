@@ -204,3 +204,116 @@ def experiment_delete(request, pk):
         experiment.soft_delete(request.user)
     return JsonResponse({"experiment_id": experiment.ale_id,
                          "deleted_at": experiment.deleted_at})
+
+
+# --- edit --------------------------------------------------------------------------------
+#
+# Creating and deleting were the first two thirds of this; until now a project or experiment
+# could be brought into existence and taken out of it, but not corrected. The summary on
+# ale/project_detail.html carries the comment about what the previous attempt looked like:
+# editable inputs in a form that posted nowhere, silently discarding anything typed. That
+# summary stays read-only. Editing is a page of its own, like creating, for the same reasons
+# -- a heading, room to explain a field, and a URL you can send someone.
+
+
+def project_edit(request, pk):
+    """The edit-a-project form."""
+    project = get_object_or_404(Project, pk=pk)
+    context = get_user_context(request.user)
+    if not can_edit_project(request.user, project):
+        return render(request, "403.html", context, status=403)
+
+    context.update({"project": project, "statuses": Project.PROJECT_STATUS})
+    return render(request, "ale/project_edit.html", context)
+
+
+def experiment_edit(request, pk):
+    """The edit-an-experiment form.
+
+    The project picker lists only what `can_edit_project` allows, so it cannot offer a
+    destination the POST would refuse -- the same rule `experiment_new` follows.
+    """
+    experiment = get_object_or_404(AleExperiment, pk=pk)
+    context = get_user_context(request.user)
+    if not can_edit_project(request.user, experiment.project):
+        return render(request, "403.html", context, status=403)
+
+    context.update({
+        "experiment": experiment,
+        "editable_projects": _editable_projects(request.user),
+    })
+    return render(request, "ale/experiment_edit.html", context)
+
+
+@require_POST
+def project_update(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    if not can_edit_project(request.user, project):
+        return JsonResponse({"error": "You cannot edit this project."}, status=403)
+
+    name = (request.POST.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"error": "A project name is required."}, status=400)
+    if len(name) > 50:
+        return JsonResponse(
+            {"error": "A project name is at most 50 characters."}, status=400)
+
+    description = (request.POST.get("description") or "").strip()
+    if len(description) > 300:
+        return JsonResponse(
+            {"error": "A project description is at most 300 characters."}, status=400)
+
+    status = (request.POST.get("status") or "").strip()
+    valid = [value for value, _label in Project.PROJECT_STATUS]
+    if status and status not in valid:
+        return JsonResponse({"error": "Unknown project status."}, status=400)
+
+    project.name = name
+    project.description = description
+    project.status = status or project.status
+    project.is_public = bool(request.POST.get("is_public"))
+    project.save(update_fields=["name", "description", "status", "is_public"])
+    return JsonResponse({"project_id": project.id, "project": project.name})
+
+
+@require_POST
+def experiment_update(request, pk):
+    """Save an experiment, possibly moving it to another project.
+
+    The move is checked against **both** ends. Checking only the destination would let you
+    take an experiment out of a project you have no say over; checking only the source
+    would let you push your experiment into someone else's.
+    """
+    experiment = get_object_or_404(AleExperiment, pk=pk)
+    if not can_edit_project(request.user, experiment.project):
+        return JsonResponse({"error": "You cannot edit this experiment."}, status=403)
+
+    name = (request.POST.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"error": "An experiment name is required."}, status=400)
+    if len(name) > 200:
+        return JsonResponse(
+            {"error": "An experiment name is at most 200 characters."}, status=400)
+
+    person = (request.POST.get("person") or "").strip()
+    if len(person) > 200:
+        return JsonResponse({"error": "A person name is at most 200 characters."},
+                            status=400)
+
+    project = experiment.project
+    requested = (request.POST.get("project") or "").strip()
+    if requested and str(requested) != str(experiment.project_id):
+        project = get_object_or_404(Project, pk=requested)
+        if not can_edit_project(request.user, project):
+            return JsonResponse({"error": "You cannot move it into that project."},
+                                status=403)
+
+    experiment.name = name
+    experiment.person = person
+    experiment.notes = (request.POST.get("notes") or "").strip()
+    experiment.doi = (request.POST.get("doi") or "").strip()
+    experiment.project = project
+    experiment.save(update_fields=["name", "person", "notes", "doi", "project"])
+    return JsonResponse({"experiment_id": experiment.ale_id,
+                         "experiment": experiment.name,
+                         "project_id": project.id if project else None})

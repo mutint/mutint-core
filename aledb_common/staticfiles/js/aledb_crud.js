@@ -28,7 +28,15 @@
             body: form
         }).then(function (resp) {
             return resp.json().then(function (body) {
-                if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
+                if (!resp.ok) {
+                    // The parsed body rides along on the Error. Callers that only read
+                    // err.message are unaffected; the sample table needs err.body.errors
+                    // to outline which rows it refused, and the body used to be dropped
+                    // here.
+                    var failure = new Error(body.error || ("HTTP " + resp.status));
+                    failure.body = body;
+                    throw failure;
+                }
                 return body;
             });
         });

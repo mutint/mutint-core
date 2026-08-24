@@ -18,6 +18,7 @@ from aledb_stats.util import get_observed_mutation_list
 import logging
 from aledb_common.context_registry import get_experiment_context
 from aledb_experiment.models import AleExperiment
+from aledb_experiment.permissions import can_edit_project
 from aledb_common.logger import user_extra, join_extras
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,11 @@ def stats(request):
                         "flask_sum": flask_sum,
                         "isolate_sum": isolate_sum,
                         "notes": experiment.notes,
+                        # Gates the whole experiment_actions block. Delete used to render
+                        # for everyone -- the POST refused it, so it was a dead end
+                        # dressed as an action rather than a hole, but a dead end all the
+                        # same. Add and Edit now come and go with it.
+                        "can_edit": can_edit_project(request.user, experiment.project),
                         })
 
         logger.info("stats performance",

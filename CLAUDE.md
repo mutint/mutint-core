@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 463 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 524 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -237,6 +237,65 @@ data-api was bound twice so a dialog opened and closed in the same millisecond.
 is no picker to get wrong. Each page checks permission itself -- 403 signed out, 403 for a
 project you cannot edit -- rather than relying on the button being hidden. The POSTs still
 go to `project_create` / `experiment_create`, which is where the real checks live.
+
+### Editing is three pages, and one of them is not what it looks like
+
+`/ale/project/<pk>/edit/`, `/ale/experiment/<pk>/edit/` and `/ale/sample/<pk>/edit/`, plus
+`/ale/experiment/<pk>/samples/` for the whole experiment at once. Same split as creating: a
+GET page that checks permission itself, a `@require_POST` JSON endpoint that checks again.
+All four gate on `can_edit_project` -- `Project.user` or a superuser -- so staff, who may
+*view* every project, cannot edit one they do not own.
+
+The project summary on `ale/project_detail.html` **stays read-only**; editing did not go
+back into it. It now shows `description` and `status` as well, which were editable-but-never-
+displayed before: a save has to be visible somewhere or it reads as having done nothing.
+
+**Changing a sample's identity never writes a number.** `aledb_experiment/samples.py`
+resolves (or creates) the `AleId`/`Flask`/`Isolate`/`TechnicalReplicate` row for the *target*
+A/F/I/R and re-points `ResequencingExperiment.tech_rep` at it. Those four rows are shared --
+`gd_import._get_or_create_chain` reuses one `AleId` and one `Flask` across every sample under
+them -- so `flask.flask_number = 30; flask.save()` renumbers every sibling in that flask. The
+FK re-point also keeps `reseq.pk` fixed, which the store paths (`samples/<pk>/aligned.bam`)
+depend on, and makes a swap need no ordering logic: both samples move to freshly resolved
+targets and the rows they vacated are pruned afterwards.
+
+Three lookups there deliberately differ from `gd_import`, and each is a correction:
+
+- `Flask` keys on `(ale_id, flask_number)` with `media` in `defaults`. `gd_import` passes
+  `media=` as a *lookup* kwarg while `Flask` is unique on that pair, so it raises
+  `IntegrityError` against an existing flask carrying different media.
+- `Isolate` is `filter().order_by("pk").first()`, not `get_or_create`. `Isolate` has no
+  `unique_together` and `gd_import` get_or_creates it on six fields including `reseq_date`, so
+  real databases already hold two rows at one `(flask, isolate_number)` and `get_or_create`
+  raises `MultipleObjectsReturned` on them. Adding the constraint needs a data-repair
+  migration and is a separate change.
+- A newly created row inherits `media`, `freezer_box`, the isolate description and the
+  replicate's text from the row it replaced. A renumber re-labels a sample; it does not move
+  it to different growth conditions or discard what was written about the run.
+
+Two samples may not share a coordinate, and the save refuses it. There is no constraint
+saying so, but `aledb-fixation` builds `flask_isolate_mutation_dict[(flask, isolate)] = qs` by
+plain assignment, so the second sample at a coordinate silently overwrites the first and its
+mutations vanish from fixation with no error. Emptied rows are pruned bottom-up for the
+opposite reason: `rebuild_sample_counts` counts `AleId`/`Flask`/`Isolate` **rows**, and the
+ALE picker is built from `AleId` rows. An `Isolate` still referenced by another isolate's
+`parent_isolate` or an `AleId.starting_strain` is kept instead -- both are `DO_NOTHING`, so
+the database would reject the delete, and nothing in the product writes either column.
+
+A structural save calls `run_post_experiment_hooks` and `rebuild_sample_counts`, once per
+POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls every
+`ObservedMutation` in the database into Python -- nothing about a renumber changes a mutation
+count, and paying for the whole database on every rename is what would make this feel broken
+in production. A descriptive-only save rebuilds nothing.
+
+**The trap to know about:** a renumber often changes no visible label.
+`ale_flask_isolate_str` returns `Isolate.description` verbatim whenever it is set, and
+`_get_or_create_autonumbered_chain` fills it with the filename for every sample not already
+named `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
+keep the description editable in the same form. A duplicate `sample_name` within an
+experiment is refused for a related reason -- re-import finds an existing sample by name --
+but only when the name actually *changed*, or an experiment that already had a duplicate pair
+could never be saved at all.
 
 ### Which import types the Add page offers
 
@@ -474,6 +533,10 @@ Creation and deletion are nested under the objects they act on:
   registers no nav item. Both existed briefly and could only ever land on a page with no
   experiment to add to; without a usable `ale_experiment_id` the route is now a plain 404.
 - Everything records the logged-in user; there are no person fields to fill in.
+- Editing lives beside all of this -- see **Editing is three pages** above. The controls in
+  `stats.html`'s `{% block experiment_actions %}` are now gated on `can_edit`; Add and Delete
+  used to render for everyone, which was a dead end dressed up as an action rather than a
+  hole, since the endpoints refused anyway.
 
 **Deletion is soft.** `Project` and `AleExperiment` carry `deleted_at`/`deleted_by`
 (`SoftDeleteMixin`); only those two are flagged, and children are reached by traversal when

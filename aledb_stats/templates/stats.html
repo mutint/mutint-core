@@ -54,12 +54,22 @@
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - Experiment Overview{% endblock %}
 {% block experiment_actions %}
+    {% comment %} All of these were rendered to everyone. Every endpoint behind them
+       refuses a caller who may not edit, so nothing unsafe followed -- but clicking one
+       could only ever produce a 403 in the error line, which is a dead end dressed up as
+       an action. {% endcomment %}
+    {% if can_edit %}
     <div style="margin-top: 0.6em;">
         <a class="btn btn-primary btn-sm" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
             + Add data</a>
+        <a class="btn btn-default btn-sm"
+           href="/ale/experiment/{{ ale_experiment_id }}/edit/">Edit experiment</a>
+        <a class="btn btn-default btn-sm"
+           href="/ale/experiment/{{ ale_experiment_id }}/samples/">Edit samples</a>
         <button type="button" class="btn btn-danger btn-sm" id="delete-experiment"
                 data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
     </div>
+    {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -195,7 +205,7 @@
                 <th>Total Reads</th>
                 <th>Percent Mapped</th>
                 <th>Average Read Length</th>
-
+                {% if can_edit %}<th></th>{% endif %}
             </tr>
             </thead>
             <tbody>
@@ -210,6 +220,11 @@
                     <td class="total_reads">{{ experiment_info_tuple.0.reads }}</td>
                     <td class="percent_reads_mapped">{{ experiment_info_tuple.0.percentage_mapped }}%</td>
                     <td class="average_read_length">{{ experiment_info_tuple.0.average_read_length }}</td>
+                    {% comment %} This is the table where you notice a sample is
+                       mislabelled, so it is the main way into the per-sample page. {% endcomment %}
+                    {% if can_edit %}
+                    <td><a href="/ale/sample/{{ experiment_info_tuple.0.id }}/edit/">Edit</a></td>
+                    {% endif %}
                 </tr>
 
             {% endfor %}

@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}Edit sample {{ sample.label }}{% endblock %}
+{% block header %}Edit sample: {{ sample.label }}{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="se-name">Sample name</label>
+            <input type="text" class="form-control" id="se-name" maxlength="200"
+                   value="{{ sample.reseq.sample_name|default_if_none:'' }}" autofocus>
+            <small class="help-block">
+                Must be unique within the experiment: re-importing finds an existing sample
+                by this name, so two samples sharing one can be merged by a later upload.
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label for="se-person">Person</label>
+            <input type="text" class="form-control" id="se-person" maxlength="200"
+                   value="{{ sample.reseq.person|default_if_none:'' }}">
+        </div>
+
+        <h4 style="margin-top: 2em;">Identity</h4>
+        {% comment %} The coordinate and the displayed label are shown together on
+           purpose. `ale_flask_isolate_str` returns the isolate description whenever it is
+           set, and the import path sets it to the filename for every sample not already
+           named A-F-I-R -- so changing these four numbers can leave every label on every
+           page byte-identical. Seeing both is what stops a successful save looking like
+           it did nothing. {% endcomment %}
+        <p style="color: #666;">
+            Currently <b>{{ sample.coordinate }}</b>, displayed everywhere as
+            <b>{{ sample.label }}</b>.
+        </p>
+
+        <div class="row">
+            <div class="col-sm-3 form-group">
+                <label for="se-ale">ALE</label>
+                <input type="number" min="0" class="form-control" id="se-ale" value="{{ sample.ale }}">
+            </div>
+            <div class="col-sm-3 form-group">
+                <label for="se-flask">Flask</label>
+                <input type="number" min="0" class="form-control" id="se-flask" value="{{ sample.flask }}">
+            </div>
+            <div class="col-sm-3 form-group">
+                <label for="se-isolate">Isolate</label>
+                <input type="number" min="0" class="form-control" id="se-isolate" value="{{ sample.isolate }}">
+            </div>
+            <div class="col-sm-3 form-group">
+                <label for="se-rep">Replicate</label>
+                <input type="number" min="0" class="form-control" id="se-rep" value="{{ sample.rep }}">
+            </div>
+        </div>
+
+        <div class="checkbox">
+            <label><input type="checkbox" id="se-population"
+                          {% if sample.is_population %}checked{% endif %}> Population</label>
+            <small class="help-block">Unchecked means a clonal isolate.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="se-isolate-description">Isolate description</label>
+            <input type="text" class="form-control" id="se-isolate-description"
+                   maxlength="300" value="{{ sample.isolate_description }}">
+            <small class="help-block">
+                When set, this is what the sample is called throughout the site, in place
+                of A#&nbsp;F#&nbsp;I#&nbsp;R#. Clear it to display the numbers instead.
+            </small>
+        </div>
+
+        <p style="color: #666;">
+            The description and the population flag describe the <b>isolate</b>, so they
+            apply to every technical replicate of it, not to this sample alone.
+        </p>
+
+        <h4 style="margin-top: 2em;">This technical replicate</h4>
+
+        <div class="form-group">
+            <label for="se-rep-description">Replicate description</label>
+            <input type="text" class="form-control" id="se-rep-description"
+                   maxlength="500" value="{{ sample.rep_description }}">
+        </div>
+
+        <div class="form-group">
+            <label for="se-rep-tags">Tags</label>
+            <input type="text" class="form-control" id="se-rep-tags"
+                   maxlength="500" value="{{ sample.rep_tags }}">
+        </div>
+
+        <div style="margin-top: 1.5em;">
+            <button type="button" class="btn btn-primary" id="se-save">Save sample</button>
+            <a class="btn btn-default"
+               href="/ale/experiment/{{ experiment.ale_id }}/samples/">Cancel</a>
+        </div>
+        <div id="se-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("se-save")) { return; }
+    document.getElementById("se-save").addEventListener("click", function () {
+        var data = {
+            sample_name: document.getElementById("se-name").value,
+            person: document.getElementById("se-person").value,
+            ale: document.getElementById("se-ale").value,
+            flask: document.getElementById("se-flask").value,
+            isolate: document.getElementById("se-isolate").value,
+            rep: document.getElementById("se-rep").value,
+            isolate_description: document.getElementById("se-isolate-description").value,
+            rep_description: document.getElementById("se-rep-description").value,
+            rep_tags: document.getElementById("se-rep-tags").value
+        };
+        if (document.getElementById("se-population").checked) { data.is_population = "1"; }
+        window.aledbPost("/ale/sample/{{ sample.id }}/update/", data).then(function () {
+            window.location.reload();
+        }).catch(function (err) {
+            document.getElementById("se-error").textContent = err.message;
+        });
+    });
+})();
+</script>
+{% endblock %}
