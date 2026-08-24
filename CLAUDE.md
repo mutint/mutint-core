@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 581 run, 0 failures** standalone; **630** in an assembled project, where the
+**Baseline: 584 run, 0 failures** standalone; **630** in an assembled project, where the
 plugins' own tests join them. The suite is green — treat *any* failure as yours.
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
@@ -153,6 +153,23 @@ Neither the sidebar nor the content box has a fixed width, and neither should ge
 `flow-root` rather than `overflow: hidden`: both establish the block formatting context that
 stops the box sliding under the floats, but `hidden` would clip a menu that opens past the edge
 -- the genome browser's sample menu is one.
+
+**The title and the page's content share one left edge, at `#aledb-content`'s 25px padding.**
+Two things used to break that, and they broke it in opposite directions, which is why the
+misalignment looked inconsistent rather than uniform:
+
+- The header block sits in a Bootstrap `.col-lg-12`, and a grid column carries a 15px gutter
+  each side -- so the title alone stood 15px further in.
+- A `.row` placed straight into `#aledb-content` bleeds 15px *out*, because its -15px margins
+  are meant to be cancelled by the 15px padding of a `.container`, and this box is not one --
+  it has 25px of its own. Most pages use `.row` as a plain wrapper round a form or a table,
+  so their content sat left of the title while the edit pages, which use no row, sat flush.
+  The Add Data page manages the same trick one level up with a bare `.col-lg-8`.
+
+`common.css` flattens the gutters that have nothing to cancel them: the header's column, a
+row that is a direct child, and a column used outside a row. A genuine multi-column row keeps
+its inter-column gutters -- only the outermost edges go -- so the Overview page's three panels
+still breathe. Measured across twelve pages with headless Chrome, all now at the same x.
 
 **That `display: flow-root` is set inline in `base.html`, not in `common.css`, and must stay
 there.** It is the whole of what keeps the content box off the sidebar, so a browser holding a

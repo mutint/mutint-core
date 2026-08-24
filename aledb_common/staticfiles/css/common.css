@@ -39,6 +39,55 @@
     margin-top: 0;
 }
 
+/* The title lines up with the page's content, which it did not.
+
+   The header block sits in a Bootstrap `.col-lg-12`, and a grid column carries a 15px
+   gutter each side. #aledb-content's own 25px padding is where everything else on the page
+   starts, so the title alone stood 15px further in -- on every page, measured, not guessed.
+   Some pages hid it better than others: a `.row` pulls back 15px with its negative margins,
+   so a table page's toolbar sat left of the title while its cells sat right of it.
+   Zeroing the gutter puts the heading, its | links and the action buttons on the same left
+   edge as whatever the page renders below them. The column is a full-width single cell, so
+   the gutter was the only thing it contributed. */
+#aledb-content .navbar .col-lg-12 {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* ...and the page's own content lines up with it, which it also did not.
+
+   A Bootstrap `.row` carries -15px margins, meant to be cancelled by the 15px padding of
+   the `.container` it sits in. #aledb-content is not a container -- it has 25px of padding
+   of its own -- so a `.row` placed straight into it bleeds 15px into that padding on both
+   sides. Most pages use `.row` as a plain wrapper around a form or a table, so their
+   content sat 15px LEFT of the title while the edit pages, which use no row, sat flush.
+   That is why the misalignment looked inconsistent rather than uniform.
+
+   Zeroing the margin fixes the wrapper case. The columns keep their gutters so a genuine
+   multi-column row (the Overview page's three panels) still breathes; only the outermost
+   edges are flattened, which is what makes the first column start where the title does. */
+#aledb-content > .row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+#aledb-content > .row > [class*="col-"]:first-child {
+    padding-left: 0;
+}
+
+#aledb-content > .row > [class*="col-"]:last-child {
+    padding-right: 0;
+}
+
+/* Same story one level up: a grid column used as a plain wrapper straight inside the
+   content box -- the Add Data page does this -- carries a 15px gutter with no row to
+   cancel it, so its content sat 15px RIGHT of the title. Outside a row a column is only a
+   width, and the gutter is noise. */
+#aledb-content > [class*="col-"] {
+    padding-left: 0;
+    padding-right: 0;
+}
+
 #padding_top {
     padding-top: 1em;
 }

@@ -10,6 +10,8 @@ import os
 import re
 import unittest
 
+from django.test import TestCase
+
 import aledb_common
 
 CORE = os.path.dirname(os.path.dirname(os.path.abspath(aledb_common.__file__)))
@@ -108,3 +110,61 @@ class ButtonsAreNotFloatedTestCase(unittest.TestCase):
         self.assertIsNotNone(match, "expected a .btn rule to still exist")
         self.assertNotIn("float", match.group(1),
                          "an unscoped .btn rule must not float every button in the app")
+
+
+class ExperimentSidebarLabelTestCase(TestCase):
+    """base.html joins the two names itself: `{{ ale_project_name }}: {{ ale_experiment_name }}`.
+
+    `AleExperiment.experiment_context()` used to return a *composed* "project: experiment"
+    under the experiment key and no project key at all, so a view that simply trusted it
+    rendered a stray leading colon, and one that added the project name without also
+    overriding the composed one rendered the project twice. Every experiment-scoped view
+    carried its own workaround; the ones that did not carried the bug -- the sample edit
+    pages had the colon, the genome browser and the Add Data page had the doubled name.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "Proj", "experiment": "Exp"}).json()
+        from aledb_experiment.models import AleExperiment
+
+        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+
+    def test_the_context_keeps_the_names_apart(self):
+        context = self.experiment.experiment_context()
+
+        self.assertEqual("Exp", context["ale_experiment_name"])
+        self.assertEqual("Proj", context["ale_project_name"])
+        self.assertEqual(self.experiment.project_id, context["ale_project_id"])
+
+    def test_a_project_less_experiment_gives_an_empty_name_rather_than_raising(self):
+        """`AleExperiment.project` is nullable, and this used to be `self.project.name`."""
+        self.experiment.project = None
+        self.experiment.save()
+
+        self.assertEqual("", self.experiment.experiment_context()["ale_project_name"])
+
+    def _sidebar_label(self, url):
+        import re
+
+        html = self.client.get(url, follow=True).content.decode()
+        match = re.search(
+            r'<a href="/stats\?ale_experiment_id=%d"><b>(.*?)</b>' % self.experiment.ale_id,
+            html)
+        return match.group(1).strip() if match else None
+
+    def test_every_experiment_page_labels_it_the_same_way(self):
+        """No leading colon, no doubled project -- on the pages that used to have each."""
+        pages = {
+            "edit samples": "/ale/experiment/%d/samples/" % self.experiment.ale_id,
+            "add data": "/import/add/?ale_experiment_id=%d" % self.experiment.ale_id,
+            "overview": "/stats/?ale_experiment_id=%d" % self.experiment.ale_id,
+            "metadata": "/metadata/?ale_experiment_id=%d" % self.experiment.ale_id,
+        }
+        for name, url in pages.items():
+            with self.subTest(page=name):
+                self.assertEqual("Proj: Exp", self._sidebar_label(url))

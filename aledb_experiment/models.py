@@ -129,10 +129,27 @@ class AleExperiment(SoftDeleteMixin):
         return ''
 
     def experiment_context(self) -> dict:
-        ale_exp_name = self.project.name + ": " + self.name
+        """The four things base.html needs to render the experiment in the sidebar.
+
+        It returns the experiment's own name and the project's separately, because that is
+        how the template joins them: `{{ ale_project_name }}: {{ ale_experiment_name }}`.
+        This used to return a *composed* `"project: experiment"` under the experiment key
+        and no project key at all, so a caller that trusted it rendered `": project:
+        experiment"` -- a stray leading colon -- and one that added the project name without
+        also overriding the composed one rendered the project twice.
+
+        Every experiment-scoped view was carrying its own workaround for that, and the two
+        that were not carried the bug: the sample edit pages had the leading colon, the
+        genome browser and the Add Data page had the doubled name.
+
+        `project` is nullable, so the project name can be empty; the template renders the
+        colon regardless, which is a template question rather than this one's.
+        """
         return {
-            "ale_experiment_name": ale_exp_name,
+            "ale_experiment_name": self.name,
             "ale_experiment_id": self.ale_id,
+            "ale_project_name": self.project.name if self.project else "",
+            "ale_project_id": self.project_id,
         }
 
 
