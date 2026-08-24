@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 447 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 463 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -278,6 +278,25 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
+
+### Coverage comes from a BigWig, not from igv
+
+A sample contributes **two** tracks: a `wig` track on its stored `coverage.bw`, and the
+alignment track, at adjacent `order` values so they read as one block. The reason is that
+`checkZoomIn` gates the *whole* alignment track on `visibilityWindow` — igv's own coverage row
+is inside that track, so it is taken away with the reads. Coverage at a whole-genome view is
+therefore impossible from the BAM alone, and asking for the reads instead is what exhausts the
+tab.
+
+The alignment track sets **`visibilityWindow: 4000`**, overriding igv's own 30 kb default, so
+reads stop drawing above a 4 kb span while the BigWig keeps going at every zoom.
+
+The **Display menu decides which tracks are loaded**, not which rows of one track are shown.
+That distinction is the whole feature: *Display Coverage Only* does not load the alignment track
+at all, so **no BAM request is made** — measured, 0 BAM requests against 9 for the BigWig. It
+changes track identity rather than a flag, so choosing an item reloads whatever is showing.
+
+A sample imported before coverage existed simply has no wig track until `./aledb coverage` runs.
 
 **igv builds its entire UI inside a shadow root on `#igv-browser`**, with its own stylesheet
 adopted there (`attachShadow({mode:'open'})` + `adoptedStyleSheets`). Two consequences, both of

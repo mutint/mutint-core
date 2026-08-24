@@ -33,6 +33,7 @@ import shutil
 from django.db import transaction
 
 from aledb_common import store
+from aledb_import import coverage
 from aledb_import import reference as reference_io
 from aledb_import.breseq_summary import read_breseq_summary
 from aledb_import import reference_store
@@ -146,7 +147,13 @@ def _import_samples(context, root, person, report_loose_gd):
         sample_name = os.path.basename(sample_dir.rstrip(os.sep))
         try:
             with transaction.atomic():
-                count = _import_one_sample(sample_dir, sample_name, context, person)
+                count, seq_experiment = _import_one_sample(
+                    sample_dir, sample_name, context, person)
+            # Outside the transaction on purpose: this walks the whole alignment, and holding
+            # a database transaction open for it would be paid by every other writer. It is
+            # also best-effort -- a sample keeps its reads whether or not the coverage
+            # derives, and `./aledb coverage` fills in what did not.
+            coverage.build_quietly(seq_experiment)
             file_results.append({"file": sample_name, "mutations": count, "error": None})
             total_mutations += count
         except Exception as exc:  # one bad sample must not poison the batch
@@ -213,7 +220,9 @@ def _import_one_sample(sample_dir, sample_name, context, person):
 
     seq_experiment.save(update_fields=updated)
 
-    return count
+    # The sample goes back with the count so the caller can derive from it once this
+    # transaction has closed.
+    return count, seq_experiment
 
 
 def _establish_or_check_reference(experiment, gff3_path, fasta_path):

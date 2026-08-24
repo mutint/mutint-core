@@ -23,6 +23,13 @@ def sample_bai(request, reseq_id):
     return _serve_sample(request, reseq_id, store.SAMPLE_BAI)
 
 
+def sample_bigwig(request, reseq_id):
+    """The sample's coverage track. `.bw` falls through to application/octet-stream, which is
+    what igv wants, and BigWig is unreadable without the byte ranges serve_file already does --
+    igv fetches its header and R-tree index by range before any data."""
+    return _serve_sample(request, reseq_id, store.SAMPLE_BIGWIG)
+
+
 def reference_fasta(request, experiment_id):
     return _serve_reference(request, experiment_id, store.REFERENCE_FASTA)
 

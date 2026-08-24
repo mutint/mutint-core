@@ -31,6 +31,10 @@ class ResequencingExperiment(models.Model):
     # gatk_location -- pointing into a bring-your-own breseq tree. They were only ever used
     # to build breseq HTML report URLs, and went with that feature.
     bam_stored = models.BooleanField(default=False)
+    # Whether the coverage BigWig derived from that alignment is in the store. A second flag
+    # rather than something inferred from bam_stored: the derivation needs external tools and
+    # is best-effort, so a sample can have its reads and not its coverage.
+    coverage_stored = models.BooleanField(default=False)
 
     @property
     def ale_experiment(self):

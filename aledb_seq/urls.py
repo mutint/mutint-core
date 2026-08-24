@@ -25,6 +25,8 @@ urlpatterns = [
             aledb_seq.views.alignments.sample_bam, name='sample_bam'),
     re_path(r'^alignments/(?P<reseq_id>\d+)/bai$',
             aledb_seq.views.alignments.sample_bai, name='sample_bai'),
+    re_path(r'^alignments/(?P<reseq_id>\d+)/bigwig$',
+            aledb_seq.views.alignments.sample_bigwig, name='sample_bigwig'),
     re_path(r'^reference/(?P<experiment_id>\d+)/fasta$',
             aledb_seq.views.alignments.reference_fasta, name='reference_fasta'),
     re_path(r'^reference/(?P<experiment_id>\d+)/fai$',

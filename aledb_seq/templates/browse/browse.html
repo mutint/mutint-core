@@ -54,6 +54,7 @@
                                 <li data-sample="{{ sample.id }}"
                                     data-url="{{ sample.url }}"
                                     data-index-url="{{ sample.indexURL }}"
+                                    data-coverage-url="{{ sample.coverageURL|default_if_none:'' }}"
                                     data-mutant="{% if sample.has_mutation %}1{% else %}0{% endif %}"
                                     data-order="{{ forloop.counter0 }}"
                                     {% if sample.is_current %}class="active"{% endif %}>
@@ -115,28 +116,51 @@
         // base is well clear of the reference and gene tracks' own ordering.
         var TRACK_ORDER_BASE = 100;
 
-        // What a newly loaded track shows. The Display menu sets it and applies it to the
-        // tracks already up; it is never read back into the menu, because igv's own gear menu
-        // can change a single track afterwards and then no one value would be true of them
-        // all. `showCoverage` and `showAlignments` are igv's own flags -- the pair its gear
-        // menu toggles -- so a track configured with them starts the way the menu would set it.
+        // Which of a sample's two tracks are loaded. The Display menu sets this and reloads
+        // whatever is showing; it is never read back into the menu, because igv's own gear
+        // menu can change a single track afterwards and then no one value would be true of
+        // them all.
+        //
+        // These are separate igv tracks, not igv's showCoverage/showAlignments flags. Those
+        // only ever hid a row of a track that had already fetched its reads; "Coverage Only"
+        // here does not load the alignment track at all, so the BAM is never requested. That
+        // is the setting that makes a whole-genome view survivable.
         var DISPLAY = {
-            reads:    {showCoverage: false, showAlignments: true},
-            coverage: {showCoverage: true,  showAlignments: false},
-            both:     {showCoverage: true,  showAlignments: true}
+            reads:    {coverage: false, reads: true},
+            coverage: {coverage: true,  reads: false},
+            both:     {coverage: true,  reads: true}
         };
         var displayDefault = DISPLAY.both;
+
+        // Reads stop being drawn above this span. igv's own default for an alignment track is
+        // 30 kb, which on a bacterial genome is still enough reads to exhaust the tab; this
+        // overrides it. The coverage track carries no visibility window, so zooming out loses
+        // the reads and keeps the depth -- which is the whole point of deriving the BigWig.
+        var READS_VISIBILITY_WINDOW = 4000;
+
+        function coverageTrack(t) {
+            return {
+                type: "wig",
+                format: "bigwig",
+                name: t.name + " coverage",
+                url: t.coverageURL,
+                order: TRACK_ORDER_BASE + t.order * 2,
+                height: 60,
+                autoscale: true,
+                color: "#4078c0"
+            };
+        }
 
         function alignmentTrack(t) {
             return {
                 type: "alignment",
                 format: "bam",
-                name: t.name,
+                name: t.name + " reads",
                 url: t.url,
                 indexURL: t.indexURL,
-                order: TRACK_ORDER_BASE + t.order,
-                showCoverage: displayDefault.showCoverage,
-                showAlignments: displayDefault.showAlignments,
+                // Immediately after its own coverage track, so a sample reads as one block.
+                order: TRACK_ORDER_BASE + t.order * 2 + 1,
+                visibilityWindow: READS_VISIBILITY_WINDOW,
                 // On by default here, off by default in igv. This page exists to look at one
                 // called position, and a clipped end is often what tells you why the call
                 // looks the way it does. Still the same flag the track's gear menu toggles,
@@ -145,19 +169,22 @@
             };
         }
 
-        // The same * the menu uses, carried onto the track itself so a stack of pileups says
-        // which of them the mutation was called in without going back to the menu. igv puts no
-        // constraints on a track name. No padding for the samples without one, unlike the menu:
-        // an igv track label is its own shrink-to-fit badge with centred text, so there is no
-        // column of names to keep aligned.
-        function sampleTrack(row) {
+        function sampleTracks(row) {
             var mutant = row.getAttribute("data-mutant") === "1";
-            return alignmentTrack({
+            var spec = {
                 name: (mutant ? "* " : "") + row.querySelector(".sample-name").textContent,
                 url: row.getAttribute("data-url"),
                 indexURL: row.getAttribute("data-index-url"),
+                coverageURL: row.getAttribute("data-coverage-url"),
                 order: Number(row.getAttribute("data-order"))
-            });
+            };
+
+            var configs = [];
+            // A sample imported before coverage existed has no BigWig; it keeps its reads and
+            // gains a coverage track once ./aledb coverage has run.
+            if (displayDefault.coverage && spec.coverageURL) { configs.push(coverageTrack(spec)); }
+            if (displayDefault.reads) { configs.push(alignmentTrack(spec)); }
+            return configs;
         }
 
         // igv.js lays its tracks out at their own heights and the container takes whatever
@@ -267,12 +294,18 @@
 
             rows.forEach(function (row) { byId[row.getAttribute("data-sample")] = row; });
 
+            // A sample is one or two tracks now -- its coverage, its reads, or both -- so
+            // everything here works in lists. Still one promise per sample: "Show all
+            // samples" fires them at once, and a plain "have I got it yet" test would let a
+            // second click load the same files again while the first was in flight.
             function show(row) {
                 var id = row.getAttribute("data-sample");
                 if (pending[id]) { return pending[id]; }
-                pending[id] = browser.loadTrack(sampleTrack(row)).then(function (t) {
-                    loaded[id] = t;
-                    return t;
+                pending[id] = Promise.all(sampleTracks(row).map(function (config) {
+                    return browser.loadTrack(config);
+                })).then(function (tracks) {
+                    loaded[id] = tracks;
+                    return tracks;
                 });
                 return pending[id];
             }
@@ -285,7 +318,11 @@
                 // to do on this path and the two cannot fight over the same row.
                 delete pending[id];
                 delete loaded[id];
-                return p.then(function (t) { if (t) { browser.removeTrack(t); } });
+                return p.then(function (tracks) {
+                    (tracks || []).forEach(function (t) {
+                        if (t) { browser.removeTrack(t); }
+                    });
+                });
             }
 
             // The one place a row's state changes, so the class and the track can never
@@ -332,14 +369,16 @@
             // the column layout changes and a class set once would go with them.
             function markMutantTracks() {
                 rows.forEach(function (row) {
-                    var track = loaded[row.getAttribute("data-sample")];
-                    if (!track || !track.trackView || !track.trackView.viewports) { return; }
+                    var tracks = loaded[row.getAttribute("data-sample")] || [];
                     var mutant = row.getAttribute("data-mutant") === "1";
-                    track.trackView.viewports.forEach(function (viewport) {
-                        if (viewport.trackLabelElement) {
-                            viewport.trackLabelElement.classList.toggle("aledb-mutant-track",
-                                                                        mutant);
-                        }
+                    tracks.forEach(function (track) {
+                        if (!track || !track.trackView || !track.trackView.viewports) { return; }
+                        track.trackView.viewports.forEach(function (viewport) {
+                            if (viewport.trackLabelElement) {
+                                viewport.trackLabelElement.classList.toggle(
+                                    "aledb-mutant-track", mutant);
+                            }
+                        });
                     });
                 });
             }
@@ -390,33 +429,16 @@
                     });
                 });
 
-            // The height each track keeps while its reads are showing, so it can be given
-            // back. Keyed by the track itself rather than stamped onto it, to leave igv's
-            // objects alone.
-            var fullHeights = new Map();
-
-            // Reads, coverage, or both -- applied to every alignment track now up, and kept as
-            // what the next one loads with. The repaint calls are igv's own, from what its
-            // gear menu does for these two flags; without them a track keeps the box it had
-            // and leaves a gap where the hidden half was.
-            //
-            // The height is *not* igv's recipe. That one adds coverageTrackHeight to
-            // alignmentTrack.height, which is the reads' current box rather than the space
-            // they are entitled to, so a round trip through coverage-only ratchets the track
-            // down and leaves it there -- measured at 300px going to 100px and staying. Giving
-            // igv the total instead lets it divide the space itself, and the track comes back
-            // the size it was.
-            function applyDisplay(track, mode) {
-                if (track.showAlignments) { fullHeights.set(track, track.height); }
-                track.showCoverage = mode.showCoverage;
-                track.showAlignments = mode.showAlignments;
-                if (!track.autoHeight) {
-                    track.trackView.setTrackHeight(mode.showAlignments
-                        ? (fullHeights.get(track) || track.height)
-                        : track.coverageTrackHeight);
-                }
-                track.trackView.checkContentHeight();
-                track.trackView.repaintViews();
+            // Changing what a sample shows changes which tracks exist, not a flag on one, so
+            // the showing samples are reloaded. That is what makes "Coverage Only" honest: the
+            // alignment track is gone rather than hidden, and no BAM request is made.
+            function reloadShowing() {
+                var showing = rows.filter(isShowing);
+                settle(showing.map(function (row) {
+                    return hide(row);
+                }).filter(Boolean).concat(showing.map(function (row) {
+                    return show(row);
+                })));
             }
 
             var display = document.getElementById("display-menu");
@@ -425,9 +447,7 @@
                 var chosen = e.target.getAttribute("data-display");
                 if (!chosen) { return; }
                 displayDefault = DISPLAY[chosen];
-                browser.findTracks(function (t) { return t.type === "alignment"; })
-                    .forEach(function (track) { applyDisplay(track, displayDefault); });
-                settle();
+                reloadShowing();
             });
 
             // igv removes tracks by itself too -- its per-track gear menu has a Remove track
@@ -438,7 +458,13 @@
             browser.on("trackremoved", function (track) {
                 var changed = false;
                 Object.keys(loaded).forEach(function (id) {
-                    if (loaded[id] !== track) { return; }
+                    if ((loaded[id] || []).indexOf(track) === -1) { return; }
+                    // Removing either of a sample's tracks takes the sample off: they are one
+                    // thing on the menu, and half a sample showing is a state nothing else
+                    // here can express.
+                    (loaded[id] || []).forEach(function (other) {
+                        if (other !== track) { browser.removeTrack(other); }
+                    });
                     delete loaded[id];
                     delete pending[id];
                     if (byId[id]) { byId[id].classList.remove("active"); }

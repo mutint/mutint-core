@@ -157,6 +157,11 @@ def _sample_track(reseq):
         # aligned.bam.bai, so igv.js's default "<url>.bai" derivation would be wrong.
         "url": reverse("sample_bam", args=[reseq.id]),
         "indexURL": reverse("sample_bai", args=[reseq.id]),
+        # The coverage BigWig, when one has been derived. Samples imported before coverage
+        # existed have none until `./aledb coverage` runs, and the page simply gives them no
+        # coverage track.
+        "coverageURL": (reverse("sample_bigwig", args=[reseq.id])
+                        if reseq.coverage_stored else None),
     }
 
 

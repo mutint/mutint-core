@@ -65,6 +65,12 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         # so no client-supplied path ever reaches the filesystem.
         'ALEDB_STORE_DIR': os.environ.get(
             'ALEDB_STORE_DIR', os.path.join(base_dir, 'aledb_store')),
+        # External tools a component declared in its tools.txt, installed there by the
+        # entry script. Read from the environment because only the entry script knows the
+        # project root: base_dir here is aledb-core's own directory under an assembled
+        # project, the same reason templates/ and staticfiles/ have to be re-pointed.
+        # None when nothing exported it, and aledb_common.tools then falls back to PATH.
+        'ALEDB_TOOLS_DIR': os.environ.get('ALEDB_TOOLS_DIR'),
         # Chunked uploads staged but never finalized are reaped after this many hours.
         'ALEDB_UPLOAD_SESSION_TTL_HOURS': int(
             os.environ.get('ALEDB_UPLOAD_SESSION_TTL_HOURS', '24')),

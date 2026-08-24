@@ -1,0 +1,13 @@
+# External (non-Python) tools this component needs, as conda package specs -- one per line,
+# `#` comments ignored. The entry script collects these from every component the same way it
+# collects requirements.txt, and installs them into env/tools with micromamba. Code finds
+# them through aledb_common.tools.tool_path(), which falls back to PATH.
+#
+# Used by aledb_import/coverage.py to derive a per-sample BigWig from its BAM:
+#     bedtools genomecov -ibam aligned.bam -bg | sort | bedGraphToBigWig - sizes coverage.bw
+#
+# Not megadepth, which would do this in one step: bioconda has no osx-arm64 build of it, so
+# an Apple Silicon machine would need an --platform osx-64 environment under Rosetta. Both of
+# these build natively everywhere.
+bedtools
+ucsc-bedgraphtobigwig

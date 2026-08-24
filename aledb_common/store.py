@@ -31,6 +31,11 @@ REFERENCE_FAI = "reference.fasta.fai"
 SAMPLE_GD = "sample.gd"
 SAMPLE_BAM = "aligned.bam"
 SAMPLE_BAI = "aligned.bam.bai"
+# Read depth across the whole reference, derived from the BAM at import. BigWig carries its
+# own zoom levels, so this one file answers a whole-genome view and a base-pair one alike --
+# which is the point, because igv's own coverage row is part of the alignment track and is
+# gated away with the reads past the track's visibility window.
+SAMPLE_BIGWIG = "coverage.bw"
 
 
 def store_root():
@@ -55,7 +60,7 @@ def sample_dir(resequencing_experiment_id):
 
 def sample_path(resequencing_experiment_id, filename):
     """Path to one sample artifact. ``filename`` must be one of the module constants."""
-    if filename not in (SAMPLE_GD, SAMPLE_BAM, SAMPLE_BAI):
+    if filename not in (SAMPLE_GD, SAMPLE_BAM, SAMPLE_BAI, SAMPLE_BIGWIG):
         raise ValueError("unknown sample artifact: %r" % (filename,))
     return os.path.join(sample_dir(resequencing_experiment_id), filename)
 
