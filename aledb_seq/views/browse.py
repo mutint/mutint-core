@@ -11,6 +11,7 @@ own; it renders the configuration igv.js needs to fetch them.
 
 import logging
 
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.template import loader
 from django.urls import reverse
@@ -18,7 +19,9 @@ from django.urls import reverse
 from aledb_common.util import get_user_context
 from aledb_import.annotate.annotator import mutation_interval
 from aledb_experiment.permissions import can_view_project
+from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import ExperimentReference, ObservedMutation
+from aledb_seq.util import get_ordered_reseq_queryset
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +61,17 @@ def browse_mutation(request):
         "mutation": mutation,
         "observed": observed,
         "sample_name": reseq.ale_flask_isolate_str,
+        # The mutation is described by breseq's own table rather than by a sentence of this
+        # page's own, so the row reads exactly as it does on the Samples page. One row, and
+        # no evidence link -- its destination is the page you are already on.
+        "rows": build_rows([observed]),
+        "is_population": is_population(reseq),
         "locus": _locus(mutation),
         # Each state the template renders is decided here rather than in the template, so the
         # reasons stay next to the data that determines them.
         "has_alignment": bool(reseq.bam_stored),
         "reference": _reference_urls(experiment),
-        "track": _sample_track(reseq),
-        "other_tracks": _other_sample_tracks(experiment, exclude=reseq.id),
+        "samples": _sample_tracks(experiment, mutation, current_id=reseq.id),
     })
 
     template = loader.get_template("browse/browse.html")
@@ -150,13 +157,33 @@ def _sample_track(reseq):
     }
 
 
-def _other_sample_tracks(experiment, exclude):
-    """The experiment's other samples that have alignments, for the "add track" control."""
-    from aledb_seq.models import ResequencingExperiment
+def _sample_tracks(experiment, mutation, current_id):
+    """Every sample in the experiment with an alignment, for the sample menu.
 
-    others = (ResequencingExperiment.objects
-              .filter(tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment.ale_id,
-                      bam_stored=True)
-              .exclude(id=exclude)
-              .select_related("tech_rep__isolate__flask__ale_id__ale_experiment"))
-    return [_sample_track(reseq) for reseq in others]
+    The sample being viewed is in the list like any other, marked `is_current` only so the
+    template can check its box: it is shown and hidden by the same control as the rest.
+
+    Ordered by `get_ordered_reseq_queryset` rather than by a query of this view's own, so the
+    menu reads in the same A/F/I/R order as the mutation table's columns and the Samples
+    page's picker.
+    """
+    called = _samples_calling(mutation)
+    return [dict(_sample_track(reseq),
+                 has_mutation=reseq.id in called,
+                 is_current=reseq.id == current_id)
+            for reseq in get_ordered_reseq_queryset(experiment.ale_id).filter(bam_stored=True)]
+
+
+def _samples_calling(mutation):
+    """Ids of the samples this mutation is *called* in.
+
+    `breseq_present or gatk_present` is the mutation table's own rule for a cell being a hit
+    (`mutation_table_builder._get_table_mutation_entry`), and it is reused rather than
+    restated so the menu's `*` marks exactly the samples whose cells are filled in there. An
+    ObservedMutation row on its own is not enough: one with `present=False` records that the
+    mutation was looked for in that sample and found absent.
+    """
+    return set(ObservedMutation.objects
+               .filter(mutation=mutation)
+               .filter(Q(breseq_present=True) | Q(gatk_present=True))
+               .values_list("sequencing_experiment_id", flat=True))

@@ -61,7 +61,7 @@ class AmplificationsRemovedTestCase(TestCase):
 
         labels = [item["label"] for item in get_nav_items(EXPERIMENT_SECTION)]
         self.assertNotIn("Amplifications", labels)
-        self.assertIn("Mutations", labels)   # the one it was wedged beside
+        self.assertIn("Compare", labels)   # the one it was wedged beside
 
     # --- and its mutations did not go with it ------------------------------------------
 

@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 409 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 433 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -151,7 +151,7 @@ starts printing Django's version instead — `aledb_common/tests/test_version.py
 `manage()` rather than `call_command` precisely to catch that.
 
 
-### The Samples page
+### The per-sample mutation page
 
 `aledb_seq/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
 column order and colouring, as the per-sample companion to `/mutations`, which pivots the
@@ -165,7 +165,12 @@ annotation lives in one JSON column rather than twenty scalar ones: rendering is
 merge, not a rebuild. It is server-rendered rather than fed to DataTables as a JSON blob,
 because the markup already exists by the time the view runs.
 
-It is called **Samples** in the nav and on the page; the route keeps the `breseq` name.
+It is called **Mutations** in the nav and on the page, with `/mutations` called **Compare**
+beside it and per-sample listed first; both routes keep their old names. The table markup
+itself lives in `aledb_seq/templates/breseq_table/_mutation_table.html`, shared with the genome
+browser, which renders the one mutation it is open at through the same `build_rows` — the two
+must not drift, because the cell contents come from `annotate.display` and mean nothing without
+these columns around them.
 
 A mutation imported before a reference was available has no annotation to render and falls
 back to the flat columns, with the page pointing at `./aledb reannotate`. That fallback is
@@ -226,6 +231,27 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
+
+The **sample menu** is a checkbox dropdown over every sample in the experiment with an
+alignment, the one being viewed included: it is shown and hidden like the rest, so *Hide all
+samples* leaves only the reference and gene tracks. Three things about it are load-bearing:
+
+- A sample's track is held as the **promise** of it, not the track. *Show all samples* fires
+  every `loadTrack` at once, and a plain "have I got it yet" test would load the same BAM twice.
+- Every track config carries an explicit **`order`**, or igv appends a re-shown sample at the
+  bottom of the stack instead of returning it to its place in the menu.
+- The menu subscribes to igv's **`trackremoved`**, because igv removes tracks by itself too —
+  its per-track gear menu has *Remove track*, and a track that fails to load is discarded the
+  same way. Without it the box stays ticked for a sample that is no longer on screen.
+
+A `*` marks the samples the mutation is **called** in, using the mutation table's own rule
+(`breseq_present or gatk_present`) rather than a second one, so it agrees with the filled cells
+back on `/mutations`. An ObservedMutation row alone is not a call: one with `present=False`
+records that the mutation was looked for and found absent.
+
+`browse.css` also re-points `#aledb-content`, whose `width: 77vw` beside a 17vw sidebar left
+several vw of dead page to the right of the browser. It is page-scoped because nothing but
+`browse.html` loads that file.
 
 The cell markup is coupled to two things that substring-test it: `_contains_mutation` decides
 whether a row renders by looking for `true`, and `table_template.js` colours a cell by testing

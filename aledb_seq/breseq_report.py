@@ -14,6 +14,19 @@ same information, without breseq's markup.
 from aledb_import.annotate.display import add_html_fields, commify
 
 
+def is_population(reseq):
+    """Whether to show breseq's Freq column for this sample.
+
+    Here rather than on either view because both render the table and the answer must be the
+    same in both -- a clonal sample has no frequency column on the Samples page and must not
+    grow one on the browser page.
+    """
+    if reseq is None:
+        return False
+    isolate = getattr(getattr(reseq, "tech_rep", None), "isolate", None)
+    return bool(isolate and isolate.is_population)
+
+
 def gd_entry(mutation):
     """The annotated GD record for a Mutation, or None if it has no annotation.
 

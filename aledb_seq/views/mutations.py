@@ -64,7 +64,7 @@ def mutation_table(request):
                         "table_body": mark_safe(json.dumps(table_body, cls=DjangoJSONEncoder)),
                         "title": exp_name + " Mutations",
                         "table_header": table_header,
-                        "template_header": "Mutations",
+                        "template_header": "Compare",
                         "hidden_columns": hidden_columns,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
                         "tag_dropdown": aledb_common.constants.TAGS,

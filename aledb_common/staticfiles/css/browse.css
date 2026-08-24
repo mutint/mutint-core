@@ -9,3 +9,82 @@
     min-height: 400px;
     overflow-y: auto;
 }
+
+/* base.html gives #aledb-content a guessed `width: 77vw` (and toggle_sidebar a second guess,
+   95vw) beside a 17vw sidebar plus the collapse strip. That comes to ~94vw, so several vw of
+   the window sat unused to the right of the browser -- far more than the 25px of padding on
+   its left, and it grew further whenever a scrollbar appeared, since vw counts one.
+   Filling what is beside the floats makes both margins that same 25px at any window width
+   and with the sidebar either open or collapsed. `display: flow-root` is the block formatting
+   context that stops the box sliding under the floats; `overflow: hidden` would do it too but
+   would clip the sample menu. The `!important`s are needed because the width and the float
+   are inline styles, and toggle_sidebar() rewrites the width on every collapse.
+   Scoped to this page: nothing but browse.html loads this file. */
+#aledb-content {
+    float: none !important;
+    width: auto !important;
+    display: flow-root;
+}
+
+/* The mutation's own table is one row: it needs no more room than that, and every pixel it
+   does not take is a pixel of reads. */
+.browse-summary {
+    margin-bottom: 0.5em;
+}
+
+.browse-summary a {
+    margin-left: 1em;
+}
+
+.breseq-table {
+    margin-bottom: 0.75em;
+}
+
+.browse-controls {
+    margin-bottom: 0.75em;
+}
+
+.browse-controls .btn-group {
+    margin-right: 0.5em;
+}
+
+#sample-legend {
+    color: #666;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+/* Its own scrollbar past a screenful: an experiment can have many samples, and the names are
+   free text (Isolate.description) rather than the short A/F/I/R form. */
+#sample-list {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 0.25em 0;
+}
+
+#sample-list li > label {
+    display: block;
+    margin: 0;
+    padding: 3px 20px;
+    font-weight: normal;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#sample-list li > label:hover {
+    background-color: #f5f5f5;
+}
+
+#sample-list input[type="checkbox"] {
+    margin: 0 0.5em 0 0;
+    vertical-align: middle;
+}
+
+/* Fixed width so a sample with no call still starts its name in the same column. The span is
+   rendered empty rather than holding a space -- a space in the markup would collapse. */
+.mut-flag {
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    font-weight: bold;
+}

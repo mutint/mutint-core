@@ -98,7 +98,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_search',          # nav: Search
             'aledb_experiment',      # nav: Projects, Experiments
             'aledb_metadata',        # nav: Metadata
-            'aledb_seq',             # nav: Mutations
+            'aledb_seq',             # nav: Mutations, Compare
             'aledb_filter',          # nav: Filter
             'aledb_import',          # nav: none (Add data is reached from an experiment)
             'aledb_stats',

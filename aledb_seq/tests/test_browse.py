@@ -13,6 +13,7 @@ from django.test import TestCase, override_settings
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
 from aledb_seq.models import ExperimentReference, ObservedMutation, ResequencingExperiment
+from aledb_seq.views.browse import _sample_tracks
 
 
 class BrowseMutationTestCase(TestCase):
@@ -131,11 +132,11 @@ class BrowseMutationTestCase(TestCase):
 
         self.assertEqual(self._get().status_code, 403)
 
-    # --- the other-samples control ------------------------------------------------------
+    # --- the sample menu ------------------------------------------------------------------
 
-    def test_other_samples_with_alignments_are_offered_as_tracks(self):
-        # A separate drop: re-importing the first sample's directory would rebuild its
-        # observed mutations and invalidate the row this test addresses.
+    def _second_sample(self):
+        """A separate drop: re-importing the first sample's directory would rebuild its
+        observed mutations and invalidate the row these tests address."""
         second = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, second, True)
         breseq_fixture.write_sample(second, "s2")
@@ -143,8 +144,40 @@ class BrowseMutationTestCase(TestCase):
             second, project_name="P", experiment_name="e", person="tester")
         other = ResequencingExperiment.objects.exclude(id=self.reseq.id).first()
         self.assertIsNotNone(other)
+        return other
+
+    def test_every_sample_with_an_alignment_is_in_the_menu(self):
+        other = self._second_sample()
 
         html = self._get().content.decode("utf-8")
         self.assertIn("/mutations/alignments/%d/bam" % other.id, html)
-        # The sample being viewed is the track, not an option to add again.
-        self.assertIn('id="add-track"', html)
+        # The sample being viewed is in the menu like any other -- it is shown and hidden by
+        # the same control, so it is not excluded the way the old add-only list excluded it.
+        self.assertIn("/mutations/alignments/%d/bam" % self.reseq.id, html)
+        self.assertIn('id="sample-list"', html)
+
+    def test_only_the_sample_arrived_at_is_checked(self):
+        self._second_sample()
+
+        samples = _sample_tracks(self.experiment, self.observed.mutation,
+                                 current_id=self.reseq.id)
+        self.assertEqual([s["is_current"] for s in samples].count(True), 1)
+        self.assertTrue(next(s for s in samples if s["id"] == self.reseq.id)["is_current"])
+
+    def test_a_sample_is_marked_mutant_only_when_the_mutation_is_called_in_it(self):
+        """The `*` follows the mutation table's own rule -- `breseq_present or gatk_present`,
+        not the mere existence of an ObservedMutation row. A row recording that the mutation
+        was looked for and found absent must not earn a star."""
+        other = self._second_sample()
+        mutation = self.observed.mutation
+        ObservedMutation.objects.filter(sequencing_experiment=other,
+                                        mutation=mutation).delete()
+        ObservedMutation.objects.create(sequencing_experiment=other, mutation=mutation,
+                                        present=False, breseq_present=False,
+                                        gatk_present=False)
+
+        marked = {s["id"]: s["has_mutation"]
+                  for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
+
+        self.assertTrue(marked[self.reseq.id])
+        self.assertFalse(marked[other.id])

@@ -3,6 +3,8 @@
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
+    {# The mutation is shown in breseq's own table, so this page needs its stylesheet too. #}
+    <link rel="stylesheet" type="text/css" href="{% static "css/breseq_table.css" %}">
     <link href="{% static "css/browse.css" %}" rel="stylesheet">
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
@@ -10,14 +12,14 @@
 {% block content %}
 <div class="row">
     <div class="col-lg-12">
-        <p>
-            <b>{{ mutation.mutation_type }}</b> at
-            <b>{{ mutation.reseq_reference }}:{{ mutation.position }}</b>
-            {% if mutation.gene %}in <b>{{ mutation.gene }}</b>{% endif %}
-            &mdash; sample <b>{{ sample_name }}</b>
-            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
-               style="margin-left: 1em;">&laquo; back to mutations</a>
+        <p class="browse-summary">
+            Sample <b>{{ sample_name }}</b>
+            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}">&laquo; back to mutations</a>
         </p>
+
+        {% comment %} The mutation itself, in breseq's own table -- the same row, from the same
+           builder, as the Samples page shows. {% endcomment %}
+        {% include "breseq_table/_mutation_table.html" %}
 
         {% if not reference %}
             <div class="alert alert-warning">
@@ -31,17 +33,40 @@
                 imported from a bare <code>.gd</code> file carries mutation calls but no reads.
             </div>
         {% else %}
-            {% if other_tracks %}
-                <div style="margin-bottom: 0.75em;">
-                    <label for="add-track" style="font-weight: normal;">Add another sample:</label>
-                    <select id="add-track" style="max-width: 24em;">
-                        <option value="">Choose a sample&hellip;</option>
-                        {% for other in other_tracks %}
-                            <option value="{{ other.id }}"
-                                    data-url="{{ other.url }}"
-                                    data-index-url="{{ other.indexURL }}">{{ other.name }}</option>
-                        {% endfor %}
-                    </select>
+            {% if samples %}
+                <div class="browse-controls">
+                    <div class="btn-group" id="sample-menu">
+                        <button type="button" class="btn btn-default btn-sm dropdown-toggle"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Samples (<span id="sample-count">1</span> of {{ samples|length }})
+                            <span class="caret"></span>
+                        </button>
+                        {% comment %} The * column is a fixed-width span rather than a leading
+                           space, so a sample without the mutation still starts its name in
+                           the same place. {% endcomment %}
+                        <ul class="dropdown-menu" id="sample-list">
+                            {% for sample in samples %}
+                                <li>
+                                    <label>
+                                        <input type="checkbox" value="{{ sample.id }}"
+                                               data-url="{{ sample.url }}"
+                                               data-index-url="{{ sample.indexURL }}"
+                                               data-mutant="{% if sample.has_mutation %}1{% else %}0{% endif %}"
+                                               data-order="{{ forloop.counter0 }}"
+                                               {% if sample.is_current %}checked{% endif %}>
+                                        <span class="mut-flag">{% if sample.has_mutation %}*{% endif %}</span><span class="sample-name">{{ sample.name }}</span>
+                                    </label>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-default btn-sm" data-samples="none">Hide all samples</button>
+                        <button type="button" class="btn btn-default btn-sm" data-samples="all">Show all samples</button>
+                        <button type="button" class="btn btn-default btn-sm" data-samples="mutant">Show mutant samples</button>
+                        <button type="button" class="btn btn-default btn-sm" data-samples="nonmutant">Show non-mutant samples</button>
+                    </div>
+                    <span id="sample-legend"><b>*</b> mutation called in this sample</span>
                 </div>
             {% endif %}
             <div id="igv-browser"></div>
@@ -53,25 +78,43 @@
     {# ~1.4 MB, so it is loaded on this page only rather than from base.html. #}
     <script src="{% static "js/igv.min.js" %}"></script>
     {{ reference|json_script:"igv-reference" }}
-    {{ track|json_script:"igv-track" }}
     <script type="text/javascript">
     (function () {
         "use strict";
         var reference = JSON.parse(document.getElementById("igv-reference").textContent);
-        var track = JSON.parse(document.getElementById("igv-track").textContent);
+
+        // The sample menu is the one source of truth for what a sample is called and where
+        // its files are, the track the browser opens with included.
+        var inputs = Array.prototype.slice.call(
+            document.querySelectorAll("#sample-list input[type=checkbox]"));
 
         // `format` is explicit on every track: these URLs end in /bam, /fasta, /gff3 and have
         // no file extension, and igv.js otherwise infers format from the extension. So is
         // every indexURL -- the store renames the index to aligned.bam.bai, so igv.js's
         // default "<url>.bai" guess would miss.
+        // `order` keeps a sample in its menu position: igv appends a newly loaded track at
+        // the bottom otherwise, so hiding and re-showing one would shuffle the stack. The
+        // base is well clear of the reference and gene tracks' own ordering.
+        var TRACK_ORDER_BASE = 100;
+
         function alignmentTrack(t) {
             return {
                 type: "alignment",
                 format: "bam",
                 name: t.name,
                 url: t.url,
-                indexURL: t.indexURL
+                indexURL: t.indexURL,
+                order: TRACK_ORDER_BASE + t.order
             };
+        }
+
+        function sampleTrack(input) {
+            return alignmentTrack({
+                name: input.parentNode.querySelector(".sample-name").textContent,
+                url: input.getAttribute("data-url"),
+                indexURL: input.getAttribute("data-index-url"),
+                order: Number(input.getAttribute("data-order"))
+            });
         }
 
         // igv.js lays its tracks out at their own heights and the container takes whatever
@@ -162,25 +205,111 @@
                 }]
             },
             locus: "{{ locus|escapejs }}",
-            tracks: [alignmentTrack(track)]
+            tracks: []
         }).then(function (browser) {
             igvBrowser = browser;
             fitReadsToContainer(browser);
+            if (!inputs.length) { return; }
 
-            var chooser = document.getElementById("add-track");
-            if (!chooser) { return; }
-            chooser.addEventListener("change", function () {
-                var option = chooser.options[chooser.selectedIndex];
-                if (!option.value) { return; }
-                browser.loadTrack(alignmentTrack({
-                    name: option.textContent.trim(),
-                    url: option.getAttribute("data-url"),
-                    indexURL: option.getAttribute("data-index-url")
-                }));
-                // Loaded once; drop it from the list so it cannot be added twice.
-                option.parentNode.removeChild(option);
-                chooser.selectedIndex = 0;
+            // A sample's track is held as the *promise* of it rather than the track itself.
+            // "Show all samples" fires every loadTrack at once, and a plain "have I got it
+            // yet" test would let a second click load the same BAM again while the first was
+            // still in flight; unchecking mid-load is handled by the same promise.
+            var pending = Object.create(null);   // sample id -> Promise<track>
+            var loaded = Object.create(null);    // sample id -> track, once it has arrived
+            var byId = Object.create(null);      // sample id -> its checkbox
+
+            inputs.forEach(function (input) { byId[input.value] = input; });
+
+            function show(input) {
+                var id = input.value;
+                if (pending[id]) { return pending[id]; }
+                pending[id] = browser.loadTrack(sampleTrack(input)).then(function (t) {
+                    loaded[id] = t;
+                    return t;
+                });
+                return pending[id];
+            }
+
+            function hide(input) {
+                var id = input.value;
+                var p = pending[id];
+                if (!p) { return; }
+                // Cleared before the removal, so the trackremoved handler below finds nothing
+                // to do on this path and the two cannot fight over the same checkbox.
+                delete pending[id];
+                delete loaded[id];
+                return p.then(function (t) { if (t) { browser.removeTrack(t); } });
+            }
+
+            var counter = document.getElementById("sample-count");
+
+            function settle(work) {
+                Promise.all(work || []).then(function () {
+                    counter.textContent = inputs.filter(function (i) { return i.checked; }).length;
+                    fitReadsToContainer(browser);
+                });
+            }
+
+            // Set the selection to exactly the samples `wanted` accepts. That is what makes
+            // "Show mutant samples" and its opposite a pair: each is the whole selection, not
+            // an addition to it.
+            function select(wanted) {
+                settle(inputs.map(function (input) {
+                    var want = wanted(input);
+                    if (input.checked === want) { return null; }
+                    input.checked = want;
+                    return want ? show(input) : hide(input);
+                }).filter(Boolean));
+            }
+
+            var WANTED = {
+                none: function () { return false; },
+                all: function () { return true; },
+                mutant: function (i) { return i.getAttribute("data-mutant") === "1"; },
+                nonmutant: function (i) { return i.getAttribute("data-mutant") === "0"; }
+            };
+
+            var list = document.getElementById("sample-list");
+            // Bootstrap's data-api closes a dropdown on any click inside it, which would shut
+            // the menu on every tick. The checkboxes are the point of this one, so it stays
+            // open until the click lands outside.
+            list.addEventListener("click", function (e) { e.stopPropagation(); });
+            list.addEventListener("change", function (e) {
+                var input = e.target;
+                if (!input.value) { return; }
+                settle([input.checked ? show(input) : hide(input)]);
             });
+
+            Array.prototype.forEach.call(
+                document.querySelectorAll(".browse-controls [data-samples]"),
+                function (button) {
+                    button.addEventListener("click", function () {
+                        select(WANTED[button.getAttribute("data-samples")]);
+                    });
+                });
+
+            // igv removes tracks by itself too -- its per-track gear menu has a Remove track
+            // item, and a track that fails to load is discarded the same way. Either leaves a
+            // ticked box for a sample that is no longer on screen unless the menu is told.
+            // Matching on the track object rather than on its name or config keeps this off
+            // igv's internals, and ignores the reference and gene tracks by construction.
+            browser.on("trackremoved", function (track) {
+                var changed = false;
+                Object.keys(loaded).forEach(function (id) {
+                    if (loaded[id] !== track) { return; }
+                    delete loaded[id];
+                    delete pending[id];
+                    if (byId[id]) { byId[id].checked = false; }
+                    changed = true;
+                });
+                if (changed) { settle(); }
+            });
+
+            // The sample the page is about is loaded through the same path as any other, so
+            // there is no second way a track can come into being and nothing to match back up
+            // afterwards. createBrowser is handed no tracks at all.
+            settle(inputs.filter(function (i) { return i.checked; }).map(show));
         });
     })();
     </script>

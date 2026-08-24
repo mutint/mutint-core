@@ -22,7 +22,7 @@ from aledb_common.logger import join_extras, user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
 from aledb_filter.util import filter_observed_mutations
-from aledb_seq.breseq_report import build_rows
+from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import ExperimentReference, ObservedMutation
 from aledb_seq.util import get_reseq_ordered_dict
 
@@ -56,12 +56,12 @@ def breseq_table(request):
             "reseq_list": list(reseq_dict.values()),
             "selected_reseq": reseq,
             "selected_reseq_id": reseq.id if reseq is not None else None,
-            "is_population": _is_population(reseq),
+            "is_population": is_population(reseq),
             "rows": rows,
             "unannotated_count": sum(1 for row in rows if not row["annotated"]),
             "reference": _reference(experiment),
-            "title": "%s samples" % experiment.name,
-            "template_header": "Samples",
+            "title": "%s mutations" % experiment.name,
+            "template_header": "Mutations",
         })
 
         logger.info("samples",
@@ -110,13 +110,6 @@ def _browse_url(reseq):
         return None
     return lambda observed: "%s?observed_mut_id=%s" % (
         reverse("browse_mutation"), observed.id)
-
-
-def _is_population(reseq):
-    if reseq is None:
-        return False
-    isolate = getattr(getattr(reseq, "tech_rep", None), "isolate", None)
-    return bool(isolate and isolate.is_population)
 
 
 def _reference(experiment):
