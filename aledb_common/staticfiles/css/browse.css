@@ -26,6 +26,31 @@
     display: flow-root;
 }
 
+/* 53px sat between the header's | links and the first line of the page, from three stacked
+   pieces: .page-header's 9px padding-bottom, its 20px margin-bottom, and base.html's
+   <h2>{{ error }}</h2> slot, which collapses to no height when there is no error but still
+   contributes Bootstrap's 20px h2 margin. This page wants that space for reads, so the
+   padding and margin are trimmed and the empty error heading is taken out of flow. It is
+   :empty rather than hidden outright, so a real error still shows. Measured, not estimated. */
+#aledb-content > h2:empty {
+    display: none;
+}
+
+/* Bootstrap's .page-header carries `margin: 40px 0 20px`, so the project/experiment heading
+   started 65px down -- the 25px #aledb-content padding plus that 40. The bottom of the page is
+   the same 25px of padding and nothing else, so the top matches it now. The h2's own 20px
+   margin-top has to go with it: .page-header has no padding or border at the top, so that
+   margin collapses straight through and would put the heading back at 45px. */
+#aledb-content .page-header {
+    margin-top: 0;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+
+#aledb-content .page-header > h2 {
+    margin-top: 0;
+}
+
 /* The mutation's own table is one row: it needs no more room than that, and every pixel it
    does not take is a pixel of reads. */
 .browse-summary {

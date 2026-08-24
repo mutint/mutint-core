@@ -104,13 +104,25 @@
                 name: t.name,
                 url: t.url,
                 indexURL: t.indexURL,
-                order: TRACK_ORDER_BASE + t.order
+                order: TRACK_ORDER_BASE + t.order,
+                // On by default here, off by default in igv. This page exists to look at one
+                // called position, and a clipped end is often what tells you why the call
+                // looks the way it does. Still the same flag the track's gear menu toggles,
+                // so it can be turned off per track.
+                showSoftClips: true
             };
         }
 
+        // The same * the menu uses, carried onto the track itself so a stack of pileups says
+        // which of them the mutation was called in without going back to the menu. igv puts no
+        // constraints on a track name. No padding for the samples without one, unlike the menu:
+        // an igv track label is its own shrink-to-fit badge with centred text, so there is no
+        // column of names to keep aligned.
         function sampleTrack(input) {
+            var mutant = input.getAttribute("data-mutant") === "1";
             return alignmentTrack({
-                name: input.parentNode.querySelector(".sample-name").textContent,
+                name: (mutant ? "* " : "")
+                    + input.parentNode.querySelector(".sample-name").textContent,
                 url: input.getAttribute("data-url"),
                 indexURL: input.getAttribute("data-index-url"),
                 order: Number(input.getAttribute("data-order"))

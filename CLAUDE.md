@@ -244,10 +244,18 @@ samples* leaves only the reference and gene tracks. Three things about it are lo
   its per-track gear menu has *Remove track*, and a track that fails to load is discarded the
   same way. Without it the box stays ticked for a sample that is no longer on screen.
 
+Every alignment track also sets **`showSoftClips: true`**, which igv defaults to off. The page
+exists to look at one called position, and a clipped end is often what explains the call. It is
+the same flag the track's gear menu toggles, so it can still be turned off per track.
+
 A `*` marks the samples the mutation is **called** in, using the mutation table's own rule
 (`breseq_present or gatk_present`) rather than a second one, so it agrees with the filled cells
 back on `/mutations`. An ObservedMutation row alone is not a call: one with `present=False`
-records that the mutation was looked for and found absent.
+records that the mutation was looked for and found absent. The same `*` is prefixed to the igv
+track name, so a stack of pileups says which of them carry the call — igv puts no constraints on
+a track name. In the menu a sample without one gets a same-width empty span so the names stay in
+a column; on the track there is deliberately no such padding, because an igv track label is its
+own shrink-to-fit badge with centred text and has no column to align to.
 
 `browse.css` also re-points `#aledb-content`, whose `width: 77vw` beside a 17vw sidebar left
 several vw of dead page to the right of the browser. It is page-scoped because nothing but
