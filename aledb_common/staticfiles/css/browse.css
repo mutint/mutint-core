@@ -10,47 +10,16 @@
     overflow-y: auto;
 }
 
-/* 53px sat between the header's | links and the first line of the page, from three stacked
-   pieces: .page-header's 9px padding-bottom, its 20px margin-bottom, and base.html's
-   <h2>{{ error }}</h2> slot, which collapses to no height when there is no error but still
-   contributes Bootstrap's 20px h2 margin. This page wants that space for reads, so the
-   padding and margin are trimmed and the empty error heading is taken out of flow. It is
-   :empty rather than hidden outright, so a real error still shows. Measured, not estimated. */
-#aledb-content > h2:empty {
-    display: none;
-}
-
-/* Bootstrap's .page-header carries `margin: 40px 0 20px`, so the project/experiment heading
-   started 65px down -- the 25px #aledb-content padding plus that 40. The bottom of the page is
-   the same 25px of padding and nothing else, so the top matches it now. The h2's own 20px
-   margin-top has to go with it: .page-header has no padding or border at the top, so that
-   margin collapses straight through and would put the heading back at 45px. */
-#aledb-content .page-header {
-    margin-top: 0;
-    padding-bottom: 4px;
-    margin-bottom: 8px;
-}
-
-#aledb-content .page-header > h2 {
-    margin-top: 0;
-}
-
-/* The mutation's own table is one row: it needs no more room than that, and every pixel it
-   does not take is a pixel of reads. */
-.browse-summary {
-    margin-bottom: 0.5em;
+/* The same 0.75em every block stacked under a page header uses; see the note on
+   `.breseq-table` in breseq_table.css, which is where that table's own gap now lives. Each
+   pixel these do not take is a pixel of reads. */
+.browse-summary,
+.browse-controls {
+    margin-bottom: 0.75em;
 }
 
 .browse-summary a {
     margin-left: 1em;
-}
-
-.breseq-table {
-    margin-bottom: 0.75em;
-}
-
-.browse-controls {
-    margin-bottom: 0.75em;
 }
 
 .browse-controls .btn-group {
@@ -63,24 +32,12 @@
     white-space: nowrap;
 }
 
-/* Styled after the column menu on the Metadata page, which is DataTables' colvis collection.
-   That menu is a plain ul.dropdown-menu of <li><a>, and the fill on a selected row is
-   Bootstrap's own `.dropdown-menu > .active > a` -- so the rows here are the same shape and
-   there is nothing to restyle. DataTables does put #717171 on the active <li>, but its <a>
-   covers the row entirely, so that grey is never the colour you see.
-
-   Its own scrollbar past a screenful: an experiment can have many samples, and the names are
-   free text (Isolate.description) rather than the short A/F/I/R form. */
-#sample-list {
-    max-height: 60vh;
-    overflow-y: auto;
-    padding: 5px 0;
-}
-
-/* The rows are links only so Bootstrap styles them; they go nowhere. */
-#sample-list li > a {
-    cursor: pointer;
-}
+/* The sample menu has no rules here on purpose. It has the same shape as the Metadata page's
+   column menu, which is DataTables' colvis collection: a ul.dropdown-menu of <li><a> where a
+   showing sample is `active` on its <li>, so Bootstrap's own `.dropdown-menu > .active > a`
+   paints the row. (DataTables does put #717171 on the active <li>, but its <a> covers the
+   row, so that grey is never the colour you see -- do not copy it.) The scrollbar past a
+   screenful is `.aledb-menu` in common.css, shared with the Mutations page's picker. */
 
 /* Fixed width so a sample with no call still starts its name in the same column. The span is
    rendered empty rather than holding a space -- a space in the markup would collapse. */

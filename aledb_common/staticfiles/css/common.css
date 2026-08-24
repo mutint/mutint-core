@@ -13,6 +13,32 @@
     background-color: white;
 }
 
+/* The header block -- the project/experiment title and the | links under it -- used to sit
+   in 65px of space above and 53px below, on every page. Three stacked pieces made the gap
+   below: .page-header's 9px padding-bottom, its 20px margin-bottom, and the
+   <h2>{{ error }}</h2> slot further down base.html, which collapses to no height when there
+   is no error but still contributes Bootstrap's 20px h2 margin. The gap above was
+   .page-header's own 40px margin-top on top of #aledb-content's 25px of padding.
+
+   Trimmed to 25px above -- the same padding the page has at its foot -- and 16px below. The
+   h2's own margin-top has to go with .page-header's: .page-header carries no padding or
+   border at the top, so that margin collapses straight through and would put the title back
+   at 45px. The empty error heading is taken out of flow with :empty rather than hidden
+   outright, so a real error still shows. Measured, not estimated. */
+#aledb-content > h2:empty {
+    display: none;
+}
+
+#aledb-content .page-header {
+    margin-top: 0;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+
+#aledb-content .page-header > h2 {
+    margin-top: 0;
+}
+
 #padding_top {
     padding-top: 1em;
 }
@@ -330,6 +356,17 @@ a:hover {
     text-align: center;
 }
 
+
+/* A dropdown menu as long as the experiment has samples -- the genome browser's sample
+   menu and the Mutations page's picker are both that. Bootstrap's .dropdown-menu already
+   gives these menus everything else they share with the Metadata page's column menu (which
+   is DataTables' colvis collection): a <ul> of <li><a> at 3px 20px in 5px 0, and the fill
+   on an `active` row. Only the scrollbar past a screenful is missing, so only that is here,
+   and it is one class rather than a copy in each page's stylesheet. */
+.aledb-menu {
+    max-height: 60vh;
+    overflow-y: auto;
+}
 
 /* aledb-core's attribution, closing the sidebar menu. Muted and small: it is a
    watermark, not a nav entry, and must not compete with the links above it. */

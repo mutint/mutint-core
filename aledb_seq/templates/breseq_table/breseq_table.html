@@ -5,14 +5,6 @@
 {% block scripts_and_style %}
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
     <script type="text/javascript">
-        $(document).ready(function () {
-            // Submitting on change keeps the picker usable without a button; the
-            // <noscript> fallback below covers the case where this never runs.
-            $('#reseq_picker').change(function () {
-                $(this).closest('form').submit();
-            });
-        });
-
         // The Show/Hide button on a large deletion's gene list, as breseq's report
         // has. Delegated from the table rather than bound per row: the markup comes
         // from aledb_import.annotate.display, which emits no element ids -- breseq
@@ -33,21 +25,31 @@
 
 {% block content %}
     <div class="row breseq-picker">
-        <form action="" method="get">
-            <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id }}"/>
-            <b>Sample:</b>
-            <select name="reseq_id" id="reseq_picker">
+        <b>Sample:</b>
+        {% comment %} The same menu as the genome browser's Samples control and the Metadata
+           page's column menu, but picking one sample rather than any number of them, so the
+           button carries the chosen sample's name as its value and the chosen row is the one
+           marked `active`.
+
+           Its rows are ordinary links, not a <select> in a form. It is one request per sample
+           either way, and links need no script at all -- Bootstrap's data-api opens the menu
+           and the hrefs do the rest, which is what the <noscript> submit button was there
+           for. The query is the same pair the form used to submit. {% endcomment %}
+        <div class="btn-group" id="reseq_picker">
+            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
+                    aria-haspopup="true" aria-expanded="false">
+                {{ selected_reseq.ale_flask_isolate_str }} <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu aledb-menu">
                 {% for reseq in reseq_list %}
-                    <option value="{{ reseq.id }}"
-                            {% if reseq.id == selected_reseq_id %}selected="selected"{% endif %}>
-                        {{ reseq.ale_flask_isolate_str }}
-                    </option>
+                    <li {% if reseq.id == selected_reseq_id %}class="active"{% endif %}>
+                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                    </li>
                 {% endfor %}
-            </select>
-            <noscript><button type="submit" class="btn btn-default btn-xs">Show</button></noscript>
-            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
-               class="breseq-crosslink">all samples &raquo;</a>
-        </form>
+            </ul>
+        </div>
+        <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
+           class="breseq-crosslink">all samples &raquo;</a>
     </div>
 
     {% if not selected_reseq %}

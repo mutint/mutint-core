@@ -11,6 +11,13 @@
 .breseq-table {
     font-size: 11pt;
     width: 100%;
+    /* 0.75em is the gap every block stacked under a page header uses -- this table, the
+       sample picker above it, and the summary line and control bar on the genome browser.
+       They all mean "the next thing starts here", and used to say it four different ways
+       (0.5em, 0.75em, 1em, and Bootstrap's 20px on .table). The browser page used to
+       override this one from browse.css, which put a component's spacing in a page's
+       stylesheet. */
+    margin-bottom: 0.75em;
 }
 
 .breseq-table th {
@@ -124,7 +131,7 @@
 }
 
 .breseq-picker {
-    margin-bottom: 1em;
+    margin-bottom: 0.75em;
 }
 
 .breseq-picker .breseq-crosslink {
