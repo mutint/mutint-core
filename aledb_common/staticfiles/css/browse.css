@@ -26,12 +26,6 @@
     margin-right: 0.5em;
 }
 
-#sample-legend {
-    color: #666;
-    font-size: 0.9em;
-    white-space: nowrap;
-}
-
 /* The sample menu has no rules here on purpose. It has the same shape as the Metadata page's
    column menu, which is DataTables' colvis collection: a ul.dropdown-menu of <li><a> where a
    showing sample is `active` on its <li>, so Bootstrap's own `.dropdown-menu > .active > a`

@@ -65,7 +65,21 @@
                         <button type="button" class="btn btn-default" data-samples="mutant">Show mutant samples</button>
                         <button type="button" class="btn btn-default" data-samples="nonmutant">Show non-mutant samples</button>
                     </div>
-                    <span id="sample-legend"><b>*</b> mutation called in this sample</span>
+                    {% comment %} Stateless on purpose: each item is applied to every track
+                       showing and becomes the default for tracks added afterwards, but igv's
+                       own gear menu can then change any one track, so nothing here could
+                       honestly claim to be the current state. {% endcomment %}
+                    <div class="btn-group" id="display-menu">
+                        <button type="button" class="btn btn-default dropdown-toggle"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Display <span class="caret"></span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a href="#" data-display="reads">Display Reads Only</a></li>
+                            <li><a href="#" data-display="coverage">Display Coverage Only</a></li>
+                            <li><a href="#" data-display="both">Display Both</a></li>
+                        </ul>
+                    </div>
                 </div>
             {% endif %}
             <div id="igv-browser"></div>
@@ -98,6 +112,18 @@
         // base is well clear of the reference and gene tracks' own ordering.
         var TRACK_ORDER_BASE = 100;
 
+        // What a newly loaded track shows. The Display menu sets it and applies it to the
+        // tracks already up; it is never read back into the menu, because igv's own gear menu
+        // can change a single track afterwards and then no one value would be true of them
+        // all. `showCoverage` and `showAlignments` are igv's own flags -- the pair its gear
+        // menu toggles -- so a track configured with them starts the way the menu would set it.
+        var DISPLAY = {
+            reads:    {showCoverage: false, showAlignments: true},
+            coverage: {showCoverage: true,  showAlignments: false},
+            both:     {showCoverage: true,  showAlignments: true}
+        };
+        var displayDefault = DISPLAY.both;
+
         function alignmentTrack(t) {
             return {
                 type: "alignment",
@@ -106,6 +132,8 @@
                 url: t.url,
                 indexURL: t.indexURL,
                 order: TRACK_ORDER_BASE + t.order,
+                showCoverage: displayDefault.showCoverage,
+                showAlignments: displayDefault.showAlignments,
                 // On by default here, off by default in igv. This page exists to look at one
                 // called position, and a clipped end is often what tells you why the call
                 // looks the way it does. Still the same flag the track's gear menu toggles,
@@ -172,6 +200,9 @@
             // Only while it is the sole alignment track. Once a second sample is loaded the
             // space is theirs to share and igv's own layout is the right answer.
             if (alignments.length !== 1) { return; }
+            // Nothing to grow into the container when the reads are hidden: igv clamps such a
+            // track to its coverage height, so filling the box would only be undone.
+            if (!alignments[0].showAlignments) { return; }
 
             var view = alignments[0].trackView;
             var spare = container.getBoundingClientRect().bottom
@@ -307,6 +338,46 @@
                         select(WANTED[button.getAttribute("data-samples")]);
                     });
                 });
+
+            // The height each track keeps while its reads are showing, so it can be given
+            // back. Keyed by the track itself rather than stamped onto it, to leave igv's
+            // objects alone.
+            var fullHeights = new Map();
+
+            // Reads, coverage, or both -- applied to every alignment track now up, and kept as
+            // what the next one loads with. The repaint calls are igv's own, from what its
+            // gear menu does for these two flags; without them a track keeps the box it had
+            // and leaves a gap where the hidden half was.
+            //
+            // The height is *not* igv's recipe. That one adds coverageTrackHeight to
+            // alignmentTrack.height, which is the reads' current box rather than the space
+            // they are entitled to, so a round trip through coverage-only ratchets the track
+            // down and leaves it there -- measured at 300px going to 100px and staying. Giving
+            // igv the total instead lets it divide the space itself, and the track comes back
+            // the size it was.
+            function applyDisplay(track, mode) {
+                if (track.showAlignments) { fullHeights.set(track, track.height); }
+                track.showCoverage = mode.showCoverage;
+                track.showAlignments = mode.showAlignments;
+                if (!track.autoHeight) {
+                    track.trackView.setTrackHeight(mode.showAlignments
+                        ? (fullHeights.get(track) || track.height)
+                        : track.coverageTrackHeight);
+                }
+                track.trackView.checkContentHeight();
+                track.trackView.repaintViews();
+            }
+
+            var display = document.getElementById("display-menu");
+            display.addEventListener("click", function (e) {
+                e.preventDefault();
+                var chosen = e.target.getAttribute("data-display");
+                if (!chosen) { return; }
+                displayDefault = DISPLAY[chosen];
+                browser.findTracks(function (t) { return t.type === "alignment"; })
+                    .forEach(function (track) { applyDisplay(track, displayDefault); });
+                settle();
+            });
 
             // igv removes tracks by itself too -- its per-track gear menu has a Remove track
             // item, and a track that fails to load is discarded the same way. Either leaves a

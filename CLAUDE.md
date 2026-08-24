@@ -301,6 +301,19 @@ Every alignment track also sets **`showSoftClips: true`**, which igv defaults to
 exists to look at one called position, and a clipped end is often what explains the call. It is
 the same flag the track's gear menu toggles, so it can still be turned off per track.
 
+Beside it a **Display** menu sets reads only, coverage only, or both -- on every alignment
+track showing, and as the default the next one loads with. It is deliberately stateless: igv's
+own gear menu can change a single track afterwards, so no one value would be true of them all,
+and the menu never marks a current choice. The flags are igv's own `showCoverage` and
+`showAlignments`, the pair its gear menu toggles, so a track configured with them starts the way
+the menu would set it.
+
+**Do not copy igv's own height recipe** for that menu. It adds `coverageTrackHeight` to
+`alignmentTrack.height`, which is the reads' *current* box rather than the space they are owed,
+so a round trip through coverage-only ratchets a track down and leaves it there -- measured at
+300px becoming 100px. Remember the height the track had while its reads were showing and hand
+igv that total instead; it divides the space itself.
+
 A `*` marks the samples the mutation is **called** in, using the mutation table's own rule
 (`breseq_present or gatk_present`) rather than a second one, so it agrees with the filled cells
 back on `/mutations`. An ObservedMutation row alone is not a call: one with `present=False`
