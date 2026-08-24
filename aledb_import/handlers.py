@@ -200,6 +200,25 @@ def handle_genomediff(experiment, staged_root, paths, user):
         except Exception as exc:
             logger.exception("genomediff import failed for %s", relative)
             results.append({"file": filename, "mutations": 0, "error": str(exc)})
+
+    if total:
+        # Recompute what the new mutations changed: the experiment filter, the plugin
+        # rebuilds (fixation, convergence), static stats and the dashboard.
+        #
+        # This was missing, so **no .gd imported through the web ever triggered any of
+        # it** -- Fixed Mutations and Converged Mutations stayed empty however good the
+        # data was, and the stats were whatever the last CLI upload left behind. The CLI
+        # path (`gd_import.import_genomediffs`) and the breseq-folder handler both do this;
+        # only this one did not, which is why the gap was invisible.
+        #
+        # Once, after all files, not once per file: the rebuilds are whole-experiment and
+        # fixation compares an ALE's last two flasks, which is not knowable until every
+        # sample is in. A drop that also carried breseq folders runs it a second time from
+        # that handler -- idempotent, and cheaper than teaching the two to coordinate.
+        from aledb_import.gd_import import run_post_processing
+
+        run_post_processing(experiment)
+
     return {"files": results, "total_mutations": total}
 
 

@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 559 run, 0 failures** standalone; **575** in an assembled project, where the
+**Baseline: 581 run, 0 failures** standalone; **575** in an assembled project, where the
 plugins' own tests join them. The suite is green — treat *any* failure as yours.
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
@@ -379,6 +379,47 @@ engine does not recognise as a comment at all. Writing a tag name in a comment t
 Nothing in core rendered that file until this change: `aledb_search` has no tests and the other
 three consumers are plugin pages. `aledb_seq/tests/test_table_actions.py` renders it directly now,
 which is what lets core notice a broken tag before four pages do.
+
+### Example datasets
+
+`./aledb load_example` lists what is registered; `./aledb load_example <name>` loads it.
+Components own their own data -- `aledb-fixation` ships `aledb-fixation-example` -- and
+register it from `AppConfig.ready()` through `aledb_common/example_registry.py`, the sixth
+registry.
+
+**A dataset is a directory of files the import path already understands**, not a Django
+fixture. Loading one runs the registered handlers in priority order exactly as a drop on the
+Add Data page does, so the derived data it exists to show is genuinely computed. A fixture
+would load faster and prove nothing. A `README` and dotfiles in the directory are skipped, so
+the expected answer can live beside the files that produce it.
+
+The command refuses a second load, naming `--replace`; `--replace` soft-deletes the previous
+experiment rather than importing on top of it. Everything lands in one project called
+**Examples**, created with the django-guardian grant -- `Project.objects.create` alone leaves
+the owner unable to view what they own.
+
+**Why this exists.** Fixed Mutations renders an empty table when an experiment has nothing
+fixed, and an empty table when the feature is broken, and there was no data anywhere in the
+suite that could tell the two apart. See `aledb-fixation/aledb_fixation/examples/fixation/README.md`
+for the expected answer stated as a table; the plugin's tests assert it.
+
+### A mutation is fixated in the last two flasks, so the time axis must be the flask
+
+`aledb-fixation` intersects an ALE's final two flasks by `flask_number`, so **an ALE with one
+flask can never fix anything** -- and neither can an experiment made entirely of such ALEs.
+That is the usual reason for an empty Fixed Mutations page and it is not a bug.
+
+It is easy to arrive at by accident. `gd_import` reads a strict `A-F-I-R` filename
+(`1-1500-1-1.gd` = ALE 1, flask 1500, isolate 1, replicate 1); **anything else falls to
+auto-numbering, which puts every sample under ALE 1 / flask 1 as separate isolates.** A
+51-timepoint series imported as `Ara-1_500gen_762B.gd` and friends therefore becomes 51
+isolates of one flask, with the generations in `isolate_number` -- which is exactly the shape
+of the MutInt dev database, and why fixation has never produced a row there.
+
+`./aledb rebuild_fixation [<experiment_id>]` recomputes. It reports the count and says when no
+ALE has more than one flask, which is the difference between a stale answer and an impossible
+one. Fixation is otherwise computed only by the post-experiment hook, so an experiment whose
+data predates the plugin -- or whose filters changed since -- had no way to catch up.
 
 ### Which import types the Add page offers
 

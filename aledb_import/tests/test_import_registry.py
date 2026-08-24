@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from aledb_common import import_registry
 from aledb_import.tests import breseq_fixture
 from aledb_import.tests.test_reference_upload import write_genbank
+from aledb_experiment.models import AleExperiment
 from aledb_seq.models import ExperimentReference, ResequencingExperiment
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
@@ -246,3 +247,95 @@ class PluggableImportTypeTestCase(TestCase):
         with self.assertRaises(ValueError):
             import_registry.register_import_handler(
                 name="test_plugin_type", label="dupe", patterns=[".x"], handle=lambda *a: {})
+
+
+class PostProcessingTestCase(TestCase):
+    """Importing through the registry must recompute what the new data changed.
+
+    `run_post_processing` refreshes the experiment filter, the static stats, the dashboard
+    and -- through `run_post_experiment_hooks` -- every plugin's derived table. The CLI path
+    (`gd_import.import_genomediffs`) and the breseq-folder handler both called it; the
+    genomediff handler did not.
+
+    Nothing noticed, because the things it drives are all things whose absence looks like an
+    empty result: a .gd dropped on the Add Data page left Fixed Mutations and Converged
+    Mutations blank however good the data was, and the stats showing whatever the last CLI
+    upload had left. Core cannot see a plugin, so this asserts the hook runs rather than what
+    any plugin does with it.
+    """
+
+    FIXTURES = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            "annotate", "tests", "fixtures")
+
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+
+        self.staged = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.staged, True)
+        shutil.copy(os.path.join(self.FIXTURES, "synthetic.gbk"),
+                    os.path.join(self.staged, "synthetic.gbk"))
+        with open(os.path.join(self.staged, "1-100-1-1.gd"), "w") as handle:
+            handle.write("#=GENOME_DIFF\t1.0\n"
+                         "#=COMMAND\tbreseq -r synthetic.gbk -o s r.fastq\n"
+                         "#=REFSEQ\tsynthetic.gbk\n"
+                         "SNP\t1\t.\tSYN001\t150\tT\tfrequency=1\n")
+
+    @override_settings(ALEDB_STORE_DIR=None)
+    def test_a_genomediff_import_runs_the_post_experiment_hooks(self):
+        from aledb_common import plugin_registry
+        from aledb_common.import_registry import run_import
+
+        seen = []
+        plugin_registry.register_post_experiment_hook(lambda exp_id: seen.append(exp_id))
+        self.addCleanup(plugin_registry._post_experiment_hooks.pop)
+
+        with tempfile.TemporaryDirectory() as store:
+            with override_settings(ALEDB_STORE_DIR=store):
+                run_import(self.experiment, self.staged, self.user)
+
+        self.assertEqual([self.experiment.ale_id], seen,
+                         "the hook must fire once, after every file")
+
+    @override_settings(ALEDB_STORE_DIR=None)
+    def test_it_fires_once_rather_than_per_file(self):
+        """Fixation compares an ALE's last two flasks, which is not knowable until every
+        sample is in -- so a per-file rebuild would compute an answer from partial data."""
+        from aledb_common import plugin_registry
+        from aledb_common.import_registry import run_import
+
+        with open(os.path.join(self.staged, "1-200-1-1.gd"), "w") as handle:
+            handle.write("#=GENOME_DIFF\t1.0\n"
+                         "#=COMMAND\tbreseq -r synthetic.gbk -o s2 r.fastq\n"
+                         "#=REFSEQ\tsynthetic.gbk\n"
+                         "SNP\t1\t.\tSYN001\t150\tT\tfrequency=1\n")
+
+        seen = []
+        plugin_registry.register_post_experiment_hook(lambda exp_id: seen.append(exp_id))
+        self.addCleanup(plugin_registry._post_experiment_hooks.pop)
+
+        with tempfile.TemporaryDirectory() as store:
+            with override_settings(ALEDB_STORE_DIR=store):
+                run_import(self.experiment, self.staged, self.user)
+
+        self.assertEqual(1, len(seen), "once for the drop, not once per .gd")
+
+    @override_settings(ALEDB_STORE_DIR=None)
+    def test_an_import_that_stored_nothing_does_not_rebuild(self):
+        """A reference on its own creates no mutations, so there is nothing to recompute."""
+        from aledb_common import plugin_registry
+        from aledb_common.import_registry import run_import
+
+        os.remove(os.path.join(self.staged, "1-100-1-1.gd"))
+        seen = []
+        plugin_registry.register_post_experiment_hook(lambda exp_id: seen.append(exp_id))
+        self.addCleanup(plugin_registry._post_experiment_hooks.pop)
+
+        with tempfile.TemporaryDirectory() as store:
+            with override_settings(ALEDB_STORE_DIR=store):
+                run_import(self.experiment, self.staged, self.user)
+
+        self.assertEqual([], seen)

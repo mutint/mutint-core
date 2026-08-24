@@ -29,8 +29,15 @@ class ComponentGroupingTestCase(TestCase):
         # The registry is module state that the real apps populated at startup, so each test
         # puts back what it found.
         self._saved = dict(about_registry._sections)
-        self.addCleanup(lambda: about_registry._sections.clear())
-        self.addCleanup(lambda: about_registry._sections.update(self._saved))
+
+        def restore():
+            about_registry._sections.clear()
+            about_registry._sections.update(self._saved)
+
+        # One callable: addCleanup is LIFO, so registering clear() and update() separately
+        # runs update() first and clear() second, leaving the registry wiped for every test
+        # that follows. Harmless while only core ran; not once a plugin's tests join.
+        self.addCleanup(restore)
 
     def test_the_component_is_the_directory_the_app_sits_in(self):
         """aledb-core is fifteen apps in one checkout and has to read as one entry."""
