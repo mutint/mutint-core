@@ -132,6 +132,16 @@ Neither the sidebar nor the content box has a fixed width, and neither should ge
 stops the box sliding under the floats, but `hidden` would clip a menu that opens past the edge
 -- the genome browser's sample menu is one.
 
+**That `display: flow-root` is set inline in `base.html`, not in `common.css`, and must stay
+there.** It is the whole of what keeps the content box off the sidebar, so a browser holding a
+cached older copy of `common.css` renders every page with the header on top of the sidebar --
+which is exactly what happened when the rule lived only in the stylesheet. Layout this
+load-bearing ships with the markup that assumes it.
+
+For the same reason aledb-core's own CSS and JS are linked with `?v={{ aledb_version }}`. A
+release changes every one of those URLs, so a browser cannot serve half of one version and half
+of another. Third-party CDN assets are already versioned in their paths.
+
 ### Branding: aledb-core has none
 
 `/` is the project list, the sidebar carries no name or version, there is no icon upper-right,

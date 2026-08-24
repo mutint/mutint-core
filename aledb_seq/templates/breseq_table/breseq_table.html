@@ -3,7 +3,7 @@
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
     <script type="text/javascript">
         $(document).ready(function () {
             // Submitting on change keeps the picker usable without a button; the

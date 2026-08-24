@@ -2,11 +2,13 @@
    given a guessed width. It used to be `float: left; width: 77vw` beside a 17vw sidebar,
    which left several vw of dead page down the right-hand side -- and the sidebar is sized
    to its own content now, so any fixed width would be wrong by a different amount again.
-   `display: flow-root` is the block formatting context that stops the box sliding under
-   the floats; `overflow: hidden` would do it too, but would clip menus that open past the
-   edge -- the genome browser's sample menu is one. */
+
+   The `display: flow-root` that makes that work is set inline in base.html, not here: it
+   is the block formatting context that stops this box sliding under the floats, and a
+   browser holding a cached older copy of this file would otherwise put the page header on
+   top of the sidebar. `overflow: hidden` would establish the context too, but would clip
+   menus that open past the edge -- the genome browser's sample menu is one. */
 #aledb-content {
-    display: flow-root;
     padding: 25px;
     background-color: white;
 }
@@ -348,6 +350,6 @@ a:hover {
 .aledb-watermark img {
     height: 1.18em;
     vertical-align: -0.18em;
-    margin-right: 0.45em;
+    margin-right: 0.6em;
     opacity: 0.7;
 }

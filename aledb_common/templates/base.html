@@ -28,7 +28,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/metisMenu/2.5.2/metisMenu.min.css" rel="stylesheet">
 
     <!-- SBAdmin 2 Theme CSS -->
-    <link href="{% static "css/sb-admin-2.css" %}" rel="stylesheet">
+    <link href="{% static "css/sb-admin-2.css" %}?v={{ aledb_version }}" rel="stylesheet">
 
     <!-- Font Awesome CSS -->
     <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet"
@@ -38,7 +38,7 @@
     <link rel="shortcut icon" type="image/png" href="{% static "img/fav.png" %}">
 
     <!-- Common CSS -->
-    <link href="{% static "css/common.css" %}" rel="stylesheet">
+    <link href="{% static "css/common.css" %}?v={{ aledb_version }}" rel="stylesheet">
 
     <!-- Jquery JS -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js" type="text/javascript"></script>
@@ -76,7 +76,7 @@
     <!-- Shared create/delete helpers: aledbPost and aledbConfirmDelete.
          In <head> deliberately: it only defines window functions, and a page's own
          inline script may call them at parse time, before the end of <body>. -->
-    <script src="{% static "js/aledb_crud.js" %}"></script>
+    <script src="{% static "js/aledb_crud.js" %}?v={{ aledb_version }}"></script>
 
     {% block scripts_and_style %}{% endblock %}
 </head>
@@ -128,7 +128,14 @@
         <div id="sidebar_arrows" class="sidebar_arrows">«</div>
     </div>
 
-    <div id="aledb-content" style="top:0">
+    {% comment %} `display: flow-root` is inline rather than in common.css deliberately.
+       It is the block formatting context that keeps this box from sliding under the sidebar
+       and the collapse strip, both of which are floats -- without it the page header lands
+       on top of the sidebar. A browser holding a cached copy of an older common.css would
+       then render every page broken, which is exactly what happened when this rule lived
+       only in the stylesheet. Layout this load-bearing ships with the markup that assumes
+       it. Everything else about this box is still in common.css. {% endcomment %}
+    <div id="aledb-content" style="top:0; display: flow-root">
         <div class="navbar navbar-static-top" role="navigation" style="margin-bottom: 0px">
 
             <div class="body">
@@ -166,7 +173,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/metisMenu/2.5.2/metisMenu.min.js"></script>
-<script src="{% static "js/sb-admin-2.min.js" %}"></script>
+<script src="{% static "js/sb-admin-2.min.js" %}?v={{ aledb_version }}"></script>
 
 
 <!-- DataTables Bootstrap JS -->
