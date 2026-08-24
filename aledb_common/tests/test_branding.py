@@ -33,6 +33,21 @@ def _templates_with(extra_dir):
     return templates
 
 
+def _core_templates_only():
+    """TEMPLATES with the project's own directory dropped, leaving what core ships.
+
+    The override seam is `DIRS`: an assembled project's `templates/` is searched ahead of
+    every app's, which is how aledb-deploy replaces the About page and supplies a splash and
+    an institutional footer. Tests about core's *defaults* have to empty it, or they assert
+    the deployment's choices -- which is exactly what four of them did the moment a bare
+    `./aledb-deploy test` began running them.
+    """
+    from django.conf import settings
+    templates = [dict(engine) for engine in settings.TEMPLATES]
+    templates[0]["DIRS"] = []
+    return templates
+
+
 class BrandingTestCase(TestCase):
 
     def setUp(self):
@@ -120,7 +135,8 @@ class LandingPageTestCase(TestCase):
         self.client.force_login(self.user)
 
     def test_it_falls_back_to_the_project_view(self):
-        response = self.client.get("/")
+        with override_settings(TEMPLATES=_core_templates_only()):
+            response = self.client.get("/")
         self.assertContains(response, "project_table")
         self.assertContains(response, "Project List")
 
@@ -158,6 +174,10 @@ class InstitutionalFooterTestCase(TestCase):
         self.client.force_login(self.user)
 
     def test_core_credits_no_institution(self):
+        with override_settings(TEMPLATES=_core_templates_only()):
+            self._assert_no_institution()
+
+    def _assert_no_institution(self):
         for page in self.PAGES:
             with self.subTest(page=page):
                 content = self.client.get(page).content.decode()
@@ -177,6 +197,7 @@ class InstitutionalFooterTestCase(TestCase):
                 with self.subTest(page=page):
                     self.assertContains(self.client.get(page), "Hosted by Somebody Else")
 
+    @override_settings(TEMPLATES=_core_templates_only())
     def test_the_about_page_describes_the_platform(self):
         """It was ALEdb's about page -- publication, PI, contact. Now it is core's."""
         content = self.client.get("/about").content.decode()
