@@ -82,6 +82,11 @@ def get_base_settings(base_dir, aledb_core_dir=None):
 
         'CSRF_TRUSTED_ORIGINS': ['http://127.0.0.1:8000', 'http://localhost:8000'],
 
+        # A bare `test` in an assembled project discovers nothing: its code lives in
+        # submodule directories whose names contain hyphens, so they are not importable
+        # packages. The runner substitutes the installed first-party apps instead.
+        'TEST_RUNNER': 'aledb_common.test_runner.AledbTestRunner',
+
         'INSTALLED_APPS': [
             'django.contrib.admin',
             'django.contrib.auth',

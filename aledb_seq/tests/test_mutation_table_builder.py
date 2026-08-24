@@ -60,10 +60,10 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_common.nav_registry import EXPERIMENT_SECTION, get_nav_items
 
         labels = [item["label"] for item in get_nav_items(EXPERIMENT_SECTION)]
+        # Only core's own entries are asserted. Whether a plugin registered something is
+        # not core's business, and the registry is shared -- an assertion about what is
+        # *absent* from it would just be a statement about the install set.
         self.assertNotIn("Amplifications", labels)
-        # Nor Compare any more: it is the aledb-compare plugin's entry, registered from
-        # that repo, which is what lets a deployment leave the page out.
-        self.assertNotIn("Compare", labels)
         self.assertIn("Mutations", labels)
 
     # --- and its mutations did not go with it ------------------------------------------

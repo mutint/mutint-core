@@ -61,7 +61,29 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 559 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 559 run, 0 failures** standalone; **575** in an assembled project, where the
+plugins' own tests join them. The suite is green — treat *any* failure as yours.
+
+**A bare `test` runs the installed first-party apps, not whatever discovery finds.**
+`aledb_common/test_runner.py` substitutes them when no labels are given. Standalone this
+changes nothing; in an assembled project it is the difference between running the suite and
+not. `./mutint test` used to report `Ran 0 tests ... OK` — unittest discovery walks the
+working directory, and an assembled project's code lives in submodule directories named
+`aledb-core`, `aledb-compare` and so on, which can never be Python packages, so discovery
+could not descend into them however they were laid out. Renaming them would not have helped:
+a directory is skipped unless it holds an `__init__.py`, and giving one to a submodule root
+would make every app importable by two dotted paths at once — `aledb_seq.models` and
+`aledb_core.aledb_seq.models` are two module objects, which means two sets of model classes.
+
+The app set comes from `about_registry.first_party_app_configs()`, the same predicate the
+About page inventories with, so "which apps are ours" is stated once.
+
+**Core's tests must not assert on what is *absent* from a shared registry.** Nav entries,
+About sections and export types are contributed by whatever is installed, so
+`assertNotIn("Compare", nav_labels)` is a statement about the install set, not about core —
+it passes standalone and fails the moment a plugin is added. Assert core's own registrations,
+and leave a plugin's to the plugin. Three tests said otherwise and were wrong; the About one
+now counts entries per *checkout*, which is the invariant it always meant.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed

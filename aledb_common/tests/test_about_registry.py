@@ -42,13 +42,35 @@ class ComponentGroupingTestCase(TestCase):
             "/srv/mutint/aledb-fixation")
 
     def test_apps_sharing_a_checkout_collapse_to_one_section(self):
+        """One entry per checkout, whatever is installed.
+
+        This used to assert `len(sections) == 1`, which was a statement about the install
+        set rather than about the grouping: true standalone, false the moment a plugin is
+        added. The invariant is that the count follows the number of distinct checkouts --
+        fifteen aledb_* apps in one directory still produce one entry.
+        """
+        from aledb_common.about_registry import first_party_app_configs
+
         sections = get_about_sections()
         names = [section["name"] for section in sections]
+        checkouts = {component_dir(cfg) for cfg in first_party_app_configs()}
 
         self.assertEqual(len(names), len(set(names)), "one entry per component: %s" % names)
         self.assertIn("aledb-core", names)
-        # Standalone, every aledb_* app lives in this checkout, so there is exactly one.
-        self.assertEqual(len(sections), 1, names)
+        self.assertEqual(len(sections), len(checkouts), names)
+
+    def test_core_is_one_entry_however_many_apps_it_ships(self):
+        """The grouping rule doing its job on the only component guaranteed to be here."""
+        from aledb_common.about_registry import first_party_app_configs
+
+        core_dir = component_dir(
+            [c for c in first_party_app_configs() if c.name == "aledb_common"][0])
+        core_apps = [c for c in first_party_app_configs()
+                     if component_dir(c) == core_dir]
+
+        self.assertGreater(len(core_apps), 1, "aledb-core ships more than one app")
+        self.assertEqual(
+            1, len([s for s in get_about_sections() if s["name"] == "aledb-core"]))
 
     def test_third_party_apps_are_left_out(self):
         """Decided by where the code lives, so there is no list of names to maintain."""

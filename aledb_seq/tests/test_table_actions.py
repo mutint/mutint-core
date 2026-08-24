@@ -187,7 +187,13 @@ class TableActionsTestCase(TestCase):
 
 
 class CompareLeftCoreTestCase(TestCase):
-    """What core gave up when Compare moved to the aledb-compare plugin."""
+    """The URL space core gave up when Compare moved to the aledb-compare plugin.
+
+    Only core's own routes are asserted here. Whether "Compare" appears in the sidebar is
+    not core's business -- the nav registry is shared, its contents depend on what else is
+    installed, and core is meant to have no knowledge of plugins at all. That belongs in
+    aledb_compare's own tests, where it is.
+    """
 
     def test_the_compare_route_is_gone(self):
         self.assertEqual(404, self.client.get("/mutations/").status_code)
@@ -207,12 +213,6 @@ class CompareLeftCoreTestCase(TestCase):
                     self.assertEqual(view, resolve(url).url_name)
                 except Resolver404:
                     self.fail("%s no longer resolves" % url)
-
-    def test_core_offers_no_compare_nav_entry(self):
-        from aledb_common.nav_registry import EXPERIMENT_SECTION, get_nav_items
-
-        labels = [item["label"] for item in get_nav_items(EXPERIMENT_SECTION)]
-        self.assertNotIn("Compare", labels)
 
 
 class SharedTableJsTestCase(TestCase):

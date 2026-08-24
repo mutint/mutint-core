@@ -97,6 +97,20 @@ def get_about_sections():
     return sections
 
 
+def first_party_app_configs():
+    """Every installed app this deployment is actually made of, in INSTALLED_APPS order.
+
+    The About page is an inventory of these, and so is a full test run -- which is why this
+    is public rather than folded into `get_about_sections`. `aledb_common.test_runner` uses
+    it to decide what to run when no labels are given, because in an assembled project
+    nothing else can: the submodule directories have hyphens in their names, so they are not
+    importable packages and unittest discovery cannot descend into them.
+    """
+    from django.apps import apps
+
+    return [cfg for cfg in apps.get_app_configs() if _is_first_party(cfg)]
+
+
 def _is_first_party(app_config):
     """Whether an app ships with this deployment rather than being a dependency of it.
 
