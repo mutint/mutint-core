@@ -295,6 +295,33 @@
 
             var counter = document.getElementById("sample-count");
 
+            // igv builds its entire UI inside a *shadow root* on the container, with its
+            // stylesheet adopted there. Nothing in browse.css can cross that boundary, so the
+            // tint below has to be handed to the shadow root itself -- the class lands on the
+            // label either way, but a rule in a document stylesheet never applies to it.
+            // A <style> child rather than adoptedStyleSheets: same effect inside a shadow
+            // root, and no CSSStyleSheet constructor to feature-detect.
+            var MUTANT_TINT_CSS = [
+                ".igv-track-label.aledb-mutant-track {",
+                "    background-color: #dff5df;",
+                "    border-color: #8fbf8f;",
+                "}",
+                ".igv-track-label.aledb-mutant-track:hover,",
+                ".igv-track-label.aledb-mutant-track:focus,",
+                ".igv-track-label.aledb-mutant-track:active {",
+                "    background-color: #c8ebc8;",
+                "}"
+            ].join("\n");
+
+            function adoptMutantTint() {
+                var root = container.shadowRoot;
+                if (!root || root.querySelector("style[data-aledb-tint]")) { return; }
+                var style = document.createElement("style");
+                style.setAttribute("data-aledb-tint", "");
+                style.textContent = MUTANT_TINT_CSS;
+                root.appendChild(style);
+            }
+
             // The mutant marker on igv's own track labels, the same signal as the * in the
             // name and in the menu. This reaches into igv's DOM, because igv builds those
             // elements: each viewport of a track view carries one. Re-applied on every settle
@@ -317,6 +344,7 @@
             function settle(work) {
                 Promise.all(work || []).then(function () {
                     counter.textContent = rows.filter(isShowing).length;
+                    adoptMutantTint();
                     markMutantTracks();
                     fitReadsToContainer(browser);
                 });

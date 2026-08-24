@@ -279,6 +279,19 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
 
+**igv builds its entire UI inside a shadow root on `#igv-browser`**, with its own stylesheet
+adopted there (`attachShadow({mode:'open'})` + `adoptedStyleSheets`). Two consequences, both of
+which will waste an afternoon if you do not know them:
+
+- **No rule in `browse.css`, or any document stylesheet, can style anything igv draws.** The
+  class lands on the element and the rule silently never applies. Styling igv's internals means
+  handing the rules to the shadow root — `browse.html` appends a `<style>` there for the mutant
+  tint. A rule for `.igv-track-label` sitting in `browse.css` looks correct and does nothing.
+- **`document.querySelector` cannot see igv's DOM.** `document.querySelectorAll('.igv-track-label')`
+  returns nothing while igv is fully rendered; you have to go through
+  `document.getElementById('igv-browser').shadowRoot`. Anything checking igv's rendering — a
+  headless probe especially — will otherwise conclude igv never rendered at all.
+
 The **sample menu** is a dropdown over every sample in the experiment with an alignment, the
 one being viewed included: it is shown and hidden like the rest, so *Hide all samples* leaves
 only the reference and gene tracks. It has the same shape as the column menu on the Metadata
