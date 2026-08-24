@@ -25,15 +25,15 @@
            experiment alongside a *new* project, so there was no way to add one to a project
            that already existed. The endpoint always existed; nothing called it. {% endcomment %}
         {% if editable_projects %}
-            <a class="btn btn-primary btn-sm" href="/ale/experiments/new/">+ New experiment</a>
+            <a class="btn btn-primary" href="/ale/experiments/new/">+ New experiment</a>
         {% elif user.is_authenticated %}
             {% comment %} Signed in with nothing to add to. The project list is where that
                starts, and it will offer the button once they get there. {% endcomment %}
-            <a class="btn btn-primary btn-sm" href="/ale/projects/new/">+ New project</a>
+            <a class="btn btn-primary" href="/ale/projects/new/">+ New project</a>
             <small style="color: #666; margin-left: 0.5em;">An experiment needs a project to live in.</small>
         {% endif %}
         {% if user.is_authenticated %}
-        <button type="button" class="btn btn-danger btn-sm" id="delete-selected">
+        <button type="button" class="btn btn-danger" id="delete-selected">
             &minus; Delete selected</button>
         <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
         <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>

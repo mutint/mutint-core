@@ -26,9 +26,13 @@
     {% comment %} Read-only: nothing here posts anywhere, and there is no edit view behind it.
        These were editable text inputs, which invited changes that were silently
        discarded on reload. Two of the three even shared name="user". {% endcomment %}
+    {% comment %} No `.container` here. A container centres itself with auto margins and
+       takes a fixed width per breakpoint, so nesting one inside a row inset this whole
+       block 40px from the experiments table below it -- which is why the Edit button did
+       not line up with anything. {% endcomment %}
     <div class="row">
-        <div class="container">
-            <dl class="dl-horizontal project-summary">
+        <div>
+            <dl class="project-summary">
                 <dt>Project Name</dt>
                 <dd>{{ project.name }}</dd>
                 <dt>Created Date</dt>
@@ -46,7 +50,7 @@
                 <dd>{{ project.description|default:"&mdash;" }}</dd>
             </dl>
             {% if can_edit %}
-            <a class="btn btn-default btn-sm"
+            <a class="btn btn-default"
                href="/ale/project/{{ project.id }}/edit/">Edit project</a>
             {% endif %}
         </div>
@@ -61,7 +65,7 @@
         <br>
         {% if can_edit %}
         <div style="margin-bottom: 1em;">
-            <a class="btn btn-primary btn-sm"
+            <a class="btn btn-primary"
                href="/ale/experiments/new/?project={{ project.id }}">+ New experiment</a>
         </div>
         {% endif %}

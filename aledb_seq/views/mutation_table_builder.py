@@ -26,7 +26,7 @@ REP_DROPDOWN = '<div class="dropdown tag_dropdown"><button class="btn btn-defaul
              '</ul>'
 REP_TAG = '</div><div class="tag_dropdown">%s</div>'
 
-_button_save_to_experiment_filter = """<button class="btn btn-default btn-xs type="button" id="experiment_filter_button" onclick="save_to_experiment_filter(%d, %d); return false;"><i class="fa fa-filter" aria-hidden="true"></i></button>"""
+_button_save_to_experiment_filter = """<button class="btn btn-default btn-xs" type="button" id="experiment_filter_button" onclick="save_to_experiment_filter(%d, %d); return false;"><i class="fa fa-filter" aria-hidden="true"></i></button>"""
 _menu_item_save_to_experiment_filter = """<li><a onclick="save_to_experiment_filter(%d, %d)" style="cursor:pointer">Save to Experiment Filter</a></li>"""
 _table_cell_dropdown_template = """<div class="dropdown">
   <button class="btn btn-default btn-xs dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">

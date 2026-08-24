@@ -60,13 +60,13 @@
        an action. {% endcomment %}
     {% if can_edit %}
     <div style="margin-top: 0.6em;">
-        <a class="btn btn-primary btn-sm" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
+        <a class="btn btn-primary" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
             + Add data</a>
-        <a class="btn btn-default btn-sm"
+        <a class="btn btn-default"
            href="/ale/experiment/{{ ale_experiment_id }}/edit/">Edit experiment</a>
-        <a class="btn btn-default btn-sm"
+        <a class="btn btn-default"
            href="/ale/experiment/{{ ale_experiment_id }}/samples/">Edit samples</a>
-        <button type="button" class="btn btn-danger btn-sm" id="delete-experiment"
+        <button type="button" class="btn btn-danger" id="delete-experiment"
                 data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
     </div>
     {% endif %}

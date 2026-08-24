@@ -79,6 +79,30 @@
     padding-right: 0;
 }
 
+/* The project summary's labels sat against a wall of empty space.
+
+   It was a Bootstrap `.dl-horizontal`, which floats each `dt` into a fixed 160px column
+   and **right-aligns** it, then pushes every `dd` to a 180px margin. On labels as short as
+   "Status" that leaves most of the column empty and the text stranded in the middle of the
+   page, and the widths are the same whatever the labels say.
+
+   A two-column grid sized to its content does the same job with none of that: the label
+   column is exactly as wide as the longest label, both columns start where the text does,
+   and there are no floats to clear. `dt`/`dd` alternate into the two columns on their own,
+   so the markup stays a plain definition list. */
+.project-summary {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 20px;
+    margin: 0 0 16px;
+}
+
+.project-summary dt,
+.project-summary dd {
+    margin: 0;
+    text-align: left;
+}
+
 /* The pagination dropped its last button onto a second line.
 
    Bootstrap 3 builds `.pagination` as an inline-block `ul` whose `li`s are `display: inline`
