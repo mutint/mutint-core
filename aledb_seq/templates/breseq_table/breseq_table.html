@@ -48,8 +48,15 @@
                 {% endfor %}
             </ul>
         </div>
-        <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}"
+        {% comment %} Compare lives in the aledb-compare plugin, which a deployment may
+           not install. `{% url %}` with `as` sets an empty string instead of raising
+           NoReverseMatch, so the link disappears rather than dangling -- the same posture
+           nav_registry takes with a url_name that will not reverse. {% endcomment %}
+        {% url 'compare' as compare_url %}
+        {% if compare_url %}
+        <a href="{{ compare_url }}?ale_experiment_id={{ ale_experiment_id }}"
            class="breseq-crosslink">all samples &raquo;</a>
+        {% endif %}
         {% comment %} You are looking at one sample's mutations when you realise its
            identity is wrong, so the edit page is one click from here. {% endcomment %}
         {% if can_edit and selected_reseq_id %}

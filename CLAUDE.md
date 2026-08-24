@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 538 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 559 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -194,8 +194,9 @@ starts printing Django's version instead — `aledb_common/tests/test_version.py
 ### The per-sample mutation page
 
 `aledb_seq/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
-column order and colouring, as the per-sample companion to `/mutations`, which pivots the
-whole experiment. A picker moves between samples; the evidence cell links into the genome
+column order and colouring, as the per-sample companion to Compare, which pivots the whole
+experiment and lives in the **aledb-compare** plugin at `/compare/` (see **Compare is a
+plugin** below). A picker moves between samples; the evidence cell links into the genome
 browser when the sample has a stored alignment.
 
 The picker is the same menu as the genome browser's Samples control and the Metadata page's
@@ -212,8 +213,9 @@ annotation lives in one JSON column rather than twenty scalar ones: rendering is
 merge, not a rebuild. It is server-rendered rather than fed to DataTables as a JSON blob,
 because the markup already exists by the time the view runs.
 
-It is called **Mutations** in the nav and on the page, with `/mutations` called **Compare**
-beside it and per-sample listed first; both routes keep their old names. The table markup
+It is called **Mutations** in the nav and on the page. **Compare** used to sit beside it
+here; it is registered by the aledb-compare plugin now, so on a deployment without that
+plugin this page is the only mutation table core offers. The table markup
 itself lives in `aledb_seq/templates/breseq_table/_mutation_table.html`, shared with the genome
 browser, which renders the one mutation it is open at through the same `build_rows` — the two
 must not drift, because the cell contents come from `annotate.display` and mean nothing without
@@ -311,6 +313,50 @@ keep the description editable in the same form. A duplicate `sample_name` within
 experiment is refused for a related reason -- re-import finds an existing sample by name --
 but only when the name actually *changed*, or an experiment that already had a duplicate pair
 could never be saved at all.
+
+### Compare is a plugin
+
+`/compare/` -- mutations as rows, samples as columns -- lives in the **aledb-compare** repo,
+not in core. It is one way of looking at an experiment rather than a core function, which is
+exactly what aledb-fixation and aledb-converge are: all three are a function view that builds a
+context and renders `base_table_template.html` through `mutation_table_builder`. Compare was
+simply the one that had never been moved out.
+
+What stayed, and why none of it could go:
+
+- **`mutation_table_builder`** -- `aledb_search`, `aledb_export`, aledb-fixation and
+  aledb-converge all call it.
+- **`base_table_template.html` and `table_template.js`** -- rendered by three other pages.
+- **The curation endpoints**, now at `/mutation-table/` (`aledb_seq/views/table_actions.py`,
+  `aledb_seq/table_urls.py`). Every table posts to them, not just Compare, and the state is
+  shared: `TechnicalReplicate.tags` is what the Show/Hide Tag control filters sample columns on
+  in `get_reseq_ordered_dict`, so tagging from one table changes what the other three show.
+  Replicating them per plugin would have meant four write paths to core-owned tables.
+
+**`/mutations/` is not a page any more** and returns 404. `aledb_seq.urls` has no `^$`, and a
+plugin cannot reclaim that path: Django does not backtrack out of a matched `include()`.
+
+Two consequences worth knowing before wondering whether something is broken:
+
+- **Compare's nav entry sits at the end of the experiment section**, after Filter and the other
+  plugins, because nav order is `INSTALLED_APPS` order and assembled projects append plugins
+  after every core app. Listing `aledb-compare` first in `.gitmodules` makes it the first
+  *plugin* entry, which is as close to its old position as the design allows.
+- **Core's suite cannot reach it.** `./aledb test` has no plugin discovery, so Compare's tests
+  run only as `./mutint test aledb_compare`.
+
+`breseq_table.html` links to it through `{% url 'compare' as compare_url %}` inside an `{% if %}`,
+so the "all samples" link disappears rather than dangling where the plugin is not installed --
+the posture `nav_registry` takes with a `url_name` that will not reverse.
+
+**The three endpoint URLs in `table_template.js` are reversed by name, not written out.** That
+file is a Django template included inside a `<script>`, so `{% url %}` works there -- and so does
+anything else tag-shaped, **including inside a `//` or `/* */` comment**, which the template
+engine does not recognise as a comment at all. Writing a tag name in a comment there executes it.
+
+Nothing in core rendered that file until this change: `aledb_search` has no tests and the other
+three consumers are plugin pages. `aledb_seq/tests/test_table_actions.py` renders it directly now,
+which is what lets core notice a broken tag before four pages do.
 
 ### Which import types the Add page offers
 
@@ -502,7 +548,9 @@ All apps use the `aledb_*` namespace. Key apps:
     isolate under ALE 1 / flask 1, with `Isolate.description` set to the filename so it
     displays by name. Do not route this through `util.parse_ale_name`, whose bare
     `except: return 1` would collapse every non-conforming file onto the same sample.
-- **`aledb_seq/`** — Mutation models and views (accessible at `/mutations/`).
+- **`aledb_seq/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`),
+  the shared `mutation_table_builder`, and the curation endpoints at `/mutation-table/`.
+  Note `/mutations/` itself is **not** a page: it was Compare, now the aledb-compare plugin.
 - **`aledb_fixation/`** — Fixated mutation computation.
 - **`aledb_converge/`** — Convergence analysis across experiments.
 - **`aledb_filter/`** — Experiment filtering UI and models.
@@ -537,8 +585,8 @@ Creation and deletion are nested under the objects they act on:
   rendered through `{% block experiment_actions %}` in `aledb_common/templates/base.html`.
 - There is no Amplifications page. `/mutations/amplifications` was a copy of `mutation_table`
   differing in one argument, and it was the only page showing `AMP` mutations, because
-  `/mutations` passed `filter_type="AMP"` — a value that means **exclude** AMP, not include it.
-  Both are gone and `/mutations` now renders every mutation type. `AMP` was never a separate
+  Compare passed `filter_type="AMP"` — a value that means **exclude** AMP, not include it.
+  Both are gone and Compare now renders every mutation type. `AMP` was never a separate
   feature: it is one of eight breseq/GenomeDiff types, first-class throughout the pipeline.
 - `/import/add/?ale_experiment_id=<pk>` is the one place data goes in. It is scoped to an
   experiment **by primary key**, so two experiments may share a name and two people may add to

@@ -279,7 +279,9 @@ class GdImportTestCase(TestCase):
         for name in self.NON_AFIR_NAMES:
             self.assertIn(name[:-3], stats_html)
 
-        mutations = self.client.get("/mutations/", {"ale_experiment_id": experiment_id})
+        # The per-sample table, not the cross-sample one: Compare is the aledb-compare
+        # plugin's now, and core's suite cannot reach a plugin.
+        mutations = self.client.get("/mutations/breseq", {"ale_experiment_id": experiment_id})
         self.assertEqual(mutations.status_code, 200)
         mutations_html = mutations.content.decode("utf-8")
         self.assertNotIn("Page not available", mutations_html)

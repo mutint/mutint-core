@@ -1,3 +1,14 @@
+/* The three URLs below are reversed by name, not written out.
+ *
+ * They used to be hardcoded as /mutations/..., which tied four pages -- Compare, Fixed
+ * Mutations, Converged Mutations and Search -- to the URL of a fifth. When Compare moved to
+ * the aledb-compare plugin and the endpoints moved to /mutation-table/, every one of those
+ * literals would have had to change together. Reversing works here because this file is a
+ * Django template, included inside a <script> -- which is also how the CSRF token reaches it.
+ *
+ * A JS comment is not a template comment: anything tag-shaped inside one is still parsed and
+ * executed, so the tag names are described here rather than spelled out.
+ */
 /**
  * Created by dgosting on 9/6/16.
  */
@@ -212,7 +223,7 @@ function add_tag(tag_type, mutation_id, row) {
         {
             type: 'POST',
             headers: { "X-CSRFToken": token },
-            url: '/mutations/toggle-mut-tag/',
+            url: '{% url "toggle_mut_tag" %}',
             data: {
                 mut_id: mutation_id,
                 tag_name: tag_type,
@@ -272,7 +283,7 @@ function add_tag_to_replicate(tag_type, replicate_id, header) {
         {
             type: 'POST',
             headers: { "X-CSRFToken": token },
-            url: '/mutations/toggle-rep-tag/',
+            url: '{% url "toggle_rep_tag" %}',
             data: {
                 rep_id: replicate_id,
                 tag_name: tag_type,
@@ -307,38 +318,13 @@ function add_tag_to_replicate(tag_type, replicate_id, header) {
     )
 }
 
-function save_to_global_filter(mutation_id) {
-    var token = '{{csrf_token}}';
-    $.ajax(
-        {
-            type: 'POST',
-            headers: { "X-CSRFToken": token },
-            url: "/mutations/add_to_global_filter",
-            data: { mut_id: mutation_id,
-                    save_method: "global"
-        },
-        success: function (result) {
-            var message = result['content'];
-            if (message == 'ok') {
-                swal("", 'Added mutation to global filter', "success");
-            }
-            else {
-                swal("", message, "info")
-            }
-        },
-        error: function (xhr, ajaxOptions, thrownError) {
-            swal("", "Save-tag failed", "error");
-        }
-    })
-}
-
 function save_to_experiment_filter(ale_experiment_id, mutation_id) {
     var token = '{{csrf_token}}';
     $.ajax(
         {
             type: 'POST',
             headers: { "X-CSRFToken": token },
-            url: "/mutations/add_to_exp_filter",
+            url: '{% url "mutation_to_exp_filter" %}',
             data: {
                 mut_id: mutation_id,
                 experiment_id: ale_experiment_id,

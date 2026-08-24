@@ -8,10 +8,9 @@ class SeqConfig(AppConfig):
         from aledb_common.nav_registry import (
             EXPERIMENT_SECTION, register_nav_item,
         )
-        # Order is the order of these calls -- there is no `order` parameter. Per-sample
-        # first: it is the view of one sample's own calls, and the comparison across samples
-        # reads as the step out from it.
+        # 'Compare' used to be registered here beside this. It is the aledb-compare
+        # plugin's now, and registers itself -- which is what lets a deployment leave it
+        # out. Because plugins load after every core app, its entry lands after this one
+        # rather than immediately beside it.
         register_nav_item('Mutations', url='/mutations/breseq',
-                          section=EXPERIMENT_SECTION)
-        register_nav_item('Compare', url='/mutations',
                           section=EXPERIMENT_SECTION)

@@ -61,7 +61,10 @@ class AmplificationsRemovedTestCase(TestCase):
 
         labels = [item["label"] for item in get_nav_items(EXPERIMENT_SECTION)]
         self.assertNotIn("Amplifications", labels)
-        self.assertIn("Compare", labels)   # the one it was wedged beside
+        # Nor Compare any more: it is the aledb-compare plugin's entry, registered from
+        # that repo, which is what lets a deployment leave the page out.
+        self.assertNotIn("Compare", labels)
+        self.assertIn("Mutations", labels)
 
     # --- and its mutations did not go with it ------------------------------------------
 

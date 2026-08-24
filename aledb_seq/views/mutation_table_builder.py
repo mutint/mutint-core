@@ -1,6 +1,5 @@
 from django.contrib.auth.models import User
 import re
-from enum import Enum
 from django.urls import reverse
 from django.utils.html import strip_tags
 from aledb_seq.util import get_ecocyc_gene_list
@@ -53,14 +52,6 @@ def _build_table_cell_for_dropdown(mutation, ale_experiment):
         menuitems += _menu_item_save_to_experiment_filter % (ale_experiment.ale_id, mutation.id)
 
     return filter_button+_table_cell_dropdown_template % (menuitems + _get_tag_filter_dropdown_entries(mutation.id))
-
-
-class TableType(Enum):
-    GENE_TABLE = 1
-    ENRICHMENT_MUTATIONS = 2
-    FIXATING_MUTATIONS = 3
-    SEARCH = 4
-    SHARED = 5
 
 
 def get_table_header(user, reseq_dict, experiment: AleExperiment = None):

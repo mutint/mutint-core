@@ -39,6 +39,10 @@ def get_core_urlpatterns():
         re_path(r'^interop-query/', include('aledb_interop_query.urls')),
         re_path(r'^metadata/', include('aledb_metadata.urls')),
         re_path(r'^mutations/', include('aledb_seq.urls')),
+        # Curation actions every mutation table posts to -- Compare, Fixed Mutations,
+        # Converged Mutations and Search. Not under ^mutations/, which names only one
+        # of those pages, and no longer even that one.
+        re_path(r'^mutation-table/', include('aledb_seq.table_urls')),
         re_path(r'^search/', include('aledb_search.urls')),
         re_path(r'^stats/', include('aledb_stats.urls')),
     ]

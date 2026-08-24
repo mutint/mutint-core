@@ -14,8 +14,10 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 # page, the logger it should report through, and what it calls itself
+# "/mutations/" is deliberately absent: the Compare page it served moved to the
+# aledb-compare plugin, and core cannot see a plugin -- there is no plugin discovery in
+# standalone aledb-core at all. Its equivalent lives in aledb_compare/tests/.
 PAGES = [
-    ("/mutations/", "aledb_seq.views.mutations", "mutation table"),
     ("/mutations/breseq", "aledb_seq.views.breseq_table", "samples"),
     ("/stats/", "aledb_stats.views", "statistics"),
     ("/metadata/", "aledb_metadata.views", "metadata"),
