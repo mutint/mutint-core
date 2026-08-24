@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 581 run, 0 failures** standalone; **575** in an assembled project, where the
+**Baseline: 581 run, 0 failures** standalone; **630** in an assembled project, where the
 plugins' own tests join them. The suite is green — treat *any* failure as yours.
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
@@ -400,8 +400,23 @@ the owner unable to view what they own.
 
 **Why this exists.** Fixed Mutations renders an empty table when an experiment has nothing
 fixed, and an empty table when the feature is broken, and there was no data anywhere in the
-suite that could tell the two apart. See `aledb-fixation/aledb_fixation/examples/fixation/README.md`
-for the expected answer stated as a table; the plugin's tests assert it.
+suite that could tell the two apart.
+
+Three are registered, one per plugin, each with a `README.md` beside its data stating the
+expected answer as a table, and each asserted by that plugin's tests:
+
+| dataset | shape | what it demonstrates |
+|---|---|---|
+| `aledb-fixation-example` | 2 ALEs x 4 flasks | a mutation in the last two flasks is fixed; one lost earlier is not |
+| `aledb-converge-example` | 3 ALEs x 2 flasks | a gene hit in two lineages converges; one recurring in a single lineage does not |
+| `aledb-compare-example` | 2 ALEs x 3 flasks | a pivot with full, partial and single rows across all six mutation types |
+
+The first two have a computed answer to check. **Compare's does not** -- it derives nothing --
+so what its dataset supplies instead is a *pattern*, because a table whose rows all look alike
+demonstrates nothing. It is also the only one carrying every mutation type, `AMP` included:
+that used to appear solely on `/mutations/amplifications` because Compare passed a
+`filter_type` whose value means *exclude*, and the `AMP` row is what stops that returning
+unnoticed.
 
 ### A mutation is fixated in the last two flasks, so the time axis must be the flask
 
