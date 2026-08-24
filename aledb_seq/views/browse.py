@@ -61,6 +61,9 @@ def browse_mutation(request):
         "mutation": mutation,
         "observed": observed,
         "sample_name": reseq.ale_flask_isolate_str,
+        # For the way back: the per-sample page, on the sample this browser is showing,
+        # rather than the cross-experiment comparison it used to land on.
+        "reseq_id": reseq.id,
         # The mutation is described by breseq's own table rather than by a sentence of this
         # page's own, so the row reads exactly as it does on the Samples page. One row, and
         # no evidence link -- its destination is the page you are already on.

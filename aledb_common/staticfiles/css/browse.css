@@ -22,8 +22,21 @@
     margin-left: 1em;
 }
 
+/* The control bar wraps on a narrow window, and used to wrap with the rows touching: these
+   are inline-blocks holding floated buttons, so a second row sat straight under the first
+   with nothing between them. Flex gives the gap in both directions from one value. */
+.browse-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+}
+
+/* Each group keeps its own width, so a group moves to the next line whole instead of shedding
+   a button off the end -- Bootstrap floats the buttons inside a .btn-group, and a group left
+   to shrink breaks its own joined run apart mid-way. */
 .browse-controls .btn-group {
-    margin-right: 0.5em;
+    flex: 0 0 auto;
 }
 
 /* The sample menu has no rules here on purpose. It has the same shape as the Metadata page's

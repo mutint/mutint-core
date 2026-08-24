@@ -14,7 +14,10 @@
     <div class="col-lg-12">
         <p class="browse-summary">
             Sample <b>{{ sample_name }}</b>
-            <a href="/mutations?ale_experiment_id={{ ale_experiment_id }}">&laquo; back to mutations</a>
+            {% comment %} Back to this sample's own mutations, not the comparison across every
+               sample: you arrived from one sample's row and that is where you belong on the way
+               out. /mutations/breseq is the page the nav calls Mutations. {% endcomment %}
+            <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq_id }}">&laquo; back to mutations</a>
         </p>
 
         {% comment %} The mutation itself, in breseq's own table -- the same row, from the same
