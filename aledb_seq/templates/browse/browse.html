@@ -36,35 +36,34 @@
             {% if samples %}
                 <div class="browse-controls">
                     <div class="btn-group" id="sample-menu">
-                        <button type="button" class="btn btn-default btn-sm dropdown-toggle"
+                        <button type="button" class="btn btn-default dropdown-toggle"
                                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                             Samples (<span id="sample-count">1</span> of {{ samples|length }})
                             <span class="caret"></span>
                         </button>
-                        {% comment %} The * column is a fixed-width span rather than a leading
-                           space, so a sample without the mutation still starts its name in
-                           the same place. {% endcomment %}
+                        {% comment %} A row is <li class="active"><a>, the shape DataTables'
+                           column menu uses on the Metadata page: showing a sample is `active`
+                           on its <li>, which Bootstrap paints for us. The * column is a
+                           fixed-width span rather than a leading space, so a sample without
+                           the mutation still starts its name in the same place. {% endcomment %}
                         <ul class="dropdown-menu" id="sample-list">
                             {% for sample in samples %}
-                                <li>
-                                    <label>
-                                        <input type="checkbox" value="{{ sample.id }}"
-                                               data-url="{{ sample.url }}"
-                                               data-index-url="{{ sample.indexURL }}"
-                                               data-mutant="{% if sample.has_mutation %}1{% else %}0{% endif %}"
-                                               data-order="{{ forloop.counter0 }}"
-                                               {% if sample.is_current %}checked{% endif %}>
-                                        <span class="mut-flag">{% if sample.has_mutation %}*{% endif %}</span><span class="sample-name">{{ sample.name }}</span>
-                                    </label>
+                                <li data-sample="{{ sample.id }}"
+                                    data-url="{{ sample.url }}"
+                                    data-index-url="{{ sample.indexURL }}"
+                                    data-mutant="{% if sample.has_mutation %}1{% else %}0{% endif %}"
+                                    data-order="{{ forloop.counter0 }}"
+                                    {% if sample.is_current %}class="active"{% endif %}>
+                                    <a href="#"><span class="mut-flag">{% if sample.has_mutation %}*{% endif %}</span><span class="sample-name">{{ sample.name }}</span></a>
                                 </li>
                             {% endfor %}
                         </ul>
                     </div>
                     <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-default btn-sm" data-samples="none">Hide all samples</button>
-                        <button type="button" class="btn btn-default btn-sm" data-samples="all">Show all samples</button>
-                        <button type="button" class="btn btn-default btn-sm" data-samples="mutant">Show mutant samples</button>
-                        <button type="button" class="btn btn-default btn-sm" data-samples="nonmutant">Show non-mutant samples</button>
+                        <button type="button" class="btn btn-default" data-samples="none">Hide all samples</button>
+                        <button type="button" class="btn btn-default" data-samples="all">Show all samples</button>
+                        <button type="button" class="btn btn-default" data-samples="mutant">Show mutant samples</button>
+                        <button type="button" class="btn btn-default" data-samples="nonmutant">Show non-mutant samples</button>
                     </div>
                     <span id="sample-legend"><b>*</b> mutation called in this sample</span>
                 </div>
@@ -83,10 +82,12 @@
         "use strict";
         var reference = JSON.parse(document.getElementById("igv-reference").textContent);
 
-        // The sample menu is the one source of truth for what a sample is called and where
-        // its files are, the track the browser opens with included.
-        var inputs = Array.prototype.slice.call(
-            document.querySelectorAll("#sample-list input[type=checkbox]"));
+        // The sample menu is the one source of truth for what a sample is called, where its
+        // files are and whether it is showing -- the track the browser opens with included.
+        // `active` on the row is the state; there is no checkbox to disagree with it.
+        var rows = Array.prototype.slice.call(document.querySelectorAll("#sample-list li"));
+
+        function isShowing(row) { return row.classList.contains("active"); }
 
         // `format` is explicit on every track: these URLs end in /bam, /fasta, /gff3 and have
         // no file extension, and igv.js otherwise infers format from the extension. So is
@@ -118,14 +119,13 @@
         // constraints on a track name. No padding for the samples without one, unlike the menu:
         // an igv track label is its own shrink-to-fit badge with centred text, so there is no
         // column of names to keep aligned.
-        function sampleTrack(input) {
-            var mutant = input.getAttribute("data-mutant") === "1";
+        function sampleTrack(row) {
+            var mutant = row.getAttribute("data-mutant") === "1";
             return alignmentTrack({
-                name: (mutant ? "* " : "")
-                    + input.parentNode.querySelector(".sample-name").textContent,
-                url: input.getAttribute("data-url"),
-                indexURL: input.getAttribute("data-index-url"),
-                order: Number(input.getAttribute("data-order"))
+                name: (mutant ? "* " : "") + row.querySelector(".sample-name").textContent,
+                url: row.getAttribute("data-url"),
+                indexURL: row.getAttribute("data-index-url"),
+                order: Number(row.getAttribute("data-order"))
             });
         }
 
@@ -221,44 +221,52 @@
         }).then(function (browser) {
             igvBrowser = browser;
             fitReadsToContainer(browser);
-            if (!inputs.length) { return; }
+            if (!rows.length) { return; }
 
             // A sample's track is held as the *promise* of it rather than the track itself.
             // "Show all samples" fires every loadTrack at once, and a plain "have I got it
             // yet" test would let a second click load the same BAM again while the first was
-            // still in flight; unchecking mid-load is handled by the same promise.
+            // still in flight; hiding one mid-load is handled by the same promise.
             var pending = Object.create(null);   // sample id -> Promise<track>
             var loaded = Object.create(null);    // sample id -> track, once it has arrived
-            var byId = Object.create(null);      // sample id -> its checkbox
+            var byId = Object.create(null);      // sample id -> its row
 
-            inputs.forEach(function (input) { byId[input.value] = input; });
+            rows.forEach(function (row) { byId[row.getAttribute("data-sample")] = row; });
 
-            function show(input) {
-                var id = input.value;
+            function show(row) {
+                var id = row.getAttribute("data-sample");
                 if (pending[id]) { return pending[id]; }
-                pending[id] = browser.loadTrack(sampleTrack(input)).then(function (t) {
+                pending[id] = browser.loadTrack(sampleTrack(row)).then(function (t) {
                     loaded[id] = t;
                     return t;
                 });
                 return pending[id];
             }
 
-            function hide(input) {
-                var id = input.value;
+            function hide(row) {
+                var id = row.getAttribute("data-sample");
                 var p = pending[id];
                 if (!p) { return; }
                 // Cleared before the removal, so the trackremoved handler below finds nothing
-                // to do on this path and the two cannot fight over the same checkbox.
+                // to do on this path and the two cannot fight over the same row.
                 delete pending[id];
                 delete loaded[id];
                 return p.then(function (t) { if (t) { browser.removeTrack(t); } });
+            }
+
+            // The one place a row's state changes, so the class and the track can never
+            // disagree. Returns the work to wait on, or null when nothing changed.
+            function setShowing(row, on) {
+                if (isShowing(row) === on) { return null; }
+                row.classList.toggle("active", on);
+                return on ? show(row) : hide(row);
             }
 
             var counter = document.getElementById("sample-count");
 
             function settle(work) {
                 Promise.all(work || []).then(function () {
-                    counter.textContent = inputs.filter(function (i) { return i.checked; }).length;
+                    counter.textContent = rows.filter(isShowing).length;
                     fitReadsToContainer(browser);
                 });
             }
@@ -267,30 +275,29 @@
             // "Show mutant samples" and its opposite a pair: each is the whole selection, not
             // an addition to it.
             function select(wanted) {
-                settle(inputs.map(function (input) {
-                    var want = wanted(input);
-                    if (input.checked === want) { return null; }
-                    input.checked = want;
-                    return want ? show(input) : hide(input);
+                settle(rows.map(function (row) {
+                    return setShowing(row, wanted(row));
                 }).filter(Boolean));
             }
 
             var WANTED = {
                 none: function () { return false; },
                 all: function () { return true; },
-                mutant: function (i) { return i.getAttribute("data-mutant") === "1"; },
-                nonmutant: function (i) { return i.getAttribute("data-mutant") === "0"; }
+                mutant: function (r) { return r.getAttribute("data-mutant") === "1"; },
+                nonmutant: function (r) { return r.getAttribute("data-mutant") === "0"; }
             };
 
             var list = document.getElementById("sample-list");
             // Bootstrap's data-api closes a dropdown on any click inside it, which would shut
-            // the menu on every tick. The checkboxes are the point of this one, so it stays
-            // open until the click lands outside.
-            list.addEventListener("click", function (e) { e.stopPropagation(); });
-            list.addEventListener("change", function (e) {
-                var input = e.target;
-                if (!input.value) { return; }
-                settle([input.checked ? show(input) : hide(input)]);
+            // the menu on every pick. Picking samples is the point of this one, so it stays
+            // open until the click lands outside. The rows are <a href="#"> to get Bootstrap's
+            // own dropdown styling, which is also why the default has to be stopped.
+            list.addEventListener("click", function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                var row = e.target.closest("li");
+                if (!row || !row.hasAttribute("data-sample")) { return; }
+                settle([setShowing(row, !isShowing(row))].filter(Boolean));
             });
 
             Array.prototype.forEach.call(
@@ -312,7 +319,7 @@
                     if (loaded[id] !== track) { return; }
                     delete loaded[id];
                     delete pending[id];
-                    if (byId[id]) { byId[id].checked = false; }
+                    if (byId[id]) { byId[id].classList.remove("active"); }
                     changed = true;
                 });
                 if (changed) { settle(); }
@@ -321,7 +328,7 @@
             // The sample the page is about is loaded through the same path as any other, so
             // there is no second way a track can come into being and nothing to match back up
             // afterwards. createBrowser is handed no tracks at all.
-            settle(inputs.filter(function (i) { return i.checked; }).map(show));
+            settle(rows.filter(isShowing).map(show));
         });
     })();
     </script>

@@ -113,6 +113,25 @@ docker-compose -f docker-compose-prod-asgi-host-nginx.yml logs web
 
 ## Architecture
 
+### The shell's two widths
+
+Neither the sidebar nor the content box has a fixed width, and neither should get one back.
+
+- `.sidebar` is `width: max-content` when open (set inline in `base.html`, and by
+  `toggle_sidebar`), so it is as wide as its widest entry plus the 15px `.nav > li > a` padding
+  either side. `max-width: 17vw` -- what the fixed width used to be -- keeps a long experiment
+  name from pushing the page over; `overflow-x: hidden` trims it instead. Collapsed, the inline
+  width is cleared and `.sidebar`'s `width: 0` is what remains.
+- `#aledb-content` is `display: flow-root` and fills whatever is left beside the sidebar and the
+  collapse strip. It used to be `float: left; width: 77vw` beside a 17vw sidebar, with
+  `toggle_sidebar` swapping in a second guess of 95vw; neither added up, and several vw of every
+  page went unused down the right-hand side. With the sidebar sized to its own content, any
+  fixed width would be wrong by a different amount again.
+
+`flow-root` rather than `overflow: hidden`: both establish the block formatting context that
+stops the box sliding under the floats, but `hidden` would clip a menu that opens past the edge
+-- the genome browser's sample menu is one.
+
 ### Branding: aledb-core has none
 
 `/` is the project list, the sidebar carries no name or version, there is no icon upper-right,
@@ -232,9 +251,15 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
 
-The **sample menu** is a checkbox dropdown over every sample in the experiment with an
-alignment, the one being viewed included: it is shown and hidden like the rest, so *Hide all
-samples* leaves only the reference and gene tracks. Three things about it are load-bearing:
+The **sample menu** is a dropdown over every sample in the experiment with an alignment, the
+one being viewed included: it is shown and hidden like the rest, so *Hide all samples* leaves
+only the reference and gene tracks. It has the same shape as the column menu on the Metadata
+page -- DataTables' colvis collection -- a `ul.dropdown-menu` of `<li><a>` where a showing
+sample is `active` on its `<li>`, so Bootstrap's own `.dropdown-menu > .active > a` paints the
+row and there is nothing to restyle. (DataTables does put `#717171` on the active `<li>`, but
+its `<a>` covers the row, so that grey is never the colour you see; do not copy it.) The rows
+are links only so Bootstrap styles them, which is why the click handler stops the default as
+well as the propagation. Three things about it are load-bearing:
 
 - A sample's track is held as the **promise** of it, not the track. *Show all samples* fires
   every `loadTrack` at once, and a plain "have I got it yet" test would load the same BAM twice.
@@ -257,9 +282,10 @@ a track name. In the menu a sample without one gets a same-width empty span so t
 a column; on the track there is deliberately no such padding, because an igv track label is its
 own shrink-to-fit badge with centred text and has no column to align to.
 
-`browse.css` also re-points `#aledb-content`, whose `width: 77vw` beside a 17vw sidebar left
-several vw of dead page to the right of the browser. It is page-scoped because nothing but
-`browse.html` loads that file.
+`browse.css` also trims the header above the page -- `.page-header`'s 40px top margin, its
+padding and margin below, and base.html's empty `<h2>{{ error }}</h2>` slot -- so all four
+margins round the browser measure the same 25px. Page-scoped, since nothing but `browse.html`
+loads that file.
 
 The cell markup is coupled to two things that substring-test it: `_contains_mutation` decides
 whether a row renders by looking for `true`, and `table_template.js` colours a cell by testing

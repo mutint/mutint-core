@@ -14,7 +14,11 @@
                 paging: false,
                 dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
                 buttons: [
-                    'colvis', 'csv'
+                    // The caret says it opens a menu rather than doing something. Buttons
+                    // inserts `text` as HTML, so the Bootstrap span renders as the same
+                    // triangle every other dropdown in the app uses.
+                    {extend: 'colvis', text: 'Column visibility <span class="caret"></span>'},
+                    'csv'
                 ],
                 deferRender: true
             });

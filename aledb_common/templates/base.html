@@ -49,18 +49,18 @@
     <script type="text/javascript">
         var sidebar_hidden = false;
 
+        // Only the sidebar's own width is written here. #aledb-content fills whatever is
+        // left beside it (see common.css), so it has nothing to be told -- it used to be
+        // switched between two guesses, 77vw and 95vw, neither of which added up with the
+        // sidebar and the collapse strip beside it.
         function toggle_sidebar() {
-            x = document.getElementById("aledb-content")
             if (sidebar_hidden) {
                 sidebar_hidden = false;
-                document.getElementById("sidebar").style.width = "17vw";
-                x.style.width = "77vw"
-                //$('nav').css('left', '0');
+                document.getElementById("sidebar").style.width = "max-content";
                 document.getElementById('sidebar_arrows').innerText = '«';
             } else {
                 sidebar_hidden = true;
                 document.getElementById("sidebar").style.width = "";
-                x.style.width = "95vw"
                 document.getElementById('sidebar_arrows').innerText = '»';
             }
         }
@@ -83,7 +83,7 @@
 <body style="background-color: white">
 <div id="wrapper">
     <div class="navbar-default sidebar-panel" role="navigation" style="z-index:999;">
-        <div class="sidebar" style="width: 17vw" id="sidebar">
+        <div class="sidebar" style="width: max-content" id="sidebar">
             <div class="navbar-header">
                 {% if branding.name or branding.version %}
                     <a class="navbar-brand" href="/">{{ branding.name }} {{ branding.version }}</a>
@@ -119,8 +119,7 @@
                     {% endfor %}
                 {% endif %}
                 <li class="aledb-watermark">
-                    Powered by ALEdb v{{ aledb_version }}
-                    <img src="{% static "img/fav.png" %}" alt="">
+                    <img src="{% static "img/fav.png" %}" alt="">Powered by ALEdb v{{ aledb_version }}
                 </li>
             </ul>
         </div>
@@ -129,8 +128,7 @@
         <div id="sidebar_arrows" class="sidebar_arrows">«</div>
     </div>
 
-    <div id="aledb-content"
-         style="float: left; top:0; width: 77vw">
+    <div id="aledb-content" style="top:0">
         <div class="navbar navbar-static-top" role="navigation" style="margin-bottom: 0px">
 
             <div class="body">

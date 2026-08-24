@@ -1,4 +1,12 @@
+/* Fills whatever is left beside the sidebar and the collapse strip, rather than being
+   given a guessed width. It used to be `float: left; width: 77vw` beside a 17vw sidebar,
+   which left several vw of dead page down the right-hand side -- and the sidebar is sized
+   to its own content now, so any fixed width would be wrong by a different amount again.
+   `display: flow-root` is the block formatting context that stops the box sliding under
+   the floats; `overflow: hidden` would do it too, but would clip menus that open past the
+   edge -- the genome browser's sample menu is one. */
 #aledb-content {
+    display: flow-root;
     padding: 25px;
     background-color: white;
 }
@@ -45,7 +53,13 @@
     height: 100vh;
     max-height: 100vh;
     overflow-y: auto;
+    /* Open, it is `width: max-content` (set in base.html, and by toggle_sidebar) so it is
+       as wide as its widest entry plus the 15px `.nav > li > a` padding either side, and no
+       wider. The cap is what the fixed width used to be: an experiment whose name runs long
+       must not push the page over, and `overflow-x: hidden` below trims it instead.
+       Collapsed, the inline width is cleared and this 0 is what remains. */
     width: 0;
+    max-width: 17vw;
     position: relative;
     z-index: 1;
     top: 0;
@@ -323,13 +337,17 @@ a:hover {
        inherit that from. Separation from the nav is margin, not extra padding. */
     padding: 10px 15px;
     margin-top: 1.5em;
-    font-size: 11px;
+    font-size: 13px;
     color: #999;
     white-space: nowrap;
 }
 
+/* Sized against the text rather than in pixels, so the icon holds its proportion
+   to it and only the font-size above has to change to resize the whole mark.
+   The ratios are the ones it was drawn at: a 13px icon sunk 2px against 11px text. */
 .aledb-watermark img {
-    height: 13px;
-    vertical-align: -2px;
+    height: 1.18em;
+    vertical-align: -0.18em;
+    margin-right: 0.45em;
     opacity: 0.7;
 }
