@@ -33,6 +33,22 @@
    row, so that grey is never the colour you see -- do not copy it.) The scrollbar past a
    screenful is `.aledb-menu` in common.css, shared with the Mutations page's picker. */
 
+/* The sample-name pill igv draws over a track whose mutation was called: the same signal as
+   the * in that track's name and in the sample menu, for anyone who would sooner see it than
+   read it. These elements are igv's, not this page's, which is why the selectors name
+   .igv-track-label -- and why they are specific enough to beat igv's own base and :hover
+   rules whatever order the two stylesheets end up in (igv injects its CSS at runtime). */
+.igv-track-label.aledb-mutant-track {
+    background-color: #dff5df;
+    border-color: #8fbf8f;
+}
+
+.igv-track-label.aledb-mutant-track:hover,
+.igv-track-label.aledb-mutant-track:focus,
+.igv-track-label.aledb-mutant-track:active {
+    background-color: #c8ebc8;
+}
+
 /* Fixed width so a sample with no call still starts its name in the same column. The span is
    rendered empty rather than holding a space -- a space in the markup would collapse. */
 .mut-flag {

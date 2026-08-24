@@ -295,9 +295,29 @@
 
             var counter = document.getElementById("sample-count");
 
+            // The mutant marker on igv's own track labels, the same signal as the * in the
+            // name and in the menu. This reaches into igv's DOM, because igv builds those
+            // elements: each viewport of a track view carries one. Re-applied on every settle
+            // rather than set once at load, since igv rebuilds a track view's viewports when
+            // the column layout changes and a class set once would go with them.
+            function markMutantTracks() {
+                rows.forEach(function (row) {
+                    var track = loaded[row.getAttribute("data-sample")];
+                    if (!track || !track.trackView || !track.trackView.viewports) { return; }
+                    var mutant = row.getAttribute("data-mutant") === "1";
+                    track.trackView.viewports.forEach(function (viewport) {
+                        if (viewport.trackLabelElement) {
+                            viewport.trackLabelElement.classList.toggle("aledb-mutant-track",
+                                                                        mutant);
+                        }
+                    });
+                });
+            }
+
             function settle(work) {
                 Promise.all(work || []).then(function () {
                     counter.textContent = rows.filter(isShowing).length;
+                    markMutantTracks();
                     fitReadsToContainer(browser);
                 });
             }
