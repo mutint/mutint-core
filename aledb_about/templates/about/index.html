@@ -1,58 +1,47 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}About{% endblock %}
 {% block header %}About{% endblock %}
+{% block scripts_and_style %}
+    <link href="{% static "css/about.css" %}?v={{ aledb_version }}" rel="stylesheet">
+{% endblock %}
 {% block content %}
-    {% comment %} aledb-core's own About page: what the platform is, not who is running it.
+    {% comment %} The page is assembled from whatever is installed: every component gets a
+       heading, and the ones that registered prose get a body under it. See
+       aledb_common/about_registry.py. Nothing here names a plugin. {% endcomment %}
 
-       This used to be ALEdb's About page -- its publication, its PI, its contact
-       address, its hosting institution. All of that is a deployment's, not the
-       platform's, and it now lives in the ALEdb deployment's own
-       templates/about/index.html. Any deployment overrides this page the same
-       way: drop about/index.html in the project templates dir, which is searched
-       ahead of every app's. {% endcomment %}
+    {% include "about/deployment.html" %}
 
-    <p>This site runs <b>aledb-core</b> {{ aledb_version }}, a platform for storing and
-        exploring mutations from adaptive laboratory evolution (ALE) experiments. It
-        imports resequencing output, annotates mutations against an experiment's
-        reference, and presents them as searchable, filterable, exportable tables
-        across experiments and samples.</p>
+    {% if sections|length > 1 %}
+        {% comment %} Only worth a contents list when there is more than one place to go.
+           {% endcomment %}
+        <ul class="about-contents">
+            {% for section in sections %}
+                <li><a href="#{{ section.anchor }}">{{ section.name }}</a></li>
+            {% endfor %}
+        </ul>
+    {% endif %}
 
-    <h4>Mutation data generation</h4>
-    <p>Mutation calls are imported from the <a href="https://github.com/barricklab/breseq">breseq</a>
-        resequencing pipeline, and re-annotated internally against the reference stored
-        for each experiment.</p>
-    <p>Deatherage, D.E., Barrick, J.E. (2014) Identification of mutations in
-        laboratory-evolved microbes from next-generation sequencing data using BreSeq.
-        Methods Mol. Biol.</p>
-
-    <h4>3rd party packages used</h4>
-    <p>mutation-needle-plot: http://dx.doi.org/10.5281/zenodo.14561</p>
-
-    <h4>License</h4>
-    <p>aledb-core is released under the MIT License. Permission is hereby granted, free
-        of charge, to any person obtaining a copy of this software and associated
-        documentation files (the "Software"), to deal in the Software without
-        restriction, including without limitation the rights to use, copy, modify,
-        merge, publish, distribute, sublicense, and/or sell copies of the Software, and
-        to permit persons to whom the Software is furnished to do so, subject to the
-        following conditions:</p>
-    <p>The above copyright notice and this permission notice shall be included in all
-        copies or substantial portions of the Software.</p>
-    <p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-        FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-        COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-        IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-        CONNECTION WITH THE SOFTWARE, OR OTHERWISE ARISING FROM THE USE OR OTHER
-        DEALINGS IN THE SOFTWARE.</p>
+    {% for section in sections %}
+        <h3 id="{{ section.anchor }}" class="about-section">
+            {{ section.name }}
+            <small>
+                {% if section.version %}{{ section.version }}{% endif %}
+                {% if section.revision %}
+                    {% if section.version %}&middot;{% endif %}
+                    {% if section.revision_url %}
+                        <a href="{{ section.revision_url }}"><code>{{ section.revision }}</code></a>
+                    {% else %}
+                        <code>{{ section.revision }}</code>
+                    {% endif %}
+                {% endif %}
+            </small>
+        </h3>
+        {% if section.template %}{% include section.template %}{% endif %}
+    {% endfor %}
 
     <hr>
     <div class="container">
         {% include "branding/footer.html" %}
-        <div class="row">
-            <div class="col-sm-12" align="center">
-                <h6 class="git-hash">{{ git_hash }}</h6>
-            </div>
-        </div>
     </div>
 {% endblock %}

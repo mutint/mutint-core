@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 433 run, 0 failures.** The suite is green — treat *any* failure as yours.
+**Baseline: 447 run, 0 failures.** The suite is green — treat *any* failure as yours.
 
 It was not green for years. The last six were all in
 `aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
@@ -439,7 +439,7 @@ user-facing lists exclude deleted rows explicitly via `aledb_experiment.models.l
 ### Import types are pluggable
 
 `aledb_common/import_registry.py` is a fourth registry alongside the plugin, nav, and export
-ones. An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
+ones (`aledb_common/about_registry.py` is the fifth). An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
 page's type dropdown and in auto-detect, with no edit to core:
 
 ```python
