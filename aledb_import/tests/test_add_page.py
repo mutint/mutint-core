@@ -237,10 +237,11 @@ class ImportTypesOfferedTestCase(TestCase):
         self.assertIn("Replace annotation", self._html())
 
     def test_replace_annotation_names_the_formats_it_takes(self):
-        """A FASTA carries no annotation, so the label must not imply it does."""
+        """The label names renaming too: this type is the only route to it, and a FASTA is
+        accepted for exactly that reason even though it installs no annotation."""
         self._establish_reference()
         html = self._html()
-        self.assertIn("Replace annotation (GenBank / GFF3)", html)
+        self.assertIn("Replace annotation or rename contigs (GenBank / GFF3 / FASTA)", html)
 
     def test_genomediff_becomes_selectable(self):
         self._establish_reference()

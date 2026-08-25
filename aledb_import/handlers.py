@@ -44,7 +44,12 @@ BRESEQ_PATTERNS = [
 ]
 
 # replace_annotation takes features, not sequence, so a FASTA has nothing it can use.
-ANNOTATION_PATTERNS = [".gbk", ".gb", ".gbff", ".genbank", ".gff", ".gff3"]
+# FASTA is included even though a FASTA carries no annotation to install: this type is also
+# how an experiment's contigs get renamed, and a rename with no annotation change is a
+# legitimate thing to arrive holding. A FASTA whose sequence and names both match is simply a
+# no-op, which is the same answer the GenBank of an unchanged genome already gets.
+ANNOTATION_PATTERNS = [".gbk", ".gb", ".gbff", ".genbank", ".gff", ".gff3",
+                       ".fa", ".fasta", ".fna", ".fas"]
 
 GENOMEDIFF_PATTERNS = [".gd"]
 
@@ -98,11 +103,12 @@ def detect_reference(staged_root, paths):
             if p not in inside_a_sample and matches_patterns(p, REFERENCE_PATTERNS)]
 
 
-def handle_reference(experiment, staged_root, paths, user):
-    return _ingest_reference(experiment, staged_root, paths, annotation_only=False)
+def handle_reference(experiment, staged_root, paths, user, options=None):
+    return _ingest_reference(experiment, staged_root, paths, annotation_only=False,
+                             options=options)
 
 
-def handle_replace_annotation(experiment, staged_root, paths, user):
+def handle_replace_annotation(experiment, staged_root, paths, user, options=None):
     """Refresh an established reference's gene annotation, leaving its sequence alone.
 
     The narrow half of what the retired `/import/reference/` page could do. That page also
@@ -111,10 +117,43 @@ def handle_replace_annotation(experiment, staged_root, paths, user):
     can quietly break it is worse than no UI at all -- `reference_store.establish_or_check`
     still takes `replace=` for a shell operator who genuinely needs it.
     """
-    return _ingest_reference(experiment, staged_root, paths, annotation_only=True)
+    return _ingest_reference(experiment, staged_root, paths, annotation_only=True,
+                             options=options)
 
 
-def _ingest_reference(experiment, staged_root, paths, annotation_only):
+def _rename_payload(experiment, plan, filename):
+    """What the user is being asked to agree to, in their terms.
+
+    The re-import warning is the consequence most likely to be discovered months later:
+    `gd_import._check_seq_ids` refuses a `.gd` whose seq_ids are not the reference's, so the
+    original breseq folders stop being re-importable the moment their contigs are renamed.
+    """
+    from aledb_seq.models import Mutation, ResequencingExperiment
+
+    counts = {
+        "mutations": Mutation.objects.filter(
+            ale_experiment=experiment,
+            reseq_reference__in=list(plan.mapping)).count(),
+        "samples": ResequencingExperiment.objects.filter(
+            tech_rep__isolate__flask__ale_id__ale_experiment=experiment).count(),
+        "alignments": ResequencingExperiment.objects.filter(
+            tech_rep__isolate__flask__ale_id__ale_experiment=experiment,
+            bam_stored=True).count(),
+    }
+    payload = dict(plan.as_payload(counts), kind="rename", file=filename)
+    payload["message"] = (
+        "%s is this experiment's genome under different contig names." % filename)
+    payload["warnings"] = [
+        "Stored alignments keep their current contig names and go on working -- igv is given "
+        "an alias table so reads and coverage still resolve.",
+        "Re-importing these samples from their original breseq result folders will be "
+        "refused afterwards: their data/output.gd still names the old contigs.",
+    ]
+    return payload
+
+
+def _ingest_reference(experiment, staged_root, paths, annotation_only, options=None):
+    from aledb_common.import_registry import ConfirmationRequired
     from aledb_import import reference as reference_io
     from aledb_import import reference_store
 
@@ -132,8 +171,14 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only):
             gff3_text, sequences = reference_io.normalize_reference(
                 full, os.path.basename(relative))
             reference_store.establish_or_check(
-                experiment, gff3_text, sequences, update_annotation=True)
+                experiment, gff3_text, sequences, update_annotation=True,
+                allow_rename=bool((options or {}).get("confirm_rename")))
             results.append({"file": relative, "mutations": 0, "error": None})
+        except reference_store.RenameRequired as ask:
+            # Not an error and not a per-file result: the same genome arrived under different
+            # contig names, and renaming rewrites every mutation in the experiment. It
+            # propagates out of run_import as a question about the whole drop.
+            raise ConfirmationRequired(_rename_payload(experiment, ask.plan, relative))
         except reference_store.ReferenceMismatch:
             # Named separately from the blanket handler below: this is the one failure a user
             # can act on, and the hash-vs-hash text establish_or_check raises does not say so.
@@ -234,6 +279,7 @@ def register_core_import_handlers():
         priority=PRIORITY_REFERENCE,
         detect=detect_reference,
         handle=handle_reference,
+        accepts_options=True,
         # Establishing a reference is a one-time act. Once the experiment has one,
         # offering this again invites the two things it will not do: replacing the
         # annotation (that is replace_annotation) and swapping in a different genome
@@ -243,7 +289,7 @@ def register_core_import_handlers():
         description="Sets the reference every sample in the experiment is checked against.")
     register_import_handler(
         name="replace_annotation",
-        label="Replace annotation (GenBank / GFF3)",
+        label="Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
         patterns=ANNOTATION_PATTERNS,
         # Deliberately one step behind `reference`, which claims the same files: in
         # auto-detect the lower priority takes them all and this one claims nothing, so it is
@@ -252,6 +298,7 @@ def register_core_import_handlers():
         priority=PRIORITY_REFERENCE + 1,
         detect=detect_annotation,
         handle=handle_replace_annotation,
+        accepts_options=True,
         requires_reference=True,
         description="Refresh the gene annotation from a new GenBank or GFF3. The sequence "
                     "must be identical; only the features are replaced.")

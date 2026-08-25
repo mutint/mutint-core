@@ -6,7 +6,8 @@ the filesystem, and authorization uses the model that actually exists -- ``can_v
 The streaming and byte-range machinery lives in ``aledb_common.fileserve``.
 """
 
-from django.http import Http404, HttpResponseForbidden
+from django.core.exceptions import ObjectDoesNotExist
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 
 from aledb_common import store
 from aledb_common.fileserve import serve_file
@@ -40,6 +41,53 @@ def reference_fai(request, experiment_id):
 
 def reference_gff3(request, experiment_id):
     return _serve_reference(request, experiment_id, store.REFERENCE_GFF3)
+
+
+def reference_chromalias(request, experiment_id):
+    """igv's chromosome alias table, so a renamed contig still finds its alignments.
+
+    Renaming an experiment's sequences renames the reference and the mutations, but the
+    stored BAMs and coverage BigWigs keep the names they were built with -- their `@SQ`
+    headers and chromosome B-trees are baked in, and rewriting 6 GB of them is not what a
+    rename should cost. igv resolves the difference itself: both readers ask the genome for
+    an alias record and match it against the names the file actually carries
+    (`getAliasName` for alignments, `getIdForChr` for BigWig).
+
+    The format is igv's own: an optional `#` header naming the columns, then one
+    tab-separated row per sequence. igv takes as canonical whichever field is in the
+    genome's chromosomeNames, so the current name must come first.
+    """
+    try:
+        experiment = AleExperiment.objects.get(pk=experiment_id)
+    except AleExperiment.DoesNotExist:
+        raise Http404("No such experiment.")
+
+    if not _may_view(request.user, experiment):
+        return HttpResponseForbidden("You do not have access to this experiment.")
+
+    try:
+        reference = experiment.reference
+    except ObjectDoesNotExist:
+        raise Http404("This experiment has no reference genome.")
+
+    return HttpResponse(chromalias_text(reference.seq_ids),
+                        content_type="text/plain; charset=utf-8")
+
+
+def chromalias_text(seq_ids):
+    """The alias table for `seq_ids`, or "" when no sequence has ever been renamed.
+
+    Kept separate from the view so the rename path can test the table it produces without
+    going through HTTP.
+    """
+    rows = [entry for entry in seq_ids if entry.get("aliases")]
+    if not rows:
+        return ""
+    lines = ["#name\tprevious"]
+    for entry in rows:
+        for alias in entry["aliases"]:
+            lines.append("%s\t%s" % (entry["id"], alias))
+    return "\n".join(lines) + "\n"
 
 
 def _serve_sample(request, reseq_id, filename):

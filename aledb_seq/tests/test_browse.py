@@ -117,6 +117,40 @@ class BrowseMutationTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("no reference genome", response.content.decode("utf-8"))
 
+    # --- the chromosome alias table -----------------------------------------------------
+
+    def test_no_alias_url_until_a_sequence_has_been_renamed(self):
+        """An experiment that has never been renamed must gain no extra request, and igv
+        treats a falsy aliasURL as 'the names are already right'.
+
+        Asserted on the JSON key, quotes included: the template always carries the bare
+        identifier `aliasURL: reference.aliasURL`, and only the config value is conditional.
+        """
+        response = self._get()
+
+        self.assertNotIn('"aliasURL"', response.content.decode("utf-8"))
+
+    def test_a_renamed_sequence_publishes_its_alias_url(self):
+        reference = ExperimentReference.objects.get()
+        reference.seq_ids = [dict(reference.seq_ids[0], aliases=["old_name"])]
+        reference.save(update_fields=["seq_ids"])
+
+        html = self._get().content.decode("utf-8")
+
+        self.assertIn('"aliasURL"', html)
+        self.assertIn("/mutations/reference/%d/chromalias" % self.experiment.ale_id, html)
+
+    def test_the_page_does_not_publish_per_sequence_hashes(self):
+        """seq_ids also carries the sequence hashes that establish reference identity;
+        this dict is rendered into the page for anyone who can see it."""
+        reference = ExperimentReference.objects.get()
+        reference.seq_ids = [dict(reference.seq_ids[0], sha256="deadbeef" * 8)]
+        reference.save(update_fields=["seq_ids"])
+
+        html = self._get().content.decode("utf-8")
+
+        self.assertNotIn("deadbeef", html)
+
     # --- addressing and access ----------------------------------------------------------
 
     def test_unknown_or_missing_observed_mutation_is_a_404(self):

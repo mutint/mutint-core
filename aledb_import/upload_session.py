@@ -22,7 +22,11 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from aledb_common import store
-from aledb_common.import_registry import get_import_handler, run_import
+from aledb_common.import_registry import (
+    ConfirmationRequired,
+    get_import_handler,
+    run_import,
+)
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_edit_project
 from aledb_import.models import (
@@ -192,6 +196,29 @@ def upload_chunk(request, upload_id):
 
 
 @require_POST
+def cancel_upload(request, upload_id):
+    """Abandon a staged upload and clear it.
+
+    Without this a declined rename would hold its staging -- gigabytes, for a breseq drop --
+    until the TTL reaper got to it.
+    """
+    session, error = _open_session(request, upload_id)
+    if error:
+        return error
+
+    shutil.rmtree(store.staging_dir(session.id), ignore_errors=True)
+    session.state = STATE_FAILED
+    session.save(update_fields=["state", "updated"])
+    return JsonResponse({"cancelled": True})
+
+
+def _payload(request):
+    try:
+        return json.loads((request.body or b"{}").decode("utf-8")) or {}
+    except (ValueError, UnicodeDecodeError):
+        return {}
+
+
 def finalize_upload(request, upload_id):
     """Ingest the staged tree and clear it. Returns the standard import summary."""
     session, error = _open_session(request, upload_id)
@@ -199,19 +226,30 @@ def finalize_upload(request, upload_id):
         return error
 
     root = store.staging_dir(session.id)
+    options = {"confirm_rename": _payload(request).get("confirm_rename")}
     try:
         # The registry decides what each file is and which handler takes it, so a plugin's
         # import type is reachable here with no change to this view.
         summary = run_import(session.ale_experiment, root, request.user,
-                             import_type=session.import_type)
+                             import_type=session.import_type, options=options)
+    except ConfirmationRequired as ask:
+        # Deliberately before the blanket handler, and deliberately without the cleanup: the
+        # staged tree is what the confirming request will import, so it has to survive the
+        # question, and the session stays open so `_open_session` accepts the second POST.
+        # `updated` is touched so the reaper's TTL restarts from when the question was asked
+        # rather than from when the upload began.
+        session.save(update_fields=["updated"])
+        # 200 rather than 409: the client's postJson throws on any non-2xx and renders
+        # `error`, so a status code would turn a question into a failure message.
+        return JsonResponse({"needs_confirmation": ask.payload})
     except Exception as exc:
         logger.exception("breseq folder finalize failed for session %s", session.id)
         session.state = STATE_FAILED
         session.save(update_fields=["state", "updated"])
-        return JsonResponse({"error": str(exc)}, status=500)
-    finally:
         shutil.rmtree(root, ignore_errors=True)
+        return JsonResponse({"error": str(exc)}, status=500)
 
+    shutil.rmtree(root, ignore_errors=True)
     session.state = STATE_FINALIZED
     session.save(update_fields=["state", "updated"])
     summary["upload_id"] = str(session.id)

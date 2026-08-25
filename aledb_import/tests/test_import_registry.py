@@ -180,19 +180,22 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertEqual(after.fasta_sha256, before.fasta_sha256)
         self.assertEqual(after.gff3_sha256, before.gff3_sha256)
 
-    def test_replace_annotation_does_not_claim_a_fasta(self):
-        """A FASTA is sequence with no features, so there is no annotation in one to
-        install. It used to be accepted and then rejected on the sequence check, which
-        told the reader the wrong thing about why."""
+    def test_a_fasta_is_accepted_but_installs_no_annotation(self):
+        """A FASTA carries no features, so there is nothing in one to install -- but this
+        type is also how contigs are renamed, and a rename with no annotation change is a
+        legitimate thing to arrive holding. It is claimed, and it leaves the stored
+        annotation alone rather than replacing a gene table with nothing."""
         write_genbank(os.path.join(self.drop, "REL606.gbk"))
         self._run(import_type="reference")
+        before = ExperimentReference.objects.get().gff3_sha256
 
         os.remove(os.path.join(self.drop, "REL606.gbk"))
         self._write("same.fasta", breseq_fixture.fasta_text(
             [("test_ref", breseq_fixture.SEQUENCE_A)]))
         summary = self._run(import_type="replace_annotation")
 
-        self.assertIn("not recognised", summary["files"][0]["error"])
+        self.assertIsNone(summary["files"][0]["error"])
+        self.assertEqual(before, ExperimentReference.objects.get().gff3_sha256)
 
 
 class PluggableImportTypeTestCase(TestCase):

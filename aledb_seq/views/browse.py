@@ -129,7 +129,7 @@ def _reference_urls(experiment):
     except ExperimentReference.DoesNotExist:
         return None
 
-    return {
+    config = {
         "id": str(experiment.ale_id),
         "name": experiment.name,
         # `format` is explicit on every URL below: these routes end in /fasta, /fai, /bam and
@@ -137,8 +137,17 @@ def _reference_urls(experiment):
         "fastaURL": reverse("reference_fasta", args=[experiment.ale_id]),
         "indexURL": reverse("reference_fai", args=[experiment.ale_id]),
         "gff3URL": reverse("reference_gff3", args=[experiment.ale_id]),
-        "seq_ids": reference.seq_ids,
+        # Only the id and length: the per-sequence hashes seq_ids also carries are identity
+        # material, and this dict is rendered into the page for anyone who can see it.
+        "seq_ids": [{"id": entry["id"], "length": entry["length"]}
+                    for entry in reference.seq_ids],
     }
+
+    # Only when a sequence has actually been renamed. An experiment that never has one gains
+    # no extra request, and igv treats a missing aliasURL as "names are already right".
+    if any(entry.get("aliases") for entry in reference.seq_ids):
+        config["aliasURL"] = reverse("reference_chromalias", args=[experiment.ale_id])
+    return config
 
 
 def _sample_track(reseq):

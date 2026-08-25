@@ -124,7 +124,11 @@ class BreseqFolderImportTestCase(TestCase):
 
         results = {f["file"]: f for f in summary["files"]}
         self.assertIsNone(results["s1"]["error"])
-        self.assertIn("sequence does not match", results["s2"]["error"])
+        # The message names the sequences that differ rather than two hash prefixes: under
+        # sequence identity the contig name carries no weight, but it is what the person
+        # holding the file recognises.
+        self.assertIn("not the same set of sequences", results["s2"]["error"])
+        self.assertIn("in this experiment but not in the upload", results["s2"]["error"])
         self.assertEqual(results["s2"]["mutations"], 0)
 
         # The batch continued, and the experiment kept exactly one reference.

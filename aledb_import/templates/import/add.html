@@ -379,6 +379,12 @@
             return postJson("/import/uploads/" + uploadId + "/finalize", {});
         }).then(function (summary) {
             progressEl.style.display = "none";
+            // A question, not a result. The staged files are still on the server and the
+            // session is still open, so confirming re-posts finalize rather than re-uploading.
+            if (summary.needs_confirmation) {
+                renderConfirmation(uploadId, summary.needs_confirmation);
+                return;
+            }
             renderSummary(summary);
         }).catch(function (err) {
             progressEl.style.display = "none";
@@ -387,6 +393,84 @@
             submitBtn.disabled = false;
         });
     });
+
+    // textContent throughout: sequence names come from an uploaded file.
+    function renderConfirmation(uploadId, ask) {
+        var box = document.createElement("div");
+        box.className = "alert alert-warning";
+
+        var head = document.createElement("p");
+        head.innerHTML = "<b></b>";
+        head.querySelector("b").textContent = ask.message || "This upload renames sequences.";
+        box.appendChild(head);
+
+        var table = document.createElement("table");
+        table.className = "table table-condensed";
+        var header = document.createElement("tr");
+        ["Currently", "Becomes"].forEach(function (text) {
+            var th = document.createElement("th");
+            th.textContent = text;
+            header.appendChild(th);
+        });
+        table.appendChild(header);
+        (ask.renames || []).forEach(function (pair) {
+            var tr = document.createElement("tr");
+            [pair.from, pair.to].forEach(function (name) {
+                var td = document.createElement("td");
+                td.textContent = name;
+                tr.appendChild(td);
+            });
+            table.appendChild(tr);
+        });
+        box.appendChild(table);
+
+        var counts = ask.counts || {};
+        var what = document.createElement("p");
+        what.textContent =
+            (counts.mutations || 0) + " mutation(s) will be rewritten across "
+            + (counts.samples || 0) + " sample(s).";
+        box.appendChild(what);
+
+        (ask.warnings || []).forEach(function (line) {
+            var p = document.createElement("p");
+            p.textContent = line;
+            box.appendChild(p);
+        });
+
+        var go = document.createElement("button");
+        go.type = "button";
+        go.className = "btn btn-primary";
+        go.textContent = "Rename and import";
+        var stop = document.createElement("button");
+        stop.type = "button";
+        stop.className = "btn btn-default";
+        stop.style.marginLeft = "8px";
+        stop.textContent = "Cancel";
+        box.appendChild(go);
+        box.appendChild(stop);
+
+        go.addEventListener("click", function () {
+            go.disabled = stop.disabled = true;
+            setProgress(1, 1, "Renaming and re-annotating…");
+            postJson("/import/uploads/" + uploadId + "/finalize",
+                     {confirm_rename: true}).then(function (summary) {
+                progressEl.style.display = "none";
+                renderSummary(summary);
+            }).catch(function (err) {
+                progressEl.style.display = "none";
+                renderError(err.message || String(err));
+            });
+        });
+        stop.addEventListener("click", function () {
+            go.disabled = stop.disabled = true;
+            postJson("/import/uploads/" + uploadId + "/cancel", {}).then(function () {
+                resultEl.innerHTML = "";
+            }).catch(function () { resultEl.innerHTML = ""; });
+        });
+
+        resultEl.innerHTML = "";
+        resultEl.appendChild(box);
+    }
 
     // textContent throughout: filenames and error strings are user-supplied.
     function renderError(message) {

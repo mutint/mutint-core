@@ -29,4 +29,6 @@ urlpatterns = [
             aledb_seq.views.alignments.reference_fai, name='reference_fai'),
     re_path(r'^reference/(?P<experiment_id>\d+)/gff3$',
             aledb_seq.views.alignments.reference_gff3, name='reference_gff3'),
+    re_path(r'^reference/(?P<experiment_id>\d+)/chromalias$',
+            aledb_seq.views.alignments.reference_chromalias, name='reference_chromalias'),
 ]

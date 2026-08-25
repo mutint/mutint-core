@@ -18,4 +18,8 @@ urlpatterns = [
             upload_session.upload_chunk, name='upload_chunk'),
     re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/finalize$',
             upload_session.finalize_upload, name='upload_finalize'),
+    # Abandoning a staged drop -- a declined rename, most often -- rather than leaving it
+    # for the TTL reaper.
+    re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/cancel$',
+            upload_session.cancel_upload, name='upload_cancel'),
 ]

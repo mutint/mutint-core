@@ -268,6 +268,11 @@
                 name: reference.name,
                 fastaURL: reference.fastaURL,
                 indexURL: reference.indexURL,
+                // Present only once a sequence has been renamed, and undefined otherwise --
+                // igv treats a falsy aliasURL as "the names are already right". This object
+                // is built key by key rather than spread from `reference`, so anything the
+                // view adds has to be named here too or it is silently dropped.
+                aliasURL: reference.aliasURL,
                 tracks: [{
                     name: "Genes",
                     type: "annotation",

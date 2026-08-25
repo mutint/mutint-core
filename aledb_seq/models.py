@@ -175,8 +175,17 @@ class Mutation(models.Model):
             attributes['size'] = self.feature_length
         return str(Record(self.mutation_type, self.id, parent_ids=None, **attributes))
 
+    #: The K-12 MG1655 accession EcoCyc's gene pages are keyed on. Matched on the accession
+    #: rather than the exact string so a versioned name -- NC_000913.3, which is what RefSeq
+    #: actually distributes -- is still recognised. Exact equality was fine while a contig
+    #: name could never change; renaming an experiment's sequences makes it a live trap,
+    #: because re-establishing the reference from a RefSeq download would silently turn every
+    #: EcoCyc link off.
+    ECOCYC_ACCESSION = 'NC_000913'
+
     def is_ecocyc_gene(self) -> bool:
-        return self.reseq_reference == 'NC_000913'
+        name = self.reseq_reference or ''
+        return name == self.ECOCYC_ACCESSION or name.startswith(self.ECOCYC_ACCESSION + '.')
 
     def ecocyc_gene_urls(self) -> str:
         """
@@ -229,9 +238,21 @@ class ExperimentReference(models.Model):
     ale_experiment = models.OneToOneField("aledb_experiment.AleExperiment",
                                           on_delete=models.CASCADE,
                                           related_name="reference")
+    # Provenance for the stored artifacts -- "did the files on disk change" -- not identity.
+    # `gff3_sha256` embeds the inline ##FASTA, so it is the finest of the three: equal
+    # gff3_sha256 means identical genome *and* identical annotation.
     gff3_sha256 = models.CharField(max_length=64)
     fasta_sha256 = models.CharField(max_length=64)
-    # [{"id": "NC_000913", "length": 4629812}, ...] in the order they appear in the FASTA.
+    # Identity: the bases alone, independent of names and order. See
+    # aledb_import.reference.sequence_set_digest. Blank on a row whose stored FASTA was
+    # missing when the backfill ran -- blank means *unknown*, never "matches".
+    sequence_sha256 = models.CharField(max_length=64, blank=True, default="")
+    # [{"id": ..., "length": ..., "sha256": ..., "aliases": [...]}, ...] in the order they
+    # appear in the FASTA. `sha256` is the per-sequence digest a rename maps old names onto
+    # new ones by; `aliases` is the names this sequence used to have, and is what
+    # /mutations/reference/<id>/chromalias serves so stored BAMs and BigWigs -- which keep
+    # the names they were built with -- still resolve. Absent on both counts until a
+    # reference is re-established or renamed.
     seq_ids = models.JSONField(default=list)
     total_length = models.BigIntegerField(default=0)
     created = models.DateTimeField(auto_now_add=True)
@@ -239,12 +260,19 @@ class ExperimentReference(models.Model):
     def __str__(self):
         return "Reference for %s" % (self.ale_experiment_id,)
 
-    def matches_sequence(self, fasta_sha256):
+    def matches_sequence(self, sequence_sha256, fasta_sha256=None):
         """Whether a reference is *the same reference* as this one.
 
-        The sequence is the sole invariant. Two breseq runs against the same genome can
-        legitimately carry annotation that differs in detail -- a newer feature table, an
-        extra locus -- and rejecting those would refuse valid data. `gff3_sha256` is kept
-        for provenance, not for this comparison.
+        The bases alone are the invariant -- not their names, not their order, not their
+        annotation. Two breseq runs against the same genome can legitimately carry
+        annotation that differs in detail, and the same genome can legitimately arrive
+        under a different set of contig names; refusing either would refuse valid data.
+
+        A row whose `sequence_sha256` was never computed -- its stored FASTA was missing
+        when the backfill ran -- falls back to the old, name-sensitive comparison. That is
+        exactly this row's behaviour before the column existed, and `plan_rename` refuses
+        to rename against it, because it has no per-sequence hashes to match names on.
         """
-        return self.fasta_sha256 == fasta_sha256
+        if self.sequence_sha256:
+            return self.sequence_sha256 == sequence_sha256
+        return fasta_sha256 is not None and self.fasta_sha256 == fasta_sha256

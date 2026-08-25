@@ -32,10 +32,23 @@ UNAVAILABLE_HIDE = "hide"
 UNAVAILABLE_DISABLE = "disable"
 
 
+class ConfirmationRequired(Exception):
+    """A handler will not proceed until the user agrees to something.
+
+    Carries `payload`, a JSON-safe description the caller renders and echoes back with the
+    agreement. Deliberately not a per-file error: it describes the whole drop, and flattening
+    it into the `files` list would present a question as a failure.
+    """
+
+    def __init__(self, payload):
+        self.payload = payload
+        super().__init__(payload.get("message") or "confirmation required")
+
+
 def register_import_handler(name, label, patterns, handle,
                             priority=PRIORITY_DATA, detect=None, description="",
                             requires_reference=False, unavailable=UNAVAILABLE_HIDE,
-                            only_without_reference=False):
+                            only_without_reference=False, accepts_options=False):
     """Register an import type.
 
     name        stable slug; the value the Add page's dropdown submits
@@ -58,6 +71,11 @@ def register_import_handler(name, label, patterns, handle,
                 met: "hide" leaves it out of the dropdown, "disable" shows it greyed
                 with the reason. Hide something nobody would go looking for; disable
                 something they will arrive holding and need an answer about.
+    accepts_options
+                the handler takes a fifth `options` argument -- the caller's per-request
+                dict, e.g. an answer to a ConfirmationRequired it raised earlier. Opt-in so
+                the documented four-argument `handle` contract keeps working untouched: a
+                plugin's handler must not have to change because core grew a seam.
     only_without_reference
                 the inverse: the type stops being offered once a reference exists,
                 because establishing one is a one-time act. Nothing enforces this
@@ -77,6 +95,7 @@ def register_import_handler(name, label, patterns, handle,
         "requires_reference": requires_reference,
         "unavailable": unavailable,
         "only_without_reference": only_without_reference,
+        "accepts_options": accepts_options,
     })
 
 
@@ -153,7 +172,13 @@ def walk_files(staged_root):
     return sorted(found)
 
 
-def run_import(experiment, staged_root, user, import_type=None):
+def _call(handler, experiment, staged_root, claimed, user, options):
+    if handler.get("accepts_options"):
+        return handler["handle"](experiment, staged_root, claimed, user, options or {})
+    return handler["handle"](experiment, staged_root, claimed, user)
+
+
+def run_import(experiment, staged_root, user, import_type=None, options=None):
     """Route a staged drop through the registered handlers.
 
     ``import_type`` None means auto-detect: every handler claims what it recognises and the
@@ -161,7 +186,12 @@ def run_import(experiment, staged_root, user, import_type=None):
     it does not claim is reported as an error rather than quietly routed elsewhere -- that is
     the point of choosing explicitly.
 
-    Returns the standard summary dict, so callers render one shape either way.
+    ``options`` is passed only to handlers that declared ``accepts_options``; it carries
+    per-request answers, such as agreement to a rename the handler asked about.
+
+    Returns the standard summary dict, so callers render one shape either way. A handler may
+    instead raise ``ConfirmationRequired``, which propagates: it is a question about the whole
+    drop, not a per-file result.
     """
     paths = walk_files(staged_root)
 
@@ -182,7 +212,7 @@ def run_import(experiment, staged_root, user, import_type=None):
         if not claimed:
             continue
         unclaimed -= set(claimed)
-        summary = handler["handle"](experiment, staged_root, claimed, user)
+        summary = _call(handler, experiment, staged_root, claimed, user, options)
         file_results.extend(summary.get("files") or [])
         total_mutations += summary.get("total_mutations") or 0
 

@@ -152,30 +152,12 @@ class Command(BaseCommand):
         return references
 
     def _reannotate(self, experiment, mutations, references, dry_run):
-        annotated = changed = failed = 0
-        skipped = sum(1 for mutation in mutations if not mutation.gd_data)
+        """One line, because the loop is shared with the contig-rename path.
 
-        for group in annotation.sample_groups(experiment, mutations):
-            payloads = [(mutation, dict(mutation.gd_data))
-                        for mutation in group if mutation.gd_data]
-            if not payloads:
-                continue
-
-            records = [record for _mutation, record in payloads]
-            try:
-                annotation.annotate_records_with(records, references)
-            except Exception as error:  # noqa: BLE001 - one bad sample must not stop the rest
-                failed += len(payloads)
-                self.stderr.write("  failed to annotate a sample: %s" % error)
-                continue
-
-            for mutation, record in payloads:
-                annotated += 1
-                if not annotation.differs(mutation, record):
-                    continue
-                changed += 1
-                if not dry_run:
-                    with transaction.atomic():
-                        annotation.apply_to(mutation, record)
-
-        return annotated, changed, skipped, failed
+        It lived here first; `annotation.reannotate_experiment` is the same code, moved so a
+        rename re-annotates by exactly the rule this command does. Two copies would drift,
+        and the failure that causes -- annotation silently not applied -- is invisible.
+        """
+        return annotation.reannotate_experiment(
+            experiment, mutations=mutations, references=references, dry_run=dry_run,
+            on_error=self.stderr.write)

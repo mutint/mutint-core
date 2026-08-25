@@ -291,6 +291,47 @@ def _render_sequence_only_gff3(sequences):
     return "\n".join(lines) + "\n"
 
 
+def sequence_digest(sequence):
+    """sha256 of one sequence's bases alone -- no name, no wrapping, no case.
+
+    This is what makes a genome a genome. `render_fasta` wraps the bases in `>seq_id`
+    headers, so hashing *that* made two files describing the identical genome under
+    different contig names hash differently and be rejected as different genomes.
+
+    `.upper()` here rather than trusting the caller: the three loaders that build
+    `sequences` all uppercase already, but an identity function must not depend on an
+    invariant maintained somewhere else.
+    """
+    return hashlib.sha256(sequence.upper().encode("utf-8")).hexdigest()
+
+
+def sequence_set_digest(sequences):
+    """Name- and order-independent identity for ``[(seq_id, sequence), ...]``.
+
+    A sorted *list* of the per-sequence digests, not a set: two identical contigs are two
+    contigs, and a set would make a genome carrying one of them the same reference as a
+    genome carrying both.
+
+    Sorting also settles an asymmetry that predates this: the GenBank/GFF3 path sorts
+    contigs by seq_id (`_sequences_of`) while the bare-FASTA path keeps file order, so the
+    same genome could hash two ways depending on which format it arrived in.
+    """
+    joined = "".join(sorted(sequence_digest(sequence) for _seq_id, sequence in sequences))
+    return hashlib.sha256(joined.encode("ascii")).hexdigest()
+
+
+def sequence_entries(sequences):
+    """The `ExperimentReference.seq_ids` value for `sequences`.
+
+    One place, because it is written from two paths in `reference_store` and a rename
+    rewrites it a third way -- and the per-sequence hash it carries is what a rename maps
+    old names onto new ones by.
+    """
+    return [{"id": seq_id, "length": len(sequence),
+             "sha256": sequence_digest(sequence)}
+            for seq_id, sequence in sequences]
+
+
 def render_fasta(sequences):
     """Canonical FASTA text: uppercase, fixed line length, LF endings.
 

@@ -128,3 +128,69 @@ class AlignmentServingTestCase(TestCase):
         """The route takes a pk, so a traversal attempt cannot even match the URL."""
         response = self.client.get("/mutations/alignments/..%2F..%2Fetc%2Fpasswd/bam")
         self.assertEqual(response.status_code, 404)
+
+
+class ChromAliasTestCase(TestCase):
+    """The alias table that lets a renamed contig keep its stored alignments.
+
+    Renaming an experiment's sequences renames the reference and the mutations but leaves
+    every stored BAM and coverage BigWig carrying the names it was built with. igv resolves
+    the difference from this table -- verified against a real BAM through igv's own reader,
+    where the renamed reference drew pixel-for-pixel what the un-renamed one did.
+    """
+
+    def test_an_experiment_that_was_never_renamed_gets_no_table(self):
+        from aledb_seq.views.alignments import chromalias_text
+
+        self.assertEqual("", chromalias_text([{"id": "REL606", "length": 4629812}]))
+
+    def test_the_current_name_comes_first(self):
+        """igv takes as canonical whichever field is in the genome's chromosomeNames and
+        falls back to field 0, so the order is not cosmetic."""
+        from aledb_seq.views.alignments import chromalias_text
+
+        text = chromalias_text(
+            [{"id": "NC_012967.1", "length": 4629812, "aliases": ["REL606"]}])
+
+        self.assertEqual("#name\tprevious\nNC_012967.1\tREL606\n", text)
+
+    def test_every_previous_name_gets_a_row(self):
+        """A sequence renamed twice must not strand the first name: a BAM stored before
+        either rename still carries it."""
+        from aledb_seq.views.alignments import chromalias_text
+
+        text = chromalias_text([{"id": "c", "length": 10, "aliases": ["a", "b"]}])
+
+        self.assertEqual(["#name\tprevious", "c\ta", "c\tb"], text.strip().split("\n"))
+
+    def test_only_renamed_sequences_appear(self):
+        from aledb_seq.views.alignments import chromalias_text
+
+        text = chromalias_text([{"id": "plasmid", "length": 5},
+                                {"id": "chr", "length": 10, "aliases": ["old"]}])
+
+        self.assertEqual(["#name\tprevious", "chr\told"], text.strip().split("\n"))
+
+
+class EcocycAccessionTestCase(TestCase):
+    """Renaming a contig must not silently switch EcoCyc links off.
+
+    `is_ecocyc_gene` compared `reseq_reference` to 'NC_000913' exactly, which was safe only
+    while a contig name could never change. Re-establishing a reference from a RefSeq
+    download names it NC_000913.3, and every gene link would have gone quiet.
+    """
+
+    def _mutation(self, name):
+        from aledb_seq.models import Mutation
+
+        return Mutation(reseq_reference=name)
+
+    def test_the_bare_accession_is_ecocyc(self):
+        self.assertTrue(self._mutation("NC_000913").is_ecocyc_gene())
+
+    def test_a_versioned_accession_is_ecocyc(self):
+        self.assertTrue(self._mutation("NC_000913.3").is_ecocyc_gene())
+
+    def test_another_genome_is_not(self):
+        for name in ("REL606", "NC_012967.1", "", None, "NC_0009134"):
+            self.assertFalse(self._mutation(name).is_ecocyc_gene(), name)

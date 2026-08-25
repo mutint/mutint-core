@@ -17,6 +17,8 @@ which `gd_import` uses as part of the mutation dedup key.
 import logging
 import os
 
+from django.db import transaction
+
 from aledb_import import reference_store
 from aledb_import.annotate.annotator import ANNOTATION_KEYS, annotate_mutations
 from aledb_import.annotate.display import (
@@ -27,6 +29,10 @@ from aledb_import.annotate.loader import UnsupportedReferenceFormat, load_refere
 from aledb_import.gene_annotation import get_annotated_gene_list
 
 logger = logging.getLogger(__name__)
+
+
+class ReferenceUnavailable(Exception):
+    """The experiment has no reference that can be read back and annotated against."""
 
 # Promoted to real columns because they are filtered, counted or sorted on.
 # They are also left in the `annotation` blob, so that blob stays self-describing
@@ -197,3 +203,60 @@ def _as_int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def reannotate_experiment(experiment, mutations=None, references=None, dry_run=False,
+                          on_error=None):
+    """Re-derive annotation for an experiment against its stored reference.
+
+    Returns `(annotated, changed, skipped, failed)`.
+
+    Extracted from `./aledb reannotate` so the command and the contig-rename path share one
+    rule rather than growing two that can disagree. A rename in particular *must* re-annotate:
+    `annotate_records_with` filters records on `record['seq_id']`, so a mutation still naming
+    the old contig matches nothing and is silently left unannotated.
+
+    `on_error` receives a message per sample that fails; one bad sample never stops the rest.
+    """
+    from aledb_seq.models import Mutation
+
+    if mutations is None:
+        mutations = list(Mutation.objects.filter(ale_experiment=experiment))
+    if references is None:
+        references = reference_sequences_for(experiment)
+    if references is None:
+        raise ReferenceUnavailable(
+            "Experiment %s has no readable reference to annotate against."
+            % (experiment.ale_id,))
+
+    annotated = changed = failed = 0
+    skipped = sum(1 for mutation in mutations if not mutation.gd_data)
+
+    for group in sample_groups(experiment, mutations):
+        payloads = [(mutation, dict(mutation.gd_data))
+                    for mutation in group if mutation.gd_data]
+        if not payloads:
+            continue
+
+        records = [record for _mutation, record in payloads]
+        try:
+            annotate_records_with(records, references)
+        except Exception as error:  # noqa: BLE001 - one bad sample must not stop the rest
+            failed += len(payloads)
+            if on_error is not None:
+                on_error("  failed to annotate a sample: %s" % error)
+            else:
+                logger.warning("failed to annotate a sample of experiment %s: %s",
+                               experiment.ale_id, error)
+            continue
+
+        for mutation, record in payloads:
+            annotated += 1
+            if not differs(mutation, record):
+                continue
+            changed += 1
+            if not dry_run:
+                with transaction.atomic():
+                    apply_to(mutation, record)
+
+    return annotated, changed, skipped, failed
