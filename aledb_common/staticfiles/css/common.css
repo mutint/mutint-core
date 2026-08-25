@@ -136,6 +136,14 @@
     height: 100%;
 }
 
+/* Sidebar entries are single lines. Without this a long experiment name wraps to two or
+   three, which is what the cap above was already trying to prevent -- `overflow-x: hidden`
+   can only trim what refuses to wrap. Only inside .sidebar: nav links elsewhere on the page
+   are laid out by Bootstrap and are none of this rule's business. */
+.sidebar .nav > li > a {
+    white-space: nowrap;
+}
+
 .nav > li > a:focus, .nav > li > a:hover {
     text-decoration: none;
     background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
@@ -171,11 +179,19 @@
     overflow-y: auto;
     /* Open, it is `width: max-content` (set in base.html, and by toggle_sidebar) so it is
        as wide as its widest entry plus the 15px `.nav > li > a` padding either side, and no
-       wider. The cap is what the fixed width used to be: an experiment whose name runs long
-       must not push the page over, and `overflow-x: hidden` below trims it instead.
-       Collapsed, the inline width is cleared and this 0 is what remains. */
+       wider. The cap stops an experiment whose name runs long from pushing the page over;
+       `overflow-x: hidden` below trims it, and the `nowrap` further down is what makes that
+       a trim rather than a wrap. Collapsed, the inline width is cleared and this 0 is what
+       remains.
+
+       A pixel cap, not `17vw`. Viewport units made the sidebar a fraction of the window, so
+       narrowing the browser squeezed the panel and wrapped every entry in it -- measured at
+       255px wide with 60px-tall links on a 1500px window, and 153px wide with 100px-tall
+       links at 900px. The sidebar's job is to be as wide as its own contents; how wide the
+       window is has nothing to do with it. 260px is roughly what 17vw came to on a normal
+       screen, so this is the width it always had, minus the shrinking. */
     width: 0;
-    max-width: 17vw;
+    max-width: 260px;
     position: relative;
     z-index: 1;
     top: 0;
