@@ -15,6 +15,7 @@ import hashlib
 import io
 import os
 
+from aledb_import import sniff
 from aledb_import.annotate import gff3 as annotate_gff3
 from aledb_import.annotate import loader as annotate_loader
 
@@ -198,9 +199,32 @@ class ReferenceFormatError(Exception):
     """The uploaded reference could not be read as GenBank, GFF3, or FASTA."""
 
 
+_KIND_TO_FORMAT = {
+    sniff.KIND_GENBANK: FORMAT_GENBANK,
+    sniff.KIND_GFF3: FORMAT_GFF3,
+    sniff.KIND_FASTA: FORMAT_FASTA,
+}
+
+
 def detect_format(path, original_name=None):
-    """Identify the reference format from its name, falling back to a content sniff."""
-    name = (original_name or os.path.basename(path)).lower()
+    """Identify the reference format from its name, falling back to a content sniff.
+
+    A GenomeDiff is refused by name here rather than left to fail in a parser. It is the
+    one wrong file people actually drop on this type -- it is the other thing an experiment
+    is made of -- and "No GenBank records found" says nothing about what to do instead.
+    Content decides that case even when the extension disagrees, because a `.gd` saved as
+    `.gbk` is the same mistake with a worse error.
+    """
+    display_name = original_name or os.path.basename(path)
+    kind = sniff.kind_of_file(path)
+    if kind == sniff.KIND_GENOMEDIFF:
+        raise ReferenceFormatError(
+            "%s is a GenomeDiff (.gd) file, not a reference genome. A .gd holds mutations "
+            "called against a reference and carries no sequence of its own -- import it "
+            "with the 'GenomeDiff mutations' type, once the experiment has a reference."
+            % (display_name,))
+
+    name = display_name.lower()
     if name.endswith((".gbk", ".gb", ".genbank", ".gbff")):
         return FORMAT_GENBANK
     if name.endswith((".gff", ".gff3")):
@@ -208,20 +232,11 @@ def detect_format(path, original_name=None):
     if name.endswith((".fa", ".fasta", ".fna", ".fas")):
         return FORMAT_FASTA
 
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith(">"):
-                return FORMAT_FASTA
-            if stripped.startswith("##gff-version") or stripped.startswith("##sequence-region"):
-                return FORMAT_GFF3
-            if stripped.startswith("LOCUS"):
-                return FORMAT_GENBANK
-            break
+    if kind in _KIND_TO_FORMAT:
+        return _KIND_TO_FORMAT[kind]
     raise ReferenceFormatError(
-        "%s is not recognisable as GenBank, GFF3, or FASTA" % (original_name or path,))
+        "%s is not recognisable as GenBank, GFF3, or FASTA: its first line begins none of "
+        "them (a GenBank starts LOCUS, a GFF3 ##gff-version, a FASTA >)." % (display_name,))
 
 
 def normalize_reference(path, original_name=None):

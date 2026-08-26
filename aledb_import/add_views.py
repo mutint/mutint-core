@@ -55,6 +55,11 @@ def add_view(request):
         # classifies a drop with cannot disagree. `/import/types/` stays unscoped -- it has
         # no experiment to scope by, and the handlers enforce their requirements anyway.
         "import_types": get_import_types_for(has_reference),
+        # The unscoped registry as well, for one job only: naming the type a stray file in
+        # the drop belongs to. That answer has to be able to name a type this experiment
+        # cannot use yet -- "these look like GenomeDiff mutations, which needs a reference
+        # first" is the whole point -- and the scoped list by construction cannot.
+        "all_import_types": get_import_types(),
         "has_reference": has_reference,
     })
     return render(request, "import/add.html", context)

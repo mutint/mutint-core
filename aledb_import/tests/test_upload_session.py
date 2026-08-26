@@ -223,6 +223,14 @@ class UploadSessionEndpointTestCase(TestCase):
                          "staging directory should be removed on finalize")
         self.assertEqual(UploadSession.objects.get(pk=upload_id).state, STATE_FINALIZED)
 
+    def test_finalize_reports_whether_a_reference_now_exists(self):
+        """The Add page reloads on this, so its menu stops offering the pre-reference
+        choices. A breseq folder brings its own reference, so it flips the flag."""
+        upload_id = self._upload_sample_folder()
+        response = self.client.post("/import/uploads/%s/finalize" % upload_id, {})
+
+        self.assertTrue(response.json()["has_reference"])
+
     def test_a_finalized_session_cannot_be_reused(self):
         upload_id = self._upload_sample_folder()
         self.client.post("/import/uploads/%s/finalize" % upload_id, {})

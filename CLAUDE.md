@@ -61,7 +61,7 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 584 run, 0 failures** standalone; **630** in an assembled project, where the
+**Baseline: 642 run, 0 failures** standalone; **688** in an assembled project, where the
 plugins' own tests join them. The suite is green — treat *any* failure as yours.
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
@@ -466,26 +466,59 @@ data predates the plugin -- or whose filters changed since -- had no way to catc
 
 ### Which import types the Add page offers
 
-Three rules, because the reasons differ. All of them are declared on the handler and applied
-by `get_import_types_for(has_reference)`, never in the template, so the dropdown and the JSON
+Two rules, because the reasons differ. Both are declared on the handler and applied by
+`get_import_types_for(has_reference)`, never in the template, so the dropdown and the JSON
 the page classifies a drop with cannot disagree:
 
 - `only_without_reference` -- `reference` stops being offered once the experiment has one.
   Establishing a reference is a one-time act; replacing the *annotation* is
   `replace_annotation`, and swapping in a different genome is deliberately shell-only.
-- `requires_reference` with `unavailable="hide"` -- `replace_annotation` is absent until
-  there is a genome to hold fixed.
-- `requires_reference` with `unavailable="disable"` -- `genomediff` is shown greyed with the
-  reason. Hide what nobody would go looking for; disable what someone will arrive holding
-  and needs an answer about.
+- `requires_reference` -- `replace_annotation` and `genomediff` are **absent** until there is
+  a genome. There is no greyed-out presentation and no `unavailable` parameter; a dropdown
+  entry you can see and cannot pick is a dead end. The page's own banner carries the answer
+  instead, and names the bare-`.gd` case explicitly, so the short menu is explained whether
+  or not an entry is there to point at.
 
 `breseq_folder` is never blocked: it brings its own reference. Auto-detect is unaffected --
 a reference dropped alongside data still runs first on `priority`, which is how a first drop
 establishes one. `/import/types/` stays unscoped; it has no experiment to scope by.
 
+Because both the menu and the banner are rendered from `has_reference` at page load, a drop
+that establishes one leaves the page stale. `finalize` therefore returns `has_reference`, and
+the page **reloads** when it flips rather than patching the menu and the banner in the client,
+where the two could drift from what the server would render. The import summary is the only
+record that the drop happened, so it rides across the reload in `sessionStorage` under
+`aledb-add-summary-<experiment>` and is re-rendered on the way back.
+
 `replace_annotation` claims only GenBank and GFF3, not FASTA. A FASTA is sequence with no
 features, so there is nothing in one to install -- it used to be accepted and then rejected
 on the sequence check, which named the wrong reason.
+
+### Telling someone they picked the wrong type
+
+The one mistake worth engineering for is a `.gd` chosen as a reference genome, or the reverse:
+those are the two things an experiment is made of, and each parser's own words for the other
+("No GenBank records found in: ...") name what failed rather than what to do. Three layers,
+each catching what the one before it cannot:
+
+- **Before anything uploads**, `renderList()` in `import/add.html` groups the files the chosen
+  type declined by what they *do* look like, and names the type they belong to -- including a
+  type this experiment cannot use yet ("...which needs this experiment to have a reference
+  genome first"), which is why the page embeds the **unscoped** registry as
+  `all_import_types` alongside the scoped `import_types` that fills the dropdown.
+- **Server-side, by pattern**, `import_registry.identify()` turns `run_import`'s "not
+  recognised as Reference genome" into "...it looks like GenomeDiff mutations, so import it
+  with that type". Patterns only, never a handler's `detect`: the job is to name a likely
+  alternative, not to re-decide what the file is.
+- **Server-side, by content**, `aledb_import/sniff.py` reads the first non-blank line, which
+  is where all four formats declare themselves. This is the layer that survives a wrong
+  extension: a `.gd` saved as `.gbk` passes every pattern check above and is caught by
+  `reference.detect_format`, and a GenBank named `.gd` by `gd_import._parse_document`.
+
+The sniff is deliberately narrow. It overrides the extension only to *refuse*, never to route:
+`detect_format` still trusts `.gff3` over content, and auto-detect still routes on `patterns`.
+Only a positively identified other format is refused, so anything whose first line declares
+nothing is still the parser's to judge.
 
 ### The genome browser
 
@@ -730,6 +763,10 @@ against it. Core registers `reference` (10), `breseq_folder` (50) and `genomedif
 `aledb_import/handlers.py`. A handler whose shape is not a suffix match supplies its own
 `detect` — breseq folders are directory-shaped, and both the reference and genomediff handlers
 exclude files that live inside one.
+
+`patterns` does more than route. `identify()` uses it to name the type a rejected file belongs
+to, and the Add page serialises it to name the type a file in the drop belongs to before
+anything uploads — so a plugin gets both of those by registering, with no edit to core.
 
 ### Pluggable App Slots
 

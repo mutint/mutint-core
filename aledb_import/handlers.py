@@ -317,9 +317,9 @@ def register_core_import_handlers():
         priority=PRIORITY_DATA + 10,
         detect=detect_genomediff,
         handle=handle_genomediff,
-        # Shown but greyed out until there is a reference, rather than hidden: a bare
-        # .gd is a thing people will arrive holding, and the useful answer is "get a
-        # reference in first", not a dropdown that silently lacks the entry.
+        # Absent until there is a reference. A bare .gd is a thing people will arrive
+        # holding, so the answer they need -- get a reference in first -- is the page's
+        # banner, which says exactly that and names .gd as the case it does not cover.
+        # An entry you can see and cannot pick is a worse way to say the same thing.
         requires_reference=True,
-        unavailable="disable",
         description="Mutations only. Needs the experiment to already have a reference.")

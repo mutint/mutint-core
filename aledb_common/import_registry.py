@@ -28,10 +28,6 @@ PRIORITY_REFERENCE = 10
 PRIORITY_DATA = 50
 
 
-UNAVAILABLE_HIDE = "hide"
-UNAVAILABLE_DISABLE = "disable"
-
-
 class ConfirmationRequired(Exception):
     """A handler will not proceed until the user agrees to something.
 
@@ -47,7 +43,7 @@ class ConfirmationRequired(Exception):
 
 def register_import_handler(name, label, patterns, handle,
                             priority=PRIORITY_DATA, detect=None, description="",
-                            requires_reference=False, unavailable=UNAVAILABLE_HIDE,
+                            requires_reference=False,
                             only_without_reference=False, accepts_options=False):
     """Register an import type.
 
@@ -64,13 +60,9 @@ def register_import_handler(name, label, patterns, handle,
                 whose shape is not expressible as suffixes (breseq folders need to
                 see a whole directory). Defaults to suffix matching on `patterns`.
     requires_reference
-                the type cannot run until the experiment has a reference genome.
-                Serialised to the client so the Add page can act on it; the handler
-                still enforces it server-side either way.
-    unavailable how the Add page presents the type when requires_reference is not
-                met: "hide" leaves it out of the dropdown, "disable" shows it greyed
-                with the reason. Hide something nobody would go looking for; disable
-                something they will arrive holding and need an answer about.
+                the type cannot run until the experiment has a reference genome, and
+                is left out of the Add page's dropdown until it does. The handler still
+                enforces it server-side either way.
     accepts_options
                 the handler takes a fifth `options` argument -- the caller's per-request
                 dict, e.g. an answer to a ConfirmationRequired it raised earlier. Opt-in so
@@ -93,7 +85,6 @@ def register_import_handler(name, label, patterns, handle,
         "detect": detect,
         "description": description,
         "requires_reference": requires_reference,
-        "unavailable": unavailable,
         "only_without_reference": only_without_reference,
         "accepts_options": accepts_options,
     })
@@ -112,24 +103,21 @@ def get_import_handler(name):
 
 
 def get_import_types_for(has_reference):
-    """The dropdown's contents for one experiment.
+    """The dropdown's contents for one experiment: only the types that can run now.
 
-    Each entry gains `disabled` and `unavailable_reason`; entries that should not
-    appear at all are dropped. Computed here rather than in the template so the
+    A type that cannot run yet is left out rather than shown greyed. A dropdown entry
+    you can see but not choose is a dead end -- the page's own banner is where the
+    answer ("get a reference in first") belongs, and it says so whether or not the
+    entry is there to point at. Computed here rather than in the template so the
     dropdown and the JSON the page classifies a drop with cannot disagree.
     """
     offered = []
     for entry in get_import_types():
         if entry["only_without_reference"] and has_reference:
             continue
-        blocked = entry["requires_reference"] and not has_reference
-        if blocked and entry["unavailable"] == UNAVAILABLE_HIDE:
+        if entry["requires_reference"] and not has_reference:
             continue
-        entry = dict(entry)
-        entry["disabled"] = blocked
-        entry["unavailable_reason"] = (
-            "needs a reference genome first" if blocked else "")
-        offered.append(entry)
+        offered.append(dict(entry))
     return offered
 
 
@@ -141,9 +129,28 @@ def get_import_types():
         "patterns": h["patterns"],
         "description": h["description"],
         "requires_reference": h["requires_reference"],
-        "unavailable": h["unavailable"],
         "only_without_reference": h["only_without_reference"],
     } for h in get_import_handlers()]
+
+
+def identify(path, exclude=None):
+    """The registered type whose patterns claim `path`, or None if none do.
+
+    Turns "not recognised as Reference genome" into a sentence that says what to do about
+    it. The answer is in the registry either way, so a plugin's type names itself here with
+    no edit to this module -- and a type that has an entry in the dropdown for exactly this
+    file is a better thing to point at than a list of extensions.
+
+    Patterns only, never a handler's own `detect`: this runs on a file the chosen handler
+    declined, where the point is to name a likely alternative rather than to settle what the
+    file is. `run_import` still routes on `claim`.
+    """
+    for handler in get_import_handlers():
+        if exclude is not None and handler["name"] == exclude:
+            continue
+        if matches_patterns(path, handler["patterns"]):
+            return handler
+    return None
 
 
 def matches_patterns(path, patterns):
@@ -176,6 +183,22 @@ def _call(handler, experiment, staged_root, claimed, user, options):
     if handler.get("accepts_options"):
         return handler["handle"](experiment, staged_root, claimed, user, options or {})
     return handler["handle"](experiment, staged_root, claimed, user)
+
+
+def _unclaimed_reason(path, import_type):
+    """Why a staged file was not imported, and where it should have gone instead."""
+    if not import_type:
+        # Auto-detect: every handler already had its chance, so there is no other type to
+        # point at. Reached only when a handler's own `detect` declined what its patterns
+        # would have matched.
+        return "not recognised by any import type"
+
+    chosen = get_import_handler(import_type)
+    elsewhere = identify(path, exclude=import_type)
+    if elsewhere is not None:
+        return ("not recognised as %s -- it looks like %s, so import it with that type"
+                % (chosen["label"], elsewhere["label"]))
+    return "not recognised as %s" % (chosen["label"],)
 
 
 def run_import(experiment, staged_root, user, import_type=None, options=None):
@@ -220,8 +243,7 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
         file_results.append({
             "file": path,
             "mutations": 0,
-            "error": ("not recognised as %s" % get_import_handler(import_type)["label"]
-                      if import_type else "not recognised by any import type"),
+            "error": _unclaimed_reason(path, import_type),
         })
 
     return {

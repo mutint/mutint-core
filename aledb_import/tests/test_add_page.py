@@ -40,15 +40,18 @@ class AddPageTestCase(TestCase):
         self.assertNotIn('id="gd-person"', html)
         self.assertNotIn('id="ref-person"', html)
 
-    def test_dropdown_lists_every_registered_type(self):
+    def test_dropdown_lists_the_registered_types_this_experiment_can_use(self):
         response = self.client.get(
             "/import/add/", {"ale_experiment_id": self.experiment.ale_id})
         html = response.content.decode("utf-8")
 
         # No Auto-detect: the type is chosen, never guessed.
         self.assertNotIn("Auto-detect", html)
-        for label in ("Reference genome", "breseq data folders", "GenomeDiff mutations"):
-            self.assertIn(label, html)
+        offered = html.split('id="add-type"')[1].split("</select>")[0]
+        for label in ("Reference genome", "breseq data folders"):
+            self.assertIn(label, offered)
+        # The two that need a reference are absent until there is one -- see
+        # ImportTypesOfferedTestCase, which covers both sides of that.
 
     def test_a_plugin_type_reaches_the_dropdown(self):
         from aledb_common import import_registry
@@ -60,9 +63,11 @@ class AddPageTestCase(TestCase):
             slice(None),
             [h for h in import_registry._import_handlers if h["name"] != "page_test_type"]))
 
-        response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id})
-        self.assertIn("Plugin readings (.tsv)", response.content.decode("utf-8"))
+        html = self.client.get(
+            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+        ).content.decode("utf-8")
+        self.assertIn("Plugin readings (.tsv)",
+                      html.split('id="add-type"')[1].split("</select>")[0])
 
     def test_types_endpoint_returns_the_registry(self):
         body = self.client.get("/import/types/").json()
@@ -77,9 +82,12 @@ class AddPageTestCase(TestCase):
         """It cannot do anything before there is a sequence to hold fixed, so offering it
         would just be a way to get an error message."""
         def dropdown():
-            return self.client.get(
+            html = self.client.get(
                 "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
             ).content.decode("utf-8")
+            # The <select> alone: the page also embeds the unscoped registry for naming
+            # stray files, so every label appears somewhere regardless.
+            return html.split('id="add-type"')[1].split("</select>")[0]
 
         self.assertNotIn("Replace annotation", dropdown())
 
@@ -201,54 +209,56 @@ class ImportTypesOfferedTestCase(TestCase):
             "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
         ).content.decode("utf-8")
 
+    def _dropdown(self):
+        """Just the <select>. The page also embeds the *unscoped* registry, for naming the
+        type a stray file belongs to, so every label appears somewhere in the HTML whether
+        or not it is offered -- searching the whole page would pass either way."""
+        return self._html().split('id="add-type"')[1].split("</select>")[0]
+
     # --- with no reference yet -----------------------------------------------
 
     def test_reference_is_offered(self):
-        self.assertIn("Reference genome", self._html())
+        self.assertIn("Reference genome", self._dropdown())
 
     def test_replace_annotation_is_absent(self):
-        self.assertNotIn("Replace annotation", self._html())
+        self.assertNotIn("Replace annotation", self._dropdown())
 
-    def test_genomediff_is_shown_but_disabled(self):
-        html = self._html()
-        self.assertIn("GenomeDiff mutations", html)
-        self.assertIn("needs a reference genome first", html)
-        offered = html.split('id="add-type"')[1].split("</select>")[0]
-        gd = [line for line in offered.splitlines() if 'value="genomediff"' in line]
-        self.assertTrue(gd and "disabled" in gd[0], gd)
+    def test_genomediff_is_absent(self):
+        """Not offered greyed out: an entry you can see and cannot pick is a dead end."""
+        self.assertNotIn('value="genomediff"', self._dropdown())
+
+    def test_the_page_says_why_the_menu_is_short(self):
+        """The banner is where the answer lives once the entry itself is gone."""
+        self.assertIn("not offered below", self._html())
 
     def test_the_page_says_a_reference_is_needed(self):
         self.assertIn("no reference genome yet", self._html())
 
     def test_breseq_folders_stay_available(self):
         """A breseq folder carries its own reference, so it is never blocked."""
-        html = self._html()
-        folder = [line for line in html.splitlines() if 'value="breseq_folder"' in line]
-        self.assertTrue(folder and "disabled" not in folder[0], folder)
+        self.assertIn('value="breseq_folder"', self._dropdown())
 
     # --- once a reference exists ---------------------------------------------
 
     def test_reference_stops_being_offered(self):
         self._establish_reference()
-        self.assertNotIn("Reference genome", self._html())
+        self.assertNotIn("Reference genome", self._dropdown())
 
     def test_replace_annotation_appears(self):
         self._establish_reference()
-        self.assertIn("Replace annotation", self._html())
+        self.assertIn("Replace annotation", self._dropdown())
 
     def test_replace_annotation_names_the_formats_it_takes(self):
         """The label names renaming too: this type is the only route to it, and a FASTA is
         accepted for exactly that reason even though it installs no annotation."""
         self._establish_reference()
-        html = self._html()
-        self.assertIn("Replace annotation or rename contigs (GenBank / GFF3 / FASTA)", html)
+        self.assertIn("Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
+                      self._dropdown())
 
     def test_genomediff_becomes_selectable(self):
         self._establish_reference()
-        html = self._html()
-        gd = [line for line in html.splitlines() if 'value="genomediff"' in line]
-        self.assertTrue(gd and "disabled" not in gd[0], gd)
-        self.assertNotIn("needs a reference genome first", html)
+        self.assertIn('value="genomediff"', self._dropdown())
+        self.assertNotIn("no reference genome yet", self._html())
 
     def test_the_unscoped_types_endpoint_stays_unfiltered(self):
         """It has no experiment to scope by, and the handlers enforce the rules anyway."""

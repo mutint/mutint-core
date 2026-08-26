@@ -122,6 +122,48 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertIn("not recognised as", results["sample.gd"]["error"])
         self.assertEqual(ResequencingExperiment.objects.count(), 0)
 
+    def test_the_rejection_names_the_type_the_file_belongs_to(self):
+        """"Not recognised" alone leaves someone to work out which of four types to pick;
+        the registry's own patterns already know, plugins included."""
+        self._write("sample.gd", breseq_fixture.GD_TEXT)
+
+        summary = self._run(import_type="reference")
+        error = summary["files"][0]["error"]
+
+        self.assertIn("not recognised as Reference genome", error)
+        self.assertIn("GenomeDiff mutations", error)
+
+    def test_a_file_no_type_claims_is_still_just_unrecognised(self):
+        """There is nothing to point at, and inventing a suggestion would be worse."""
+        self._write("notes.txt", "just notes\n")
+
+        error = self._run(import_type="reference")["files"][0]["error"]
+
+        self.assertIn("not recognised as Reference genome", error)
+        self.assertNotIn("looks like", error)
+
+    def test_a_genomediff_dropped_as_a_reference_says_what_it_is(self):
+        """Past the suffix check -- a .gd renamed .gbk -- the content has to answer, or
+        the user gets Biopython's "No GenBank records found" and no way forward."""
+        self._write("REL606.gbk", breseq_fixture.GD_TEXT)
+
+        error = self._run(import_type="reference")["files"][0]["error"]
+
+        self.assertIn("GenomeDiff", error)
+        self.assertIn("not a reference genome", error)
+
+    def test_a_reference_dropped_as_a_genomediff_says_what_it_is(self):
+        """The mirror image: a GenBank named .gd reaches the GenomeDiff parser."""
+        self._write("ref.fasta", breseq_fixture.fasta_text(SEQUENCES))
+        self._run(import_type="reference")
+        os.remove(os.path.join(self.drop, "ref.fasta"))
+
+        write_genbank(os.path.join(self.drop, "REL606.gd"))
+        error = self._run(import_type="genomediff")["files"][0]["error"]
+
+        self.assertIn("GenBank", error)
+        self.assertIn("Reference genome", error)
+
     def test_unknown_type_is_an_error(self):
         with self.assertRaises(ValueError):
             self._run(import_type="no_such_type")

@@ -29,6 +29,7 @@ from aledb_common.import_registry import (
 )
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_edit_project
+from aledb_import import reference_store
 from aledb_import.models import (
     STATE_FAILED,
     STATE_FINALIZED,
@@ -253,6 +254,11 @@ def finalize_upload(request, upload_id):
     session.state = STATE_FINALIZED
     session.save(update_fields=["state", "updated"])
     summary["upload_id"] = str(session.id)
+    # The Add page's dropdown and its banner are both scoped by this, and a drop that
+    # establishes a reference -- a genome on its own, or a breseq folder bringing its own --
+    # changes it underneath a page already rendered. Reporting it is what lets the page know
+    # to go and get itself re-rendered rather than keep offering the pre-reference choices.
+    summary["has_reference"] = reference_store.has_reference(session.ale_experiment)
     return JsonResponse(summary)
 
 

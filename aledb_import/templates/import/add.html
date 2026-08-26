@@ -17,22 +17,22 @@
         <div class="alert alert-warning">
             This experiment has no reference genome yet. Drop one
             (GenBank, GFF3 or FASTA) &mdash; on its own, or alongside your data in the same drop.
-            A breseq folder brings its own; bare <code>.gd</code> files do not.
+            A breseq folder brings its own; bare <code>.gd</code> files do not. Until there is
+            one, the types that need a reference are not offered below.
         </div>
     {% endif %}
 
     <form id="add-form">
         {% csrf_token %}
         <input type="hidden" id="add-experiment-id" value="{{ experiment.ale_id }}">
+        <input type="hidden" id="add-had-reference" value="{{ has_reference|yesno:"1,0" }}">
 
         <div class="form-group">
             <label for="add-type">Import type</label>
             <select class="form-control" id="add-type">
                 <option value="" disabled selected>Choose what you are importing&hellip;</option>
                 {% for type in import_types %}
-                    <option value="{{ type.name }}"{% if type.disabled %} disabled{% endif %}>
-                        {{ type.label }}{% if type.disabled %} &mdash; {{ type.unavailable_reason }}{% endif %}
-                    </option>
+                    <option value="{{ type.name }}">{{ type.label }}</option>
                 {% endfor %}
             </select>
             <small class="help-block" id="add-type-help">
@@ -40,8 +40,8 @@
                 reported rather than routed elsewhere, so nothing is imported as something
                 it is not.
                 {% if not has_reference %}
-                    This experiment has no reference genome yet. Drop one first, or drop a
-                    breseq result folder, which brings its own.
+                    Importing mutations on their own (a bare <code>.gd</code>) becomes
+                    available once this experiment has a reference genome.
                 {% endif %}
             </small>
         </div>
@@ -76,6 +76,7 @@
 </div>
 
 {{ import_types|json_script:"import-types-data" }}
+{{ all_import_types|json_script:"all-import-types-data" }}
 
 <script type="text/javascript">
 (function () {
@@ -86,7 +87,15 @@
     // and its answer is the one that counts.
     var IMPORT_TYPES = JSON.parse(
         document.getElementById("import-types-data").textContent);
+    // Every registered type, offered here or not, in priority order. Used only to say what
+    // a file the chosen type declined actually is -- including when the answer is a type
+    // this experiment cannot use yet, which is the case worth explaining.
+    var ALL_TYPES = JSON.parse(
+        document.getElementById("all-import-types-data").textContent);
     var EXPERIMENT_ID = document.getElementById("add-experiment-id").value;
+    var HAD_REFERENCE = document.getElementById("add-had-reference").value === "1";
+    // Where the summary waits out the reload below. Per experiment, and cleared on read.
+    var SUMMARY_KEY = "aledb-add-summary-" + EXPERIMENT_ID;
     var CHUNK_BYTES = 8 * 1024 * 1024;
     var MAX_CHUNK_RETRIES = 3;
 
@@ -122,6 +131,39 @@
         return null;
     }
 
+    // Priority order, so a GenBank reads as "Reference genome" rather than as the
+    // replace-annotation type that claims the same suffixes one step behind it.
+    function looksLike(path) {
+        for (var i = 0; i < ALL_TYPES.length; i++) {
+            if (matches(path, ALL_TYPES[i].patterns)) { return ALL_TYPES[i]; }
+        }
+        return null;
+    }
+
+    function isOffered(name) {
+        for (var i = 0; i < IMPORT_TYPES.length; i++) {
+            if (IMPORT_TYPES[i].name === name) { return true; }
+        }
+        return false;
+    }
+
+    function strayMessage(type, count) {
+        var files = count + (count === 1 ? " file" : " files");
+        if (!type) {
+            return files + " in the selection match no import type, and will be skipped.";
+        }
+        if (isOffered(type.name)) {
+            return files + " look like " + type.label
+                 + " — choose that type instead, or drop them on their own.";
+        }
+        if (type.requires_reference) {
+            return files + " look like " + type.label
+                 + ", which needs this experiment to have a reference genome first.";
+        }
+        return files + " look like " + type.label
+             + ", which is not offered for this experiment.";
+    }
+
     function humanBytes(n) {
         var units = ["B", "KB", "MB", "GB", "TB"];
         var i = 0;
@@ -137,7 +179,11 @@
     function renderList() {
         fileListEl.innerHTML = "";
         var buckets = {};
-        var unknown = 0;
+        // Files the chosen type declined, grouped by what they look like instead. Saying
+        // "3 files will be skipped" is true and useless; the answer someone needs is which
+        // type those three belong to, which the registry's own patterns already know.
+        var strays = {};
+        var strayOrder = [];
         var total = 0;
 
         selected.forEach(function (entry) {
@@ -146,7 +192,13 @@
                 buckets[type.label] = (buckets[type.label] || 0) + 1;
                 total += entry.file.size;   // only the files that will be sent
             } else {
-                unknown += 1;
+                var hint = looksLike(entry.path);
+                var key = hint ? hint.name : "";
+                if (!strays[key]) {
+                    strays[key] = { count: 0, type: hint };
+                    strayOrder.push(key);
+                }
+                strays[key].count += 1;
             }
         });
 
@@ -155,11 +207,13 @@
             li.textContent = label + " — " + buckets[label] + " file(s)";
             fileListEl.appendChild(li);
         });
-        if (unknown && typeSelect.value) {
-            var li = document.createElement("li");
-            li.textContent = unknown + " other file(s) in the selection will be skipped";
-            li.style.color = "#666";
-            fileListEl.appendChild(li);
+        if (typeSelect.value) {
+            strayOrder.forEach(function (key) {
+                var li = document.createElement("li");
+                li.textContent = strayMessage(strays[key].type, strays[key].count);
+                li.style.color = "#a00";
+                fileListEl.appendChild(li);
+            });
         }
         if (selected.length && !typeSelect.value) {
             // Nothing to preview against until a type is chosen, and saying so is more
@@ -385,7 +439,7 @@
                 renderConfirmation(uploadId, summary.needs_confirmation);
                 return;
             }
-            renderSummary(summary);
+            finish(summary);
         }).catch(function (err) {
             progressEl.style.display = "none";
             renderError(err.message || String(err));
@@ -393,6 +447,34 @@
             submitBtn.disabled = false;
         });
     });
+
+    // Both the dropdown and the banner above it are rendered from what the experiment had
+    // when the page loaded, so a drop that establishes a reference -- a genome on its own, or
+    // a breseq folder bringing its own -- leaves both stale: the types that need a reference
+    // are still missing from the menu and the page still says to go and find one. Rather than
+    // patch the two of them in the client and risk them drifting from what the server would
+    // render, the page reloads. The summary is the only record that the import happened, so
+    // it rides across in sessionStorage and is re-rendered on the way back.
+    function finish(summary) {
+        if (summary.has_reference && !HAD_REFERENCE) {
+            try {
+                sessionStorage.setItem(SUMMARY_KEY, JSON.stringify(summary));
+            } catch (err) { /* private mode, quota: the reload still matters more */ }
+            window.location.reload();
+            return;
+        }
+        renderSummary(summary);
+    }
+
+    function restoreSummary() {
+        var stashed = null;
+        try {
+            stashed = sessionStorage.getItem(SUMMARY_KEY);
+            sessionStorage.removeItem(SUMMARY_KEY);
+        } catch (err) { return; }
+        if (!stashed) { return; }
+        try { renderSummary(JSON.parse(stashed)); } catch (err) { /* ignore */ }
+    }
 
     // textContent throughout: sequence names come from an uploaded file.
     function renderConfirmation(uploadId, ask) {
@@ -455,7 +537,7 @@
             postJson("/import/uploads/" + uploadId + "/finalize",
                      {confirm_rename: true}).then(function (summary) {
                 progressEl.style.display = "none";
-                renderSummary(summary);
+                finish(summary);
             }).catch(function (err) {
                 progressEl.style.display = "none";
                 renderError(err.message || String(err));
@@ -529,6 +611,8 @@
         table.appendChild(tbody);
         resultEl.appendChild(table);
     }
+
+    restoreSummary();
 })();
 </script>
 {% endblock %}

@@ -39,6 +39,7 @@ from aledb_experiment.models import (
     TechnicalReplicate,
 )
 from aledb_import import annotation
+from aledb_import import sniff
 from aledb_import.gene_annotation import get_annotated_gene_list
 from aledb_import.util import AleName, parse_ale_name
 from aledb_seq.models import (
@@ -64,6 +65,10 @@ class SeqIdMismatch(Exception):
 
 class ReferenceRequired(Exception):
     """The target experiment has no reference genome, and a .gd cannot supply one."""
+
+
+class NotAGenomeDiff(Exception):
+    """A file imported as a .gd declares itself to be some other format."""
 
 
 def import_gd_files(uploaded_files, project_name, experiment_name, person, is_public=False,
@@ -231,6 +236,16 @@ def _parse_document(uploaded):
     raw = uploaded.read()
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8")
+    # The mirror of the GenomeDiff check in `reference.detect_format`: a reference genome
+    # named `.gd` otherwise reaches the GenomeDiff parser, which reports the first line it
+    # cannot match rather than the fact that this is a GenBank and belongs on another type.
+    # Only a positively identified other format is refused -- anything the first line does
+    # not name is still the parser's to judge.
+    kind = sniff.kind_of_text(raw)
+    if kind is not None and kind != sniff.KIND_GENOMEDIFF:
+        raise NotAGenomeDiff(
+            "this is %s, not a GenomeDiff -- import it with the 'Reference genome' type"
+            % (sniff.describe(kind),))
     lines = [line for line in raw.splitlines() if line.strip()]
     return GenomeDiff.read(iter(lines))
 
