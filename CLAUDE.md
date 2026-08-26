@@ -61,10 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 852 run, 0 failures** standalone. The suite is green — treat *any* failure as
-yours. (This said 642 for a while and was wrong by more than the sharing work added: it was
-698 before it, and the number had simply not been re-counted. Re-count it rather than
-adjusting it by what you think you added.)
+**Baseline: 852 run, 0 failures** standalone; **965** in an assembled project, where the
+plugins' own tests join them. The suite is green — treat *any* failure as yours. (These said
+642 and 688 for a while and were wrong by more than the sharing work added — standalone was
+already 698 before it. Re-count rather than adjusting the number by what you think you
+added.)
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
 `aledb_common/test_runner.py` substitutes them when no labels are given. Standalone this
