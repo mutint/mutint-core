@@ -3,7 +3,6 @@ import os
 import subprocess
 
 from aledb_experiment.models import TechnicalReplicate
-from django.core.cache import cache
 
 __author__ = 'Patrick Phaneuf, Denny Gosting'
 
@@ -15,15 +14,6 @@ ALEDB_CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Keyed by absolute directory. The code under a running process does not change, and the
 # About page would otherwise shell out twice per component on every request.
 _revisions = {}
-
-def clear_dashboard_cache():
-
-    cache.delete('dashboard_mutation')
-
-    cache.delete('dashboard_observed_mutation')
-
-    cache.delete('dashboard_bar_chart_gene_dict')
-
 
 def _git(directory, *args):
     """One git command run in `directory`, or None if it could not be run.

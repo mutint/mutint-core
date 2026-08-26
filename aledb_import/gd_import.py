@@ -505,15 +505,20 @@ def run_post_processing(experiment):
     path's do (filters, plugin rebuilds, stats, dashboard).
 
     Public because re-annotation needs it too: changing a mutation's annotation
-    changes what convergence, fixation and the dashboard counts see."""
-    import aledb_filter.models
-    from aledb_common.plugin_registry import run_post_experiment_hooks
-    from aledb_dashboard.util import rebuild_dashboard_data
-    from aledb_filter.models import AleExperimentFilter
-    from aledb_stats.util import generate_static_data
+    changes what convergence, fixation and the dashboard counts see.
 
-    AleExperimentFilter.objects.get_or_create(
-        **aledb_filter.models.get_default_experiment_filter_params(experiment))
-    run_post_experiment_hooks(experiment.ale_id)
-    generate_static_data(experiment.ale_id)
-    rebuild_dashboard_data()
+    This was four statements naming four things by hand -- the filter row, the plugin hooks,
+    the needle-plot data and the dashboard -- and adding a fifth meant editing this function,
+    which is what kept core's derived data reachable only from the import path. All five are
+    registered rebuilds now, so the list lives in `aledb_common.rebuild_registry` and this
+    asks for all of them.
+
+    Eager, and marked stale first. Eager because an import is already a long operation and
+    its whole point is to leave the data queryable, so the Overview should be warm when it
+    finishes rather than making its first reader wait. Marked stale first so that a rebuild
+    which fails is recorded as still needing to run -- the old code left no trace of that at
+    all, and a plugin hook that raised took the whole import down with it."""
+    from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
+
+    request_rebuild(experiment.ale_id, reason='experiment data imported')
+    run_rebuilds(experiment.ale_id)

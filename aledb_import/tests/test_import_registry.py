@@ -333,10 +333,12 @@ class PostProcessingTestCase(TestCase):
     def test_a_genomediff_import_runs_the_post_experiment_hooks(self):
         from aledb_common import plugin_registry
         from aledb_common.import_registry import run_import
+        from aledb_common.rebuild_registry import unregister_rebuilder
 
         seen = []
-        plugin_registry.register_post_experiment_hook(lambda exp_id: seen.append(exp_id))
-        self.addCleanup(plugin_registry._post_experiment_hooks.pop)
+        registered = plugin_registry.register_post_experiment_hook(
+            lambda exp_id: seen.append(exp_id))
+        self.addCleanup(unregister_rebuilder, registered)
 
         with tempfile.TemporaryDirectory() as store:
             with override_settings(ALEDB_STORE_DIR=store):
@@ -351,6 +353,7 @@ class PostProcessingTestCase(TestCase):
         sample is in -- so a per-file rebuild would compute an answer from partial data."""
         from aledb_common import plugin_registry
         from aledb_common.import_registry import run_import
+        from aledb_common.rebuild_registry import unregister_rebuilder
 
         with open(os.path.join(self.staged, "1-200-1-1.gd"), "w") as handle:
             handle.write("#=GENOME_DIFF\t1.0\n"
@@ -359,8 +362,9 @@ class PostProcessingTestCase(TestCase):
                          "SNP\t1\t.\tSYN001\t150\tT\tfrequency=1\n")
 
         seen = []
-        plugin_registry.register_post_experiment_hook(lambda exp_id: seen.append(exp_id))
-        self.addCleanup(plugin_registry._post_experiment_hooks.pop)
+        registered = plugin_registry.register_post_experiment_hook(
+            lambda exp_id: seen.append(exp_id))
+        self.addCleanup(unregister_rebuilder, registered)
 
         with tempfile.TemporaryDirectory() as store:
             with override_settings(ALEDB_STORE_DIR=store):
@@ -373,11 +377,13 @@ class PostProcessingTestCase(TestCase):
         """A reference on its own creates no mutations, so there is nothing to recompute."""
         from aledb_common import plugin_registry
         from aledb_common.import_registry import run_import
+        from aledb_common.rebuild_registry import unregister_rebuilder
 
         os.remove(os.path.join(self.staged, "1-100-1-1.gd"))
         seen = []
-        plugin_registry.register_post_experiment_hook(lambda exp_id: seen.append(exp_id))
-        self.addCleanup(plugin_registry._post_experiment_hooks.pop)
+        registered = plugin_registry.register_post_experiment_hook(
+            lambda exp_id: seen.append(exp_id))
+        self.addCleanup(unregister_rebuilder, registered)
 
         with tempfile.TemporaryDirectory() as store:
             with override_settings(ALEDB_STORE_DIR=store):

@@ -1,0 +1,294 @@
+"""Registry of derived data and the rebuilds that produce it.
+
+The seventh registry, alongside the plugin, nav, about, import, context and example ones --
+and the first that runs in *both* directions. The others let an app contribute something to
+core (a nav entry, a URL, an import type). This one also lets an app tell core that something
+it contributed has changed, so that core's own derived data can catch up.
+
+Nothing in ALEdb is computed at read time if it can be computed once. `aledb_stats.StaticData`,
+`aledb_stats.ExperimentSummary`, `aledb_dashboard`'s three count tables, `aledb_fixation`'s
+`FixatedMutation` and `aledb_converge`'s `ConvergeMutation` are all the same idea: a table that
+is a function of the mutations, rebuilt when they change. What was missing was any way to say
+that they *have* changed, other than from the two hardcoded call sites inside `aledb_import`.
+
+So a rebuild has two halves, and they are deliberately separate calls:
+
+    request_rebuild(experiment_id)      "this is stale now"     -- cheap, always safe
+    run_rebuilds(experiment_id)         "so recompute it"       -- expensive
+
+Marking is one UPDATE and can be done from anywhere, including from a request that changes
+something about every experiment at once -- a global filter edit is exactly that, and is why
+this is not simply a synchronous hook. Running is a whole-experiment recomputation and is done
+either eagerly, where a caller is already paying for a long operation and wants the result warm
+(the import path), or lazily by the page that reads the data (`ensure_fresh`), or in bulk from
+`./aledb rebuild`.
+
+Registering looks like every other registry -- from `AppConfig.ready()`, with no edit to core:
+
+    from aledb_common.rebuild_registry import register_rebuilder
+    register_rebuilder('fixation', rebuild_fixated_mutations)
+
+**Order is explicit here, as in `import_registry` and unlike everywhere else.** A nav entry's
+position is cosmetic and is settled by moving its app in INSTALLED_APPS; a rebuild's is
+correctness. The experiment filter's defaults have to exist before anything that filters
+mutations through them, and the dashboard's installation-wide totals are computed from every
+experiment and so have to come last -- but `aledb_dashboard` is the second app in the
+`aledb_*` block, because that is where its *nav entry* belongs. INSTALLED_APPS order cannot
+express both, so `priority` does, and the constants below are the vocabulary.
+
+**Failures are isolated, which the post-experiment hook it replaces did not do.**
+`run_post_experiment_hooks` was a bare loop: one plugin raising aborted the remaining hooks and
+propagated out of the import, 500ing a request whose mutations were already committed. Here each
+rebuilder runs in its own try/except, the exception is logged, the row *stays* marked stale, and
+the message is recorded in `last_error`. That is the same posture `run_sequence_rename_hooks`
+takes and for the same reason: derived data that is stale is recoverable -- `./aledb rebuild`
+recomputes it, and the read path retries on its own -- where a failed import is not.
+
+The trade is real and worth stating: a broken plugin rebuild is now quiet rather than loud.
+`./aledb rebuild --list` is where it shows up, and it is why `last_error` is a column rather
+than only a log line.
+"""
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# fn(ale_experiment_id) -- derived data belonging to one experiment.
+EXPERIMENT_SCOPE = 'experiment'
+# fn() -- derived data covering the whole installation, e.g. the dashboard's totals.
+SITE_SCOPE = 'site'
+
+_SCOPES = (EXPERIMENT_SCOPE, SITE_SCOPE)
+
+# Settings other rebuilds read. The per-experiment filter defaults come first because
+# everything counting mutations counts them through it.
+PRIORITY_SETTINGS = 10
+# Derived data computed from an experiment's mutations. The default, and where a plugin
+# belongs unless it has a reason not to.
+PRIORITY_DERIVED = 50
+# Totals aggregated across every experiment, so computed once the rest are current.
+PRIORITY_AGGREGATE = 90
+
+# [{'name', 'fn', 'scope', 'label', 'priority', 'index'}, ...]
+_rebuilders = []
+
+
+def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
+                       priority=PRIORITY_DERIVED):
+    """Register a named rebuild (called from AppConfig.ready()).
+
+    Rebuilds run in registration order: apps in INSTALLED_APPS order, and within an app in the
+    order register_rebuilder() is called. There is deliberately no ordering parameter, as with
+    nav_registry -- to move a rebuild, move its app in INSTALLED_APPS. Order matters here in a
+    way it does not for nav entries: `aledb_stats`'s summary is computed from the mutations, so
+    anything that *changes* the mutations has to be registered ahead of it.
+
+    name   stable identifier, e.g. 'fixation'. It is what `only=` and `./aledb rebuild --only`
+           name, and what a DerivedDataState row is keyed by, so changing it orphans that row
+           and the data reads as never built.
+    fn     callable(ale_experiment_id) for EXPERIMENT_SCOPE, callable() for SITE_SCOPE.
+    scope  EXPERIMENT_SCOPE or SITE_SCOPE.
+    label  human-readable name for `./aledb rebuild --list`; defaults to name.
+    priority  lower runs first; see the constants above. Ties break on registration order,
+           which is INSTALLED_APPS order, so leaving it alone gives the obvious behaviour.
+
+    A duplicate name raises, as in import_registry and example_registry: two rebuilds sharing a
+    name would share a staleness row, and each would keep marking the other fresh.
+    """
+    if scope not in _SCOPES:
+        raise ValueError("register_rebuilder() scope must be one of %r, got %r" % (_SCOPES, scope))
+    if not callable(fn):
+        raise ValueError("register_rebuilder(%r) needs a callable" % (name,))
+    for existing in _rebuilders:
+        if existing['name'] == name:
+            raise ValueError("a rebuilder named %r is already registered" % (name,))
+    _rebuilders.append({
+        'name': name,
+        'fn': fn,
+        'scope': scope,
+        'label': label or name,
+        'priority': priority,
+        'index': len(_rebuilders),
+    })
+
+
+def get_rebuilders(scope=None, only=None):
+    """Registered rebuilders, in the order they must run: priority, then registration.
+
+    scope  restrict to EXPERIMENT_SCOPE or SITE_SCOPE.
+    only   an iterable of names to restrict to. **An unknown name is skipped, not an error.**
+           Callers name plugins they cannot know are installed -- `rebuild_after_structural_change`
+           asks for 'fixation' and 'converge' -- and a deployment without a plugin must not
+           raise where it would simply have nothing to do. `./aledb rebuild --only` checks the
+           names itself, because there a typo should be reported rather than silently do nothing.
+    """
+    names = None if only is None else set(only)
+    matched = [r for r in _rebuilders
+               if (scope is None or r['scope'] == scope)
+               and (names is None or r['name'] in names)]
+    return sorted(matched, key=lambda r: (r['priority'], r['index']))
+
+
+def unregister_rebuilder(name):
+    """Remove a rebuilder. Returns whether there was one.
+
+    Exists for tests, which register a hook and have to take it out again -- they used to
+    `.pop()` a private list, which said nothing about *which* entry went. Production code has
+    no reason to call it: an app that is installed contributes its rebuilds for the life of
+    the process.
+    """
+    for index, rebuilder in enumerate(_rebuilders):
+        if rebuilder['name'] == name:
+            del _rebuilders[index]
+            return True
+    return False
+
+
+def get_rebuilder(name):
+    for rebuilder in _rebuilders:
+        if rebuilder['name'] == name:
+            return rebuilder
+    return None
+
+
+def request_rebuild(experiment_id=None, only=None, reason=''):
+    """Mark derived data stale. Cheap, and safe to call from any request.
+
+    experiment_id  the experiment whose data changed, or None meaning "every experiment" --
+                   which is what a global filter edit is, since every experiment's counts are
+                   computed through it.
+    only           names to narrow to; everything registered by default. Use it to say what
+                   actually changed: a sample renumber changes fixation and the sample counts
+                   and nothing about a mutation count, and `rebuild_after_structural_change`
+                   has always refused to rebuild the dashboard for exactly that reason.
+    reason         logged, not stored. It is for reading the log after the fact.
+
+    Site-scoped rebuilds are marked too, because they aggregate across experiments -- one
+    experiment changing does make the installation-wide totals stale.
+
+    Marking every experiment is one UPDATE rather than a row per experiment: a row that does
+    not exist already counts as stale (see `is_stale`), so there is nothing to insert.
+    """
+    from django.utils import timezone
+
+    from aledb_common.models import DerivedDataState
+
+    now = timezone.now()
+    rebuilders = get_rebuilders(only=only)
+    if not rebuilders:
+        return
+
+    for rebuilder in rebuilders:
+        if rebuilder['scope'] == SITE_SCOPE or experiment_id is None:
+            # Everything under this name, however many experiments that is.
+            query = DerivedDataState.objects.filter(name=rebuilder['name'])
+            if rebuilder['scope'] == SITE_SCOPE:
+                query = query.filter(ale_experiment=None)
+            query.update(stale_since=now)
+        else:
+            DerivedDataState.objects.update_or_create(
+                name=rebuilder['name'], ale_experiment_id=experiment_id,
+                defaults={'stale_since': now})
+
+    logger.info("rebuild requested for %s (%s)%s",
+                "every experiment" if experiment_id is None else "experiment %s" % experiment_id,
+                ", ".join(r['name'] for r in rebuilders),
+                " -- %s" % reason if reason else "")
+
+
+def is_stale(name, experiment_id=None):
+    """Whether `name`'s data needs rebuilding for this experiment.
+
+    A missing row means stale: never built is the same answer as built and invalidated, and it
+    saves having to seed a row for every experiment the moment a rebuilder is registered.
+    """
+    from aledb_common.models import DerivedDataState
+
+    state = DerivedDataState.objects.filter(
+        name=name, ale_experiment_id=experiment_id).first()
+    return state is None or state.stale_since is not None
+
+
+def ensure_fresh(name, experiment_id=None):
+    """Rebuild `name` for this experiment if it is stale; do nothing if it is not.
+
+    This is what a read path calls -- the Overview does, which is what makes the first page view
+    after a change pay for the recomputation and every view after it free. Returns True if the
+    data is fresh on return, False if a rebuild was needed and failed.
+
+    A failure is logged and recorded, never raised: a page whose derived data could not be
+    rebuilt should render what it has and say so, not 500.
+    """
+    if not is_stale(name, experiment_id):
+        return True
+    results = run_rebuilds(experiment_id, only=[name])
+    return all(results.values()) if results else True
+
+
+def run_rebuilds(experiment_id=None, only=None, force=False):
+    """Run the stale rebuilds (or all of them, with force=True). Returns {name: succeeded}.
+
+    Each rebuilder is isolated: one raising neither aborts the others nor propagates. See the
+    module docstring for why that differs from the `run_post_experiment_hooks` it replaces.
+
+    Staleness is cleared with a compare-and-set against the `stale_since` read before the
+    rebuild started. If something marked the data stale again *while* it was being rebuilt, the
+    rebuild that just finished did not see that change, so the row stays stale and the next
+    reader rebuilds again. Clearing unconditionally would lose the second change silently.
+    """
+    from django.utils import timezone
+
+    from aledb_common.models import DerivedDataState
+
+    results = {}
+    for rebuilder in get_rebuilders(only=only):
+        name = rebuilder['name']
+        site_scoped = rebuilder['scope'] == SITE_SCOPE
+        target = None if site_scoped else experiment_id
+
+        if target is None and not site_scoped:
+            # An experiment-scoped rebuild with no experiment named. `./aledb rebuild --all`
+            # loops the experiments itself rather than asking for this, so reaching here means
+            # a caller wanted the site-wide sweep and this rebuilder cannot answer it.
+            continue
+
+        state = DerivedDataState.objects.filter(name=name, ale_experiment_id=target).first()
+        was_stale_since = state.stale_since if state else None
+        if not force and state is not None and state.stale_since is None:
+            continue
+
+        started = timezone.now()
+        try:
+            if site_scoped:
+                rebuilder['fn']()
+            else:
+                rebuilder['fn'](target)
+        except Exception as error:  # noqa: BLE001
+            logger.exception("rebuild %r failed for %s", name,
+                             "the site" if site_scoped else "experiment %s" % target)
+            DerivedDataState.objects.update_or_create(
+                name=name, ale_experiment_id=target,
+                defaults={'stale_since': was_stale_since or started,
+                          'last_error': str(error)[:2000]})
+            results[name] = False
+            continue
+
+        finished = timezone.now()
+        fresh = {'rebuilt_at': finished, 'stale_since': None, 'last_error': ''}
+        # Compare-and-set, in both shapes: only clear the staleness this run actually
+        # answered. Where there was no row, "unchanged" means there is *still* no row --
+        # `request_rebuild` creates one, so a row appearing during the rebuild is a change
+        # this run did not see, exactly as a moved `stale_since` is.
+        if state is None:
+            _, claimed = DerivedDataState.objects.get_or_create(
+                name=name, ale_experiment_id=target, defaults=fresh)
+        else:
+            claimed = bool(DerivedDataState.objects.filter(
+                pk=state.pk, stale_since=was_stale_since).update(**fresh))
+        if not claimed:
+            logger.info("rebuild %r for %s was invalidated again while it ran; "
+                        "leaving it stale", name,
+                        "the site" if site_scoped else "experiment %s" % target)
+        results[name] = True
+        logger.debug("rebuild %r took %.3fs", name, (finished - started).total_seconds())
+    return results

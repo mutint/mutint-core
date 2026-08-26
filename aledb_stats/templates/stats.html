@@ -214,8 +214,8 @@
                     <td class="sample_name">
                         {{ experiment_info_tuple.0.ale_flask_isolate_str }}
                     </td>
-                    <td class="mutation_count">{{ experiment_info_tuple.0.mutations.count }}</td>
-                    <td class="missing_coverage_count">{{ experiment_info_tuple.1 | length }}</td>
+                    <td class="mutation_count">{{ experiment_info_tuple.9 }}</td>
+                    <td class="missing_coverage_count">{{ experiment_info_tuple.1 }}</td>
                     {% comment %} floatformat:1 throughout: these are floats straight off
                        summary.json and rendered raw they run to a dozen decimals, which is
                        false precision and makes the column unreadable. The class names keep

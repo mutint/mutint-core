@@ -7,7 +7,8 @@ from aledb_filter.models import AleExperimentFilter
 import aledb_filter.models
 from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN, DEFAULT_MUTATION_FREQ_MAX
 from aledb_filter.util import get_ignored_mut_id_list_from_str
-from aledb_common.util import clear_dashboard_cache, get_user_context
+from aledb_common.util import get_user_context
+from aledb_common.rebuild_registry import request_rebuild
 from aledb_seq.util import get_mutation_objects
 from aledb_common.logger import user_extra
 from aledb_experiment import permissions
@@ -34,8 +35,10 @@ def mutation_filter(request):
 
         if request.method == 'POST':
             # check user permissions
-            clear_dashboard_cache()
             _handle_POST(request, filter_form_model, experiment)
+            # After the save, not before: this marks what the save just invalidated, and
+            # marking first would let a rebuild racing between the two clear it again.
+            request_rebuild(experiment.ale_id, reason='experiment filter changed')
 
         filter_form = FilterForm(filter_form_model.__dict__)
 

@@ -2,7 +2,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-_post_experiment_hooks = []
 _sequence_rename_hooks = []
 _plugin_urlpatterns = []
 _export_handlers = {}
@@ -10,13 +9,62 @@ _export_labels = {}
 
 
 def register_post_experiment_hook(fn):
-    """Register fn(ale_experiment_id) to be called after each experiment upload."""
-    _post_experiment_hooks.append(fn)
+    """Register fn(ale_experiment_id) to be called after each experiment upload.
+
+    Kept as the name plugins already call. It is a thin wrapper over
+    `aledb_common.rebuild_registry.register_rebuilder`, which is the general form: a
+    post-experiment hook is exactly a rebuild of derived data belonging to one experiment,
+    and the registry adds the two things this never had -- a name, so a caller can ask for
+    one rebuild and not the rest, and a record of whether the data is currently stale.
+
+    The rebuilder is named after the app the function came from -- `aledb_fixation`,
+    `aledb_converge` -- which is what `./aledb rebuild --only` and the `only=` argument take.
+    A second hook from the same app has its function name appended, and a third a counter,
+    so registering twice is not an error the way `register_rebuilder` alone would make it --
+    the old API allowed it, including two anonymous functions, and still does.
+
+    Returns the name it registered under, which is what `unregister_rebuilder` takes.
+
+    New code should call `register_rebuilder` directly and choose its own name.
+    """
+    from aledb_common.rebuild_registry import get_rebuilder, register_rebuilder
+
+    app = (getattr(fn, "__module__", "") or "").split(".")[0]
+    fn_name = getattr(fn, "__name__", "hook")
+    for candidate in _candidate_names(app, fn_name):
+        if get_rebuilder(candidate) is None:
+            register_rebuilder(candidate, fn)
+            return candidate
+
+
+def _candidate_names(app, fn_name):
+    """Names to try, least qualified first, ending in an unbounded numbered sequence."""
+    stem = "%s.%s" % (app, fn_name) if app else fn_name
+    if app:
+        yield app
+    yield stem
+    counter = 2
+    while True:
+        yield "%s.%d" % (stem, counter)
+        counter += 1
 
 
 def run_post_experiment_hooks(ale_experiment_id):
-    for fn in _post_experiment_hooks:
-        fn(ale_experiment_id)
+    """Run every registered rebuild for this experiment, stale or not.
+
+    Retained because it is the name the import path and the sample editor call, and because
+    tests patch it. It runs *everything* registered, not only what was registered through
+    `register_post_experiment_hook`, which is the point of folding the two together: core's
+    own derived data used to be rebuilt by hardcoded statements either side of this call, and
+    a plugin had no way to ask for it.
+
+    `force=True` -- the callers of this reach it having just changed an experiment's
+    mutations, so asking whether the data is stale would only re-derive what they already
+    know. Call `request_rebuild` then `run_rebuilds` to have staleness respected.
+    """
+    from aledb_common.rebuild_registry import run_rebuilds
+
+    run_rebuilds(ale_experiment_id, force=True)
 
 
 def register_sequence_rename_hook(fn):

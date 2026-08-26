@@ -2,11 +2,10 @@ import os
 import aledb_experiment.models
 import aledb_import.util
 from aledb_import import breseq_folder
-from aledb_common.plugin_registry import run_post_experiment_hooks
 import aledb_seq.models
 import aledb_seq.views.common
 from aledb_import.gdparse.gdparse import gdparse
-from aledb_common.util import clear_dashboard_cache, _find_between
+from aledb_common.util import _find_between
 import aledb_metadata.parser
 from aledb_dashboard.timeline_util import create_event
 from aledb_dashboard.util import rebuild_dashboard_data
@@ -49,10 +48,16 @@ def remove_flask(flask_primary_key):
     """
     Executed from Django ipython shell
     """
-    clear_dashboard_cache()
+    from aledb_common.rebuild_registry import request_rebuild
+
     flask_to_delete = aledb_experiment.models.Flask.objects.get(pk=flask_primary_key)
+    experiment_id = flask_to_delete.ale_id.ale_experiment_id
     flask_to_delete.delete()
     _delete_all_orphaned_mutations()
+    # After the delete, not before: marking data stale that is about to change again would be
+    # cleared by any rebuild that ran in between. Marked rather than rebuilt, because this is
+    # a shell operation and the next reader of any of it will rebuild what it needs.
+    request_rebuild(experiment_id, reason='flask removed')
 
 
 def delete_ale_experiments(ale_experiment_primary_key_list):

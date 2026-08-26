@@ -503,38 +503,60 @@ class RebuildHooksTestCase(SampleEditTestCase):
         self.second = self.make_sample(1, 1, 2, 1, name="second")
 
     def _patched(self):
-        return (
-            mock.patch("aledb_common.plugin_registry.run_post_experiment_hooks"),
-            mock.patch("aledb_dashboard.util.rebuild_sample_counts"),
-            mock.patch("aledb_dashboard.util.rebuild_dashboard_data"),
-        )
+        """Patch the bus, not the individual rebuilds.
+
+        `rebuild_registry` holds the callables themselves -- registered from AppConfig.ready()
+        -- so patching `aledb_dashboard.util.rebuild_sample_counts` would replace a module
+        attribute the registry no longer reads, and the assertion would pass for the wrong
+        reason. Every other registry in the suite stores callables the same way. What this
+        class is really about is *which* rebuilds a structural save asks for, and that is now
+        one argument on one call, so assert on it directly.
+        """
+        return (mock.patch("aledb_common.rebuild_registry.run_rebuilds"),
+                mock.patch("aledb_common.rebuild_registry.request_rebuild"))
 
     def test_a_structural_save_rebuilds_once_for_the_whole_batch(self):
-        hooks, counts, dashboard = self._patched()
-        with hooks as run_hooks, counts as rebuild_counts, dashboard as rebuild_all:
+        run, request = self._patched()
+        with run as run_rebuilds, request as request_rebuild:
             response = self.bulk([self.row(self.first, ale=2),
                                   self.row(self.second, ale=3)])
 
             self.assertEqual(200, response.status_code, response.content)
-            self.assertEqual(1, run_hooks.call_count)
-            self.assertEqual(1, rebuild_counts.call_count)
-            rebuild_all.assert_not_called()
+            self.assertEqual(1, run_rebuilds.call_count)
+            self.assertEqual(1, request_rebuild.call_count)
+
+    def test_a_structural_save_leaves_the_mutation_counts_alone(self):
+        """The expensive one, and the reason `only=` exists.
+
+        `mutation_counts` pulls every ObservedMutation in the database into Python. A
+        renumber provably changes no mutation count, so asking for it would be the one thing
+        here that could make the feature feel broken in production.
+        """
+        run, request = self._patched()
+        with run as run_rebuilds, request as request_rebuild:
+            self.bulk([self.row(self.first, ale=2)])
+
+            for call in (run_rebuilds.call_args, request_rebuild.call_args):
+                asked_for = call.kwargs["only"]
+                self.assertIn("sample_counts", asked_for)
+                self.assertIn("overview", asked_for)
+                self.assertNotIn("mutation_counts", asked_for)
+                self.assertNotIn("static_data", asked_for)
 
     def test_a_descriptive_save_rebuilds_nothing(self):
-        hooks, counts, dashboard = self._patched()
-        with hooks as run_hooks, counts as rebuild_counts, dashboard as rebuild_all:
+        run, request = self._patched()
+        with run as run_rebuilds, request as request_rebuild:
             self.assertEqual(200, self.single(self.first, sample_name="renamed").status_code)
 
-            run_hooks.assert_not_called()
-            rebuild_counts.assert_not_called()
-            rebuild_all.assert_not_called()
+            run_rebuilds.assert_not_called()
+            request_rebuild.assert_not_called()
 
     def test_toggling_the_population_flag_counts_as_structural(self):
-        hooks, counts, _dashboard = self._patched()
-        with hooks as run_hooks, counts as rebuild_counts:
+        run, request = self._patched()
+        with run as run_rebuilds, request as request_rebuild:
             self.single(self.first, is_population=1)
-            self.assertEqual(1, run_hooks.call_count)
-            self.assertEqual(1, rebuild_counts.call_count)
+            self.assertEqual(1, run_rebuilds.call_count)
+            self.assertEqual(1, request_rebuild.call_count)
 
 
 class ExistingDuplicateNamesTestCase(SampleEditTestCase):

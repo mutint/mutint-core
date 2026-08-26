@@ -496,13 +496,19 @@ def rebuild_after_structural_change(experiment):
     `generate_static_data`, whose output is `{coord, category, value}` per mutation and so
     cannot depend on a sample's identity.
 
-    Deliberately not `rebuild_dashboard_data`: that calls `rebuild_mutation_counts`, which
-    pulls every ObservedMutation in the database into Python. Nothing about a renumber
-    changes a mutation count, and paying for the whole database on every rename is the one
-    thing here that could make the feature feel broken in production.
-    """
-    from aledb_common.plugin_registry import run_post_experiment_hooks
-    from aledb_dashboard.util import rebuild_sample_counts
+    Deliberately not `mutation_counts`: it pulls every ObservedMutation in the database into
+    Python. Nothing about a renumber changes a mutation count, and paying for the whole
+    database on every rename is the one thing here that could make the feature feel broken in
+    production. That refusal is what `only=` says -- it names what a renumber can change, and
+    everything it does not name is left alone.
 
-    run_post_experiment_hooks(experiment.ale_id)
-    rebuild_sample_counts()
+    `overview` is named because the Overview's sample table and its ALE/flask/isolate counts
+    are read from the numbers this just changed. `aledb_fixation` and `aledb_converge` are
+    named although this app cannot know they are installed; `get_rebuilders` skips a name
+    nothing registered, so a deployment without them simply has less to do.
+    """
+    from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
+
+    changed = ('aledb_fixation', 'aledb_converge', 'overview', 'sample_counts')
+    request_rebuild(experiment.ale_id, only=changed, reason='samples renumbered')
+    run_rebuilds(experiment.ale_id, only=changed)

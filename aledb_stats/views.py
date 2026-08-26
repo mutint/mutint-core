@@ -4,17 +4,12 @@ from django.template import loader
 from django.utils.safestring import mark_safe
 from django.conf import settings
 from aledb_seq.util import get_ordered_reseq_queryset
-import aledb_seq.views.common
 from aledb_seq.views import common
 from aledb_stats.util import get_needle_plot_data,\
-    get_mutation_type_count_dict, \
-    get_observed_mutation_type_count_dict,\
-    get_protein_change_type_count_dict,\
-    get_observed_protein_change_type_count_dict,\
     get_ale_flask_isolate_count_list,\
+    get_experiment_summary,\
     get_reseq_experiment_info_list
 from aledb_common.util import get_user_context
-from aledb_stats.util import get_observed_mutation_list
 import logging
 from aledb_common.context_registry import get_experiment_context
 from aledb_experiment.models import AleExperiment
@@ -40,12 +35,17 @@ def stats(request):
             context.update(experiment.experiment_context())
             context.update(get_experiment_context(experiment))
 
-        experiment = aledb_seq.views.common.get_ale_experiment(request)
+        # This used to fetch the experiment a second time here. The file imported the same
+        # module twice under two names -- `import aledb_seq.views.common` alongside
+        # `from aledb_seq.views import common` -- which made the second call look like a
+        # different one, so every view of this page paid for a second AleExperiment query, a
+        # second project FK query and a second guardian permission check, then discarded the
+        # object the lines above had already fetched. The duplicate import is gone with it.
         exp_name = experiment.name
         ale_experiment_id = experiment.ale_id
-        ale_number = aledb_seq.views.common.get_ale_id(request)
+        ale_number = common.get_ale_id(request)
 
-        ale_id = common.get_ale_id(request)
+        ale_id = ale_number
         reseq_queryset = get_ordered_reseq_queryset(experiment.ale_id, ale_id)
         ale_flask_isolate_count_list = get_ale_flask_isolate_count_list(reseq_queryset)
         ale_sum = len(ale_flask_isolate_count_list)
@@ -56,13 +56,16 @@ def stats(request):
             isolate_sum += l[2]
 
         experiments_info_list = get_reseq_experiment_info_list(reseq_queryset)
-        obs_mutations = get_observed_mutation_list(experiment.ale_id)
-        mutations_dict = {obs_mut.mutation.id: obs_mut.mutation for obs_mut in obs_mutations}
-        mutations = mutations_dict.values()
-        mutation_type_count_dict = get_mutation_type_count_dict(mutations)
-        observed_mutation_type_count_dict = get_observed_mutation_type_count_dict(obs_mutations)
-        protein_change_type_count_dict = get_protein_change_type_count_dict(mutations)
-        observed_protein_change_type_count_dict = get_observed_protein_change_type_count_dict(obs_mutations)
+
+        # One row, not every ObservedMutation in the experiment. `get_experiment_summary`
+        # rebuilds it first if anything has marked it stale, so the first view after an
+        # import, a sample renumber or a filter change pays for the recomputation and every
+        # view after it does not. See aledb_common/rebuild_registry.py.
+        summary = get_experiment_summary(experiment.ale_id)
+        mutation_type_count_dict = summary.mutation_type_counts
+        observed_mutation_type_count_dict = summary.observed_mutation_type_counts
+        protein_change_type_count_dict = summary.protein_change_counts
+        observed_protein_change_type_count_dict = summary.observed_protein_change_counts
         template = loader.get_template(STATS_TEMPLATE)
 
         needle_plot_data = get_needle_plot_data(experiment.ale_id)
@@ -95,10 +98,15 @@ def stats(request):
                         "can_edit": can_edit_project(request.user, experiment.project),
                         })
 
+        # Rendered before the log, not after: the sample table used to issue two queries per
+        # sample while the template ran, so a timing taken above this line reported a page
+        # that had not finished being built. Those queries are gone, and this stays below the
+        # render so the number keeps meaning what it says.
+        rendered = template.render(context, request)
         logger.info("stats performance",
                              extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))
 
-        return HttpResponse(template.render(context, request), content_type="text/html")
+        return HttpResponse(rendered, content_type="text/html")
 
     except AleExperiment.DoesNotExist:
         return common.no_experiment_selected(

@@ -2,7 +2,8 @@ from django.http import HttpResponse
 from django.template import loader
 from aledb_filter.forms.filter import FilterForm
 from aledb_filter.util import get_ignored_mut_id_list_from_str, get_global_filter
-from aledb_common.util import clear_dashboard_cache, get_user_context
+from aledb_common.util import get_user_context
+from aledb_common.rebuild_registry import request_rebuild
 from aledb_seq.util import get_mutation_objects
 from aledb_common.logger import user_extra
 from aledb_experiment import permissions
@@ -23,8 +24,12 @@ def global_filter(request):
         filter_form_model = get_global_filter()
 
         if request.method == 'POST':
-            clear_dashboard_cache()
             _handle_post(request, filter_form_model)
+            # Every experiment, because every experiment's mutation counts are computed
+            # through this filter. Marked, never rebuilt here: recomputing the whole
+            # installation inside the request that edited a form is exactly the case
+            # marking exists for. Each page rebuilds its own on next view.
+            request_rebuild(reason='global filter changed')
 
         initial_filter_form_data = {"ignored_genes": filter_form_model.ignored_genes}
 
