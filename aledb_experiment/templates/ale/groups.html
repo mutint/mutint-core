@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Groups{% endblock %}
+{% block header %}Groups{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 52em;">
+        <p class="help-block">
+            A group is a named set of people, so a whole lab can be given access to a project
+            in one grant. You see the groups you own or belong to.
+        </p>
+
+        <div style="margin-bottom: 1em;">
+            <a class="btn btn-primary" href="/ale/groups/new/">+ New group</a>
+        </div>
+
+        {% comment %} A plain table, not a DataTable: a person belongs to a handful of
+           groups, and the pagination control is more machinery than the content. {% endcomment %}
+        <table class="table table-striped table-bordered">
+            <thead class="alert-success">
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th width="100">Members</th>
+                <th width="100">You are</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in groups %}
+                <tr>
+                    <td><a href="/ale/group/{{ row.group.id }}/">{{ row.group.name }}</a></td>
+                    <td>{{ row.group.description|default:"&mdash;" }}</td>
+                    <td>{{ row.members }}</td>
+                    <td>{{ row.standing }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4">You do not belong to any group yet.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

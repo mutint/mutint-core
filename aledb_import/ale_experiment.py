@@ -18,7 +18,7 @@ from aledb_experiment.models import AleExperiment, Project
 from django.contrib.auth.models import User
 from datetime import datetime
 from aledb_stats.models import StaticData
-from aledb_experiment.permissions import grant_access_to_project
+from aledb_experiment.permissions import set_primary_owner
 
 WILD_TYPE_ALE_NUMBER = 0
 WILD_TYPE_FLASK_NUMBER = 0
@@ -222,7 +222,7 @@ def try_creating_project(project, owner_name, is_pub=False):
     owner = find_user(owner_name)
     new_project = Project.objects.create(name=project, user=owner, date=datetime.now(),
                            status="In progress", is_public=is_pub)
-    grant_access_to_project(new_project, [owner])
+    set_primary_owner(new_project, owner)
     return new_project
 
 

@@ -10,3 +10,4 @@ class ExperimentConfig(AppConfig):
         )
         register_nav_item('Projects', url='/ale/projects/', section=MAIN_SECTION)
         register_nav_item('Experiments', url='/ale/experiments/', section=MAIN_SECTION)
+        register_nav_item('Groups', url='/ale/groups/', section=MAIN_SECTION)

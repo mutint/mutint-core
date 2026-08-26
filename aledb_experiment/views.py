@@ -3,7 +3,10 @@ from aledb_experiment.models import live
 from django.shortcuts import redirect
 from .models import Project, AleExperiment
 from .utils import get_user_projects, get_all_user_exps
-from .permissions import can_edit_project, can_view_project
+from .permissions import (
+    accessible_projects, can_admin_project, can_edit_project, can_view_project,
+)
+from .roles import ROLE_WRITE
 from aledb_common.util import get_user_context
 import logging
 
@@ -32,10 +35,10 @@ def _editable_projects(user):
     """Projects the user may create an experiment under.
 
     Viewable is not enough: `experiment_create` gates on `can_edit_project`, so offering a
-    project here that the POST would 403 on is just a slower error.
+    project here that the POST would 403 on is just a slower error. One query -- this was a
+    Python filter over every readable project, which meant a permission check per row.
     """
-    return [project for project in get_user_projects(user)
-            if can_edit_project(user, project)]
+    return accessible_projects(user, ROLE_WRITE)
 
 
 def experiments(request):
@@ -55,8 +58,12 @@ def project_detail(request, pk):
             "project": project,
             "experiments": experiments,
             "can_edit": can_edit_project(request.user, project),
+            "can_admin": can_admin_project(request.user, project),
         })
-    return render(request, "403.html")
+    # `status=403`, as every other refusal on this page does. Without it a refused project
+    # rendered the 403 body under an HTTP 200, so anything reading the status -- a test, a
+    # link checker, a client -- was told the request had succeeded.
+    return render(request, "403.html", get_user_context(request.user), status=403)
 
 
 def experiment_detail(request, pk):
@@ -84,7 +91,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .permissions import can_delete_experiment, can_edit_project, grant_access_to_project
+from .permissions import can_delete_experiment, can_delete_project, set_primary_owner
 
 
 
@@ -107,8 +114,7 @@ def experiment_new(request):
         return render(request, "403.html", get_user_context(request.user), status=403)
 
     context = get_user_context(request.user)
-    editable = [p for p in get_user_projects(request.user)
-                if can_edit_project(request.user, p)]
+    editable = _editable_projects(request.user)
 
     project = None
     requested = request.GET.get("project")
@@ -142,7 +148,7 @@ def project_create(request):
         is_public=bool(request.POST.get("is_public")),
         status="in progress",
         description=(request.POST.get("description") or "").strip())
-    grant_access_to_project(project, [request.user])
+    set_primary_owner(project, request.user)
 
     payload = {"project_id": project.id, "project": project.name, "experiment_id": None}
 
@@ -187,8 +193,12 @@ def _create_experiment(project, name, user):
 
 @require_POST
 def project_delete(request, pk):
+    # Admin, not `can_edit_project`. Editing widened to `write` when roles arrived, and
+    # letting everyone who may add data also delete the whole project is not what anyone
+    # means by "may add data". Admin rather than owner because the delete is soft and
+    # `purge_deleted` gives a retention window.
     project = get_object_or_404(Project, pk=pk)
-    if not can_edit_project(request.user, project):
+    if not can_delete_project(request.user, project):
         return JsonResponse({"error": "You cannot delete this project."}, status=403)
     if project.deleted_at is None:
         project.soft_delete(request.user)

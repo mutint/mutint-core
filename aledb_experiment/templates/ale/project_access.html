@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% block title %}Sharing {{ project.name }}{% endblock %}
+{% block header %}Sharing: {{ project.name }}{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} base.html does not load sweetalert; aledbConfirmDelete calls swal(),
+       so every page using it pulls it in for itself. {% endcomment %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 52em;">
+        {% csrf_token %}
+
+        {% if project.is_public %}
+            <div class="alert alert-info">
+                This project is <strong>public</strong>: anyone can read it, signed in or
+                not. The grants below add editing and administration on top of that.
+                <a href="/ale/project/{{ project.id }}/edit/">Change that on the edit page.</a>
+            </div>
+        {% endif %}
+
+        <h4>Who has access</h4>
+        <table class="table table-striped table-bordered">
+            <thead class="alert-success">
+            <tr>
+                <th>Name</th>
+                <th width="90">Kind</th>
+                <th width="180">Role</th>
+                <th width="110"></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+                <tr>
+                    <td>
+                        {% if row.entry.group %}
+                            <a href="/ale/group/{{ row.entry.group.id }}/">{{ row.entry.subject_name }}</a>
+                        {% else %}
+                            {{ row.entry.subject_name }}
+                        {% endif %}
+                    </td>
+                    <td>{{ row.entry.subject_kind }}</td>
+                    <td>
+                        {% if row.editable %}
+                            <select class="form-control pa-role" id="pa-role-{{ row.entry.id }}"
+                                    data-subject-kind="{{ row.entry.subject_kind }}"
+                                    data-subject="{{ row.entry.subject_name }}">
+                                {% for value, label in row.options %}
+                                    <option value="{{ value }}"
+                                            {% if value == row.entry.role %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        {% else %}
+                            {{ row.role_label }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.editable %}
+                            <button type="button" class="btn btn-default btn-sm pa-remove"
+                                    data-access-id="{{ row.entry.id }}"
+                                    data-subject="{{ row.entry.subject_name }}">Remove</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4">Nobody yet.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <h4>Add a person</h4>
+        <div class="row">
+            <div class="col-lg-5">
+                <div class="form-group">
+                    <label for="pa-username">Username</label>
+                    <input type="text" class="form-control" id="pa-username"
+                           placeholder="their exact username">
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="form-group">
+                    <label for="pa-user-role">Role</label>
+                    <select class="form-control" id="pa-user-role">
+                        {% for value, label in grantable %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-lg-3">
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-primary form-control"
+                            id="pa-add-user">Add person</button>
+                </div>
+            </div>
+        </div>
+
+        <h4>Add a group</h4>
+        <div class="row">
+            <div class="col-lg-5">
+                <div class="form-group">
+                    <label for="pa-group">Group name</label>
+                    <input type="text" class="form-control" id="pa-group"
+                           placeholder="a group you belong to">
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="form-group">
+                    <label for="pa-group-role">Role</label>
+                    <select class="form-control" id="pa-group-role">
+                        {% for value, label in grantable_to_group %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-lg-3">
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-primary form-control"
+                            id="pa-add-group">Add group</button>
+                </div>
+            </div>
+        </div>
+
+        {% comment %} Only groups you belong to can be added, so naming them here is what
+           makes an otherwise blank text box usable -- there is no autocomplete. {% endcomment %}
+        <p class="help-block">
+            {% if my_groups %}
+                You can add:
+                {% for group in my_groups %}<a href="/ale/group/{{ group.id }}/">{{ group.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+            {% else %}
+                You do not belong to any group yet.
+            {% endif %}
+            <a href="/ale/groups/">Manage groups</a>
+        </p>
+
+        <dl class="dl-horizontal" style="color: #666; margin-top: 1.5em;">
+            <dt>Your role</dt><dd>{{ actor_role }}</dd>
+            <dt>Owner</dt><dd>{{ project.owner }}</dd>
+        </dl>
+        <p class="help-block">
+            A group cannot own a project, and you cannot grant a role above your own.
+        </p>
+
+        <div style="margin-top: 1.5em;">
+            <a class="btn btn-default" href="/ale/project/{{ project.id }}/">Back to project</a>
+        </div>
+        <div id="pa-error" style="color: #a00; margin-top: 1em;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("pa-add-user")) { return; }
+
+    var grantUrl = "/ale/project/{{ project.id }}/access/grant/";
+    var revokeUrl = "/ale/project/{{ project.id }}/access/revoke/";
+    var errorBox = document.getElementById("pa-error");
+
+    function fail(err) { errorBox.textContent = err.message; }
+    function reload() { window.location.reload(); }
+
+    document.getElementById("pa-add-user").addEventListener("click", function () {
+        errorBox.textContent = "";
+        window.aledbPost(grantUrl, {
+            username: document.getElementById("pa-username").value,
+            role: document.getElementById("pa-user-role").value
+        }).then(reload).catch(fail);
+    });
+
+    document.getElementById("pa-add-group").addEventListener("click", function () {
+        errorBox.textContent = "";
+        window.aledbPost(grantUrl, {
+            group: document.getElementById("pa-group").value,
+            role: document.getElementById("pa-group-role").value
+        }).then(reload).catch(fail);
+    });
+
+    {% comment %} The role dropdown posts to the same grant endpoint: it is an upsert on the
+       subject, so there is no second endpoint that could disagree with this one. {% endcomment %}
+    Array.prototype.forEach.call(document.querySelectorAll(".pa-role"), function (select) {
+        select.addEventListener("change", function () {
+            errorBox.textContent = "";
+            var data = { role: select.value };
+            if (select.getAttribute("data-subject-kind") === "group") {
+                data.group = select.getAttribute("data-subject");
+            } else {
+                data.username = select.getAttribute("data-subject");
+            }
+            window.aledbPost(grantUrl, data).then(reload).catch(function (err) {
+                fail(err);
+                reload();
+            });
+        });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".pa-remove"), function (button) {
+        button.addEventListener("click", function () {
+            errorBox.textContent = "";
+            window.aledbConfirmDelete(
+                "access for " + button.getAttribute("data-subject")
+            ).then(function (confirmed) {
+                if (!confirmed) { return; }
+                window.aledbPost(revokeUrl, {
+                    access_id: button.getAttribute("data-access-id")
+                }).then(reload).catch(fail);
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

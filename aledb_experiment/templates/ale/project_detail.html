@@ -53,6 +53,10 @@
             <a class="btn btn-default"
                href="/ale/project/{{ project.id }}/edit/">Edit project</a>
             {% endif %}
+            {% if can_admin %}
+            <a class="btn btn-default"
+               href="/ale/project/{{ project.id }}/access/">Sharing</a>
+            {% endif %}
         </div>
     </div>
 

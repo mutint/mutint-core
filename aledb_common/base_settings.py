@@ -100,7 +100,6 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'bootstrap3',
             'bootstrap4',
             'debug_toolbar',
-            'guardian',
             # Order is load-bearing: sidebar entries render in INSTALLED_APPS
             # order (see aledb_common/nav_registry.py). To move a nav entry,
             # move its app here. Apps contributing no nav follow.
@@ -143,9 +142,12 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'django.contrib.messages.middleware.MessageMiddleware',
         ],
 
+        # Just the model backend. django-guardian's ObjectPermissionBackend sat here to
+        # answer `user.has_perm('view_project', project)`; access is an explicit
+        # `ProjectAccess` row now and `aledb_experiment/permissions.py` reads it directly,
+        # so there is no per-object permission for an auth backend to resolve.
         'AUTHENTICATION_BACKENDS': (
             'django.contrib.auth.backends.ModelBackend',
-            'guardian.backends.ObjectPermissionBackend',
         ),
 
         'LOGIN_URL': '/accounts/login/',

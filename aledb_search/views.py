@@ -218,14 +218,16 @@ def _add_project_to_query(request, include_argument_list, user_projects):
     :param user_projects:
     :return: True if there is project param and the project is valid, else FALSE
     """
+    # One evaluation of the queryset, not one per branch: `get_user_projects` returns a
+    # QuerySet, and both branches below used to re-run it.
+    project_ids = list(user_projects.values_list("id", flat=True))
     if request.GET['project']:
         project_id = request.GET['project']
-        ok = int(project_id) in [proj.id for proj in user_projects]
+        ok = int(project_id) in project_ids
         if ok:
             include_argument_list.append(Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project_id=project_id))
         return ok
     elif not request.user.is_superuser:
-        project_ids = [proj.id for proj in user_projects]
         include_argument_list.append(
             Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project_id__in=project_ids))
     return False

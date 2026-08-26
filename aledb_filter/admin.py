@@ -1,10 +1,9 @@
 from django.contrib import admin
 from django import forms
 from aledb_filter.models import AleExperimentFilter
-from guardian.admin import GuardedModelAdmin
 
 
 @admin.register(AleExperimentFilter)
-class FilterAdmin(GuardedModelAdmin):
+class FilterAdmin(admin.ModelAdmin):
     list_display = ('id', 'ale_experiment', 'min_cutoff', 'max_cutoff')
     search_fields = ('id', 'ale_experiment')

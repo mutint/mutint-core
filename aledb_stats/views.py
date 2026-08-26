@@ -39,8 +39,8 @@ def stats(request):
         # module twice under two names -- `import aledb_seq.views.common` alongside
         # `from aledb_seq.views import common` -- which made the second call look like a
         # different one, so every view of this page paid for a second AleExperiment query, a
-        # second project FK query and a second guardian permission check, then discarded the
-        # object the lines above had already fetched. The duplicate import is gone with it.
+        # second project FK query and a second permission check, then discarded the object
+        # the lines above had already fetched. The duplicate import is gone with it.
         exp_name = experiment.name
         ale_experiment_id = experiment.ale_id
         ale_number = common.get_ale_id(request)

@@ -61,8 +61,10 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 642 run, 0 failures** standalone; **688** in an assembled project, where the
-plugins' own tests join them. The suite is green — treat *any* failure as yours.
+**Baseline: 852 run, 0 failures** standalone. The suite is green — treat *any* failure as
+yours. (This said 642 for a while and was wrong by more than the sharing work added: it was
+698 before it, and the number had simply not been re-counted. Re-count it rather than
+adjusting it by what you think you added.)
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
 `aledb_common/test_runner.py` substitutes them when no labels are given. Standalone this
@@ -101,11 +103,15 @@ stopped the parser writing `Media.substrate` while the tests kept asserting on i
 - **`find_user()` prompts on stdin.** Anything reaching `try_creating_project` with a person
   name that matches no `User` raises `EOFError` under the test runner. Create the `User` first,
   or use `gd_import.prepare_experiment_by_id`, which never resolves a person.
-- **`Project.objects.create()` leaves the owner unable to view it.** `can_view_project` consults
-  the django-guardian grant, never `Project.user`. Use the `/ale/projects/create/` view, or call
-  `grant_access_to_project` yourself, or the project's own pages will 403 in the test — and it
-  will not appear in `get_user_projects` either. That used to be masked: the grant lookups
-  filtered on a stale app label and `get_user_projects` fell through to returning everything.
+- **`Project.objects.create()` is enough now, and used to not be.** `can_view_project` read
+  the django-guardian grant and never `Project.user`, so a project could name an owner who
+  could not open it, and five test modules carried a `POST /ale/projects/create/` workaround
+  for it. `effective_role` reads `Project.user` directly, so that trap is gone. Call
+  `set_primary_owner(project, user)` when you want the grant row as well — it is what the
+  create view, the CLI importer and `load_example` all use.
+- **Access is explicit; staff have no blanket read.** `can_view_project` used to end
+  `return bool(user.is_staff)`. A test that gives someone `is_staff=True` and expects them to
+  see a project is asserting the old behaviour.
 - **Override the store.** Anything touching `ALEDB_STORE_DIR` needs
   `override_settings(ALEDB_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
 - **Template content outside a `{% block %}` is silently discarded** in a child template. A
@@ -361,6 +367,104 @@ keep the description editable in the same form. A duplicate `sample_name` within
 experiment is refused for a related reason -- re-import finds an existing sample by name --
 but only when the name actually *changed*, or an experiment that already had a duplicate pair
 could never be saved at all.
+
+### Sharing: four roles, at the project level only
+
+Access is granted on a **project** and nowhere else. An experiment, a sample and a mutation
+are all reached through `experiment.project`, so there is one place to ask the question and
+one place to change the answer. Nothing below the project has an owner.
+
+    read  <  write  <  admin  <  owner
+
+`read` sees the project and its data. `write` adds, edits and curates — data, samples, tags,
+experiment filters. `admin` additionally manages access and may soft-delete the project.
+`owner` additionally grants and revokes ownership.
+
+`aledb_experiment/roles.py` holds the ordering and nothing else — it imports nothing from
+Django, so `models.py` (which needs `ROLE_CHOICES` for a field) and `permissions.py` (which
+needs `rank`) can both use it without importing each other. Roles are strings, not integers,
+so the column reads in `/admin/` and in a sqlite dump; `roles_at_least()` is what turns
+"role ≥ write" into one `role__in=[...]` lookup.
+
+`aledb_experiment/permissions.py` is the whole policy, and `effective_role(user, project)` is
+the whole of *that* — every `can_*` is a comparison against it. Three things confer a role
+with no row: a superuser is owner everywhere, `Project.user` is owner of their own project,
+and `is_public` gives everyone `read`. **There is no blanket grant for staff**; that clause
+used to end `can_view_project` and, since `load_projects` marks every imported user staff, it
+made nearly everything readable by nearly everyone. `./aledb project_access` is the escape
+hatch for a deployment that relied on it.
+
+**`ProjectAccess` is one row per (project, subject, role)**, where the subject is a user *or*
+a group. Its unique constraints are conditional (`condition=Q(user__isnull=False)`) because a
+plain `unique_together` would treat NULLs as distinct and permit unlimited duplicate group
+rows. A group may not hold `owner`: ownership has to be answerable about a person, and
+otherwise a group's manager could add themselves and own every project the group owns.
+
+**`Project.user` stays, as the *primary* owner, mirrored by a `ProjectAccess` owner row.** It
+is read by `Project.owner()`, two templates, `ProjectAdmin`, `load_projects`,
+`try_creating_project` and `load_example` — which looks projects up *by* it. `set_primary_owner`
+is the only writer, and revoking the primary owner re-points it at the longest-standing
+remaining owner. Multiple owners are allowed, so a project whose only owner leaves is not
+stranded.
+
+**The role cache is not an optimisation.** `mutation_table_builder` calls
+`can_add_experiment_filter` once per sample column *and* once per mutation row, so a table of
+400 mutations across 20 samples asks 420 times. django-guardian absorbed that in its own
+per-user cache; `permissions.py` keeps a `{project_pk: (generation, role)}` dict on the `User`
+instance, whose lifetime is naturally one request. A module-level generation counter, bumped
+by every write helper, invalidates it — which is what stops a `User` object that outlives a
+grant (every test, and the CLI) from answering with a stale role.
+`test_permissions.CacheTestCase` asserts the query count directly.
+
+**django-guardian is gone.** It stored a single `view_project` object permission and nothing
+else, and the two lookups built on it filtered on the app label `'ale'` while the real label
+is `aledb_experiment`, so they matched nothing. `0005` converts its grants to `read` rows and
+every `Project.user` to an `owner` row. It reads guardian's table with **raw SQL behind an
+introspection guard**, not `apps.get_model("guardian", ...)`: the ORM version only works while
+guardian is still in `INSTALLED_APPS`, which would have forced migrate-then-uninstall across
+two releases.
+
+**`0003_backfill_view_project_grants.py` is inert but must stay, under that name.** It
+declared a dependency on `("guardian", "0001_initial")`, and a dependency on an uninstalled
+app makes `migrate` fail with `NodeNotFoundError` on a *fresh* database — which every test run
+builds. Four other apps (`aledb_seq.0005`, `aledb_stats.0003`, `aledb_filter.0002`,
+`aledb_common.0001`) name the file as a dependency, so it cannot be renamed away.
+
+### Groups
+
+`AleGroup` + `AleGroupMembership`, in `aledb_experiment`. Deliberately not
+`django.contrib.auth.Group`: that one is administered from `/admin/`, has no owner, and
+carries a `permissions` m2m that would sit unused inviting someone to wire model permissions
+into a per-object scheme.
+
+`is_manager` is a flag on the membership row rather than a second m2m, so "every manager is a
+member" is true by construction. **The group's owner holds a membership row too**, written
+when the group is created — that is what lets `effective_role` reach them through the same
+join as everyone else instead of needing a `Q(group__owner=user)` special case in the hot
+query. Owner renames/manages/appoints/transfers/deletes; a manager renames and manages plain
+members only; a member just sees the page. The owner's row can never be removed or demoted —
+transfer first, which leaves the outgoing owner a manager.
+
+**Project roles and group roles are disjoint vocabularies with no bridge**, which is itself
+the guardrail: holding `admin` on a project lets you add "Barrick Lab" to it and gives you
+nothing whatever over that group. The corollary is that **the add-a-group box resolves against
+`visible_groups(user)`, not every group**. There is no autocomplete — a box that resolved any
+name would be an oracle: type names until one is accepted and you have enumerated every group
+on the installation. A group you cannot see returns the same message as one that does not
+exist, and `test_permissions` asserts the two strings are equal.
+
+### The sharing and group pages
+
+`/ale/project/<pk>/access/` (admin or owner) and `/ale/groups/`, `/ale/group/<pk>/`. Same
+shape as every other page here: function-based views, permission checked inline, `403.html`
+with a status, hand-written Bootstrap markup posting to `@require_POST` JSON endpoints through
+`aledbPost` — no Django `Form` classes, no autocomplete, usernames typed in and resolved
+server-side.
+
+The role dropdown on a row posts to the **same** grant endpoint as the add boxes: it is an
+upsert keyed on the subject, so there is no second endpoint that could disagree with it. A row
+the actor could not re-grant — an owner, seen by an admin — renders as text rather than a
+dropdown, so the page never offers a control whose every use the server would refuse.
 
 ### Compare is a plugin
 

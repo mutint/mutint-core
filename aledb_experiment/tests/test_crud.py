@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from aledb_common import store
 from aledb_experiment.models import AleExperiment, Project
-from aledb_experiment.permissions import grant_access_to_project
+from aledb_experiment.permissions import set_primary_owner
 from aledb_experiment.utils import get_all_user_exps, get_user_projects
 
 
@@ -171,8 +171,9 @@ class ProjectDetailIsReadOnlyTestCase(TestCase):
     """
 
     def setUp(self):
-        # Via the view, not Project.objects.create: the latter leaves the owner
-        # without the django-guardian grant, and the page then 403s.
+        # Via the view because the page under test is the one the view lands on. Direct
+        # creation is fine for access now -- `set_primary_owner` is what `project_create`
+        # calls, and `Project.user` alone already reads as owner.
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
@@ -327,7 +328,7 @@ class ProjectVisibilityTestCase(TestCase):
 
         self.private = Project.objects.create(
             name="private", user=self.owner, is_public=False)
-        grant_access_to_project(self.private, [self.owner])
+        set_primary_owner(self.private, self.owner)
         self.public = Project.objects.create(
             name="public", user=self.owner, is_public=True)
 
@@ -349,18 +350,30 @@ class ProjectVisibilityTestCase(TestCase):
         self.assertIn(self.private, visible)
         self.assertIn(self.public, visible)
 
-    def test_staff_keep_their_blanket_view_access(self):
-        """Deliberately retained: load_projects creates every imported user as staff."""
+    def test_staff_have_no_blanket_access(self):
+        """The inverse of what this asserted before, and the point of explicit roles.
+
+        `can_view_project` used to end `return bool(user.is_staff)`, and `load_projects`
+        creates every imported user with `is_staff=True` -- so nearly everyone could read
+        nearly everything and every role below admin was decorative.
+        """
         staff = User.objects.create(
             username="staff", email="st@e.com", is_active=True, is_staff=True)
-        self.assertIn(self.private, list(get_user_projects(staff)))
+        visible = list(get_user_projects(staff))
+        self.assertNotIn(self.private, visible)
+        self.assertIn(self.public, visible)
 
-    def test_a_project_with_no_grant_is_invisible_to_everyone_but_its_superusers(self):
-        """Why the backfill migration has to land with the filter fix: an ungranted
-        private project is not visible to the owner it names."""
+    def test_a_project_with_no_access_row_is_still_visible_to_the_user_it_names(self):
+        """The old trap, gone: `Project.objects.create()` used to leave the owner locked out.
+
+        `can_view_project` consulted only the guardian grant, never `Project.user`, so a
+        project could name an owner who could not open it. `effective_role` reads
+        `Project.user` directly now, so a missing grant row is a display bug at worst.
+        """
         orphan = Project.objects.create(
             name="ungranted", user=self.owner, is_public=False)
-        self.assertNotIn(orphan, list(get_user_projects(self.owner)))
+        self.assertIn(orphan, list(get_user_projects(self.owner)))
+        self.assertNotIn(orphan, list(get_user_projects(self.stranger)))
 
 
 class PurgeDeletedTestCase(TestCase):

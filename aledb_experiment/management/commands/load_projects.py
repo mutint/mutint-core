@@ -1,6 +1,6 @@
 import pandas as pd
 from aledb_experiment.models import AleExperiment, Project
-from aledb_experiment.permissions import grant_access_to_project
+from aledb_experiment.permissions import set_primary_owner
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand
 from django.contrib.auth.hashers import make_password
@@ -65,7 +65,7 @@ def _create_project(project_name: str, owner: User, pub_flag):
     is_pub = (pub_flag == 1)
     project = Project.objects.create(name=project_name, user=owner, date=datetime.now(),
                                      status="In progress", is_public=is_pub)
-    # `can_view_project` consults the guardian grant, never `Project.user`, so setting the
-    # owner without granting leaves them unable to see what they own.
-    grant_access_to_project(project, [owner])
+    # `set_primary_owner` writes both `Project.user` and the owner grant. Assigning the
+    # field alone used to leave the owner unable to see what they owned.
+    set_primary_owner(project, owner)
     return project

@@ -1,57 +1,35 @@
-"""Give every existing project's owner the guardian grant it was never issued.
+"""Inert. It once backfilled django-guardian grants; guardian is gone.
 
-`can_view_project` reads the django-guardian grant, never `Project.user`. Only two code
-paths ever issued one -- `/ale/projects/create/` and the CLI's `try_creating_project` -- so
-projects made by `load_projects` (and any created before those paths existed) have an owner
-who cannot see them.
+What it did: `can_view_project` read the guardian `view_project` grant and never
+`Project.user`, so projects made by `load_projects` -- and any made before the two paths that
+issued a grant existed -- had an owner who could not see them. This migration issued the
+missing grants.
 
-That went unnoticed because the queries behind `get_user_projects` filtered on
-`content_type__app_label='ale'` while the real label is `aledb_experiment`, so they always
-returned empty and the code fell through to showing every project to everyone. Correcting
-that filter is what makes the missing grants matter, so this backfill has to land with it.
+Why it is empty now: `0005` converts those grants into `ProjectAccess` rows and derives an
+owner row from `Project.user` regardless, and `effective_role` treats `Project.user` as owner
+directly, so the hole this filled cannot reopen. Re-running the backfill on a fresh database
+would write rows into a table that no longer exists.
+
+**The file is kept, and must not be renamed.** `aledb_seq.0005`, `aledb_stats.0003`,
+`aledb_filter.0002` and `aledb_common.0001` all name it as a dependency. Its own dependencies
+on `guardian` and `contenttypes` are what had to go: a dependency on an app that is no longer
+in INSTALLED_APPS makes `migrate` fail with NodeNotFoundError on a *fresh* database, before
+reaching any later migration -- and every test run builds a fresh database.
 """
 
 from django.db import migrations
 
 
-def grant_owners_view_access(apps, schema_editor):
-    # assign_perm needs the real model: it resolves the ContentType from the instance, and
-    # historical models carry no _meta the guardian shortcuts can use.
-    from django.contrib.contenttypes.models import ContentType
-    from guardian.models import UserObjectPermission
-    from django.contrib.auth.models import Permission
-
-    Project = apps.get_model("aledb_experiment", "Project")
-    content_type = ContentType.objects.filter(
-        app_label="aledb_experiment", model="project").first()
-    if content_type is None:
-        return
-
-    permission = Permission.objects.filter(
-        content_type=content_type, codename="view_project").first()
-    if permission is None:
-        return
-
-    for project in Project.objects.exclude(user__isnull=True).iterator():
-        UserObjectPermission.objects.get_or_create(
-            permission=permission,
-            content_type=content_type,
-            object_pk=str(project.pk),
-            user_id=project.user_id)
-
-
-def drop_backfilled_grants(apps, schema_editor):
-    """No-op: the grants are indistinguishable from ones issued normally."""
+def noop(apps, schema_editor):
+    """See the module docstring. Kept as a named function so the operation still reads."""
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
         ("aledb_experiment", "0002_aleexperiment_deleted_at_aleexperiment_deleted_by_and_more"),
-        ("guardian", "0001_initial"),
-        ("contenttypes", "0002_remove_content_type_name"),
     ]
 
     operations = [
-        migrations.RunPython(grant_owners_view_access, drop_backfilled_grants),
+        migrations.RunPython(noop, noop),
     ]

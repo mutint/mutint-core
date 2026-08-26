@@ -1,10 +1,12 @@
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 from django.contrib.auth.models import User
 from django.urls import reverse
 
-blank_field = {"blank": True, "null": True}
+from aledb_experiment.roles import ROLE_CHOICES, ROLE_OWNER
 
-VIEW_PROJECT = 'view_project'
+blank_field = {"blank": True, "null": True}
 
 
 class SoftDeleteMixin(models.Model):
@@ -85,15 +87,6 @@ class Project(SoftDeleteMixin):
         if self.date:
             return self.date.strftime("%Y-%m-%d")
         return ''
-
-
-def get_projects(user: User):
-    project_queryset = Project.objects.all()
-    projects = []
-    for project in project_queryset:
-        if project.is_public or user.has_perm(VIEW_PROJECT, project):
-            projects.append(project)
-    return projects
 
 
 class AleExperiment(SoftDeleteMixin):
@@ -323,3 +316,136 @@ class RecentExperiments(models.Model):
     third = models.IntegerField(null=True)
     fourth = models.IntegerField(null=True)
     fifth = models.IntegerField(null=True)
+
+
+# --- sharing: groups and project access ---------------------------------------------------
+#
+# Access is granted at the project level and nowhere else. An experiment, a sample and a
+# mutation are all reached through `experiment.project`, so there is exactly one place to ask
+# the question and exactly one place to change the answer.
+#
+# The policy that reads these tables is `aledb_experiment/permissions.py`; the ordering
+# between roles is `aledb_experiment/roles.py`. Nothing here decides who may do what.
+
+
+class AleGroup(models.Model):
+    """A named set of people, so a whole lab can be given access in one grant.
+
+    Deliberately not `django.contrib.auth.Group`: that one is administered from /admin/, has
+    no notion of who owns it, and carries a `permissions` m2m that would sit unused and
+    invite someone to wire Django model permissions into a per-object scheme.
+
+    `owner` is PROTECT, not the DO_NOTHING that `Project.user` uses for historical reasons: a
+    group whose owner has been deleted is unmanageable -- nobody can rename it, add to it, or
+    delete it -- and ownership transfer exists precisely so a departing member's groups get
+    handed on first.
+    """
+
+    name = models.CharField(max_length=80)
+    description = models.CharField(max_length=300, blank=True, default="")
+    owner = models.ForeignKey(User, on_delete=models.PROTECT,
+                              related_name="owned_ale_groups")
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Case-insensitive, because a group is added to a project by typing its name into a
+        # plain text box. Two groups differing only in case would be unresolvable, and the
+        # person typing would have no way to say which they meant.
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="alegroup_name_ci_unique"),
+        ]
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("group_detail", args=(self.pk,))
+
+    def member_count(self):
+        return self.memberships.count()
+
+
+class AleGroupMembership(models.Model):
+    """One person's place in one group.
+
+    `is_manager` is a flag rather than a separate `managers` m2m so that "every manager is a
+    member" is true by construction. With two tables it is only true by convention, and every
+    membership query then has to union them.
+
+    The group's owner holds a row here too, with `is_manager=True`, written when the group is
+    created. That keeps `group.memberships` a complete roster, which is what lets the
+    permission query reach a group's owner through the same join as everyone else instead of
+    needing a `Q(group__owner=user)` special case in the hot path.
+    """
+
+    group = models.ForeignKey(AleGroup, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name="ale_group_memberships")
+    is_manager = models.BooleanField(default=False)
+    added_at = models.DateTimeField(auto_now_add=True)
+    added_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
+                                 **blank_field)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["group", "user"],
+                                    name="alegroup_one_row_per_member"),
+        ]
+        ordering = ["-is_manager", "user__username"]
+
+    def __str__(self):
+        return "%s in %s" % (self.user.get_username(), self.group.name)
+
+
+class ProjectAccess(models.Model):
+    """One grant: a role on a project, held by either a user or a group.
+
+    The unique constraints have to be **conditional**. A plain
+    `unique_together = ("project", "user", "group")` looks equivalent and is not: SQL treats
+    NULLs as distinct, so it would permit unlimited duplicate rows for the same group (whose
+    `user` is NULL) and the same user (whose `group` is NULL).
+
+    **A group may not hold `owner`.** Ownership is accountability, and "who is the last owner"
+    has to be answerable about a person. It also closes the obvious escalation: were it
+    allowed, a group's manager could add themselves to the group and become an owner of every
+    project that group owns.
+    """
+
+    project = models.ForeignKey('Project', on_delete=models.CASCADE,
+                                related_name="access_entries")
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name="project_access", **blank_field)
+    group = models.ForeignKey(AleGroup, on_delete=models.CASCADE,
+                              related_name="project_access", **blank_field)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    granted_at = models.DateTimeField(auto_now_add=True)
+    granted_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
+                                   **blank_field)
+
+    class Meta:
+        verbose_name_plural = "project access"
+        constraints = [
+            models.CheckConstraint(
+                check=(Q(user__isnull=False, group__isnull=True)
+                       | Q(user__isnull=True, group__isnull=False)),
+                name="projectaccess_exactly_one_subject"),
+            models.UniqueConstraint(fields=["project", "user"],
+                                    condition=Q(user__isnull=False),
+                                    name="projectaccess_one_row_per_user"),
+            models.UniqueConstraint(fields=["project", "group"],
+                                    condition=Q(group__isnull=False),
+                                    name="projectaccess_one_row_per_group"),
+            models.CheckConstraint(
+                check=~Q(group__isnull=False, role=ROLE_OWNER),
+                name="projectaccess_groups_cannot_own"),
+        ]
+
+    def subject_kind(self):
+        return "user" if self.user_id else "group"
+
+    def subject_name(self):
+        return self.user.get_username() if self.user_id else self.group.name
+
+    def __str__(self):
+        return "%s: %s on %s" % (self.subject_name(), self.role, self.project.name)

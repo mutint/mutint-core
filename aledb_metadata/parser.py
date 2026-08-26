@@ -247,8 +247,8 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
             # There was a `Project.objects.get_or_create(name=metadata_dict[PROJECT])` here
             # whose result was never used. Its only effect was a side effect: creating a
             # Project with no `user` -- a column that is NOT NULL, so the create branch
-            # raised IntegrityError -- and with no guardian grant, which is what
-            # `can_view_project` actually reads. The experiment's project is already set by
-            # the import that called this; metadata does not get to invent another one.
+            # raised IntegrityError -- and with no access grant, so nobody could have seen
+            # it anyway. The experiment's project is already set by the import that called
+            # this; metadata does not get to invent another one.
 
 

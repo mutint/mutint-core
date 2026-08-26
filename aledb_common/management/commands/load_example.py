@@ -98,7 +98,7 @@ class Command(BaseCommand):
     def _load(self, dataset, options):
         from aledb_common.import_registry import run_import
         from aledb_experiment.models import AleExperiment, Project, live
-        from aledb_experiment.permissions import grant_access_to_project
+        from aledb_experiment.permissions import set_primary_owner
         from aledb_experiment.views import _create_experiment
 
         user = self._resolve_user(options.get("username"))
@@ -121,9 +121,10 @@ class Command(BaseCommand):
             project = Project.objects.create(
                 name=EXAMPLE_PROJECT, user=user, is_public=False, status="in progress",
                 description="Example datasets loaded by ./aledb load_example.")
-            # Without the guardian grant the owner cannot view their own project -- the
-            # trap documented in CLAUDE.md. The web view issues it; so must this.
-            grant_access_to_project(project, [user])
+            # `set_primary_owner` writes the owner grant alongside `Project.user`, which
+            # is what the web view does. The lookup above finds the project by `user`, so
+            # the two have to stay in step.
+            set_primary_owner(project, user)
 
         experiment = _create_experiment(project, name, user)
 

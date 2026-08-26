@@ -1,79 +1,369 @@
-from guardian.models import UserObjectPermission
-from guardian.shortcuts import assign_perm
+"""Who may do what to a project. The whole policy lives here.
 
-from aledb_experiment.models import AleExperiment
+Everything below the project inherits: an experiment, a sample and a mutation are all
+reached through `experiment.project`, so `can_edit_project(user, experiment.project)` is the
+only question any of them asks. Nothing is owned at the experiment or sample level.
+
+Four roles, ordered (`aledb_experiment/roles.py`):
+
+    read  < write < admin < owner
+
+`read` sees the project and its data. `write` adds, edits and curates -- data, samples, tags
+and experiment filters. `admin` additionally manages who has access and may soft-delete the
+project. `owner` additionally grants and revokes ownership.
+
+Three things confer a role without a `ProjectAccess` row, and all three are in
+`effective_role`: a superuser is owner everywhere; `Project.user` is owner of their own
+project; and `is_public` gives everyone, signed in or not, `read`.
+
+**There is no blanket grant for staff.** `can_view_project` used to end
+`return bool(user.is_staff)`, and `load_projects` creates every imported user with
+`is_staff=True`, so on a real deployment that made every project readable by almost everyone
+and every role below `admin` decorative. Restoring it would empty this module of meaning; the
+escape hatch for a deployment that relied on it is `./aledb project_access`.
+"""
+
 import logging
 
-VIEW_PROJECT = 'view_project'
+from django.db.models import Q
+
+from aledb_experiment.models import AleGroup, Project, ProjectAccess, live
+from aledb_experiment.roles import (
+    ROLE_ADMIN, ROLE_OWNER, ROLE_READ, ROLE_WRITE,
+    at_least, best_role, is_role, rank, roles_at_least,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def get_users_with_access_to_project(project):
-    users = set([])
-    permissions = UserObjectPermission.objects.filter(object_pk=project.id)
-    for permission in permissions:
-        users.add(permission.user)
-    return users
+class AccessError(Exception):
+    """A refusal whose message is written for a person and is safe to show verbatim."""
 
 
-def grant_access_to_project(project, user_list):
-    for user in user_list:
-        assign_perm(VIEW_PROJECT, user, project)
-    return
+# --- the per-request role cache -----------------------------------------------------------
+#
+# This is not an optimisation, it is what keeps a mutation table from issuing a query per row.
+# `mutation_table_builder.get_table_header` calls can_add_experiment_filter once per sample
+# column and `get_mutation_table_body` once per mutation row -- a table of 400 mutations
+# across 20 samples asks 420 times. django-guardian used to absorb that in its own
+# `_guardian_perm_cache` on the user object; replacing it with a plain lookup and no cache
+# would have been a silent, large regression on the busiest page in the product.
+#
+# The cache hangs off the `User` instance, so its lifetime is naturally one request --
+# `request.user` is one object per request and is discarded with it. A module-level
+# generation counter, bumped by every write helper below, invalidates it: that matters most
+# in tests and in the CLI, where one `User` object outlives several grants and would
+# otherwise keep answering with the role it had at the start.
+
+_CACHE_ATTR = "_aledb_project_roles"
+_generation = 0
+
+
+def _bump_cache():
+    global _generation
+    _generation += 1
+
+
+def clear_role_cache(user=None):
+    """Drop cached roles. Bumping the generation invalidates every user's at once."""
+    _bump_cache()
+    if user is not None:
+        try:
+            delattr(user, _CACHE_ATTR)
+        except AttributeError:
+            pass
+
+
+def _cached(user, project_pk):
+    entry = getattr(user, _CACHE_ATTR, {}).get(project_pk)
+    if entry is None or entry[0] != _generation:
+        return None, False
+    return entry[1], True
+
+
+def _remember(user, project_pk, role):
+    try:
+        cache = user.__dict__.setdefault(_CACHE_ATTR, {})
+    except AttributeError:
+        # AnonymousUser and friends: not worth caching, and not worth failing over.
+        return role
+    cache[project_pk] = (_generation, role)
+    return role
+
+
+# --- reading the policy -------------------------------------------------------------------
+
+
+def effective_role(user, project):
+    """The best role `user` holds on `project`, or None if they hold none.
+
+    One query, cached. Every `can_*` predicate below is a comparison against this.
+    """
+    if project is None:
+        return None
+
+    if user is None or not getattr(user, "is_authenticated", False):
+        return ROLE_READ if project.is_public else None
+
+    if user.is_superuser:
+        return ROLE_OWNER
+
+    cached, hit = _cached(user, project.pk)
+    if hit:
+        return cached
+
+    role = ROLE_READ if project.is_public else None
+    if project.user_id == user.id:
+        # The project names them. Deliberately not dependent on the mirror ProjectAccess row
+        # existing: a missing mirror is then a display bug rather than an owner locked out of
+        # their own project, which is exactly the trap the old scheme had.
+        role = ROLE_OWNER
+    else:
+        granted = ProjectAccess.objects.filter(
+            Q(user=user) | Q(group__memberships__user=user),
+            project=project,
+        ).values_list("role", flat=True)
+        for grant in granted:
+            role = best_role(role, grant)
+
+    return _remember(user, project.pk, role)
+
+
+def has_project_role(user, project, minimum):
+    return at_least(effective_role(user, project), minimum)
 
 
 def can_view_project(user, project):
-    """Superusers, public projects, anyone holding the guardian grant -- and all staff.
-
-    `user.has_perm` goes through guardian's own backend, which resolves the content type
-    from the instance, so that clause was always correct.
-
-    The staff clause is a deliberate blanket grant. It used to be conditional -- staff were
-    let through only on projects that had no grant at all -- but the query behind that test
-    filtered on `content_type__app_label='ale'` while the label is `aledb_experiment`, so it
-    matched nothing and staff were let through on *everything*. Correcting the label without
-    also flattening this would have quietly reversed it, cutting staff off from every project
-    the backfill migration granted. `load_projects` creates every imported user with
-    `is_staff=True`, so that is most of the user base. Narrowing who counts as staff is a
-    separate decision from fixing the lookup.
-    """
-    if user.is_superuser or project.is_public:
-        return True
-    if user.has_perm(VIEW_PROJECT, project):
-        return True
-    return bool(user.is_staff)
+    return has_project_role(user, project, ROLE_READ)
 
 
 def can_edit_project(user, project):
-    """Who may create under, or delete, a project.
+    """Add, edit and curate. Was "owner or superuser"; collaboration is the point here."""
+    return has_project_role(user, project, ROLE_WRITE)
 
-    Deliberately built on `Project.user` and `is_superuser` rather than the guardian grant:
-    the two `content_type__app_label='ale'` lookups in this module are stale (the app label is
-    `aledb_experiment`), so they always return empty and cannot be trusted for a destructive
-    action. `Project.user` is set at creation and is unambiguous.
+
+def can_admin_project(user, project):
+    return has_project_role(user, project, ROLE_ADMIN)
+
+
+def can_own_project(user, project):
+    return has_project_role(user, project, ROLE_OWNER)
+
+
+def can_manage_project_access(user, project):
+    """Who may open /ale/project/<pk>/access/ and change what is on it."""
+    return has_project_role(user, project, ROLE_ADMIN)
+
+
+def can_delete_project(user, project):
+    """Deliberately admin, and deliberately *not* `can_edit_project`.
+
+    Widening editing to `write` would otherwise have handed every read/write collaborator the
+    ability to soft-delete the whole project, which is not what "may add data" means to
+    anyone. Admin rather than owner because deletion is soft and `purge_deleted` gives a
+    retention window, so it is recoverable.
     """
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    return project is not None and project.user_id == user.id
+    return has_project_role(user, project, ROLE_ADMIN)
 
 
 def can_delete_experiment(user, experiment):
     """An experiment is deletable by whoever may edit the project holding it."""
-    if not user or not user.is_authenticated:
+    if experiment is None:
         return False
-    if user.is_superuser:
-        return True
-    return can_edit_project(user, experiment.project) if experiment else False
+    return can_edit_project(user, experiment.project)
 
 
 def can_add_global_filter(user):
-    return user.is_superuser
+    return bool(user and user.is_superuser)
 
 
 def can_add_experiment_filter(user, experiment):
-    if experiment:
-        return user.is_superuser or user.has_perm(VIEW_PROJECT, experiment.project)
-    return False
+    """Curating -- tagging a mutation, editing an experiment filter -- is a write.
+
+    `TechnicalReplicate.tags` and the experiment filter are read by four different mutation
+    tables, so a change here is a change to what everyone else sees. It used to be granted by
+    the plain view permission, which let a read-only visitor rewrite shared state.
+    """
+    if experiment is None:
+        return False
+    return can_edit_project(user, experiment.project)
+
+
+def accessible_projects(user, minimum=ROLE_READ):
+    """Every live project on which `user` holds at least `minimum`. Always a QuerySet.
+
+    This replaces a loop over every project in the database with a per-row permission check.
+    Two things in the query are easy to get subtly wrong:
+
+    - `role__in` and the subject lookup must sit inside **one** `Q()`. Split across two
+      `.filter()` calls they become two joins, asking "has some row with this role AND some
+      row for this user", which is a different and wrong question.
+    - `.distinct()` is required: the group join fans out one row per matching membership.
+    """
+    base = live(Project.objects.all())
+
+    if user is None or not getattr(user, "is_authenticated", False):
+        # Anonymous access is exactly the public projects, and only for reading.
+        return base.filter(is_public=True) if minimum == ROLE_READ else Project.objects.none()
+
+    if user.is_superuser:
+        return base
+
+    roles = roles_at_least(minimum)
+    query = (Q(access_entries__role__in=roles, access_entries__user=user)
+             | Q(access_entries__role__in=roles, access_entries__group__memberships__user=user)
+             | Q(user=user))
+    if minimum == ROLE_READ:
+        query |= Q(is_public=True)
+    return base.filter(query).distinct()
+
+
+def project_owners(project):
+    """Every user holding `owner`, via the mirror row or an additional grant."""
+    return ProjectAccess.objects.filter(project=project, role=ROLE_OWNER,
+                                        user__isnull=False).select_related("user")
+
+
+# --- resolving what someone typed ---------------------------------------------------------
+
+
+def resolve_username(name):
+    """A username typed into a text box -> a User, or an AccessError saying why not.
+
+    Exact first, then case-insensitive. Django usernames are unique case-*sensitively*, so a
+    bare `iexact` can genuinely match two accounts; that is refused by name rather than
+    resolved arbitrarily.
+    """
+    from django.contrib.auth.models import User
+
+    name = (name or "").strip()
+    if not name:
+        raise AccessError("Enter a username.")
+
+    exact = User.objects.filter(username=name).first()
+    if exact is not None:
+        return exact
+
+    matches = list(User.objects.filter(username__iexact=name)[:2])
+    if not matches:
+        raise AccessError('There is no user named "%s".' % name)
+    if len(matches) > 1:
+        raise AccessError('More than one user matches "%s"; usernames are case-sensitive, '
+                          'so type it exactly.' % name)
+    return matches[0]
+
+
+def resolve_group_name(name, user):
+    """A group name typed into a text box -> an AleGroup the actor can actually see.
+
+    Resolved against the groups `user` belongs to, never against all of them. A box that
+    resolved any name would be a group-name oracle: type names until one is accepted and you
+    have enumerated every group on the installation. A group you cannot see gives the same
+    answer as a group that does not exist, which is the point.
+    """
+    from aledb_experiment.group_permissions import visible_groups
+
+    name = (name or "").strip()
+    if not name:
+        raise AccessError("Enter a group name.")
+
+    group = visible_groups(user).filter(name__iexact=name).first()
+    if group is None:
+        raise AccessError('There is no group named "%s" that you belong to.' % name)
+    return group
+
+
+# --- writing -------------------------------------------------------------------------------
+
+
+def _remaining_owner_count(project, excluding_pk=None):
+    owners = ProjectAccess.objects.filter(project=project, role=ROLE_OWNER)
+    if excluding_pk is not None:
+        owners = owners.exclude(pk=excluding_pk)
+    return owners.count()
+
+
+def grant_project_access(project, subject, role, granted_by=None):
+    """Give `subject` (a User or an AleGroup) `role` on `project`. Upserts.
+
+    The guardrails live here rather than only in the view, so the management command and the
+    import paths cannot route around them.
+    """
+    if not is_role(role):
+        raise AccessError("Unknown role.")
+
+    if isinstance(subject, AleGroup):
+        if role == ROLE_OWNER:
+            raise AccessError("A group cannot own a project; ownership is held by a person.")
+        lookup = {"project": project, "group": subject}
+    else:
+        lookup = {"project": project, "user": subject}
+
+    existing = ProjectAccess.objects.filter(**lookup).first()
+    if (existing is not None and existing.role == ROLE_OWNER and role != ROLE_OWNER
+            and _remaining_owner_count(project, excluding_pk=existing.pk) == 0):
+        raise AccessError("A project must have an owner; give ownership to someone else first.")
+
+    if existing is not None:
+        existing.role = role
+        existing.granted_by = granted_by if _is_real_user(granted_by) else None
+        existing.save(update_fields=["role", "granted_by"])
+        entry = existing
+    else:
+        entry = ProjectAccess.objects.create(
+            role=role, granted_by=granted_by if _is_real_user(granted_by) else None, **lookup)
+
+    if role == ROLE_OWNER and project.user_id is None:
+        project.user = subject
+        project.save(update_fields=["user"])
+
+    _bump_cache()
+    return entry
+
+
+def revoke_project_access(project, entry):
+    """Remove one grant, keeping the "a project always has an owner" invariant."""
+    if entry.role == ROLE_OWNER and _remaining_owner_count(project, excluding_pk=entry.pk) == 0:
+        raise AccessError("A project must have an owner; give ownership to someone else first.")
+
+    was_primary = entry.user_id is not None and project.user_id == entry.user_id
+    entry.delete()
+
+    if was_primary:
+        # `Project.user` is the primary owner and is displayed as *the* owner, so it cannot be
+        # left pointing at someone who no longer has any access. The lowest-pk remaining owner
+        # is the longest-standing one.
+        successor = (ProjectAccess.objects
+                     .filter(project=project, role=ROLE_OWNER, user__isnull=False)
+                     .order_by("pk").first())
+        if successor is not None:
+            project.user = successor.user
+            project.save(update_fields=["user"])
+
+    _bump_cache()
+
+
+def set_primary_owner(project, user, granted_by=None):
+    """Make `user` the project's primary owner: writes `Project.user` **and** the owner row.
+
+    The one writer of `Project.user`. Everything that creates a project goes through here --
+    the create page, the CLI importer, `load_projects`, `load_example` -- so a project cannot
+    come into existence with an owner who has no grant, which is what the old
+    `Project.objects.create()` trap was.
+    """
+    if project.user_id != getattr(user, "id", None):
+        project.user = user
+        project.save(update_fields=["user"])
+    entry, created = ProjectAccess.objects.get_or_create(
+        project=project, user=user, group=None,
+        defaults={"role": ROLE_OWNER,
+                  "granted_by": granted_by if _is_real_user(granted_by) else None})
+    if not created and entry.role != ROLE_OWNER:
+        entry.role = ROLE_OWNER
+        entry.save(update_fields=["role"])
+    _bump_cache()
+    return entry
+
+
+def _is_real_user(user):
+    return bool(user and getattr(user, "is_authenticated", False) and user.pk)
