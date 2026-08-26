@@ -82,6 +82,48 @@ class NormalizationTestCase(TestCase):
         self.assertEqual(reference_store.digest(from_gbk[0]),
                          reference_store.digest(from_gff[0]))
 
+    def _versioned_genbank(self):
+        """A GenBank whose VERSION accession differs from its LOCUS name, as every
+        NCBI download does: LOCUS `test_ref`, VERSION `test_ref.3`."""
+        path = os.path.join(self.tmp, "versioned.gbk")
+        write_genbank(path, [("test_ref", breseq_fixture.SEQUENCE_A)])
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+        text = text.replace("VERSION     test_ref", "VERSION     test_ref.3")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        return path
+
+    def test_genbank_seq_ids_come_from_the_locus_line(self):
+        """breseq names contigs from LOCUS, so a .gd it writes says `test_ref`. Taking
+        the VERSION here would name the same contig `test_ref.3` and the two would not
+        resolve to each other -- `ReferenceSequences.add` matches names exactly."""
+        gff3_text, sequences = reference_io.normalize_reference(self._versioned_genbank())
+
+        self.assertEqual([seq_id for seq_id, _ in sequences], ["test_ref"])
+        self.assertIn("##sequence-region\ttest_ref\t", gff3_text)
+        self.assertNotIn("test_ref.3", gff3_text)
+
+    def test_the_versioned_accession_still_resolves(self):
+        """Kept as an alias, so a GFF3 or .gd spelling it `test_ref.3` still finds the
+        contig; only the canonical name changed."""
+        from aledb_import.annotate import genbank
+
+        references = genbank.load_genbank(self._versioned_genbank())
+
+        self.assertIs(references["test_ref.3"], references["test_ref"])
+        self.assertEqual(genbank.read_seq_ids(self._versioned_genbank()), ["test_ref"])
+
+    def test_a_versioned_genbank_still_matches_breseqs_gff3(self):
+        """The same property as above, now that the two spell the accession differently
+        in the file: normalization has to land them on the same name."""
+        gbk = reference_io.normalize_reference(self._versioned_genbank())
+        gff = reference_io.normalize_reference(
+            self._write("ref.gff3", breseq_fixture.gff3_text(SEQUENCES)))
+
+        self.assertEqual(gbk[0], gff[0], "normalized GFF3 differs")
+        self.assertEqual(gbk[1], gff[1], "normalized sequences differ")
+
     def test_normalized_gff3_is_breseq_dialect(self):
         """The canonical form keeps what annotation needs, in breseq's spelling.
 

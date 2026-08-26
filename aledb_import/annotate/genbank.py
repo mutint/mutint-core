@@ -152,13 +152,34 @@ def _borrow_labels(feature, bio_feature, labels):
             feature.name = make_safe(locus_tag)
 
 
+def _record_seq_id(record):
+    """The seq_id breseq would give this record: the LOCUS name.
+
+    Biopython puts the LOCUS name in ``record.name`` and the VERSION accession in
+    ``record.id``, so a record for E. coli K-12 is ``NC_000913`` and ``NC_000913.3``
+    respectively. breseq takes the LOCUS name (reference_sequence.cpp
+    ``LoadGenBankFileHeader``), and every seq_id in a .gd it writes is therefore the
+    unversioned one. Taking the VERSION here made a GenBank and breseq's own GFF3 of
+    the same genome disagree about what its contigs are called, which is exactly the
+    disagreement ``ReferenceSequences.add`` refuses to paper over.
+
+    The VERSION is kept as an alias in ``load_genbank`` so a lookup by either name
+    still resolves; only the canonical name changes.
+    """
+    for candidate in (record.name, record.id):
+        # Biopython fills these with '<unknown name>'/'<unknown id>' rather than ''.
+        if candidate and not candidate.startswith('<unknown'):
+            return candidate
+    return ''
+
+
 def load_genbank(*paths):
     """Load one or more GenBank files into a ReferenceSequences."""
     references = ReferenceSequences()
 
     for path in paths:
         for record in parse_records(path):
-            seq_id = record.id or record.name
+            seq_id = _record_seq_id(record)
             annotated = AnnotatedSequence(seq_id, str(record.seq).upper())
             labels = _gene_feature_labels(record.features)
 
@@ -177,8 +198,13 @@ def load_genbank(*paths):
                     annotated.features.append(feature)
             annotated.update_feature_lists()
             references.add(annotated)
-            if record.name and record.name not in references.sequences:
-                references.sequences[record.name] = annotated
+            # The accession stays reachable under its versioned name, so a GFF3 or .gd
+            # that spells the contig `NC_000913.3` still finds it. Alias only: the
+            # rendered GFF3 and the stored seq_ids come from `annotated.seq_id`.
+            version = record.id
+            if (version and not version.startswith('<unknown')
+                    and version not in references.sequences):
+                references.sequences[version] = annotated
 
     if not references.sequences:
         raise ValueError('No GenBank records found in: %s' % ', '.join(paths))
@@ -187,7 +213,7 @@ def load_genbank(*paths):
 
 def read_seq_ids(path):
     """Just the contig ids a GenBank file defines."""
-    return [record.id or record.name for record in parse_records(path)]
+    return [_record_seq_id(record) for record in parse_records(path)]
 
 
 def looks_like_genbank(path):

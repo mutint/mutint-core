@@ -494,6 +494,27 @@ record that the drop happened, so it rides across the reload in `sessionStorage`
 features, so there is nothing in one to install -- it used to be accepted and then rejected
 on the sequence check, which named the wrong reason.
 
+### A GenBank's contig names come from its LOCUS line
+
+`annotate/genbank.py` takes each record's `seq_id` from **LOCUS** (`record.name`,
+`NC_000913`), not from **VERSION** (`record.id`, `NC_000913.3`). breseq does the same
+(`reference_sequence.cpp` `LoadGenBankFileHeader`), so every seq_id in a `.gd` it writes is
+the unversioned one — and `ReferenceSequences.add` matches names **exactly**, on purpose, so
+a reference that called the contig `NC_000913.3` would reject every one of those `.gd` files.
+Taking VERSION here made a GenBank and breseq's own GFF3 of the same genome disagree about
+what its contigs are called, which is the one disagreement the whole normalization design
+exists to prevent.
+
+The VERSION accession stays in `references.sequences` as an alias, so a lookup by either
+spelling resolves. It is an alias only: `_sequences_of` and `render_breseq_gff3` both dedupe
+by object identity and emit `annotated.seq_id`, so the canonical name is what gets stored and
+hashed.
+
+Existing references are untouched — their GFF3 was rendered when they were established. A
+GenBank re-imported through `replace_annotation` against a reference established under the old
+rule renames its contigs, which is exactly the case `reference_rename` asks about before
+proceeding.
+
 ### Telling someone they picked the wrong type
 
 The one mistake worth engineering for is a `.gd` chosen as a reference genome, or the reverse:
