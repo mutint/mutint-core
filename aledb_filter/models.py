@@ -19,8 +19,16 @@ def get_default_experiment_filter_params(ale_experiment):
 
 
 class AleExperimentFilter(models.Model):
+    """One experiment's mutation filter settings. Exactly one row per experiment.
 
-    ale_experiment = models.ForeignKey(AleExperiment, on_delete=models.CASCADE)
+    A OneToOneField rather than a plain ForeignKey, because every piece of code that reads
+    this has always assumed one row -- `ale_exp_filter` calls `.get(ale_experiment_id=...)`
+    and the filter form edits a single instance -- while nothing in the database said so.
+    Two rows made `filter_observed_mutations` OR both of their exclusions together, which
+    quietly changed what every mutation table showed, and made that `.get()` raise.
+    """
+
+    ale_experiment = models.OneToOneField(AleExperiment, on_delete=models.CASCADE)
     min_cutoff = models.PositiveSmallIntegerField(default=DEFAULT_MUTATION_FREQ_MIN)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
     max_cutoff = models.PositiveSmallIntegerField(default=DEFAULT_MUTATION_FREQ_MAX)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
     min_gatk_cutoff = models.PositiveSmallIntegerField(

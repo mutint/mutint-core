@@ -218,5 +218,13 @@ def ensure_default_experiment_filter(ale_experiment_id):
     experiment = AleExperiment.objects.filter(ale_id=ale_experiment_id).first()
     if experiment is None:
         return
+    # `ale_experiment` is the lookup and everything else is a default, which is the whole
+    # point. Passing the defaults as *lookups* -- which this did -- asks for "a filter for
+    # this experiment whose settings are all still the factory ones", so the moment anyone
+    # edited a filter this stopped matching their row and created a second one beside it.
+    # `filter_observed_mutations` then ORed both rows' exclusions together, and
+    # `ale_exp_filter`'s `get_or_create(ale_experiment=...)` raised MultipleObjectsReturned.
+    # The same shape as the view's call, which always had it right.
     AleExperimentFilter.objects.get_or_create(
-        **get_default_experiment_filter_params(experiment))
+        ale_experiment=experiment,
+        defaults=get_default_experiment_filter_params(experiment))
