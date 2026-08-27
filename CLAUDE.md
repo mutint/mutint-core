@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1163 run, 0 failures** standalone; **1278** in an assembled project, where the
-plugins' own tests join them. They were 1156 and 1271 before the frequency cutoff was fixed,
+**Baseline: 1178 run, 0 failures** standalone; **1293** in an assembled project, where the
+plugins' own tests join them. They were 1163 and 1278 before the lazy-rebuild sweep, 1156 and
+1271 before the frequency cutoff was fixed,
 1136 and 1251 before the mutation-change page, 1116
 and 1231 before the cross-sample grid, 1109 and 1222 before the caller flags were dropped,
 1081 and 1194 before the genomediff bump, 1028 and 1141
@@ -399,6 +400,76 @@ so an IIFE in the content block runs with only plain DataTables loaded and `sele
 `buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
 class from the stylesheet, so it reads as a styling fault rather than a load-order one.
 
+### Derived data is only as fresh as its reader makes it
+
+`rebuild_registry` splits marking from running on purpose -- `request_rebuild` is one UPDATE
+and safe from any request, `run_rebuilds` is expensive -- and the design says the page that
+reads the data closes the gap by calling **`ensure_fresh`**. For a long time exactly one reader
+did. Six rebuilders were registered; `aledb_stats.get_experiment_summary` was the only one that
+refreshed itself.
+
+So a filter edit, which deliberately marks and rebuilds nothing, left the needle plot, Fixed
+Mutations, Convergence and the dashboard showing what was true under the *previous* cutoff, with
+nothing short of `./aledb rebuild` that would ever correct them. The global filter view's own
+comment -- *"Each page rebuilds its own on next view"* -- described something that had never
+been implemented.
+
+The sharpest case was a single page: `/stats` renders `get_experiment_summary`, which
+refreshed, beside `get_needle_plot_data`, which did not -- two counts of the same mutations
+disagreeing in the same viewport. Every reader calls `ensure_fresh` now.
+
+**A plugin must not spell its own rebuilder's name.** `register_post_experiment_hook` derives
+it from the app label, suffixes a second registration, and **returns** what it used; aledb-fixation
+and aledb-converge capture that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
+`'aledb_fixation'` would be a second opinion about a name `_candidate_names` owns.
+
+**`ensure_fresh` cannot raise**, which is what makes it safe on a read path: a rebuild that
+fails is logged, recorded in `last_error` and left stale, and the page renders whatever was
+stored before. A broken plugin rebuild degrades its own page instead of 500ing it.
+
+#### What the edit path pays for, and what it does not
+
+`rebuild_after_edit` is **unnarrowed by name and narrowed by scope**, and those are different
+questions. Never `only=`, unlike `rebuild_after_structural_change`: adding or removing an
+observation changes every derived thing an experiment has, and aledb-fixation caches
+ObservedMutation *ids* that only its delete-and-recompute rebuild clears. But `request_rebuild`
+marks the **site-scoped** totals stale too, correctly, and running them here made a single
+delete recount every ObservedMutation in the installation -- measured at 4.9s for the read half
+alone on 74,859 rows, which is exactly the bill `rebuild_after_structural_change` refuses. They
+stay marked; the dashboard's own `ensure_fresh` pays it once on the next view. Ten deletes cost
+one recount rather than ten.
+
+`run_rebuilds` takes `scope=` for this; `get_rebuilders` already did.
+
+#### Derived data cannot notice that the *rules* changed
+
+Every write path marks what it invalidated. Nothing marks anything when the code that decides
+what counts changes instead -- no experiment moved, so no `request_rebuild` fires, and the
+tables sit there holding pre-change values while `stale_since` says they are fresh. Measured
+right after the frequency cutoff started filtering: the dashboard stored **74,859** observations
+where the filter yields **73,857**, marked fresh, so `ensure_fresh` would have left it
+indefinitely.
+
+`aledb_common.0002` stamps every `DerivedDataState` row stale for that reason -- one UPDATE, no
+rebuilding, and each page recomputes on its next view. Measured end to end on the dev database
+after migrating: the first `/dashboard` view took **5.4s** and corrected the stored total from
+74,859 to 73,857; the second took **0.00s**. **Any future change to filtering or
+counting logic needs the same migration**, because there is no way for the data to work it out
+for itself. `./aledb rebuild --all --force` is the manual equivalent.
+
+#### The dashboard counted what had been deleted
+
+`rebuild_mutation_counts` read `ObservedMutation.objects.all()` and `rebuild_sample_counts`
+counted every `AleId`/`Flask`/`Isolate`, neither excluding soft-deleted rows -- and nothing
+marked the totals stale when a project or experiment was removed, so even a rebuild would have
+produced the same numbers. Both halves are fixed. Both conditions are needed: **deleting a
+project does not stamp its experiments**, so a check on `AleExperiment.deleted_at` alone would
+go on counting everything underneath it. `get_general_count_dict` counted deleted projects and
+experiments outright, behind a comment saying no filtering was needed.
+
+The two delete views mark only the aggregates by name: removing one experiment cannot make
+another's needle plot wrong, and `request_rebuild()` with no experiment would mark every one.
+
 ### The frequency cutoff, which excluded nothing
 
 `aledb_filter`'s min/max cutoff is the oldest user-facing filter here and it did not work, in
@@ -454,6 +525,16 @@ so the whole cost is what the browser is then handed. Capped it is 1.75 MB, and 
 because a client-side filter still ships every row; the box decides what gets built. A number
 matches `position` exactly, since a substring match on a coordinate is never what anybody
 means.
+
+**Only mutations something observes are listed.** A `Mutation` is never deleted here, so
+removing its last observation leaves the row behind -- and a grid keyed on
+`Mutation.objects.filter(ale_experiment=...)` went on rendering it with every cell empty, which
+is what "the page does not update when I delete" turned out to be. The page reloads; the row was
+genuinely still there. Restricted to the *shown* samples rather than to the experiment, because
+`get_reseq_ordered_dict` applies the sample tag filters and a mutation observed only in a hidden
+sample is an all-empty row for the same reason. This is not the filtering the editor forbids: a
+mutation no sample observes is stored in no sample, so there is nothing on its row to select and
+nothing on it to delete.
 
 **Selection lives in a `Set` of observation ids and never in the DOM.** DataTables detaches
 the rows of undrawn pages, so `.selected` on `<td>`s can only ever see the current page. The

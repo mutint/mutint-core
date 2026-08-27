@@ -510,3 +510,28 @@ class BulkPageTestCase(AccessTestCase):
         it -- so a declined change looked like one that had simply not taken."""
         html = self.client.get(self.page).content.decode()
         self.assertNotIn("fail(err);\n                reload();", html)
+
+    def test_a_partial_apply_moves_the_rows_that_succeeded(self):
+        """The page deliberately does not reload on a partial apply, so the per-subject
+        refusals stay readable. That left the rows that *did* change still showing their old
+        role, under a line reading "Applied to 7" -- the page contradicting itself.
+
+        This asserts only that the handler is wired, because the behaviour itself is not
+        reachable from a Django test: it needs a browser and a resolved fetch. Measured in
+        headless Chrome, four rows ticked and the first refused by the server:
+
+            before= admin:admin, owner:owner,  reader:read,  writer:write
+            after=  admin:admin, owner:admin, reader:admin, writer:admin
+            message="Applied to 3, refused 1:"
+
+        The refused row keeps what it still has, the three that applied follow, and the
+        message stays on screen.
+        """
+        html = self.client.get(self.page).content.decode()
+
+        self.assertIn("showAppliedRole", html)
+        self.assertIn("if (data.role) { showAppliedRole(data.role, errors); }", html)
+        # The two guards that make it correct rather than merely present: a row nobody ticked
+        # was not part of the apply, and a refused one did not move.
+        self.assertIn('if (!row.querySelector(".pa-pick:checked")) { return; }', html)
+        self.assertIn('if (errors[select.getAttribute("data-subject")]) { return; }', html)

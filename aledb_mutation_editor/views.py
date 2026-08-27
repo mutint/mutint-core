@@ -133,14 +133,33 @@ def _cell_for(observed):
 GRID_ROW_LIMIT = 250
 
 
-def _grid_mutations(experiment, query):
+def _grid_mutations(experiment, reseq_dict, query):
     """The mutations a grid should lay out, narrowed by the search box.
 
     Narrowing happens here rather than in DataTables because the point is to not *render* the
     rest: a client-side search still ships every row. Position is matched exactly when the
     query is a number, since a substring match on a coordinate is never what anybody means.
+
+    **Only mutations something in `reseq_dict` observes.** A `Mutation` is never deleted here
+    -- its id is stored as a bare integer in aledb-converge, in aledb-phylogeny's JSON and in
+    every exported CSV -- so removing a mutation's last observation leaves the row behind, and
+    a grid keyed on `Mutation.objects.filter(ale_experiment=...)` went on rendering it with
+    every cell empty. That is what "the page does not update when I delete" was: the page
+    reloads, and the row is genuinely still there.
+
+    Restricted to the *shown* samples rather than to the experiment, because
+    `get_reseq_ordered_dict` applies the experiment's sample tag filters -- a mutation observed
+    only in a hidden sample is an all-empty row for the same reason.
+
+    This is not the filtering the editor forbids. A mutation no sample observes is stored in no
+    sample: there is no cell on its row to select and nothing on it to delete. It is not being
+    hidden, it is not there.
     """
-    mutations = Mutation.objects.filter(ale_experiment=experiment)
+    observed_here = (history.observations_for(experiment)
+                     .filter(sequencing_experiment_id__in=list(reseq_dict))
+                     .values("mutation_id"))
+    mutations = Mutation.objects.filter(ale_experiment=experiment,
+                                        id__in=observed_here)
     query = (query or "").strip()
     if query:
         terms = (Q(gene__icontains=query) | Q(reseq_reference__icontains=query)
@@ -170,7 +189,7 @@ def _grid_for(experiment, reseq_dict, query=None):
     and `get_table_body` filters through `filter_observed_mutations`, while this page must show
     what is stored -- a mutation hidden by a gene or frequency filter has to stay deletable.
     """
-    matching = _grid_mutations(experiment, query)
+    matching = _grid_mutations(experiment, reseq_dict, query)
     total = matching.count()
     page = list(matching[:GRID_ROW_LIMIT])
 

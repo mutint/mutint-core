@@ -192,6 +192,13 @@ def _create_experiment(project, name, user):
         name=name, project=project, instrument=instrument, person=user.get_username())
 
 
+#: The dashboard's installation-wide totals, which a soft delete changes and nothing else
+#: here does. Named rather than requesting everything: removing one experiment cannot make
+#: another's needle plot or fixation table wrong, and `request_rebuild()` with no experiment
+#: would mark every one of them.
+_AGGREGATE_REBUILDS = ("sample_counts", "mutation_counts")
+
+
 @require_POST
 def project_delete(request, pk):
     # Admin, not `can_edit_project`. Editing widened to `write` when roles arrived, and
@@ -215,6 +222,7 @@ def project_delete(request, pk):
 
     if project.deleted_at is None:
         project.soft_delete(request.user)
+        _mark_totals_stale('project deleted')
     return JsonResponse({"project_id": project.id, "deleted_at": project.deleted_at})
 
 
@@ -259,8 +267,20 @@ def experiment_delete(request, pk):
                       or "You cannot delete this experiment."}, status=403)
     if experiment.deleted_at is None:
         experiment.soft_delete(request.user)
+        _mark_totals_stale('experiment deleted')
     return JsonResponse({"experiment_id": experiment.ale_id,
                          "deleted_at": experiment.deleted_at})
+
+
+def _mark_totals_stale(reason):
+    """Marked, not rebuilt. The dashboard recounts on its next view.
+
+    Deleting is a fast operation and recounting the installation is not -- and the person who
+    just deleted something is on a list page, not the dashboard.
+    """
+    from aledb_common.rebuild_registry import request_rebuild
+
+    request_rebuild(only=_AGGREGATE_REBUILDS, reason=reason)
 
 
 # --- edit --------------------------------------------------------------------------------

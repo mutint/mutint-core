@@ -132,13 +132,38 @@ class RebuildTestCase(EditorTestCase):
         states = DerivedDataState.objects.filter(ale_experiment=self.experiment)
         self.assertTrue(states.exists())
 
-    def test_the_dashboard_totals_are_marked_too(self):
-        """Site-scoped, and deliberately not narrowed away.
+    def test_the_dashboard_totals_are_marked_stale_but_not_rebuilt(self):
+        """Site-scoped, and deliberately not narrowed away -- but not run here either.
 
         `rebuild_after_structural_change` refuses to pay for these because a renumber cannot
-        change a mutation count. Deleting a mutation can, so this one must not copy that.
+        change a mutation count. Deleting a mutation can, so it has to be *marked*. Running it
+        is a different question: it recounts every ObservedMutation in the installation, which
+        is 4.9 seconds of read on a 74,859-row database and not a bill a single delete should
+        pick up. The dashboard calls `ensure_fresh` and pays it once on its next view.
+
+        Asserted from a fresh row rather than an absent one: a missing row already counts as
+        stale, so `assertTrue(is_stale(...))` on a clean database passes without the code
+        doing anything at all.
         """
+        from aledb_common.rebuild_registry import is_stale
+
+        DerivedDataState.objects.update_or_create(
+            name="mutation_counts", ale_experiment=None,
+            defaults={"stale_since": None})
+
         history.rebuild_after_edit(self.experiment)
 
-        self.assertTrue(DerivedDataState.objects.filter(
-            name="mutation_counts", ale_experiment__isnull=True).exists())
+        self.assertTrue(is_stale("mutation_counts"),
+                        "a mutation edit invalidates the installation-wide totals")
+        state = DerivedDataState.objects.get(name="mutation_counts", ale_experiment=None)
+        self.assertIsNotNone(state.stale_since, "marked, and left for the dashboard to run")
+
+    def test_the_experiments_own_derived_data_is_rebuilt_here(self):
+        """The other half of the same split: what the caller just changed is made warm now,
+        because it is already paying for a long operation and is about to look at it."""
+        from aledb_common.rebuild_registry import is_stale
+
+        history.rebuild_after_edit(self.experiment)
+
+        self.assertFalse(is_stale("overview", self.experiment.ale_id))
+        self.assertFalse(is_stale("static_data", self.experiment.ale_id))

@@ -12,20 +12,37 @@ def rebuild_dashboard_data():
     rebuild_mutation_counts()
 
 
+#: The join from an ObservedMutation up to its experiment, as `aledb_seq.util`,
+#: `aledb_filter.util` and `aledb_mutation_editor.history` all spell it.
+_EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment"
+
+#: Deletion here is soft: it sets `deleted_at` and leaves everything below the experiment in
+#: place, and this app's managers are deliberately unfiltered -- so these totals counted every
+#: project and experiment anybody had ever removed. Both halves are needed: deleting a project
+#: does not stamp its experiments. `~Q(ale_id=0)` below is the pre-existing sentinel exclusion
+#: and is a different thing entirely.
+
+
 def rebuild_sample_counts():
     if SampleCounts.objects.all().count() == 0:
         SampleCounts.objects.create()
-    ale_count = AleId.objects.filter(~Q(ale_id=0)).count()
+    live_ales = AleId.objects.filter(~Q(ale_id=0)).filter(
+        Q(ale_experiment__deleted_at__isnull=True)
+        & Q(ale_experiment__project__deleted_at__isnull=True))
+    ale_count = live_ales.count()
     SampleCounts.objects.all().update(ale_count=ale_count)
-    flask_count = Flask.objects.filter(~Q(ale_id__ale_id=0)).count()
+    flask_count = Flask.objects.filter(~Q(ale_id__ale_id=0),
+                                       ale_id__in=live_ales).count()
     SampleCounts.objects.all().update(flask_count=flask_count)
-    isolate_count = Isolate.objects.filter(~Q(flask__ale_id__ale_id=0)).count()
+    isolate_count = Isolate.objects.filter(~Q(flask__ale_id__ale_id=0),
+                                           flask__ale_id__in=live_ales).count()
     SampleCounts.objects.all().update(isolate_count=isolate_count)
-    print(ale_count, flask_count, isolate_count)
 
 
 def rebuild_mutation_counts():
-    raw_obs_mut_qryset = ObservedMutation.objects.all()
+    raw_obs_mut_qryset = ObservedMutation.objects.filter(
+        **{"%s__deleted_at__isnull" % _EXPERIMENT_PATH: True,
+           "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True})
     obs_muts = filter_observed_mutations(raw_obs_mut_qryset)
     muts = get_mutations_from_observed_muations(obs_muts)
 

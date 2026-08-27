@@ -35,6 +35,16 @@ def generate_needle_plot_data(obs_mut_list):
 
 
 def get_needle_plot_data(experiment_id):
+    """The stored needle-plot data, rebuilding it first if it is stale.
+
+    The `ensure_fresh` matters more here than anywhere: `/stats` renders this *and*
+    `get_experiment_summary` on the same page, so without it a filter change left the Overview
+    counts and the needle plot -- derived from the same mutations -- disagreeing with each
+    other in the same viewport.
+    """
+    from aledb_common.rebuild_registry import ensure_fresh
+
+    ensure_fresh('static_data', experiment_id)
     static_data = StaticData.objects.filter(id=experiment_id).first()
     return static_data.mut_needle_data if static_data else []
 

@@ -4,7 +4,8 @@ from django.shortcuts import render
 from aledb_seq.views import common
 from django.utils.safestring import mark_safe
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import AleExperiment, Project, live
+from aledb_common.rebuild_registry import ensure_fresh
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
 from aledb_dashboard.timeline_util import get_timeline
 from aledb_common.logger import user_extra, join_extras
@@ -22,6 +23,14 @@ def dashboard(request):
 
     try:
         start_time = time.time()
+        # The lazy half of the rebuild contract, and this is the page it was written for: a
+        # global filter edit marks every experiment stale and rebuilds nothing, because
+        # recomputing the installation inside the request that edited a form is exactly what
+        # marking exists to avoid. So the first view after it pays, once, and every view
+        # after that is free. `ensure_fresh` no-ops when fresh and cannot raise.
+        ensure_fresh('sample_counts')
+        ensure_fresh('mutation_counts')
+
         general_count_dict = get_general_count_dict()
         observed_mutation_counts = ObservedMutationCounts.objects.first()
         unique_mutation_counts = UniqueMutationCounts.objects.first()
@@ -45,8 +54,11 @@ def dashboard(request):
 
 def get_general_count_dict():
     count_dict = dict()
-    count_dict['ale_exp'] = AleExperiment.objects.count()  # No need to filter experiment count.
-    count_dict['project'] = Project.objects.count()
+    # `live()`, not `.count()`. Deletion here is soft, so the unfiltered managers still
+    # carry every project and experiment anybody has ever removed -- and this page was
+    # counting them.
+    count_dict['ale_exp'] = live(AleExperiment.objects).count()
+    count_dict['project'] = live(Project.objects).count()
 
     sample_counts = SampleCounts.objects.first()
 

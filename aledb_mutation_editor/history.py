@@ -340,18 +340,29 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
 
 
 def rebuild_after_edit(experiment):
-    """Recompute everything an edit invalidated. Call outside the transaction.
+    """Recompute what an edit invalidated. Call outside the transaction.
 
-    Deliberately unnarrowed, unlike `aledb_experiment.samples.rebuild_after_structural_change`.
-    A renumber provably cannot change a mutation count, so that one refuses to pay for the
-    dashboard's installation-wide totals. Adding or removing an observation changes every one
-    of them -- and aledb-fixation caches ObservedMutation *ids*, which only its
-    delete-and-recompute rebuild can clear.
+    **Unnarrowed by name, and narrowed by scope.** Both halves matter and they are different
+    questions.
+
+    Never narrowed with `only=`, unlike `aledb_experiment.samples.rebuild_after_structural_change`
+    -- a renumber provably cannot change a mutation count, while adding or removing an
+    observation changes every derived thing an experiment has, and aledb-fixation caches
+    ObservedMutation *ids* which only its delete-and-recompute rebuild can clear.
+
+    But `request_rebuild` marks the **site-scoped** totals stale too, correctly, and running
+    them here made a single delete recount every ObservedMutation in the installation --
+    measured at 4.9 seconds for the read half alone on a 74,859-row database, which is exactly
+    the cost `rebuild_after_structural_change` refuses to pay. They stay marked; the dashboard
+    calls `ensure_fresh` and rebuilds them on the next view. Ten deletes then cost one recount
+    rather than ten.
     """
-    from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
+    from aledb_common.rebuild_registry import (
+        EXPERIMENT_SCOPE, request_rebuild, run_rebuilds,
+    )
 
     request_rebuild(experiment.ale_id, reason='mutations edited')
-    run_rebuilds(experiment.ale_id)
+    run_rebuilds(experiment.ale_id, scope=EXPERIMENT_SCOPE)
 
 
 # --- reconstructing -------------------------------------------------------------------------

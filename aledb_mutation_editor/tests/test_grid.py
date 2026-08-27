@@ -196,6 +196,52 @@ class GridPageTestCase(EditorTestCase):
 
         self.assertNotIn('data-mutation="%d"' % stranger.id, html)
 
+    # --- a mutation with nothing left in it -----------------------------------------------
+
+    def test_deleting_the_last_observation_removes_the_row(self):
+        """The reported bug. The page reloads; the row was genuinely still being rendered.
+
+        `Mutation` rows are never deleted here -- their ids are stored as bare integers in
+        aledb-converge, aledb-phylogeny and every exported CSV -- so a mutation whose last
+        observation goes still exists, and a grid built from `Mutation.objects.filter(...)`
+        renders it with every cell empty.
+        """
+        ids = [observed.id for observed in
+               ObservedMutation.objects.filter(mutation=self.mut_1)]
+
+        self.client.post("/mutation-editor/delete", {
+            "experiment_id": self.experiment.ale_id,
+            "observed_ids": json.dumps(ids)})
+
+        html = self.grid().content.decode("utf-8")
+        self.assertNotIn('data-mutation="%d"' % self.mut_1.id, html)
+        self.assertIn('data-mutation="%d"' % self.mut_2.id, html,
+                      "the mutations that still have observations are untouched")
+
+    def test_a_mutation_no_sample_observes_is_not_listed(self):
+        """The same state arrived at without a delete -- an import can leave one, and
+        experiment 2 in the dev database carries one today."""
+        orphan = self.make_mutation(position=8888, sequence_change="T>G")
+
+        html = self.grid().content.decode("utf-8")
+
+        self.assertNotIn('data-mutation="%d"' % orphan.id, html)
+
+    def test_the_total_counts_only_what_could_be_shown(self):
+        """`Showing N of M` is a promise that the other M-N are reachable by searching. An
+        orphan is reachable by nothing: there is no cell on its row to select.
+
+        Read off the view's own context rather than recomputed here, which would just be the
+        fix written twice and would pass whatever the page did.
+        """
+        self.make_mutation(position=8888, sequence_change="T>G")
+
+        response = self.grid()
+
+        self.assertEqual(4, self.experiment.mutations.count(), "the orphan is stored")
+        self.assertEqual(3, response.context["grid_total"])
+        self.assertEqual(3, len(response.context["grid_rows"]))
+
     # --- the column header is a control, so it says what it would do -----------------------
 
     def test_a_sample_with_nothing_on_the_page_is_not_a_selector(self):

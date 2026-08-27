@@ -93,6 +93,61 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         self.client.force_login(admin)
         self.assertEqual(200, self._delete_one().status_code)
 
+    def test_a_writer_may_delete(self):
+        """**write**, not admin. Curating an experiment's mutations is what the write role is
+        for -- `can_add_experiment_filter` delegates to `can_edit_experiment`, which is
+        `has_project_role(..., ROLE_WRITE)`.
+
+        Every other case here was covered and this one was not: owner, superuser, anonymous,
+        stranger, staff-without-a-grant and reader all had tests, so "the lowest role that is
+        allowed to edit actually can" was the one thing nobody had asserted.
+        """
+        self.client.force_login(self._writer())
+
+        self.assertEqual(200, self._delete_one().status_code)
+        self.assertEqual(3, self.observation_count(), "the observation is gone")
+
+    def test_a_writer_may_copy(self):
+        self.client.force_login(self._writer())
+        self.assertEqual(200, self._copy_one().status_code)
+
+    def test_a_writer_may_add(self):
+        self.client.force_login(self._writer())
+        self.assertEqual(200, self._add_one().status_code)
+
+    def test_a_writer_may_change_a_mutation(self):
+        self.client.force_login(self._writer())
+
+        response = self.client.post("/mutation-editor/change/apply", {
+            "experiment_id": self.experiment.ale_id,
+            "mutation_id": self.mut_1.id,
+            "mutation_type": "SNP",
+            "seq_id": "NC_000913",
+            "position": 150,
+            "new_seq": "T"})
+
+        self.assertEqual(200, response.status_code, response.content)
+
+    def test_a_writer_may_open_the_editor_with_its_controls(self):
+        """The endpoints answering 200 is not enough on its own: a page that hides the
+        buttons would leave a writer unable to reach them."""
+        self.client.force_login(self._writer())
+
+        html = self.client.get("/mutation-editor/", {
+            "ale_experiment_id": self.experiment.ale_id,
+            "reseq_id": "all"}).content.decode("utf-8")
+
+        self.assertIn('id="me-apply"', html)
+
+    def _writer(self):
+        from aledb_experiment.permissions import grant_project_access
+        from aledb_experiment.roles import ROLE_WRITE
+
+        writer = User.objects.create(username="justawriter", email="w@e.com", is_active=True)
+        grant_project_access(self.experiment.project, writer, ROLE_WRITE,
+                             granted_by=self.owner)
+        return writer
+
     # --- who may not ---------------------------------------------------------------------
 
     def test_anonymous_may_not_edit(self):

@@ -287,6 +287,11 @@
             names.forEach(function (name) { lines.push(name + " -- " + errors[name]); });
             errorBox.textContent = lines.join("\n");
             markRowErrors(errors);
+            // ...but the rows that *did* change have to stop showing their old role, or the
+            // page reads "Applied to 7" above seven controls that disagree with it. Only the
+            // ones not named in `errors`, and only when a role was what was applied -- adding
+            // subjects has no row on screen to move.
+            if (data.role) { showAppliedRole(data.role, errors); }
         }).catch(fail);
     }
 
@@ -294,6 +299,22 @@
         Array.prototype.forEach.call(
             document.querySelectorAll("tr[data-access-id]"), function (tr) {
                 tr.classList.remove("danger");
+            });
+    }
+
+    function showAppliedRole(role, errors) {
+        Array.prototype.forEach.call(
+            document.querySelectorAll("tr[data-access-id] select.pa-role"), function (select) {
+                var row = select.closest("tr");
+                if (!row.querySelector(".pa-pick:checked")) { return; }
+                if (errors[select.getAttribute("data-subject")]) { return; }
+                // The server may legitimately have applied something other than what was
+                // asked -- it refuses rather than substitutes, so anything not in `errors`
+                // took the role that was sent. An option that is not there means this row
+                // could never have been given it, and is left alone.
+                if (select.querySelector('option[value="' + role + '"]')) {
+                    select.value = role;
+                }
             });
     }
 

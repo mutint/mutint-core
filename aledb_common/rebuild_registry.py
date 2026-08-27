@@ -225,8 +225,13 @@ def ensure_fresh(name, experiment_id=None):
     return all(results.values()) if results else True
 
 
-def run_rebuilds(experiment_id=None, only=None, force=False):
+def run_rebuilds(experiment_id=None, only=None, force=False, scope=None):
     """Run the stale rebuilds (or all of them, with force=True). Returns {name: succeeded}.
+
+    `scope` restricts to EXPERIMENT_SCOPE or SITE_SCOPE. It is how a caller says "recompute
+    what I just changed, and leave the installation-wide totals for whoever reads them" --
+    `rebuild_after_edit` does exactly that, because counting every ObservedMutation in the
+    database is not a cost a single delete should pay.
 
     Each rebuilder is isolated: one raising neither aborts the others nor propagates. See the
     module docstring for why that differs from the `run_post_experiment_hooks` it replaces.
@@ -241,7 +246,7 @@ def run_rebuilds(experiment_id=None, only=None, force=False):
     from aledb_common.models import DerivedDataState
 
     results = {}
-    for rebuilder in get_rebuilders(only=only):
+    for rebuilder in get_rebuilders(scope=scope, only=only):
         name = rebuilder['name']
         site_scoped = rebuilder['scope'] == SITE_SCOPE
         target = None if site_scoped else experiment_id
