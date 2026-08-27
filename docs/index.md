@@ -50,5 +50,5 @@ Everything below is a registration, made from your `AppConfig.ready()`. Each is 
 [The quickstart](plugin/quickstart.md) builds a plugin end to end — repository, app,
 registration, installed into an assembled project, tests running. It is worth doing once even
 if you then throw it away, because the two things that most often go wrong are both
-environmental: a plugin's tests do not run in aledb-core at all, and an assembled project
+environmental: a plugin's tests can only run in an assembled project, and an assembled project
 reaches your code through a path that has a hyphen in it.

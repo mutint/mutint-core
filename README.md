@@ -216,8 +216,8 @@ The full guide is the documentation site, built locally:
 ```
 
 It covers the repository structure a plugin should use, the seven registries and what each
-contributes, how to test a plugin (which cannot be done from this repo -- a plugin's tests run
-only inside an assembled project), and how to assemble a project in the first place.
+contributes, how to test a plugin (which happens in an assembled project, since a plugin's app
+is not installed in this one), and how to assemble a project in the first place.
 
 ---
 

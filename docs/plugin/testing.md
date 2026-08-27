@@ -2,10 +2,7 @@
 
 The single most important thing on this page:
 
-!!! danger "Your tests do not run in aledb-core"
-
-    `./aledb test` has no plugin discovery of any kind. A plugin's suite runs only inside an
-    assembled project:
+!!! danger "Your plugin's tests run only in an assembled project"
 
     ```bash
     cd mutint
@@ -13,22 +10,52 @@ The single most important thing on this page:
     ./mutint test                     # everything installed, yours included
     ```
 
-    Running them from aledb-core does not fail — it finds nothing, and reports
-    `Ran 0 tests ... OK`.
+    Not because of anything about testing — because your app is not installed in aledb-core.
+    It lives in a different repository, so it is not on that project's `sys.path` and not in
+    its `INSTALLED_APPS`. `./aledb test aledb_yourthing` therefore errors on an app label it
+    has never heard of.
 
-## Why a bare run needs a custom runner
+    aledb-core runs **its own** suite normally, and with the same runner; there is nothing
+    second-class about either mode. What it cannot do is run tests for code that is not
+    installed in it, and teaching it to would mean core knowing which plugins exist — the one
+    thing this architecture is built to avoid.
 
-`./aledb test` works by ordinary `unittest` discovery, because aledb-core's app packages sit
-directly under the working directory. In an assembled project they do not: they live inside
-submodule directories named `aledb-core`, `aledb-yourthing` and so on. Those names contain
-hyphens, so they can never be Python packages and discovery can never descend into them,
-however they are laid out. Your app is importable only because settings puts each submodule
-directory on `sys.path`.
+## One runner, both modes
 
-So a bare run has to be told what to run. `aledb_common.test_runner` substitutes the installed
-first-party apps, taken from `about_registry.first_party_app_configs()` — the same predicate
-the About page inventories with, so "which apps are ours" is decided once. Explicit labels
-still work and take precedence.
+There is no separate standalone path. `TEST_RUNNER` is set once, in
+`aledb_common/base_settings.py`, and aledb-core and every assembled project inherit it:
+
+```python
+'TEST_RUNNER': 'aledb_common.test_runner.AledbTestRunner'
+```
+
+Given no labels, it runs the **installed first-party apps** rather than whatever discovery
+finds. aledb-core has sixteen of those; an assembled project has those sixteen plus each
+installed plugin's. That is the whole difference between the two.
+
+## Why the runner substitutes at all
+
+Standalone, it need not. aledb-core's app packages sit directly under the working directory, so
+ordinary `unittest` discovery would find exactly the same set — substituting changes nothing
+there.
+
+In an assembled project it is the difference between running the suite and not. The code lives
+in submodule directories named `aledb-core`, `aledb-yourthing` and so on, and **those names
+contain hyphens**, so they can never be Python packages and discovery can never descend into
+them, however they are laid out. Your app is importable only because settings puts each
+submodule directory on `sys.path`, which discovery does not consult.
+
+Renaming the directories would not help either: giving a submodule root an `__init__.py` would
+make every app importable by two dotted paths at once, and `aledb_yourthing.models` and
+`aledb_core.aledb_yourthing.models` are two module objects holding two sets of model classes.
+
+So a bare run is told what to run instead, from
+`about_registry.first_party_app_configs()` — the same predicate the About page inventories
+with, so "which apps are ours" is decided once and in one place. Explicit labels still work and
+take precedence.
+
+`./mutint test` reported `Ran 0 tests ... OK` before this existed, which is the worst available
+way to fail: it says success.
 
 ## The store is redirected for you
 
