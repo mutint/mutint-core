@@ -1,0 +1,21 @@
+# The documentation toolchain, deliberately *not* in requirements.txt.
+#
+# The entry script installs every component's requirements.txt plus this repo's root one, so
+# anything listed there lands in every deployment. A production ALEdb has no use for a static
+# site generator, and `./aledb docs` installs this file on first use instead.
+#
+# MkDocs rather than Sphinx for two reasons measured against this repo rather than assumed:
+#
+#   * The registry docstrings are written in markdown -- 360 non-blank lines carrying 90
+#     single-backtick code spans. Sphinx's autodoc parses docstrings as reStructuredText,
+#     where a single backtick is a *title reference*, so every one of those would render as
+#     italics and warn. (MyST changes how .md pages parse, not how docstrings do.)
+#     mkdocstrings parses them as markdown, so they render as written with no edits to code.
+#   * This venv is Python 3.9, on which Sphinx is capped at 7.4.x while mkdocs-material is
+#     current.
+#
+# Versioning is not set up yet; `mike` is the intended path and needs nothing here until then.
+# See docs/contributing/docs.md.
+mkdocs>=1.6,<2
+mkdocs-material>=9.5,<10
+mkdocstrings[python]>=0.24,<1

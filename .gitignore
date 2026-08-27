@@ -61,3 +61,6 @@ env/
 .claude/worktrees/
 .claude/settings.local.json
 .claude/.DS_Store
+
+# `./aledb docs` output. The sources are docs/; this is the build.
+/site/

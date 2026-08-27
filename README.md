@@ -204,7 +204,20 @@ All configuration is via environment variables. The defaults are suitable for lo
 
 ## Extending ALEdb
 
-To add custom apps without modifying this repo, see [DEVELOPER.md](DEVELOPER.md) for the git submodule integration guide.
+ALEdb is extended by **plugins**: separate repositories, each holding one Django app, that
+register themselves at startup. This repo contains no reference to any of them -- installing
+one is adding a git submodule, with no file here to edit.
+
+The full guide is the documentation site, built locally:
+
+```bash
+./aledb docs --serve      # http://127.0.0.1:8001
+./aledb docs              # or build to site/
+```
+
+It covers the repository structure a plugin should use, the seven registries and what each
+contributes, how to test a plugin (which cannot be done from this repo -- a plugin's tests run
+only inside an assembled project), and how to assemble a project in the first place.
 
 ---
 

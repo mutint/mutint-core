@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1190 run, 0 failures** standalone; **1321** in an assembled project, where the
-plugins' own tests join them. They were 1178 and 1293 before the tree learned to go stale,
+**Baseline: 1197 run, 0 failures** standalone; **1328** in an assembled project, where the
+plugins' own tests join them. They were 1190 and 1321 before the plugin API docs, 1178 and
+1293 before the tree learned to go stale,
 1163 and 1278 before the lazy-rebuild sweep, 1156 and
 1271 before the frequency cutoff was fixed,
 1136 and 1251 before the mutation-change page, 1116
@@ -293,6 +294,44 @@ back to the flat columns, with the page pointing at `./aledb reannotate`. That f
 the usual reason the page looks plain: nothing is wrong with the rendering, the rows simply
 have no annotation yet. `Mutation.gd_data` is kept for every mutation, so `reannotate`
 recomputes them in place against the stored reference -- re-importing is not needed.
+
+### The plugin API documentation
+
+`docs/`, built with `./aledb docs` (add `--serve` for live reload on :8001, `--strict` to fail
+on a broken link). Output goes to `site/`, which is git-ignored. Nothing is hosted.
+
+**The toolchain is MkDocs + Material + mkdocstrings, and the reason is the docstrings.** The
+seven registries carry 360 non-blank lines of docstring containing 90 single-backtick code
+spans, written as markdown. Sphinx's `autodoc` parses docstrings as reStructuredText, where a
+single backtick is a *title reference* -- all 90 would render as italics and warn. MyST changes
+how `.md` pages parse, not how docstrings do. `mkdocstrings` parses them as markdown, so the
+reference renders correctly with no edit to any docstring. (Secondarily: on this repo's Python
+3.9, pip caps Sphinx at 7.4.x while `mkdocs-material` is current.)
+
+**`requirements-docs.txt` is separate from `requirements.txt` on purpose** -- the entry script
+installs the latter into every deployment, and production has no use for a site generator.
+`./aledb docs` installs it on first run, the way `./aledb start` bootstraps the venv.
+
+**`DEVELOPER.md` moved into the site** (`docs/assembling/`) and is now a stub pointing at it.
+Two descriptions of how `config/settings.py` is wired would have drifted.
+
+**Where a fact belongs**: how something behaves goes in the `aledb_common` docstring, because
+the Reference pages are generated from those; how to do something goes in a guide under
+`docs/plugin/`; why *this repo* is built as it is stays here, for a different reader.
+
+`aledb_common/tests/test_docs.py` guards two kinds of drift, by reading files rather than
+importing mkdocs or PyYAML -- neither is installed in a normal environment. It fails when a
+registry has no reference page, when a page names the wrong module, when the nav omits one,
+and when a public `register_*` is named nowhere in `docs/`. That last one caught five
+undocumented hooks the first time it ran. **Neither guard catches prose going out of date**,
+which is said out loud in `docs/contributing/docs.md`.
+
+Versioning is deliberately not configured. `mike` is the intended path and needs one block in
+`mkdocs.yml`; adding it now would render a version picker with nothing in it.
+
+**A caveat with a clock on it**: mkdocs-material warns that MkDocs 2.0 removes the plugin
+system entirely with no migration path. `requirements-docs.txt` pins `mkdocs<2`, which holds
+today and is not a plan.
 
 ### `present` says whether it is there; `source` says who said so
 
