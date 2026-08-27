@@ -32,7 +32,7 @@ give the form a second opinion about what a MOB needs.
 
 import re
 
-from genomediff.records import TYPE_SPECIFIC_FIELDS
+from genomediff.schema import TYPE_SPECIFIC_FIELDS, check_field
 
 from aledb_import.annotate.annotator import mutation_interval
 from aledb_import.annotate.model import reverse_complement
@@ -82,6 +82,21 @@ SEQUENCE_FIELDS = ("new_seq",)
 #: and bounds alone, and must not trigger a reference load -- that parses the whole genome.
 SEQUENCE_CHECKED_TYPES = ("SNP", "SUB", "INV", "CON", "INT", "MOB")
 
+#: Our sentence for a field `check_field` guards, where we have a better one than breseq's.
+#:
+#: The package decides **whether** a value is acceptable -- it mirrors breseq's own
+#: `genome_diff_entry.cpp` tables and was checked against `gdtools VALIDATE` over breseq's test
+#: suite, so it is the authority and we do not keep a second opinion. This only decides how to
+#: say no: "Expected positive integral value for field [position] instead of [0]" is right in a
+#: `.gd` and wrong beside a form input. A guarded field with no entry here shows the package's
+#: own message, which is better than inventing one for a rule we do not own.
+GUARD_MESSAGES = {
+    "position": "Positions are 1-based, so the first base is 1.",
+    "strand": "Strand is 1 or -1.",
+    "new_copy_number": "A copy number below 1 is a deletion, not an AMP.",
+    "new_seq": "Use only the bases A, C, G, T or N.",
+}
+
 _SEQUENCE_RE = re.compile(r"^[ACGTN]+$")
 #: `seq_id:start-end`. The contig name is greedy up to the last colon, because a name may
 #: itself contain one; start and end are what must be numeric.
@@ -128,9 +143,15 @@ def _coerce_int(raw, field, errors):
 
 
 def _coerce_sequence(raw, field, errors, single=False):
-    """Bases, upper-cased. `single` for a SNP, which takes exactly one."""
+    """Bases, upper-cased.
+
+    The character rule is `check_field`'s (`BASE_SEQUENCE`), applied in the guard pass below.
+    What stays here is upper-casing, and the two rules where we are deliberately **stricter**
+    than breseq: it accepts the empty string as a base sequence, and it has no notion of a SNP
+    taking exactly one base.
+    """
     value = str(raw.get(field, "")).strip().upper()
-    if not _SEQUENCE_RE.match(value):
+    if not value:
         errors[field] = "Use only the bases A, C, G, T or N."
         return None
     if single and len(value) != 1:
@@ -178,15 +199,22 @@ def _shape(raw, mutation_type, errors):
         else:
             attributes[field] = str(raw[field]).strip()
 
-    # Ranges the spec constrains, checked only once the value is an integer.
-    if attributes.get("position") is not None and attributes["position"] < 1:
-        errors["position"] = "Positions are 1-based, so the first base is 1."
+    # breseq's own guards, from the package. This is where `position` must be positive, a
+    # `strand` must be 1 or -1, a `new_copy_number` must be at least one and a `new_seq` must
+    # be bases -- all of it mirrored from `genome_diff_entry.cpp` rather than restated here.
+    for field, value in attributes.items():
+        if field in errors:
+            continue
+        message = check_field(mutation_type, field, value)
+        if message is not None:
+            errors[field] = GUARD_MESSAGES.get(field, message)
+
+    # Stricter than breseq, on purpose. `size` is a NonNegativeInteger to breseq, so a size of
+    # zero passes its guard -- but a DEL covering no bases deletes nothing, and this form is
+    # the one place a person can type it by hand. Checked after the guard pass so that a
+    # negative size gets this sentence rather than the package's.
     if attributes.get("size") is not None and attributes["size"] < 1:
         errors["size"] = "A size of %d covers no bases." % attributes["size"]
-    if attributes.get("strand") is not None and attributes["strand"] not in (1, -1):
-        errors["strand"] = "Strand is 1 or -1."
-    if attributes.get("new_copy_number") is not None and attributes["new_copy_number"] < 1:
-        errors["new_copy_number"] = "A copy number below 1 is a deletion, not an AMP."
 
     return attributes
 

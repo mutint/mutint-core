@@ -600,6 +600,22 @@
             if (f.error) {
                 statusTd.textContent = f.error;
                 statusTd.style.color = "#a00";
+            } else if ((f.warnings || []).length) {
+                // Not an error: these mutations imported. The parser could not read some
+                // lines of the file, so what landed is less than the file appears to hold,
+                // and saying nothing would make that silent. textContent throughout --
+                // the text quotes a line from an uploaded file.
+                statusTd.style.color = "#8a6d3b";
+                statusTd.appendChild(document.createTextNode(
+                    "imported, with " + f.warnings.length + " unreadable line(s):"));
+                var list = document.createElement("ul");
+                list.style.marginBottom = "0";
+                f.warnings.forEach(function (warning) {
+                    var item = document.createElement("li");
+                    item.textContent = warning;
+                    list.appendChild(item);
+                });
+                statusTd.appendChild(list);
             } else {
                 statusTd.textContent = "ok";
             }

@@ -16,12 +16,18 @@ djangoajax==3.3
 # breseq's SC/MP/DP/PD/MASK entry types plus tolerance of ones it has not seen.
 # Without that last part a current breseq output.gd fails to load in full.
 #
-# The SHA is the whole pin: 82cfd6d reports itself as 0.4.2, the same version as
-# 32f77e9, so pip will not upgrade an already-installed 0.4.2 on the strength of the
-# requirement alone. An existing environment needs
-#   pip install --force-reinstall --no-deps 'git+https://github.com/barricklab/genomediff-python.git@82cfd6d'
+# 43a0f72 adds genomediff.schema -- breseq's own field guards, mirrored from
+# genome_diff_entry.cpp -- behind Record.get()/set()/validate(). aledb_mutation_editor
+# checks hand-entered mutations against it rather than keeping a second opinion about
+# what breseq accepts. It also stops a malformed line costing the whole file: problems
+# collect in gd.parse_errors, which the import summary now reports per file.
+#
+# The SHA is the whole pin: every commit here reports itself as 0.4.2, so pip will not
+# upgrade an already-installed 0.4.2 on the strength of the requirement alone. An
+# existing environment needs
+#   pip install --force-reinstall --no-deps 'git+https://github.com/barricklab/genomediff-python.git@43a0f72'
 # (dev: `pip install -e /path/to/genomediff`)
-genomediff @ git+https://github.com/barricklab/genomediff-python.git@82cfd6d
+genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72
 # GenBank/FASTA parsing for uploaded reference genomes (aledb_import/reference.py).
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.

@@ -315,3 +315,121 @@ class SchemaTestCase(SimpleTestCase):
         for entry in schema["types"]:
             for field in entry["fields"]:
                 self.assertIn(field, schema["help"])
+
+
+class PackageGuardTestCase(ValidationTestCase):
+    """Where our validator defers to `genomediff.schema`, and where it deliberately does not.
+
+    The point of delegating is that breseq's rules live in one place. The point of these tests
+    is the second half: two of our rules are *stricter* than breseq's, and a future tidy-up
+    that "simplifies" them away would widen what the form accepts without anything failing.
+    """
+
+    def test_the_package_decides_and_we_word_it(self):
+        """A guarded field shows our sentence, not breseq's phrasing."""
+        message = self.assertRefused("SNP", "position", position=0, new_seq="T")
+
+        self.assertIn("1-based", message)
+        self.assertNotIn("Expected positive integral value", message,
+                         "breseq's wording is right in a .gd and wrong beside a form input")
+
+    def test_every_sentence_of_ours_replaces_a_rule_the_package_actually_has(self):
+        """A key here for a field breseq does not guard would never be reached, and would sit
+        looking like a rule the form enforces when nothing does."""
+        from genomediff.schema import field_type
+
+        for field in validation.GUARD_MESSAGES:
+            with self.subTest(field=field):
+                self.assertIsNotNone(
+                    field_type("SNP", field) or field_type("MOB", field)
+                    or field_type("AMP", field),
+                    "%s is not guarded by the package, so our sentence is unreachable" % field)
+
+    def test_our_rules_and_the_packages_agree_on_a_valid_record(self):
+        """Every type the form offers, accepted by both."""
+        from genomediff.schema import check_field
+
+        # Bases are ACGTTTAAACCCGGGATCGATG, so position 5 is a T and 5-7 is TTA. The values
+        # below are chosen to be real changes -- an accidental no-op here would fail for a
+        # reason that has nothing to do with what this test is about.
+        cases = {
+            "SNP": {"position": 5, "new_seq": "A"},
+            "SUB": {"position": 5, "size": 3, "new_seq": "GGG"},
+            "DEL": {"position": 5, "size": 3},
+            "INS": {"position": 5, "new_seq": "GGA"},
+            "INV": {"position": 1, "size": 3},
+            "AMP": {"position": 1, "size": 3, "new_copy_number": 2},
+            "MOB": {"position": 5, "repeat_name": "IS150", "strand": 1,
+                    "duplication_size": 9},
+            "CON": {"position": 1, "size": 3, "region": "%s:5-7" % self.SEQ},
+            "INT": {"position": 1, "size": 3, "region": "%s:5-7" % self.SEQ},
+        }
+        for mutation_type, fields in cases.items():
+            with self.subTest(mutation_type=mutation_type):
+                attributes = self.assertOk(mutation_type, **fields)
+                for key, value in attributes.items():
+                    self.assertIsNone(
+                        check_field(mutation_type, key, value),
+                        "%s.%s passed our validator but not breseq's guard" % (
+                            mutation_type, key))
+
+    # --- the two places we are stricter ---------------------------------------------------
+
+    def test_a_size_of_zero_passes_the_package_and_we_still_refuse_it(self):
+        """breseq types `size` as a NonNegativeInteger, so zero is legal to it. A DEL
+        covering no bases deletes nothing, and this form is where somebody types it."""
+        from genomediff.schema import check_field
+
+        self.assertIsNone(check_field("DEL", "size", 0), "the package accepts it")
+        self.assertIn("no bases", self.assertRefused("DEL", "size", position=5, size=0))
+
+    def test_an_empty_new_seq_passes_the_package_and_we_still_refuse_it(self):
+        """`is_base_sequence('')` is vacuously true -- every character of nothing is a base."""
+        from genomediff.schema import check_field
+
+        self.assertIsNone(check_field("INS", "new_seq", ""), "the package accepts it")
+        self.assertRefused("INS", "new_seq", position=5, new_seq="")
+
+    def test_a_multi_base_snp_passes_the_package_and_we_still_refuse_it(self):
+        from genomediff.schema import check_field
+
+        self.assertIsNone(check_field("SNP", "new_seq", "AT"))
+        self.assertIn("use SUB", self.assertRefused("SNP", "new_seq", position=5, new_seq="AT"))
+
+    def test_the_semantic_rules_have_no_counterpart_in_the_package(self):
+        """The reason the whole semantic validator stays: `check_field` is well-formedness
+        only, and breseq's own reference-aware check is equally generic."""
+        from genomediff.schema import check_field
+
+        self.assertIsNone(check_field("SNP", "new_seq", "A"), "a no-op SNP is well-formed")
+        self.assertIsNone(check_field("AMP", "new_copy_number", 1), "so is an AMP to 1 copy")
+        self.assertIsNone(check_field("INV", "size", 4), "so is a palindromic inversion")
+
+        # And we refuse all three.
+        self.assertRefused("SNP", "new_seq", position=1, new_seq="A")
+        self.assertRefused("AMP", "new_copy_number", position=1, size=3, new_copy_number=1)
+        self.assertRefused("INV", "size", position=1, size=4)
+
+
+class RecordApiTestCase(SimpleTestCase):
+    """Two semantics of the package's API that are easy to assume wrongly."""
+
+    def test_get_without_a_default_raises_rather_than_returning_None(self):
+        """It is not `dict.get`. Every call site has to pass a default."""
+        from genomediff.records import Record
+
+        record = Record("SNP", 1, parent_ids=None, seq_id="ref", position=5, new_seq="T")
+
+        self.assertEqual(5, record.get("position"))
+        self.assertIsNone(record.get("frequency", None))
+        with self.assertRaises(KeyError):
+            record.get("frequency")
+
+    def test_set_refuses_a_value_breseq_would_reject_and_keeps_the_old_one(self):
+        from genomediff.records import Record
+
+        record = Record("SNP", 1, parent_ids=None, seq_id="ref", position=5, new_seq="T")
+
+        with self.assertRaises(ValueError):
+            record.set("position", 0)
+        self.assertEqual(5, record.get("position"), "the refused write left it alone")

@@ -348,3 +348,101 @@ class SeqIdMustMatchTheReferenceTestCase(TestCase):
 
         self.assertEqual(0, summary["total_mutations"])
         self.assertIn("REL606", summary["files"][0]["error"])
+
+
+class NewParserBehaviourTestCase(GdImportTestCase):
+    """What changed when the genomediff pin moved from 82cfd6d to 43a0f72.
+
+    None of this is exercised by the tests above, which is the point: the suite passed
+    unchanged across the bump, so the only way these behaviours get pinned is deliberately.
+    """
+
+    HEADER = "#=GENOME_DIFF\t1.0\n#=REFSEQ\tREL606\n"
+
+    def _upload(self, body, name="1-1-1-1.gd"):
+        return SimpleUploadedFile(name, (self.HEADER + body).encode("utf-8"))
+
+    def _import_text(self, body, experiment="gd exp"):
+        self._ensure_reference(experiment)
+        return gd_import.import_gd_files(
+            [self._upload(body)], project_name="gd project",
+            experiment_name=experiment, person="tester")
+
+    # --- a bad line no longer costs the file ------------------------------------------------
+
+    def test_a_truncated_line_is_reported_but_the_file_still_imports(self):
+        """It used to raise out of the parser and fail the whole file.
+
+        `strict=True` would restore that, and is deliberately not used: it also raises on the
+        field-guard violations breseq's own output contains, so it would start refusing files
+        that import cleanly today.
+        """
+        summary = self._import_text(
+            "SNP\t1\t.\tREL606\t100\tA\n"
+            "DEL\t2\t.\tREL606\n")            # missing position and size
+
+        row = summary["files"][0]
+        self.assertIsNone(row["error"], "a bad line does not fail the file")
+        self.assertEqual(1, row["mutations"], "the good mutation still landed")
+        self.assertTrue(row["warnings"], "and the bad one is reported")
+        self.assertIn("missing", row["warnings"][0])
+
+    def test_a_clean_file_carries_no_warnings(self):
+        summary = self._import_text("SNP\t1\t.\tREL606\t100\tA\n")
+        self.assertEqual([], summary["files"][0]["warnings"])
+
+    def test_a_failed_file_still_has_the_warnings_key(self):
+        """The summary shape is one contract; a consumer should not have to test for it."""
+        summary = gd_import.import_gd_files(
+            [SimpleUploadedFile("bad.gd", b"not a genome diff at all")],
+            project_name="gd project", experiment_name="gd exp", person="tester",
+            require_reference=False)
+        self.assertIn("warnings", summary["files"][0])
+
+    # --- an entry with no id -----------------------------------------------------------------
+
+    def test_an_entry_whose_id_is_a_dot_imports(self):
+        """breseq writes '.' for an entry with no id. That used to fail the whole file --
+        18 of breseq's own 306 test files could not be read at all."""
+        summary = self._import_text("SNP\t.\t.\tREL606\t100\tA\n")
+
+        self.assertEqual(1, summary["total_mutations"])
+        self.assertIsNone(Mutation.objects.get(position=100).gd_data["id"])
+
+    def test_it_writes_the_dot_back_rather_than_the_string_None(self):
+        """The old version emitted `None` in the id column, producing a file breseq cannot
+        read. Fixed by the bump, and worth pinning so it cannot come back."""
+        self._import_text("SNP\t.\t.\tREL606\t100\tA\n")
+        line = Mutation.objects.get(position=100).to_gd_line().split("\t")
+
+        self.assertEqual(".", line[1])
+        self.assertNotIn("None", Mutation.objects.get(position=100).to_gd_line())
+
+    # --- numbers ------------------------------------------------------------------------------
+
+    def test_scientific_notation_survives_as_a_value(self):
+        """The notation itself does not survive the database -- JSON has one number type --
+        but the value must."""
+        self._import_text("SNP\t1\t.\tREL606\t100\tA\tfrequency=8.39314286e-01\n")
+
+        stored = Mutation.objects.get(position=100).gd_data["frequency"]
+        self.assertAlmostEqual(0.839314286, stored)
+        self.assertIsInstance(stored, float)
+        self.assertEqual(
+            0.8393, float(ObservedMutation.objects.get().frequency),
+            "and it reaches the observation's Decimal column")
+
+    def test_the_same_mutation_spelled_two_ways_is_one_row(self):
+        """The sharpest consequence of the bump, and a silent one.
+
+        Parsed numbers can come back as `PreservedInt`, whose `str()` is the *source text*.
+        `synthesize_sequence_change` formats those, and its output is one of the seven fields
+        `get_or_create` dedups on -- so `size=0042` and `size=42` would fork one mutation into
+        two rows depending only on how each file happened to write the number.
+        """
+        self._import_text("DEL\t1\t.\tREL606\t100\t42\n", experiment="gd exp")
+        self._import_text("DEL\t1\t.\tREL606\t100\t0042\n", experiment="gd exp")
+
+        rows = Mutation.objects.filter(position=100, mutation_type="DEL")
+        self.assertEqual(1, rows.count(), "one mutation, however the size was written")
+        self.assertEqual("del 42 bp", rows.get().sequence_change)

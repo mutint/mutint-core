@@ -64,7 +64,16 @@ def build_identity(mutation_type, gd_data, annotated_record):
     """
     attributes = {key: value for key, value in gd_data.items()
                   if key not in ("type", "parent_ids")}
-    record = Record(mutation_type, None, parent_ids=None, **attributes)
+
+    # Built field by field through `set()` rather than through the constructor's
+    # `**attributes`, which stores whatever it is given. `set()` is the checked half of the
+    # package's API: it runs breseq's guard for the field and refuses a value gdtools would
+    # reject. `validate_record` has already passed by the time we are here, so a ValueError
+    # means the form's rules and breseq's have drifted apart -- which is worth failing loudly
+    # over rather than storing a mutation that cannot be applied.
+    record = Record(mutation_type, None, parent_ids=None)
+    for key, value in attributes.items():
+        record.set(key, value)
 
     # `gene` is part of the get_or_create key, so it is derived with gd_import's own
     # expression rather than taken from `display_values` -- the two agree today, and the key

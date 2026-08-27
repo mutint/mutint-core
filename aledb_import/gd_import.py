@@ -99,12 +99,14 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
         filename = os.path.basename(getattr(uploaded, "name", "") or "unnamed.gd")
         try:
             with transaction.atomic():
-                count = _import_one_file(uploaded, filename, context, person)
-            file_results.append({"file": filename, "mutations": count, "error": None})
+                count, warnings = _import_one_file(uploaded, filename, context, person)
+            file_results.append({"file": filename, "mutations": count, "error": None,
+                                 "warnings": warnings})
             total_mutations += count
         except Exception as exc:  # one bad file must not poison the batch
             logger.exception("GenomeDiff import failed for %s", filename)
-            file_results.append({"file": filename, "mutations": 0, "error": str(exc)})
+            file_results.append({"file": filename, "mutations": 0, "error": str(exc),
+                                 "warnings": []})
 
     experiment = context["experiment"]
     if total_mutations:
@@ -169,11 +171,37 @@ def prepare_experiment_by_id(ale_experiment_id):
     return {"experiment": experiment, "media": media, "freezer_box": freezer_box}
 
 
+def _is_storable(record):
+    """Whether a parsed mutation has enough to become a `Mutation` row.
+
+    The parser is lenient now: a line missing positional columns is read as far as it goes,
+    with the missing fields set to None, and the problem recorded in `document.parse_errors`.
+    That is the right call for reading a file -- one bad line should not cost the other
+    hundred -- but such a record cannot be stored: `Mutation.position` is NOT NULL, so
+    handing it on turns a reported bad line into an IntegrityError that rolls back the whole
+    sample. Skipping it here is what makes leniency actually lenient.
+
+    Nothing is lost by the skip: the reason is already in `parse_errors`, which the import
+    summary reports per file, so the person who uploaded it is told which line and why.
+    """
+    return record.get("position", None) is not None and record.get("seq_id", None) is not None
+
+
+def parse_warnings(document):
+    """What the parser could not make sense of, as sentences for the person who uploaded it.
+
+    Non-fatal by construction: the mutations it *could* read are already imported by the time
+    anyone sees these. Surfacing them is what stops a truncated line being silently worth
+    fewer mutations than the file appears to contain.
+    """
+    return [str(error) for error in getattr(document, "parse_errors", ())]
+
+
 def _import_one_file(uploaded, filename, context, person):
     document = _parse_document(uploaded)
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
     _, count = import_document_as_sample(document, sample_name, context, person)
-    return count
+    return count, parse_warnings(document)
 
 
 def import_document_as_sample(document, sample_name, context, person):
@@ -223,8 +251,15 @@ def _parse_afir(sample_name):
 def _parse_document(uploaded):
     """Parse an uploaded ``.gd`` into a ``genomediff.GenomeDiff``.
 
-    Decodes bytes to text and drops blank lines (the genomediff parser raises on
-    a line it can't match, and a bare newline matches nothing).
+    Decodes bytes to text and drops blank lines (a bare newline matches no entry
+    pattern, and the parser would report every one of them).
+
+    Read leniently, which is the parser's default: a line it cannot fully make sense of
+    lands in ``document.parse_errors`` and the rest of the file still loads. `strict=True`
+    would restore the old raise-and-lose-the-file behaviour, and is deliberately not used --
+    it raises on *any* problem including the field-guard violations breseq's own output
+    contains, so it would start refusing files that import cleanly today. The errors are
+    reported per file instead; see `parse_warnings`.
 
     Only mutations are read from the result. GenomeDiff spells a mutation with a
     three-letter code and the parser classifies on that, so evidence (RA, MC, JC,
@@ -367,7 +402,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
     unannotated; `./aledb reannotate` fills it in once one arrives."""
     ObservedMutation.objects.filter(sequencing_experiment=seq_experiment).delete()
 
-    records = list(document.mutations)
+    records = [record for record in document.mutations if _is_storable(record)]
     verbatim = [{
         "type": record.type,
         "id": record.id,
@@ -474,26 +509,47 @@ def synthesize_sequence_change(record):
     `Mutation.objects.get_or_create` keys on below, so a second rule for it would let a
     hand-entered mutation and a later re-import of the same call become two rows.
     """
-    attributes = record.attributes
     mutation_type = record.type
+
+    def field(name, default=None):
+        return _plain(record.get(name, default))
+
     if mutation_type in ("SNP", "INS", "SUB"):
-        return str(attributes.get("new_seq", ""))
+        return str(field("new_seq", ""))
     if mutation_type == "DEL":
-        return "del %s bp" % attributes.get("size", "?")
+        return "del %s bp" % field("size", "?")
     if mutation_type == "MOB":
-        sign = "+" if attributes.get("strand") == 1 else "-"
-        return "%s (%s) +%s bp" % (
-            attributes.get("repeat_name", ""), sign, attributes.get("duplication_size", 0))
+        sign = "+" if field("strand") == 1 else "-"
+        return "%s (%s) +%s bp" % (field("repeat_name", ""), sign, field("duplication_size", 0))
     if mutation_type == "AMP":
-        return "%s bp x%s" % (attributes.get("size", "?"), attributes.get("new_copy_number", "?"))
+        return "%s bp x%s" % (field("size", "?"), field("new_copy_number", "?"))
     if mutation_type == "INV":
-        return "inv %s bp" % attributes.get("size", "?")
+        return "inv %s bp" % field("size", "?")
     if mutation_type in ("CON", "INT"):
-        return str(attributes.get("region", ""))
+        return str(field("region", ""))
     return " ".join(
-        str(attributes.get(field))
-        for field in TYPE_SPECIFIC_FIELDS.get(mutation_type, ())
-        if attributes.get(field) is not None)
+        str(field(name))
+        for name in TYPE_SPECIFIC_FIELDS.get(mutation_type, ())
+        if field(name) is not None)
+
+
+def _plain(value):
+    """A parsed number as its own value, independent of how the file spelled it.
+
+    genomediff returns `PreservedInt`/`PreservedFloat` for values whose source text would not
+    format back identically -- `size=0042`, `frequency=8.39314286e-01` -- and their `__str__`
+    answers that original text. That is right for writing a `.gd` back out and wrong here:
+    `sequence_change` is one of the seven fields `Mutation.objects.get_or_create` keys on, so
+    formatting from source text would fork one mutation into two rows depending on how each
+    file happened to write the number.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
+    return value
 
 
 def _coerce_frequency(value):

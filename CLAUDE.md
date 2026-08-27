@@ -61,13 +61,18 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1081 run, 0 failures** standalone; **1194** in an assembled project, where the
-plugins' own tests join them. They were 1028 and 1141 before the experiment lock and the bulk
-sharing editor, 938 and 1051 before the mutation editor's add form, and 852 and 965 before the
-editor itself. The suite is green — treat *any* failure as yours. (These said 642 and 688
-for a while and were wrong
-by more than the sharing work added — standalone was already 698 before it. Re-count rather
-than adjusting the number by what you think you added.)
+**Baseline: 1109 run, 0 failures** standalone; **1222** in an assembled project, where the
+plugins' own tests join them. They were 1081 and 1194 before the genomediff bump, 1028 and 1141
+before the experiment lock and the bulk sharing editor, 938 and 1051 before the add form, and
+852 and 965 before the mutation editor itself.
+
+**An assembled project's venv needs the genomediff pin installed too**, and `./mutint install`
+will not do it on its own — pip sees an installed 0.4.2 and leaves it. Use the
+`--force-reinstall` line from `requirements.txt` against `mutint/env/main/bin/pip`, or the
+suite runs green against the wrong package. The suite is green — treat *any* failure as yours.
+(These said 642 and 688 for a while and were wrong by more than the sharing work added —
+standalone was already 698 before it. Re-count rather than adjusting the number by what you
+think you added.)
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
 `aledb_common/test_runner.py` substitutes them when no labels are given. Standalone this
@@ -356,15 +361,90 @@ so an IIFE in the content block runs with only plain DataTables loaded and `sele
 `buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
 class from the stylesheet, so it reads as a styling fault rather than a load-order one.
 
+### breseq's own field guards, and where we are stricter
+
+The `genomediff` pin is a **git SHA, and has to be**: every commit in that repo reports itself
+as `0.4.2`, so a version pin cannot tell one from another and pip will not upgrade an installed
+`0.4.2` on the strength of the requirement alone. Bumping an existing environment needs the
+`--force-reinstall` line spelled out in `requirements.txt`.
+
+At `43a0f72` the package grew `genomediff.schema` — breseq's `genome_diff_entry.cpp` tables,
+mirrored and checked against `gdtools VALIDATE` over breseq's own 306-file test suite — behind
+`Record.get()` / `set()` / `validate()`. `aledb_mutation_editor.validation` defers to
+`check_field` for those rules rather than keeping a second opinion about what breseq accepts.
+
+**`check_field` is well-formedness only.** It guards about twenty field names with five rules
+(base sequence, positive / non-negative / any integer, strand) and knows nothing semantic — a
+SNP to the base already there, an AMP to one copy and an inversion of a palindrome all pass it,
+and breseq's own reference-aware check is equally generic. So the whole semantic validator
+stays; what was deleted is the hand-rolled range and character checking that duplicated the
+table.
+
+**Two rules are deliberately stricter than breseq's**, and a tidy-up that "simplifies" them
+away would silently widen what the form accepts:
+
+- **`size`** is a `NonNegativeInteger` to breseq, so a size of **zero passes its guard**. A DEL
+  covering no bases deletes nothing, and this form is where somebody types it by hand.
+- **`new_seq`** as a base sequence accepts the **empty string** — every character of nothing is
+  a base. It also has no notion of a SNP taking exactly one.
+
+`PackageGuardTestCase` asserts both, by checking that `check_field` accepts the value and that
+we refuse it anyway.
+
+**Wording.** `check_field` returns breseq's phrasing — *"Expected positive integral value for
+field [position] instead of [0]."* — which is right in a `.gd` and wrong beside a form input.
+`GUARD_MESSAGES` maps the four fields where we have a better sentence; anything else shows the
+package's own, which beats inventing wording for a rule we do not own. A key in that map for a
+field breseq does not guard would never be reached, so there is a test that every key names a
+real guard.
+
+**`Record.get` is not `dict.get`** — with no default it raises `KeyError`. Every call site
+passes one.
+
+### Reading a `.gd`: one bad line no longer costs the file
+
+At `43a0f72` the parser stopped raising on a line it cannot fully read. Problems collect in
+`document.parse_errors` and the rest of the file loads. `gd_import.parse_warnings` carries them
+into the per-file import summary as `warnings`, beside the existing `error`, and the Add Data
+page lists them under the file — so a truncated line is named rather than silently worth fewer
+mutations.
+
+**`strict=True` restores the old raise, and is deliberately not used.** It raises on *any*
+problem including the field-guard violations breseq's own output contains, so it would start
+refusing files that import cleanly today.
+
+**Leniency is not enough on its own**, which is the part that is easy to miss: a truncated line
+parses with its missing fields set to `None`, and `Mutation.position` is NOT NULL — so passing
+such a record on turns a reported bad line into an `IntegrityError` that rolls back the whole
+sample. `gd_import._is_storable` skips them, and the reason is already in `parse_warnings`.
+
+Two smaller changes from the same bump: an entry whose id column is `.` now parses with
+`id=None` instead of failing the file (18 of breseq's 306 test files could not be read at all
+before), and `Record.__str__` writes `.` back for an absent value where it used to write the
+literal string `None` — a file breseq cannot read. Both are fixes we get for free.
+
+**Numeric notation does not survive the database.** The parser now returns `PreservedInt` /
+`PreservedFloat` for values whose text would not format back identically, so
+`frequency=8.39314286e-01` writes back byte-for-byte — but JSON has one number type, so storing
+it in `gd_data` flattens it and an exported line says `frequency=0.839314286`. Verified, and
+unchanged from before the bump; `gd_data` is verbatim in content, not in bytes.
+
+The sharp edge that comes with those wrappers: **`str()` on one returns the source text**, and
+`synthesize_sequence_change` formats parsed values into `sequence_change`, which is one of the
+seven fields `Mutation.objects.get_or_create` keys on. Left alone, `size=42` and `size=0042`
+would have become two rows for one mutation. `gd_import._plain` coerces numerics first, and a
+test imports the same mutation spelled both ways and asserts one row.
+
 ### Adding a mutation by hand
 
 `/mutation-editor/add` records a mutation no sample carries yet, on one or more samples at
 once. It is the third thing the editor does, and the only one that has to invent a `Mutation`
 rather than move an existing one about.
 
-**The form's fields come from `genomediff.records.TYPE_SPECIFIC_FIELDS`.** That table is what
-the parser fills a record from and what `Record.__str__` serialises in order, and its own
-comment says it is kept synced with breseq's `genomediff.cpp`. `validation.form_schema()`
+**The form's fields come from `genomediff.schema.TYPE_SPECIFIC_FIELDS`.** That table is what
+the parser fills a record from and what `Record.__str__` serialises in order, and it is
+mirrored from breseq's `genome_diff_entry.cpp`. (It used to live in `genomediff.records`, which
+still re-exports it.) `validation.form_schema()`
 hands it to the page through `json_script`, so the type dropdown, the visible inputs, the
 required-field check and the emitted `.gd` line read one table. Restating the field sets in the
 template would give the form a second opinion about what a MOB needs. The nine offered types

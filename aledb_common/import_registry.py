@@ -53,7 +53,9 @@ def register_import_handler(name, label, patterns, handle,
                 'data/reference.bam'). Serialised to the client so it can bucket a
                 drop before uploading, and used as the default `detect`.
     handle      callable(experiment, staged_root, paths, user) -> summary dict with
-                keys 'files' (list of {file, mutations, error}) and 'total_mutations'
+                keys 'files' (list of {file, mutations, error, warnings}) and
+                'total_mutations'. `error` means the file failed; `warnings` lists what
+                the parser could not read in a file that otherwise imported.
     priority    lower runs first; use PRIORITY_REFERENCE for anything that must be
                 in place before data is imported
     detect      optional callable(staged_root, paths) -> claimed paths, for handlers
@@ -259,6 +261,7 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
             "file": path,
             "mutations": 0,
             "error": _unclaimed_reason(path, import_type),
+            "warnings": [],
         })
 
     return {

@@ -40,6 +40,7 @@ from aledb_import import reference_store
 from aledb_import.gd_import import (
     _parse_document,
     _prepare_experiment,
+    parse_warnings,
     run_post_processing,
     import_document_as_sample,
 )
@@ -147,24 +148,27 @@ def _import_samples(context, root, person, report_loose_gd):
         sample_name = os.path.basename(sample_dir.rstrip(os.sep))
         try:
             with transaction.atomic():
-                count, seq_experiment = _import_one_sample(
+                count, seq_experiment, warnings = _import_one_sample(
                     sample_dir, sample_name, context, person)
             # Outside the transaction on purpose: this walks the whole alignment, and holding
             # a database transaction open for it would be paid by every other writer. It is
             # also best-effort -- a sample keeps its reads whether or not the coverage
             # derives, and `./aledb coverage` fills in what did not.
             coverage.build_quietly(seq_experiment)
-            file_results.append({"file": sample_name, "mutations": count, "error": None})
+            file_results.append({"file": sample_name, "mutations": count, "error": None,
+                                 "warnings": warnings})
             total_mutations += count
         except Exception as exc:  # one bad sample must not poison the batch
             logger.exception("breseq folder import failed for %s", sample_name)
-            file_results.append({"file": sample_name, "mutations": 0, "error": str(exc)})
+            file_results.append({"file": sample_name, "mutations": 0, "error": str(exc),
+                                 "warnings": []})
 
     if report_loose_gd:
         for gd_path in find_loose_gd_files(root, sample_dirs):
             file_results.append({
                 "file": os.path.basename(gd_path),
                 "mutations": 0,
+                "warnings": [],
                 "error": ("a bare .gd has no reference genome, which every sample in an "
                           "experiment must share; import it into an experiment whose "
                           "reference is already established"),
@@ -201,6 +205,7 @@ def _import_one_sample(sample_dir, sample_name, context, person):
 
     seq_experiment, count = import_document_as_sample(
         document, sample_name, context, person)
+    warnings = parse_warnings(document)
 
     sample_store = store.ensure_dir(store.sample_dir(seq_experiment.id))
     shutil.copyfile(gd_path, os.path.join(sample_store, store.SAMPLE_GD))
@@ -221,8 +226,9 @@ def _import_one_sample(sample_dir, sample_name, context, person):
     seq_experiment.save(update_fields=updated)
 
     # The sample goes back with the count so the caller can derive from it once this
-    # transaction has closed.
-    return count, seq_experiment
+    # transaction has closed; the warnings go back so the summary can report what the
+    # parser could not read.
+    return count, seq_experiment, warnings
 
 
 def _establish_or_check_reference(experiment, gff3_path, fasta_path):
