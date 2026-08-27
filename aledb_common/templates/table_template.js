@@ -192,11 +192,6 @@ function column_sort_from_right() {
     table.order(sorting_array).draw();
 }
 
-var deleteRow = function () {
-    var row = $(this).closest("tr").get(0);
-    $('#data').DataTable().row(row).remove().draw();
-};
-
 function filter_dups() {
     var table = $('#data').DataTable();
     if ($('#show_dups').is(":checked")) {
@@ -318,22 +313,5 @@ function add_tag_to_replicate(tag_type, replicate_id, header) {
     )
 }
 
-function save_to_experiment_filter(ale_experiment_id, mutation_id) {
-    var token = '{{csrf_token}}';
-    $.ajax(
-        {
-            type: 'POST',
-            headers: { "X-CSRFToken": token },
-            url: '{% url "mutation_to_exp_filter" %}',
-            data: {
-                mut_id: mutation_id,
-                experiment_id: ale_experiment_id,
-                save_method: "experiment"
-            },
-            error: function (xhr, ajaxOptions, thrownError) {
-                swal("", "Save-tag failed", "error");
-            }
-    })
-}
 
 

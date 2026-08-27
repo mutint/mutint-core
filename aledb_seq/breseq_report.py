@@ -96,6 +96,9 @@ def build_rows(observed_mutations, browse_url=None):
         row["freq"] = frequency_text
         row["mutation_type"] = observed.mutation.mutation_type or ""
         row["mutation_id"] = observed.mutation_id
+        # The observation, not the mutation: the editor addresses rows by what it deletes,
+        # and one mutation is observed in many samples. Unused by the read-only tables.
+        row["observed_id"] = observed.id
         row["evidence_url"] = browse_url(observed) if browse_url else None
         # breseq alternates row shading and colours a polymorphic call green.
         row["row_class"] = ("polymorphism_table_row" if is_polymorphism

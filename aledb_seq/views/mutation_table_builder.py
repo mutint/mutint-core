@@ -10,7 +10,6 @@ from aledb_experiment.models import TechnicalReplicate, AleExperiment
 from aledb_experiment.permissions import can_add_global_filter, can_add_experiment_filter
 
 
-HTML_MUTATION_TABLE_ROW = """<a href="javascript:void(0)" style="float:right" onclick="deleteRow.call(this)"><img src="/static/img/close-icon.gif" width="12" height="11"></a>"""
 HTML_EMPTY_MUTATION_CELL = """<span class="empty"></span>"""
 HTML_MUTATION_PRESENT_FALSE_CELL_HTML = """<span class="false">%d/%d</span>"""
 
@@ -26,8 +25,6 @@ REP_DROPDOWN = '<div class="dropdown tag_dropdown"><button class="btn btn-defaul
              '</ul>'
 REP_TAG = '</div><div class="tag_dropdown">%s</div>'
 
-_button_save_to_experiment_filter = """<button class="btn btn-default btn-xs" type="button" id="experiment_filter_button" onclick="save_to_experiment_filter(%d, %d); return false;"><i class="fa fa-filter" aria-hidden="true"></i></button>"""
-_menu_item_save_to_experiment_filter = """<li><a onclick="save_to_experiment_filter(%d, %d)" style="cursor:pointer">Save to Experiment Filter</a></li>"""
 _table_cell_dropdown_template = """<div class="dropdown">
   <button class="btn btn-default btn-xs dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
     <i class="fa fa-bars" aria-hidden="true"></i>
@@ -44,14 +41,12 @@ def _build_table_cell_for_dropdown(mutation, ale_experiment):
 
     NOTE: this is a temporary solution for implementing #425 until the
     mutation table component rendering is refactored
-    """
-    menuitems = ''
-    filter_button = ''
-    if ale_experiment:
-        filter_button += _button_save_to_experiment_filter % (ale_experiment.ale_id, mutation.id)
-        menuitems += _menu_item_save_to_experiment_filter % (ale_experiment.ale_id, mutation.id)
 
-    return filter_button+_table_cell_dropdown_template % (menuitems + _get_tag_filter_dropdown_entries(mutation.id))
+    "Save to Experiment Filter" used to lead this menu, appending the mutation's id to
+    `AleExperimentFilter.ignored_mutations` so it would stop being shown. Removing a mutation
+    is `aledb_mutation_editor`'s job now, so what is left here is tagging.
+    """
+    return _table_cell_dropdown_template % _get_tag_filter_dropdown_entries(mutation.id)
 
 
 def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
@@ -83,7 +78,7 @@ def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, expe
     table_body = []
     for mutation in mutations:
         if _contains_mutation(table_entry_list[mutation_index_dict[mutation.id]]):
-            table_row = [HTML_MUTATION_TABLE_ROW]
+            table_row = []
             if can_add_global_filter(user) or can_add_experiment_filter(user, experiment):
                 table_row.append(_build_table_cell_for_dropdown(mutation, experiment))
             else:

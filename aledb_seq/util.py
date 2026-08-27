@@ -98,19 +98,6 @@ def get_ecocyc_gene_list(gene_list, is_ecocyc_gene: bool = False):
     return url_list
 
 
-def get_mutation_objects(mutations_id_str):
-    """
-    Get list of mutations for the ids
-    :param mutations_id_str: mutation ids, in string, separated by ','
-    :return: list of mutations from database
-    """
-    mutations = []
-    if mutations_id_str and len(mutations_id_str)>0:
-        mutations_ids = [mut_id for mut_id in mutations_id_str.split(',') if is_int(mut_id)]
-        mutations = [mutation for mutation in aledb_seq.models.Mutation.objects.filter(id__in=mutations_ids)]
-    return mutations
-
-
 def get_ref_sequences():
     return sorted(
         aledb_seq.models.Mutation.objects.exclude(reseq_reference__isnull=True).exclude(reseq_reference='')

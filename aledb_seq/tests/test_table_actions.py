@@ -238,12 +238,28 @@ class SharedTableJsTestCase(TestCase):
         comment, which the template engine parses regardless of the //."""
         self.assertIn("function add_tag", self._render())
 
-    def test_it_reverses_the_three_endpoints(self):
+    def test_it_reverses_both_endpoints(self):
+        """Two, not three: `add_to_exp_filter` was the third and is gone.
+
+        It appended a mutation id to the experiment filter's ignored list so the row would
+        stop being drawn -- a delete that kept the row, unattributed and unrecoverable.
+        `aledb_mutation_editor` replaces it.
+        """
         js = self._render()
 
         self.assertIn("/mutation-table/toggle-mut-tag/", js)
         self.assertIn("/mutation-table/toggle-rep-tag", js)
-        self.assertIn("/mutation-table/add_to_exp_filter", js)
+
+    def test_the_dead_experiment_filter_helper_is_gone(self):
+        """Its `{% url %}` names a route that no longer exists.
+
+        This file is a Django template rendered inside a <script>, so a tag naming a removed
+        route raises NoReverseMatch and takes down all four tables that include it -- which is
+        what `test_the_shared_table_js_renders` would catch, one failure later.
+        """
+        js = self._render()
+        self.assertNotIn("save_to_experiment_filter", js)
+        self.assertNotIn("deleteRow", js)
 
     def test_no_endpoint_path_is_hardcoded_under_mutations(self):
         """The prefix these used to live under names a page core no longer serves."""

@@ -61,11 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 852 run, 0 failures** standalone; **965** in an assembled project, where the
-plugins' own tests join them. The suite is green — treat *any* failure as yours. (These said
-642 and 688 for a while and were wrong by more than the sharing work added — standalone was
-already 698 before it. Re-count rather than adjusting the number by what you think you
-added.)
+**Baseline: 938 run, 0 failures** standalone; **1051** in an assembled project, where the
+plugins' own tests join them. They were 852 and 965 before `aledb_mutation_editor`. The suite
+is green — treat *any* failure as yours. (These said 642 and 688 for a while and were wrong
+by more than the sharing work added — standalone was already 698 before it. Re-count rather
+than adjusting the number by what you think you added.)
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
 `aledb_common/test_runner.py` substitutes them when no labels are given. Standalone this
@@ -281,6 +281,116 @@ back to the flat columns, with the page pointing at `./aledb reannotate`. That f
 the usual reason the page looks plain: nothing is wrong with the rendering, the rows simply
 have no annotation yet. `Mutation.gd_data` is kept for every mutation, so `reannotate`
 recomputes them in place against the stored reference -- re-importing is not needed.
+
+### Editing a sample's mutations, and the history that makes it safe
+
+`aledb_mutation_editor` owns two operations -- **delete** an observation from a sample, and
+**batch-copy** one from a sibling sample -- and an append-only change log that makes both
+reversible. `/mutation-editor/` edits one sample, `/mutation-editor/copy` copies between them,
+`/mutation-editor/history` lists what has been done and restores from it.
+
+**What it deletes is an `ObservedMutation`, never a `Mutation`.** That distinction is the whole
+design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
+prunes them, in aledb-converge's `ConvergeMutation`, in aledb-phylogeny's `site_mutation_ids`
+and `branch_mutations` JSON -- whose docstring says *"ids do not move"*, and which is not on the
+rebuild hook -- and in every exported CSV's "Mut ID" column. Deleting a Mutation and letting a
+re-import recreate it through `gd_import`'s seven-field `get_or_create` would mint a new pk for
+the same biological mutation and quietly invalidate all of it. Removing only the sample's
+observation changes nothing any stored id means.
+
+**The rows are hard-deleted, and that is what kept every read path untouched.** An
+ObservedMutation is read by `mutation_table_builder`, `breseq_table`, `aledb_export`,
+`aledb_stats`, `aledb_dashboard`, `aledb_search`, aledb-fixation and aledb-converge, and this
+repo's default managers are deliberately unfiltered. A soft-delete flag would have needed all
+eight taught to filter, and the one that was missed would have gone on showing deleted
+mutations in an export or a fixation table. Nothing was added to any query.
+
+The log is two tables in `models.py`. A `MutationChangeSet` is one user action against one
+experiment; a `MutationChange` is one observation it added or removed, carrying a **full
+snapshot** of the row (`observation`) and of its mutation's identity (`mutation_identity`).
+
+- The observation snapshot is every column, so a restore is exact rather than approximate.
+  `frequency` is a `DecimalField`, so it is stored as a string -- a round trip through `float`
+  moves it at the fourth decimal place, which is where that column keeps its precision.
+- **`mutation_identity` exists because the Mutation row may not outlive the log.**
+  `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
+  no ObservedMutation, and runs after an experiment delete and after `delete_isolate` -- so
+  removing a mutation's last observation makes it eligible for a sweep triggered by something
+  else entirely. The snapshot is the exact `get_or_create` key plus `gd_data` and `annotation`,
+  which is enough to put it back indistinguishable from an imported row. `aledb_import` needed
+  no edit for this, and `test_restore.SweptMutationTestCase` is what pins it.
+
+**Restoring is a new changeset, not a rewind.** `history.state_after` derives the state at a
+version by taking the live rows and undoing every changeset newer than it, newest first;
+`plan_restore` diffs that against the present and `restore` applies the difference with
+`kind=RESTORE`. So the log is never rewritten, a restore can itself be restored past, and
+restoring twice to the same point is a no-op the second time rather than a second identical
+entry. Identity throughout is `(sample_id, mutation_key, source)` and **not** a primary key: a
+restored row is a new row, and its Mutation may have been recreated. "Newer than" is decided on
+`pk`, not `created_at`, because two changesets written in the same microsecond need a total
+order; the timestamp is what a person picks a version by.
+
+**The editor's listings are unfiltered.** `breseq_table` runs its rows through
+`filter_observed_mutations`; these pages do not. Filtering is a display concern, and a mutation
+excluded by a gene or frequency filter has to stay visible here or it cannot be removed and
+returns the moment somebody widens the filter.
+
+Rebuilds run through `history.rebuild_after_edit`, outside the transaction as
+`gd_import.run_post_processing` does, and deliberately **without `only=`** -- unlike
+`samples.rebuild_after_structural_change`, which refuses to pay for the dashboard's totals
+because a renumber cannot change a mutation count. Adding or removing an observation changes
+every registered rebuild, and aledb-fixation caches ObservedMutation *ids*, which only its
+delete-and-recompute rebuild clears.
+
+**Two traps in the templates.** The selection tables are DataTables with the Select extension,
+which is safe here only because no cell is an input -- selection lives in DataTables' data
+model, so a row selected on another page or behind a search box still comes back from
+`rows({selected:true})`. `ale/experiment_samples.html` avoids DataTables for the opposite
+reason: `deferRender` never builds the DOM for undrawn rows, so a *typed* value on page two
+would not exist to read back. If a cell here ever becomes editable, the table has to become a
+plain one. And the initialisation must sit inside **`$(document).ready`**: base.html loads the
+Select and Buttons extensions in the last `<script>` of `<body>`, after `{% block content %}`,
+so an IIFE in the content block runs with only plain DataTables loaded and `select:` and
+`buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
+class from the stylesheet, so it reads as a styling fault rather than a load-order one.
+
+### The old way of deleting a mutation, and why it is gone
+
+`AleExperimentFilter.ignored_mutations`, `AleExperimentFilter.starting_strain_mutations` and
+`GlobalFilter.ignored_mutations` were comma-joined `Mutation.id` strings that
+`filter_observed_mutations` excluded from every table. They were a delete that kept the row:
+scoped to a whole experiment rather than a sample, recording nothing about who did it, with no
+way back, and with nothing that ever pruned an id that had stopped meaning anything. The
+mutation table's first column carried the same idea in miniature -- a close icon that removed
+the row from the client-side DataTable until the next reload.
+
+All of it is gone, along with `add_to_exp_filter`, its `mutation_to_exp_filter` route, its
+dropdown entry, and `save_to_experiment_filter`/`deleteRow` in `table_template.js`.
+`aledb_mutation_editor.migrations.0002` converts whatever those columns held into delete
+changesets before `aledb_filter.0003` drops them, so what was hidden stays hidden and becomes
+inspectable and restorable; `aledb_filter.0003` depends on it, which is what stops the drop
+running first. Those changesets have `created_by` null and render as "system".
+
+**What is left in `aledb_filter` is filtering proper**: the four frequency cutoffs and
+`ignored_genes`, which aledb-fixation, aledb-converge, `aledb_stats` and `aledb_seq` all have
+tests on. One visible behaviour change: **"Show Experiment Filtered" no longer reveals what was
+hidden**, because it is deleted rather than filtered -- the history page is where it lives now.
+
+Two things this shook out that are worth knowing:
+
+- **Removing the close icon shifted every column of the shared mutation table left by one.**
+  `REFSEQ_COLUMN_IN_MUT_TABLE` went 3 -> 2 and `aledb_export.util`'s `mut_pos_index` with it;
+  everything in `table_template.js` is expressed relative to that constant, and aledb-compare,
+  aledb-fixation, aledb-converge and `aledb_search` all import it rather than hardcoding an
+  index, so they followed for free. Getting it wrong renders a table labelled one way and
+  sorted another, which reads like CSS. `test_mutation_table_builder` now asserts the header
+  and every row are the same width and that the constant points at "Reference Seq".
+- **An experiment filter with no cutoff at either end used to exclude the whole experiment.**
+  `filtered_observed_mutation_queryset` builds a per-experiment `Q` and hands it to
+  `.exclude()`; with an empty `q_exp` that leaves the bare experiment match. It was unreachable
+  while a non-empty ignored-mutation list could carry the clause on its own, and removing those
+  lists made a 0-100 filter reach it. Both copies of that block -- here and in
+  `aledb_interop_query.views`, which rebuilds it by hand -- now skip an empty `q_exp`.
 
 ### Creating and importing are pages, not dialogs
 
@@ -816,7 +926,12 @@ All apps use the `aledb_*` namespace. Key apps:
   Note `/mutations/` itself is **not** a page: it was Compare, now the aledb-compare plugin.
 - **`aledb_fixation/`** — Fixated mutation computation.
 - **`aledb_converge/`** — Convergence analysis across experiments.
-- **`aledb_filter/`** — Experiment filtering UI and models.
+- **`aledb_filter/`** — Experiment filtering UI and models: frequency cutoffs and
+  ignored genes. The three mutation-id hide lists it used to carry are gone — see
+  **The old way of deleting a mutation** above.
+- **`aledb_mutation_editor/`** — Deleting and copying a sample's mutations, with an
+  append-only change log you can restore from. See **Editing a sample's mutations**
+  above.
 - **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
 - **`aledb_export/`** — Data export in various formats.
 - **`aledb_stats/`** — Precomputed statistics: `StaticData` (the needle plot) and

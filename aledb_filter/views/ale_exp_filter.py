@@ -6,10 +6,8 @@ from aledb_filter.forms.filter import FilterForm
 from aledb_filter.models import AleExperimentFilter
 import aledb_filter.models
 from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN, DEFAULT_MUTATION_FREQ_MAX
-from aledb_filter.util import get_ignored_mut_id_list_from_str
 from aledb_common.util import get_user_context
 from aledb_common.rebuild_registry import request_rebuild
-from aledb_seq.util import get_mutation_objects
 from aledb_common.logger import user_extra
 from aledb_experiment import permissions
 import logging
@@ -42,9 +40,6 @@ def mutation_filter(request):
 
         filter_form = FilterForm(filter_form_model.__dict__)
 
-        ignored_mutations = get_mutation_objects(filter_form_model.ignored_mutations)
-        starting_strain_mutations = get_mutation_objects(filter_form_model.starting_strain_mutations)
-
         context.update({
             "form": filter_form,
             "experiment": experiment,
@@ -52,8 +47,9 @@ def mutation_filter(request):
             "ale_experiment_name": experiment.name,
             "ale_project_name": experiment.project.name,
             "ale_project_id": experiment.project.id,
-            "ignored_mutations": ignored_mutations,
-            "starting_strain_mutations": starting_strain_mutations})
+            # The same predicate `_handle_POST` enforces. The template used to ask Django's
+            # `perms.filter.add_globalfilter`, which nothing in this codebase grants.
+            "can_edit": permissions.can_add_experiment_filter(request.user, experiment)})
         return HttpResponse(template.render(context, request), content_type="text/html")
     except AleExperiment.DoesNotExist:
         return common.no_experiment_selected(request, context, logger, "filter settings")
@@ -70,11 +66,9 @@ def _handle_POST(request, filter_form_model, experiment):
         filter_form_model.min_cutoff = request.POST.get("min_cutoff", DEFAULT_MUTATION_FREQ_MIN)
         filter_form_model.max_cutoff = request.POST.get("max_cutoff", DEFAULT_MUTATION_FREQ_MAX)
         filter_form_model.ignored_genes = request.POST.get("ignored_genes", "")
-        deleted_mut_id = request.POST.get('deleted_mut_id', None)
-        ignored_mutation_id_list = get_ignored_mut_id_list_from_str(
-            AleExperimentFilter.objects.get(ale_experiment_id=experiment.ale_id).ignored_mutations, deleted_mut_id)
-        cleaned_list = get_ignored_mut_id_list_from_str(",".join(ignored_mutation_id_list))
-        filter_form_model.ignored_mutations = ",".join(cleaned_list)
+        # The three lines that used to follow read the page's `deleted_mut_id` accumulator
+        # back into `ignored_mutations`. That column is gone; removing a mutation is
+        # aledb_mutation_editor's job, and it removes the row rather than hiding it.
         filter_form_model.save()
     elif filter_form.is_valid():
         raise Exception("User doesn't have permission to edit experiment filter")

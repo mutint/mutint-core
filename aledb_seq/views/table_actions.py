@@ -1,4 +1,4 @@
-"""Curation actions the mutation table performs: tagging, and filter suppression.
+"""Curation actions the mutation table performs: tagging.
 
 These are **not** Compare's, which is why they stayed in core when Compare moved out to
 `aledb-compare`. Every page that renders `base_table_template.html` or includes
@@ -11,6 +11,11 @@ They are mounted at `/mutation-table/` rather than `/mutations/`, where they use
 beside the Compare view. The prefix named a page that is no longer here, and three of the
 four callers were never that page.
 
+`add_to_exp_filter` used to sit here too, appending a mutation id to
+`AleExperimentFilter.ignored_mutations` so the row would stop appearing. That was a way of
+deleting a mutation while keeping it, per experiment and unattributed, and it is
+`aledb_mutation_editor`'s job now -- per sample, recorded, and restorable.
+
 `@ajax` puts the real status in the JSON body and always sends HTTP 200 (see
 `django_ajax.shortcuts.render_to_json`), so a refusal returns HttpResponseForbidden and the
 caller reads `content` for the reason -- which the existing `swal()` handler already does.
@@ -22,8 +27,6 @@ from django.http import HttpResponseForbidden
 from django_ajax.decorators import ajax
 
 from aledb_experiment import models, permissions
-from aledb_filter.models import AleExperimentFilter
-from aledb_filter.util import get_global_filter
 from aledb_seq.models import Mutation
 
 logger = logging.getLogger(__name__)
@@ -60,25 +63,6 @@ def _toggle(existing, selected_tag):
     else:
         tag_list.append(selected_tag)
     return ','.join(tag_list)
-
-
-@ajax
-def add_to_exp_filter(request):
-    try:
-        mut_id = request.POST['mut_id']
-        experiment_id = request.POST['experiment_id']
-        experiment = models.AleExperiment.objects.get(ale_id=experiment_id)
-        if not experiment:
-            return "Invalid experiment id: " + experiment_id
-        if permissions.can_add_experiment_filter(request.user, experiment):
-            ale_exp_filter, created = AleExperimentFilter.objects.get_or_create(ale_experiment_id=experiment_id)
-            ale_exp_filter.ignored_mutations = ale_exp_filter.ignored_mutations + "," + mut_id
-            ale_exp_filter.save()
-            return 'ok'
-        else:
-            return "User doesn't have permission to edit experiment filter"
-    except Exception as ex:
-        return ex
 
 
 @ajax

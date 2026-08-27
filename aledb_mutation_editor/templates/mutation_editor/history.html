@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    {% include "mutation_editor/_toolbar.html" with active='history' %}
+    {% csrf_token %}
+
+    <div class="row">
+        <p style="color: #666;">
+            Every recorded change to this experiment's mutations, newest first. Restoring does
+            not erase anything: it works out what would have to change to reach that point and
+            applies it as a new entry, so you can always come back from a restore the same way
+            you went into it.
+        </p>
+        <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
+    </div>
+
+    {% if not changesets %}
+        <p>No mutation edits have been recorded for this experiment. Its mutations are exactly
+           what was imported.</p>
+    {% else %}
+    <div class="row">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Who</th>
+                    <th>What</th>
+                    <th>Samples</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for entry in changesets %}
+                <tr data-change-set-id="{{ entry.change_set.pk }}">
+                    <td style="white-space: nowrap;">{{ entry.change_set.created_at }}</td>
+                    <td>
+                        {% comment %} A changeset with no user is one the system wrote -- today
+                           that is only the migration that brought the old experiment-filter
+                           hide-list into this history. Saying "system" is honest; leaving it
+                           blank would read as a bug. {% endcomment %}
+                        {% if entry.change_set.is_system %}<em>system</em>
+                        {% else %}{{ entry.change_set.created_by }}{% endif %}
+                    </td>
+                    <td>
+                        <span class="label label-default">{{ entry.change_set.get_kind_display }}</span>
+                        {{ entry.change_set.note }}
+                        {% if entry.change_set.restored_to_id %}
+                            <br><small style="color: #666;">back to change
+                                #{{ entry.change_set.restored_to_id }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% for sample in entry.samples %}
+                            <div>
+                                {{ sample.label }}
+                                {% if sample.added %}<span style="color: #3c763d;">+{{ sample.added }}</span>{% endif %}
+                                {% if sample.removed %}<span style="color: #a94442;">&minus;{{ sample.removed }}</span>{% endif %}
+                            </div>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if can_edit %}
+                        <button type="button" class="btn btn-default btn-xs me-restore"
+                                data-change-set-id="{{ entry.change_set.pk }}"
+                                data-when="{{ entry.change_set.created_at }}">
+                            Restore to here</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if can_edit %}
+                <tr>
+                    <td colspan="4"><em>Before any recorded change &mdash; the mutations as
+                        they were imported.</em></td>
+                    <td>
+                        <button type="button" class="btn btn-default btn-xs me-restore"
+                                data-change-set-id=""
+                                data-when="the original import">Restore to here</button>
+                    </td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <script type="text/javascript">
+    (function () {
+        "use strict";
+        // No restore buttons for a reader, and none when nothing has been recorded.
+        if (!document.querySelector(".me-restore")) { return; }
+
+        Array.prototype.forEach.call(
+            document.querySelectorAll(".me-restore"), function (button) {
+                button.addEventListener("click", function () {
+                    var id = button.getAttribute("data-change-set-id");
+                    var when = button.getAttribute("data-when");
+                    swal({
+                        title: "Restore to " + when + "?",
+                        text: "This experiment's mutations go back to how they stood then. "
+                            + "It is recorded as a new entry here, so nothing is lost and you "
+                            + "can come back from it.",
+                        icon: "warning",
+                        buttons: true
+                    }).then(function (confirmed) {
+                        if (!confirmed) { return; }
+                        document.getElementById("me-error").textContent = "";
+                        window.aledbPost("/mutation-editor/restore", {
+                            experiment_id: "{{ ale_experiment_id }}",
+                            change_set_id: id,
+                            // Empty list means the whole experiment. Per-sample restore uses
+                            // the same endpoint with ids in here.
+                            reseq_ids: "[]"
+                        }).then(function (body) {
+                            if (!body.changed) {
+                                swal("", "Nothing to do -- the mutations already match that "
+                                       + "point.", "info");
+                                return;
+                            }
+                            window.location.reload();
+                        }).catch(function (err) {
+                            document.getElementById("me-error").textContent = err.message;
+                        });
+                    });
+                });
+            });
+    })();
+    </script>
+{% endblock %}

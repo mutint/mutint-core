@@ -172,9 +172,20 @@ class SummaryTestCase(TestCase):
         types, _, _, _ = self._assert_matches_original("cutoff not applied the same way")
         self.assertEqual(0, types["MOB"], "the 1% observation is below the 50% cutoff")
 
-    def test_an_ignored_mutation_is_excluded(self):
-        self._filter(ignored_mutations=str(self.deletion.id))
-        types, _, _, _ = self._assert_matches_original("ignored mutation still counted")
+    def test_a_deleted_mutation_is_excluded(self):
+        """This used to set the filter's `ignored_mutations` list, which hid a mutation from
+        every table while leaving its rows in place. That mechanism is gone; deleting an
+        observation through `aledb_mutation_editor` is what replaces it, and the Overview must
+        stop counting it for the same reason -- by simply not finding the row any more.
+        """
+        from aledb_mutation_editor import history
+        from aledb_mutation_editor.models import KIND_DELETE
+
+        removals = list(ObservedMutation.objects.filter(mutation=self.deletion))
+        self.assertTrue(removals, "the fixture's DEL is observed somewhere")
+        history.apply_changes(self.experiment, None, KIND_DELETE, removals=removals)
+
+        types, _, _, _ = self._assert_matches_original("deleted mutation still counted")
         self.assertEqual(0, types["DEL"])
 
     # ---- the Python path ------------------------------------------------------------

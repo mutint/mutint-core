@@ -81,6 +81,69 @@ class AmplificationsRemovedTestCase(TestCase):
         self.assertIn("AMP", types)
         self.assertIn("SNP", types)   # and it did not become AMP-only by accident
 
+    # --- the columns line up -------------------------------------------------------------
+
+    def test_the_header_and_every_row_have_the_same_number_of_columns(self):
+        """DataTables is fed the header and the rows separately, and does not check.
+
+        A row shorter than the header renders silently misaligned -- every column after the
+        mismatch shows its neighbour's value, which reads like a CSS problem rather than an
+        off-by-one. This is the assertion the close-icon column's removal needed: it shifted
+        every column left by one, in two files that had to move together.
+        """
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import (
+            get_mutation_table_body, get_table_header,
+        )
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+
+        header = get_table_header(self.user, reseq_dict, self.experiment)
+        body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
+
+        self.assertTrue(body, "the fixture produces rows")
+        for index, row in enumerate(body):
+            self.assertEqual(len(header), len(row), "row %d is a different width" % index)
+
+    def test_the_refseq_column_constant_points_at_the_reference_column(self):
+        """table_template.js derives every other column it touches from this one -- the sort
+        column, and the default hidden columns -- so if it drifts, the table sorts and hides
+        the wrong things while still looking plausible."""
+        from aledb_common.constants import (
+            HTML_MUTATION_TABLE_HEADER, REFSEQ_COLUMN_IN_MUT_TABLE,
+        )
+
+        self.assertEqual("Reference Seq",
+                         HTML_MUTATION_TABLE_HEADER[REFSEQ_COLUMN_IN_MUT_TABLE])
+
+    def test_the_row_holds_the_reference_at_that_index(self):
+        """The other half of the same invariant: the header says where it is, and the body
+        has to actually put it there."""
+        from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import get_mutation_table_body
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
+
+        references = {mutation.reseq_reference for mutation in Mutation.objects.all()}
+        self.assertIn(row[REFSEQ_COLUMN_IN_MUT_TABLE], references)
+
+    def test_the_close_icon_column_is_gone(self):
+        """It removed the row from the client-side table until the next reload -- the same
+        delete-that-is-not-a-delete `aledb_mutation_editor` replaces."""
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import get_mutation_table_body
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
+
+        self.assertNotIn("deleteRow", "".join(str(cell) for cell in row))
+        self.assertNotIn("close-icon", "".join(str(cell) for cell in row))
+
     # --- the browser link on a frequency cell -------------------------------------------
 
     def test_a_cell_links_to_the_browser_when_the_sample_has_an_alignment(self):

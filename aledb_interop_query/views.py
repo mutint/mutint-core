@@ -10,7 +10,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from aledb_filter.models import AleExperimentFilter
-from aledb_filter.util import filter_observed_mutations, _get_global_filter_genes_muts, _get_exp_filter_genes_muts
+from aledb_filter.util import (
+    filter_observed_mutations, _get_exp_filter_genes, _get_global_filter_genes,
+)
 from aledb_common.logger import user_extra
 from aledb_metadata.views import get_ordered_reseq_queryset, get_reseq_info_list
 from aledb_seq.models import ObservedMutation
@@ -46,7 +48,7 @@ def _get_public_filtered_queryset():
         sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project__is_public=True
     )
 
-    global_filter_genes, global_filter_muts = _get_global_filter_genes_muts()
+    global_filter_genes = _get_global_filter_genes()
     exp_filters = AleExperimentFilter.objects.filter(
         ale_experiment_id__in=qs.values(
             "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"
@@ -54,11 +56,9 @@ def _get_public_filtered_queryset():
     )
 
     q_queries = Q()
-    if len(global_filter_muts) > 0:
-        q_queries.add(Q(mutation__id__in=global_filter_muts), Q.OR)
 
     for exp_filter in exp_filters:
-        exp_filter_genes, exp_filter_muts = _get_exp_filter_genes_muts(exp_filter)
+        exp_filter_genes = _get_exp_filter_genes(exp_filter)
 
         q_exp = Q()
         if exp_filter.min_cutoff and exp_filter.min_cutoff > 0:
@@ -71,8 +71,10 @@ def _get_public_filtered_queryset():
             q_exp.add(Q(frequency_gatk__lt=exp_filter.min_cutoff / 100), Q.AND)
         if exp_filter.max_gatk_cutoff and exp_filter.max_gatk_cutoff < 100:
             q_exp.add(Q(frequency_gatk__gt=exp_filter.max_cutoff / 100), Q.AND)
-        if len(exp_filter_muts) > 0:
-            q_exp.add(Q(mutation__id__in=exp_filter_muts), Q.OR)
+        # See the same guard in aledb_filter.util: an empty q_exp excludes the whole
+        # experiment, because this Q is handed to .exclude().
+        if not q_exp:
+            continue
 
         exp_q_query = Q(
             sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=exp_filter.ale_experiment_id)

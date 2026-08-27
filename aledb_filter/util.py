@@ -1,14 +1,9 @@
 
 from aledb_filter.models import AleExperimentFilter, GlobalFilter
-import aledb_seq.models
 from django.db.models import Q
-from django.core.exceptions import ObjectDoesNotExist
 from aledb_common.util import get_gene_list
-from aledb_common.util import is_int
 
 __author__ = 'Patrick Phaneuf, Muyao :)'
-
-NO_BREAK_STRING_CODE = u'\xa0'
 
 
 def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_id=None,
@@ -16,10 +11,18 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
     """The part of filtering that SQL can express, plus the gene lists that it cannot.
 
     Returns `(queryset, global_filter_genes, exp_filter_genes_map)`. The queryset has the
-    mutation-id and frequency-cutoff exclusions applied; the two gene collections are what
+    frequency-cutoff exclusions applied; the two gene collections are what
     `filter_observed_mutations` below still has to walk the rows to apply, because "every gene
     this mutation touches is in the ignore list" is a set-subset test over a parsed column and
     there is no SQL for it.
+
+    **This filter no longer hides individual mutations.** `ignored_mutations` and
+    `starting_strain_mutations` were comma-joined `Mutation.id` strings excluded here -- a way
+    of deleting a mutation while keeping the row, which recorded nothing about who did it and
+    could not be undone. Removing a mutation is `aledb_mutation_editor`'s job now, and what it
+    removes is the observation rather than the mutation, per sample rather than per experiment,
+    with an entry in a change log that can be restored from. What is left here is filtering
+    proper: frequency cutoffs, and genes.
 
     Split out so that a caller wanting *counts* rather than rows can aggregate this queryset in
     the database instead of materialising it -- see `aledb_stats.util.build_experiment_summary`,
@@ -41,19 +44,16 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
         exp_filters = AleExperimentFilter.objects.none()
 
     if not skip_global_filter:
-        global_filter_genes, global_filter_muts = _get_global_filter_genes_muts()
+        global_filter_genes = _get_global_filter_genes()
     else:
-        global_filter_genes, global_filter_muts = set(), []
+        global_filter_genes = set()
 
     exp_filter_genes_map = dict()
 
-    # filter muts by global filter
     q_queries = Q()
-    if len(global_filter_muts) > 0:
-        q_queries.add(Q(mutation__id__in=global_filter_muts), Q.OR)
     # filter muts by experiment filters
     for exp_filter in exp_filters:
-        exp_filter_genes, exp_filter_muts = _get_exp_filter_genes_muts(exp_filter)
+        exp_filter_genes = _get_exp_filter_genes(exp_filter)
         if len(exp_filter_genes) > 0:
             exp_filter_genes_map[exp_filter.ale_experiment_id] = exp_filter_genes
 
@@ -68,8 +68,12 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
             q_exp.add(Q(frequency_gatk__lt=exp_filter.min_cutoff / 100), Q.AND)
         if exp_filter.max_gatk_cutoff and exp_filter.max_gatk_cutoff < 100:
             q_exp.add(Q(frequency_gatk__gt=exp_filter.max_cutoff / 100), Q.AND)
-        if len(exp_filter_muts) > 0:
-            q_exp.add(Q(mutation__id__in=exp_filter_muts), Q.OR)
+        # An empty q_exp would leave `exp_q_query` as the bare experiment match, and this
+        # whole Q is *excluded* -- so every mutation in the experiment would vanish. That was
+        # unreachable while a non-empty ignored-mutation list could carry the clause on its
+        # own; with those gone, a filter set to 0-100 (no cutoff at either end) reaches it.
+        if not q_exp:
+            continue
         exp_q_query = Q(
             sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=exp_filter.ale_experiment_id)
         exp_q_query.add(q_exp, Q.AND)
@@ -131,72 +135,24 @@ def filter_observed_mutations(observed_mutation_queryset, experiment_id=None, fi
     return observed_mutations
 
 
-def _get_global_filter_genes_muts():
-    ignored_genes = []
-    ignored_mutations = []
-    f = get_global_filter()
-    if f.ignored_mutations:
-        ignored_mutations = get_ignored_mut_id_list_from_str(f.ignored_mutations)
-    if f.ignored_genes:
-        ignored_genes = get_gene_list(f.ignored_genes)
-    return set(ignored_genes), ignored_mutations
+def _get_global_filter_genes():
+    """The site-wide ignored genes. Used to also return a list of ignored Mutation ids."""
+    global_filter = get_global_filter()
+    if not global_filter.ignored_genes:
+        return set()
+    return set(get_gene_list(global_filter.ignored_genes))
 
 
-def _get_exp_filter_genes_muts(exp_filter: AleExperimentFilter):
-    ignored_genes = []
-    ignored_mutations = []
-    if exp_filter.ignored_mutations:
-        ignored_mutations = get_ignored_mut_id_list_from_str(exp_filter.ignored_mutations)
-    if exp_filter.starting_strain_mutations:
-        ignored_mutations += get_ignored_mut_id_list_from_str(exp_filter.starting_strain_mutations)
-    if exp_filter.ignored_genes:
-        ignored_genes = get_gene_list(exp_filter.ignored_genes)
-    return set(ignored_genes), ignored_mutations
+def _get_exp_filter_genes(exp_filter: AleExperimentFilter):
+    """One experiment's ignored genes.
 
-
-def get_ignored_mut_id_list_from_str(ignored_mutation_id_str, deleted_mutation_id=None):
-    if not ignored_mutation_id_str:
-        return []
-
-    ignored_mutation_ids = ignored_mutation_id_str.split(",")
-    deleted_mutation_ids = []
-    if deleted_mutation_id:
-        deleted_mutation_ids = deleted_mutation_id.split(",")
-
-    new_list = [mut_id for mut_id in ignored_mutation_ids if is_int(mut_id) and mut_id not in deleted_mutation_ids]
-    return new_list
-
-
-def _get_ignored_gene_list_from_str(ignored_genes):
-
-    if not ignored_genes:
-        return []
-
-    if ignored_genes.endswith(','):
-        ignored_genes = ignored_genes[:-1]
-
-    if ignored_genes.startswith(','):
-        ignored_genes = ignored_genes[1:]
-
-    ignored_genes = ignored_genes.replace(" ", "").replace('\n', '').replace('\r', '').split(',')
-    cleaned_list = []
-
-    for gene in ignored_genes:
-
-        if gene == '' or not gene:
-            continue
-
-        cleaned_list.append(gene)
-
-    return cleaned_list
-
-
-def _mutation_exists(mut_id):
-    try:
-        aledb_seq.models.Mutation.objects.get(id=mut_id)
-        return True
-    except ObjectDoesNotExist:
-        return False
+    `_get_ignored_gene_list_from_str` used to live below this and was never called by anything
+    -- `get_gene_list` from aledb_common is what actually parses the column. It went with the
+    mutation-id helpers rather than being left as a second, unused parser of the same field.
+    """
+    if not exp_filter.ignored_genes:
+        return set()
+    return set(get_gene_list(exp_filter.ignored_genes))
 
 
 def get_global_filter():

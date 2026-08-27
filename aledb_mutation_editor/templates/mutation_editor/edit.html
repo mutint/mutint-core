@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} breseq's own cell styling, borrowed so this table reads exactly like the
+       Samples page it is the editable counterpart of. {% endcomment %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
+    {% comment %} base.html does not load sweetalert; every page that confirms something has
+       to pull it in. {% endcomment %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    {% include "mutation_editor/_toolbar.html" with active='edit' %}
+    {% csrf_token %}
+
+    <div class="row breseq-picker">
+        <b>Sample:</b>
+        <div class="btn-group" id="reseq_picker">
+            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
+                    aria-haspopup="true" aria-expanded="false">
+                {{ selected_reseq.ale_flask_isolate_str }} <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu aledb-menu">
+                {% for reseq in reseq_list %}
+                    <li {% if reseq.id == selected_reseq_id %}class="active"{% endif %}>
+                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ selected_reseq_id }}"
+           class="breseq-crosslink">view this sample &raquo;</a>
+    </div>
+
+    {% if not selected_reseq %}
+        <p>This experiment has no resequencing samples to edit.</p>
+    {% elif not can_edit %}
+        <p>You have read access to this project, so this page is showing you what is stored
+           without offering to change it. Editing mutations needs write access.</p>
+    {% else %}
+        <div class="row">
+            <p style="color: #666;">
+                Every mutation stored for this sample is listed, including any the experiment's
+                gene or frequency filters hide elsewhere &mdash; a filtered mutation is still
+                stored, and hiding it here would leave no way to remove it. Deleting is
+                recorded and can be undone from the
+                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>.
+            </p>
+        </div>
+
+        <div class="row" style="margin-bottom: 10px;">
+            <button type="button" class="btn btn-danger" id="me-apply">&minus; Delete selected</button>
+            <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
+            <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
+        </div>
+
+        <div class="row">
+            {% comment %} A DataTable, unlike the sample editor's plain table next door, and
+               the difference is that nothing in here is an <input>. That table avoids
+               DataTables because deferRender never builds the DOM for undrawn rows, so a value
+               typed on page two would not exist to read back on save. Selection is held in
+               DataTables' own data model rather than the DOM, so a row selected on another
+               page or behind a search box still comes back from rows({selected:true}) -- which
+               is what makes paging and search safe to have here, and they are worth having on
+               a sample with several hundred mutations.
+
+               If a cell in this table ever becomes editable, this reasoning stops holding and
+               the table has to become a plain one. {% endcomment %}
+            <table class="table breseq-table" id="me-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th class="breseq-evidence">Type</th>
+                        <th class="breseq-seq-id">Reference</th>
+                        <th class="breseq-position">Position</th>
+                        <th class="breseq-mutation">Mutation</th>
+                        {% if is_population %}<th class="breseq-freq">Freq</th>{% endif %}
+                        <th class="breseq-annotation">Annotation</th>
+                        <th class="breseq-gene">Gene</th>
+                        <th class="breseq-description">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr data-observed-id="{{ row.observed_id }}">
+                        <td></td>
+                        <td class="breseq-evidence">{{ row.mutation_type }}</td>
+                        <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
+                        <td class="breseq-position">{{ row.position|safe }}</td>
+                        <td class="breseq-mutation">{{ row.mutation|safe }}</td>
+                        {% if is_population %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}
+                        <td class="breseq-annotation">{{ row.annotation|safe }}</td>
+                        <td class="breseq-gene">{{ row.gene|safe }}</td>
+                        <td class="breseq-description">{{ row.description|safe }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="{% if is_population %}9{% else %}8{% endif %}">
+                            This sample has no mutations stored.</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if recent_changes %}
+        <div class="row" style="margin-top: 20px;">
+            <h4>Recent changes</h4>
+            <ul style="list-style: none; padding-left: 0;">
+                {% for entry in recent_changes %}
+                    <li style="margin-bottom: 4px;">
+                        <code>{{ entry.change_set.created_at }}</code>
+                        &mdash; {{ entry.change_set.note }}
+                        <span style="color: #666;">
+                            ({% if entry.change_set.is_system %}system{% else %}{{ entry.change_set.created_by }}{% endif %})
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+            <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">Full history &raquo;</a>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    <script type="text/javascript">
+    // $(document).ready, not a bare IIFE: base.html loads the DataTables Select and Buttons
+    // extensions in the last <script> of <body>, after this block. Initialising at parse time
+    // silently drops `select:` and `buttons:` -- the table draws either way and the checkbox
+    // column still gets its class from the stylesheet, so the failure looks like styling
+    // rather than a load-order problem. /ale/experiments/ does the same thing for the same
+    // reason.
+    $(document).ready(function () {
+        "use strict";
+        // The page renders without this button for a reader, and for an experiment with no
+        // samples. Bailing here rather than letting the selectors below return null is the
+        // same guard the sample editor uses, and there is a test asserting it renders.
+        if (!document.getElementById("me-apply")) { return; }
+
+        var table = $("#me-table").DataTable({
+            paging: true,
+            pageLength: 100,
+            lengthMenu: [50, 100, 500, 1000],
+            deferRender: true,
+            order: [[2, "asc"], [3, "asc"]],
+            columnDefs: [{ targets: 0, orderable: false, className: "select-checkbox" }],
+            select: { style: "multi", selector: "td:first-child" },
+            dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
+            buttons: [{ extend: "collection", text: "Select",
+                        buttons: ["selectAll", "selectNone"] }]
+        });
+
+        document.getElementById("me-apply").addEventListener("click", function () {
+            var ids = [];
+            // rows({selected:true}) reads DataTables' own selection model, so rows on other
+            // pages and rows hidden by the search box are included.
+            table.rows({ selected: true }).every(function () {
+                var id = this.node().getAttribute("data-observed-id");
+                if (id) { ids.push(parseInt(id, 10)); }
+            });
+
+            if (!ids.length) {
+                swal("", "Select at least one mutation, then try again.", "warning");
+                return;
+            }
+
+            // Deliberately not aledbConfirmDelete, whose text says the deletion is permanent.
+            // Here it is the opposite: the point of this page is that it is recorded and can
+            // be put back, and a dialog that said otherwise would stop people using it.
+            swal({
+                title: "Delete " + ids.length + " mutation(s)?",
+                text: "They are removed from this sample and the change is recorded, so you "
+                    + "can restore them from the history page.",
+                icon: "warning",
+                buttons: true,
+                dangerMode: true
+            }).then(function (confirmed) {
+                if (!confirmed) { return; }
+                document.getElementById("me-error").textContent = "";
+                // One POST for the whole batch, not one per row: it is what makes this a
+                // single entry in the history rather than eleven.
+                window.aledbPost("/mutation-editor/delete", {
+                    experiment_id: "{{ ale_experiment_id }}",
+                    reseq_id: "{{ selected_reseq_id }}",
+                    observed_ids: JSON.stringify(ids)
+                }).then(function () {
+                    window.location.reload();
+                }).catch(function (err) {
+                    document.getElementById("me-error").textContent = err.message;
+                });
+            });
+        });
+    });
+    </script>
+{% endblock %}
