@@ -7,12 +7,13 @@ outside a `{% block %}` in a child template is silently discarded -- a script ap
 
 import json
 
-from aledb_mutation_editor import history
+from aledb_mutation_editor import history, validation
 from aledb_mutation_editor.models import KIND_DELETE
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import ObservedMutation
 
 EDIT = "/mutation-editor/"
+ADD = "/mutation-editor/add"
 COPY = "/mutation-editor/copy"
 HISTORY = "/mutation-editor/history"
 
@@ -89,6 +90,40 @@ class PageTestCase(EditorTestCase):
         response = self.get(COPY, source_reseq_id=self.sample_a.id)
         for mutation in (self.mut_1, self.mut_2, self.mut_3):
             self.assertContains(response, 'data-mutation-id="%d"' % mutation.id)
+
+    # --- the add page ---------------------------------------------------------------------
+
+    def test_the_add_page_renders_the_schema_for_the_client(self):
+        """The dropdown, the visible fields and the server's required-field check all read
+        one table, so it has to actually reach the page."""
+        response = self.get(ADD)
+
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, 'id="mutation-schema"')
+        for name in validation.MUTATION_TYPES:
+            self.assertContains(response, name)
+
+    def test_the_add_page_offers_every_mutation_type(self):
+        html = self.get(ADD).content.decode()
+        for name in validation.MUTATION_TYPES:
+            self.assertIn('<option value="%s">' % name, html)
+
+    def test_it_renders_an_input_for_every_field_any_type_takes(self):
+        """A field with no input would be invisible and unfillable for the types needing it."""
+        html = self.get(ADD).content.decode()
+        for entry in validation.form_schema()["types"]:
+            for field in entry["fields"]:
+                self.assertIn('data-name="%s"' % field, html,
+                              "%s has no input, but %s needs it" % (field, entry["name"]))
+
+    def test_it_lists_the_samples_to_add_to(self):
+        response = self.get(ADD)
+        for sample in (self.sample_a, self.sample_b):
+            self.assertContains(response, 'class="me-target" value="%d"' % sample.id)
+
+    def test_the_handler_guards_its_missing_control(self):
+        self.assertContains(self.get(ADD),
+                            'if (!document.getElementById("me-apply")) { return; }')
 
     # --- the history page -----------------------------------------------------------------
 

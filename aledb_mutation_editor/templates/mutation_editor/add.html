@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    {% include "mutation_editor/_toolbar.html" with active='add' %}
+    {% csrf_token %}
+
+    {% comment %} The whole form schema, straight from `genomediff.records.TYPE_SPECIFIC_FIELDS`
+       via `validation.form_schema()`. Through json_script rather than a JS literal, which is
+       the `import/add.html` precedent and which escapes properly. The client never restates
+       which fields a type takes: it reads them from here, so the dropdown, the visible inputs
+       and the server's required-field check are one table. {% endcomment %}
+    {{ schema|json_script:"mutation-schema" }}
+
+    {% if not targets %}
+        <p>This experiment has no resequencing samples to add a mutation to.</p>
+    {% elif not can_edit %}
+        <p>Adding a mutation needs write access to this project.</p>
+    {% else %}
+        {% if not has_reference %}
+        <div class="alert alert-warning">
+            <b>This experiment has no reference genome.</b> The fields below are still checked
+            for shape &mdash; a size has to be a number, a strand has to be 1 or &minus;1
+            &mdash; but nothing can be compared against the sequence, so a mutation that would
+            change nothing cannot be detected and will be accepted. Establish a reference on
+            the <a href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">Add Data</a>
+            page to turn those checks on.
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <p style="color: #666;">
+                Records a mutation no sample carries yet. It is added to every sample you tick,
+                as one entry in the
+                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>,
+                and can be restored away from there. A sample that already has this mutation is
+                skipped rather than given a second copy of it.
+            </p>
+        </div>
+
+        <div class="col-lg-7" style="padding-left: 0;">
+            <div class="form-group">
+                <label for="me-type">Mutation type</label>
+                <select class="form-control" id="me-type">
+                    {% for entry in schema.types %}
+                        <option value="{{ entry.name }}">{{ entry.label }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-block" id="me-type-help"></p>
+            </div>
+
+            {% comment %} Every field any type can ask for, rendered once and shown or hidden by
+               type. One input per spec field name is what lets a value survive a type change
+               without a mapping table: `new_seq` is the same box in SNP, SUB and INS because
+               the spec means the same thing by it. {% endcomment %}
+            <div id="me-fields">
+                <div class="form-group me-field" data-field="seq_id">
+                    <label for="me-f-seq_id">Reference sequence</label>
+                    {% if seq_ids %}
+                        <select class="form-control me-input" id="me-f-seq_id" data-name="seq_id">
+                            {% for seq_id in seq_ids %}<option value="{{ seq_id }}">{{ seq_id }}</option>{% endfor %}
+                        </select>
+                    {% else %}
+                        <input type="text" class="form-control me-input" id="me-f-seq_id"
+                               data-name="seq_id" placeholder="NC_000913">
+                    {% endif %}
+                    <p class="help-block"></p>
+                </div>
+
+                <div class="form-group me-field" data-field="position">
+                    <label for="me-f-position">Position</label>
+                    <input type="text" class="form-control me-input" id="me-f-position"
+                           data-name="position" placeholder="1">
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="size">
+                    <label for="me-f-size">Size</label>
+                    <input type="text" class="form-control me-input" id="me-f-size"
+                           data-name="size" placeholder="1">
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="new_seq">
+                    <label for="me-f-new_seq">New sequence</label>
+                    <input type="text" class="form-control me-input" id="me-f-new_seq"
+                           data-name="new_seq" placeholder="A" style="text-transform: uppercase;">
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="new_copy_number">
+                    <label for="me-f-new_copy_number">New copy number</label>
+                    <input type="text" class="form-control me-input" id="me-f-new_copy_number"
+                           data-name="new_copy_number" placeholder="2">
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="repeat_name">
+                    <label for="me-f-repeat_name">Repeat element</label>
+                    <input type="text" class="form-control me-input" id="me-f-repeat_name"
+                           data-name="repeat_name" placeholder="IS150">
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="strand">
+                    <label for="me-f-strand">Strand</label>
+                    <select class="form-control me-input" id="me-f-strand" data-name="strand">
+                        <option value="1">1 (forward)</option>
+                        <option value="-1">-1 (reverse)</option>
+                    </select>
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="duplication_size">
+                    <label for="me-f-duplication_size">Duplication size</label>
+                    <input type="text" class="form-control me-input" id="me-f-duplication_size"
+                           data-name="duplication_size" placeholder="0">
+                    <p class="help-block"></p>
+                </div>
+                <div class="form-group me-field" data-field="region">
+                    <label for="me-f-region">Source region</label>
+                    <input type="text" class="form-control me-input" id="me-f-region"
+                           data-name="region" placeholder="NC_000913:1000-2000">
+                    <p class="help-block"></p>
+                </div>
+            </div>
+
+            <div class="form-group" data-field="frequency">
+                <label for="me-f-frequency">Frequency</label>
+                <input type="text" class="form-control" id="me-f-frequency"
+                       data-name="frequency" value="1.0">
+                <p class="help-block">Applied to every sample below. 1.0 is a fixed mutation.</p>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="me-apply">+ Add mutation</button>
+            <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
+        </div>
+
+        <div class="col-lg-5">
+            <h4>Add to</h4>
+            <div style="max-height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 8px;">
+                {% for reseq in targets %}
+                    <label style="font-weight: normal; display: block;">
+                        <input type="checkbox" class="me-target" value="{{ reseq.id }}">
+                        {{ reseq.ale_flask_isolate_str }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <script type="text/javascript">
+    (function () {
+        "use strict";
+        if (!document.getElementById("me-apply")) { return; }
+
+        var SCHEMA = JSON.parse(document.getElementById("mutation-schema").textContent);
+        var TYPES = {};
+        SCHEMA.types.forEach(function (entry) { TYPES[entry.name] = entry; });
+
+        var typeSelect = document.getElementById("me-type");
+        var inputs = {};
+        Array.prototype.forEach.call(
+            document.querySelectorAll(".me-input"), function (el) {
+                inputs[el.getAttribute("data-name")] = el;
+            });
+
+        // Everything ever typed, keyed by the spec's own field name. A field the current type
+        // does not use keeps its value here rather than being cleared, so switching away and
+        // back restores it -- and because the spec uses one name for one meaning, `new_seq`
+        // carrying from SNP to SUB to INS needs no translation table.
+        var values = {};
+
+        Object.keys(inputs).forEach(function (name) {
+            var el = inputs[name];
+            values[name] = el.value;
+            el.addEventListener("input", function () { values[name] = el.value; });
+            el.addEventListener("change", function () { values[name] = el.value; });
+        });
+
+        function fieldRow(name) {
+            return document.querySelector('.me-field[data-field="' + name + '"]');
+        }
+
+        function showFieldsFor(typeName) {
+            var entry = TYPES[typeName];
+            var wanted = {};
+            entry.fields.forEach(function (name) { wanted[name] = true; });
+
+            Object.keys(inputs).forEach(function (name) {
+                var row = fieldRow(name);
+                if (!row) { return; }
+                row.style.display = wanted[name] ? "" : "none";
+                if (wanted[name]) {
+                    // Repopulate from the parked value rather than from whatever the input
+                    // happens to still hold, so the two never disagree.
+                    inputs[name].value = values[name] || "";
+                    row.querySelector(".help-block").textContent = SCHEMA.help[name] || "";
+                }
+            });
+            document.getElementById("me-type-help").textContent = entry.label;
+        }
+
+        function translateInto(typeName) {
+            // A SNP is a one-base SUB, so widening a call should not fail for a blank size.
+            // The only translation beyond same-name, and it never overwrites a typed value.
+            if (typeName === "SUB" && !values.size) {
+                values.size = "1";
+            }
+        }
+
+        typeSelect.addEventListener("change", function () {
+            translateInto(typeSelect.value);
+            clearFieldErrors();
+            showFieldsFor(typeSelect.value);
+        });
+
+        function clearFieldErrors() {
+            Array.prototype.forEach.call(
+                document.querySelectorAll(".me-field"), function (row) {
+                    row.classList.remove("has-error");
+                });
+            document.getElementById("me-error").textContent = "";
+        }
+
+        function showFieldErrors(errors) {
+            Object.keys(errors || {}).forEach(function (name) {
+                var row = fieldRow(name);
+                if (!row) { return; }
+                row.classList.add("has-error");
+                row.querySelector(".help-block").textContent = errors[name];
+            });
+        }
+
+        document.getElementById("me-apply").addEventListener("click", function () {
+            var targetIds = [];
+            Array.prototype.forEach.call(
+                document.querySelectorAll(".me-target:checked"), function (box) {
+                    targetIds.push(parseInt(box.value, 10));
+                });
+            if (!targetIds.length) {
+                swal("", "Select at least one sample to add the mutation to.", "warning");
+                return;
+            }
+
+            clearFieldErrors();
+
+            // Only the chosen type's fields are sent. The parked values for the others stay
+            // in the browser; the server would reject them as unknown for this type anyway.
+            var payload = {
+                experiment_id: "{{ ale_experiment_id }}",
+                mutation_type: typeSelect.value,
+                frequency: document.getElementById("me-f-frequency").value,
+                target_reseq_ids: JSON.stringify(targetIds)
+            };
+            TYPES[typeSelect.value].fields.forEach(function (name) {
+                payload[name] = values[name] || "";
+            });
+
+            window.aledbPost("/mutation-editor/add/apply", payload).then(function (body) {
+                var message = "Added to " + body.added + " sample(s).";
+                if (body.skipped) {
+                    message += " " + body.skipped + " already had it and were skipped.";
+                }
+                swal("", message, "success").then(function () { window.location.reload(); });
+            }).catch(function (err) {
+                document.getElementById("me-error").textContent = err.message;
+                showFieldErrors(err.body && err.body.errors);
+            });
+        });
+
+        showFieldsFor(typeSelect.value);
+    })();
+    </script>
+{% endblock %}

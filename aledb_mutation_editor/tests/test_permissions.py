@@ -21,9 +21,11 @@ from aledb_seq.models import ObservedMutation
 
 DELETE = "/mutation-editor/delete"
 COPY = "/mutation-editor/copy/apply"
+ADD = "/mutation-editor/add/apply"
 RESTORE = "/mutation-editor/restore"
 
-PAGES = ("/mutation-editor/", "/mutation-editor/copy", "/mutation-editor/history")
+PAGES = ("/mutation-editor/", "/mutation-editor/add", "/mutation-editor/copy",
+         "/mutation-editor/history")
 
 
 class WriteEndpointPermissionTestCase(EditorTestCase):
@@ -43,6 +45,15 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
             "mutation_ids": json.dumps([self.mut_2.id]),
             "target_reseq_ids": json.dumps([self.sample_b.id])})
 
+    def _add_one(self):
+        return self.client.post(ADD, {
+            "experiment_id": self.experiment.ale_id,
+            "mutation_type": "SNP",
+            "seq_id": "NC_000913",
+            "position": 4242,
+            "new_seq": "T",
+            "target_reseq_ids": json.dumps([self.sample_a.id])})
+
     def _restore(self):
         return self.client.post(RESTORE, {
             "experiment_id": self.experiment.ale_id,
@@ -51,7 +62,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
 
     def _every_endpoint(self):
         return (("delete", self._delete_one), ("copy", self._copy_one),
-                ("restore", self._restore))
+                ("add", self._add_one), ("restore", self._restore))
 
     def _assert_nothing_was_written(self):
         self.assertEqual(4, self.observation_count(),
@@ -68,6 +79,9 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
 
     def test_the_owner_may_copy(self):
         self.assertEqual(200, self._copy_one().status_code)
+
+    def test_the_owner_may_add(self):
+        self.assertEqual(200, self._add_one().status_code)
 
     def test_the_owner_may_restore(self):
         self._delete_one()
@@ -113,7 +127,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
     # --- shape ---------------------------------------------------------------------------
 
     def test_the_endpoints_refuse_a_GET(self):
-        for url in (DELETE, COPY, RESTORE):
+        for url in (DELETE, COPY, ADD, RESTORE):
             with self.subTest(url=url):
                 self.assertEqual(405, self.client.get(url).status_code)
 

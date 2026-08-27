@@ -7,6 +7,8 @@ session state holding the current experiment, and a link that dropped it lands o
 <ul class="nav nav-tabs" style="margin-bottom: 16px;">
     <li{% if active == 'edit' %} class="active"{% endif %}>
         <a href="/mutation-editor/?ale_experiment_id={{ ale_experiment_id }}">Edit</a></li>
+    <li{% if active == 'add' %} class="active"{% endif %}>
+        <a href="/mutation-editor/add?ale_experiment_id={{ ale_experiment_id }}">Add</a></li>
     <li{% if active == 'copy' %} class="active"{% endif %}>
         <a href="/mutation-editor/copy?ale_experiment_id={{ ale_experiment_id }}">Copy between samples</a></li>
     <li{% if active == 'history' %} class="active"{% endif %}>

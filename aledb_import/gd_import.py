@@ -388,7 +388,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             annotated_record.get("gene_name") or attributes.get("gene_name"),
             annotated_record.get("gene_product") or attributes.get("gene_product"))
         gene_str = ", ".join(gene_list)
-        sequence_change = _synthesize_sequence_change(record)[:200]
+        sequence_change = synthesize_sequence_change(record)[:200]
 
         mutation, created = Mutation.objects.get_or_create(
             ale_experiment=experiment,
@@ -465,9 +465,15 @@ def export_gd_text(seq_experiment):
     return "\n".join(lines) + "\n"
 
 
-def _synthesize_sequence_change(record):
+def synthesize_sequence_change(record):
     """Build a short human-readable allele description used for display and as the
-    dedup discriminator (the discrete alleles themselves live in ``gd_data``)."""
+    dedup discriminator (the discrete alleles themselves live in ``gd_data``).
+
+    Public because `aledb_mutation_editor` builds mutations by hand and has to land on the
+    same string this does. `sequence_change` is one of the seven fields
+    `Mutation.objects.get_or_create` keys on below, so a second rule for it would let a
+    hand-entered mutation and a later re-import of the same call become two rows.
+    """
     attributes = record.attributes
     mutation_type = record.type
     if mutation_type in ("SNP", "INS", "SUB"):

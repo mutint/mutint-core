@@ -26,11 +26,13 @@ from django.db import models
 
 KIND_DELETE = "delete"
 KIND_COPY = "copy"
+KIND_ADD = "add"
 KIND_RESTORE = "restore"
 
 KIND_CHOICES = [
     (KIND_DELETE, "Delete"),
     (KIND_COPY, "Copy"),
+    (KIND_ADD, "Add"),
     (KIND_RESTORE, "Restore"),
 ]
 

@@ -22,6 +22,7 @@ history.
 
 import json
 import logging
+from decimal import Decimal, InvalidOperation
 
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -33,8 +34,11 @@ from aledb_common.logger import user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_add_experiment_filter
-from aledb_mutation_editor import history
-from aledb_mutation_editor.models import KIND_COPY, KIND_DELETE, MutationChangeSet
+from aledb_import import annotation
+from aledb_mutation_editor import history, record_builder, validation
+from aledb_mutation_editor.models import (
+    KIND_ADD, KIND_COPY, KIND_DELETE, MutationChangeSet,
+)
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import ObservedMutation
 from aledb_seq.util import get_reseq_ordered_dict
@@ -48,12 +52,19 @@ _REFUSED = "You do not have permission to edit this experiment's mutations."
 
 
 class EditorError(Exception):
-    """A refusal the user is meant to read, mirroring `samples.SampleEditError`."""
+    """A refusal the user is meant to read, mirroring `samples.SampleEditError`.
 
-    def __init__(self, message, status=400):
+    `errors` maps a field name to the complaint about that field, so the add form can put each
+    message beside the input it belongs to. The delete and copy endpoints have one thing to
+    say and leave it empty; `message` is always self-sufficient, so a caller with only one
+    place to put text loses nothing by ignoring the map.
+    """
+
+    def __init__(self, message, status=400, errors=None):
         super().__init__(message)
         self.message = message
         self.status = status
+        self.errors = errors or {}
 
 
 # --- shared plumbing ------------------------------------------------------------------------
@@ -166,7 +177,11 @@ def _int_list(request, field):
 
 
 def _error_response(error):
-    return JsonResponse({"error": error.message}, status=error.status)
+    # `errors` rides alongside the summary, which is what `aledbPost` hands the client as
+    # `err.body.errors` -- the shape `experiment_samples.html` already reads to outline the
+    # rows it was refused on.
+    return JsonResponse({"error": error.message, "errors": error.errors},
+                        status=error.status)
 
 
 # --- pages ----------------------------------------------------------------------------------
@@ -195,6 +210,39 @@ def mutation_editor(request):
         return render(request, "mutation_editor/edit.html", context)
     except _NotForYou as refusal:
         return refusal.response
+
+
+@ensure_csrf_cookie
+def mutation_add(request):
+    """Add a mutation nothing in this experiment carries yet."""
+    context = get_user_context(request.user)
+    try:
+        experiment = _experiment_for_page(request, context)
+        reseq_dict = get_reseq_ordered_dict(experiment.ale_id)
+        reference_row = _reference_row(experiment)
+
+        context = _page_context(request, experiment)
+        context.update({
+            "targets": list(reseq_dict.values()),
+            "schema": validation.form_schema(),
+            # The contigs a position can be on. Offered as a dropdown when they are known,
+            # because a mistyped contig name is refused by an exact match with no near-miss
+            # handling -- `ReferenceSequences.add` matches names exactly, on purpose.
+            "seq_ids": sorted(validation.contig_lengths(reference_row)),
+            "has_reference": reference_row is not None,
+            "title": "Add a mutation to %s" % experiment.name,
+            "template_header": "Add Mutation",
+        })
+        return render(request, "mutation_editor/add.html", context)
+    except _NotForYou as refusal:
+        return refusal.response
+
+
+def _reference_row(experiment):
+    """The experiment's `ExperimentReference`, or None. Reads no files."""
+    from aledb_seq.models import ExperimentReference
+
+    return ExperimentReference.objects.filter(ale_experiment=experiment).first()
 
 
 @ensure_csrf_cookie
@@ -380,6 +428,105 @@ def _plan_copy(experiment, sources, targets):
             # Keep the map current so copying two source rows that collapse to the same key
             # onto one target adds it once rather than twice.
             existing.setdefault(key, []).append(None)
+    return additions, skipped
+
+
+@require_POST
+def mutation_add_apply(request):
+    """Create one mutation and observe it in every selected sample.
+
+    The mutation itself is minted by `history.apply_changes` through `_resolve_mutation`, which
+    `get_or_create`s on the same seven fields the importer keys on -- so adding a call another
+    sample already carries links the existing row instead of forking it.
+    """
+    try:
+        experiment = _experiment_for_write(request)
+        target_ids = _int_list(request, "target_reseq_ids")
+        if not target_ids:
+            raise EditorError("Select at least one sample to add it to.")
+
+        mutation_type = (request.POST.get("mutation_type") or "").strip().upper()
+        frequency = _frequency(request)
+
+        reference_row = _reference_row(experiment)
+        attributes, errors = validation.validate_record(
+            request.POST, mutation_type,
+            reference_row=reference_row,
+            # A callable, not a value: loading parses the whole genome, and most types are
+            # decided without ever reading a base.
+            load_references=lambda: annotation.reference_sequences_for(experiment))
+        if errors:
+            raise EditorError("That mutation cannot be added as entered.", errors=errors)
+
+        targets = {reseq.id: reseq for reseq in
+                   get_reseq_ordered_dict(experiment.ale_id).values()
+                   if reseq.id in set(target_ids)}
+        if not targets:
+            raise EditorError("Those samples are not in this experiment.", status=404)
+
+        gd_data = record_builder.build_gd_data(mutation_type, attributes)
+        annotated_record, _ = record_builder.annotate(gd_data, experiment)
+        identity = record_builder.build_identity(mutation_type, gd_data, annotated_record)
+        observation = record_builder.build_observation(frequency)
+
+        additions, skipped = _plan_add(experiment, identity, observation, targets)
+        change_set = history.apply_changes(
+            experiment, request.user, KIND_ADD, additions=additions,
+            note="Added %s at %s:%s to %d sample(s)." % (
+                mutation_type, attributes.get("seq_id"), attributes.get("position"),
+                len(additions)))
+    except EditorError as error:
+        return _error_response(error)
+
+    if change_set is not None:
+        # The promoted annotation columns are not part of the identity, so the row `apply_changes`
+        # minted has them null until this runs -- and would render through the unannotated
+        # fallback. Same call `gd_import` makes after its own get_or_create.
+        record_builder.apply_annotation(change_set.changes.first().mutation, annotated_record)
+        history.rebuild_after_edit(experiment)
+
+    logger.info("mutation added", extra=user_extra(request))
+    return JsonResponse({"experiment_id": experiment.ale_id,
+                         "added": len(additions),
+                         "skipped": skipped,
+                         "change_set_id": change_set.pk if change_set else None})
+
+
+def _frequency(request):
+    """The one frequency every selected sample's observation gets."""
+    raw = (request.POST.get("frequency") or "").strip()
+    if not raw:
+        return Decimal("1.0")
+    try:
+        value = Decimal(raw)
+    except (InvalidOperation, ValueError):
+        raise EditorError("That mutation cannot be added as entered.",
+                          errors={"frequency": "Must be a number between 0 and 1."})
+    if not Decimal("0") < value <= Decimal("1"):
+        raise EditorError("That mutation cannot be added as entered.",
+                          errors={"frequency": "Frequencies run from just above 0 to 1."})
+    return value
+
+
+def _plan_add(experiment, identity, observation, targets):
+    """One addition per target that does not already carry this mutation."""
+    existing = history.live_state(experiment, sample_ids=list(targets))
+    key_part = history.key_from_identity(identity)
+
+    additions = []
+    skipped = 0
+    for target_id in targets:
+        if existing.get((target_id, key_part, observation.get("source"))):
+            skipped += 1
+            continue
+        additions.append({
+            "sample_id": target_id,
+            "identity": identity,
+            "observation": observation,
+            "mutation": None,          # -- minted by _resolve_mutation from the identity
+            "observed": None,
+            "source_sample_id": None,  # -- nothing was copied; this is a new assertion
+        })
     return additions, skipped
 
 

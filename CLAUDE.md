@@ -61,9 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 938 run, 0 failures** standalone; **1051** in an assembled project, where the
-plugins' own tests join them. They were 852 and 965 before `aledb_mutation_editor`. The suite
-is green — treat *any* failure as yours. (These said 642 and 688 for a while and were wrong
+**Baseline: 1028 run, 0 failures** standalone; **1141** in an assembled project, where the
+plugins' own tests join them. They were 938 and 1051 before the mutation editor's add form,
+and 852 and 965 before the editor itself. The suite is green — treat *any* failure as yours. (These said 642 and 688 for a while and were wrong
 by more than the sharing work added — standalone was already 698 before it. Re-count rather
 than adjusting the number by what you think you added.)
 
@@ -353,6 +353,74 @@ Select and Buttons extensions in the last `<script>` of `<body>`, after `{% bloc
 so an IIFE in the content block runs with only plain DataTables loaded and `select:` and
 `buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
 class from the stylesheet, so it reads as a styling fault rather than a load-order one.
+
+### Adding a mutation by hand
+
+`/mutation-editor/add` records a mutation no sample carries yet, on one or more samples at
+once. It is the third thing the editor does, and the only one that has to invent a `Mutation`
+rather than move an existing one about.
+
+**The form's fields come from `genomediff.records.TYPE_SPECIFIC_FIELDS`.** That table is what
+the parser fills a record from and what `Record.__str__` serialises in order, and its own
+comment says it is kept synced with breseq's `genomediff.cpp`. `validation.form_schema()`
+hands it to the page through `json_script`, so the type dropdown, the visible inputs, the
+required-field check and the emitted `.gd` line read one table. Restating the field sets in the
+template would give the form a second opinion about what a MOB needs. The nine offered types
+are exactly the three-letter keys — `GenomeDiff.read` classifies by type-string length, which
+is also why `Mutation.mutation_type` is `max_length=3`.
+
+**Values survive a type change because they are keyed by the spec's field name.** The spec
+already uses one name for one meaning, so `new_seq` is the same box in SNP, SUB and INS and
+`size` in the six types that have it: switching type hides and shows rows and repopulates them
+from a single `values` object, and a field the new type does not use keeps its value rather
+than being cleared. The only translation beyond same-name is that SNP → SUB fills a blank
+`size` with 1, because a SNP *is* a one-base SUB and the commonest widening of a call should
+not fail for an empty field. A multi-base `new_seq` carried into SNP is *not* truncated —
+validation names the problem instead of silently discarding what was typed.
+
+**Validation is four stages and the order is load-bearing** (`validation.py`): shape, then the
+no-ops that need no sequence (an AMP to one copy — refused even with no reference stored, since
+nothing about it depends on one), then contig and bounds from `ExperimentReference.seq_ids`
+(which carries a `length` per contig, so no file is opened), then the sequence no-ops. Only
+that last stage loads the reference, which is why `load_references` is a *callable* and why
+`SEQUENCE_CHECKED_TYPES` exists: a DEL's validity never depends on which bases it removes, and
+loading parses the whole genome. Stage 4 must never run before stage 3 —
+`ReferenceSequences.get_sequence_1` slices a plain string, so an over-long end returns a short
+one and a start of 0 returns the wrong bases, both without raising.
+
+The no-ops worth knowing: a SNP to the base already there, a SUB matching its span, **an
+inversion of a palindrome** (a span that is its own reverse complement inverts to itself), a
+CON/INT whose source region already matches its target, and a MOB naming a repeat family the
+reference does not annotate. DEL and INS can never be no-ops. The interval each is checked over
+comes from `annotate.annotator.mutation_interval`, reused rather than re-derived so the form
+and the annotator agree about what a mutation covers.
+
+**An experiment with no reference gets stages 1 and 2 only**, and the page says so in a banner
+rather than quietly appearing to have checked.
+
+**`record_builder.py` mirrors `gd_import._database_gd_mutations` for a single record**, because
+a hand-entered mutation has to be indistinguishable from an imported one. Three details carry
+that:
+
+- `sequence_change` comes from `gd_import.synthesize_sequence_change`, which stopped being
+  private for this. It is one of the seven fields `Mutation.objects.get_or_create` keys on, so
+  a second rule for it would fork the mutation the next time the same call was imported.
+- `gd_data` carries **no `id`** — `to_gd_line()` falls back to the row's own pk, and a record
+  built before its row exists has no id to give — and **no `frequency`**, which is
+  per-observation while `gd_data` lives on the `Mutation` every observing sample shares.
+- `annotation.apply_to` runs *after* `apply_changes`, because `history._resolve_mutation` sets
+  only what the identity carries and the promoted columns (`snp_type`, `gene_name`, …) are not
+  in it. Without that call the new row renders through the unannotated fallback.
+
+The observation is written with `source="manual"`, which distinguishes a typed call from a
+called one everywhere that column is read; null would mean "imported before the column
+existed", which is a different thing.
+
+**A trap this shook out, left alone deliberately.** `get_annotated_gene_list(None)` stringifies
+its argument, so `gd_import` has always written the literal string `"None"` into `Mutation.gene`
+for a mutation with no annotation. This path reproduces it, because `gene` is part of the
+get_or_create key and writing `""` here would fork every unannotated mutation on re-import.
+Fixing it means changing both paths at once plus a data migration, and is its own change.
 
 ### The old way of deleting a mutation, and why it is gone
 
@@ -929,9 +997,9 @@ All apps use the `aledb_*` namespace. Key apps:
 - **`aledb_filter/`** — Experiment filtering UI and models: frequency cutoffs and
   ignored genes. The three mutation-id hide lists it used to carry are gone — see
   **The old way of deleting a mutation** above.
-- **`aledb_mutation_editor/`** — Deleting and copying a sample's mutations, with an
-  append-only change log you can restore from. See **Editing a sample's mutations**
-  above.
+- **`aledb_mutation_editor/`** — Adding, deleting and copying a sample's mutations, with an
+  append-only change log you can restore from. See **Editing a sample's mutations** and
+  **Adding a mutation by hand** above.
 - **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
 - **`aledb_export/`** — Data export in various formats.
 - **`aledb_stats/`** — Precomputed statistics: `StaticData` (the needle plot) and
