@@ -14,6 +14,19 @@ production ALEdb has no use for a static site generator.
 
 `site/` is git-ignored. The sources are `docs/` and `mkdocs.yml`.
 
+!!! note "`./mutint docs` refuses, on purpose"
+
+    Every command in this repo is inherited by an assembled project — both entry scripts end
+    at `aledb_common.cli.manage()` — so `./mutint docs` reaches this command. Its base
+    directory comes from `__file__`, which there is the **submodule**, so it would build
+    `mutint/aledb-core/site/` out of a detached-HEAD checkout: a second copy of a site whose
+    sources are somewhere else, stale the moment the pointer moves.
+
+    It refuses and says where to run it instead. `ALEDB_TOOLS_DIR` is what tells the two
+    apart — the entry script exports it before re-execing and is the one place that knows the
+    project root, which settings cannot, because an assembled project reaches
+    `get_base_settings()` through aledb-core's `config/defaults.py`.
+
 ## Where a fact should live
 
 - **How something behaves** → the docstring in `aledb_common/`. The Reference pages are

@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1197 run, 0 failures** standalone; **1328** in an assembled project, where the
-plugins' own tests join them. They were 1190 and 1321 before the plugin API docs, 1178 and
+**Baseline: 1201 run, 0 failures** standalone; **1332** in an assembled project, where the
+plugins' own tests join them. They were 1197 and 1328 before `./aledb docs` learned to refuse,
+1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
 1163 and 1278 before the lazy-rebuild sweep, 1156 and
 1271 before the frequency cutoff was fixed,
@@ -325,6 +326,14 @@ registry has no reference page, when a page names the wrong module, when the nav
 and when a public `register_*` is named nowhere in `docs/`. That last one caught five
 undocumented hooks the first time it ran. **Neither guard catches prose going out of date**,
 which is said out loud in `docs/contributing/docs.md`.
+
+**`./aledb docs` refuses to run from an assembled project.** Both entry scripts end at
+`aledb_common.cli.manage()`, so every command here is inherited -- `./mutint docs` reaches it,
+and its `BASE_DIR` comes from `__file__`, which there is the submodule. It would build
+`mutint/aledb-core/site/` from a detached-HEAD checkout. `ALEDB_TOOLS_DIR` is the signal that
+distinguishes them, because the entry script exports it and is the one place that knows the
+project root. The refusal only calls it a submodule when this checkout is genuinely inside the
+project; shadowed on PYTHONPATH it is not, and there is a test for that distinction.
 
 Versioning is deliberately not configured. `mike` is the intended path and needs one block in
 `mkdocs.yml`; adding it now would render a version picker with nothing in it.

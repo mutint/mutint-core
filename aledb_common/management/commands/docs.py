@@ -39,6 +39,7 @@ class Command(BaseCommand):
         if not os.path.isfile(CONFIG):
             raise CommandError("no mkdocs.yml beside %s" % BASE_DIR)
 
+        self._refuse_if_embedded()
         self._ensure_toolchain()
 
         command = [sys.executable, "-m", "mkdocs",
@@ -62,6 +63,59 @@ class Command(BaseCommand):
         if not options["serve"]:
             self.stdout.write(self.style.SUCCESS(
                 "Built %s" % os.path.join(BASE_DIR, "site", "index.html")))
+
+    def _refuse_if_embedded(self):
+        """Refuse to build when aledb-core is a submodule of the project being run.
+
+        Every command in this repo is inherited by an assembled project -- both entry scripts
+        end at `aledb_common.cli.manage()` -- so `./mutint docs` reaches here. `BASE_DIR` is
+        derived from this file, so there it resolves to the *submodule*, and the build would
+        write `mutint/aledb-core/site/` from a detached-HEAD checkout: a second copy of a site
+        whose sources live somewhere else, going stale the moment the pointer moves.
+
+        `ALEDB_TOOLS_DIR` is what distinguishes the two. The entry script exports it before it
+        re-execs and is the one place that knows the project root -- settings cannot, because
+        an assembled project reaches `get_base_settings()` through aledb-core's
+        `config/defaults.py`. Unset means nothing was exported, which means this was not run
+        through an entry script at all; then there is nothing to compare against and refusing
+        would be a guess.
+        """
+        tools_dir = os.environ.get("ALEDB_TOOLS_DIR")
+        if not tools_dir:
+            return
+
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(tools_dir)))
+        if os.path.normpath(project_root) == os.path.normpath(BASE_DIR):
+            return
+
+        # Only call it a submodule if it is actually inside the project. Usually it is; it is
+        # not when someone has shadowed the submodule with another checkout on PYTHONPATH,
+        # and asserting a detached HEAD about a path that has not been looked at is the kind
+        # of confident-and-wrong message that costs an afternoon.
+        embedded = os.path.normpath(BASE_DIR).startswith(
+            os.path.normpath(project_root) + os.sep)
+        if embedded:
+            what = ("here aledb-core is a submodule of %s rather than the project itself.\n\n"
+                    "Building would write into\n    %s/site\n"
+                    "which is a detached-HEAD checkout, so the output would be a second copy "
+                    "of a site whose sources live in your own aledb-core clone -- going stale "
+                    "the moment the submodule pointer moved."
+                    % (project_root, BASE_DIR))
+        else:
+            what = ("the project being run is %s, and this command came from a different "
+                    "checkout:\n    %s\n\n"
+                    "Building would write that checkout's site from this project's "
+                    "environment, which is not a combination anybody means to ask for."
+                    % (project_root, BASE_DIR))
+
+        raise CommandError(
+            "This builds aledb-core's documentation, and %s\n\n"
+            "Run it from the aledb-core repository instead:\n"
+            "    cd /path/to/aledb-core && ./aledb docs\n\n"
+            "The documentation is the same either way -- it describes aledb-core's plugin "
+            "API, which is what %s installs."
+            % (what, os.path.basename(project_root)))
+
 
     def _ensure_toolchain(self):
         try:
