@@ -61,9 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1136 run, 0 failures** standalone; **1251** in an assembled project, where the
-plugins' own tests join them. They were 1116 and 1231 before the cross-sample grid, 1109 and
-1222 before the caller flags were dropped,
+**Baseline: 1156 run, 0 failures** standalone; **1271** in an assembled project, where the
+plugins' own tests join them. They were 1136 and 1251 before the mutation-change page, 1116
+and 1231 before the cross-sample grid, 1109 and 1222 before the caller flags were dropped,
 1081 and 1194 before the genomediff bump, 1028 and 1141
 before the experiment lock and the bulk sharing editor, 938 and 1051 before the add form, and
 852 and 965 before the mutation editor itself.
@@ -445,6 +445,61 @@ those. `mutation_table_builder` could not have been reused anyway -- its cells a
 elements into the genome browser, which would fight a click meaning "select", and
 `get_table_body` filters through `filter_observed_mutations` while this page must show what is
 stored.
+
+### Changing a mutation, everywhere it is observed
+
+`/mutation-editor/change?mutation_id=<pk>` opens the Add form prefilled from the mutation's
+`gd_data` and moves the mutation itself. **The scope is the mutation, not a set of samples** --
+a `Mutation` is experiment-scoped and shared by every sample observing it, so correcting a
+mis-called position is one correction. Changing it for *some* samples would be splitting one
+mutation into two, which is delete-and-add and stays that way; the page says so.
+
+**The observations are logged as removed and re-added, and that is not bookkeeping.** The
+change log is keyed on `(sample_id, mutation_key, source)` and `mutation_key` is derived from
+the six `MUTATION_KEY_FIELDS`. Move a Mutation without saying so and `live_state` starts
+computing a different key than every earlier entry recorded, with no changeset for
+`state_after` to undo -- so "restore to before the edit" would silently leave the edit in
+place. `KIND_EDIT` labels the *changeset*; its rows stay `OP_ADD` and `OP_REMOVE`, which is why
+`state_after`, `plan_restore` and `restore` needed no change at all.
+
+**What is not re-created is the Mutation row.** `_resolve_mutation` returns the row it is
+handed, so the additions point back at the one the removals came off and the primary key never
+moves. Mutation ids are stored as bare integers, with no foreign key, in
+`aledb_converge.ConvergeMutation`, in aledb-phylogeny's `site_mutation_ids` and
+`branch_mutations`, and in every exported CSV -- and aledb-phylogeny is **not** on the rebuild
+hook, so ids it holds are never refreshed. Minting a new row would leave all of that pointing
+at a mutation with no observations; reusing it leaves them resolving, to the corrected call.
+
+**The order inside `apply_mutation_edit` is the whole of it.** The removal snapshots are taken
+*before* the row moves. Taken after, both sides of the changeset would record the new identity
+and `state_after` would read the edit as having changed nothing.
+
+Two refusals, before anything is written:
+
+- **A change that changes nothing.** Checked on the six key fields *and* `gd_data`, because the
+  record can move without the identity -- a MOB's `strand`, say -- and that is a real change to
+  what `to_gd_line()` writes.
+- **A collision.** Two rows sharing the six-field `get_or_create` key is a state `gd_import`
+  cannot produce and would resolve arbitrarily if it met one; an edit is the only way to reach
+  it. Refused, naming the other mutation. Merging instead would silently destroy a row when the
+  person may not have realised the two were the same.
+
+**`_resolve_mutation` now checks that the row still *is* the identity**, not merely that its pk
+still exists. That is a consequence of reusing the row, and the bug it fixes was silent: a
+restore to before an edit arrives holding the old identity and a row that has since become
+something else, and the old code handed the observations back to the *edited* mutation and
+reported success having undone nothing.
+
+So **a restore to before an edit mints a new Mutation row** -- `get_or_create` from the logged
+identity finds nothing matching and creates it, leaving the edited row with no observations, as
+a swept mutation would be. It is the one place an edit does not preserve the pk, and making it
+do so would mean `state_after` replaying mutation-level state, which nothing else needs.
+
+**The two forms share their fields and their machinery.** `_mutation_fields.html` is every
+input any type can ask for, and `_mutation_form.js` -- a template inside `<script>`, the
+`table_template.js` idiom -- is the type switching, the values that survive a type change, and
+the per-field error display. Add and Change differ only in what they post. A field added to
+`genomediff.schema.TYPE_SPECIFIC_FIELDS` should need one edit, not two.
 
 ### breseq's own field guards, and where we are stricter
 

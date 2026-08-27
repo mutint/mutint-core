@@ -1,0 +1,76 @@
+{% comment %}
+Every field any mutation type can ask for, rendered once and shown or hidden by type.
+
+Shared by the Add and Change forms so the two cannot drift: `validation.form_schema()` decides
+which of these a type uses, and a field added to `genomediff.schema.TYPE_SPECIFIC_FIELDS`
+should need one edit here, not two.
+
+One input per **spec field name** is what lets a value survive a type change without a mapping
+table: `new_seq` is the same box in SNP, SUB and INS because the spec means the same thing by
+it.
+{% endcomment %}
+<div id="me-fields">
+    <div class="form-group me-field" data-field="seq_id">
+        <label for="me-f-seq_id">Reference sequence</label>
+        {% if seq_ids %}
+            <select class="form-control me-input" id="me-f-seq_id" data-name="seq_id">
+                {% for seq_id in seq_ids %}<option value="{{ seq_id }}">{{ seq_id }}</option>{% endfor %}
+            </select>
+        {% else %}
+            <input type="text" class="form-control me-input" id="me-f-seq_id"
+                   data-name="seq_id" placeholder="NC_000913">
+        {% endif %}
+        <p class="help-block"></p>
+    </div>
+
+    <div class="form-group me-field" data-field="position">
+        <label for="me-f-position">Position</label>
+        <input type="text" class="form-control me-input" id="me-f-position"
+               data-name="position" placeholder="1">
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="size">
+        <label for="me-f-size">Size</label>
+        <input type="text" class="form-control me-input" id="me-f-size"
+               data-name="size" placeholder="1">
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="new_seq">
+        <label for="me-f-new_seq">New sequence</label>
+        <input type="text" class="form-control me-input" id="me-f-new_seq"
+               data-name="new_seq" placeholder="A" style="text-transform: uppercase;">
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="new_copy_number">
+        <label for="me-f-new_copy_number">New copy number</label>
+        <input type="text" class="form-control me-input" id="me-f-new_copy_number"
+               data-name="new_copy_number" placeholder="2">
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="repeat_name">
+        <label for="me-f-repeat_name">Repeat element</label>
+        <input type="text" class="form-control me-input" id="me-f-repeat_name"
+               data-name="repeat_name" placeholder="IS150">
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="strand">
+        <label for="me-f-strand">Strand</label>
+        <select class="form-control me-input" id="me-f-strand" data-name="strand">
+            <option value="1">1 (forward)</option>
+            <option value="-1">-1 (reverse)</option>
+        </select>
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="duplication_size">
+        <label for="me-f-duplication_size">Duplication size</label>
+        <input type="text" class="form-control me-input" id="me-f-duplication_size"
+               data-name="duplication_size" placeholder="0">
+        <p class="help-block"></p>
+    </div>
+    <div class="form-group me-field" data-field="region">
+        <label for="me-f-region">Source region</label>
+        <input type="text" class="form-control me-input" id="me-f-region"
+               data-name="region" placeholder="NC_000913:1000-2000">
+        <p class="help-block"></p>
+    </div>
+</div>

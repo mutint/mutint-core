@@ -373,6 +373,66 @@ def mutation_add(request):
         return refusal.response
 
 
+@ensure_csrf_cookie
+def mutation_change(request):
+    """Change one mutation's own fields, everywhere in the experiment it is observed.
+
+    Scope is the mutation, not a set of samples. A `Mutation` is experiment-scoped and shared
+    by every sample observing it, so correcting a mis-called position is one correction --
+    changing it for *some* samples would be splitting one mutation into two, which is
+    delete-and-add and stays that way.
+    """
+    context = get_user_context(request.user)
+    try:
+        experiment = _experiment_for_page(request, context)
+        mutation = _mutation_for_page(request, experiment)
+
+        context = _page_context(request, experiment)
+        reference_row = _reference_row(experiment)
+        context.update({
+            "mutation": mutation,
+            "schema": validation.form_schema(),
+            "initial": _initial_fields(mutation),
+            "sample_count": (history.observations_for(experiment)
+                             .filter(mutation=mutation).count()),
+            "seq_ids": sorted(validation.contig_lengths(reference_row)),
+            "has_reference": reference_row is not None,
+            "title": "Change a mutation",
+            "template_header": "Change Mutation",
+        })
+        return render(request, "mutation_editor/change.html", context)
+    except _NotForYou as refusal:
+        return refusal.response
+
+
+def _mutation_for_page(request, experiment):
+    """The mutation named by `?mutation_id=`, scoped through the experiment.
+
+    Scoped rather than fetched by pk alone, for the reason `mutation_delete` scopes its ids:
+    a mutation belongs to one experiment's reference genome, and a hand-typed pk from another
+    must not resolve here.
+    """
+    try:
+        return Mutation.objects.get(ale_experiment=experiment,
+                                    pk=request.GET.get("mutation_id"))
+    except (Mutation.DoesNotExist, ValueError, TypeError):
+        raise _NotForYou(render(request, "404.html", get_user_context(request.user),
+                                status=404))
+
+
+def _initial_fields(mutation):
+    """What the form opens with: the mutation's stored record, minus its bookkeeping.
+
+    Straight from `gd_data`, which is the verbatim GenomeDiff record -- so the form is
+    populated by the same keys `validation.validate_record` will read back, and a field the
+    add form knows nothing about cannot appear.
+    """
+    data = dict(mutation.gd_data or {})
+    for key in ("type", "id", "parent_ids", "frequency"):
+        data.pop(key, None)
+    return {name: ("" if value is None else value) for name, value in data.items()}
+
+
 def _reference_row(experiment):
     """The experiment's `ExperimentReference`, or None. Reads no files."""
     from aledb_seq.models import ExperimentReference
@@ -663,6 +723,89 @@ def _plan_add(experiment, identity, observation, targets):
             "source_sample_id": None,  # -- nothing was copied; this is a new assertion
         })
     return additions, skipped
+
+
+@require_POST
+def mutation_change_apply(request):
+    """Move one mutation to a new set of field values, taking its observations with it."""
+    try:
+        experiment = _experiment_for_write(request)
+        mutation = _mutation_for_write(request, experiment)
+
+        mutation_type = (request.POST.get("mutation_type") or "").strip().upper()
+        reference_row = _reference_row(experiment)
+        attributes, errors = validation.validate_record(
+            request.POST, mutation_type,
+            reference_row=reference_row,
+            load_references=lambda: annotation.reference_sequences_for(experiment))
+        if errors:
+            raise EditorError("That mutation cannot be changed as entered.", errors=errors)
+
+        gd_data = record_builder.build_gd_data(mutation_type, attributes)
+        annotated_record, _ = record_builder.annotate(gd_data, experiment)
+        identity = record_builder.build_identity(mutation_type, gd_data, annotated_record)
+
+        _refuse_unchanged(mutation, identity)
+        _refuse_collision(experiment, mutation, identity)
+
+        change_set = history.apply_mutation_edit(
+            experiment, request.user, mutation, identity,
+            note="Changed %s at %s:%s to %s at %s:%s." % (
+                mutation.mutation_type, mutation.reseq_reference, mutation.position,
+                mutation_type, attributes.get("seq_id"), attributes.get("position")))
+        if change_set is None:
+            raise EditorError("No sample carries that mutation, so there is nothing to "
+                              "change.", status=404)
+    except EditorError as error:
+        return _error_response(error)
+
+    # The promoted annotation columns are not part of the identity, so `apply_mutation_edit`
+    # left them describing the mutation as it was. Same call the add path makes.
+    record_builder.apply_annotation(mutation, annotated_record)
+    history.rebuild_after_edit(experiment)
+    logger.info("mutation changed", extra=user_extra(request))
+    return JsonResponse({"experiment_id": experiment.ale_id,
+                         "mutation_id": mutation.pk,
+                         "samples": change_set.changes.filter(operation="add").count(),
+                         "change_set_id": change_set.pk})
+
+
+def _mutation_for_write(request, experiment):
+    try:
+        return Mutation.objects.get(ale_experiment=experiment,
+                                    pk=request.POST.get("mutation_id"))
+    except (Mutation.DoesNotExist, ValueError, TypeError):
+        raise EditorError("That mutation is not in this experiment.", status=404)
+
+
+def _refuse_unchanged(mutation, identity):
+    """A change that changes nothing is refused rather than logged.
+
+    Both halves matter: the six key fields decide what the mutation *is*, and `gd_data` can
+    move without them -- a MOB's `strand`, say -- which is a real change to what
+    `to_gd_line()` writes even though the identity is the same.
+    """
+    if (history.mutation_key(mutation) == history.key_from_identity(identity)
+            and (mutation.gd_data or None) == (identity.get("gd_data") or None)):
+        raise EditorError("Those are the values it already has.")
+
+
+def _refuse_collision(experiment, mutation, identity):
+    """Refuse an edit that would duplicate another mutation in the same experiment.
+
+    The six-field key is what `gd_import` dedups on, so two rows sharing it is a state the
+    importer cannot produce and would resolve arbitrarily if it met one. An edit is the only
+    way to reach it. Merging the two instead would silently destroy a row, and the person may
+    not have realised they were the same.
+    """
+    key = {field: identity.get(field) for field in history.MUTATION_KEY_FIELDS}
+    clash = (Mutation.objects.filter(ale_experiment=experiment, **key)
+             .exclude(pk=mutation.pk).first())
+    if clash is not None:
+        raise EditorError(
+            "That would make this identical to mutation %d (%s %s %s), which this experiment "
+            "already has." % (clash.pk, clash.reseq_reference or "", clash.position,
+                              clash.mutation_type))
 
 
 @require_POST

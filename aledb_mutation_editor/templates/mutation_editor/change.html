@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    {% include "mutation_editor/_toolbar.html" with active='edit' %}
+    {% csrf_token %}
+
+    {{ schema|json_script:"mutation-schema" }}
+    {{ initial|json_script:"mutation-initial" }}
+
+    {% if not can_edit %}
+        <p>Changing a mutation needs write access to this project.</p>
+    {% else %}
+        {% if not has_reference %}
+        <div class="alert alert-warning">
+            <b>This experiment has no reference genome.</b> The fields below are still checked
+            for shape, but nothing can be compared against the sequence, so a change that would
+            leave the genome unaltered cannot be detected and will be accepted.
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <p style="color: #666;">
+                Changes this mutation itself, so every one of the
+                <b>{{ sample_count }}</b> sample{{ sample_count|pluralize }} that carries it
+                follows. Each keeps its own frequency and read counts &mdash; what moves is
+                what the mutation <i>is</i>. It is one entry in the
+                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>
+                and can be restored away from there.
+            </p>
+            <p style="color: #666;">
+                To change it in some samples but not others, delete it from those and add it
+                back: that is two mutations, not one, and this page will not make them.
+            </p>
+        </div>
+
+        <div class="col-lg-7" style="padding-left: 0;">
+            <div class="form-group">
+                <label for="me-type">Mutation type</label>
+                <select class="form-control" id="me-type">
+                    {% for entry in schema.types %}
+                        <option value="{{ entry.name }}">{{ entry.label }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-block" id="me-type-help"></p>
+            </div>
+
+            {% include "mutation_editor/_mutation_fields.html" %}
+
+            <button type="button" class="btn btn-primary" id="me-apply">Save changes</button>
+            <a href="/mutation-editor/?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ all_samples_value|default:'all' }}"
+               class="btn btn-link">cancel</a>
+            <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
+        </div>
+
+        <div class="col-lg-5">
+            <h4>Currently</h4>
+            <table class="table">
+                <tr><th>Reference</th><td>{{ mutation.reseq_reference|default_if_none:"" }}</td></tr>
+                <tr><th>Position</th><td>{{ mutation.position }}</td></tr>
+                <tr><th>Type</th><td>{{ mutation.mutation_type }}</td></tr>
+                <tr><th>Change</th><td>{{ mutation.sequence_change }}</td></tr>
+                <tr><th>Gene</th><td>{{ mutation.gene|default_if_none:"" }}</td></tr>
+                <tr><th>Mutation id</th><td>{{ mutation.id }}</td></tr>
+                <tr><th>Samples</th><td>{{ sample_count }}</td></tr>
+            </table>
+            <p style="color: #666;">
+                The mutation id does not change. It is stored as a plain number in convergence,
+                phylogeny and every exported table, and those go on resolving &mdash; to the
+                corrected call.
+            </p>
+        </div>
+    {% endif %}
+
+    <script type="text/javascript">
+    {% include "mutation_editor/_mutation_form.js" %}
+
+    (function () {
+        "use strict";
+        if (!document.getElementById("me-apply")) { return; }
+
+        // Seeded from the mutation's own gd_data, so the form opens on what is stored rather
+        // than on blanks, and an untouched field round-trips to the value it already had.
+        var initial = JSON.parse(document.getElementById("mutation-initial").textContent);
+        initial.__type = "{{ mutation.mutation_type }}";
+        var form = aledbMutationForm(initial);
+
+        document.getElementById("me-apply").addEventListener("click", function () {
+            form.clearFieldErrors();
+
+            var payload = {
+                experiment_id: "{{ ale_experiment_id }}",
+                mutation_id: "{{ mutation.id }}",
+                mutation_type: form.type()
+            };
+            var fields = form.fields();
+            Object.keys(fields).forEach(function (name) { payload[name] = fields[name]; });
+
+            window.aledbPost("/mutation-editor/change/apply", payload).then(function (body) {
+                swal("", "Changed in " + body.samples + " sample(s).", "success")
+                    .then(function () {
+                        window.location.href =
+                            "/mutation-editor/?ale_experiment_id={{ ale_experiment_id }}&reseq_id=all";
+                    });
+            }).catch(function (err) {
+                document.getElementById("me-error").textContent = err.message;
+                form.showFieldErrors(err.body && err.body.errors);
+            });
+        });
+    })();
+    </script>
+{% endblock %}

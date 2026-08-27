@@ -36,7 +36,7 @@ from django.db import transaction
 
 from aledb_experiment.permissions import ExperimentLocked
 from aledb_mutation_editor.models import (
-    KIND_RESTORE, OP_ADD, OP_REMOVE,
+    KIND_EDIT, KIND_RESTORE, OP_ADD, OP_REMOVE,
     MutationChange, MutationChangeSet,
 )
 from aledb_seq.models import Mutation, ObservedMutation
@@ -165,8 +165,14 @@ def _resolve_mutation(experiment, mutation, identity):
     re-import would have produced -- and a later import finds it rather than adding a second.
     """
     if mutation is not None and mutation.pk is not None:
-        if Mutation.objects.filter(pk=mutation.pk).exists():
-            return mutation
+        live = Mutation.objects.filter(pk=mutation.pk).first()
+        # The row has to still *be* the mutation the identity describes. It is not enough that
+        # it exists: `apply_mutation_edit` moves a row's fields while keeping its primary key,
+        # so a restore to before an edit arrives here holding the old identity and a row that
+        # has since become something else. Returning it would put the observation back on the
+        # edited mutation and report success, leaving the restore silently undone.
+        if live is not None and mutation_key(live) == key_from_identity(identity):
+            return live
 
     lookup = {field: identity.get(field) for field in MUTATION_KEY_FIELDS}
     recreated, created = Mutation.objects.get_or_create(
@@ -252,6 +258,83 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
         ObservedMutation.objects.filter(
             pk__in=[observed.pk for observed in removals]).delete()
 
+    MutationChange.objects.bulk_create(changes)
+    return change_set
+
+
+@transaction.atomic
+def apply_mutation_edit(experiment, user, mutation, identity, note=""):
+    """Change a mutation's own fields, everywhere it is observed. One changeset.
+
+    The observations are logged as **removed and re-added**, which is not bookkeeping: the log
+    is keyed on `(sample_id, mutation_key, source)`, and `mutation_key` is derived from the six
+    identity fields. Move a Mutation without saying so and `live_state` starts computing a
+    different key than every earlier entry recorded, with no changeset for `state_after` to
+    undo -- so "restore to before the edit" would silently leave the edit in place.
+
+    What is *not* re-created is the Mutation row. `_resolve_mutation` returns the row it is
+    handed, so the additions point back at the one the removals came off, and its primary key
+    never moves. That matters because Mutation ids are stored as bare integers, with no foreign
+    key, in `aledb_converge.ConvergeMutation`, in aledb-phylogeny's `site_mutation_ids` and
+    `branch_mutations`, and in every exported CSV -- and aledb-phylogeny is not on the rebuild
+    hook, so ids it holds are never refreshed. Minting a new row would leave all of that
+    pointing at a mutation with no observations; reusing it leaves them resolving, to the
+    corrected call.
+
+    The order below is the whole of this function. The removal snapshots have to be taken
+    **before** the row moves, or both sides of the changeset would record the new identity and
+    `state_after` would read the edit as having changed nothing.
+    """
+    if experiment is not None and experiment.is_locked:
+        raise ExperimentLocked(experiment.lock_message())
+
+    observations = list(observations_for(experiment).filter(mutation=mutation))
+    if not observations:
+        # Nothing observes it, so there is no state to move and nothing to log. The row is
+        # left alone rather than edited in silence.
+        return None
+
+    before = mutation_identity(mutation)
+    change_set = MutationChangeSet.objects.create(
+        ale_experiment=experiment,
+        created_by=user if getattr(user, "is_authenticated", False) else None,
+        kind=KIND_EDIT,
+        note=note)
+
+    changes = [
+        MutationChange(
+            change_set=change_set,
+            operation=OP_REMOVE,
+            sample_id=observed.sequencing_experiment_id,
+            mutation=mutation,
+            observation=observation_snapshot(observed),
+            mutation_identity=before)
+        for observed in observations
+    ]
+
+    for field in MUTATION_KEY_FIELDS:
+        setattr(mutation, field, identity.get(field))
+    mutation.gd_data = identity.get("gd_data")
+    mutation.annotation = identity.get("annotation")
+    mutation.product = identity.get("product") or ""
+    mutation.protein_change = identity.get("protein_change") or ""
+    mutation.save()
+
+    for observed in observations:
+        created = ObservedMutation.objects.create(
+            sequencing_experiment_id=observed.sequencing_experiment_id,
+            mutation=mutation,
+            **_observation_kwargs(observation_snapshot(observed)))
+        changes.append(MutationChange(
+            change_set=change_set,
+            operation=OP_ADD,
+            sample_id=observed.sequencing_experiment_id,
+            mutation=mutation,
+            observation=observation_snapshot(created),
+            mutation_identity=identity))
+
+    ObservedMutation.objects.filter(
+        pk__in=[observed.pk for observed in observations]).delete()
     MutationChange.objects.bulk_create(changes)
     return change_set
 

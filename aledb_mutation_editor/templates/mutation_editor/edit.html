@@ -96,6 +96,7 @@
                         <th class="breseq-annotation">Annotation</th>
                         <th class="breseq-gene">Gene</th>
                         <th class="breseq-description">Description</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -110,10 +111,12 @@
                         <td class="breseq-annotation">{{ row.annotation|safe }}</td>
                         <td class="breseq-gene">{{ row.gene|safe }}</td>
                         <td class="breseq-description">{{ row.description|safe }}</td>
+                        <td><a href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation_id }}"
+                               title="Change this mutation in every sample that carries it">change</a></td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="{% if is_population %}9{% else %}8{% endif %}">
+                        <td colspan="{% if is_population %}10{% else %}9{% endif %}">
                             This sample has no mutations stored.</td>
                     </tr>
                 {% endfor %}

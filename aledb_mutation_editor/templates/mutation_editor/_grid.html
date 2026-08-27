@@ -74,6 +74,7 @@ rendering of it, and `draw` re-applies them.
                 <th class="breseq-evidence">Type</th>
                 <th class="breseq-mutation">Mutation</th>
                 <th class="breseq-gene">Gene</th>
+                <th></th>
                 {% for column in grid_columns %}
                     {% comment %} The header is the column selector. A link rather than a
                        checkbox so Bootstrap styles it and the column stays narrow; the
@@ -105,6 +106,9 @@ rendering of it, and `draw` re-applies them.
                 <td class="breseq-evidence">{{ row.mutation.mutation_type }}</td>
                 <td class="breseq-mutation">{{ row.mutation.sequence_change }}</td>
                 <td class="breseq-gene">{{ row.mutation.gene|default_if_none:"" }}</td>
+                <td class="me-change"><a
+                    href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
+                    title="Change this mutation in every sample that carries it">change</a></td>
                 {% for cell in row.cells %}
                     {% if cell %}
                         <td class="me-cell me-{{ cell.state }}" data-obs="{{ cell.id }}"
@@ -117,7 +121,7 @@ rendering of it, and `draw` re-applies them.
                 {% endfor %}
             </tr>
         {% empty %}
-            <tr><td colspan="{{ grid_columns|length|add:6 }}">
+            <tr><td colspan="{{ grid_columns|length|add:7 }}">
                 {% if grid_query %}No mutation matches &ldquo;{{ grid_query }}&rdquo;.
                 {% else %}This experiment has no mutations stored.{% endif %}</td></tr>
         {% endfor %}
@@ -147,7 +151,7 @@ $(document).ready(function () {
     var bySample = JSON.parse(document.getElementById("me-by-sample").textContent);
     var selected = new Set();
 
-    var FIXED_COLUMNS = 6;   // the mutation's own columns, before the samples begin
+    var FIXED_COLUMNS = 7;   // the mutation's own columns, before the samples begin
 
     var table = $("#me-grid").DataTable({
         paging: true,
@@ -156,7 +160,7 @@ $(document).ready(function () {
         deferRender: true,
         order: [[1, "asc"], [2, "asc"]],
         columnDefs: [
-            { targets: 0, orderable: false },
+            { targets: [0, 6], orderable: false },
             // Sorting a sample column would order rows by the cell's text, which is a
             // frequency in one row and a tick in the next. Nothing useful comes of it, and
             // the header is a control -- a click there selects the column.

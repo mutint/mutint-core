@@ -28,11 +28,17 @@ KIND_DELETE = "delete"
 KIND_COPY = "copy"
 KIND_ADD = "add"
 KIND_RESTORE = "restore"
+#: A mutation's own fields changed, everywhere it was observed. The *changeset* is labelled
+#: this; its rows are still OP_REMOVE and OP_ADD, because that is what happened to every
+#: observation -- each one moved from the old identity to the new. Nothing in `state_after`,
+#: `plan_restore` or `restore` needed to learn about it.
+KIND_EDIT = "edit"
 
 KIND_CHOICES = [
     (KIND_DELETE, "Delete"),
     (KIND_COPY, "Copy"),
     (KIND_ADD, "Add"),
+    (KIND_EDIT, "Edit"),
     (KIND_RESTORE, "Restore"),
 ]
 
