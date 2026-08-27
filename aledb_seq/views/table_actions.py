@@ -43,7 +43,15 @@ def _may_curate(user, experiment):
     could reach the URL could tag anything by primary key -- and with `LoginRequiredMiddleware`
     only present in `settings_private.py`, that included anonymous callers. This enforces
     server-side what the templates already assumed.
+
+    **The lock is tested before the disjunction, and has to be.** `can_add_global_filter` is
+    `user.is_superuser`, so leaving the lock to `can_add_experiment_filter` on the right-hand
+    side would let a superuser go on tagging a locked experiment -- the `or` short-circuits
+    and never reaches it. This is the one place in the codebase where that pattern hides the
+    lock, and it hides it silently.
     """
+    if experiment is not None and experiment.is_locked:
+        return False
     return (permissions.can_add_global_filter(user)
             or permissions.can_add_experiment_filter(user, experiment))
 

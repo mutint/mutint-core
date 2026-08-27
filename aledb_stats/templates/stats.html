@@ -70,9 +70,43 @@
                 data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
     </div>
     {% endif %}
+
+    {% comment %} Its own block, outside `{% if can_edit %}`, and gated on admin instead.
+       Two reasons it cannot live in there: `can_edit` is false precisely when the
+       experiment is locked, so the unlock button would vanish exactly when it is needed,
+       and the whole value of the lock is that the people who ordinarily edit cannot lift
+       it themselves. {% endcomment %}
+    {% if can_lock %}
+    <div style="margin-top: 0.6em;">
+        {% if experiment.is_locked %}
+            <button type="button" class="btn btn-warning" id="unlock-experiment"
+                    data-experiment-id="{{ ale_experiment_id }}">Unlock experiment</button>
+        {% else %}
+            <button type="button" class="btn btn-default" id="lock-experiment"
+                    data-experiment-id="{{ ale_experiment_id }}">Lock experiment</button>
+        {% endif %}
+    </div>
+    {% endif %}
 {% endblock %}
 
 {% block content %}
+    {% if experiment.is_locked %}
+        {% comment %} Shown to everyone, not only to whoever can unlock it. A reader who
+           finds the edit controls gone is owed the reason, and a collaborator who cannot
+           lift the lock still needs to know who to ask. {% endcomment %}
+        <div class="alert alert-warning">
+            <b>This experiment is locked.</b>
+            Its mutations, samples and settings cannot be changed by anyone, including
+            administrators, until it is unlocked.
+            {% if experiment.locked_reason %}<br>Reason: {{ experiment.locked_reason }}{% endif %}
+            <br><small>
+                Locked {{ experiment.locked_at }}{% if experiment.locked_by %}
+                by {{ experiment.locked_by.get_username }}{% endif %}.
+                {% if not can_lock %}An administrator of this project can unlock it.{% endif %}
+            </small>
+        </div>
+    {% endif %}
+
     <div class="panel panel-default">
         <div class="panel-heading">Notes</div>
         <div class="panel-body">
@@ -274,6 +308,55 @@
             });
         });
     });
+})();
+</script>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var lock = document.getElementById("lock-experiment");
+    var unlock = document.getElementById("unlock-experiment");
+    if (!lock && !unlock) { return; }
+
+    // aledbPost rather than the hand-rolled fetch above: this block was written after
+    // aledb_crud.js was loaded from base.html, and there is no reason for a second copy.
+    function post(id, data) {
+        return window.aledbPost("/ale/experiment/" + id + "/lock/", data)
+            .then(function () { window.location.reload(); })
+            .catch(function (err) { swal("", err.message || "Failed", "error"); });
+    }
+
+    if (lock) {
+        lock.addEventListener("click", function () {
+            // A reason, not a yes/no confirm. The lock is going to refuse somebody later,
+            // and the one useful thing to record now is why -- so the refusal can say it.
+            swal({
+                title: "Lock this experiment?",
+                text: "Nobody will be able to change its mutations, samples or settings "
+                    + "until it is unlocked. Why is it being locked?",
+                content: "input",
+                buttons: true
+            }).then(function (reason) {
+                // null is Cancel; "" is OK with an empty box, which is allowed.
+                if (reason === null) { return; }
+                post(lock.dataset.experimentId, { locked: "1", reason: reason || "" });
+            });
+        });
+    }
+
+    if (unlock) {
+        unlock.addEventListener("click", function () {
+            swal({
+                title: "Unlock this experiment?",
+                text: "It becomes editable again by everyone with write access.",
+                icon: "warning",
+                buttons: true
+            }).then(function (confirmed) {
+                if (!confirmed) { return; }
+                post(unlock.dataset.experimentId, {});
+            });
+        });
+    }
 })();
 </script>
 {% endblock %}

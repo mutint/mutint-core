@@ -3,7 +3,8 @@ from aledb_experiment.sample_views import (
     experiment_samples, experiment_samples_update, sample_edit, sample_update,
 )
 from aledb_experiment.access_views import (
-    project_access, project_access_grant, project_access_revoke,
+    project_access, project_access_bulk, project_access_grant,
+    project_access_revoke,
 )
 from aledb_experiment.group_views import (
     group_create, group_delete, group_detail, group_member_add, group_member_remove,
@@ -11,6 +12,7 @@ from aledb_experiment.group_views import (
 )
 from aledb_experiment.views import (
     experiment_create, experiment_delete, experiment_detail, experiment_edit,
+    experiment_lock,
     experiment_new, experiment_update, experiments,
     project_create, project_delete, project_detail, project_edit, project_new,
     project_update, projects,
@@ -40,6 +42,10 @@ urlpatterns = [
     re_path(r'^experiment/(?P<pk>[0-9]+)/samples/update/$',
             experiment_samples_update, name="experiment_samples_update"),
 
+    # Locking. Its own endpoint rather than a field on the edit form: a locked experiment
+    # refuses `experiment_update` outright, so a checkbox there could lock and never unlock.
+    re_path(r'^experiment/(?P<pk>[0-9]+)/lock/$', experiment_lock, name="experiment_lock"),
+
     # Sharing. Every route here is anchored, so none of them can grow into a prefix trap
     # of the kind `^projects` / `^experiments` below already are.
     re_path(r'^project/(?P<pk>[0-9]+)/access/$', project_access, name="project_access"),
@@ -47,6 +53,8 @@ urlpatterns = [
             project_access_grant, name="project_access_grant"),
     re_path(r'^project/(?P<pk>[0-9]+)/access/revoke/$',
             project_access_revoke, name="project_access_revoke"),
+    re_path(r'^project/(?P<pk>[0-9]+)/access/bulk/$',
+            project_access_bulk, name="project_access_bulk"),
 
     # Groups. `^groups/` and `^group/` mirror the `^projects` / `^project/` split, but both
     # are anchored, so the specific-before-general ordering that `projects/create/` needs

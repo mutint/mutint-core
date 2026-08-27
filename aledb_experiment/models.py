@@ -99,6 +99,21 @@ class AleExperiment(SoftDeleteMixin):
     project = models.ForeignKey(Project, default=None, **blank_field, on_delete=models.DO_NOTHING)
     doi = models.TextField(**blank_field)
 
+    # --- the lock ---------------------------------------------------------------------
+    #
+    # Shaped like SoftDeleteMixin above: the timestamp *is* the flag, and there is no
+    # boolean beside it to disagree with. A locked experiment refuses every write in the
+    # web UI regardless of who is asking -- an admin unlocks, edits, and locks it again.
+    # That is what makes it a lock rather than a fifth role: it guards against the
+    # accidental edit to a finished dataset, which no permission tier can.
+    #
+    # `locked_reason` is the one thing SoftDeleteMixin has no equivalent of, and it earns
+    # its place: every refusal in the app can then say why rather than only no.
+    locked_at = models.DateTimeField(db_index=True, **blank_field)
+    locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
+                                  **blank_field)
+    locked_reason = models.TextField(blank=True, default="")
+
     class Meta:
         verbose_name_plural = "experiments"
 
@@ -107,6 +122,40 @@ class AleExperiment(SoftDeleteMixin):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_locked(self):
+        return self.locked_at is not None
+
+    def lock(self, user=None, reason="", when=None):
+        from django.utils import timezone
+        self.locked_at = when or timezone.now()
+        self.locked_by = user if (user and user.is_authenticated) else None
+        self.locked_reason = (reason or "").strip()
+        self.save(update_fields=["locked_at", "locked_by", "locked_reason"])
+        return self
+
+    def unlock(self):
+        """Clear the lock. Takes no user, as `SoftDeleteMixin.restore()` does not.
+
+        So the columns record who last *locked* it, not who unlocked it. Who unlocked it
+        is a question for an audit log rather than two columns, and there is no such log
+        for experiments -- `aledb_mutation_editor`'s changesets cover the mutations only.
+        """
+        self.locked_at = None
+        self.locked_by = None
+        self.locked_reason = ""
+        self.save(update_fields=["locked_at", "locked_by", "locked_reason"])
+        return self
+
+    def lock_message(self):
+        """Why a write was refused, written for the person who tried it."""
+        if not self.is_locked:
+            return ""
+        message = "%s is locked, so it cannot be changed." % self.name
+        if self.locked_reason:
+            message += " Reason: %s" % self.locked_reason
+        return message + " An administrator of its project can unlock it."
 
     def doi_as_list(self):
         if self.doi is None:
@@ -143,6 +192,10 @@ class AleExperiment(SoftDeleteMixin):
             "ale_experiment_id": self.ale_id,
             "ale_project_name": self.project.name if self.project else "",
             "ale_project_id": self.project_id,
+            # Fifth, and here for the same reason as the other four: every experiment-scoped
+            # page renders the shell, and a locked experiment should say so on all of them
+            # rather than only on the one page that happens to check.
+            "ale_experiment_locked": self.is_locked,
         }
 
 

@@ -215,7 +215,22 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
     Returns the standard summary dict, so callers render one shape either way. A handler may
     instead raise ``ConfirmationRequired``, which propagates: it is a question about the whole
     drop, not a per-file result.
+
+    **A locked experiment is refused here**, not only at the view. This is the single funnel
+    every import type passes through -- core's four and any a plugin registers -- and the
+    upload flow needs it: `upload_session` checks permission when the session is *created*
+    and never again, so a session opened before the lock would otherwise still ingest after
+    it. Raising `ExperimentLocked` rather than returning an error summary because this is a
+    refusal of the whole drop, the same shape `ConfirmationRequired` already takes.
     """
+    # Imported here rather than at module scope: this module is in aledb_common, which the
+    # registries keep free of app-level imports so it can be loaded before the app registry
+    # is ready. `rebuild_registry` defers its model imports the same way.
+    from aledb_experiment.permissions import ExperimentLocked
+
+    if experiment is not None and getattr(experiment, "is_locked", False):
+        raise ExperimentLocked(experiment.lock_message())
+
     paths = walk_files(staged_root)
 
     if import_type:

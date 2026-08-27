@@ -34,6 +34,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
+from aledb_experiment.permissions import ExperimentLocked
 from aledb_mutation_editor.models import (
     KIND_RESTORE, OP_ADD, OP_REMOVE,
     MutationChange, MutationChangeSet,
@@ -201,6 +202,13 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
     and reads what was just written, and holding a write transaction open across it would make
     every concurrent edit queue behind it.
     """
+    # Defence in depth. Every caller checks permission first, and this trusts none of them:
+    # it is the lowest layer that still knows which experiment it is writing to, and a new
+    # write path added later is exactly the thing that forgets. Raising rather than returning
+    # None because a silent no-op here would read as "there was nothing to do".
+    if experiment is not None and experiment.is_locked:
+        raise ExperimentLocked(experiment.lock_message())
+
     removals = list(removals)
     additions = list(additions)
     if not removals and not additions:

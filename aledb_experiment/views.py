@@ -4,7 +4,8 @@ from django.shortcuts import redirect
 from .models import Project, AleExperiment
 from .utils import get_user_projects, get_all_user_exps
 from .permissions import (
-    accessible_projects, can_admin_project, can_edit_project, can_view_project,
+    accessible_projects, can_admin_project, can_edit_experiment, can_edit_project,
+    can_lock_experiment, can_view_project, experiment_lock_refusal,
 )
 from .roles import ROLE_WRITE
 from aledb_common.util import get_user_context
@@ -200,16 +201,62 @@ def project_delete(request, pk):
     project = get_object_or_404(Project, pk=pk)
     if not can_delete_project(request.user, project):
         return JsonResponse({"error": "You cannot delete this project."}, status=403)
+
+    # A locked experiment cannot be deleted, and deleting the project that holds it would
+    # take it away just the same -- so the lock has to reach one button sideways or it is
+    # sidestepped by the most obvious route there is. Named rather than counted: the person
+    # has to know which one to go and unlock.
+    locked = list(live(project.aleexperiment_set.all())
+                  .filter(locked_at__isnull=False).values_list("name", flat=True))
+    if locked:
+        return JsonResponse(
+            {"error": "This project holds locked experiments (%s). Unlock them first."
+                      % ", ".join(locked)}, status=409)
+
     if project.deleted_at is None:
         project.soft_delete(request.user)
     return JsonResponse({"project_id": project.id, "deleted_at": project.deleted_at})
 
 
 @require_POST
+def experiment_lock(request, pk):
+    """Lock or unlock an experiment. Admin on its project.
+
+    Its own endpoint rather than a field on the edit form, for the reason `experiment_update`
+    gives about `person`: a details form rewrites every field it carries on every save. Here
+    that argument is doubled, because a locked experiment refuses `experiment_update`
+    outright -- a lock checkbox on that form could only ever be used to lock, never to unlock.
+
+    Idempotent, like `project_delete`: locking a locked experiment is not an error, it just
+    does not move the timestamp.
+    """
+    experiment = get_object_or_404(AleExperiment, pk=pk)
+    if not can_lock_experiment(request.user, experiment):
+        return JsonResponse(
+            {"error": "Only an administrator of this project can lock or unlock it."},
+            status=403)
+
+    wants_locked = bool(request.POST.get("locked"))
+    if wants_locked and not experiment.is_locked:
+        experiment.lock(request.user, reason=request.POST.get("reason") or "")
+    elif not wants_locked and experiment.is_locked:
+        experiment.unlock()
+
+    return JsonResponse({"experiment_id": experiment.ale_id,
+                         "locked": experiment.is_locked,
+                         "locked_at": experiment.locked_at,
+                         "locked_by": (experiment.locked_by.get_username()
+                                       if experiment.locked_by_id else None),
+                         "locked_reason": experiment.locked_reason})
+
+
+@require_POST
 def experiment_delete(request, pk):
     experiment = get_object_or_404(AleExperiment, pk=pk)
     if not can_delete_experiment(request.user, experiment):
-        return JsonResponse({"error": "You cannot delete this experiment."}, status=403)
+        return JsonResponse(
+            {"error": experiment_lock_refusal(experiment)
+                      or "You cannot delete this experiment."}, status=403)
     if experiment.deleted_at is None:
         experiment.soft_delete(request.user)
     return JsonResponse({"experiment_id": experiment.ale_id,
@@ -242,10 +289,14 @@ def experiment_edit(request, pk):
 
     The project picker lists only what `can_edit_project` allows, so it cannot offer a
     destination the POST would refuse -- the same rule `experiment_new` follows.
+
+    `can_edit_experiment` rather than `can_edit_project`: a locked experiment refuses this
+    page as well as the endpoint behind it, so there is no form to fill in and be refused at
+    the end of.
     """
     experiment = get_object_or_404(AleExperiment, pk=pk)
     context = get_user_context(request.user)
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
 
     context.update({
@@ -295,8 +346,12 @@ def experiment_update(request, pk):
     would let you push your experiment into someone else's.
     """
     experiment = get_object_or_404(AleExperiment, pk=pk)
-    if not can_edit_project(request.user, experiment.project):
-        return JsonResponse({"error": "You cannot edit this experiment."}, status=403)
+    if not can_edit_experiment(request.user, experiment):
+        # Refuses a locked experiment too, which stops the *move* as well as the rename --
+        # the destination check below is about the other end and would not catch it.
+        return JsonResponse(
+            {"error": experiment_lock_refusal(experiment)
+                      or "You cannot edit this experiment."}, status=403)
 
     name = (request.POST.get("name") or "").strip()
     if not name:

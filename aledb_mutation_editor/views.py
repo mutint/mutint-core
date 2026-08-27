@@ -33,7 +33,9 @@ import aledb_seq.views.common as seq_common
 from aledb_common.logger import user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
-from aledb_experiment.permissions import can_add_experiment_filter
+from aledb_experiment.permissions import (
+    can_add_experiment_filter, experiment_lock_refusal,
+)
 from aledb_import import annotation
 from aledb_mutation_editor import history, record_builder, validation
 from aledb_mutation_editor.models import (
@@ -152,7 +154,10 @@ def _experiment_for_write(request):
     except (AleExperiment.DoesNotExist, ValueError, TypeError):
         raise EditorError("No such experiment.", status=404)
     if not can_add_experiment_filter(request.user, experiment):
-        raise EditorError(_REFUSED, status=403)
+        # "you may not edit this" and "nobody may edit this at the moment" are different
+        # answers, and the second one is actionable -- it names the reason and says who can
+        # lift it. Falling back to the generic refusal when the lock is not why.
+        raise EditorError(experiment_lock_refusal(experiment) or _REFUSED, status=403)
     return experiment
 
 

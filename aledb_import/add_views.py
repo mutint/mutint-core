@@ -15,7 +15,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from aledb_common.import_registry import get_import_types, get_import_types_for
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
-from aledb_experiment.permissions import can_edit_project
+from aledb_experiment.permissions import can_edit_experiment
 
 logger = logging.getLogger("aledb_import.add_views")
 
@@ -40,7 +40,7 @@ def add_view(request):
         # turn in the nav.
         raise Http404("No such experiment.")
 
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", get_user_context(request.user), status=403)
 
     has_reference = _has_reference(experiment)

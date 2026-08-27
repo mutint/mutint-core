@@ -40,6 +40,16 @@ class AccessError(Exception):
     """A refusal whose message is written for a person and is safe to show verbatim."""
 
 
+class ExperimentLocked(Exception):
+    """A write was refused because the experiment is locked, not because of who asked.
+
+    Lives here rather than with any one write path because the lock is policy, and because
+    both `aledb_common.import_registry` and `aledb_mutation_editor.history` raise it -- two
+    layers that share nothing else. Its message is `AleExperiment.lock_message()`, written
+    for a person and safe to show verbatim.
+    """
+
+
 # --- the per-request role cache -----------------------------------------------------------
 #
 # This is not an optimisation, it is what keeps a mutation table from issuing a query per row.
@@ -166,11 +176,64 @@ def can_delete_project(user, project):
     return has_project_role(user, project, ROLE_ADMIN)
 
 
-def can_delete_experiment(user, experiment):
-    """An experiment is deletable by whoever may edit the project holding it."""
+def can_edit_experiment(user, experiment):
+    """Write access to an experiment's data -- **and** the experiment not being locked.
+
+    The lock is not a fifth role. It answers a different question: not "who are you" but
+    "is this dataset still open", and it outranks the first. A locked experiment refuses
+    everyone, including admins, owners and superusers; an admin unlocks it, edits, and locks
+    it again. That is the whole point -- a permission tier cannot protect a finished dataset
+    from someone who legitimately has permission and did not mean to touch it.
+
+    Every web write that acts on an experiment should ask this rather than
+    `can_edit_project(user, experiment.project)`, which cannot see the lock because it is
+    handed the project and the flag is on the experiment.
+
+    **Not** asked by the rebuild registry. Recomputing derived data is not editing: the
+    numbers on the Overview are a function of the mutations, and a locked experiment whose
+    counts silently went stale because nobody was allowed to refresh them would be worse than
+    one that keeps up.
+    """
     if experiment is None:
         return False
+    if experiment.is_locked:
+        return False
     return can_edit_project(user, experiment.project)
+
+
+def experiment_lock_refusal(experiment):
+    """The message for a write refused by the lock, or "" if the lock is not why.
+
+    Lets a caller tell the two refusals apart: "you may not edit this" and "nobody may edit
+    this at the moment" are different answers and deserve different words.
+    """
+    if experiment is not None and experiment.is_locked:
+        return experiment.lock_message()
+    return ""
+
+
+def can_lock_experiment(user, experiment):
+    """Who may lock or unlock. Admin on the project, mirroring `can_delete_project`.
+
+    Admin rather than owner because locking is reversible by anyone who can set it, and
+    admin rather than write because the whole value of the lock is that the people who
+    ordinarily edit cannot lift it themselves.
+
+    Note an experiment with no project can never be locked: `effective_role` answers None for
+    a null project before it reaches its superuser branch, so nobody holds admin on one.
+    """
+    if experiment is None:
+        return False
+    return can_admin_project(user, experiment.project)
+
+
+def can_delete_experiment(user, experiment):
+    """An experiment is deletable by whoever may edit the project holding it.
+
+    Now via `can_edit_experiment`, so a locked experiment cannot be deleted either -- which
+    also means it cannot be purged, since `purge_deleted` only ever sees soft-deleted rows.
+    """
+    return can_edit_experiment(user, experiment)
 
 
 def can_add_global_filter(user):
@@ -183,10 +246,13 @@ def can_add_experiment_filter(user, experiment):
     `TechnicalReplicate.tags` and the experiment filter are read by four different mutation
     tables, so a change here is a change to what everyone else sees. It used to be granted by
     the plain view permission, which let a read-only visitor rewrite shared state.
+
+    Delegates to `can_edit_experiment`, so it refuses a locked experiment too. That one line
+    is what carries the lock into the mutation editor's four write endpoints, both tag
+    endpoints and the filter page, and into the controls those pages render -- every one of
+    them already asks this question.
     """
-    if experiment is None:
-        return False
-    return can_edit_project(user, experiment.project)
+    return can_edit_experiment(user, experiment)
 
 
 def accessible_projects(user, minimum=ROLE_READ):

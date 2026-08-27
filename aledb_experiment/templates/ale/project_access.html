@@ -22,6 +22,12 @@
         <table class="table table-striped table-bordered">
             <thead class="alert-success">
             <tr>
+                {% comment %} A plain table, not a DataTable with the Select extension: this
+                   one has role dropdowns in it, and selection is only safe on a DataTable
+                   while no cell is an input -- deferRender never builds the rows it has not
+                   drawn. Same reason `ale/experiment_samples.html` gives. {% endcomment %}
+                <th width="30"><input type="checkbox" id="pa-select-all"
+                                      title="Select every row you can change"></th>
                 <th>Name</th>
                 <th width="90">Kind</th>
                 <th width="180">Role</th>
@@ -30,7 +36,12 @@
             </thead>
             <tbody>
             {% for row in rows %}
-                <tr>
+                <tr data-access-id="{{ row.entry.id }}">
+                    <td>
+                        {% if row.editable %}
+                            <input type="checkbox" class="pa-pick" value="{{ row.entry.id }}">
+                        {% endif %}
+                    </td>
                     <td>
                         {% if row.entry.group %}
                             <a href="/ale/group/{{ row.entry.group.id }}/">{{ row.entry.subject_name }}</a>
@@ -62,18 +73,52 @@
                     </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="4">Nobody yet.</td></tr>
+                <tr><td colspan="5">Nobody yet.</td></tr>
             {% endfor %}
             </tbody>
         </table>
+
+        {% comment %} Applies to the ticked rows. Partial on purpose: grants are
+           independent of each other, so what can be applied is, and what cannot is named --
+           unlike the sample table's all-or-nothing save, where a half-applied renumbering
+           would be incoherent. {% endcomment %}
+        <div class="row" id="pa-bulk-row">
+            <div class="col-lg-4">
+                <div class="form-group">
+                    <label for="pa-bulk-role">Set selected to</label>
+                    <select class="form-control" id="pa-bulk-role">
+                        {% for value, label in grantable %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-primary form-control"
+                            id="pa-apply">Apply to selected</button>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <p class="form-control-static" id="pa-picked" style="color: #666;"></p>
+                </div>
+            </div>
+        </div>
 
         <h4>Add a person</h4>
         <div class="row">
             <div class="col-lg-5">
                 <div class="form-group">
-                    <label for="pa-username">Username</label>
-                    <input type="text" class="form-control" id="pa-username"
-                           placeholder="their exact username">
+                    <label for="pa-username">Username(s)</label>
+                    {% comment %} A textarea, one name per line. There is no autocomplete
+                       and deliberately no user-enumeration endpoint -- `resolve_username`
+                       answers a name at a time and each can fail for its own reason, which
+                       is why the response names them individually. {% endcomment %}
+                    <textarea class="form-control" id="pa-username" rows="3"
+                              placeholder="their exact username, one per line"></textarea>
                 </div>
             </div>
             <div class="col-lg-4">
@@ -146,7 +191,7 @@
         <div style="margin-top: 1.5em;">
             <a class="btn btn-default" href="/ale/project/{{ project.id }}/">Back to project</a>
         </div>
-        <div id="pa-error" style="color: #a00; margin-top: 1em;"></div>
+        <div id="pa-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
     </div>
 
 <script type="text/javascript">
@@ -163,10 +208,10 @@
 
     document.getElementById("pa-add-user").addEventListener("click", function () {
         errorBox.textContent = "";
-        window.aledbPost(grantUrl, {
-            username: document.getElementById("pa-username").value,
+        applyBulk({
+            usernames: document.getElementById("pa-username").value,
             role: document.getElementById("pa-user-role").value
-        }).then(reload).catch(fail);
+        });
     });
 
     document.getElementById("pa-add-group").addEventListener("click", function () {
@@ -188,10 +233,90 @@
             } else {
                 data.username = select.getAttribute("data-subject");
             }
-            window.aledbPost(grantUrl, data).then(reload).catch(function (err) {
-                fail(err);
-                reload();
+            // No reload in the catch. It used to reload here too, which wiped the
+            // refusal off the screen a moment after showing it -- so a role change the
+            // server declined looked like one that had simply not taken.
+            window.aledbPost(grantUrl, data).then(reload).catch(fail);
+        });
+    });
+
+    var bulkUrl = "/ale/project/{{ project.id }}/access/bulk/";
+
+    function picked() {
+        var ids = [];
+        Array.prototype.forEach.call(
+            document.querySelectorAll(".pa-pick:checked"), function (box) {
+                ids.push(parseInt(box.value, 10));
             });
+        return ids;
+    }
+
+    function showPicked() {
+        var count = picked().length;
+        document.getElementById("pa-picked").textContent =
+            count ? count + " selected" : "";
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll(".pa-pick"), function (box) {
+        box.addEventListener("change", showPicked);
+    });
+
+    var selectAll = document.getElementById("pa-select-all");
+    if (selectAll) {
+        selectAll.addEventListener("change", function () {
+            Array.prototype.forEach.call(
+                document.querySelectorAll(".pa-pick"), function (box) {
+                    box.checked = selectAll.checked;
+                });
+            showPicked();
+        });
+    }
+
+    function applyBulk(data) {
+        clearRowErrors();
+        window.aledbPost(bulkUrl, data).then(function (body) {
+            var errors = body.errors || {};
+            var names = Object.keys(errors);
+            if (!names.length) {
+                reload();
+                return;
+            }
+            // Partial: say what landed, name what did not, and leave the page as it is so
+            // the messages can be read. A reload here would hide exactly the useful part.
+            var lines = ["Applied to " + body.applied + ", refused " + names.length + ":"];
+            names.forEach(function (name) { lines.push(name + " -- " + errors[name]); });
+            errorBox.textContent = lines.join("\n");
+            markRowErrors(errors);
+        }).catch(fail);
+    }
+
+    function clearRowErrors() {
+        Array.prototype.forEach.call(
+            document.querySelectorAll("tr[data-access-id]"), function (tr) {
+                tr.classList.remove("danger");
+            });
+    }
+
+    function markRowErrors(errors) {
+        Array.prototype.forEach.call(
+            document.querySelectorAll("tr[data-access-id]"), function (tr) {
+                var name = tr.querySelector("td:nth-child(2)");
+                if (name && errors[name.textContent.trim()]) {
+                    tr.classList.add("danger");
+                }
+            });
+    }
+
+    document.getElementById("pa-apply").addEventListener("click", function () {
+        errorBox.textContent = "";
+        var ids = picked();
+        if (!ids.length) {
+            errorBox.textContent = "Tick some rows first.";
+            return;
+        }
+        applyBulk({
+            access_ids: JSON.stringify(ids),
+            role: document.getElementById("pa-bulk-role").value
         });
     });
 

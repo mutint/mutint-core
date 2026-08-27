@@ -110,7 +110,11 @@
                 {# <li><a href="/bibliome">Bibliome</a></li> #}
                 {% if ale_experiment_id %}
                     <li>
-                        <a href="/stats?ale_experiment_id={{ ale_experiment_id }}"><b>{{ ale_project_name }}: {{ ale_experiment_name }}</b></a>
+                        {% comment %} The padlock goes here rather than in the page header,
+                           because `{% block header %}` is overridden by almost every
+                           experiment page and a badge added to the default would render on
+                           none of them. This block is not overridden anywhere. {% endcomment %}
+                        <a href="/stats?ale_experiment_id={{ ale_experiment_id }}"><b>{% if ale_experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ ale_project_name }}: {{ ale_experiment_name }}</b></a>
                     </li>
                     {% for item in nav_experiment_items %}
                         <li>

@@ -28,7 +28,7 @@ from aledb_common.import_registry import (
     run_import,
 )
 from aledb_experiment.models import AleExperiment
-from aledb_experiment.permissions import can_edit_project
+from aledb_experiment.permissions import can_edit_experiment, experiment_lock_refusal
 from aledb_import import reference_store
 from aledb_import.models import (
     STATE_FAILED,
@@ -100,7 +100,7 @@ def create_upload_session(request):
         experiment = AleExperiment.objects.get(pk=payload.get("ale_experiment_id"))
     except (AleExperiment.DoesNotExist, ValueError, TypeError):
         return JsonResponse({"error": "Unknown experiment."}, status=404)
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "You cannot add to this experiment."}, status=403)
 
     # Required, not optional. Auto-detect guessed from filename suffixes, which is
@@ -225,6 +225,16 @@ def finalize_upload(request, upload_id):
     session, error = _open_session(request, upload_id)
     if error:
         return error
+
+    # Re-checked here, and not only when the session was created. Permission was asked once
+    # at `create_upload_session` and the session then carries itself; a session opened before
+    # the experiment was locked would otherwise finalize straight through it. `run_import`
+    # refuses as well -- this one exists so the answer arrives as a clean JSON refusal rather
+    # than an exception surfacing from three layers down.
+    if not can_edit_experiment(request.user, session.ale_experiment):
+        return JsonResponse(
+            {"error": experiment_lock_refusal(session.ale_experiment)
+                      or "You cannot add data to this experiment."}, status=403)
 
     root = store.staging_dir(session.id)
     options = {"confirm_rename": _payload(request).get("confirm_rename")}

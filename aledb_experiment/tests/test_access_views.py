@@ -307,3 +307,206 @@ class EndToEndTestCase(AccessTestCase):
         response = self.client.post("/ale/experiments/create/",
                                     {"name": "E", "project": self.project.id})
         self.assertEqual(response.status_code, 403)
+
+
+class BulkTestCase(AccessTestCase):
+    """Applying one role to several subjects in a single request.
+
+    Deliberately partial, unlike the sample table's all-or-nothing save: grants are
+    independent of each other, so what can be applied is, and what cannot is named. The
+    ordering assertion in `test_a_batch_cannot_demote_the_last_owner` is the one that matters
+    -- the last-owner check reads the database each call, so a batch validated up front and
+    applied afterwards would pass every individual check against the starting state.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.bulk_url = self.page + "bulk/"
+        self.client.force_login(self.owner)
+
+    def ids_for(self, *users):
+        return list(ProjectAccess.objects.filter(
+            project=self.project, user__in=users).values_list("id", flat=True))
+
+    def bulk(self, **data):
+        data.setdefault("role", ROLE_READ)
+        return self.client.post(self.bulk_url, data)
+
+    def role_of(self, user):
+        return ProjectAccess.objects.get(project=self.project, user=user).role
+
+    # --- the happy path -------------------------------------------------------------------
+
+    def test_one_role_lands_on_several_rows(self):
+        import json
+
+        response = self.bulk(
+            access_ids=json.dumps(self.ids_for(self.writer, self.reader)), role=ROLE_ADMIN)
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(2, response.json()["applied"])
+        self.assertEqual(ROLE_ADMIN, self.role_of(self.writer))
+        self.assertEqual(ROLE_ADMIN, self.role_of(self.reader))
+
+    def test_several_people_are_added_at_once(self):
+        one = make_user("newbie1")
+        two = make_user("newbie2")
+
+        body = self.bulk(usernames="newbie1\nnewbie2", role=ROLE_WRITE).json()
+
+        self.assertEqual(2, body["added"])
+        self.assertEqual({}, body["errors"])
+        self.assertEqual(ROLE_WRITE, self.role_of(one))
+        self.assertEqual(ROLE_WRITE, self.role_of(two))
+
+    def test_blank_lines_are_ignored(self):
+        make_user("newbie1")
+        body = self.bulk(usernames="\n  newbie1  \n\n", role=ROLE_READ).json()
+        self.assertEqual(1, body["added"])
+
+    def test_rows_and_names_can_be_mixed(self):
+        import json
+
+        make_user("newbie1")
+        body = self.bulk(access_ids=json.dumps(self.ids_for(self.reader)),
+                         usernames="newbie1", role=ROLE_WRITE).json()
+
+        self.assertEqual(2, body["applied"])
+        self.assertEqual(1, body["added"], "only the new one counts as added")
+
+    # --- partial success ------------------------------------------------------------------
+
+    def test_an_unknown_name_is_reported_and_the_rest_still_land(self):
+        make_user("newbie1")
+
+        body = self.bulk(usernames="newbie1\nnosuchperson", role=ROLE_READ).json()
+
+        self.assertEqual(1, body["applied"])
+        self.assertIn("nosuchperson", body["errors"])
+        self.assertIn("no user named", body["errors"]["nosuchperson"])
+
+    def test_a_batch_cannot_demote_the_last_owner(self):
+        """The one cross-row dependency, and why the loop applies sequentially.
+
+        `_remaining_owner_count` reads the database each call. Validated up front against the
+        starting state, both of these would look fine and the project would end up ownerless.
+        """
+        import json
+
+        grant_project_access(self.project, self.admin, ROLE_OWNER)
+        owners = self.ids_for(self.owner, self.admin)
+
+        body = self.bulk(access_ids=json.dumps(owners), role=ROLE_READ).json()
+
+        self.assertEqual(1, body["applied"], "the first demotion is allowed")
+        self.assertEqual(1, len(body["errors"]), "the second is refused")
+        self.assertEqual(
+            1, ProjectAccess.objects.filter(project=self.project, role=ROLE_OWNER).count(),
+            "the project still has an owner")
+
+    def test_a_grant_from_another_project_is_refused(self):
+        import json
+
+        other = Project.objects.create(name="Other", user=self.stranger)
+        set_primary_owner(other, self.stranger)
+        foreign = ProjectAccess.objects.get(project=other, user=self.stranger)
+
+        body = self.bulk(access_ids=json.dumps([foreign.id]), role=ROLE_READ).json()
+
+        self.assertEqual(0, body["applied"])
+        self.assertIn(str(foreign.id), body["errors"])
+        self.assertEqual(ROLE_OWNER, ProjectAccess.objects.get(pk=foreign.pk).role)
+
+    def test_a_row_above_the_actors_role_is_skipped(self):
+        """The page renders those as text rather than a dropdown; a bulk apply must not
+        quietly include what the page would not offer."""
+        import json
+
+        self.client.force_login(self.admin)
+        owner_row = self.ids_for(self.owner)
+
+        body = self.bulk(access_ids=json.dumps(owner_row), role=ROLE_READ).json()
+
+        self.assertEqual(0, body["applied"])
+        self.assertIn("owner", body["errors"])
+        self.assertEqual(ROLE_OWNER, self.role_of(self.owner))
+
+    def test_the_same_subject_twice_collapses_to_one_grant(self):
+        """ProjectAccess is conditionally unique per subject, and naming someone in both the
+        ticked rows and the add box is the obvious way to do it by accident."""
+        import json
+
+        body = self.bulk(access_ids=json.dumps(self.ids_for(self.reader)),
+                         usernames="reader", role=ROLE_WRITE).json()
+
+        self.assertEqual(1, body["applied"])
+        self.assertEqual(
+            1, ProjectAccess.objects.filter(project=self.project, user=self.reader).count())
+
+    # --- refusals -------------------------------------------------------------------------
+
+    def test_a_writer_cannot_bulk_apply(self):
+        import json
+
+        self.client.force_login(self.writer)
+        response = self.bulk(access_ids=json.dumps(self.ids_for(self.reader)))
+
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(ROLE_READ, self.role_of(self.reader))
+
+    def test_nobody_can_grant_above_their_own_role(self):
+        import json
+
+        self.client.force_login(self.admin)
+        response = self.bulk(access_ids=json.dumps(self.ids_for(self.reader)),
+                             role=ROLE_OWNER)
+
+        self.assertEqual(403, response.status_code)
+        self.assertIn("above your own", response.json()["error"])
+
+    def test_an_empty_batch_is_refused(self):
+        self.assertEqual(400, self.bulk(access_ids="[]", usernames="").status_code)
+
+    def test_an_unknown_role_is_refused(self):
+        import json
+
+        response = self.bulk(access_ids=json.dumps(self.ids_for(self.reader)), role="king")
+        self.assertEqual(400, response.status_code)
+
+    def test_malformed_ids_are_a_400_not_a_500(self):
+        self.assertEqual(400, self.bulk(access_ids="not json").status_code)
+
+    def test_it_refuses_a_GET(self):
+        self.assertEqual(405, self.client.get(self.bulk_url).status_code)
+
+    def test_anonymous_is_refused(self):
+        import json
+
+        self.client.logout()
+        response = self.bulk(access_ids=json.dumps(self.ids_for(self.reader)))
+        self.assertEqual(403, response.status_code)
+
+
+class BulkPageTestCase(AccessTestCase):
+    """What the page renders for the bulk controls."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+
+    def test_the_page_offers_a_checkbox_per_editable_row(self):
+        html = self.client.get(self.page).content.decode()
+
+        self.assertIn('id="pa-select-all"', html)
+        self.assertIn('class="pa-pick"', html)
+        self.assertIn('id="pa-apply"', html)
+
+    def test_the_username_box_takes_several(self):
+        html = self.client.get(self.page).content.decode()
+        self.assertIn("one per line", html)
+
+    def test_a_refused_role_change_no_longer_reloads_the_page(self):
+        """It used to `fail(err); reload();`, which wiped the refusal a moment after showing
+        it -- so a declined change looked like one that had simply not taken."""
+        html = self.client.get(self.page).content.decode()
+        self.assertNotIn("fail(err);\n                reload();", html)

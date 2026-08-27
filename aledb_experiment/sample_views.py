@@ -25,7 +25,7 @@ from django.views.decorators.http import require_POST
 
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
-from aledb_experiment.permissions import can_edit_project
+from aledb_experiment.permissions import can_edit_experiment
 from aledb_experiment.samples import (
     SampleEditError, apply_rows, coordinate_str, parse_rows, plan_moves,
     rebuild_after_structural_change, rows_are_structural, sample_coordinate,
@@ -101,7 +101,7 @@ def sample_edit(request, pk):
     """One sample's identity and description."""
     reseq, experiment = _get_sample(pk)
     context = get_user_context(request.user)
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
 
     context.update(experiment.experiment_context())
@@ -117,7 +117,7 @@ def experiment_samples(request, pk):
     """Every sample of one experiment, editable in a single save."""
     experiment = get_object_or_404(AleExperiment, pk=pk)
     context = get_user_context(request.user)
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
 
     context.update(experiment.experiment_context())
@@ -172,7 +172,7 @@ def _error_response(error):
 @require_POST
 def sample_update(request, pk):
     reseq, experiment = _get_sample(pk)
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "You cannot edit this sample."}, status=403)
 
     row = {
@@ -214,7 +214,7 @@ def experiment_samples_update(request, pk):
     instead of erroring.
     """
     experiment = get_object_or_404(AleExperiment, pk=pk)
-    if not can_edit_project(request.user, experiment.project):
+    if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "You cannot edit this experiment's samples."},
                             status=403)
 

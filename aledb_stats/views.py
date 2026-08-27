@@ -13,7 +13,7 @@ from aledb_common.util import get_user_context
 import logging
 from aledb_common.context_registry import get_experiment_context
 from aledb_experiment.models import AleExperiment
-from aledb_experiment.permissions import can_edit_project
+from aledb_experiment.permissions import can_edit_experiment, can_lock_experiment
 from aledb_common.logger import user_extra, join_extras
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,16 @@ def stats(request):
                         # for everyone -- the POST refused it, so it was a dead end
                         # dressed as an action rather than a hole, but a dead end all the
                         # same. Add and Edit now come and go with it.
-                        "can_edit": can_edit_project(request.user, experiment.project),
+                        # `can_edit_experiment`, so the Add/Edit/Delete block also
+                        # disappears while the experiment is locked -- every endpoint behind
+                        # those buttons refuses a locked experiment, and an action that can
+                        # only produce a refusal is the dead end this comment already
+                        # describes.
+                        "can_edit": can_edit_experiment(request.user, experiment),
+                        # Separate, and admin-level: the whole point of the lock is that the
+                        # people who ordinarily edit cannot lift it themselves.
+                        "can_lock": can_lock_experiment(request.user, experiment),
+                        "experiment": experiment,
                         })
 
         # Rendered before the log, not after: the sample table used to issue two queries per

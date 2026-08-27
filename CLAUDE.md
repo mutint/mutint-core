@@ -61,9 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1028 run, 0 failures** standalone; **1141** in an assembled project, where the
-plugins' own tests join them. They were 938 and 1051 before the mutation editor's add form,
-and 852 and 965 before the editor itself. The suite is green — treat *any* failure as yours. (These said 642 and 688 for a while and were wrong
+**Baseline: 1081 run, 0 failures** standalone; **1194** in an assembled project, where the
+plugins' own tests join them. They were 1028 and 1141 before the experiment lock and the bulk
+sharing editor, 938 and 1051 before the mutation editor's add form, and 852 and 965 before the
+editor itself. The suite is green — treat *any* failure as yours. (These said 642 and 688
+for a while and were wrong
 by more than the sharing work added — standalone was already 698 before it. Re-count rather
 than adjusting the number by what you think you added.)
 
@@ -644,6 +646,73 @@ The role dropdown on a row posts to the **same** grant endpoint as the add boxes
 upsert keyed on the subject, so there is no second endpoint that could disagree with it. A row
 the actor could not re-grant — an owner, seen by an admin — renders as text rather than a
 dropdown, so the page never offers a control whose every use the server would refuse.
+
+**`project_access_bulk` applies one role to several subjects at once**, and does not overturn
+the per-row design it sits beside. It **loops the same `grant_project_access` helper** every
+other path calls, so each guardrail still delivers its own message and the endpoint knows none
+of the rules. What it saves is page loads: adding ten people was ten reloads, each clearing
+the box you were typing in. The add box takes a textarea of usernames for the same reason,
+resolved one at a time because `resolve_username` answers one name at a time and each can fail
+for its own reason.
+
+It is deliberately **partial**, unlike `experiment_samples_update`, and that is the same
+reasoning read forwards: a half-applied sample renumbering is incoherent, a half-applied set of
+independent grants is just the subset that was allowed. It answers
+`{applied, added, errors: {subject: message}}` and the page leaves those messages on screen
+rather than reloading over them.
+
+**The loop applies sequentially, and must.** The last-owner invariant is the one cross-row
+dependency, and `_remaining_owner_count` reads the database on each call — so a batch validated
+up front against the starting state would find every individual demotion allowed and leave the
+project ownerless. Ticking every owner and setting them all to `read` demotes all but the last
+and names the one it refused.
+
+### Locking an experiment
+
+`AleExperiment.locked_at` / `locked_by` / `locked_reason`, shaped like `SoftDeleteMixin` above
+— the timestamp is the flag, with no boolean beside it to disagree. `/ale/experiment/<pk>/lock/`
+sets it, gated on `can_admin_project`.
+
+**A lock is not a fifth role.** It answers "is this dataset still open", which outranks "who
+are you": a locked experiment refuses every web write from everyone, admins, owners and
+superusers included. An admin unlocks, edits, and locks it again. That is the point — no
+permission tier protects a finished dataset from someone who legitimately has permission and
+did not mean to touch it.
+
+`can_edit_experiment(user, experiment)` is the predicate, and
+`can_add_experiment_filter` / `can_delete_experiment` delegate to it — which is what carries
+the lock into the mutation editor's four endpoints, both tag endpoints, the filter page and
+every `can_edit` context key without those files knowing about it. The nine call sites that
+used to ask `can_edit_project(user, experiment.project)` now pass the experiment, because a
+predicate handed the project cannot see a flag on the experiment.
+
+Three places it would have silently not held, all now tested:
+
+- **`_may_curate` short-circuits.** It reads `can_add_global_filter(user) or
+  can_add_experiment_filter(...)`, and the first is `is_superuser` — so a lock tested only on
+  the right-hand side is never reached for a superuser. The lock is tested *before* the
+  disjunction.
+- **`finalize_upload` had no permission check at all.** Permission was asked when the upload
+  session was created and never again, so a session opened before the lock would still ingest
+  after it. The backstop is in `import_registry.run_import`, the one funnel every import type
+  passes through including plugin-registered ones, plus a check at the view for a clean
+  refusal.
+- **`project_delete`** refuses while the project holds a locked experiment, naming them.
+  Otherwise the lock is sidestepped by the most obvious adjacent button.
+
+`aledb_mutation_editor.history.apply_changes` raises `ExperimentLocked` too, trusting no
+caller: it is the lowest layer that still knows which experiment it is writing to, and a write
+path added later is exactly what forgets.
+
+**What it deliberately does not stop.** Derived-data rebuilds — those recompute what the
+mutations already imply, and a locked experiment whose counts silently went stale would be
+worse, not safer. Reading and exporting. Access changes, since locking is per experiment and
+access is per project. And **management commands**: the lock guards the web, so `./aledb
+upload` still writes to a locked experiment, matching by name as it always has.
+
+An experiment with **no project can never be locked**: `effective_role` answers `None` for a
+null project before it reaches its superuser branch, so nobody holds admin on one. It cannot
+be unlocked either, but it cannot get locked in the first place.
 
 ### Compare is a plugin
 
