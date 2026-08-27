@@ -318,3 +318,163 @@ class RebuildCommandTestCase(TestCase):
     def test_a_second_run_reports_everything_current(self):
         self._run(str(self.experiment.ale_id), only=["overview"])
         self.assertIn("0 rebuilt", self._run(str(self.experiment.ale_id), only=["overview"]))
+
+
+class DeclaredInputsTestCase(TestCase):
+    """A rebuild says what it reads, and a caller says what changed.
+
+    Without this, `request_rebuild` marks everything registered, and a frequency-cutoff edit
+    invalidated derived data that never reads through the filter -- `aledb_phylogeny` queries
+    ObservedMutation directly, so its tree cannot have changed. On a page that hides its own
+    content when marked stale, that is a warning asking for a rebuild which would redraw the
+    identical answer, and warnings people learn to ignore are worse than none.
+    """
+
+    # Its own fixture rather than subclassing RebuildRegistryTestCase: inheriting a TestCase
+    # re-runs every test it declares, which is how this file briefly grew by 44 tests that
+    # were all copies of ones already running.
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.calls = []
+
+    def _register(self, name, fn=None, **kwargs):
+        register_rebuilder(name, fn or (lambda *a: self.calls.append((name,) + a)), **kwargs)
+        self.addCleanup(unregister_rebuilder, name)
+        return name
+
+    def test_a_registration_that_says_nothing_reads_everything(self):
+        """The default has to be the conservative one: an existing plugin that knows nothing
+        about this must keep being marked by every caller."""
+        from aledb_common.rebuild_registry import ALL_INPUTS
+
+        self.assertEqual(ALL_INPUTS, get_rebuilder(self._register("test.default"))["inputs"])
+
+    def test_a_filter_change_marks_what_reads_the_filter(self):
+        """Both started fresh, deliberately. A missing DerivedDataState row already counts as
+        stale, so asserting `assertFalse(is_stale(...))` on a never-built rebuild would fail
+        whatever this code did -- and asserting the opposite would pass whatever it did."""
+        from aledb_common.rebuild_registry import INPUT_FILTERS, INPUT_MUTATIONS
+
+        both = self._register("test.both")
+        muts = self._register("test.muts", inputs={INPUT_MUTATIONS})
+        run_rebuilds(self.experiment.ale_id, force=True)
+        self.assertFalse(is_stale(muts, self.experiment.ale_id), "fresh to begin with")
+
+        request_rebuild(self.experiment.ale_id, changed=INPUT_FILTERS, reason='test')
+
+        self.assertTrue(is_stale(both, self.experiment.ale_id))
+        self.assertFalse(is_stale(muts, self.experiment.ale_id),
+                         "declared independent of the filters, so a cutoff cannot stale it")
+
+    def test_no_changed_still_marks_everything(self):
+        """An import and a mutation edit both mean "all of it", and both pass nothing."""
+        from aledb_common.rebuild_registry import INPUT_MUTATIONS
+
+        muts = self._register("test.muts2", inputs={INPUT_MUTATIONS})
+        run_rebuilds(self.experiment.ale_id, force=True)
+        self.assertFalse(is_stale(muts, self.experiment.ale_id), "fresh to begin with")
+
+        request_rebuild(self.experiment.ale_id, reason='test')
+
+        self.assertTrue(is_stale(muts, self.experiment.ale_id))
+
+    def test_an_unknown_input_is_refused_at_registration(self):
+        """Silently narrowing what gets marked is data that quietly stops being refreshed --
+        the same reason `./aledb rebuild --only` refuses a name nothing registered."""
+        with self.assertRaises(ValueError):
+            self._register("test.typo", inputs={"filtres"})
+
+    def test_an_unknown_changed_is_refused(self):
+        with self.assertRaises(ValueError):
+            request_rebuild(self.experiment.ale_id, changed="filtres", reason='test')
+
+    def test_registering_hands_back_the_name(self):
+        """A plugin stores it and asks `is_stale` for it later, rather than writing out a
+        name the registry derives."""
+        self.assertEqual("test.returned",
+                         register_rebuilder("test.returned", lambda _: None))
+        self.addCleanup(unregister_rebuilder, "test.returned")
+
+
+class ManualRebuildTestCase(TestCase):
+    """`auto=False`: tracked and marked, never run behind anyone's back.
+
+    It is what lets derived data be told it has gone stale without promising to recompute
+    itself. aledb-phylogeny wanted exactly that and could not have it, so it registered nothing
+    and its stored tree was never invalidated at all.
+    """
+
+    # Its own fixture rather than subclassing RebuildRegistryTestCase: inheriting a TestCase
+    # re-runs every test it declares, which is how this file briefly grew by 44 tests that
+    # were all copies of ones already running.
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.calls = []
+
+    def _register(self, name, fn=None, **kwargs):
+        register_rebuilder(name, fn or (lambda *a: self.calls.append((name,) + a)), **kwargs)
+        self.addCleanup(unregister_rebuilder, name)
+        return name
+
+    def test_it_is_not_run_by_a_plain_rebuild(self):
+        name = self._register("test.manual", auto=False)
+
+        run_rebuilds(self.experiment.ale_id)
+
+        self.assertEqual([], self.calls)
+
+    def test_force_does_not_override_it(self):
+        """`run_post_experiment_hooks` forces on every import. If force reached this, an
+        import would build every opted-out thing there is, which is the whole thing being
+        opted out of. Force means "even if fresh", not "even if you opted out"."""
+        self._register("test.manual2", auto=False)
+
+        run_rebuilds(self.experiment.ale_id, force=True)
+
+        self.assertEqual([], self.calls)
+
+    def test_naming_it_runs_it(self):
+        """`./aledb rebuild 4 --only aledb_phylogeny` is the ask that builds one."""
+        name = self._register("test.manual3", auto=False)
+
+        run_rebuilds(self.experiment.ale_id, only=[name], force=True)
+
+        self.assertEqual([(name, self.experiment.ale_id)], self.calls)
+
+    def test_it_is_still_marked_stale(self):
+        """The point of registering at all. Marking is what its page reads."""
+        name = self._register("test.manual4", auto=False)
+
+        request_rebuild(self.experiment.ale_id, reason='test')
+
+        self.assertTrue(is_stale(name, self.experiment.ale_id))
+
+    def test_a_plain_rebuild_leaves_it_stale(self):
+        """And does not report having done anything about it."""
+        name = self._register("test.manual5", auto=False)
+        request_rebuild(self.experiment.ale_id, reason='test')
+
+        results = run_rebuilds(self.experiment.ale_id)
+
+        self.assertNotIn(name, results)
+        self.assertTrue(is_stale(name, self.experiment.ale_id))
+
+    def test_the_listing_says_it_is_manual(self):
+        """A bare `./aledb rebuild 4` leaving it stale is the design, so the listing has to
+        say so or the stale marker beside it reads as a failure."""
+        name = self._register("test.manual6", auto=False)
+        out = StringIO()
+
+        call_command("rebuild", "--list", stdout=out)
+
+        listed = [line for line in out.getvalue().splitlines() if line.startswith(name)]
+        self.assertEqual(1, len(listed), out.getvalue())
+        self.assertIn("manual", listed[0])

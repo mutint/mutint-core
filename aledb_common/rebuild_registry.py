@@ -60,6 +60,20 @@ SITE_SCOPE = 'site'
 
 _SCOPES = (EXPERIMENT_SCOPE, SITE_SCOPE)
 
+# What a rebuild reads, so that a caller can say what changed and mark only the derived data
+# that depends on it. Two values, and deliberately no more: an input nothing passes as
+# `changed=` is a vocabulary word with no meaning behind it.
+#
+# The experiment's mutations or observations moved -- an import, a mutation edit, a delete.
+INPUT_MUTATIONS = 'mutations'
+# A frequency cutoff or ignored-gene list moved. Not every derived table reads through the
+# filter: `aledb_phylogeny` queries ObservedMutation directly, so a cutoff edit cannot change
+# its tree, and marking it stale would be a false alarm on a page that hides its own content
+# when marked.
+INPUT_FILTERS = 'filters'
+
+ALL_INPUTS = frozenset({INPUT_MUTATIONS, INPUT_FILTERS})
+
 # Settings other rebuilds read. The per-experiment filter defaults come first because
 # everything counting mutations counts them through it.
 PRIORITY_SETTINGS = 10
@@ -69,12 +83,12 @@ PRIORITY_DERIVED = 50
 # Totals aggregated across every experiment, so computed once the rest are current.
 PRIORITY_AGGREGATE = 90
 
-# [{'name', 'fn', 'scope', 'label', 'priority', 'index'}, ...]
+# [{'name', 'fn', 'scope', 'label', 'priority', 'index', 'auto', 'inputs'}, ...]
 _rebuilders = []
 
 
 def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
-                       priority=PRIORITY_DERIVED):
+                       priority=PRIORITY_DERIVED, auto=True, inputs=None):
     """Register a named rebuild (called from AppConfig.ready()).
 
     Rebuilds run in registration order: apps in INSTALLED_APPS order, and within an app in the
@@ -91,6 +105,22 @@ def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
     label  human-readable name for `./aledb rebuild --list`; defaults to name.
     priority  lower runs first; see the constants above. Ties break on registration order,
            which is INSTALLED_APPS order, so leaving it alone gives the obvious behaviour.
+    auto   False registers derived data that is *tracked* but never rebuilt behind anyone's
+           back: `request_rebuild` marks it, `--list` shows it, and `run_rebuilds` skips it
+           unless it is named in `only=`. It is what lets a plugin be told its data has gone
+           stale without promising to recompute it -- the thing `aledb-phylogeny` wanted and
+           could not have, so it registered nothing at all and its tree was never invalidated.
+
+           **`force=True` does not override it.** `run_post_experiment_hooks` forces, so an
+           import would otherwise build every opted-out thing there is. Force means "rebuild
+           even if fresh", not "rebuild what opted out".
+
+           The cost of opting out: a page that forgets to ask `is_stale` is now worse off than
+           one that never registered, because it has a staleness record nobody reads.
+    inputs an iterable of INPUT_* naming what this reads. **None means all of them**, so an
+           existing registration keeps being marked by everything and no plugin has to change.
+           Narrow it only where the independence is real -- a rebuild wrongly declared
+           independent of an input is data that silently stops being marked.
 
     A duplicate name raises, as in import_registry and example_registry: two rebuilds sharing a
     name would share a staleness row, and each would keep marking the other fresh.
@@ -99,6 +129,14 @@ def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
         raise ValueError("register_rebuilder() scope must be one of %r, got %r" % (_SCOPES, scope))
     if not callable(fn):
         raise ValueError("register_rebuilder(%r) needs a callable" % (name,))
+    declared = ALL_INPUTS if inputs is None else frozenset(inputs)
+    unknown = declared - ALL_INPUTS
+    if unknown:
+        # Raising rather than ignoring, for the reason `./aledb rebuild --only` refuses an
+        # unknown name: a misspelled input silently narrows what gets marked, and the symptom
+        # is data that is quietly never refreshed.
+        raise ValueError("register_rebuilder(%r) got unknown inputs %r; known: %r"
+                         % (name, sorted(unknown), sorted(ALL_INPUTS)))
     for existing in _rebuilders:
         if existing['name'] == name:
             raise ValueError("a rebuilder named %r is already registered" % (name,))
@@ -109,7 +147,10 @@ def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
         'label': label or name,
         'priority': priority,
         'index': len(_rebuilders),
+        'auto': bool(auto),
+        'inputs': declared,
     })
+    return name
 
 
 def get_rebuilders(scope=None, only=None):
@@ -151,7 +192,7 @@ def get_rebuilder(name):
     return None
 
 
-def request_rebuild(experiment_id=None, only=None, reason=''):
+def request_rebuild(experiment_id=None, only=None, changed=None, reason=''):
     """Mark derived data stale. Cheap, and safe to call from any request.
 
     experiment_id  the experiment whose data changed, or None meaning "every experiment" --
@@ -161,6 +202,14 @@ def request_rebuild(experiment_id=None, only=None, reason=''):
                    actually changed: a sample renumber changes fixation and the sample counts
                    and nothing about a mutation count, and `rebuild_after_structural_change`
                    has always refused to rebuild the dashboard for exactly that reason.
+    changed        an INPUT_* value, or None for "everything changed" -- which is what an
+                   import and a mutation edit both mean, and is the default so that every
+                   existing caller keeps its behaviour. `changed=INPUT_FILTERS` marks only
+                   the rebuilds that declared they read the filters, which is what stops a
+                   cutoff edit invalidating a tree built from unfiltered mutations.
+
+                   It composes with `only=`: that one narrows by name, this one by what the
+                   data depends on.
     reason         logged, not stored. It is for reading the log after the fact.
 
     Site-scoped rebuilds are marked too, because they aggregate across experiments -- one
@@ -175,6 +224,11 @@ def request_rebuild(experiment_id=None, only=None, reason=''):
 
     now = timezone.now()
     rebuilders = get_rebuilders(only=only)
+    if changed is not None:
+        if changed not in ALL_INPUTS:
+            raise ValueError("request_rebuild() changed must be one of %r, got %r"
+                             % (sorted(ALL_INPUTS), changed))
+        rebuilders = [r for r in rebuilders if changed in r['inputs']]
     if not rebuilders:
         return
 
@@ -246,8 +300,15 @@ def run_rebuilds(experiment_id=None, only=None, force=False, scope=None):
     from aledb_common.models import DerivedDataState
 
     results = {}
+    named = None if only is None else set(only)
     for rebuilder in get_rebuilders(scope=scope, only=only):
         name = rebuilder['name']
+        if not rebuilder['auto'] and (named is None or name not in named):
+            # Opted out of running on its own. Being named in `only=` is the ask that runs it,
+            # which is what `./aledb rebuild --only aledb_phylogeny` is. `force` is checked
+            # below and deliberately does not reach here: it means "even if fresh", not "even
+            # if you opted out", and `run_post_experiment_hooks` forces on every import.
+            continue
         site_scoped = rebuilder['scope'] == SITE_SCOPE
         target = None if site_scoped else experiment_id
 

@@ -129,6 +129,11 @@ class Command(BaseCommand):
             name = rebuilder["name"]
             line = "%s  %-10s  %s" % (name.ljust(width), rebuilder["scope"],
                                       rebuilder["label"])
+            if not rebuilder["auto"]:
+                # It is tracked and marked like everything else but never runs on its own, so
+                # a bare `./aledb rebuild 4` leaving it stale is the design rather than a
+                # failure. Say so here or the next line reads as one.
+                line += "  (manual -- --only runs it)"
             count = stale.get(name)
             if count:
                 line += "  [%d stale]" % count

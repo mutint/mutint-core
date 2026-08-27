@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1178 run, 0 failures** standalone; **1293** in an assembled project, where the
-plugins' own tests join them. They were 1163 and 1278 before the lazy-rebuild sweep, 1156 and
+**Baseline: 1190 run, 0 failures** standalone; **1321** in an assembled project, where the
+plugins' own tests join them. They were 1178 and 1293 before the tree learned to go stale,
+1163 and 1278 before the lazy-rebuild sweep, 1156 and
 1271 before the frequency cutoff was fixed,
 1136 and 1251 before the mutation-change page, 1116
 and 1231 before the cross-sample grid, 1109 and 1222 before the caller flags were dropped,
@@ -440,6 +441,60 @@ stay marked; the dashboard's own `ensure_fresh` pays it once on the next view. T
 one recount rather than ten.
 
 `run_rebuilds` takes `scope=` for this; `get_rebuilders` already did.
+
+#### Being told without being rebuilt
+
+`register_rebuilder(..., auto=False)` is derived data that is **tracked and marked stale but
+never rebuilt on its own**. Until it existed the two were welded together -- you could only be
+told your data had gone stale by promising to recompute it -- and `aledb-phylogeny` refused
+that bargain and so registered nothing at all. Its stored tree was never invalidated by
+anything, and `/phylogeny` drew a topology inferred from mutations that had since been deleted.
+
+`force=True` does not override it. `run_post_experiment_hooks` forces on every import, so an
+import would otherwise build every opted-out thing there is. Being named in `only=` is what
+runs one, which is `./aledb rebuild <id> --only aledb_phylogeny` and nothing else.
+
+The skip lives in `run_rebuilds`, **not** in `get_rebuilders`: `request_rebuild` and
+`./aledb rebuild --list` both go through the latter and must still see manual rebuilders --
+one to mark them, the other to show them, tagged `(manual -- --only runs it)` so a stale marker
+beside one does not read as a failure.
+
+**Opting out is a new way to be wrong.** A page that registers `auto=False` and then forgets to
+ask `is_stale` is worse off than one that never registered: it has a staleness record nobody
+reads.
+
+#### A rebuild declares what it reads
+
+`inputs=` takes `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(...,
+changed=...)` says which of them moved. Both default to *everything*, so every existing
+registration keeps being marked by every existing caller and no plugin had to change.
+
+It exists because `aledb_phylogeny.genotypes` reads `ObservedMutation` directly rather than
+through `filter_observed_mutations` -- a frequency cutoff genuinely cannot change its tree.
+Marked by one, the page would hide itself after every filter save and ask for a rebuild that
+would redraw the identical topology, which is exactly the false alarm that teaches people to
+ignore the real one. Only `aledb_filter`'s two views pass `changed=`; everything else means
+"all of it" and says nothing.
+
+An unknown input name raises at registration, for the reason `--only` refuses an unknown
+rebuild: a misspelled input silently narrows what gets marked, and the symptom is data that is
+quietly never refreshed again.
+
+**Declaring independence you do not have is the dangerous direction.** The vocabulary is two
+words on purpose; a third that nothing passes as `changed=` would be a word with no meaning
+behind it.
+
+#### Freshness belongs where the data is written
+
+`aledb_phylogeny.rebuild_phylogeny` clears its own staleness row, rather than the view doing
+it. A missing `DerivedDataState` row already counts as stale, so a tree built by any route
+other than the registry -- the page's Generate button, `load_example`, a rename resync -- read
+as stale the instant it was built, and the next page load hid a tree it had just made. That is
+how it was found: four of the example suite's branch tests started answering 409.
+
+The registered rebuild passes `mark_fresh=False`, because `run_rebuilds` does its own
+compare-and-set afterwards and would otherwise find the row already clean and log that the
+rebuild had been invalidated while it ran.
 
 #### Derived data cannot notice that the *rules* changed
 

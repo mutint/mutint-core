@@ -3,7 +3,7 @@ from django.template import loader
 from aledb_filter.forms.filter import FilterForm
 from aledb_filter.util import get_global_filter
 from aledb_common.util import get_user_context
-from aledb_common.rebuild_registry import request_rebuild
+from aledb_common.rebuild_registry import INPUT_FILTERS, request_rebuild
 from aledb_common.logger import user_extra
 from aledb_experiment import permissions
 import logging
@@ -28,7 +28,7 @@ def global_filter(request):
             # through this filter. Marked, never rebuilt here: recomputing the whole
             # installation inside the request that edited a form is exactly the case
             # marking exists for. Each page rebuilds its own on next view.
-            request_rebuild(reason='global filter changed')
+            request_rebuild(changed=INPUT_FILTERS, reason='global filter changed')
 
         initial_filter_form_data = {"ignored_genes": filter_form_model.ignored_genes}
 

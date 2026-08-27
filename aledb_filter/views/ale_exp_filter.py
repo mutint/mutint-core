@@ -7,7 +7,7 @@ from aledb_filter.models import AleExperimentFilter
 import aledb_filter.models
 from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN, DEFAULT_MUTATION_FREQ_MAX
 from aledb_common.util import get_user_context
-from aledb_common.rebuild_registry import request_rebuild
+from aledb_common.rebuild_registry import INPUT_FILTERS, request_rebuild
 from aledb_common.logger import user_extra
 from aledb_experiment import permissions
 import logging
@@ -36,7 +36,12 @@ def mutation_filter(request):
             _handle_POST(request, filter_form_model, experiment)
             # After the save, not before: this marks what the save just invalidated, and
             # marking first would let a rebuild racing between the two clear it again.
-            request_rebuild(experiment.ale_id, reason='experiment filter changed')
+            # `changed=`, so this marks what actually reads through the filter. A tree
+            # inferred from unfiltered mutations is not invalidated by a cutoff, and marking
+            # it would hide it behind a warning asking for a rebuild that would redraw the
+            # identical topology.
+            request_rebuild(experiment.ale_id, changed=INPUT_FILTERS,
+                            reason='experiment filter changed')
 
         filter_form = FilterForm(filter_form_model.__dict__)
 

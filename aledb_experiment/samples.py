@@ -510,5 +510,11 @@ def rebuild_after_structural_change(experiment):
     from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
 
     changed = ('aledb_fixation', 'aledb_converge', 'overview', 'sample_counts')
-    request_rebuild(experiment.ale_id, only=changed, reason='samples renumbered')
+    # Marked but not run: `aledb_phylogeny` stores a rendered "A1 F1500 I1 R1" per tip, so a
+    # renumber leaves its tree drawing labels that are now wrong -- but inferring a tree costs
+    # seconds and nobody asked for one by renaming a sample. It is registered `auto=False`, so
+    # naming it in `run_rebuilds` is what would build it; naming it only here marks it and
+    # lets its own page say the tree is out of date.
+    request_rebuild(experiment.ale_id, only=changed + ('aledb_phylogeny',),
+                    reason='samples renumbered')
     run_rebuilds(experiment.ale_id, only=changed)
