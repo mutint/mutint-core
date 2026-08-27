@@ -24,6 +24,7 @@ import json
 import logging
 from decimal import Decimal, InvalidOperation
 
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -42,13 +43,18 @@ from aledb_mutation_editor.models import (
     KIND_ADD, KIND_COPY, KIND_DELETE, MutationChangeSet,
 )
 from aledb_seq.breseq_report import build_rows, is_population
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import Mutation, ObservedMutation
 from aledb_seq.util import get_reseq_ordered_dict
 
 logger = logging.getLogger(__name__)
 
 REQUEST_RESEQ_ID = "reseq_id"
 REQUEST_SOURCE_RESEQ_ID = "source_reseq_id"
+
+#: `?reseq_id=all` -- the whole experiment at once rather than one sample. A sentinel in the
+#: same parameter, not a parameter of its own, so the sample picker stays one control with one
+#: link per entry and there is no state in which both are set and disagree.
+ALL_SAMPLES = "all"
 
 _REFUSED = "You do not have permission to edit this experiment's mutations."
 
@@ -100,6 +106,102 @@ def _rows_for(reseq):
                     .select_related("mutation"))
     observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
     return build_rows(observed)
+
+
+def _cell_for(observed):
+    """One observation as a grid cell.
+
+    `label` is the frequency where there is one, because that is what the read-only tables put
+    in the same place, and a tick where there is not -- an observation with no frequency is
+    still an assertion that the mutation is there.
+    """
+    if observed.present is False:
+        state, label = "absent", "\u2013"
+    elif observed.present:
+        state = "present"
+        label = ("%.2f" % float(observed.frequency)
+                 if observed.frequency is not None else "\u2713")
+    else:
+        state, label = "unknown", "?"
+    return {"id": observed.id, "label": label, "state": state}
+
+
+#: How many mutations the grid lays out at once. Not a display preference -- a real
+#: experiment here is 5,076 mutations across 51 samples, and rendering all of it produced a
+#: **32.8 MB** page (measured; the server built it in 1.6s, so the cost is entirely what the
+#: browser is then handed). The per-sample mode has no such ceiling because it is one column.
+GRID_ROW_LIMIT = 250
+
+
+def _grid_mutations(experiment, query):
+    """The mutations a grid should lay out, narrowed by the search box.
+
+    Narrowing happens here rather than in DataTables because the point is to not *render* the
+    rest: a client-side search still ships every row. Position is matched exactly when the
+    query is a number, since a substring match on a coordinate is never what anybody means.
+    """
+    mutations = Mutation.objects.filter(ale_experiment=experiment)
+    query = (query or "").strip()
+    if query:
+        terms = (Q(gene__icontains=query) | Q(reseq_reference__icontains=query)
+                 | Q(mutation_type__iexact=query) | Q(sequence_change__icontains=query))
+        if query.isdigit():
+            terms = terms | Q(position=int(query))
+        mutations = mutations.filter(terms)
+    return mutations.order_by("reseq_reference", "position", "pk")
+
+
+def _grid_for(experiment, reseq_dict, query=None):
+    """Every observation of the matching mutations, as mutations down and samples across.
+
+    Returns `(rows, by_mutation, by_sample, total, shown)`. The two maps are what the page's
+    row and column selectors read: `deferRender` means a cell on an undrawn page has no DOM,
+    so "select this whole sample" cannot be done by walking `<td>`s without silently missing
+    everything not currently on screen.
+
+    **The maps cover only the rendered rows**, deliberately. They could just as easily cover
+    the whole experiment, and then a column selector would put observations into the selection
+    that the person cannot see and did not know about -- on a page whose next button deletes
+    them.
+
+    Built here rather than through `mutation_table_builder`, for the reasons `_rows_for` gives
+    about `breseq_table/_mutation_table.html` and two more of its own. That builder renders a
+    cell as an `<a>` into the genome browser, which would fight a click that means "select";
+    and `get_table_body` filters through `filter_observed_mutations`, while this page must show
+    what is stored -- a mutation hidden by a gene or frequency filter has to stay deletable.
+    """
+    matching = _grid_mutations(experiment, query)
+    total = matching.count()
+    page = list(matching[:GRID_ROW_LIMIT])
+
+    column_of = {reseq_id: position for position, reseq_id in enumerate(reseq_dict)}
+    rows = {mutation.id: {"mutation": mutation, "cells": [None] * len(column_of)}
+            for mutation in page}
+
+    by_mutation = {}
+    by_sample = {}
+    observed = (history.observations_for(experiment)
+                .filter(mutation_id__in=list(rows))
+                .order_by("pk"))
+    for entry in observed:
+        position = column_of.get(entry.sequencing_experiment_id)
+        if position is None:
+            # A sample the picker is not showing -- `get_reseq_ordered_dict` applies the
+            # experiment's sample tag filters. Its observations are not selectable here
+            # because they are not on the page; they are untouched, not hidden.
+            continue
+        rows[entry.mutation_id]["cells"][position] = _cell_for(entry)
+        by_mutation.setdefault(entry.mutation_id, []).append(entry.id)
+        by_sample.setdefault(entry.sequencing_experiment_id, []).append(entry.id)
+
+    ordered = [rows[mutation.id] for mutation in page]
+    # The column headers double as selectors, so each carries how much it would select. A
+    # sample with nothing among the rendered rows renders as plain text instead of a link:
+    # measured in a browser, an experiment's mutations are often concentrated in a subset of
+    # its samples, and a control that looks live and silently does nothing reads as broken.
+    columns = [{"reseq": reseq, "count": len(by_sample.get(reseq_id, ()))}
+               for reseq_id, reseq in reseq_dict.items()]
+    return ordered, columns, by_mutation, by_sample, total, len(ordered)
 
 
 def _page_context(request, experiment):
@@ -194,16 +296,29 @@ def _error_response(error):
 
 @ensure_csrf_cookie
 def mutation_editor(request):
-    """One sample's mutations, selectable, with Delete selected."""
+    """Mutations, selectable, with Delete selected -- one sample or the whole experiment.
+
+    The two modes exist because the questions are different. One sample reads like breseq's
+    own report and is where somebody checks a single run; all samples is where the same bad
+    call is removed from the twelve samples that carry it, which was twelve page loads before
+    even though `mutation_delete` has always taken a list spanning any of them.
+
+    Per-sample stays the default. The grid is the more useful view of a large experiment and
+    also the more expensive one, and arriving at a page that has to lay out every mutation
+    against every sample is not what somebody following a link from a sample expects.
+    """
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
         reseq_dict = get_reseq_ordered_dict(experiment.ale_id)
-        reseq = _selected_reseq(request, reseq_dict)
+        all_samples = request.GET.get(REQUEST_RESEQ_ID) == ALL_SAMPLES
+        reseq = None if all_samples else _selected_reseq(request, reseq_dict)
 
         context = _page_context(request, experiment)
         context.update({
             "reseq_list": list(reseq_dict.values()),
+            "all_samples": all_samples,
+            "all_samples_value": ALL_SAMPLES,
             "selected_reseq": reseq,
             "selected_reseq_id": reseq.id if reseq is not None else None,
             "is_population": is_population(reseq),
@@ -212,6 +327,21 @@ def mutation_editor(request):
             "title": "Edit %s mutations" % experiment.name,
             "template_header": "Edit Mutations",
         })
+        if all_samples:
+            query = request.GET.get("q", "")
+            grid_rows, grid_columns, by_mutation, by_sample, total, shown = _grid_for(
+                experiment, reseq_dict, query)
+            context.update({
+                "grid_rows": grid_rows,
+                "grid_columns": grid_columns,
+                "by_mutation": by_mutation,
+                "by_sample": by_sample,
+                "grid_query": query,
+                "grid_total": total,
+                "grid_shown": shown,
+                "grid_truncated": total > shown,
+                "grid_limit": GRID_ROW_LIMIT,
+            })
         return render(request, "mutation_editor/edit.html", context)
     except _NotForYou as refusal:
         return refusal.response

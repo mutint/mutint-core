@@ -21,9 +21,17 @@
         <div class="btn-group" id="reseq_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {{ selected_reseq.ale_flask_isolate_str }} <span class="caret"></span>
+                {% if all_samples %}All samples{% else %}{{ selected_reseq.ale_flask_isolate_str }}{% endif %}
+                <span class="caret"></span>
             </button>
             <ul class="dropdown-menu aledb-menu">
+                {% comment %} The whole experiment is an entry in the sample picker rather
+                   than a separate control: it is the same question -- which samples am I
+                   editing -- and two controls could disagree about the answer. {% endcomment %}
+                <li {% if all_samples %}class="active"{% endif %}>
+                    <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ all_samples_value }}"><b>All samples</b></a>
+                </li>
+                <li role="separator" class="divider"></li>
                 {% for reseq in reseq_list %}
                     <li {% if reseq.id == selected_reseq_id %}class="active"{% endif %}>
                         <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
@@ -31,15 +39,22 @@
                 {% endfor %}
             </ul>
         </div>
-        <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ selected_reseq_id }}"
-           class="breseq-crosslink">view this sample &raquo;</a>
+        {% if all_samples %}
+            <a href="/compare/?ale_experiment_id={{ ale_experiment_id }}"
+               class="breseq-crosslink">compare this experiment &raquo;</a>
+        {% else %}
+            <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ selected_reseq_id }}"
+               class="breseq-crosslink">view this sample &raquo;</a>
+        {% endif %}
     </div>
 
-    {% if not selected_reseq %}
+    {% if not all_samples and not selected_reseq %}
         <p>This experiment has no resequencing samples to edit.</p>
     {% elif not can_edit %}
         <p>You have read access to this project, so this page is showing you what is stored
            without offering to change it. Editing mutations needs write access.</p>
+    {% elif all_samples %}
+        {% include "mutation_editor/_grid.html" %}
     {% else %}
         <div class="row">
             <p style="color: #666;">
@@ -106,6 +121,8 @@
             </table>
         </div>
 
+    {% endif %}
+
         {% if recent_changes %}
         <div class="row" style="margin-top: 20px;">
             <h4>Recent changes</h4>
@@ -123,7 +140,6 @@
             <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">Full history &raquo;</a>
         </div>
         {% endif %}
-    {% endif %}
 
     <script type="text/javascript">
     // $(document).ready, not a bare IIFE: base.html loads the DataTables Select and Buttons
@@ -134,10 +150,11 @@
     // reason.
     $(document).ready(function () {
         "use strict";
-        // The page renders without this button for a reader, and for an experiment with no
-        // samples. Bailing here rather than letting the selectors below return null is the
-        // same guard the sample editor uses, and there is a test asserting it renders.
-        if (!document.getElementById("me-apply")) { return; }
+        // Guarded on the table, not on the Delete button: the page renders without either
+        // for a reader and for an experiment with no samples, but the *grid* renders its own
+        // `me-apply` -- so guarding on the button would bind this handler a second time on
+        // top of the grid's, and every delete would go through whichever won.
+        if (!document.getElementById("me-table")) { return; }
 
         var table = $("#me-table").DataTable({
             paging: true,

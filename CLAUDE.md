@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1116 run, 0 failures** standalone; **1231** in an assembled project, where the
-plugins' own tests join them. They were 1109 and 1222 before the caller flags were dropped,
+**Baseline: 1136 run, 0 failures** standalone; **1251** in an assembled project, where the
+plugins' own tests join them. They were 1116 and 1231 before the cross-sample grid, 1109 and
+1222 before the caller flags were dropped,
 1081 and 1194 before the genomediff bump, 1028 and 1141
 before the experiment lock and the bulk sharing editor, 938 and 1051 before the add form, and
 852 and 965 before the mutation editor itself.
@@ -396,6 +397,54 @@ Select and Buttons extensions in the last `<script>` of `<body>`, after `{% bloc
 so an IIFE in the content block runs with only plain DataTables loaded and `select:` and
 `buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
 class from the stylesheet, so it reads as a styling fault rather than a load-order one.
+
+### The whole experiment at once: `?reseq_id=all`
+
+The Edit page has two modes in one sample picker -- a sample, or **All samples**, which lays
+the experiment out as a grid with mutations down and samples across and lets a selection span
+any number of both. It exists because `mutation_delete` has always taken a list of
+observations scoped to the experiment rather than to a sample, so removing the same bad call
+from twelve samples was already one changeset' worth of work and twelve page loads' worth of
+clicking. Per-sample stays the default: the grid is the more useful view of a large experiment
+and also much the more expensive one.
+
+**It renders at most `GRID_ROW_LIMIT` (250) mutations, and narrows server-side.** That is not
+a display preference. The largest experiment in the dev database is 5,076 mutations across 51
+samples, and laying all of it out produced a **32.8 MB** page -- built by the server in 1.6s,
+so the whole cost is what the browser is then handed. Capped it is 1.75 MB, and a real search
+(`q=thrA`) is 0.10 MB. The search box is a `GET` that re-renders rather than DataTables' own,
+because a client-side filter still ships every row; the box decides what gets built. A number
+matches `position` exactly, since a substring match on a coordinate is never what anybody
+means.
+
+**Selection lives in a `Set` of observation ids and never in the DOM.** DataTables detaches
+the rows of undrawn pages, so `.selected` on `<td>`s can only ever see the current page. The
+page carries two maps through `json_script` -- `by_mutation` and `by_sample` -- and the row
+and column selectors read those, so they reach rows that do not currently exist. Measured in
+headless Chrome: one click on a sample header selected **66 observations, of which only 32
+were in the DOM**, split 32/23/11 across three pages, and the count survived paging back and
+forth. Walking the table would have found 32 and silently reported success.
+
+**The maps cover only the rendered rows, deliberately.** They could just as easily cover the
+whole experiment -- and then a column selector would put observations into the selection that
+the person cannot see and does not know about, on a page whose next button deletes them.
+
+Two smaller things the browser found:
+
+- **A column header with nothing on the page is not a link.** An experiment's mutations
+  concentrate in a subset of its samples, so several headers select nothing; one that looks
+  live and silently does nothing reads as broken. Each header carries its own count and says
+  it in the tooltip.
+- **The per-sample script guards on `#me-table`, not on `#me-apply`.** Both modes render a
+  Delete button with that id, so the old guard bound the per-sample handler on top of the
+  grid's and every delete went through whichever won.
+
+The grid is a **second** mutations-by-samples table beside Compare's, and that is allowed: this
+one is unfiltered, selectable, capped and shows uncalled observations, and Compare is none of
+those. `mutation_table_builder` could not have been reused anyway -- its cells are `<a>`
+elements into the genome browser, which would fight a click meaning "select", and
+`get_table_body` filters through `filter_observed_mutations` while this page must show what is
+stored.
 
 ### breseq's own field guards, and where we are stricter
 
