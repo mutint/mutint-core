@@ -62,5 +62,7 @@ env/
 .claude/settings.local.json
 .claude/.DS_Store
 
-# `./aledb docs` output. The sources are docs/; this is the build.
+# `./aledb docs`. The sources are docs/ and mkdocs.yml; these two are generated --
+# .docs-build/ is the merged tree of symlinks plus a generated config, site/ the output.
+/.docs-build/
 /site/

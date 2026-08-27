@@ -57,6 +57,45 @@ answer in your tests. The reason this exists at all: a plugin's page renders an 
 when there is nothing to show *and* when the feature is broken, and there was no data anywhere
 in the suite that could tell the two apart.
 
+## Shipping documentation
+
+A plugin contributes pages to its deployment's manual by having two files. There is no
+registry call:
+
+```
+aledb-yourthing/
+├── mkdocs.yml
+└── docs/
+    └── using/yourthing.md
+```
+
+`mkdocs.yml` needs only a name and a nav, and the **top-level nav heading is how a page says
+who it is for**:
+
+```yaml
+site_name: aledb-yourthing
+
+nav:
+  - Using ALEdb:
+      - Your Thing: using/yourthing.md
+  - Extending ALEdb:
+      - How it computes: extending/internals.md
+```
+
+`Using ALEdb` and `Extending ALEdb` are merged across every installed component, so your page
+sits beside core's rather than in a section of your own. Anything under a heading the manual
+does not recognise lands under *About this deployment* named for your plugin — visible, rather
+than dropped.
+
+`./mutint docs` collects it. Nothing needs adding to the project.
+
+!!! warning "Do not link to another component's pages"
+
+    Your page is at `aledb-yourthing/using/yourthing/` in a deployment's manual and at
+    `using/yourthing/` if your plugin is ever built alone, so a link across components is
+    broken in one of the two. Name the other component instead of linking to it. Building with
+    `--strict` turns such a link into an error rather than a warning.
+
 ## Adding your plugin to an assembled project
 
 ```bash

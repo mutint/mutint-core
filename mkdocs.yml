@@ -3,8 +3,8 @@
 # Not hosted anywhere. When it should be versioned, `mike` is the tool -- see
 # docs/contributing/docs.md for the one addition that needs.
 
-site_name: ALEdb plugin API
-site_description: Writing a plugin against aledb-core
+site_name: ALEdb
+site_description: Using and extending ALEdb
 # No site_url: nothing is hosted yet, and a wrong one makes the canonical links wrong.
 repo_url: https://github.com/barricklab/aledb-core
 edit_uri: ""
@@ -63,25 +63,39 @@ markdown_extensions:
 
 # Listed rather than inferred. An inferred nav quietly absorbs a page nobody linked and hides
 # one that was deleted; this way both are a visible edit.
+#
+# The two top-level headings are not decoration. An assembled project merges every installed
+# component's nav into one manual, and these headings are how a page says who it is for --
+# `Using ALEdb` and `Extending ALEdb` from `aledb_common.docs_manual`. Anything filed under a
+# heading that module does not recognise lands under "About this deployment" instead, named
+# for this component, which is visible rather than silent.
 nav:
-  - Overview: index.md
-  - Writing a plugin:
-      - Quickstart: plugin/quickstart.md
-      - Repository structure: plugin/structure.md
-      - The registries: plugin/registries.md
-      - URLs, views and permissions: plugin/views-and-urls.md
-      - Fitting into core's pages: plugin/integrating.md
-      - Templates and static files: plugin/templates.md
-      - Models and derived data: plugin/derived-data.md
-      - Testing: plugin/testing.md
-      - Packaging and installing: plugin/packaging.md
-  - Reference:
-      - plugin_registry: reference/plugin_registry.md
-      - rebuild_registry: reference/rebuild_registry.md
-      - nav_registry: reference/nav_registry.md
-      - import_registry: reference/import_registry.md
-      - about_registry: reference/about_registry.md
-      - example_registry: reference/example_registry.md
-      - context_registry: reference/context_registry.md
-  - Assembling a project: assembling/index.md
-  - Contributing to these docs: contributing/docs.md
+  - Using ALEdb:
+      - What ALEdb is: index.md
+      - Quick start: using/quickstart.md
+      - Loading data: using/loading-data.md
+      - Reference genomes: using/reference-genomes.md
+      - Configuration: using/configuration.md
+      - Management commands: using/commands.md
+  - Extending ALEdb:
+      - Writing a plugin:
+          - Overview: extending/index.md
+          - Quickstart: plugin/quickstart.md
+          - Repository structure: plugin/structure.md
+          - The registries: plugin/registries.md
+          - URLs, views and permissions: plugin/views-and-urls.md
+          - Fitting into core's pages: plugin/integrating.md
+          - Templates and static files: plugin/templates.md
+          - Models and derived data: plugin/derived-data.md
+          - Testing: plugin/testing.md
+          - Packaging and installing: plugin/packaging.md
+      - Reference:
+          - plugin_registry: reference/plugin_registry.md
+          - rebuild_registry: reference/rebuild_registry.md
+          - nav_registry: reference/nav_registry.md
+          - import_registry: reference/import_registry.md
+          - about_registry: reference/about_registry.md
+          - example_registry: reference/example_registry.md
+          - context_registry: reference/context_registry.md
+      - Assembling a project: assembling/index.md
+      - Contributing to these docs: contributing/docs.md

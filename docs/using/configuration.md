@@ -1,0 +1,70 @@
+# Configuration
+
+## Settings
+
+| module | for |
+|---|---|
+| `config/defaults.py` | the base; delegates to `aledb_common.base_settings` |
+| `config/settings_local.py` | local development — SQLite, `DEBUG=True`, no external services |
+| `config/settings_private.py` | production, with authentication enforced |
+| `config/settings_public.py` | a public read-only deployment |
+
+Select one with `DJANGO_SETTINGS_MODULE`. `./aledb start` writes `settings_local.py` on first
+run.
+
+## Storage
+
+`ALEDB_STORE_DIR` is where references and alignments live, keyed by database id. It is the one
+setting a real deployment must think about — it holds the BAMs.
+
+!!! danger "Point it away from anything you care about before running tests"
+
+    Store paths are derived from primary keys and a test database numbers its experiments from
+    1. A test that exercises the importer and forgets to override the store writes its
+    fixtures into `experiments/1/` of whatever deployment it was run against.
+
+    The test runner redirects `ALEDB_STORE_DIR` to a temporary directory as a backstop, which
+    exists because this happened: a run replaced a real REL606 reference with a 6 kb synthetic
+    one, and the genome browser then drew empty tracks for 29 samples whose BAMs were
+    perfectly intact.
+
+## Authentication
+
+Pluggable by changing `INSTALLED_APPS`. Any app with `auth_app = True` on its `AppConfig` and
+`app_name = 'accounts'` in its `urls.py` is discovered automatically.
+
+- `aledb_accounts_noauth` — the default. Django's built-in login, nothing enforced.
+- `aledb_accounts` — production, with `django-defender` brute-force protection.
+
+## Access
+
+Four ordered roles, granted on a **project** and nowhere else:
+
+```
+read  <  write  <  admin  <  owner
+```
+
+`read` sees the project and its data. `write` adds, edits and curates. `admin` additionally
+manages access and may delete the project. `owner` additionally grants ownership. Groups can
+hold any role except owner — ownership has to be answerable about a person.
+
+Three things confer a role with no grant row: a superuser is owner everywhere, a project's
+primary owner is owner of it, and a public project gives everyone `read`. **There is no
+blanket grant for staff.**
+
+## Locking an experiment
+
+An admin can lock an experiment, and a lock outranks every role: while it is set the experiment
+refuses every web write from everyone, superusers included. It answers "is this dataset still
+open", which is a different question from "who are you". Rebuilds are deliberately exempt, so
+derived data still keeps up, and management commands still write — the lock guards the web.
+
+## Branding
+
+aledb-core is unbranded: `/` is the project list, the sidebar carries no name, no institution
+is credited. A deployment adds its own through `ALEDB_BRANDING` and by supplying templates at
+known paths, because an assembled project's `templates/` directory is searched ahead of every
+app's.
+
+The `Powered by ALEdb` line at the foot of the sidebar is not branding and has no setting. It
+is aledb-core's attribution and renders on every deployment.

@@ -1,54 +1,37 @@
-# Writing a plugin for ALEdb
+# ALEdb
 
-`aledb-core` is a Django project that can run on its own or be embedded in an **assembled
-project** alongside other apps. A **plugin** is one of those other apps: its own git
-repository, holding one Django app, that adds something to ALEdb without aledb-core knowing it
-exists.
+ALEdb stores and analyses **adaptive laboratory evolution** experiments: the sequencing output
+of evolved populations and clones, the mutations called from it, and the analyses that make
+sense of them across a lineage.
 
-That last part is literal. **aledb-core contains no reference to any plugin** — no import, no
-setting, no template include, no URL. A plugin announces itself at startup by calling
-registration functions, and core renders whatever has been registered. Adding one to a
-deployment is adding a git submodule; there is no core file to edit.
+It is a Django application that runs on its own or as part of an **assembled project** —
+aledb-core plus whichever plugins a deployment wants. If you are reading this inside a
+deployment's manual, everything under *Using ALEdb* is the platform, and the sections beside
+it are what that deployment adds.
 
-Four plugins exist today, and they are the worked examples this guide keeps pointing at:
+## What is in here
 
-| plugin | what it adds |
+- **Using ALEdb** — getting an instance running, loading experiments, establishing a reference
+  genome, and the commands that maintain it.
+- **Extending ALEdb** — writing a plugin. aledb-core knows nothing about any plugin; a plugin
+  registers itself at startup, and installing one is adding a git submodule.
+
+## The shape of the data
+
+Four levels, and every page here assumes them:
+
+| | |
 |---|---|
-| `aledb-compare` | the cross-sample mutation table at `/compare/` |
-| `aledb-fixation` | mutations that have fixed in a lineage, at `/fixation` |
-| `aledb-converge` | genes hit independently in more than one lineage, at `/converge` |
-| `aledb-phylogeny` | a maximum-parsimony tree over an experiment's samples |
+| **Project** | who owns the work. Access is granted here and nowhere else. |
+| **Experiment** | one ALE study, with one reference genome. |
+| **ALE / flask / isolate / replicate** | where a sample sits in the evolution — the `A-F-I-R` coordinate. |
+| **Sample** | one sequencing run, carrying the mutations called from it. |
 
-## What a plugin can add
+A mutation belongs to an experiment; a sample *observes* it. That distinction runs through
+everything: deleting a mutation from one sample removes the observation and leaves the mutation
+for the samples that still carry it.
 
-Everything below is a registration, made from your `AppConfig.ready()`. Each is covered in
-[The registries](plugin/registries.md), with the full signatures under **Reference**.
+## Getting started
 
-- **Pages** — URL patterns, mounted under a prefix of your choosing.
-- **A sidebar entry**, in the main section or the per-experiment one.
-- **Derived data** — a table computed from the mutations, which core marks stale for you when
-  they change.
-- **A CSV export type**, appearing in the export menus.
-- **An import type**, appearing on the Add Data page and in its auto-detection.
-- **A section on `/about`**, describing your component and reporting its version.
-- **An example dataset**, loadable with `./aledb load_example`.
-- **Context for the experiment views**, without core depending on you.
-
-## What a plugin cannot do
-
-- **It cannot change core's behaviour by being installed.** Registration is additive. If your
-  plugin needs core to behave differently, that is a change to core, not a plugin.
-- **It cannot assume another plugin is installed.** A deployment picks its own set. Where you
-  must name one — asking for its rebuild, say — the API is built to skip a name nothing
-  registered rather than raise.
-- **It cannot bypass permissions.** Reading and writing an experiment's data is gated the same
-  way for a plugin as for core, and a plugin that writes has an obligation core cannot enforce
-  for it. See [URLs, views and permissions](plugin/views-and-urls.md).
-
-## Where to start
-
-[The quickstart](plugin/quickstart.md) builds a plugin end to end — repository, app,
-registration, installed into an assembled project, tests running. It is worth doing once even
-if you then throw it away, because the two things that most often go wrong are both
-environmental: a plugin's tests can only run in an assembled project, and an assembled project
-reaches your code through a path that has a hyphen in it.
+[Quick start](using/quickstart.md) gets an instance running with no external services.
+[Loading data](using/loading-data.md) is what to do next.

@@ -14,18 +14,28 @@ production ALEdb has no use for a static site generator.
 
 `site/` is git-ignored. The sources are `docs/` and `mkdocs.yml`.
 
-!!! note "`./mutint docs` refuses, on purpose"
+## The same command builds a deployment's manual
 
-    Every command in this repo is inherited by an assembled project — both entry scripts end
-    at `aledb_common.cli.manage()` — so `./mutint docs` reaches this command. Its base
-    directory comes from `__file__`, which there is the **submodule**, so it would build
-    `mutint/aledb-core/site/` out of a detached-HEAD checkout: a second copy of a site whose
-    sources are somewhere else, stale the moment the pointer moves.
+Every command here is inherited by an assembled project — both entry scripts end at
+`aledb_common.cli.manage()` — so `./mutint docs` reaches this one. It does **not** build
+aledb-core's docs from inside the submodule. It builds MutInt's manual: MutInt's own pages,
+plus every installed component's, merged by audience.
 
-    It refuses and says where to run it instead. `ALEDB_TOOLS_DIR` is what tells the two
-    apart — the entry script exports it before re-execing and is the one place that knows the
-    project root, which settings cannot, because an assembled project reaches
-    `get_base_settings()` through aledb-core's `config/defaults.py`.
+`aledb_common/docs_manual.py` does the collecting. In outline:
+
+- the project is found from `ALEDB_TOOLS_DIR`, exported by the entry script and the only thing
+  that knows — settings cannot, because an assembled project reaches `get_base_settings()`
+  through aledb-core's `config/defaults.py`;
+- components come from `about_registry.first_party_app_configs()`, so an uninstalled submodule
+  contributes nothing, and **the project is excluded from its own component list** or
+  aledb-core standalone would collect itself and render everything twice;
+- each component's `docs/` is **symlinked** into `.docs-build/docs/<component>/` — mkdocs walks
+  with `followlinks=True`, so a build can never serve a stale copy of somebody else's pages;
+- a generated `mkdocs.yml` merges the navs and points `mkdocstrings.paths` at every component,
+  without which a plugin's `:::` reference will not resolve.
+
+There is one code path. Standalone, aledb-core finds no other components and the merge is a
+merge of one.
 
 ## Where a fact should live
 

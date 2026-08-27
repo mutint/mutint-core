@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1201 run, 0 failures** standalone; **1332** in an assembled project, where the
-plugins' own tests join them. They were 1197 and 1328 before `./aledb docs` learned to refuse,
+**Baseline: 1213 run, 0 failures** standalone; **1344** in an assembled project, where the
+plugins' own tests join them. They were 1201 and 1332 before the collected manual, 1197 and
+1328 before `./aledb docs` learned to refuse,
 1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
 1163 and 1278 before the lazy-rebuild sweep, 1156 and
@@ -327,13 +328,39 @@ and when a public `register_*` is named nowhere in `docs/`. That last one caught
 undocumented hooks the first time it ran. **Neither guard catches prose going out of date**,
 which is said out loud in `docs/contributing/docs.md`.
 
-**`./aledb docs` refuses to run from an assembled project.** Both entry scripts end at
-`aledb_common.cli.manage()`, so every command here is inherited -- `./mutint docs` reaches it,
-and its `BASE_DIR` comes from `__file__`, which there is the submodule. It would build
-`mutint/aledb-core/site/` from a detached-HEAD checkout. `ALEDB_TOOLS_DIR` is the signal that
-distinguishes them, because the entry script exports it and is the one place that knows the
-project root. The refusal only calls it a submodule when this checkout is genuinely inside the
-project; shadowed on PYTHONPATH it is not, and there is a test for that distinction.
+**The same command builds a deployment's whole manual.** Both entry scripts end at
+`aledb_common.cli.manage()`, so `./mutint docs` reaches this command -- and rather than
+building aledb-core's docs from inside the submodule, it builds MutInt's manual: MutInt's own
+pages plus every installed component's. `aledb_common/docs_manual.py` collects them.
+
+There is no eighth registry. A component contributes by having `docs/` and `mkdocs.yml`;
+discovery is `about_registry.first_party_app_configs()` → `component_dir()`, so an uninstalled
+submodule contributes nothing and the manual is an inventory of what is installed, the way the
+About page is.
+
+Four things in that module are load-bearing:
+
+- **The project is excluded from its own component list.** Standalone, aledb-core *is* the
+  project and its apps are installed; without the exclusion every page renders twice, once at
+  the top level and once nested under a component heading.
+- **`ALEDB_TOOLS_DIR` says which project is being built**, because the entry script exports it
+  and is the one place that knows -- settings cannot, for the reason `templates/` and
+  `staticfiles/` have to be re-pointed.
+- **Component docs are symlinked**, not copied: mkdocs walks `docs_dir` with
+  `followlinks=True`, so a build reads through to each repository and can never serve a stale
+  copy.
+- **`mkdocstrings.paths` must name every component**, or a plugin's `:::` reference does not
+  resolve once its pages are built from somewhere else.
+
+**The manual is organised by audience, not by component.** `Using ALEdb` and `Extending ALEdb`
+are top-level nav headings a component uses in its *own* `mkdocs.yml` to say who each page is
+for, and the collector merges each heading across components. Anything under an unrecognised
+heading lands under `About this deployment` named for its component -- visible rather than
+dropped, so a component that has not thought about audience still builds.
+
+**Cross-component links are not supported and `--strict` catches them.** A page is at
+`aledb-core/plugin/testing/` in a manual and `plugin/testing/` when built alone, so such a link
+is broken in one of the two. One was written and caught this way.
 
 Versioning is deliberately not configured. `mike` is the intended path and needs one block in
 `mkdocs.yml`; adding it now would render a version picker with nothing in it.

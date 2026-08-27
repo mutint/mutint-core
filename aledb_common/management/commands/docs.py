@@ -1,8 +1,16 @@
-"""Build the plugin API documentation, or serve it with live reload.
+"""Build this project's manual, or serve it with live reload.
 
     ./aledb docs             build to site/
     ./aledb docs --serve     serve at http://127.0.0.1:8001 and rebuild as you type
     ./aledb docs --strict    fail on a broken link or an unresolvable reference
+
+Run from aledb-core it builds aledb-core's documentation. Run from an assembled project --
+every command here is inherited, because both entry scripts end at `aledb_common.cli.manage()`
+-- it builds *that project's* manual: the project's own pages plus every installed component's,
+merged by audience. `aledb_common.docs_manual` does the collecting and explains the rules.
+
+There is one code path. Standalone, the project has no other components and the merge is a
+merge of one.
 
 The toolchain is deliberately absent from `requirements.txt` -- the entry script installs that
 into every deployment, and a production ALEdb has no use for a static site generator. So this
@@ -16,15 +24,18 @@ import sys
 
 from django.core.management import BaseCommand, CommandError
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
+from aledb_common import docs_manual
+
+#: aledb-core's own directory. Only used as a fallback: when no entry script exported
+#: `ALEDB_TOOLS_DIR` there is nothing else that knows what the project is.
+CORE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
-REQUIREMENTS = os.path.join(BASE_DIR, "requirements-docs.txt")
-CONFIG = os.path.join(BASE_DIR, "mkdocs.yml")
+REQUIREMENTS = os.path.join(CORE_DIR, "requirements-docs.txt")
 
 
 class Command(BaseCommand):
 
-    help = "Build the plugin API documentation (docs/ -> site/)."
+    help = "Build this project's documentation (docs/ -> site/)."
 
     def add_arguments(self, parser):
         parser.add_argument("--serve", action="store_true",
@@ -36,15 +47,26 @@ class Command(BaseCommand):
                             help="treat a broken link or unresolved reference as an error")
 
     def handle(self, *args, **options):
-        if not os.path.isfile(CONFIG):
-            raise CommandError("no mkdocs.yml beside %s" % BASE_DIR)
+        root = docs_manual.project_root() or CORE_DIR
+        if not os.path.isdir(os.path.join(root, "docs")):
+            raise CommandError(
+                "%s has no docs/ directory, so there is nothing of its own to build.\n"
+                "A project's manual starts with its own pages; its components' are merged "
+                "into them." % root)
+        if not os.path.isfile(os.path.join(root, "mkdocs.yml")):
+            raise CommandError("%s has a docs/ directory but no mkdocs.yml beside it." % root)
 
-        self._refuse_if_embedded()
         self._ensure_toolchain()
+
+        components = docs_manual.contributing_components(root)
+        config_path = docs_manual.assemble(root, components)
+        if components:
+            self.stdout.write("Collected %d component(s): %s"
+                              % (len(components), ", ".join(n for n, _ in components)))
 
         command = [sys.executable, "-m", "mkdocs",
                    "serve" if options["serve"] else "build",
-                   "--config-file", CONFIG]
+                   "--config-file", config_path]
         if options["strict"]:
             command.append("--strict")
         if options["serve"]:
@@ -55,72 +77,20 @@ class Command(BaseCommand):
         try:
             # `call`, not `check_call`: mkdocs prints its own diagnostics, and a traceback
             # from CalledProcessError on top of them says nothing extra.
-            code = subprocess.call(command, cwd=BASE_DIR)
+            code = subprocess.call(command, cwd=os.path.dirname(config_path))
         except KeyboardInterrupt:
             return
         if code != 0:
             raise CommandError("mkdocs exited %d" % code)
         if not options["serve"]:
             self.stdout.write(self.style.SUCCESS(
-                "Built %s" % os.path.join(BASE_DIR, "site", "index.html")))
-
-    def _refuse_if_embedded(self):
-        """Refuse to build when aledb-core is a submodule of the project being run.
-
-        Every command in this repo is inherited by an assembled project -- both entry scripts
-        end at `aledb_common.cli.manage()` -- so `./mutint docs` reaches here. `BASE_DIR` is
-        derived from this file, so there it resolves to the *submodule*, and the build would
-        write `mutint/aledb-core/site/` from a detached-HEAD checkout: a second copy of a site
-        whose sources live somewhere else, going stale the moment the pointer moves.
-
-        `ALEDB_TOOLS_DIR` is what distinguishes the two. The entry script exports it before it
-        re-execs and is the one place that knows the project root -- settings cannot, because
-        an assembled project reaches `get_base_settings()` through aledb-core's
-        `config/defaults.py`. Unset means nothing was exported, which means this was not run
-        through an entry script at all; then there is nothing to compare against and refusing
-        would be a guess.
-        """
-        tools_dir = os.environ.get("ALEDB_TOOLS_DIR")
-        if not tools_dir:
-            return
-
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(tools_dir)))
-        if os.path.normpath(project_root) == os.path.normpath(BASE_DIR):
-            return
-
-        # Only call it a submodule if it is actually inside the project. Usually it is; it is
-        # not when someone has shadowed the submodule with another checkout on PYTHONPATH,
-        # and asserting a detached HEAD about a path that has not been looked at is the kind
-        # of confident-and-wrong message that costs an afternoon.
-        embedded = os.path.normpath(BASE_DIR).startswith(
-            os.path.normpath(project_root) + os.sep)
-        if embedded:
-            what = ("here aledb-core is a submodule of %s rather than the project itself.\n\n"
-                    "Building would write into\n    %s/site\n"
-                    "which is a detached-HEAD checkout, so the output would be a second copy "
-                    "of a site whose sources live in your own aledb-core clone -- going stale "
-                    "the moment the submodule pointer moved."
-                    % (project_root, BASE_DIR))
-        else:
-            what = ("the project being run is %s, and this command came from a different "
-                    "checkout:\n    %s\n\n"
-                    "Building would write that checkout's site from this project's "
-                    "environment, which is not a combination anybody means to ask for."
-                    % (project_root, BASE_DIR))
-
-        raise CommandError(
-            "This builds aledb-core's documentation, and %s\n\n"
-            "Run it from the aledb-core repository instead:\n"
-            "    cd /path/to/aledb-core && ./aledb docs\n\n"
-            "The documentation is the same either way -- it describes aledb-core's plugin "
-            "API, which is what %s installs."
-            % (what, os.path.basename(project_root)))
-
+                "Built %s" % os.path.join(root, "site", "index.html")))
 
     def _ensure_toolchain(self):
         try:
             import mkdocs  # noqa: F401
             import mkdocstrings  # noqa: F401
+            import yaml  # noqa: F401
         except ImportError:
             pass
         else:
