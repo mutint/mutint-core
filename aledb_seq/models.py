@@ -199,9 +199,13 @@ class ObservedMutation(models.Model):
     sequencing_experiment = models.ForeignKey(ResequencingExperiment, on_delete=models.CASCADE, null=True)
     # make sure not delete mutation if there is associated observed mutations
     mutation = models.ForeignKey(Mutation, on_delete=models.DO_NOTHING)
+    # Whether the mutation is in this sample. True is an assertion that it is there,
+    # False that it was looked for and found absent, null that nothing was recorded. It used
+    # to sit beside `breseq_present` and `gatk_present`, one flag per caller, and every read
+    # path asked those rather than this -- so a mutation a *person* added, which no caller
+    # found, was absent from every cross-sample table. `source` says who asserted it; this
+    # says whether it is there.
     present = models.BooleanField(null=True)
-    breseq_present = models.BooleanField(null=True)
-    gatk_present = models.BooleanField(null=True)
     wt_reads = models.IntegerField(null=True)
     mutated_reads = models.IntegerField(null=True)
     other_reads = models.IntegerField(null=True)

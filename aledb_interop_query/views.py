@@ -415,8 +415,17 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         ale_experiment_ids.add(ale_experiment_id)
         if observed_mutation.sequencing_experiment_id in reseq_dict.keys():
             sample_name = reseq_dict[observed_mutation.sequencing_experiment_id].exp_ale_flask_isolate_str
-            if observed_mutation.breseq_present or observed_mutation.gatk_present:
-                sample_type = "%2f/%2f" % (float(observed_mutation.frequency), float(observed_mutation.frequency_gatk))
+            # Initialised here, and not only inside the branch below: it used to be assigned
+            # nowhere else, so a row that failed the test either raised NameError or silently
+            # reported the *previous* row's frequency.
+            sample_type = ""
+            if observed_mutation.present:
+                # `frequency_gatk` is written by no import path, so formatting it
+                # unconditionally raised TypeError on None. Show whichever exist, the same
+                # rule the mutation table's cells use.
+                frequencies = [f for f in (observed_mutation.frequency,
+                                           observed_mutation.frequency_gatk) if f is not None]
+                sample_type = "/".join("%2f" % float(f) for f in frequencies)
             observed_mutation.experiment = {
                 'ale_experiment_id': observed_mutation.sequencing_experiment.ale_experiment.ale_id,
                 'sequencing_experiment_id': observed_mutation.sequencing_experiment.id,

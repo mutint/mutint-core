@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 #: so a removal can be undone exactly: a restore that guessed at `frequency` or dropped the
 #: read counts would put back a row that renders differently from the one that was deleted.
 OBSERVATION_FIELDS = (
-    "present", "breseq_present", "gatk_present",
+    "present",
     "wt_reads", "mutated_reads", "other_reads",
     "reference_genome_likelihood", "frequency", "frequency_gatk", "source",
 )

@@ -89,7 +89,6 @@ class SnapshotTestCase(EditorTestCase):
 
         self.assertEqual(set(history.OBSERVATION_FIELDS), set(snapshot))
         self.assertEqual(True, snapshot["present"])
-        self.assertEqual(True, snapshot["breseq_present"])
         self.assertEqual("breseq", snapshot["source"])
         self.assertEqual(10, snapshot["wt_reads"])
         self.assertEqual(30, snapshot["mutated_reads"])

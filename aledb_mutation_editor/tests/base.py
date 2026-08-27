@@ -77,7 +77,6 @@ class EditorTestCase(TestCase):
             sequencing_experiment=sample,
             mutation=mutation,
             present=present,
-            breseq_present=True,
             source="breseq",
             wt_reads=10,
             mutated_reads=30,

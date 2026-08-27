@@ -199,19 +199,42 @@ class BrowseMutationTestCase(TestCase):
         self.assertTrue(next(s for s in samples if s["id"] == self.reseq.id)["is_current"])
 
     def test_a_sample_is_marked_mutant_only_when_the_mutation_is_called_in_it(self):
-        """The `*` follows the mutation table's own rule -- `breseq_present or gatk_present`,
-        not the mere existence of an ObservedMutation row. A row recording that the mutation
-        was looked for and found absent must not earn a star."""
+        """The `*` follows the mutation table's own rule -- `present`, not the mere
+        existence of an ObservedMutation row. A row recording that the mutation was looked
+        for and found absent must not earn a star."""
         other = self._second_sample()
         mutation = self.observed.mutation
         ObservedMutation.objects.filter(sequencing_experiment=other,
                                         mutation=mutation).delete()
         ObservedMutation.objects.create(sequencing_experiment=other, mutation=mutation,
-                                        present=False, breseq_present=False,
-                                        gatk_present=False)
+                                        present=False)
 
         marked = {s["id"]: s["has_mutation"]
                   for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
 
         self.assertTrue(marked[self.reseq.id])
         self.assertFalse(marked[other.id])
+
+    def test_a_sample_that_carries_the_mutation_by_hand_is_marked_too(self):
+        """The `*` says the mutation is in that sample, not that a caller found it.
+
+        `aledb_mutation_editor` writes `present=True` with `source="manual"` and no caller
+        flags -- which is the exact shape the old `breseq_present or gatk_present` rule
+        answered no to, so a mutation somebody added went unstarred in a menu whose whole job
+        is saying which pileups to look at.
+        """
+        from decimal import Decimal
+
+        from aledb_mutation_editor.record_builder import build_observation
+
+        other = self._second_sample()
+        mutation = self.observed.mutation
+        ObservedMutation.objects.filter(sequencing_experiment=other,
+                                        mutation=mutation).delete()
+        ObservedMutation.objects.create(sequencing_experiment=other, mutation=mutation,
+                                        **build_observation(Decimal("1.0")))
+
+        marked = {s["id"]: s["has_mutation"]
+                  for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
+
+        self.assertTrue(marked[other.id])

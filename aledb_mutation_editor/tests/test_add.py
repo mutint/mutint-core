@@ -80,8 +80,9 @@ class AddTestCase(EditorTestCase):
         self.snp()
         observed = ObservedMutation.objects.get(mutation__position=5000)
         self.assertEqual("manual", observed.source)
-        self.assertTrue(observed.present)
-        self.assertIsNone(observed.breseq_present, "breseq did not call this")
+        self.assertTrue(observed.present,
+                        "a typed mutation is in the sample, and every cross-sample table "
+                        "decides that by asking `present`")
 
     def test_the_frequency_is_applied_to_every_sample(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T", frequency="0.25",

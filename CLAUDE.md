@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1109 run, 0 failures** standalone; **1222** in an assembled project, where the
-plugins' own tests join them. They were 1081 and 1194 before the genomediff bump, 1028 and 1141
+**Baseline: 1116 run, 0 failures** standalone; **1231** in an assembled project, where the
+plugins' own tests join them. They were 1109 and 1222 before the caller flags were dropped,
+1081 and 1194 before the genomediff bump, 1028 and 1141
 before the experiment lock and the bulk sharing editor, 938 and 1051 before the add form, and
 852 and 965 before the mutation editor itself.
 
@@ -288,6 +289,41 @@ back to the flat columns, with the page pointing at `./aledb reannotate`. That f
 the usual reason the page looks plain: nothing is wrong with the rendering, the rows simply
 have no annotation yet. `Mutation.gd_data` is kept for every mutation, so `reannotate`
 recomputes them in place against the stored reference -- re-importing is not needed.
+
+### `present` says whether it is there; `source` says who said so
+
+`ObservedMutation` used to carry `breseq_present` and `gatk_present` beside `present` -- one
+flag per variant caller -- and **every read path asked the caller flags rather than `present`**:
+`_get_table_mutation_entry` for a filled cell, `browse._samples_calling` for the genome
+browser's `*`, and `aledb_interop_query`. That was harmless while breseq was the only thing
+that ever wrote a mutation, and stopped being harmless the moment `aledb_mutation_editor` let a
+person add one. A hand-added observation is `present=True` with no caller flag, so it answered
+no to all three: it was stored, it showed on the editor's own per-sample page, and it was
+**absent from Compare, fixation, converge and search** -- which reads as the add having
+silently failed rather than as a rendering rule being wrong.
+
+Both columns are gone. The two questions they conflated are now asked of separate columns:
+
+- **`present`** -- is this mutation in this sample. True is an assertion that it is, False
+  that it was looked for and found absent (which renders the read-count cell), null that
+  nothing was recorded.
+- **`source`** -- who asserted it: `"breseq"` from the importer, `"manual"` from the editor.
+  Null means imported before that column existed, which is its own thing and must not be
+  read as "unknown caller".
+
+`aledb_seq.0010` backfills `present=True` wherever a caller flag was set and `present` was
+null, then drops the columns -- in that order, because a row whose presence was recorded only
+in a flag would otherwise become a row about which nothing was ever recorded, and those render
+nowhere. `aledb_seq/tests/test_caller_flag_migration.py` stands the database up at `0009`
+through the real migration executor to check it, which is the only way to test a data migration
+whose columns the live model no longer has.
+
+**Old change-log snapshots needed no migration.** `history._observation_kwargs` builds its
+kwargs by walking `OBSERVATION_FIELDS` and calling `snapshot.get(field)`, so the two keys left
+behind in stored `MutationChange.observation` blobs are simply never read again.
+`aledb_mutation_editor.migrations.0002` writes those blobs and had its own copy of the field
+list; it now skips a column the model does not have, because which side of the drop it runs on
+depends on where it falls in a given database's graph.
 
 ### Editing a sample's mutations, and the history that makes it safe
 
@@ -1056,10 +1092,11 @@ so a round trip through coverage-only ratchets a track down and leaves it there 
 300px becoming 100px. Remember the height the track had while its reads were showing and hand
 igv that total instead; it divides the space itself.
 
-A `*` marks the samples the mutation is **called** in, using the mutation table's own rule
-(`breseq_present or gatk_present`) rather than a second one, so it agrees with the filled cells
-back on `/mutations`. An ObservedMutation row alone is not a call: one with `present=False`
-records that the mutation was looked for and found absent. The same `*` is prefixed to the igv
+A `*` marks the samples the mutation is **in**, using the mutation table's own rule
+(`present=True`) rather than a second one, so it agrees with the filled cells back on
+`/mutations`. An ObservedMutation row alone is not enough: one with `present=False` records
+that the mutation was looked for and found absent, and one with `present` null records nothing
+either way. The same `*` is prefixed to the igv
 track name, so a stack of pileups says which of them carry the call — igv puts no constraints on
 a track name. In the menu a sample without one gets a same-width empty span so the names stay in
 a column; on the track there is deliberately no such padding, because an igv track label is its

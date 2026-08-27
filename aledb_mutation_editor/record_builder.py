@@ -106,15 +106,13 @@ def build_identity(mutation_type, gd_data, annotated_record):
 def build_observation(frequency):
     """One sample's observation of a hand-entered mutation.
 
-    `breseq_present` is left null on purpose: breseq did not call this. `present` is True
-    because asserting the mutation is the whole point of the form -- an ObservedMutation with
-    `present=False` records that something was looked for and found absent, which is not what
-    this page is for.
+    `present` is True because asserting the mutation is the whole point of the form -- an
+    ObservedMutation with `present=False` records that something was looked for and found
+    absent, which is not what this page is for. `source` is what records that a person rather
+    than a caller said so.
     """
     return {
         "present": True,
-        "breseq_present": None,
-        "gatk_present": None,
         "wt_reads": None,
         "mutated_reads": None,
         "other_reads": None,

@@ -448,7 +448,6 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             sequencing_experiment=seq_experiment,
             mutation=mutation,
             present=True,
-            breseq_present=True,
             source=BRESEQ_SOURCE,
             frequency=_coerce_frequency(attributes.get("frequency"))))
 

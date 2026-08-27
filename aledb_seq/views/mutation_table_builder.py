@@ -177,7 +177,7 @@ def _get_table_mutation_entry(observed_mutation, reseq_dict):
     whether a row renders at all, and table_template.js tests it to colour the cell.
     """
     table_entry = ""
-    if observed_mutation.breseq_present or observed_mutation.gatk_present:
+    if observed_mutation.present:
         # A .gd imported through the web uploader sets frequency but never frequency_gatk,
         # so show whichever frequencies exist rather than formatting None with %.2f.
         frequencies = [f for f in (observed_mutation.frequency,

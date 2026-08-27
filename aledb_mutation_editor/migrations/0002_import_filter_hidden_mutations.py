@@ -50,11 +50,22 @@ def _ids(raw):
 
 
 def _observation_snapshot(observed):
-    """Mirrors `history.OBSERVATION_FIELDS`. Decimals go to strings for JSON."""
+    """Mirrors `history.OBSERVATION_FIELDS` as it stood when this migration was written.
+
+    Spelled out rather than imported, as a historical migration must be: `history` is live
+    code and its list has already changed once since. `breseq_present` and `gatk_present`
+    were dropped by `aledb_seq.0010`, and which side of that a database is on depends on
+    where this migration falls in its graph -- so the columns are read with a default rather
+    than assumed to exist. A snapshot taken after the drop simply has no entry for them,
+    which is what `history._observation_kwargs` already tolerates: it reads the fields it
+    wants out of the blob and ignores the rest.
+    """
     snapshot = {}
     for field in ("present", "breseq_present", "gatk_present", "wt_reads", "mutated_reads",
                   "other_reads", "reference_genome_likelihood", "frequency",
                   "frequency_gatk", "source"):
+        if not hasattr(observed, field):
+            continue
         value = getattr(observed, field)
         if field in ("frequency", "frequency_gatk") and value is not None:
             value = str(value)

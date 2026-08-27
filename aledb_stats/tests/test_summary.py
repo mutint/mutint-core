@@ -110,7 +110,7 @@ class SummaryTestCase(TestCase):
     def _observe(self, sample, mutation):
         return ObservedMutation.objects.create(
             sequencing_experiment=sample, mutation=mutation,
-            present=True, breseq_present=True, frequency="1.0000")
+            present=True, frequency="1.0000")
 
     # ---- what the page used to compute ----------------------------------------------
     def _original_counts(self):

@@ -56,7 +56,7 @@ class OverviewQueryCountTestCase(TestCase):
                 sequence_change="A>T", protein_change="nonsynonymous (A1T)", gene="thrA")
             ObservedMutation.objects.create(
                 sequencing_experiment=sample, mutation=mutation,
-                present=True, breseq_present=True, frequency="1.0000")
+                present=True, frequency="1.0000")
         return experiment
 
     def _queries(self, experiment):
