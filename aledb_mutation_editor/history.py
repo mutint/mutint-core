@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 OBSERVATION_FIELDS = (
     "present",
     "wt_reads", "mutated_reads", "other_reads",
-    "reference_genome_likelihood", "frequency", "frequency_gatk", "source",
+    "reference_genome_likelihood", "frequency", "source",
 )
 
 #: The fields `gd_import._database_gd_mutations` passes to `Mutation.objects.get_or_create`.
@@ -60,7 +60,7 @@ MUTATION_KEY_FIELDS = (
     "sequence_change", "gene",
 )
 
-_DECIMAL_FIELDS = ("frequency", "frequency_gatk")
+_DECIMAL_FIELDS = ("frequency",)
 
 #: The join from an ObservedMutation up to its experiment. Spelled once here; it is the same
 #: traversal `aledb_seq.util` and `aledb_filter.util` use.
@@ -73,10 +73,10 @@ _EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale
 def observation_snapshot(observed):
     """Every column of an ObservedMutation, JSON-safe.
 
-    `frequency` and `frequency_gatk` are `DecimalField`s, which JSON cannot carry, so they are
-    stored as strings and rebuilt with `Decimal(...)` rather than through `float` -- a round
-    trip through float would move the value at the fourth decimal place, which is exactly where
-    these columns keep their precision.
+    `frequency` is a `DecimalField`, which JSON cannot carry, so it is stored as a string and
+    rebuilt with `Decimal(...)` rather than through `float` -- a round trip through float would
+    move the value at the fourth decimal place, which is exactly where that column keeps its
+    precision.
     """
     snapshot = {}
     for field in OBSERVATION_FIELDS:

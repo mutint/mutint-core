@@ -118,7 +118,6 @@ def build_observation(frequency):
         "other_reads": None,
         "reference_genome_likelihood": None,
         "frequency": str(frequency),
-        "frequency_gatk": None,
         "source": MANUAL_SOURCE,
     }
 

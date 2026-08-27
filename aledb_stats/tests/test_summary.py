@@ -156,16 +156,15 @@ class SummaryTestCase(TestCase):
     def test_a_frequency_cutoff_is_applied(self):
         """Excluded in SQL, by the queryset both paths share.
 
-        `frequency_gatk` is set as well as `frequency`, and it has to be: the filter ANDs a
-        `frequency_gatk__lt` term in whenever `min_gatk_cutoff` is set, which it is by
-        default (20). Against a NULL that comparison is NULL, the AND fails, and the row is
-        not excluded -- so an observation with no GATK frequency ignores the cutoff
-        entirely. That is existing behaviour, not something this change introduced, and the
-        test pins the cutoff rather than that quirk.
+        This used to need `frequency_gatk` set alongside `frequency` or it failed, and said
+        so: the filter ANDed a `frequency_gatk__lt` term in whenever `min_gatk_cutoff` was
+        set, which was always, and a comparison against null is never true -- so a real
+        observation, which never had a GATK frequency, ignored the cutoff entirely. The
+        column is gone and the workaround with it, so this now pins the cutoff against the
+        rows an import actually produces.
         """
         low = self._observe(self.samples[0], self._mutation("MOB", "", gene="insH"))
         low.frequency = "0.0100"
-        low.frequency_gatk = "0.0100"
         low.save()
         self._filter(min_cutoff=50)
 

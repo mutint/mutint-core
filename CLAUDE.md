@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1156 run, 0 failures** standalone; **1271** in an assembled project, where the
-plugins' own tests join them. They were 1136 and 1251 before the mutation-change page, 1116
+**Baseline: 1163 run, 0 failures** standalone; **1278** in an assembled project, where the
+plugins' own tests join them. They were 1156 and 1271 before the frequency cutoff was fixed,
+1136 and 1251 before the mutation-change page, 1116
 and 1231 before the cross-sample grid, 1109 and 1222 before the caller flags were dropped,
 1081 and 1194 before the genomediff bump, 1028 and 1141
 before the experiment lock and the bulk sharing editor, 938 and 1051 before the add form, and
@@ -398,6 +399,43 @@ so an IIFE in the content block runs with only plain DataTables loaded and `sele
 `buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
 class from the stylesheet, so it reads as a styling fault rather than a load-order one.
 
+### The frequency cutoff, which excluded nothing
+
+`aledb_filter`'s min/max cutoff is the oldest user-facing filter here and it did not work, in
+any configuration reachable through the form. Two independent faults in one block of
+`filtered_observed_mutation_queryset`, neither with a test. That queryset builds a `Q` and
+hands it to `.exclude()`, so every term describes something to **hide**.
+
+- **A `frequency_gatk__lt` term was ANDed in whenever `min_gatk_cutoff` was set** -- which was
+  always: it defaulted to 20 and no form, view or template ever exposed it. No import path has
+  ever written `frequency_gatk` (0 of 74,859 rows in the dev database), and a comparison
+  against null is never true, so the AND could not be satisfied and nothing was excluded.
+- **The floor and the ceiling were ANDed together**, which reads "below the floor *and* above
+  the ceiling at the same time". No row can be both, so setting a maximum silently switched
+  the minimum off as well.
+
+Two smaller things fell out with them: one branch was a straight duplicate of the term above
+it, and both gatk branches compared against `min_cutoff`/`max_cutoff` rather than their own
+settings -- so those settings were never values, only switches.
+
+`frequency_gatk`, `min_gatk_cutoff` and `max_gatk_cutoff` are gone (`aledb_seq.0011`,
+`aledb_filter.0004`), and the two remaining terms are **OR**ed. The block is now two lines and
+does what the page has always said it does.
+
+**This changes what every read-only table shows**, which is the point and is still worth
+saying out loud. In the dev database it hides 1,002 of 74,859 observations, and **all 1,002 are
+in one experiment** -- `Population tree`, where 1.9% of 53,141 calls sit below the default 20%
+floor. Every other experiment loses nothing, because a clonal isolate rarely carries a call
+that low. So the filter finally working is most visible exactly where it was designed to
+matter, and somebody will notice that one experiment got shorter.
+
+They are still *stored*, and still listed in `aledb_mutation_editor`, whose listings are
+deliberately unfiltered -- which matters more now than it did, because a mutation hidden from
+every table has to stay somewhere it can be removed. There is a test for that.
+
+`aledb_interop_query` carries a hand-rebuilt copy of the same block and had every one of the
+same faults; it was fixed in the same shape.
+
 ### The whole experiment at once: `?reseq_id=all`
 
 The Edit page has two modes in one sample picker -- a sample, or **All samples**, which lays
@@ -661,7 +699,7 @@ changesets before `aledb_filter.0003` drops them, so what was hidden stays hidde
 inspectable and restorable; `aledb_filter.0003` depends on it, which is what stops the drop
 running first. Those changesets have `created_by` null and render as "system".
 
-**What is left in `aledb_filter` is filtering proper**: the four frequency cutoffs and
+**What is left in `aledb_filter` is filtering proper**: the two frequency cutoffs and
 `ignored_genes`, which aledb-fixation, aledb-converge, `aledb_stats` and `aledb_seq` all have
 tests on. One visible behaviour change: **"Show Experiment Filtered" no longer reveals what was
 hidden**, because it is deleted rather than filtered -- the history page is where it lives now.

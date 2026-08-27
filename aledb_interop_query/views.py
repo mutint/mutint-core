@@ -60,17 +60,22 @@ def _get_public_filtered_queryset():
     for exp_filter in exp_filters:
         exp_filter_genes = _get_exp_filter_genes(exp_filter)
 
+        # OR, not AND. This whole Q is *excluded*, so it has to read "below the floor **or**
+        # above the ceiling". ANDed it said "below the floor and above the ceiling at the
+        # same time", which no row can be -- so setting a maximum silently turned the
+        # minimum off as well, and neither end filtered anything.
+        #
+        # Five terms stood here. Two named `frequency_gatk`, which no import path has ever
+        # written; a comparison against null is never true, so ANDing one in made the whole
+        # clause unsatisfiable and the cutoff excluded nothing at all. A third was a straight
+        # duplicate of the first, and the two gatk branches read `min_cutoff`/`max_cutoff`
+        # rather than their own settings -- so those settings were never values, only
+        # switches. All of it is gone with the column.
         q_exp = Q()
         if exp_filter.min_cutoff and exp_filter.min_cutoff > 0:
-            q_exp.add(Q(frequency__lt=exp_filter.min_cutoff / 100), Q.AND)
-        if exp_filter.min_gatk_cutoff and exp_filter.min_gatk_cutoff > 0:
-            q_exp.add(Q(frequency__lt=exp_filter.min_cutoff / 100), Q.AND)
+            q_exp.add(Q(frequency__lt=exp_filter.min_cutoff / 100), Q.OR)
         if exp_filter.max_cutoff and exp_filter.max_cutoff < 100:
-            q_exp.add(Q(frequency__gt=exp_filter.max_cutoff / 100), Q.AND)
-        if exp_filter.min_gatk_cutoff and exp_filter.min_gatk_cutoff > 0:
-            q_exp.add(Q(frequency_gatk__lt=exp_filter.min_cutoff / 100), Q.AND)
-        if exp_filter.max_gatk_cutoff and exp_filter.max_gatk_cutoff < 100:
-            q_exp.add(Q(frequency_gatk__gt=exp_filter.max_cutoff / 100), Q.AND)
+            q_exp.add(Q(frequency__gt=exp_filter.max_cutoff / 100), Q.OR)
         # See the same guard in aledb_filter.util: an empty q_exp excludes the whole
         # experiment, because this Q is handed to .exclude().
         if not q_exp:
@@ -420,12 +425,8 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
             # reported the *previous* row's frequency.
             sample_type = ""
             if observed_mutation.present:
-                # `frequency_gatk` is written by no import path, so formatting it
-                # unconditionally raised TypeError on None. Show whichever exist, the same
-                # rule the mutation table's cells use.
-                frequencies = [f for f in (observed_mutation.frequency,
-                                           observed_mutation.frequency_gatk) if f is not None]
-                sample_type = "/".join("%2f" % float(f) for f in frequencies)
+                sample_type = ("%2f" % float(observed_mutation.frequency)
+                               if observed_mutation.frequency is not None else "")
             observed_mutation.experiment = {
                 'ale_experiment_id': observed_mutation.sequencing_experiment.ale_experiment.ale_id,
                 'sequencing_experiment_id': observed_mutation.sequencing_experiment.id,

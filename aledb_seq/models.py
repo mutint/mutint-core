@@ -210,12 +210,14 @@ class ObservedMutation(models.Model):
     mutated_reads = models.IntegerField(null=True)
     other_reads = models.IntegerField(null=True)
     reference_genome_likelihood = models.FloatField(null=True)
+    # The one frequency. `frequency_gatk` sat beside it, for the GATK half of a gdtools
+    # COMPARE merge that no import path has ever written -- 0 of 74,859 rows had a value.
+    # Being always null was not merely useless: `aledb_filter` ANDed a `frequency_gatk__lt`
+    # term into the exclusion, and a comparison against null is never true, so the frequency
+    # cutoff excluded nothing at all.
     frequency = models.DecimalField(null=True,
                                     max_digits=5,
                                     decimal_places=4)
-    frequency_gatk = models.DecimalField(null=True,
-                                         max_digits=5,
-                                         decimal_places=4)
     # Which caller produced this observation. Imports record "breseq"; other
     # callers can be added alongside. Left null on rows imported before this
     # existed, which came from a gdtools COMPARE merge of breseq and

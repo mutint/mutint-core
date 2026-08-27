@@ -178,14 +178,10 @@ def _get_table_mutation_entry(observed_mutation, reseq_dict):
     """
     table_entry = ""
     if observed_mutation.present:
-        # A .gd imported through the web uploader sets frequency but never frequency_gatk,
-        # so show whichever frequencies exist rather than formatting None with %.2f.
-        frequencies = [f for f in (observed_mutation.frequency,
-                                   observed_mutation.frequency_gatk) if f is not None]
-        if frequencies:
-            label = "/".join("%.2f" % float(f) for f in frequencies)
-        else:
-            label = "&#10003;"
+        # An observation may carry no frequency at all -- a hand-added mutation need not
+        # claim one -- so a tick rather than None formatted with %.2f.
+        label = ("%.2f" % float(observed_mutation.frequency)
+                 if observed_mutation.frequency is not None else "&#10003;")
         table_entry = _cell_html(observed_mutation, reseq_dict, label)
 
     # TODO: Figure out what this is supposed to do.

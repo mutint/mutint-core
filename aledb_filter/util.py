@@ -57,17 +57,22 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
         if len(exp_filter_genes) > 0:
             exp_filter_genes_map[exp_filter.ale_experiment_id] = exp_filter_genes
 
+        # OR, not AND. This whole Q is *excluded*, so it has to read "below the floor **or**
+        # above the ceiling". ANDed it said "below the floor and above the ceiling at the
+        # same time", which no row can be -- so setting a maximum silently turned the
+        # minimum off as well, and neither end filtered anything.
+        #
+        # Five terms stood here. Two named `frequency_gatk`, which no import path has ever
+        # written; a comparison against null is never true, so ANDing one in made the whole
+        # clause unsatisfiable and the cutoff excluded nothing at all. A third was a straight
+        # duplicate of the first, and the two gatk branches read `min_cutoff`/`max_cutoff`
+        # rather than their own settings -- so those settings were never values, only
+        # switches. All of it is gone with the column.
         q_exp = Q()
         if exp_filter.min_cutoff and exp_filter.min_cutoff > 0:
-            q_exp.add(Q(frequency__lt=exp_filter.min_cutoff / 100), Q.AND)
-        if exp_filter.min_gatk_cutoff and exp_filter.min_gatk_cutoff > 0:
-            q_exp.add(Q(frequency__lt=exp_filter.min_cutoff / 100), Q.AND)
+            q_exp.add(Q(frequency__lt=exp_filter.min_cutoff / 100), Q.OR)
         if exp_filter.max_cutoff and exp_filter.max_cutoff < 100:
-            q_exp.add(Q(frequency__gt=exp_filter.max_cutoff / 100), Q.AND)
-        if exp_filter.min_gatk_cutoff and exp_filter.min_gatk_cutoff > 0:
-            q_exp.add(Q(frequency_gatk__lt=exp_filter.min_cutoff / 100), Q.AND)
-        if exp_filter.max_gatk_cutoff and exp_filter.max_gatk_cutoff < 100:
-            q_exp.add(Q(frequency_gatk__gt=exp_filter.max_cutoff / 100), Q.AND)
+            q_exp.add(Q(frequency__gt=exp_filter.max_cutoff / 100), Q.OR)
         # An empty q_exp would leave `exp_q_query` as the bare experiment match, and this
         # whole Q is *excluded* -- so every mutation in the experiment would vanish. That was
         # unreachable while a non-empty ignored-mutation list could carry the clause on its

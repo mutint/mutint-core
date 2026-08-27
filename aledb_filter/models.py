@@ -11,8 +11,6 @@ def get_default_experiment_filter_params(ale_experiment):
             'ale_experiment': ale_experiment,
             'min_cutoff': DEFAULT_MUTATION_FREQ_MIN,
             'max_cutoff': DEFAULT_MUTATION_FREQ_MAX,
-            'min_gatk_cutoff': DEFAULT_MUTATION_FREQ_MIN,
-            'max_gatk_cutoff': DEFAULT_MUTATION_FREQ_MAX,
             'ignored_genes': ""}
     return default_experiment_filter_params
 
@@ -30,10 +28,9 @@ class AleExperimentFilter(models.Model):
     ale_experiment = models.OneToOneField(AleExperiment, on_delete=models.CASCADE)
     min_cutoff = models.PositiveSmallIntegerField(default=DEFAULT_MUTATION_FREQ_MIN)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
     max_cutoff = models.PositiveSmallIntegerField(default=DEFAULT_MUTATION_FREQ_MAX)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
-    min_gatk_cutoff = models.PositiveSmallIntegerField(
-        default=DEFAULT_MUTATION_FREQ_MIN)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
-    max_gatk_cutoff = models.PositiveSmallIntegerField(
-        default=DEFAULT_MUTATION_FREQ_MAX)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
+    # `min_gatk_cutoff` and `max_gatk_cutoff` sat here. No form, view or template ever
+    # exposed them, so they stayed at their defaults forever -- and their only effect was to
+    # gate the `frequency_gatk` terms that made the cutoffs above filter nothing.
 
     ignored_genes = models.TextField(default='', blank=True)
 
