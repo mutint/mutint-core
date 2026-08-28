@@ -10,11 +10,16 @@ def get_observed_mutation_queryset(experiment_id):
     return aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id)
 
 
-def get_all_observed_mutations_filtered(experiment_id, filter_type=None,
-                                        skip_experiment_filter=False):
+def get_all_observed_mutations_filtered(experiment_id, *, filter_type=None, view_filter=None):
+    """An experiment's observations, through the reader's filter.
+
+    `view_filter` comes from `aledb_filter.view_filter.get_view_filter(request, experiment_id)`
+    and is the reader's own; None means unfiltered. It replaced `skip_experiment_filter`, which
+    asked to see through a *shared* filter -- a question that stops meaning anything once the
+    filter is yours to clear.
+    """
     queryset = get_observed_mutation_queryset(experiment_id)
-    return filter_observed_mutations(queryset, experiment_id, filter_type,
-                                     skip_experiment_filter=skip_experiment_filter)
+    return filter_observed_mutations(queryset, filter_type=filter_type, view_filter=view_filter)
 
 
 def get_all_observed_mutations(reseq_id_list):

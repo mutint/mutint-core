@@ -20,7 +20,6 @@ from django.test import TestCase
 from aledb_experiment.models import (
     AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
 )
-from aledb_filter.models import AleExperimentFilter
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 from aledb_stats.util import get_needle_plot_data
 
@@ -70,10 +69,17 @@ class NeedlePlotTestCase(TestCase):
             present=True, frequency=frequency)
 
     def _filter(self, **fields):
-        from aledb_filter.util import ensure_default_experiment_filter
+        """The reader's filter, as a value rather than a stored row.
 
-        ensure_default_experiment_filter(self.experiment.ale_id)
-        AleExperimentFilter.objects.filter(ale_experiment=self.experiment).update(**fields)
+        This used to call `ensure_default_experiment_filter` and then `update()` an
+        `AleExperimentFilter`, because an experiment created through the UI had no row until
+        something rebuilt one. There is no row: a filter is a value the caller passes in.
+        """
+        from aledb_filter.view_filter import ViewFilter
+
+        return ViewFilter.parse(min_freq=fields.get("min_cutoff"),
+                                max_freq=fields.get("max_cutoff"),
+                                genes=fields.get("ignored_genes"))
 
     def _needles(self):
         return get_needle_plot_data(self.experiment.ale_id)
@@ -107,31 +113,28 @@ class NeedlePlotTestCase(TestCase):
     def test_an_experiment_with_no_mutations_draws_nothing(self):
         self.assertEqual([], self._needles())
 
-    # ---- the filter reaches it -------------------------------------------------------
-    def test_a_frequency_cutoff_excludes(self):
-        """The SQL half. The plot and the Overview's counts sit in one viewport and would
-        contradict each other if only one of them applied this."""
-        self._observe(self.first, self._mutation("SNP", 150, gene="thrA"), frequency="0.0100")
+    # ---- the filter deliberately does not reach it -----------------------------------
+    def test_it_is_not_filtered(self):
+        """**`/stats` shows what the experiment holds, not what you are reading through.**
+
+        It applied the shared experiment filter until that filter became a per-reader one, and
+        the Overview and the needle plot are summaries of a dataset in the way the dashboard
+        is -- so they were left out. Three tests stood here pinning that a frequency cutoff and
+        an ignored-gene list reached this plot; they described a filter that no longer has a
+        stored value to come from, and this is the property that replaced them.
+        """
+        self._observe(self.first, self._mutation("SNP", 150, gene="rrlA"), frequency="0.0100")
         self._observe(self.first, self._mutation("SNP", 250, gene="thrA"))
-        self._filter(min_cutoff=50)
 
-        self.assertEqual(['250'], [n['coord'] for n in self._needles()])
+        self.assertEqual(['150', '250'], sorted(n['coord'] for n in self._needles()),
+                         "the needle plot has started filtering")
 
-    def test_an_ignored_gene_excludes(self):
-        """The half with no SQL: this is the branch walked per row."""
-        self._observe(self.first, self._mutation("SNP", 150, gene="rrlA"))
-        self._observe(self.first, self._mutation("SNP", 250, gene="thrA"))
-        self._filter(ignored_genes="rrlA")
+    def test_it_takes_no_filter_argument(self):
+        """Structural rather than incidental: there is no way to hand this one."""
+        import inspect
 
-        self.assertEqual(['250'], [n['coord'] for n in self._needles()])
-
-    def test_a_partly_ignored_intergenic_mutation_survives(self):
-        """Subset, not intersection -- the same rule `gene_is_filtered` applies everywhere,
-        asserted here because this caller reaches it with a tuple rather than a model."""
-        self._observe(self.first, self._mutation("DEL", 150, gene="thrB/thrC"))
-        self._filter(ignored_genes="thrB")
-
-        self.assertEqual(['150'], [n['coord'] for n in self._needles()])
+        self.assertNotIn("view_filter",
+                         inspect.signature(get_needle_plot_data).parameters)
 
     # ---- nothing is stored -----------------------------------------------------------
     def test_it_reflects_a_new_observation_immediately(self):

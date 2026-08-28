@@ -102,18 +102,6 @@ class RegisteredHookTestCase(SimpleTestCase):
                     "nowhere in docs/. Mention it in docs/plugin/registries.md or the guide "
                     "it belongs to." % (name, module))
 
-    def test_the_input_vocabulary_is_documented(self):
-        """`inputs=` is only usable if its two values are written down somewhere."""
-        text = documentation_text()
-        source = io.open(os.path.join(COMMON_DIR, "rebuild_registry.py"),
-                         encoding="utf-8").read()
-        for constant in re.findall(r"^(INPUT_[A-Z_]+)\s*=", source, re.M):
-            with self.subTest(constant=constant):
-                self.assertTrue(constant in text,
-                                "%s is undocumented; `inputs=` is unusable without its "
-                                "values written down." % constant)
-
-
 class ProjectRootTestCase(SimpleTestCase):
     """Which project is being built, and which components contribute to it.
 

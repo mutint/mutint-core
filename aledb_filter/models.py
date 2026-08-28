@@ -1,49 +1,18 @@
-from django.db import models
+"""No models.
 
-from aledb_experiment.models import AleExperiment
+`AleExperimentFilter` stood here: one row per experiment holding `min_cutoff`, `max_cutoff` and
+`ignored_genes`, edited at `/filter` by anyone with write access on the experiment. **It was
+shared.** Changing your own view changed everybody's, silently, with no record of who did it --
+which conflated curating a dataset, `aledb_mutation_editor`'s job and logged and reversible, with
+choosing what you personally want to look at, which is nobody else's business.
 
-from aledb_filter.common import DEFAULT_MUTATION_FREQ_MIN
-from aledb_filter.common import DEFAULT_MUTATION_FREQ_MAX
+Filtering is a value a reader carries now, in their session, applied by the page that reads it.
+See `aledb_filter/view_filter.py`. There is nothing left to store, and so nothing to default, to
+keep fresh, or to send anyone to a page to edit -- the `experiment_filter` rebuilder and the
+`Filter` nav entry went with the table.
 
-
-def get_default_experiment_filter_params(ale_experiment):
-    default_experiment_filter_params = {
-            'ale_experiment': ale_experiment,
-            'min_cutoff': DEFAULT_MUTATION_FREQ_MIN,
-            'max_cutoff': DEFAULT_MUTATION_FREQ_MAX,
-            'ignored_genes': ""}
-    return default_experiment_filter_params
-
-
-class AleExperimentFilter(models.Model):
-    """One experiment's mutation filter settings. Exactly one row per experiment.
-
-    A OneToOneField rather than a plain ForeignKey, because every piece of code that reads
-    this has always assumed one row -- `ale_exp_filter` calls `.get(ale_experiment_id=...)`
-    and the filter form edits a single instance -- while nothing in the database said so.
-    Two rows made `filter_observed_mutations` OR both of their exclusions together, which
-    quietly changed what every mutation table showed, and made that `.get()` raise.
-    """
-
-    ale_experiment = models.OneToOneField(AleExperiment, on_delete=models.CASCADE)
-    min_cutoff = models.PositiveSmallIntegerField(default=DEFAULT_MUTATION_FREQ_MIN)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
-    max_cutoff = models.PositiveSmallIntegerField(default=DEFAULT_MUTATION_FREQ_MAX)  # TODO: this should like rather be a decimal to it's conterpart of aledb_seq.models.ObservedMutation.frequency
-    # `min_gatk_cutoff` and `max_gatk_cutoff` sat here. No form, view or template ever
-    # exposed them, so they stayed at their defaults forever -- and their only effect was to
-    # gate the `frequency_gatk` terms that made the cutoffs above filter nothing.
-
-    ignored_genes = models.TextField(default='', blank=True)
-
-    # `ignored_mutations` and `starting_strain_mutations` used to sit here: comma-joined
-    # Mutation ids, with no foreign key and nothing that ever pruned them, excluded from every
-    # table by `filter_observed_mutations`. They were a way of deleting a mutation while
-    # keeping the row -- per experiment rather than per sample, unattributed, and impossible to
-    # undo. `aledb_mutation_editor` replaces them; migration 0003 moved what was in them into
-    # its change log, so what was hidden is still hidden and is now also visible and
-    # restorable.
-
-    # `GlobalFilter` sat here: a second ignored-gene list, one row for the whole installation,
-    # superuser-only, and linked from nowhere -- the only reference to its page was a
-    # commented-out sidebar entry. It went the way its own `ignored_mutations` column had
-    # already gone. `0005` folds whatever a deployment had in it into each experiment's list
-    # before dropping the table, so nothing that was hidden became visible.
+This model had already been shedding parts for the same reason the whole of it now goes: its
+three mutation-id hide-lists (`0003`) were a delete that kept the row, its two `frequency_gatk`
+cutoffs (`0004`) were compared against a column no import path ever wrote, and `GlobalFilter`
+(`0005`) was a second, installation-wide copy of the same idea. `0006` drops what is left.
+"""

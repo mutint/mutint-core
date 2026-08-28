@@ -139,11 +139,25 @@ def get_table_body(user: User,
                    reseq_dict,
                    observed_mutations_queryset,
                    ale_experiment=None,
-                   is_gene_table=False):
-    # filter_type='AMP' means *exclude* AMP -- the values read backwards. Only the plugin
-    # tables (fixation, converge) reach this now, and they keep the old behaviour; /mutations
-    # deliberately no longer excludes AMP, since its dedicated page is gone.
-    observed_mutations = filter_observed_mutations(observed_mutations_queryset, filter_type='AMP')
+                   is_gene_table=False,
+                   *,
+                   view_filter=None):
+    """Render a queryset of observations as the shared mutation table's body.
+
+    `filter_type='AMP'` means *exclude* AMP -- the values read backwards. Only the plugin tables
+    (fixation, converge) reach this now, and they keep the old behaviour; /mutations deliberately
+    no longer excludes AMP, since its dedicated page is gone.
+
+    **`view_filter` defaults to None, and both callers pass None on purpose.** A reader's filter
+    changes *which mutations fix and which converge* -- fixation asks what is present in an ALE's
+    last two flasks, convergence asks which genes were hit in more than one ALE -- so it has to be
+    applied before those questions are answered, not after the answer has been rendered. Both
+    plugins apply it when they compute their set, and filtering the same rows again here would be
+    a no-op in the good case and a source of drift in every other. Pass one only if you are
+    rendering a queryset nobody has filtered yet.
+    """
+    observed_mutations = filter_observed_mutations(
+        observed_mutations_queryset, filter_type='AMP', view_filter=view_filter)
     return get_mutation_table_body(user, observed_mutations, reseq_dict, ale_experiment, is_gene_table)
 
 

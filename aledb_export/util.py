@@ -8,16 +8,26 @@ from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_dic
 MUT_TYPE_STR = "mut"
 
 
-def get_csv_str(exp_id, mut_type_str):
+def get_csv_str(exp_id, mut_type_str, view_filter=None):
+    """One experiment's rows for the CSV, through the reader's filter.
+
+    `view_filter` is resolved per experiment by the view, so a multi-experiment zip carries each
+    experiment's own filter and each file is what that experiment's page showed.
+
+    A pre-existing divergence, left alone deliberately: no `filter_type` is passed here, so an
+    export includes AMP rows where the fixation and converge *pages* exclude them --
+    `get_table_body` hardcodes `filter_type='AMP'`. Changing it would silently change every
+    export anyone has ever taken, so it is recorded rather than fixed.
+    """
     if mut_type_str == MUT_TYPE_STR:
         obs_mut_qryset = get_observed_mutation_queryset(exp_id)
     else:
         handler = get_export_handler(mut_type_str)
         if handler is None:
             return []
-        obs_mut_qryset = handler(exp_id)
+        obs_mut_qryset = handler(exp_id, view_filter)
 
-    observed_mutations = filter_observed_mutations(obs_mut_qryset, exp_id)
+    observed_mutations = filter_observed_mutations(obs_mut_qryset, view_filter=view_filter)
     reseq_ordered_dict = get_ordered_reseq_dict(observed_mutations)
 
     mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_ordered_dict, observed_mutations)

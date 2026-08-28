@@ -28,7 +28,6 @@ from aledb_experiment.models import (
     AleExperiment, AleId, Flask, FreezerBox, Instrument, Isolate, Media,
     TechnicalReplicate,
 )
-from aledb_filter.models import AleExperimentFilter
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 
 
@@ -65,10 +64,17 @@ class MutationCountsTestCase(TestCase):
             present=True, frequency=frequency)
 
     def _filter(self, **fields):
-        from aledb_filter.util import ensure_default_experiment_filter
+        """The reader's filter, as a value rather than a stored row.
 
-        ensure_default_experiment_filter(self.experiment.ale_id)
-        AleExperimentFilter.objects.filter(ale_experiment=self.experiment).update(**fields)
+        This used to call `ensure_default_experiment_filter` and then `update()` an
+        `AleExperimentFilter`, because an experiment created through the UI had no row until
+        something rebuilt one. There is no row: a filter is a value the caller passes in.
+        """
+        from aledb_filter.view_filter import ViewFilter
+
+        return ViewFilter.parse(min_freq=fields.get("min_cutoff"),
+                                max_freq=fields.get("max_cutoff"),
+                                genes=fields.get("ignored_genes"))
 
     def _counts(self):
         rebuild_mutation_counts()
@@ -109,36 +115,31 @@ class MutationCountsTestCase(TestCase):
 
         self.assertEqual(2, observed.total, "the dashboard applied a gene filter")
 
-    def test_a_filter_change_does_not_mark_it_stale(self):
-        """The declaration that follows from the above. `mutation_counts` is the most
-        expensive rebuild registered, and a filter save marks every experiment at once -- so
-        being marked by one would be both wrong and the costliest way to be wrong.
+    def test_no_reader_can_change_these_totals(self):
+        """Two tests stood here pinning that a filter change did *not* mark these counts stale
+        while a mutation change did -- `mutation_counts` declared `inputs={INPUT_MUTATIONS}`
+        because it is the most expensive rebuild registered and a filter save marked every
+        experiment at once.
+
+        There is no filter save. A filter belongs to whoever is reading and lives in their
+        session, so it cannot mark anything for anybody, and the declaration that protected
+        against it went with the vocabulary it was written in. What is left to assert is the
+        stronger, structural fact: `rebuild_mutation_counts` takes no request, so it has no way
+        to reach a reader's filter even if it wanted to.
         """
-        from aledb_common.rebuild_registry import (
-            INPUT_FILTERS, is_stale, request_rebuild, run_rebuilds,
-        )
+        import inspect
+
+        from aledb_common.rebuild_registry import is_stale, request_rebuild, run_rebuilds
+
+        self.assertEqual([], list(inspect.signature(rebuild_mutation_counts).parameters))
 
         run_rebuilds(force=True)
         self.assertFalse(is_stale("mutation_counts"))
 
-        request_rebuild(changed=INPUT_FILTERS, reason="test")
+        request_rebuild(reason="test")
 
-        self.assertFalse(is_stale("mutation_counts"),
-                         "a filter change marked counts that do not read the filter")
-
-    def test_a_mutation_change_still_marks_it_stale(self):
-        """The other half: declaring independence from filters must not make it independent
-        of the mutations, which is what it actually counts."""
-        from aledb_common.rebuild_registry import (
-            INPUT_MUTATIONS, is_stale, request_rebuild, run_rebuilds,
-        )
-
-        run_rebuilds(force=True)
-        self.assertFalse(is_stale("mutation_counts"))
-
-        request_rebuild(changed=INPUT_MUTATIONS, reason="test")
-
-        self.assertTrue(is_stale("mutation_counts"))
+        self.assertTrue(is_stale("mutation_counts"),
+                        "a mutation change must still mark what counts mutations")
 
     # ---- the functional-change buckets -----------------------------------------------
     def test_synonymous_and_nonsynonymous_are_written(self):

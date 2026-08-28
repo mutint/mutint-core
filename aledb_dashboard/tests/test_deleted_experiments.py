@@ -76,11 +76,32 @@ class DeletedExperimentTestCase(EditorTestCase):
         """`request_rebuild()` with no experiment would mark every one of them. Removing one
         experiment cannot make another's derived data wrong.
 
-        Watches `experiment_filter`, the experiment-scoped rebuilder core still has; it
-        watched `static_data` until the needle plot stopped being stored.
+        It needs an **experiment-scoped** rebuilder to watch, and core has none left to borrow:
+        it watched `static_data` until the needle plot stopped being stored, then
+        `experiment_filter` until the shared filter it defaulted stopped existing, and what
+        remains -- `sample_counts` and `mutation_counts` -- is site-scoped and *is* legitimately
+        marked by a delete, as the two tests above assert. So it registers its own, which is
+        also the honest shape: the property belongs to the delete view, not to whichever
+        rebuilder happened to be available.
         """
-        run_rebuilds(self.experiment.ale_id, force=True)
+        from aledb_common.rebuild_registry import (
+            register_rebuilder, request_rebuild, unregister_rebuilder,
+        )
+
+        register_rebuilder("test.other_experiment", lambda experiment_id: None)
+        self.addCleanup(unregister_rebuilder, "test.other_experiment")
+        other = self._second_experiment()
+        run_rebuilds(other.ale_id, force=True)
+        self.assertFalse(is_stale("test.other_experiment", other.ale_id))
 
         self.client.post("/ale/experiment/%d/delete/" % self.experiment.ale_id, {})
 
-        self.assertFalse(is_stale("experiment_filter", self.experiment.ale_id))
+        self.assertFalse(is_stale("test.other_experiment", other.ale_id),
+                         "deleting one experiment marked another's derived data stale")
+
+    def _second_experiment(self):
+        from aledb_experiment.models import AleExperiment
+
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "Other", "experiment": "Other"}).json()
+        return AleExperiment.objects.get(pk=created["experiment_id"])

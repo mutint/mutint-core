@@ -6,16 +6,11 @@ from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
 from aledb_seq.views.common import MUTATION_TYPE_LIST
-from aledb_filter.util import filtered_observed_mutation_queryset, gene_is_filtered
 import collections
 import logging
 
 
 logger = logging.getLogger(__name__)
-
-#: The experiment a row belongs to, fetched alongside it so that the gene half of the filter
-#: -- a set-subset test that has no SQL -- can be applied per row without a second query.
-EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"
 
 #: The order `filter_observed_mutations` returns rows in. Kept here so the computed needle
 #: plot is element-for-element what the stored one was, rather than the same points shuffled.
@@ -45,21 +40,19 @@ def get_needle_plot_data(experiment_id):
     Ordered, and deliberately: the plot does not care, but "the same points in a different
     order" is a difference a reader would have to rule out by hand every time this is compared
     against the reference implementation, and the sort is free at this size.
+
+    **Unfiltered.** It applied the shared experiment filter until that filter became a
+    per-reader one, and `/stats` is not one of the pages that honours it -- this is a summary of
+    what the experiment holds, like the dashboard, rather than a table you are reading through.
+    Two columns rather than four: the gene and the experiment were fetched only to apply the
+    ignored-gene list per row.
     """
-    queryset, exp_filter_genes_map = filtered_observed_mutation_queryset(
-        get_observed_mutation_queryset(experiment_id), experiment_id)
-    rows = queryset.order_by(*ROW_ORDER).values_list(
-        "mutation__position", "mutation__mutation_type", "mutation__gene", EXPERIMENT_PATH,
+    rows = get_observed_mutation_queryset(experiment_id).order_by(*ROW_ORDER).values_list(
+        "mutation__position", "mutation__mutation_type",
     ).iterator(chunk_size=2000)
 
-    needle_plot_data = []
-    for position, mutation_type, gene, exp_id in rows:
-        if exp_filter_genes_map and gene_is_filtered(gene, exp_filter_genes_map.get(exp_id)):
-            continue
-        needle_plot_data.append({'coord': str(position),
-                                 'category': mutation_type,
-                                 'value': 1})
-    return needle_plot_data
+    return [{'coord': str(position), 'category': mutation_type, 'value': 1}
+            for position, mutation_type in rows]
 
 
 def get_ale_flask_isolate_count_list(reseq_queryset):
@@ -163,21 +156,11 @@ def get_reseq_experiment_info_list(reseq_experiments):
 # are instead, which is why nothing is stored: 0.07s on the largest experiment in the dev
 # database is not worth an `ExperimentSummary` row to keep correct.
 #
-# There are two paths, and they are the same two the filter itself already has (see the
-# branch at the end of `aledb_filter.util.filter_observed_mutations`):
-#
-#   * No gene filters -- the filter is entirely expressible as SQL, so the counts are two
-#     aggregate queries and no row ever reaches Python.
-#   * Gene filters set -- "every gene this mutation touches is in the ignore list" is a
-#     set-subset test over a parsed column, which SQL cannot express, so the rows must be
-#     walked. They are walked as `values_list` tuples rather than model instances: same
-#     rows, same decisions, none of the JSON deserialisation or the fat columns.
-#
-# Both must produce identical dictionaries, and `test_summary.py` asserts that directly --
-# the same fixture counted down each branch. It used to assert against a second, row-walking
-# implementation kept in this file for the purpose; the literal counts it also pinned are the
-# half that was doing the work, and a duplicate implementation is one more thing to keep in
-# step for no coverage the literals do not already give.
+# There was a second, row-walking path beside this one, chosen when the experiment's filter
+# ignored genes -- a set-subset test over a parsed column that SQL cannot express. `/stats` no
+# longer filters at all, so there is nothing here SQL cannot do, and that path went with the
+# branch that selected it. `test_summary.py` pins the counts literally, which is what was
+# doing the work; asserting one implementation against another was the half that was not.
 # --------------------------------------------------------------------------------------
 
 
@@ -244,69 +227,24 @@ def _count_in_sql(queryset):
             protein_change_counts, observed_protein_change_counts)
 
 
-def _count_in_python(queryset, exp_filter_genes_map):
-    """The four count dicts when a gene filter makes SQL alone insufficient.
-
-    The exclusion logic below is `aledb_filter.util.filter_observed_mutations`' loop, applied
-    to tuples instead of model instances. It is duplicated rather than shared because that
-    function returns *rows* and this one returns counts, and materialising the rows to count
-    them is the whole cost being removed -- but it must stay in step with it.
-
-    It got shorter with the global filter. The `and`/`or` precedence in the old
-    `should_test_genes` condition was a copied quirk, and the cross-experiment
-    `deleted_global_mutations` cache existed only because a globally ignored gene meant the
-    same everywhere. One list, one experiment, one test.
-    """
-    mutation_type_counts, observed_mutation_type_counts, \
-        protein_change_counts, observed_protein_change_counts = _empty_counts()
-
-    rows = queryset.values_list(
-        'mutation_id',
-        'mutation__mutation_type',
-        'mutation__snp_type',
-        'mutation__gene',
-        'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id',
-    ).iterator(chunk_size=2000)
-
-    seen_mutations = set()
-    for mutation_id, mutation_type, snp_type, gene, experiment_id in rows:
-        if gene_is_filtered(gene, exp_filter_genes_map.get(experiment_id)):
-            continue
-
-        first_time = mutation_id not in seen_mutations
-        seen_mutations.add(mutation_id)
-
-        if mutation_type in observed_mutation_type_counts:
-            observed_mutation_type_counts[mutation_type] += 1
-            if first_time:
-                mutation_type_counts[mutation_type] += 1
-        # One bucket, resolved by severity. This was a loop over every token with no
-        # `break`, so a mutation counted under each one it matched and these sums exceeded the
-        # mutation count by design. A hierarchy picks one -- and the sums now equal it, which
-        # is also what the dashboard has always done.
-        change = functional_change_bucket(snp_type)
-        observed_protein_change_counts[change] += 1
-        if first_time:
-            protein_change_counts[change] += 1
-
-    return (mutation_type_counts, observed_mutation_type_counts,
-            protein_change_counts, observed_protein_change_counts)
-
-
 def compute_experiment_counts(ale_experiment_id):
-    """The Overview's four count dicts for one experiment, without materialising its rows."""
-    from aledb_filter.util import filtered_observed_mutation_queryset
+    """The Overview's four count dicts for one experiment, without materialising its rows.
+
+    **Unfiltered**, for the same reason as the needle plot above: `/stats` summarises what the
+    experiment holds rather than showing rows you are reading through, and filtering became a
+    per-reader affair that this page does not take part in.
+
+    There used to be two paths here. The gene half of the old filter -- "every gene this
+    mutation touches is in the ignore list" -- is a set-subset test over a parsed column with no
+    SQL equivalent, so a filter with ignored genes forced the rows to be walked in Python.
+    Nothing is filtered now, so there is nothing SQL cannot express, and `_count_in_python` went
+    with the branch that chose it.
+    """
     from aledb_seq.util import get_observed_mutation_queryset
 
     # The join, not `sequencing_experiment_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.
-    queryset = get_observed_mutation_queryset(ale_experiment_id)
-    queryset, exp_filter_genes_map = filtered_observed_mutation_queryset(
-        queryset, ale_experiment_id)
-
-    if not exp_filter_genes_map:
-        return _count_in_sql(queryset)
-    return _count_in_python(queryset, exp_filter_genes_map)
+    return _count_in_sql(get_observed_mutation_queryset(ale_experiment_id))
 
 
 #: What `/stats` reads. An `ExperimentSummary` row stood here with these four field names,

@@ -1,0 +1,89 @@
+"""`{% view_filter_fields %}`, `{% view_filter_form %}` and `{% view_filter_summary %}`.
+
+The plugin-facing surface of filtering: the controls a reader changes their view with, and the
+line a table shows about what it did. Tags rather than context keys, and that is what makes them
+generic -- they read `ale_experiment_id` and the request straight out of the context every table
+page already has, so including them in `base_table_template.html` reaches aledb-compare,
+aledb-fixation and aledb-converge without touching any of those repositories.
+
+The library was `filter_summary`, which described a shared setting somebody else had configured.
+It renders the controls now as well, because the filter belongs to whoever is reading.
+
+**A control that does nothing is worse than no control.** The old checkbox this replaces was
+gated on a `show_filter_toggles` flag each page had to remember to set, because it rendered inert
+on three pages that never read it back. That flag is gone and the property is structural instead:
+these tags render nothing at all without an `ale_experiment_id` in the context, and any page that
+has one resolves its filter through `get_view_filter`, so there is no way to draw a control that
+is not connected to anything.
+"""
+
+from django import template
+
+from aledb_filter.util import describe_filters
+from aledb_filter.view_filter import GENES_PARAM, MAX_PARAM, MIN_PARAM, get_view_filter
+
+register = template.Library()
+
+
+def _resolved(context):
+    """The experiment on this page and the filter the reader has on it, or `(None, None)`."""
+    experiment_id = context.get("ale_experiment_id")
+    request = context.get("request")
+    if not experiment_id or request is None:
+        return None, None
+    return experiment_id, get_view_filter(request, experiment_id)
+
+
+def _fields_context(context, standalone):
+    experiment_id, view_filter = _resolved(context)
+    if experiment_id is None:
+        return {"experiment_id": None}
+    return {
+        "experiment_id": experiment_id,
+        "standalone": standalone,
+        "view_filter": view_filter,
+        "genes_text": ", ".join(view_filter.genes),
+        "min_param": MIN_PARAM,
+        "max_param": MAX_PARAM,
+        "genes_param": GENES_PARAM,
+    }
+
+
+@register.inclusion_tag("filter/_fields.html", takes_context=True)
+def view_filter_fields(context):
+    """The filter's inputs, with no `<form>` of their own.
+
+    For a page that already has one -- `base_table_template.html` puts every view control
+    (columns, ALE, sample type, tags) in a single GET form behind a single Apply button, and a
+    second form beside it would mean two Apply buttons that discard each other's pending edits.
+    """
+    return _fields_context(context, standalone=False)
+
+
+@register.inclusion_tag("filter/_fields.html", takes_context=True)
+def view_filter_form(context):
+    """The same inputs wrapped in their own GET form, for a page with no form to join."""
+    return _fields_context(context, standalone=True)
+
+
+@register.inclusion_tag("filter/_summary.html", takes_context=True)
+def view_filter_summary(context, own_rules=None):
+    """Say what filtering shaped the rows on this page.
+
+    `own_rules` is for a page filtering by rules of its own -- aledb-phylogeny encodes frequency
+    in three states rather than excluding on it, and search spans experiments so no one reader's
+    filter applies. A sentence says so, where an empty summary would read as "no filtering here"
+    when the truth is "different filtering here".
+    """
+    if own_rules:
+        return {"own_rules": own_rules, "summary": None, "experiment_id": None}
+
+    experiment_id, view_filter = _resolved(context)
+    return {
+        "own_rules": None,
+        # The same object the exclusion is built from, so the sentence and the rows cannot
+        # disagree -- a page confidently describing filtering it is not doing is worse than one
+        # that says nothing.
+        "summary": describe_filters(view_filter),
+        "experiment_id": experiment_id,
+    }

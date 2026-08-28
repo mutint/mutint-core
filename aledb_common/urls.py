@@ -34,7 +34,6 @@ def get_core_urlpatterns():
         re_path(r'^ale/', include('aledb_experiment.urls')),
         re_path(r'^bibliome/', include('aledb_bibliome.urls')),
         re_path(r'^export/', include('aledb_export.urls')),
-        re_path(r'^filter/', include('aledb_filter.urls')),
         re_path(r'^import/', include('aledb_import.urls')),
         re_path(r'^interop-query/', include('aledb_interop_query.urls')),
         re_path(r'^metadata/', include('aledb_metadata.urls')),

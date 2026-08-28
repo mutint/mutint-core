@@ -1,0 +1,42 @@
+{% comment %}
+The reader's own filter. Nothing is stored against the experiment: this shapes the page you are
+looking at and the file you download from it, it is remembered in your session, and it is yours.
+
+Renders nothing without an experiment. That is the whole of the gate the old
+`show_filter_toggles` flag used to be -- a control that does nothing is worse than no control,
+and a page with an `ale_experiment_id` always resolves its filter through `get_view_filter`.
+
+`standalone` wraps the inputs in their own GET form, for a page that has none of its own.
+`base_table_template.html` passes False and drops these into the form it already has, because
+that page keeps every view control behind one Apply button and a second one would mean two
+buttons that discard each other's edits.
+{% endcomment %}
+{% if experiment_id %}
+    {% if standalone %}<form action="" method="get" class="form-inline" style="margin: 6px 0;">
+        <input type="hidden" name="ale_experiment_id" value="{{ experiment_id }}"/>{% endif %}
+    <b>Showing: </b>
+    <label style="font-weight: normal; margin-left: 6px;">
+        frequency
+        <input type="text" name="{{ min_param }}" size="3" placeholder="0"
+               value="{% if view_filter.min_freq is not None %}{{ view_filter.min_freq }}{% endif %}"/>
+        &ndash;
+        <input type="text" name="{{ max_param }}" size="3" placeholder="100"
+               value="{% if view_filter.max_freq is not None %}{{ view_filter.max_freq }}{% endif %}"/>%
+    </label>
+    <label style="font-weight: normal; margin-left: 10px;">
+        ignoring genes
+        <input type="text" name="{{ genes_param }}" size="18" placeholder="none"
+               value="{{ genes_text }}"/>
+    </label>
+    {% if standalone %}
+        <input type="submit" class="btn btn-default btn-primary" value="Apply"/>
+    {% endif %}
+    {% if view_filter.is_empty %}{% else %}
+        {% comment %} The parameters are present and empty, which is what clears it: the
+           resolver tests for presence, not truthiness, so this is how a URL says "no
+           filter". Shown only when there is something to clear. {% endcomment %}
+        <a href="?ale_experiment_id={{ experiment_id }}&amp;{{ min_param }}=&amp;{{ max_param }}=&amp;{{ genes_param }}="
+           class="btn btn-link btn-sm">clear</a>
+    {% endif %}
+    {% if standalone %}</form>{% endif %}
+{% endif %}

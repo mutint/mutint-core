@@ -168,13 +168,14 @@ class BreseqTablePageTestCase(TestCase):
 
     # --- the empty state ------------------------------------------------------
 
-    def _empty_the_table(self):
-        """Filter every mutation out, so the {% empty %} branch renders."""
-        from aledb_filter.models import AleExperimentFilter
-        AleExperimentFilter.objects.update_or_create(
-            ale_experiment=self.experiment,
-            defaults={"ignored_genes": ", ".join(
-                Mutation.objects.values_list("gene", flat=True).distinct())})
+    def _empty_filter_params(self):
+        """Ignore every gene, so the {% empty %} branch renders.
+
+        Through the query string, which is how a reader sets their filter -- it used to write a
+        shared `AleExperimentFilter` row, and there is no such row now.
+        """
+        return {"ignore_genes": ", ".join(
+            Mutation.objects.values_list("gene", flat=True).distinct())}
 
     def test_the_empty_message_spans_exactly_the_columns_rendered(self):
         """The colspan was hardcoded to 8 while a clonal sample has 7 columns,
@@ -189,8 +190,7 @@ class BreseqTablePageTestCase(TestCase):
                 isolate = self.reseq.tech_rep.isolate
                 isolate.is_population = population
                 isolate.save()
-                self._empty_the_table()
-                content = self.content()
+                content = self.content(**self._empty_filter_params())
 
                 self.assertIn("No mutations passed the current filters", content)
                 headers = content.count("<th ")

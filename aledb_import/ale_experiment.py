@@ -9,8 +9,6 @@ from aledb_common.util import _find_between
 import aledb_metadata.parser
 from aledb_dashboard.timeline_util import create_event
 from aledb_dashboard.util import rebuild_dashboard_data
-from aledb_filter.models import AleExperimentFilter
-import aledb_filter.models
 import logging
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment.models import AleExperiment, Project

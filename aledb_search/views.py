@@ -95,6 +95,9 @@ def _get_observed_mutations(search_include_param_list, search_exclude_param_list
     :return: mutation_queryset and observed_mutation_queryset based on user request and user permission
     """
     obs_mut_qryset = _get_mut_qryset(search_include_param_list, search_exclude_param_list)
+    # Unfiltered, and deliberately. Search spans experiments and a reader's filter belongs to
+    # one, so there is no single value to apply; the page's own frequency boxes are its filter.
+    # It used to apply each experiment's shared row, which is what its summary line said.
     observed_mutations = filter_observed_mutations(obs_mut_qryset)
     return observed_mutations
 

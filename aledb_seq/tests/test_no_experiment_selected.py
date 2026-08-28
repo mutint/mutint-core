@@ -21,7 +21,6 @@ PAGES = [
     ("/mutations/breseq", "aledb_seq.views.breseq_table", "samples"),
     ("/stats/", "aledb_stats.views", "statistics"),
     ("/metadata/", "aledb_metadata.views", "metadata"),
-    ("/filter/", "aledb_filter.views.ale_exp_filter", "filter settings"),
 ]
 
 

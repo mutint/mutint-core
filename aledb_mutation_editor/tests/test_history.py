@@ -125,12 +125,23 @@ class SnapshotTestCase(EditorTestCase):
 class RebuildTestCase(EditorTestCase):
 
     def test_editing_marks_the_derived_data_stale(self):
-        """Fixation, convergence, the needle plot and the counts are all functions of these
-        rows, so an edit that did not mark them would leave four pages disagreeing."""
+        """An edit that did not mark what is derived from these rows would leave pages
+        disagreeing about the same mutations.
+
+        Registers its own rebuilder, because core has none left that is experiment-scoped:
+        fixation and convergence compute on read, the needle plot and the Overview counts store
+        nothing, and `experiment_filter` went with the shared filter row. An installed plugin
+        is what contributes one now, so the test contributes one too.
+        """
+        from aledb_common.rebuild_registry import register_rebuilder, unregister_rebuilder
+
+        register_rebuilder("test.derived", lambda experiment_id: None)
+        self.addCleanup(unregister_rebuilder, "test.derived")
+
         history.rebuild_after_edit(self.experiment)
 
-        states = DerivedDataState.objects.filter(ale_experiment=self.experiment)
-        self.assertTrue(states.exists())
+        self.assertTrue(DerivedDataState.objects.filter(
+            name="test.derived", ale_experiment=self.experiment).exists())
 
     def test_the_dashboard_totals_are_marked_stale_but_not_rebuilt(self):
         """Site-scoped, and deliberately not narrowed away -- but not run here either.
@@ -160,9 +171,19 @@ class RebuildTestCase(EditorTestCase):
 
     def test_the_experiments_own_derived_data_is_rebuilt_here(self):
         """The other half of the same split: what the caller just changed is made warm now,
-        because it is already paying for a long operation and is about to look at it."""
-        from aledb_common.rebuild_registry import is_stale
+        because it is already paying for a long operation and is about to look at it.
+
+        Experiment-scoped, which is the half that runs -- the site-wide totals are marked and
+        left for the dashboard, as the test above asserts. Registers its own rebuilder for the
+        reason the one above does: core has no experiment-scoped one left.
+        """
+        from aledb_common.rebuild_registry import (
+            is_stale, register_rebuilder, unregister_rebuilder,
+        )
+
+        register_rebuilder("test.warmed", lambda experiment_id: None)
+        self.addCleanup(unregister_rebuilder, "test.warmed")
 
         history.rebuild_after_edit(self.experiment)
 
-        self.assertFalse(is_stale("experiment_filter", self.experiment.ale_id))
+        self.assertFalse(is_stale("test.warmed", self.experiment.ale_id))

@@ -339,13 +339,21 @@ class StillAllowedTestCase(LockTestCase):
         """Derived data is a function of the mutations, not a change to them. A locked
         experiment whose counts silently went stale would be worse, not safer."""
         from aledb_common.models import DerivedDataState
+        from aledb_common.rebuild_registry import register_rebuilder, unregister_rebuilder
         from aledb_mutation_editor import history
+
+        # Core has no experiment-scoped rebuilder of its own any more -- the last one was
+        # `experiment_filter`, which defaulted a shared filter row that no longer exists, and
+        # what remains is the dashboard's two site-scoped totals. So this registers one, which
+        # is what an installed plugin would contribute.
+        register_rebuilder("test.locked", lambda experiment_id: None)
+        self.addCleanup(unregister_rebuilder, "test.locked")
 
         self.lock()
         history.rebuild_after_edit(self.experiment)
 
         self.assertTrue(DerivedDataState.objects.filter(
-            ale_experiment=self.experiment).exists())
+            name="test.locked", ale_experiment=self.experiment).exists())
 
     def test_access_can_still_be_changed(self):
         """Locking is per experiment, access is per project; freezing one must not freeze

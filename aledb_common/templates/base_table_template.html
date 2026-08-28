@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load filter_summary %}
+{% load view_filter %}
 {% block title %}Mutations{% endblock %}
 {% block scripts_and_style %}
 
@@ -77,23 +77,14 @@
                         <option>Hide Tag: {{ key }}</option>
                     {% endfor %}
                 </select>
-                {% comment %} Only Compare reads these back off the query string. Fixed
-                   Mutations, Converged Mutations and Search render this same template and
-                   never did, so the boxes sat there inert on three pages -- a control that
-                   does nothing is worse than no control. The page that honours them says
-                   so. {% endcomment %}
-                {% if show_filter_toggles %}
-                <label style="margin-left: 10px; font-weight: normal;">
-                    {% comment %} `Show Global Filtered` stood here beside its sibling. It
-                       offered to reveal what the installation-wide ignored-gene list hid, and
-                       that list is gone -- there is one filter now, and it belongs to the
-                       experiment. {% endcomment %}
-                </label>
-                <label style="margin-left: 10px; font-weight: normal;">
-                    <input type="checkbox" name="show_exp_filtered" value="1"
-                           {% if show_exp_filtered %}checked{% endif %} /> Show Experiment Filtered
-                </label>
-                {% endif %}
+                {% comment %} The reader's own filter, in the form that already carries every
+                   other view control on this page -- one Apply button, not two. A
+                   `Show Experiment Filtered` checkbox stood here: it revealed what the *shared*
+                   experiment filter hid, a question that stops meaning anything once the filter
+                   is yours and clearing it is a click away. It was gated on a flag only Compare
+                   set, because it rendered inert on the other three pages; the tag gates itself
+                   now. {% endcomment %}
+                {% view_filter_fields %}
                 <input type="submit" class="btn btn-default btn-primary" value="Apply"/>
                 <button type="button" class="btn btn-default" onclick="column_sort_from_right()">
                     <i class="fa fa-sort-amount-desc fa-fw" aria-hidden="true"></i>Column Sort from Right
@@ -102,10 +93,10 @@
         </div>
         {% comment %} What filtering produced the table below. Included here rather than in
            each page, because this template is shared by aledb-compare, aledb-fixation and
-           aledb-converge -- so all three say what they did without a line of their own. The
-           tag reads `ale_experiment_id` and `show_exp_filtered` straight out of the context
-           they already set. {% endcomment %}
-        {% filter_summary %}
+           aledb-converge -- so all three say what they did, and all three get the controls
+           above, without a line of their own. The tags read `ale_experiment_id` and the request
+           straight out of the context they already set. {% endcomment %}
+        {% view_filter_summary %}
         <div><i>Note: You must select the Apply button when selecting specific ALEs or show/hide of columns according to
             tags.</i></div>
         <br>

@@ -23,6 +23,7 @@ from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_edit_project
 from aledb_filter.util import filter_observed_mutations
+from aledb_filter.view_filter import get_view_filter
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import ExperimentReference, ObservedMutation
 from aledb_seq.util import get_reseq_ordered_dict
@@ -44,7 +45,8 @@ def breseq_table(request):
                                             sample_type, request)
         reseq = _selected_reseq(request, reseq_dict)
 
-        rows = _rows_for(experiment, reseq) if reseq is not None else []
+        view_filter = get_view_filter(request, experiment.ale_id)
+        rows = _rows_for(experiment, reseq, view_filter) if reseq is not None else []
 
         context.update(experiment.experiment_context())
         context.update({
@@ -96,10 +98,10 @@ def _selected_reseq(request, reseq_dict):
     return None
 
 
-def _rows_for(experiment, reseq):
+def _rows_for(experiment, reseq, view_filter=None):
     observed = filter_observed_mutations(
         ObservedMutation.objects.filter(sequencing_experiment=reseq).select_related("mutation"),
-        experiment.ale_id)
+        view_filter=view_filter)
     # filter_observed_mutations orders across samples; within one sample breseq
     # orders by reference then position.
     observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))

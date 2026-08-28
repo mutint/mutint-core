@@ -17,8 +17,8 @@ Between them the cutoff was inert in every configuration a person could reach th
 
 from decimal import Decimal
 
-from aledb_filter.models import AleExperimentFilter, get_default_experiment_filter_params
 from aledb_filter.util import filter_observed_mutations
+from aledb_filter.view_filter import ViewFilter
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import ObservedMutation
 
@@ -27,9 +27,9 @@ class FrequencyCutoffTestCase(EditorTestCase):
 
     def setUp(self):
         super().setUp()
-        self.filter = AleExperimentFilter.objects.create(
-            **get_default_experiment_filter_params(self.experiment))
-        # 1% and 99%: outside any cutoff either end of the default 20-100.
+        # The cutoffs are the reader's now rather than a stored row, so each test states the
+        # one it is exercising. 1% and 99%: outside a cutoff at either end.
+        self.view_filter = ViewFilter.parse(min_freq=20)
         self.low = self._at(self.mut_2, "0.0100")
         self.high = self._at(self.mut_3, "0.9900")
 
@@ -41,13 +41,13 @@ class FrequencyCutoffTestCase(EditorTestCase):
         return observed
 
     def _kept(self):
-        return {observed.id for observed
-                in filter_observed_mutations(ObservedMutation.objects.all())}
+        return {observed.id for observed in filter_observed_mutations(
+            ObservedMutation.objects.all(), view_filter=self.view_filter)}
 
     def _cutoffs(self, **values):
-        for name, value in values.items():
-            setattr(self.filter, name, value)
-        self.filter.save()
+        self.view_filter = ViewFilter.parse(
+            min_freq=values.get("min_cutoff", self.view_filter.min_freq),
+            max_freq=values.get("max_cutoff", self.view_filter.max_freq))
 
     # --- the floor ------------------------------------------------------------------------
 

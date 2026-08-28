@@ -1,3 +1,4 @@
+import inspect
 import logging
 
 logger = logging.getLogger(__name__)
@@ -6,6 +7,8 @@ _sequence_rename_hooks = []
 _plugin_urlpatterns = []
 _export_handlers = {}
 _export_labels = {}
+#: Whether each handler's signature can accept the reader's filter. See below.
+_export_takes_filter = {}
 
 
 def register_post_experiment_hook(fn):
@@ -117,16 +120,54 @@ def get_plugin_urlpatterns():
 
 
 def register_export_handler(type_str, fn, label=None):
-    """Register fn(ale_experiment_id) -> ObservedMutation queryset for a named export type.
+    """Register `fn(ale_experiment_id, view_filter=None)` -> ObservedMutation queryset.
 
-    label is the human-readable name shown in export menus; it defaults to type_str.
+    `label` is the human-readable name shown in export menus; it defaults to `type_str`.
+
+    **The second argument is optional and a handler may simply not have it.** The contract was
+    `fn(experiment_id)` before filtering became a per-reader affair, and a download should carry
+    the filter the page it was launched from was showing -- but no plugin should have to be
+    edited to keep working. The signature is inspected once, here, and `get_export_handler`
+    returns a callable that always takes both and forwards or drops the filter to suit.
+
+    Inspecting rather than `try: fn(a, b) except TypeError: fn(a)`, because that swallows a
+    `TypeError` raised *inside* the handler and turns a plugin's bug into a silently unfiltered
+    export -- which looks like data, not like a failure.
     """
     _export_handlers[type_str] = fn
+    _export_takes_filter[type_str] = _accepts_view_filter(fn)
     _export_labels[type_str] = label or type_str
 
 
+def _accepts_view_filter(fn):
+    """Whether `fn` can be handed a view filter: by name, by **kwargs, or by arity."""
+    try:
+        parameters = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False        # a builtin or C callable; assume the old contract
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        return True
+    positional = [p for p in parameters.values()
+                  if p.kind in (inspect.Parameter.POSITIONAL_ONLY,
+                                inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    return "view_filter" in parameters or len(positional) >= 2
+
+
 def get_export_handler(type_str):
-    return _export_handlers.get(type_str)
+    """The handler for a type, normalised to `(experiment_id, view_filter=None)`.
+
+    Always safe to call with both arguments; one that predates the filter never sees it.
+    """
+    handler = _export_handlers.get(type_str)
+    if handler is None:
+        return None
+    if _export_takes_filter.get(type_str):
+        return handler
+
+    def without_filter(experiment_id, view_filter=None):
+        return handler(experiment_id)
+
+    return without_filter
 
 
 def get_export_types():

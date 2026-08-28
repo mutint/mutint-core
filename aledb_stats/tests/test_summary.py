@@ -37,7 +37,6 @@ from django.test import TestCase
 from aledb_experiment.models import (
     AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
 )
-from aledb_filter.models import AleExperimentFilter
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 from aledb_stats.util import compute_experiment_counts
 
@@ -104,17 +103,17 @@ class SummaryTestCase(TestCase):
             sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _filter(self, **fields):
-        """Set fields on this experiment's filter, creating the row if it has none.
+        """The reader's filter, as a value rather than a stored row.
 
-        An experiment created through the UI has no AleExperimentFilter until something
-        rebuilds it -- `ensure_default_experiment_filter` is the registered rebuild that now
-        does, and it used to be the first statement of `gd_import.run_post_processing`, where
-        only an import could reach it. A bare `.update()` here would silently match no rows.
+        This used to call `ensure_default_experiment_filter` and then `update()` an
+        `AleExperimentFilter`, because an experiment created through the UI had no row until
+        something rebuilt one. There is no row: a filter is a value the caller passes in.
         """
-        from aledb_filter.util import ensure_default_experiment_filter
+        from aledb_filter.view_filter import ViewFilter
 
-        ensure_default_experiment_filter(self.experiment.ale_id)
-        AleExperimentFilter.objects.filter(ale_experiment=self.experiment).update(**fields)
+        return ViewFilter.parse(min_freq=fields.get("min_cutoff"),
+                                max_freq=fields.get("max_cutoff"),
+                                genes=fields.get("ignored_genes"))
 
     def _observe(self, sample, mutation):
         return ObservedMutation.objects.create(
@@ -152,23 +151,27 @@ class SummaryTestCase(TestCase):
                          "every mutation gets exactly one functional-change bucket, unlike the "
                          "type counts above, where an unknown type is dropped")
 
-    def test_a_frequency_cutoff_is_applied(self):
-        """Excluded in SQL, by the queryset both paths share.
+    def test_it_is_not_filtered(self):
+        """**The Overview shows what the experiment holds.**
 
-        This used to need `frequency_gatk` set alongside `frequency` or it failed, and said
-        so: the filter ANDed a `frequency_gatk__lt` term in whenever `min_gatk_cutoff` was
-        set, which was always, and a comparison against null is never true -- so a real
-        observation, which never had a GATK frequency, ignored the cutoff entirely. The
-        column is gone and the workaround with it, so this now pins the cutoff against the
-        rows an import actually produces.
+        Its counts went through the shared experiment filter until filtering became a
+        per-reader affair, and this page was left out of that -- it summarises a dataset the
+        way the dashboard does rather than showing rows you read through. Several tests stood
+        here pinning that a frequency cutoff and an ignored-gene list reached these counts.
         """
         low = self._observe(self.samples[0], self._mutation("MOB", "", gene="insH"))
         low.frequency = "0.0100"
         low.save()
-        self._filter(min_cutoff=50)
 
         types, _, _, _ = self._counts()
-        self.assertEqual(0, types["MOB"], "the 1% observation is below the 50% cutoff")
+
+        self.assertEqual(1, types["MOB"], "the Overview has started filtering")
+
+    def test_it_takes_no_filter_argument(self):
+        import inspect
+
+        self.assertNotIn("view_filter",
+                         inspect.signature(compute_experiment_counts).parameters)
 
     def test_a_deleted_mutation_is_excluded(self):
         """This used to set the filter's `ignored_mutations` list, which hid a mutation from
@@ -186,55 +189,21 @@ class SummaryTestCase(TestCase):
         types, _, _, _ = self._counts()
         self.assertEqual(0, types["DEL"])
 
-    # ---- the Python path ------------------------------------------------------------
-    def test_a_noncoding_gene_filter_matches_the_original(self):
-        """A gene filter forces the row-walking path; it must reach the same answer.
+    # ---- there is one counting path now ----------------------------------------------
+    def test_the_counts_come_from_sql_alone(self):
+        """There were two paths: a gene filter forced the rows to be walked in Python, because
+        "every gene this mutation touches is in the ignore list" is a set-subset test with no
+        SQL. Nothing is filtered here now, so there is nothing SQL cannot express and
+        `_count_in_python` went with the branch that chose it."""
+        from aledb_stats import util
 
-        This case used the site-wide list before it was removed. There is one filter now, so
-        it exercises the same path through the experiment's own."""
-        self._filter(ignored_genes="rrlA")
-        types, _, _, _ = self._counts()
-        self.assertEqual(1, types["SNP"],
-                         "the noncoding SNP is in the ignored gene; the other SNP is not")
+        self.assertFalse(hasattr(util, "_count_in_python"))
 
-    def test_an_experiment_gene_filter_matches_the_original(self):
-        self._filter(ignored_genes="araB")
-        types, _, _, _ = self._counts()
-        self.assertEqual(0, types["INS"], "araB was the only INS")
-
-    def test_a_multi_gene_mutation_survives_a_partial_gene_filter(self):
-        """The rule is subset, not intersection: ignoring one of two genes ignores nothing.
-
-        This is the branch that cannot be expressed in SQL and the reason the second path
-        exists at all, so it is the one worth pinning.
-        """
-        self._filter(ignored_genes="thrB")
-        types, _, _, _ = self._counts()
-        self.assertEqual(1, types["DEL"], "thrB/thrC is not a subset of {thrB}")
-
-    def test_both_paths_agree_with_each_other(self):
-        """Same data, same answer, whichever branch computes it."""
-        with_sql = compute_experiment_counts(self.experiment.ale_id)
-        # A gene filter naming a gene no mutation has changes no count, but does force the
-        # row-walking path -- which is precisely how to compare the two on one dataset.
-        self._filter(ignored_genes="notAGene")
-        with_python = compute_experiment_counts(self.experiment.ale_id)
-        self.assertEqual(with_sql, with_python)
-
-    # ---- the severity hierarchy, down both paths --------------------------------------
+    # ---- the severity hierarchy --------------------------------------
     def _both_paths(self):
-        """The counts from the SQL branch and the row-walking branch, as a pair.
-
-        A gene filter naming a gene no mutation has changes no count but forces the second
-        branch, which is how one dataset exercises both. Every case below asserts the pair is
-        equal as well as correct: the two resolve buckets from different shapes -- one from
-        grouped strings, one per row -- so a hierarchy implemented twice could disagree.
-        """
-        with_sql = compute_experiment_counts(self.experiment.ale_id)
-        self._filter(ignored_genes="notAGene")
-        with_python = compute_experiment_counts(self.experiment.ale_id)
-        self.assertEqual(with_sql, with_python, "the two counting paths disagree")
-        return with_sql
+        """The counts. Named for the two paths there used to be -- one aggregating in SQL, one
+        walking rows because a gene filter cannot be expressed in SQL. There is one now."""
+        return compute_experiment_counts(self.experiment.ale_id)
 
     def test_a_compound_snp_type_takes_the_most_severe_bucket(self):
         """A SNP in two overlapping reading frames carries one value per gene, joined with '|'.

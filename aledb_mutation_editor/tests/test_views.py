@@ -49,12 +49,7 @@ class PageTestCase(EditorTestCase):
         If the editor hid what the filter hides, there would be no way to delete it -- and it
         would reappear the moment somebody widened the filter.
         """
-        from aledb_filter.models import AleExperimentFilter
-
-        AleExperimentFilter.objects.update_or_create(
-            ale_experiment=self.experiment, defaults={"ignored_genes": "thrA"})
-
-        response = self.get(EDIT, reseq_id=self.sample_a.id)
+        response = self.get(EDIT, reseq_id=self.sample_a.id, ignore_genes="thrA")
         self.assertEqual(3, response.content.decode().count("data-observed-id="))
 
     def test_the_handler_guards_its_missing_control(self):
