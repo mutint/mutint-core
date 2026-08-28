@@ -260,7 +260,7 @@ class RebuildCommandTestCase(TestCase):
 
     def test_list_names_what_is_registered(self):
         output = self._run("--list")
-        for name in ("experiment_filter", "overview", "static_data", "sample_counts"):
+        for name in ("experiment_filter", "sample_counts", "mutation_counts"):
             self.assertIn(name, output)
 
     def test_list_says_when_nothing_has_ever_been_built(self):
@@ -285,39 +285,47 @@ class RebuildCommandTestCase(TestCase):
         with self.assertRaises(CommandError):
             self._run(str(self.experiment.ale_id), "--all")
 
-    def test_it_rebuilds_the_named_experiment(self):
-        from aledb_stats.models import ExperimentSummary
+    # These four watch `experiment_filter`, whose rebuild writes an `AleExperimentFilter`
+    # row for an experiment that has none -- an effect visible in the database, which is what
+    # they need. They watched `overview` until it stopped storing anything; the command is
+    # what is under test either way, not the rebuild it runs.
+    def _filters(self, experiment):
+        from aledb_filter.models import AleExperimentFilter
 
-        self._run(str(self.experiment.ale_id), only=["overview"])
-        self.assertTrue(
-            ExperimentSummary.objects.filter(ale_experiment=self.experiment).exists())
+        return AleExperimentFilter.objects.filter(ale_experiment=experiment)
+
+    def test_it_rebuilds_the_named_experiment(self):
+        self.assertFalse(self._filters(self.experiment).exists(),
+                         "an experiment created through the UI has no filter row yet")
+
+        self._run(str(self.experiment.ale_id), only=["experiment_filter"])
+
+        self.assertTrue(self._filters(self.experiment).exists())
 
     def test_all_rebuilds_every_live_experiment(self):
-        from aledb_stats.models import ExperimentSummary
-
         second = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
         other = AleExperiment.objects.get(pk=second["experiment_id"])
 
-        self._run("--all", only=["overview"])
-        self.assertEqual(2, ExperimentSummary.objects.count())
-        self.assertTrue(ExperimentSummary.objects.filter(ale_experiment=other).exists())
+        self._run("--all", only=["experiment_filter"])
+
+        self.assertTrue(self._filters(self.experiment).exists())
+        self.assertTrue(self._filters(other).exists())
 
     def test_all_leaves_a_soft_deleted_experiment_alone(self):
         """Rebuilding one is work whose result nobody can see."""
-        from aledb_stats.models import ExperimentSummary
         from django.utils import timezone
 
         AleExperiment.objects.filter(pk=self.experiment.pk).update(
             deleted_at=timezone.now())
-        self._run("--all", only=["overview"])
+        self._run("--all", only=["experiment_filter"])
 
-        self.assertFalse(
-            ExperimentSummary.objects.filter(ale_experiment=self.experiment).exists())
+        self.assertFalse(self._filters(self.experiment).exists())
 
     def test_a_second_run_reports_everything_current(self):
-        self._run(str(self.experiment.ale_id), only=["overview"])
-        self.assertIn("0 rebuilt", self._run(str(self.experiment.ale_id), only=["overview"]))
+        self._run(str(self.experiment.ale_id), only=["experiment_filter"])
+        self.assertIn("0 rebuilt",
+                      self._run(str(self.experiment.ale_id), only=["experiment_filter"]))
 
 
 class DeclaredInputsTestCase(TestCase):

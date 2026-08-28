@@ -495,6 +495,13 @@ The sharpest case was a single page: `/stats` renders `get_experiment_summary`, 
 refreshed, beside `get_needle_plot_data`, which did not -- two counts of the same mutations
 disagreeing in the same viewport. Every reader calls `ensure_fresh` now.
 
+**That page then went further and stopped storing either of them**, which is the better answer
+where it is available: an `ensure_fresh` closes the gap between two caches, and having no cache
+means there is no gap to close. `/stats` is two queries over the same rows now, so the two
+halves cannot disagree about how fresh they are. The remaining readers that do call
+`ensure_fresh` -- `aledb_dashboard` and `aledb-fixation` -- are the ones whose answer is
+genuinely expensive to produce.
+
 **A plugin must not spell its own rebuilder's name.** `register_post_experiment_hook` derives
 it from the app label, suffixes a second registration, and **returns** what it used;
 aledb-fixation captures that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
@@ -1611,10 +1618,12 @@ All apps use the `aledb_*` namespace. Key apps:
   **Adding a mutation by hand** above.
 - **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
 - **`aledb_export/`** — Data export in various formats.
-- **`aledb_stats/`** — Precomputed statistics: `StaticData` (the needle plot) and
-  `ExperimentSummary` (the Overview's mutation counts). Both are rebuilt through
-  `aledb_common.rebuild_registry` rather than computed per request; the Overview used to
-  materialise every ObservedMutation in the experiment to produce sixteen integers.
+- **`aledb_stats/`** — The `/stats` page: the Overview's mutation counts and the needle
+  plot. **It has no models.** Both were stored — `ExperimentSummary` and `StaticData`, each
+  with its own rebuilder — and both are computed by the request that renders them now, in
+  0.07s and 0.05s on the largest experiment in the dev database. What made that possible is
+  reading the three or four columns each answer needs as `values_list` tuples instead of
+  materialising every ObservedMutation in the experiment as a model.
 - **`aledb_search/`** — Cross-experiment search.
 - **`aledb_bibliome/`** — Publication/bibliography management.
 - **`aledb_dashboard/`** — Dashboard views and timeline events.
@@ -1713,10 +1722,11 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
    `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes
 3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances
 4. Ends in `gd_import.run_post_processing`, which asks the rebuild registry to recompute
-   everything derived -- the experiment filter defaults, each plugin's tables
-   (`aledb_fixation`, `aledb_converge`), the needle-plot data and the Overview's counts, then
-   the dashboard's installation-wide totals. See **Derived data and rebuilds** in the suite
-   `CLAUDE.md`; none of it is the Django cache framework, which this repo does not use.
+   everything derived -- the experiment filter defaults, `aledb_fixation`'s table, then the
+   dashboard's installation-wide totals. It asks for whatever is registered, so the needle
+   plot, the Overview's counts and convergence dropped off it by ceasing to be registered
+   rather than by an edit here. See **Derived data and rebuilds** in the suite `CLAUDE.md`;
+   none of it is the Django cache framework, which this repo does not use.
 
 ### Infrastructure (production)
 

@@ -11,13 +11,11 @@ from aledb_dashboard.timeline_util import create_event
 from aledb_dashboard.util import rebuild_dashboard_data
 from aledb_filter.models import AleExperimentFilter
 import aledb_filter.models
-from aledb_stats.util import generate_static_data
 import logging
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment.models import AleExperiment, Project
 from django.contrib.auth.models import User
 from datetime import datetime
-from aledb_stats.models import StaticData
 from aledb_experiment.permissions import set_primary_owner
 
 WILD_TYPE_ALE_NUMBER = 0
@@ -69,11 +67,11 @@ def delete_ale_experiments(ale_experiment_primary_key_list):
         print("Deleting Experiment #" + str(exp_id) + ":", ale_experiment_to_delete.name)
         message = "Experiment %s was deleted" % ale_experiment_to_delete.name
         ale_experiment_to_delete.delete()
-        # StaticData has no FK -- it is tied to the experiment only by the convention
-        # StaticData.id == AleExperiment.ale_id -- and it only exists once post-processing
-        # has run. An experiment with no mutations has none, and `get()` raised here *after*
-        # the experiment row was already deleted, leaving the delete half-finished.
-        StaticData.objects.filter(id=exp_id).delete()
+        # The `StaticData` sweep that stood here is gone with the table. It was needed because
+        # that row had no FK to the experiment -- only the convention that its pk *was* the
+        # experiment's -- so a cascade could not reach it, and `get()` raised on an experiment
+        # that had never been post-processed, leaving the delete half-finished. Nothing
+        # derived from this experiment outlives it now, because nothing derived is stored.
         create_event(title="Experiment Deleted",
                      message=message,
                      icon='<i class="fa fa-times" aria-hidden="true"></i>',
@@ -103,12 +101,6 @@ def delete_isolate(ale_experiment_primary_key, ale_number, flask_number, isolate
             isolate.delete()
             print("Successfully removed: ", ale_number, flask_number, isolate_number)
     _delete_all_orphaned_mutations()
-
-
-def rebuild_all_static_data():
-    ale_experiment_queryset = aledb_experiment.models.AleExperiment.objects.all()
-    for ale_experiment in ale_experiment_queryset:
-        generate_static_data(ale_experiment.ale_id)
 
 
 def upload_ale_experiment(experiment_path):

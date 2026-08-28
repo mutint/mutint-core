@@ -539,8 +539,12 @@ class RebuildHooksTestCase(SampleEditTestCase):
             for call in (run_rebuilds.call_args, request_rebuild.call_args):
                 asked_for = call.kwargs["only"]
                 self.assertIn("sample_counts", asked_for)
-                self.assertIn("overview", asked_for)
                 self.assertNotIn("mutation_counts", asked_for)
+                # `overview` and `static_data` used to be named and then not-named here.
+                # Neither is a rebuilder any longer -- the Overview's counts and the needle
+                # plot are computed by the request that renders them -- so naming either
+                # would be a name `get_rebuilders` silently skips, which reads as coverage.
+                self.assertNotIn("overview", asked_for)
                 self.assertNotIn("static_data", asked_for)
 
     def test_a_descriptive_save_rebuilds_nothing(self):

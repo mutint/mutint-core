@@ -1,55 +1,24 @@
-from django.db import models
-from jsonfield import JSONField
+"""No models.
 
-# Create your models here.
-class StaticData(models.Model):
-    id = models.AutoField(primary_key=True)
-    mut_needle_data = JSONField(default=dict)
+Two stood here, and they were the same idea a generation apart. `StaticData` held the needle
+plot's `{coord, category, value}` list as a JSON blob, precomputed at import since long before
+there was a rebuild registry to keep it current. `ExperimentSummary` held the Overview's four
+count dictionaries, and was added when the page's cost was traced to materialising every
+observation in the experiment to arrive at about sixteen integers.
 
+Both are gone, and for the same reason: the cost was never the counting, it was fetching rows
+as model instances. Reading the three or four columns each answer actually needs, as tuples,
+brings the needle plot to 0.05s and the counts to 0.07s on the largest experiment in the dev
+database -- 52 139 observations, against 3.38s for the model-instance path.
 
-class ExperimentSummary(models.Model):
-    """The Overview page's mutation counts, computed once instead of on every view.
+What went with them is what a cache costs beyond disk. Two registered rebuilders, marked stale
+by every mutation edit and every filter change. Two `ensure_fresh` calls on the read path. A
+`StaticData` row tied to its experiment only by the convention `id == ale_id`, with no foreign
+key, which both `delete_ale_experiments` and `purge_deleted` had to remember to sweep. And a
+failure mode particular to caching two halves of one page: `/stats` renders both of these from
+the same mutations, and while both were stored they could disagree in the same viewport.
+Neither is stored now and both read `get_observed_mutation_queryset`, so they cannot.
 
-    Sibling to `StaticData` above and the same idea: the needle-plot data has been precomputed
-    at import since long before this, and it is the one part of `/stats` that was ever fast.
-    These four dictionaries are the rest of that page, and producing them used to mean pulling
-    every ObservedMutation in the experiment -- each joined across six tables and carrying two
-    JSONFields and a gene column of up to 19 000 characters -- into a Python list, to arrive at
-    about sixteen integers.
-
-    Registered as the 'overview' rebuilder, so it is warmed by an import, marked stale by a
-    sample renumber or a filter change, and rebuilt by the first page view after that. See
-    `aledb_common/rebuild_registry.py`.
-
-    **Deliberately not stored here: the per-sample rows of the Sample Resequencing Stats
-    table.** Those were slow for a different reason -- two queries per sample fired during
-    template rendering -- and the fix for that is aggregation, not caching. Leaving them live
-    means editing a sample shows up immediately with nothing to invalidate.
-
-    The counts depend on the global and per-experiment filters as well as on the mutations,
-    which is why `aledb_filter`'s two views mark this stale. A summary that ignored the filters
-    would disagree with every mutation table on the site.
-
-    `django.db.models.JSONField`, not the `jsonfield` package `StaticData` uses: the native one
-    is what `aledb_seq.Mutation.annotation` and `.gd_data` use, and it is the one to write new
-    code against.
-    """
-
-    ale_experiment = models.OneToOneField("aledb_experiment.AleExperiment",
-                                          primary_key=True, on_delete=models.CASCADE,
-                                          related_name="summary")
-    # {mutation_type: count} over the distinct mutations in the filtered observed set.
-    mutation_type_counts = models.JSONField(default=dict)
-    # {mutation_type: count} over the filtered observed mutations themselves.
-    observed_mutation_type_counts = models.JSONField(default=dict)
-    # {functional_change_type: count}; a mutation counts once per type its protein_change
-    # contains, so these sums may legitimately exceed the mutation counts above.
-    protein_change_counts = models.JSONField(default=dict)
-    observed_protein_change_counts = models.JSONField(default=dict)
-    computed_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name_plural = "experiment summaries"
-
-    def __str__(self):
-        return "summary of experiment %s" % self.ale_experiment_id
+The app keeps its migrations: `0004` drops both tables, and a deployment upgrading past it
+needs that migration to run.
+"""

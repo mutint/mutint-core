@@ -9,6 +9,11 @@ These tests are about the shape of the cost rather than its size, so they compar
 experiments rather than assert a number. A literal query count would be a tripwire for every
 unrelated change to a context processor; the invariant that matters is that the count does
 not grow with the data.
+
+There used to be a cold page and a warm one, and a test that the second view was cheaper --
+`ExperimentSummary` and `StaticData` were built by the first view and read by the rest.
+Neither is stored now, so every view is a cold one, and the assertion that replaced it is the
+stronger one: the count does not depend on how many times the page has been looked at either.
 """
 
 from django.contrib.auth.models import User
@@ -64,31 +69,32 @@ class OverviewQueryCountTestCase(TestCase):
         self.assertEqual(200, response.status_code)
         return len(captured)
 
-    def test_a_warm_page_costs_the_same_however_many_samples(self):
-        """The 2N fix. Both pages are warmed first so neither pays for a rebuild."""
+    def test_the_cost_does_not_grow_with_the_sample_count(self):
+        """The 2N fix. Twelve samples must cost what one does.
+
+        This was two tests, one warming the pages first and one not, back when the first view
+        of a page built two tables and later views read them. With nothing stored there is
+        only one measurement to make.
+        """
         small = self._experiment("small", samples=1)
         large = self._experiment("large", samples=12)
-        self._queries(small)
-        self._queries(large)
 
         self.assertEqual(self._queries(small), self._queries(large),
                          "the Overview is issuing queries per sample")
 
-    def test_a_cold_page_costs_the_same_however_many_samples(self):
-        """Cold too: the rebuild aggregates, so it does not walk samples either."""
-        small = self._experiment("small", samples=1)
-        large = self._experiment("large", samples=12)
+    def test_every_view_costs_the_same(self):
+        """No view is a rebuild, so no view is dearer than the next.
 
-        self.assertEqual(self._queries(small), self._queries(large),
-                         "the cold rebuild is issuing queries per sample")
-
-    def test_the_second_view_is_cheaper_than_the_first(self):
-        """The summary is what makes it cheaper -- the first view builds it, the rest read it."""
+        The replacement for a test that the *second* view was cheaper. That one passed on a
+        cache being filled; this one fails if a cache comes back -- either as a first view
+        that pays extra, or as a later view that pays less because something was stored.
+        """
         experiment = self._experiment("counted", samples=6)
-        cold = self._queries(experiment)
-        warm = self._queries(experiment)
 
-        self.assertLess(warm, cold, "the summary is being rebuilt on every view")
+        counts = [self._queries(experiment) for _ in range(4)]
+
+        self.assertEqual([counts[0]] * 4, counts,
+                         "a view is doing work the others are not")
 
     def test_the_page_still_shows_the_right_counts(self):
         """A query-count test that stopped rendering the numbers would still pass."""

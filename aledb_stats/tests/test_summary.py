@@ -3,17 +3,21 @@
 `/stats` used to build these four dictionaries by pulling every ObservedMutation in the
 experiment -- each joined across six tables, instantiated as a model, carrying two JSONFields
 and a gene column of up to 19 000 characters -- to arrive at about sixteen integers. They are
-computed in SQL now and stored in `ExperimentSummary`.
+computed where the rows already are now, and nothing is stored.
 
-**Every count test here asserts the new answer against the old helpers**, which are kept in
-`aledb_stats.util` for exactly that. The point is not that the numbers are plausible; it is
-that they are the same numbers, including where the original behaviour is surprising:
+**Every count is pinned literally**, including where the behaviour is surprising:
 
   * a mutation_type outside MUTATION_TYPE_LIST is dropped, not bucketed as unannotated;
   * a protein_change counts once per functional-change token it contains, so 'nonsynonymous'
     also counts under 'synonymous' and those sums exceed the mutation count;
   * "unique" means distinct mutations *surviving the filter*, not every Mutation row the
     experiment owns.
+
+These used to be asserted against the row-walking implementation as well, which was kept in
+`aledb_stats.util` for the purpose. That second implementation is gone: the literals are what
+was carrying the coverage, and a duplicate had to be kept in step with the real one for no
+guarantee the literals do not already give. `test_both_paths_agree_with_each_other` still
+compares two implementations -- but two that both ship.
 
 There are two code paths and they must agree. With no gene filter set the whole filter is
 expressible as SQL. With one set, "every gene this mutation touches is in the ignore list" is
@@ -30,15 +34,7 @@ from aledb_experiment.models import (
 )
 from aledb_filter.models import AleExperimentFilter
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
-from aledb_stats.util import (
-    build_experiment_summary,
-    compute_experiment_counts,
-    get_mutation_type_count_dict,
-    get_observed_mutation_list,
-    get_observed_mutation_type_count_dict,
-    get_observed_protein_change_type_count_dict,
-    get_protein_change_type_count_dict,
-)
+from aledb_stats.util import compute_experiment_counts
 
 
 class SummaryTestCase(TestCase):
@@ -112,29 +108,13 @@ class SummaryTestCase(TestCase):
             sequencing_experiment=sample, mutation=mutation,
             present=True, frequency="1.0000")
 
-    # ---- what the page used to compute ----------------------------------------------
-    def _original_counts(self):
-        """The four dicts exactly as `aledb_stats.views.stats` used to build them."""
-        observed = get_observed_mutation_list(self.experiment.ale_id)
-        unique = {obs.mutation.id: obs.mutation for obs in observed}.values()
-        return (get_mutation_type_count_dict(unique),
-                get_observed_mutation_type_count_dict(observed),
-                get_protein_change_type_count_dict(unique),
-                get_observed_protein_change_type_count_dict(observed))
-
-    def _assert_matches_original(self, message):
-        expected = self._original_counts()
-        actual = compute_experiment_counts(self.experiment.ale_id)
-        self.assertEqual(expected, actual, message)
-        return actual
+    def _counts(self):
+        return compute_experiment_counts(self.experiment.ale_id)
 
     # ---- the SQL path ---------------------------------------------------------------
-    def test_it_matches_the_original_with_no_filters(self):
-        self._assert_matches_original("aggregate path disagrees with the Python original")
-
     def test_the_counts_are_the_ones_the_page_shows(self):
-        """Pinned literally as well as against the original, so a change to *both*
-        implementations at once cannot slip through green."""
+        """The whole fixture, stated. Every rule below is one somebody could reasonably
+        "fix" and be wrong, so each is asserted with the reason beside it."""
         types, observed_types, protein, observed_protein = compute_experiment_counts(
             self.experiment.ale_id)
 
@@ -168,7 +148,7 @@ class SummaryTestCase(TestCase):
         low.save()
         self._filter(min_cutoff=50)
 
-        types, _, _, _ = self._assert_matches_original("cutoff not applied the same way")
+        types, _, _, _ = self._counts()
         self.assertEqual(0, types["MOB"], "the 1% observation is below the 50% cutoff")
 
     def test_a_deleted_mutation_is_excluded(self):
@@ -184,7 +164,7 @@ class SummaryTestCase(TestCase):
         self.assertTrue(removals, "the fixture's DEL is observed somewhere")
         history.apply_changes(self.experiment, None, KIND_DELETE, removals=removals)
 
-        types, _, _, _ = self._assert_matches_original("deleted mutation still counted")
+        types, _, _, _ = self._counts()
         self.assertEqual(0, types["DEL"])
 
     # ---- the Python path ------------------------------------------------------------
@@ -194,15 +174,13 @@ class SummaryTestCase(TestCase):
         This case used the site-wide list before it was removed. There is one filter now, so
         it exercises the same path through the experiment's own."""
         self._filter(ignored_genes="rrlA")
-        types, _, _, _ = self._assert_matches_original(
-            "row-walking path disagrees with the Python original")
+        types, _, _, _ = self._counts()
         self.assertEqual(1, types["SNP"],
                          "the noncoding SNP is in the ignored gene; the other SNP is not")
 
     def test_an_experiment_gene_filter_matches_the_original(self):
         self._filter(ignored_genes="araB")
-        types, _, _, _ = self._assert_matches_original(
-            "per-experiment gene filter path disagrees with the original")
+        types, _, _, _ = self._counts()
         self.assertEqual(0, types["INS"], "araB was the only INS")
 
     def test_a_multi_gene_mutation_survives_a_partial_gene_filter(self):
@@ -212,7 +190,7 @@ class SummaryTestCase(TestCase):
         exists at all, so it is the one worth pinning.
         """
         self._filter(ignored_genes="thrB")
-        types, _, _, _ = self._assert_matches_original("subset rule diverges")
+        types, _, _, _ = self._counts()
         self.assertEqual(1, types["DEL"], "thrB/thrC is not a subset of {thrB}")
 
     def test_both_paths_agree_with_each_other(self):
@@ -224,23 +202,32 @@ class SummaryTestCase(TestCase):
         with_python = compute_experiment_counts(self.experiment.ale_id)
         self.assertEqual(with_sql, with_python)
 
-    # ---- storing it ------------------------------------------------------------------
-    def test_building_stores_what_computing_returns(self):
-        types, observed_types, protein, observed_protein = compute_experiment_counts(
-            self.experiment.ale_id)
-        summary = build_experiment_summary(self.experiment.ale_id)
+    # ---- what the page reads ---------------------------------------------------------
+    def test_the_page_reads_what_computing_returns(self):
+        """`get_experiment_summary` is what `/stats` calls, and it used to return a stored
+        `ExperimentSummary` row. It returns a namedtuple with the same four field names, so
+        the view and the template did not change -- which is worth an assertion, because a
+        rename here fails at template-render time and not here."""
+        from aledb_stats.util import get_experiment_summary
+
+        types, observed_types, protein, observed_protein = self._counts()
+        summary = get_experiment_summary(self.experiment.ale_id)
 
         self.assertEqual(types, summary.mutation_type_counts)
         self.assertEqual(observed_types, summary.observed_mutation_type_counts)
         self.assertEqual(protein, summary.protein_change_counts)
         self.assertEqual(observed_protein, summary.observed_protein_change_counts)
 
-    def test_rebuilding_replaces_rather_than_duplicates(self):
-        from aledb_stats.models import ExperimentSummary
+    def test_it_reflects_an_edit_with_nothing_to_invalidate(self):
+        """The counts were stored and rebuilt through the 'overview' rebuilder, so a new
+        observation showed up only once something marked them stale. Computed, there is no
+        such window -- which is the behaviour that replaced the rebuilder."""
+        from aledb_stats.util import get_experiment_summary
 
-        build_experiment_summary(self.experiment.ale_id)
+        self.assertEqual(0, get_experiment_summary(
+            self.experiment.ale_id).mutation_type_counts["AMP"])
+
         self._observe(self.samples[0], self._mutation("AMP", "", gene="galK"))
-        summary = build_experiment_summary(self.experiment.ale_id)
 
-        self.assertEqual(1, ExperimentSummary.objects.count())
-        self.assertEqual(1, summary.mutation_type_counts["AMP"])
+        self.assertEqual(1, get_experiment_summary(
+            self.experiment.ale_id).mutation_type_counts["AMP"])

@@ -34,7 +34,6 @@ from aledb_seq.models import (
     ObservedMutation,
     ResequencingExperiment,
 )
-from aledb_stats.models import StaticData
 
 METADATA_FIXTURE = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
@@ -107,9 +106,16 @@ class UploadCommandTestCase(TestCase):
         isolate = ResequencingExperiment.objects.get().tech_rep.isolate
         self.assertTrue(isolate.flask.ale_id.ale_experiment.project)
 
-    def test_derived_data_is_rebuilt(self):
+    def test_derived_data_is_available_after_the_import(self):
+        """This asserted that `StaticData` had a row. Nothing is stored now, so what the
+        import has to leave behind is an *answer*: the needle plot is built from the rows the
+        upload just wrote."""
+        from aledb_stats.util import get_needle_plot_data
+
         self.upload()
-        self.assertTrue(StaticData.objects.exists())
+        experiment = AleExperiment.objects.get()
+
+        self.assertTrue(get_needle_plot_data(experiment.ale_id))
 
     def test_a_directory_with_no_metadata_is_skipped(self):
         shutil.rmtree(os.path.join(self.experiment_dir, "metadata"))
@@ -148,7 +154,6 @@ class DeleteExperimentsTestCase(TestCase):
         self.assertEqual(0, AleExperiment.objects.count())
         self.assertEqual(0, ObservedMutation.objects.count())
         self.assertEqual(0, Mutation.objects.count())
-        self.assertEqual(0, StaticData.objects.count())
 
 
 class FindExperimentPathsTestCase(TestCase):

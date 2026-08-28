@@ -1,96 +1,62 @@
 import re
 from django.db.models import Count
 from aledb_seq.models import UnassignedMissingCoverageEvidence
-from aledb_seq.util import get_all_observed_mutations, get_reseq_ordered_dict
+from aledb_seq.util import get_observed_mutation_queryset
 from aledb_seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST
-from aledb_stats.models import StaticData
-from aledb_filter.util import filter_observed_mutations
-import aledb_stats.models
+from aledb_filter.util import filtered_observed_mutation_queryset, gene_is_filtered
+import collections
 import logging
 
 
 logger = logging.getLogger(__name__)
 
+#: The experiment a row belongs to, fetched alongside it so that the gene half of the filter
+#: -- a set-subset test that has no SQL -- can be applied per row without a second query.
+EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"
 
-def get_observed_mutation_list(ale_experiment_id):
-    """
-    updated by R. Cai
-    :param ale_experiment_id:
-    :return: list of observed mutations for given experiment, filtered and data loaded
-    """
-    ordered_reseq_dict = get_reseq_ordered_dict(ale_experiment_id)
-    observed_mutation_query_set = get_all_observed_mutations(list(ordered_reseq_dict.keys()))
-    observed_mutation_list = filter_observed_mutations(observed_mutation_query_set, ale_experiment_id)
-    return observed_mutation_list
-
-
-def generate_needle_plot_data(obs_mut_list):
-    needle_plot_data = []
-    for observed_mutation in obs_mut_list:
-        needle_plot_data.append(
-            {'coord': str(observed_mutation.mutation.position),
-             'category': observed_mutation.mutation.mutation_type,
-             'value': 1})
-    return needle_plot_data
+#: The order `filter_observed_mutations` returns rows in. Kept here so the computed needle
+#: plot is element-for-element what the stored one was, rather than the same points shuffled.
+ROW_ORDER = (
+    'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__name',
+    'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_id',
+    'sequencing_experiment__tech_rep__isolate__flask__flask_number',
+    'sequencing_experiment__tech_rep__isolate__isolate_number',
+    'sequencing_experiment__tech_rep__tech_rep_number',
+)
 
 
 def get_needle_plot_data(experiment_id):
-    """The stored needle-plot data, rebuilding it first if it is stale.
+    """`{coord, category, value}` per observed mutation, computed now.
 
-    The `ensure_fresh` matters more here than anywhere: `/stats` renders this *and*
-    `get_experiment_summary` on the same page, so without it a filter change left the Overview
-    counts and the needle plot -- derived from the same mutations -- disagreeing with each
-    other in the same viewport.
+    **Nothing is stored.** `StaticData` held this as a JSON blob kept current through the
+    `static_data` rebuilder, and it was the oldest cache on the page -- precomputed at import
+    since long before the rebuild registry existed. Reading three columns as tuples instead of
+    instantiating the rows costs 0.05s on the largest experiment in the dev database, 52 139
+    observations, against 3.38s for the model-instance path above.
+
+    That number is what removes the failure mode the `ensure_fresh` here existed for. `/stats`
+    renders this *and* `get_experiment_summary` from the same mutations, and while both were
+    stored they could disagree in the same viewport -- one refreshed, the other stale. Neither
+    is stored now and both read `get_observed_mutation_queryset`, so they cannot.
+
+    Ordered, and deliberately: the plot does not care, but "the same points in a different
+    order" is a difference a reader would have to rule out by hand every time this is compared
+    against the reference implementation, and the sort is free at this size.
     """
-    from aledb_common.rebuild_registry import ensure_fresh
+    queryset, exp_filter_genes_map = filtered_observed_mutation_queryset(
+        get_observed_mutation_queryset(experiment_id), experiment_id)
+    rows = queryset.order_by(*ROW_ORDER).values_list(
+        "mutation__position", "mutation__mutation_type", "mutation__gene", EXPERIMENT_PATH,
+    ).iterator(chunk_size=2000)
 
-    ensure_fresh('static_data', experiment_id)
-    static_data = StaticData.objects.filter(id=experiment_id).first()
-    return static_data.mut_needle_data if static_data else []
-
-
-def generate_static_data(ale_id):
-    observed_mutation_list = get_observed_mutation_list(ale_id)
-    mutation_needle_data = generate_needle_plot_data(observed_mutation_list)
-    static_data_orm, created = aledb_stats.models.StaticData.objects.get_or_create(id=ale_id)
-    static_data_orm.mut_needle_data = mutation_needle_data
-    static_data_orm.save()
-
-
-def get_mutation_type_count_dict(mutations):
-    mutation_type_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
-    for mutation in mutations:
-        mutation_type = mutation.mutation_type
-        if mutation_type in MUTATION_TYPE_LIST:
-            mutation_type_count_dict[mutation.mutation_type] += 1
-    return mutation_type_count_dict
-
-
-def get_observed_mutation_type_count_dict(obs_mutations):
-    mutation_type_count_dict = {mutation_type:0 for mutation_type in MUTATION_TYPE_LIST}
-    for observed_mutation in obs_mutations:
-        mut_type = observed_mutation.mutation.mutation_type
-        if mut_type in mutation_type_count_dict.keys():
-            mutation_type_count_dict[mut_type] += 1
-    return mutation_type_count_dict
-
-
-def get_protein_change_type_count_dict(mutations):
-    protein_change_type_count_dict = {prot_change_type: 0 for prot_change_type in FUNCTIONAL_CHANGE_TYPE_LIST}
-    for mut in mutations:
-        for protein_change_type in FUNCTIONAL_CHANGE_TYPE_LIST:
-            if protein_change_type in mut.protein_change:
-                protein_change_type_count_dict[protein_change_type] += 1
-    return protein_change_type_count_dict
-
-
-def get_observed_protein_change_type_count_dict(observed_mutations):
-    protein_change_type_count_dict = {protein_change_type:0 for protein_change_type in FUNCTIONAL_CHANGE_TYPE_LIST}
-    for observed_mutation in observed_mutations:
-        for protein_change_type in FUNCTIONAL_CHANGE_TYPE_LIST:
-            if protein_change_type in observed_mutation.mutation.protein_change:
-                protein_change_type_count_dict[protein_change_type] += 1
-    return protein_change_type_count_dict
+    needle_plot_data = []
+    for position, mutation_type, gene, exp_id in rows:
+        if exp_filter_genes_map and gene_is_filtered(gene, exp_filter_genes_map.get(exp_id)):
+            continue
+        needle_plot_data.append({'coord': str(position),
+                                 'category': mutation_type,
+                                 'value': 1})
+    return needle_plot_data
 
 
 def get_ale_flask_isolate_count_list(reseq_queryset):
@@ -188,11 +154,11 @@ def get_reseq_experiment_info_list(reseq_experiments):
 # The Overview page's mutation counts
 #
 # These four dictionaries are what `/stats` renders in its two count tables, and producing
-# them used to mean `get_observed_mutation_list()` above -- every ObservedMutation in the
-# experiment, each joined across six tables and instantiated as a model carrying two
-# JSONFields and a gene column of up to 19 000 characters -- to arrive at about sixteen
-# integers. The result is stored in `ExperimentSummary` and rebuilt through the 'overview'
-# rebuilder, so the page reads one row.
+# them used to mean pulling every ObservedMutation in the experiment -- each joined across six
+# tables and instantiated as a model carrying two JSONFields and a gene column of up to 19 000
+# characters -- to arrive at about sixteen integers. They are counted where the rows already
+# are instead, which is why nothing is stored: 0.07s on the largest experiment in the dev
+# database is not worth an `ExperimentSummary` row to keep correct.
 #
 # There are two paths, and they are the same two the filter itself already has (see the
 # branch at the end of `aledb_filter.util.filter_observed_mutations`):
@@ -204,8 +170,11 @@ def get_reseq_experiment_info_list(reseq_experiments):
 #     walked. They are walked as `values_list` tuples rather than model instances: same
 #     rows, same decisions, none of the JSON deserialisation or the fat columns.
 #
-# Both must produce identical dictionaries; `aledb_stats/tests/test_summary.py` asserts that
-# against the original helpers above, for both paths.
+# Both must produce identical dictionaries, and `test_summary.py` asserts that directly --
+# the same fixture counted down each branch. It used to assert against a second, row-walking
+# implementation kept in this file for the purpose; the literal counts it also pinned are the
+# half that was doing the work, and a duplicate implementation is one more thing to keep in
+# step for no coverage the literals do not already give.
 # --------------------------------------------------------------------------------------
 
 
@@ -276,8 +245,6 @@ def _count_in_python(queryset, exp_filter_genes_map):
     `deleted_global_mutations` cache existed only because a globally ignored gene meant the
     same everywhere. One list, one experiment, one test.
     """
-    from aledb_filter.util import gene_is_filtered
-
     mutation_type_counts, observed_mutation_type_counts, \
         protein_change_counts, observed_protein_change_counts = _empty_counts()
 
@@ -327,46 +294,24 @@ def compute_experiment_counts(ale_experiment_id):
     return _count_in_python(queryset, exp_filter_genes_map)
 
 
-def build_experiment_summary(ale_experiment_id):
-    """Recompute and store one experiment's Overview counts. The 'overview' rebuilder."""
-    (mutation_type_counts, observed_mutation_type_counts,
-     protein_change_counts, observed_protein_change_counts) = compute_experiment_counts(
-        ale_experiment_id)
-
-    summary, _ = aledb_stats.models.ExperimentSummary.objects.update_or_create(
-        ale_experiment_id=ale_experiment_id,
-        defaults={
-            'mutation_type_counts': mutation_type_counts,
-            'observed_mutation_type_counts': observed_mutation_type_counts,
-            'protein_change_counts': protein_change_counts,
-            'observed_protein_change_counts': observed_protein_change_counts,
-        })
-    return summary
+#: What `/stats` reads. An `ExperimentSummary` row stood here with these four field names,
+#: which is why they are these four field names: the view and the template are unchanged.
+ExperimentCounts = collections.namedtuple(
+    "ExperimentCounts",
+    "mutation_type_counts observed_mutation_type_counts "
+    "protein_change_counts observed_protein_change_counts")
 
 
 def get_experiment_summary(ale_experiment_id):
-    """The stored summary, rebuilding it first if it is stale.
+    """The Overview's four count dicts, computed now.
 
-    Returns an *unsaved* zero-filled summary if the rebuild failed and nothing was ever
-    stored -- the Overview is mostly sample information, and a page of zeroed counts beside a
-    working sample table is a better answer than a 500. `./aledb rebuild --list` is where the
-    failure is visible.
+    **Nothing is stored.** `ExperimentSummary` held them and the 'overview' rebuilder kept it
+    current. The row was worth having while producing the counts meant materialising every
+    observation in the experiment; it stopped being worth it when `compute_experiment_counts`
+    moved the work into SQL, which is 0.07s on 52 139 observations.
+
+    The zero-filled fallback went with the table. It existed because a rebuild could fail and
+    leave nothing stored, so the page had to render *something* rather than 500 -- a state
+    that cannot arise when the counts are computed by the request that needs them.
     """
-    from aledb_common.rebuild_registry import ensure_fresh
-
-    ensure_fresh('overview', ale_experiment_id)
-    summary = aledb_stats.models.ExperimentSummary.objects.filter(
-        ale_experiment_id=ale_experiment_id).first()
-    if summary is not None:
-        return summary
-
-    logger.warning("no Overview summary for experiment %s; rendering zeroed counts",
-                   ale_experiment_id)
-    (mutation_type_counts, observed_mutation_type_counts,
-     protein_change_counts, observed_protein_change_counts) = _empty_counts()
-    return aledb_stats.models.ExperimentSummary(
-        ale_experiment_id=ale_experiment_id,
-        mutation_type_counts=mutation_type_counts,
-        observed_mutation_type_counts=observed_mutation_type_counts,
-        protein_change_counts=protein_change_counts,
-        observed_protein_change_counts=observed_protein_change_counts)
+    return ExperimentCounts(*compute_experiment_counts(ale_experiment_id))

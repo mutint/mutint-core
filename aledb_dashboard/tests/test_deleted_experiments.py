@@ -74,9 +74,13 @@ class DeletedExperimentTestCase(EditorTestCase):
 
     def test_a_delete_does_not_invalidate_another_experiments_derived_data(self):
         """`request_rebuild()` with no experiment would mark every one of them. Removing one
-        experiment cannot make another's needle plot wrong."""
+        experiment cannot make another's derived data wrong.
+
+        Watches `experiment_filter`, the experiment-scoped rebuilder core still has; it
+        watched `static_data` until the needle plot stopped being stored.
+        """
         run_rebuilds(self.experiment.ale_id, force=True)
 
         self.client.post("/ale/experiment/%d/delete/" % self.experiment.ale_id, {})
 
-        self.assertFalse(is_stale("static_data", self.experiment.ale_id))
+        self.assertFalse(is_stale("experiment_filter", self.experiment.ale_id))

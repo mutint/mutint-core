@@ -165,5 +165,4 @@ class RebuildTestCase(EditorTestCase):
 
         history.rebuild_after_edit(self.experiment)
 
-        self.assertFalse(is_stale("overview", self.experiment.ale_id))
-        self.assertFalse(is_stale("static_data", self.experiment.ale_id))
+        self.assertFalse(is_stale("experiment_filter", self.experiment.ale_id))

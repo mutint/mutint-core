@@ -492,9 +492,8 @@ def rebuild_after_structural_change(experiment):
     AleId/Flask/Isolate *rows*, which this module creates and prunes.
 
     Deliberately not `gd_import.run_post_processing`: it lives in aledb_import, so calling
-    it would point aledb_experiment at the import app, and it also runs
-    `generate_static_data`, whose output is `{coord, category, value}` per mutation and so
-    cannot depend on a sample's identity.
+    it would point aledb_experiment at the import app, and it asks for every registered
+    rebuild rather than the two a renumber can change.
 
     Deliberately not `mutation_counts`: it pulls every ObservedMutation in the database into
     Python. Nothing about a renumber changes a mutation count, and paying for the whole
@@ -502,16 +501,15 @@ def rebuild_after_structural_change(experiment):
     production. That refusal is what `only=` says -- it names what a renumber can change, and
     everything it does not name is left alone.
 
-    `overview` is named because the Overview's sample table and its ALE/flask/isolate counts
-    are read from the numbers this just changed. `aledb_fixation` is named although this app
-    cannot know it is installed; `get_rebuilders` skips a name nothing registered, so a
-    deployment without it simply has less to do. `aledb_converge` was named here too until it
-    stopped storing anything -- convergence is computed when the page asks for it, so a
-    renumber has nothing of its to mark.
+    `aledb_fixation` is named although this app cannot know it is installed;
+    `get_rebuilders` skips a name nothing registered, so a deployment without it simply has
+    less to do. `overview` and `aledb_converge` were named here too, until neither stored
+    anything: the Overview's counts and the convergent set are both computed by the request
+    that renders them, so a renumber has nothing of theirs to mark.
     """
     from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
 
-    changed = ('aledb_fixation', 'overview', 'sample_counts')
+    changed = ('aledb_fixation', 'sample_counts')
     # Marked but not run: `aledb_phylogeny` stores a rendered "A1 F1500 I1 R1" per tip, so a
     # renumber leaves its tree drawing labels that are now wrong -- but inferring a tree costs
     # seconds and nobody asked for one by renaming a sample. It is registered `auto=False`, so

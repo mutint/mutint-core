@@ -570,9 +570,10 @@ def run_post_processing(experiment):
 
     This was four statements naming four things by hand -- the filter row, the plugin hooks,
     the needle-plot data and the dashboard -- and adding a fifth meant editing this function,
-    which is what kept core's derived data reachable only from the import path. All five are
-    registered rebuilds now, so the list lives in `aledb_common.rebuild_registry` and this
-    asks for all of them.
+    which is what kept core's derived data reachable only from the import path. The list lives
+    in `aledb_common.rebuild_registry` now and this asks for all of it, which is also why
+    nothing had to be removed here when the needle plot stopped being stored: a rebuild that
+    no longer exists is simply not in the registry to be run.
 
     Eager, and marked stale first. Eager because an import is already a long operation and
     its whole point is to leave the data queryable, so the Overview should be warm when it

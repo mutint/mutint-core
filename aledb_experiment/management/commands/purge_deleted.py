@@ -4,8 +4,7 @@ Deletion in the UI only flags a row. This is the second half: run it from cron w
 retention window so flagged rows age out, or by hand with --dry-run first.
 
 Purging an experiment reuses `delete_ale_experiments`, which already handles the two things
-a plain `.delete()` misses -- the StaticData row (linked only by the convention
-`StaticData.id == AleExperiment.ale_id`, with no FK) and the sweep of mutations left orphaned
+a plain `.delete()` misses -- the sweep of mutations left orphaned
 once their observations go. It also removes the experiment's files from the managed store,
 which nothing else in the codebase does.
 
