@@ -140,20 +140,33 @@ def filter_observed_mutations(observed_mutation_queryset, experiment_id=None, fi
                 if obs_mut.mutation.mutation_type != 'AMP':
                     continue
 
-            deleted = False
-            if obs_mut.get_experiment_id() in exp_filter_genes_map:
-                # Every gene the mutation touches has to be in the list. A mutation spanning an
-                # ignored gene and a kept one is kept -- ignoring a gene is not a claim about
-                # its neighbours.
-                genes = set(get_gene_list(obs_mut.mutation.gene))
-                exp_filter_genes = exp_filter_genes_map[obs_mut.get_experiment_id()]
-                if len(exp_filter_genes) >= len(genes) and genes.issubset(exp_filter_genes):
-                    deleted = True
+            deleted = gene_is_filtered(
+                obs_mut.mutation.gene,
+                exp_filter_genes_map.get(obs_mut.get_experiment_id()))
             if not deleted:
                 observed_mutations.append(obs_mut)
     else:
         observed_mutations = [obs_mut for obs_mut in queryset]
     return observed_mutations
+
+
+def gene_is_filtered(gene, ignored_genes):
+    """Whether a mutation on `gene` is hidden by an ignore list.
+
+    **Subset, not intersection**: every gene the mutation touches has to be on the list.
+    Ignoring one gene of an intergenic pair ignores nothing, because the mutation is still
+    partly about a gene nobody asked to hide.
+
+    Extracted because this rule is applied in three places and there is no SQL for it --
+    `filter_observed_mutations` walks model instances, `aledb_stats._count_in_python` walks
+    tuples because it is counting rather than returning rows, and `aledb_converge` walks tuples
+    because it only needs the gene and the ALE. Three transcriptions of a subset test is one
+    too many; the shapes differ, the rule does not.
+    """
+    if not ignored_genes:
+        return False
+    genes = set(get_gene_list(gene))
+    return len(ignored_genes) >= len(genes) and genes.issubset(ignored_genes)
 
 
 def _get_exp_filter_genes(exp_filter: AleExperimentFilter):

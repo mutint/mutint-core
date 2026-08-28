@@ -276,7 +276,7 @@ def _count_in_python(queryset, exp_filter_genes_map):
     `deleted_global_mutations` cache existed only because a globally ignored gene meant the
     same everywhere. One list, one experiment, one test.
     """
-    from aledb_common.util import get_gene_list
+    from aledb_filter.util import gene_is_filtered
 
     mutation_type_counts, observed_mutation_type_counts, \
         protein_change_counts, observed_protein_change_counts = _empty_counts()
@@ -291,11 +291,8 @@ def _count_in_python(queryset, exp_filter_genes_map):
 
     seen_mutations = set()
     for mutation_id, mutation_type, protein_change, gene, experiment_id in rows:
-        if experiment_id in exp_filter_genes_map:
-            genes = set(get_gene_list(gene))
-            exp_filter_genes = exp_filter_genes_map[experiment_id]
-            if len(exp_filter_genes) >= len(genes) and genes.issubset(exp_filter_genes):
-                continue
+        if gene_is_filtered(gene, exp_filter_genes_map.get(experiment_id)):
+            continue
 
         first_time = mutation_id not in seen_mutations
         seen_mutations.add(mutation_id)
