@@ -640,6 +640,15 @@ Two things fell out of removing the filter, and both are worth knowing:
   `FUNCTIONAL_CHANGE_TYPE_LIST`, so both columns sat at zero from the day they were added. They
   are filled now, which is the second reason `0003` exists.
 
+**And they will still read zero, because `protein_change` is probably the wrong column.** This
+is a separate, larger, pre-existing bug and it is deliberately not fixed. The annotator writes a
+coding SNP's `protein_change` as `I34S (ATC→AGC)`, containing neither word -- so on the dev
+database 19,982 of 24,088 mutations bucket as `unannotated`, while `Mutation.snp_type` holds
+`nonsynonymous` for 12,793 of them and `synonymous` for 4,878. The dead branch's name,
+`snp_type_synonymous`, suggests the author knew. Reading `snp_type` instead would move every
+functional-change number on the dashboard **and on the Overview**, which counts the same way
+from the same column, so it needs its own decision and its own stale-marking migration.
+
 Note the dashboard's buckets are **not** the Overview's, deliberately: here a mutation lands in
 one functional-change bucket (the first token its `protein_change` contains) and an unknown
 mutation type is bucketed `unannotated`; there, a mutation counts under every token it contains

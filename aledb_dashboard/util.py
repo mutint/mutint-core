@@ -151,6 +151,19 @@ def rebuild_mutation_counts():
 def _functional_change_bucket(protein_change):
     """The first token this protein_change contains, or UNANNOTATED.
 
+    **Known issue, not introduced here: `protein_change` is probably the wrong column.**
+    The annotator writes a coding SNP's protein_change as `I34S (ATC→AGC)`, which contains
+    neither "synonymous" nor "nonsynonymous" -- so on the dev database 19,982 of 24,088
+    mutations bucket as `unannotated` while `Mutation.snp_type` holds `nonsynonymous` for
+    12,793 of them and `synonymous` for 4,878. The dead branch this replaced was named
+    `snp_type_synonymous`, which suggests the author knew where the answer lived.
+
+    Left alone deliberately: reading `snp_type` instead would move every functional-change
+    number on this page *and* on the Overview, which counts the same way from the same column,
+    and it needs its own decision and its own stale-marking migration. What is fixed here is
+    that the two columns can be written at all; they will read zero on data like the above
+    until that question is settled.
+
     **One bucket per mutation, unlike the Overview**, which counts a mutation under every
     token its protein_change contains and whose sums therefore exceed its mutation count.
     Two pages, two questions; neither is the other's bug.
