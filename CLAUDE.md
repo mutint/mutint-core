@@ -414,8 +414,8 @@ reversible. `/mutation-editor/` edits one sample, `/mutation-editor/copy` copies
 
 **What it deletes is an `ObservedMutation`, never a `Mutation`.** That distinction is the whole
 design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
-prunes them, in aledb-converge's `ConvergeMutation`, in aledb-phylogeny's `site_mutation_ids`
-and `branch_mutations` JSON -- whose docstring says *"ids do not move"*, and which is not on the
+prunes them, in aledb-phylogeny's `site_mutation_ids` and `branch_mutations` JSON -- whose
+docstring says *"ids do not move"*, and which is not on the
 rebuild hook -- and in every exported CSV's "Mut ID" column. Deleting a Mutation and letting a
 re-import recreate it through `gd_import`'s seven-field `get_or_create` would mint a new pk for
 the same biological mutation and quietly invalidate all of it. Removing only the sample's
@@ -496,8 +496,8 @@ refreshed, beside `get_needle_plot_data`, which did not -- two counts of the sam
 disagreeing in the same viewport. Every reader calls `ensure_fresh` now.
 
 **A plugin must not spell its own rebuilder's name.** `register_post_experiment_hook` derives
-it from the app label, suffixes a second registration, and **returns** what it used; aledb-fixation
-and aledb-converge capture that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
+it from the app label, suffixes a second registration, and **returns** what it used;
+aledb-fixation captures that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
 `'aledb_fixation'` would be a second opinion about a name `_candidate_names` owns.
 
 **`ensure_fresh` cannot raise**, which is what makes it safe on a read path: a rebuild that
@@ -714,9 +714,9 @@ place. `KIND_EDIT` labels the *changeset*; its rows stay `OP_ADD` and `OP_REMOVE
 
 **What is not re-created is the Mutation row.** `_resolve_mutation` returns the row it is
 handed, so the additions point back at the one the removals came off and the primary key never
-moves. Mutation ids are stored as bare integers, with no foreign key, in
-`aledb_converge.ConvergeMutation`, in aledb-phylogeny's `site_mutation_ids` and
-`branch_mutations`, and in every exported CSV -- and aledb-phylogeny is **not** on the rebuild
+moves. Mutation ids are stored as bare integers, with no foreign key, in aledb-phylogeny's
+`site_mutation_ids` and `branch_mutations`, and in every exported CSV -- and aledb-phylogeny is
+**not** on the rebuild
 hook, so ids it holds are never refreshed. Minting a new row would leave all of that pointing
 at a mutation with no observations; reusing it leaves them resolving, to the corrected call.
 

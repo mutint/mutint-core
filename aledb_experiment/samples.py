@@ -503,13 +503,15 @@ def rebuild_after_structural_change(experiment):
     everything it does not name is left alone.
 
     `overview` is named because the Overview's sample table and its ALE/flask/isolate counts
-    are read from the numbers this just changed. `aledb_fixation` and `aledb_converge` are
-    named although this app cannot know they are installed; `get_rebuilders` skips a name
-    nothing registered, so a deployment without them simply has less to do.
+    are read from the numbers this just changed. `aledb_fixation` is named although this app
+    cannot know it is installed; `get_rebuilders` skips a name nothing registered, so a
+    deployment without it simply has less to do. `aledb_converge` was named here too until it
+    stopped storing anything -- convergence is computed when the page asks for it, so a
+    renumber has nothing of its to mark.
     """
     from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
 
-    changed = ('aledb_fixation', 'aledb_converge', 'overview', 'sample_counts')
+    changed = ('aledb_fixation', 'overview', 'sample_counts')
     # Marked but not run: `aledb_phylogeny` stores a rendered "A1 F1500 I1 R1" per tip, so a
     # renumber leaves its tree drawing labels that are now wrong -- but inferring a tree costs
     # seconds and nobody asked for one by renaming a sample. It is registered `auto=False`, so

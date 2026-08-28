@@ -8,8 +8,8 @@ answer, and it is why restoring is not a rewind.
 The unit of change is an `aledb_seq.ObservedMutation` -- one sample's observation of one
 mutation -- and **never an `aledb_seq.Mutation`**. That distinction is load-bearing. Mutation
 primary keys are stored as bare integers, with no foreign key and no pruning, in
-aledb-converge's `ConvergeMutation`, in aledb-phylogeny's `site_mutation_ids` and
-`branch_mutations` JSON, and in every exported CSV's "Mut ID" column. Deleting a Mutation and
+aledb-phylogeny's `site_mutation_ids` and `branch_mutations` JSON, and in every exported CSV's
+"Mut ID" column. Deleting a Mutation and
 letting a later re-import recreate it through `gd_import`'s seven-field `get_or_create` would
 mint a new pk for the same biological mutation and quietly invalidate all of that. Removing
 only the sample's observation of it changes nothing any stored id means.

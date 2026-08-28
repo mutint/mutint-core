@@ -6,9 +6,9 @@ core (a nav entry, a URL, an import type). This one also lets an app tell core t
 it contributed has changed, so that core's own derived data can catch up.
 
 Nothing in ALEdb is computed at read time if it can be computed once. `aledb_stats.StaticData`,
-`aledb_stats.ExperimentSummary`, `aledb_dashboard`'s three count tables, `aledb_fixation`'s
-`FixatedMutation` and `aledb_converge`'s `ConvergeMutation` are all the same idea: a table that
-is a function of the mutations, rebuilt when they change. What was missing was any way to say
+`aledb_stats.ExperimentSummary`, `aledb_dashboard`'s three count tables and
+`aledb_fixation`'s `FixatedMutation` are all the same idea: a table that is a function of the
+mutations, rebuilt when they change. What was missing was any way to say
 that they *have* changed, other than from the two hardcoded call sites inside `aledb_import`.
 
 So a rebuild has two halves, and they are deliberately separate calls:

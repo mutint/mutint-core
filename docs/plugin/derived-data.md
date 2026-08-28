@@ -16,10 +16,14 @@ Ordinary Django models in your app, with ordinary migrations. Two conventions wo
   experiment and recomputes them. A sample arriving out of order can change a result anywhere
   in the table, not just at the end.
 - **Do not put a foreign key on `Mutation` if you can avoid a hard dependency**, but know what
-  you are taking on if you store bare ids instead. `aledb_converge.ConvergeMutation` and
-  `aledb_phylogeny`'s JSON both store `Mutation.id` as plain integers, which is only safe
-  because of an invariant core maintains: the mutation editor deletes `ObservedMutation` rows
-  and never `Mutation` rows, so an id keeps meaning what it meant.
+  you are taking on if you store bare ids instead. `aledb_phylogeny`'s JSON stores `Mutation.id`
+  as plain integers, which is only safe because of an invariant core maintains: the mutation
+  editor deletes `ObservedMutation` rows and never `Mutation` rows, so an id keeps meaning what
+  it meant.
+- **Ask whether you need a table at all.** `aledb_converge` had one and dropped it: computing
+  convergence on demand came out at 0.17s where keeping the stored answer correct cost a
+  rebuilder, a staleness row marked on every edit, an `ensure_fresh` on the read path, and a
+  column of bare `Mutation` ids. A cheap query beats a cache you have to keep honest.
 
 ## Registering the rebuild
 
