@@ -72,9 +72,14 @@ class RebuildRegistryTestCase(TestCase):
         self.assertEqual(["test.first", "test.second"], names)
 
     def test_an_unknown_name_in_only_is_skipped_not_raised(self):
-        """`rebuild_after_structural_change` asks for 'aledb_fixation' from a repo that
-        cannot know whether the plugin is installed. A deployment without it has less to do,
-        not an exception."""
+        """A repo naming a plugin's rebuild cannot know whether the plugin is installed, so a
+        deployment without it has less to do rather than an exception.
+
+        `rebuild_after_structural_change` asking for 'aledb_fixation' was the motivating
+        caller and no longer exists -- fixation stores nothing to rebuild. The property is
+        the contract `only=` offers, and the distinction it draws against
+        `./aledb rebuild --only`, which *refuses* an unknown name because a typo at a shell
+        that silently does nothing is indistinguishable from having nothing to do."""
         self.assertEqual([], get_rebuilders(only=["test.never_registered"]))
 
     # ---- staleness ------------------------------------------------------------------

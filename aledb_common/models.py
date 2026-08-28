@@ -2,8 +2,8 @@
 
 This is `aledb_common`'s only model, and the app had none before it. It lives here rather than
 in `aledb_stats` beside the data it most often describes because it is not about statistics: it
-tracks staleness for every registered rebuild, plugins included, and `aledb_fixation`'s state
-has no business living inside the stats app. The shared layer is where a table shared by every
+tracks staleness for every registered rebuild, plugins included, and a plugin's state has no
+business living inside the stats app. The shared layer is where a table shared by every
 component belongs.
 
 See `aledb_common/rebuild_registry.py` for how rows here are written and read.

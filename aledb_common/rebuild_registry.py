@@ -6,20 +6,28 @@ core (a nav entry, a URL, an import type). This one also lets an app tell core t
 it contributed has changed, so that core's own derived data can catch up.
 
 Some things in ALEdb are too expensive to compute per request. `aledb_dashboard`'s count
-tables and `aledb_fixation`'s `FixatedMutation` are a table that is a function of the
-mutations, rebuilt when they change. What was missing was any way to say that they *have*
-changed, other than from the two hardcoded call sites inside `aledb_import`.
+tables are a table that is a function of the mutations, rebuilt when they change. What was
+missing was any way to say that they *have* changed, other than from the two hardcoded call
+sites inside `aledb_import`.
 
-**The list is shorter than it was, and the direction is worth knowing before adding to it.**
-`aledb_stats.StaticData` (the needle plot), `aledb_stats.ExperimentSummary` (the Overview's
-counts) and `aledb_converge.ConvergeMutation` were all on it, and all three turned out to cost
-less to answer than to keep correct once they stopped materialising rows to do it -- 0.05s,
-0.07s and 0.17s respectively on the largest experiment in the dev database, where the
-row-instantiating versions were 3.38s, and 6.25s. What a stored answer costs beyond disk is a
-rebuilder to register, a staleness row marked by every edit, an `ensure_fresh` on the read
-path, and -- where it stores `Mutation` ids -- integers that must keep meaning the same thing
-across deletes and re-imports. Register derived data when the computation is genuinely
-expensive; a query that reads three columns as tuples usually is not.
+**The list is much shorter than it was, and the direction is worth knowing before adding to
+it.** `aledb_stats.StaticData` (the needle plot), `aledb_stats.ExperimentSummary` (the
+Overview's counts), `aledb_converge.ConvergeMutation` and `aledb_fixation.FixatedMutation` were
+all on it, and each turned out to cost less to answer than to keep correct once it stopped
+materialising rows to do it -- 0.05s, 0.07s and 0.17s respectively on the largest experiment in
+the dev database, where the row-instantiating versions were 3.38s and 6.25s. (Fixation's cost
+is unmeasured: no local data exercises it, since an ALE needs more than one flask to fix
+anything. It was rewritten on the shape of the old code, not on a number.)
+
+What a stored answer costs beyond disk is a rebuilder to register, a staleness row marked by
+every edit, an `ensure_fresh` on the read path, and -- where it stores ids -- integers that
+must keep meaning the same thing across deletes and re-imports. Register derived data when the
+computation is genuinely expensive; a query that reads three columns as tuples usually is not.
+
+The dashboard's totals stay because they are genuinely installation-wide, and they stay
+*correct* because the dashboard applies no filter -- see `aledb_dashboard.util`. Anything the
+per-user filter reaches could not be stored in any case: a shared table cannot be keyed by
+user.
 
 So a rebuild has two halves, and they are deliberately separate calls:
 

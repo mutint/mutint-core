@@ -472,8 +472,11 @@ Rebuilds run through `history.rebuild_after_edit`, outside the transaction as
 `gd_import.run_post_processing` does, and deliberately **without `only=`** -- unlike
 `samples.rebuild_after_structural_change`, which refuses to pay for the dashboard's totals
 because a renumber cannot change a mutation count. Adding or removing an observation changes
-every registered rebuild, and aledb-fixation caches ObservedMutation *ids*, which only its
-delete-and-recompute rebuild clears.
+every registered rebuild.
+
+That used to have a sharper second reason -- aledb-fixation cached ObservedMutation *ids*, in a
+column only its delete-and-recompute rebuild cleared, and those are exactly the rows an edit
+hard-deletes. Fixation stores nothing now, so no registered rebuild holds an observation id.
 
 **Two traps in the templates.** The selection tables are DataTables with the Select extension,
 which is safe here only because no cell is an input -- selection lives in DataTables' data
@@ -525,8 +528,9 @@ stored before. A broken plugin rebuild degrades its own page instead of 500ing i
 
 `rebuild_after_edit` is **unnarrowed by name and narrowed by scope**, and those are different
 questions. Never `only=`, unlike `rebuild_after_structural_change`: adding or removing an
-observation changes every derived thing an experiment has, and aledb-fixation caches
-ObservedMutation *ids* that only its delete-and-recompute rebuild clears. But `request_rebuild`
+observation changes every derived thing an experiment has. (It used to also be because
+aledb-fixation cached ObservedMutation ids that only its own rebuild cleared; it stores nothing
+now, and the first reason stands alone.) But `request_rebuild`
 marks the **site-scoped** totals stale too, correctly, and running them here made a single
 delete recount every ObservedMutation in the installation -- measured at 4.9s for the read half
 alone on 74,859 rows, which is exactly the bill `rebuild_after_structural_change` refuses. They
@@ -1401,10 +1405,15 @@ auto-numbering, which puts every sample under ALE 1 / flask 1 as separate isolat
 isolates of one flask, with the generations in `isolate_number` -- which is exactly the shape
 of the MutInt dev database, and why fixation has never produced a row there.
 
-`./aledb rebuild_fixation [<experiment_id>]` recomputes. It reports the count and says when no
-ALE has more than one flask, which is the difference between a stale answer and an impossible
-one. Fixation is otherwise computed only by the post-experiment hook, so an experiment whose
-data predates the plugin -- or whose filters changed since -- had no way to catch up.
+`./aledb fixation [<experiment_id>]` reports the count, and says when no ALE has more than one
+flask -- which is the difference between an empty page and an impossible one, and the reason
+the command still exists.
+
+**It was `rebuild_fixation`, and there is nothing left to rebuild.** Fixation was stored in
+`FixatedMutation` and recomputed by the post-experiment hook, so an experiment whose data
+predated the plugin -- or whose filters had changed since, which altered what fixation would
+find and rebuilt nothing -- stayed stale with no way to catch up. It is computed by the page
+now, so staleness is not a state this data can be in, and only the diagnostic half remains.
 
 ### Which import types the Add page offers
 

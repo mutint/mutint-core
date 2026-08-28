@@ -347,8 +347,12 @@ def rebuild_after_edit(experiment):
 
     Never narrowed with `only=`, unlike `aledb_experiment.samples.rebuild_after_structural_change`
     -- a renumber provably cannot change a mutation count, while adding or removing an
-    observation changes every derived thing an experiment has, and aledb-fixation caches
-    ObservedMutation *ids* which only its delete-and-recompute rebuild can clear.
+    observation changes every derived thing an experiment has.
+
+    That used to have a second and sharper reason: aledb-fixation cached ObservedMutation
+    *ids*, in a column only its delete-and-recompute rebuild cleared, and those are rows this
+    module hard-deletes. Fixation stores nothing now, so no registered rebuild holds an
+    observation id and that particular trap is gone. The first reason stands on its own.
 
     But `request_rebuild` marks the **site-scoped** totals stale too, correctly, and running
     them here made a single delete recount every ObservedMutation in the installation --

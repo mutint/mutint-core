@@ -501,15 +501,19 @@ def rebuild_after_structural_change(experiment):
     production. That refusal is what `only=` says -- it names what a renumber can change, and
     everything it does not name is left alone.
 
-    `aledb_fixation` is named although this app cannot know it is installed;
-    `get_rebuilders` skips a name nothing registered, so a deployment without it simply has
-    less to do. `overview` and `aledb_converge` were named here too, until neither stored
-    anything: the Overview's counts and the convergent set are both computed by the request
-    that renders them, so a renumber has nothing of theirs to mark.
+    **This list has emptied out from the other end.** `overview`, `aledb_converge` and
+    `aledb_fixation` were all named here, and none of them stores anything now -- the
+    Overview's counts, the convergent set and the fixated set are each computed by the request
+    that renders them, so a renumber has nothing of theirs to mark. What is left is
+    `sample_counts`, which counts the AleId/Flask/Isolate rows this module creates and prunes.
+
+    Naming a plugin from here was always safe in itself: `get_rebuilders` skips a name nothing
+    registered, so a deployment without the plugin simply had less to do. That property still
+    holds and is still tested; it just no longer has a caller in core relying on it.
     """
     from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
 
-    changed = ('aledb_fixation', 'sample_counts')
+    changed = ('sample_counts',)
     # Marked but not run: `aledb_phylogeny` stores a rendered "A1 F1500 I1 R1" per tip, so a
     # renumber leaves its tree drawing labels that are now wrong -- but inferring a tree costs
     # seconds and nobody asked for one by renaming a sample. It is registered `auto=False`, so
