@@ -356,6 +356,11 @@ def rebuild_after_edit(experiment):
     the cost `rebuild_after_structural_change` refuses to pay. They stay marked; the dashboard
     calls `ensure_fresh` and rebuilds them on the next view. Ten deletes then cost one recount
     rather than ten.
+
+    That measurement predates `rebuild_mutation_counts` reading tuples rather than
+    materialising every observation to filter it, so the per-recount price is lower than it
+    was. What this does is unchanged: one recount instead of ten is the argument, and it does
+    not depend on what one costs.
     """
     from aledb_common.rebuild_registry import (
         EXPERIMENT_SCOPE, request_rebuild, run_rebuilds,

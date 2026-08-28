@@ -1,7 +1,5 @@
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
-from aledb_seq.models import ObservedMutation, Mutation
-from aledb_filter.util import filter_observed_mutations
-from aledb_seq.util import get_mutations_from_observed_muations
+from aledb_seq.models import ObservedMutation
 from aledb_seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST, UNANNOTATED
 from aledb_experiment.models import AleId, Isolate, Flask
 from django.db.models import Q
@@ -39,12 +37,51 @@ def rebuild_sample_counts():
     SampleCounts.objects.all().update(isolate_count=isolate_count)
 
 
-def rebuild_mutation_counts():
-    raw_obs_mut_qryset = ObservedMutation.objects.filter(
+def _live_observation_rows():
+    """Every observation the installation still has, as `(mutation_id, type, protein_change)`.
+
+    **The dashboard applies no filter, deliberately.** It is an inventory of what the
+    installation holds, and an experiment's frequency cutoff or ignored-gene list is one
+    person's view of one experiment -- a site-wide total computed through it answers a question
+    nobody asked, and could not be computed at all once filtering is per-user, since a shared
+    table cannot be keyed by user. It used to call `filter_observed_mutations`, which in the
+    dev database made the stored total 73,857 where the installation holds 74,859.
+
+    Tuples rather than model instances, and that is what the filter's removal buys: filtering
+    needed the gene column parsed per row, so the rows had to be built -- every one of them
+    joined across six tables and carrying two JSONFields. Counting needs three columns.
+    `rebuild_after_structural_change` refuses to run this rebuild at all because it "pulls
+    every ObservedMutation in the database into Python", and that is the sentence this is
+    meant to stop being true.
+    """
+    return ObservedMutation.objects.filter(
         **{"%s__deleted_at__isnull" % _EXPERIMENT_PATH: True,
-           "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True})
-    obs_muts = filter_observed_mutations(raw_obs_mut_qryset)
-    muts = get_mutations_from_observed_muations(obs_muts)
+           "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True}
+    ).values_list("mutation_id", "mutation__mutation_type",
+                  "mutation__protein_change").iterator(chunk_size=2000)
+
+
+def rebuild_mutation_counts():
+    mut_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
+    mut_func_change_type_dict = {t: 0 for t in FUNCTIONAL_CHANGE_TYPE_LIST}
+    obs_mut_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
+    obs_mut_func_change_type_dict = {t: 0 for t in FUNCTIONAL_CHANGE_TYPE_LIST}
+
+    # "Unique" is distinct mutations, so each id is bucketed the first time it is seen. This
+    # was a `{id: mutation}` dict of model instances (`get_mutations_from_observed_muations`);
+    # a set of ids is the same answer without the rows.
+    seen = set()
+    observed_total = 0
+    for mutation_id, mutation_type, protein_change in _live_observation_rows():
+        observed_total += 1
+        bucket = _mutation_type_bucket(mutation_type)
+        change = _functional_change_bucket(protein_change)
+        obs_mut_count_dict[bucket] += 1
+        obs_mut_func_change_type_dict[change] += 1
+        if mutation_id not in seen:
+            seen.add(mutation_id)
+            mut_count_dict[bucket] += 1
+            mut_func_change_type_dict[change] += 1
 
     if ObservedMutationCounts.objects.all().count() == 0:
         ObservedMutationCounts.objects.create()
@@ -53,35 +90,12 @@ def rebuild_mutation_counts():
         UniqueMutationCounts.objects.create()
     mut_count_qryset = UniqueMutationCounts.objects.all()
 
-    print("obs_mut ", len(obs_muts))
-    obs_mut_count_qryset.update(total=len(obs_muts))
-    print('muts', len(muts))
-    mut_count_qryset.update(total=len(muts))
+    obs_mut_count_qryset.update(total=observed_total)
+    mut_count_qryset.update(total=len(seen))
 
-    mut_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
-    mut_func_change_type_dict = {func_change_type: 0 for func_change_type in FUNCTIONAL_CHANGE_TYPE_LIST}
-    for mut in muts:
-        mutation_type = _find_mutation_type(mut)
-        mut_count_dict[mutation_type] = mut_count_dict[mutation_type] + 1
-        functional_change_type = _find_functional_change_type(mut)
-        mut_func_change_type_dict[functional_change_type] = mut_func_change_type_dict[functional_change_type] + 1
-
-    obs_mut_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
-    obs_mut_func_change_type_dict = {func_change_type: 0 for func_change_type in FUNCTIONAL_CHANGE_TYPE_LIST}
-    for obs_mut in obs_muts:
-        mutation_type = _find_mutation_type(obs_mut.mutation)
-        obs_mut_count_dict[mutation_type] = obs_mut_count_dict[mutation_type] + 1
-        functional_change_type = _find_functional_change_type(obs_mut.mutation)
-        obs_mut_func_change_type_dict[functional_change_type] = obs_mut_func_change_type_dict[functional_change_type] + 1
-
-    total_mut_cnt = 0
-    total_obs_mut_cnt = 0
     for mutation_type in MUTATION_TYPE_LIST:
         observed_mutation_type_count = obs_mut_count_dict[mutation_type]
         unique_mutation_type_count = mut_count_dict[mutation_type]
-        print(mutation_type, observed_mutation_type_count, unique_mutation_type_count)
-        total_obs_mut_cnt += observed_mutation_type_count
-        total_mut_cnt += unique_mutation_type_count
         if mutation_type == 'SNP':
             obs_mut_count_qryset.update(single_base_substitution=observed_mutation_type_count)
             mut_count_qryset.update(single_base_substitution=unique_mutation_type_count)
@@ -106,11 +120,11 @@ def rebuild_mutation_counts():
         elif mutation_type == 'INV':
             obs_mut_count_qryset.update(inversion=observed_mutation_type_count)
             mut_count_qryset.update(inversion=unique_mutation_type_count)
-    if total_mut_cnt != len(muts):
-        print("mut count does not match", total_mut_cnt, len(muts))
-    if total_obs_mut_cnt != len(obs_muts):
-        print("obs mut count does not match: ", total_obs_mut_cnt, len(obs_muts))
 
+    # The two totals above deliberately do not equal the sum of these columns: a mutation
+    # whose type is not in MUTATION_TYPE_LIST is bucketed UNANNOTATED, which has no column
+    # here. That difference used to be reported by a `print` on every rebuild, including
+    # every test run.
     for functional_change_type in FUNCTIONAL_CHANGE_TYPE_LIST:
         observed_mutation_type_count = obs_mut_func_change_type_dict[functional_change_type]
         unique_mutation_type_count = mut_func_change_type_dict[functional_change_type]
@@ -123,10 +137,10 @@ def rebuild_mutation_counts():
         elif functional_change_type == 'pseudogene':
             obs_mut_count_qryset.update(pseudogene=observed_mutation_type_count)
             mut_count_qryset.update(pseudogene=unique_mutation_type_count)
-        elif functional_change_type == 'snp_type_synonymous':
+        elif functional_change_type == 'synonymous':
             obs_mut_count_qryset.update(synonymous=observed_mutation_type_count)
             mut_count_qryset.update(synonymous=unique_mutation_type_count)
-        elif functional_change_type == 'snp_type_nonsynonymous':
+        elif functional_change_type == 'nonsynonymous':
             obs_mut_count_qryset.update(nonsynonymous=observed_mutation_type_count)
             mut_count_qryset.update(nonsynonymous=unique_mutation_type_count)
         elif functional_change_type == UNANNOTATED:
@@ -134,14 +148,28 @@ def rebuild_mutation_counts():
             mut_count_qryset.update(unannotated=unique_mutation_type_count)
 
 
-def _find_functional_change_type(mutation:Mutation)->str:
+def _functional_change_bucket(protein_change):
+    """The first token this protein_change contains, or UNANNOTATED.
+
+    **One bucket per mutation, unlike the Overview**, which counts a mutation under every
+    token its protein_change contains and whose sums therefore exceed its mutation count.
+    Two pages, two questions; neither is the other's bug.
+
+    `FUNCTIONAL_CHANGE_TYPE_LIST`'s order is load-bearing here: `nonsynonymous` contains
+    `synonymous` as a substring and is listed first, so a nonsynonymous change is not
+    counted as a synonymous one.
+    """
     for functional_change_type in FUNCTIONAL_CHANGE_TYPE_LIST:
-        if functional_change_type in mutation.protein_change:
-            return functional_change_type;
+        if functional_change_type in (protein_change or ""):
+            return functional_change_type
     return UNANNOTATED
 
 
-def _find_mutation_type(mutation:Mutation)->str:
-    if mutation.mutation_type in MUTATION_TYPE_LIST:
-        return mutation.mutation_type
+def _mutation_type_bucket(mutation_type):
+    """The type, or UNANNOTATED for one outside the vocabulary.
+
+    Bucketed, unlike the Overview, which drops such a mutation from every type count.
+    """
+    if mutation_type in MUTATION_TYPE_LIST:
+        return mutation_type
     return UNANNOTATED

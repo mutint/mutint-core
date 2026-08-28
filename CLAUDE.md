@@ -61,9 +61,12 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1239 run, 0 failures** standalone; **1370** in an assembled project, where the
-plugins' own tests join them. They were 1213 and 1344 before the global filter went and the
-filter summary arrived, 1201 and 1332 before the collected manual, 1197 and
+**Baseline: 1264 run, 0 failures** standalone; **1401** in an assembled project, where the
+plugins' own tests join them. **19 of that jump is `aledb_dashboard`'s tests running for the
+first time** -- see the `__init__.py` gotcha below -- so the derived-table removals added
+fewer than the arithmetic suggests. They were 1239 and 1370 before the dashboard stopped
+filtering and `aledb_stats` stopped storing, 1213 and 1344 before the global filter went and
+the filter summary arrived, 1201 and 1332 before the collected manual, 1197 and
 1328 before `./aledb docs` learned to refuse,
 1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
@@ -129,6 +132,13 @@ stopped the parser writing `Media.substrate` while the tests kept asserting on i
 - **Access is explicit; staff have no blanket read.** `can_view_project` used to end
   `return bool(user.is_staff)`. A test that gives someone `is_staff=True` and expects them to
   see a project is asserting the old behaviour.
+- **A `tests/` directory with no `__init__.py` is not run at all, and says nothing.**
+  `aledb_dashboard/tests/` had none, so its nine tests had never run in the suite -- and the
+  symptom is not a failure, it is a total that is quietly nineteen short. A bare `./aledb test`
+  runs *app labels* (see above), and label discovery cannot descend into a directory that is
+  not a package; naming the module explicitly (`./aledb test aledb_dashboard.tests.test_x`)
+  works fine, which is what makes it invisible when writing a new test. `./aledb test
+  <app_label>` reporting `Found 0 test(s)` for an app that plainly has tests is the tell.
 - **Override the store.** Anything touching `ALEDB_STORE_DIR` needs
   `override_settings(ALEDB_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
 - **Template content outside a `{% block %}` is silently discarded** in a child template. A
@@ -523,6 +533,11 @@ alone on 74,859 rows, which is exactly the bill `rebuild_after_structural_change
 stay marked; the dashboard's own `ensure_fresh` pays it once on the next view. Ten deletes cost
 one recount rather than ten.
 
+**That 4.9s was measured on an implementation that no longer exists** -- `rebuild_mutation_counts`
+materialised every observation as a model in order to filter it, and reads three columns as
+tuples now. The behaviour above is unchanged and not up for revisiting on that account: it rests
+on ten deletes costing one recount rather than ten, which is true at any per-row price.
+
 `run_rebuilds` takes `scope=` for this; `get_rebuilders` already did.
 
 #### Being told without being rebuilt
@@ -594,6 +609,37 @@ after migrating: the first `/dashboard` view took **5.4s** and corrected the sto
 74,859 to 73,857; the second took **0.00s**. **Any future change to filtering or
 counting logic needs the same migration**, because there is no way for the data to work it out
 for itself. `./aledb rebuild --all --force` is the manual equivalent.
+
+**`aledb_common.0003` is that rule being followed**, and it moves the same total back: the
+dashboard stopped applying the filter, so 73,857 becomes 74,859 again. It marks only
+`mutation_counts`, because only that changed -- `0002` marked everything because the filter
+itself had changed and every derived table read through it.
+
+#### The dashboard applies no filter
+
+It is an inventory of what the installation **holds**. An experiment's frequency cutoff or
+ignored-gene list is one person's view of one experiment, and a site-wide total computed
+through every experiment's filters answers a question nobody asked. Under per-user filtering it
+stops being computable at all: a shared table cannot be keyed by user.
+
+So `mutation_counts` declares `inputs={INPUT_MUTATIONS}` and a filter save no longer marks it.
+That matters more than it sounds: a filter edit marks *every* experiment at once, and this is
+the most expensive rebuild registered, so being marked by one was both wrong and the costliest
+way to be wrong.
+
+Two things fell out of removing the filter, and both are worth knowing:
+
+- **Nothing has to be materialised any more.** Filtering needed the gene column parsed per row,
+  so every row had to be built; counting needs three columns, read as `values_list` tuples.
+- **`synonymous` and `nonsynonymous` had never been written.** The branch filling them tested
+  for `snp_type_synonymous`/`snp_type_nonsynonymous`, which are not tokens in
+  `FUNCTIONAL_CHANGE_TYPE_LIST`, so both columns sat at zero from the day they were added. They
+  are filled now, which is the second reason `0003` exists.
+
+Note the dashboard's buckets are **not** the Overview's, deliberately: here a mutation lands in
+one functional-change bucket (the first token its `protein_change` contains) and an unknown
+mutation type is bucketed `unannotated`; there, a mutation counts under every token it contains
+and an unknown type is dropped. Two pages, two questions.
 
 #### The dashboard counted what had been deleted
 
