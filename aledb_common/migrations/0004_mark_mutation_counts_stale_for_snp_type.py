@@ -22,8 +22,13 @@ The shape of the correction, over the dev database's 24,088 mutations:
     nonsense            0  ->     394
     pseudogene        237  ->     210
 
-Those are per-mutation figures; the stored columns count observations and distinct mutations over
-live experiments, so read them as the shape of the move rather than as expected column values.
+Those are per-`Mutation`-row figures. The stored columns count observations, and distinct mutations
+*among those observations*, over live experiments -- so read them as the shape of the move rather
+than as expected column values. The gap is not only soft-deleted experiments: a mutation whose last
+observation was deleted stays in the table until something sweeps it, and counts in the first figure
+and not the second. There is one such row in the dev database, which is why the unique column totals
+24,087 against 24,088 mutations.
+
 Two parts of it are worth naming because they will look like faults:
 
 * `intergenic` falls. `snp_type` is a SNP concept -- breseq assigns it for SNP and RA entries only
