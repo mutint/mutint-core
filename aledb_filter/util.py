@@ -6,6 +6,30 @@ from aledb_common.util import get_gene_list
 __author__ = 'Patrick Phaneuf, Muyao :)'
 
 
+def filters_in_play(observed_mutation_queryset=None, experiment_id=None,
+                    skip_experiment_filter=False):
+    """The `AleExperimentFilter` rows that apply to these mutations.
+
+    **One resolution, two consumers.** `filtered_observed_mutation_queryset` turns these rows
+    into the exclusions, and `describe_filters` turns the same rows into the sentence a page
+    shows about itself. Deriving the description separately would be a second opinion about
+    which filters apply, and the failure mode of a description that drifts is worse than no
+    description at all -- a page confidently describing filtering it is not doing.
+
+    `experiment_id` narrows to one experiment. Without it the filters are found from the
+    queryset's own experiments, which is what a cross-experiment page like search needs.
+    """
+    if skip_experiment_filter:
+        return AleExperimentFilter.objects.none()
+    if experiment_id:
+        return AleExperimentFilter.objects.filter(ale_experiment_id=experiment_id)
+    if observed_mutation_queryset is None:
+        return AleExperimentFilter.objects.none()
+    return AleExperimentFilter.objects.filter(
+        ale_experiment_id__in=observed_mutation_queryset.values(
+            "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"))
+
+
 def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_id=None,
                                        skip_experiment_filter=False):
     """The part of filtering that SQL can express, plus the gene lists that it cannot.
@@ -40,14 +64,8 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
     `order_by` left on a queryset silently joins its columns into a later `.values().annotate()`
     GROUP BY, which would give a caller counting things the wrong number of groups.
     """
-    if not skip_experiment_filter:
-        if experiment_id:
-            exp_filters = AleExperimentFilter.objects.filter(ale_experiment_id=experiment_id)
-        else:
-            exp_filters = AleExperimentFilter.objects.filter(ale_experiment_id__in=observed_mutation_queryset.values(
-                "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"))
-    else:
-        exp_filters = AleExperimentFilter.objects.none()
+    exp_filters = filters_in_play(observed_mutation_queryset, experiment_id,
+                                  skip_experiment_filter)
 
     exp_filter_genes_map = dict()
 
@@ -174,3 +192,47 @@ def ensure_default_experiment_filter(ale_experiment_id):
     AleExperimentFilter.objects.get_or_create(
         ale_experiment=experiment,
         defaults=get_default_experiment_filter_params(experiment))
+
+
+def describe_filters(observed_mutation_queryset=None, experiment_id=None,
+                     skip_experiment_filter=False):
+    """What filtering shaped a page's rows, for the page to say out loud.
+
+    Takes the same arguments as `filter_observed_mutations` and reads the same rows through
+    `filters_in_play`, so the sentence and the exclusion cannot disagree about which filters
+    apply. Returns:
+
+        {'applied': bool,          anything at all is being hidden
+         'skipped': bool,          the reader asked to see through it
+         'cutoffs': [(min, max)],  the ranges in force, one per experiment
+         'genes': [names],         ignored genes, deduplicated across experiments
+         'experiments': int}       how many filters were consulted
+
+    `applied` is the question a page actually asks, and it is **not** "is a filter
+    configured". A filter of 0-100 with no ignored genes is configured and hides nothing, and
+    saying "filtered" about it would train people to ignore the word. The two are different
+    facts about a deployment and the summary distinguishes them.
+    """
+    filters = list(filters_in_play(observed_mutation_queryset, experiment_id,
+                                   skip_experiment_filter))
+
+    cutoffs = []
+    genes = []
+    for exp_filter in filters:
+        low = exp_filter.min_cutoff or 0
+        high = exp_filter.max_cutoff if exp_filter.max_cutoff is not None else 100
+        if low > 0 or high < 100:
+            pair = (low, high)
+            if pair not in cutoffs:
+                cutoffs.append(pair)
+        for gene in _get_exp_filter_genes(exp_filter):
+            if gene not in genes:
+                genes.append(gene)
+
+    return {
+        "applied": bool(cutoffs or genes),
+        "skipped": bool(skip_experiment_filter),
+        "cutoffs": cutoffs,
+        "genes": sorted(genes),
+        "experiments": len(filters),
+    }

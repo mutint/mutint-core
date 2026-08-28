@@ -61,9 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1222 run, 0 failures** standalone; **the assembled count needs re-running** --
-it was 1344 before the global filter was removed. Re-count it rather than deriving it. They
-were 1213 and 1344 before that, 1201 and 1332 before the collected manual, 1197 and
+**Baseline: 1239 run, 0 failures** standalone; **1370** in an assembled project, where the
+plugins' own tests join them. They were 1213 and 1344 before the global filter went and the
+filter summary arrived, 1201 and 1332 before the collected manual, 1197 and
 1328 before `./aledb docs` learned to refuse,
 1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
@@ -943,6 +943,42 @@ and never reading it, and `aledb_stats._count_in_python` -- which carries its ow
 gene loop -- lost both its cross-experiment `deleted_global_mutations` cache and the copied
 `and`/`or` precedence quirk, since a global gene meaning the same thing everywhere was the only
 reason either existed.
+
+### Every table says what filtering produced it
+
+`{% filter_summary %}` renders a line under a mutation table naming the cutoffs and ignored
+genes behind it. It exists because filtering is shared state that nothing announced: the four
+plugins each chose differently what to do about it, and once the frequency cutoff started
+actually working, `Population tree` began rendering 1,002 fewer observations in the filtered
+views than phylogeny counts, with nothing to explain the difference.
+
+**One resolution, two consumers.** `filters_in_play` returns the `AleExperimentFilter` rows
+that apply; `filtered_observed_mutation_queryset` turns them into exclusions and
+`describe_filters` turns the same rows into the sentence. Deriving the description separately
+would be a second opinion about which filters apply, and a page confidently describing
+filtering it is not doing is worse than one saying nothing. `test_describe_filters` asserts the
+two agree on one fixture, and that is the test that fails if they drift.
+
+**`applied` is not "is a filter configured".** A 0-100 range with no ignored genes is
+configured and hides nothing; calling that "filtered" teaches people to ignore the word. The
+summary says *No filtering* instead.
+
+**A template tag, not a context key**, and that is what makes it generic: it reads
+`ale_experiment_id`, `show_exp_filtered` and `show_filter_toggles` out of the context every
+table page already sets, so including it once in `base_table_template.html` reached
+aledb-compare, aledb-fixation and aledb-converge **without touching any of their
+repositories**. `show_filter_toggles` matters: only Compare renders the *Show Experiment
+Filtered* checkbox, and a summary telling a reader to tick a control their page does not have
+is worse than one that stays quiet.
+
+A page filtering by its own rules passes `own_rules=` rather than rendering an empty summary
+that reads as "no filtering here" when the truth is "different filtering here". Search does,
+because it spans experiments; aledb-phylogeny does, because it encodes frequency in three
+states rather than excluding on it.
+
+**What it does not claim**: criteria a view hardcodes. `get_table_body` passes
+`filter_type='AMP'`, so amplifications are excluded from the fixation and converge tables and
+the summary does not say so. Widening it means every caller declaring what it passed.
 
 **What is left in `aledb_filter` is filtering proper**: the two frequency cutoffs and
 `ignored_genes`, which aledb-fixation, aledb-converge, `aledb_stats` and `aledb_seq` all have

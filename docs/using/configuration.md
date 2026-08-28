@@ -51,6 +51,16 @@ list — ignoring one gene of two ignores nothing.
     What *is* per-viewer is the **Show Filtered** checkbox on a mutation table: it reveals what
     the filter hides for you alone, in that request, and stores nothing.
 
+**Every mutation table says what filtering produced it**, in a line under the controls: the
+cutoffs in force, the genes excluded, and a link to change them. A table whose filter hides
+nothing says *No filtering* rather than describing a range that excludes nothing — those are
+different facts about a deployment.
+
+A page that filters by its own rules says so instead. The phylogeny page is the one to know
+about: it encodes frequency in three states rather than excluding on it, so a call between 0
+and 100 % becomes *ambiguous* rather than absent, and its site count will not match the
+mutation tables.
+
 Filtering is not deleting. A filtered mutation is still stored and comes back when the filter
 changes; a deleted one is removed from the sample, recorded against whoever did it, and
 restorable from the mutation editor's history. The two were once the same mechanism and that

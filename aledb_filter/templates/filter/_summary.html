@@ -1,0 +1,26 @@
+{% comment %}
+One line under a table saying what filtering produced it.
+
+It describes the *configured* filter -- the cutoffs and the ignored genes. It does not know
+about criteria a view hardcodes: `get_table_body` passes `filter_type='AMP'`, so amplifications
+are excluded from the fixation and converge tables and nothing here says so. A page applying its
+own rules should pass them as `own_rules` rather than let this describe only half of what it did.
+{% endcomment %}
+<div class="row" style="margin: 6px 0 10px 0; color: #666; font-size: 12px;">
+    {% if own_rules %}
+        {{ own_rules }}
+    {% elif summary.skipped %}
+        Showing everything the experiment filter hides.
+    {% elif not summary.applied %}
+        No filtering: every stored mutation for this experiment is shown.
+    {% else %}
+        {% spaceless %}Filtered{% for low, high in summary.cutoffs %} to frequencies
+            {{ low }}&ndash;{{ high }}%{% if not forloop.last %},{% endif %}{% endfor %}{% if summary.cutoffs and summary.genes %},
+            and{% elif summary.genes %},{% endif %}{% if summary.genes %} excluding {{ summary.genes|length }}
+            gene{{ summary.genes|length|pluralize }} ({{ summary.genes|join:", " }}){% endif %}.{% endspaceless %}
+        {% if experiment_id %}
+            <a href="/filter?ale_experiment_id={{ experiment_id }}">Change</a>{% if has_toggle %},
+            or tick <b>Show Experiment Filtered</b> above to see what is hidden{% endif %}.
+        {% endif %}
+    {% endif %}
+</div>

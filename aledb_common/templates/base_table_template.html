@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load filter_summary %}
 {% block title %}Mutations{% endblock %}
 {% block scripts_and_style %}
 
@@ -99,6 +100,12 @@
                 </button>
             </form>
         </div>
+        {% comment %} What filtering produced the table below. Included here rather than in
+           each page, because this template is shared by aledb-compare, aledb-fixation and
+           aledb-converge -- so all three say what they did without a line of their own. The
+           tag reads `ale_experiment_id` and `show_exp_filtered` straight out of the context
+           they already set. {% endcomment %}
+        {% filter_summary %}
         <div><i>Note: You must select the Apply button when selecting specific ALEs or show/hide of columns according to
             tags.</i></div>
         <br>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load filter_summary %}
 {% load static %}
 
 {% block title %}{{ title }}{% endblock %}
@@ -68,6 +69,11 @@
     {% if not selected_reseq %}
         <p>This experiment has no resequencing samples to show.</p>
     {% else %}
+        {% comment %} This page filters through `filter_observed_mutations` like the shared
+           tables do, so it says the same thing about itself. There is no `Show Experiment
+           Filtered` control here, so the summary describes the filter without offering to
+           lift it. {% endcomment %}
+        {% filter_summary %}
         <div class="row">
             {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." %}
         </div>

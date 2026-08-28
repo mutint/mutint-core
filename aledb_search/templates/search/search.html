@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load filter_summary %}
 {% block title %}Search{% endblock %}
 {% block scripts_and_style%}
 
@@ -170,6 +171,11 @@
     <div class="row">
         Search Returned <b>{{ mutation_count }}</b> Unique Mutations and <b>{{ observed_mutation_count }}</b> Observed Mutations
     </div>
+    {% comment %} Search spans experiments, so it has no `ale_experiment_id` and the tag finds
+       no single filter to describe -- it says so rather than describing one experiment's as
+       though it applied to all of them. Each experiment's own filter still applies to its own
+       rows; `filter_observed_mutations` resolves them from the queryset. {% endcomment %}
+    {% filter_summary own_rules="Each experiment's own filter applies to its own results." %}
     <br>
 <div class="row">
     <form action="" method="get">
