@@ -36,6 +36,31 @@ Pluggable by changing `INSTALLED_APPS`. Any app with `auth_app = True` on its `A
 - `aledb_accounts_noauth` — the default. Django's built-in login, nothing enforced.
 - `aledb_accounts` — production, with `django-defender` brute-force protection.
 
+## Filtering
+
+An experiment has one filter: a **frequency range** and a list of **ignored genes**. A mutation
+is hidden when its frequency falls outside the range, or when *every* gene it touches is on the
+list — ignoring one gene of two ignores nothing.
+
+!!! warning "The filter is shared, not personal"
+
+    It is stored per experiment, with no user field, so a cutoff one person changes is a cutoff
+    everyone sees. Editing it needs **write** access to the project, and a locked experiment
+    refuses it like any other write.
+
+    What *is* per-viewer is the **Show Filtered** checkbox on a mutation table: it reveals what
+    the filter hides for you alone, in that request, and stores nothing.
+
+Filtering is not deleting. A filtered mutation is still stored and comes back when the filter
+changes; a deleted one is removed from the sample, recorded against whoever did it, and
+restorable from the mutation editor's history. The two were once the same mechanism and that
+was the bug — the old ignored-mutation lists were a delete that kept the row, per experiment,
+attributed to nobody, with no way back.
+
+There used to be a second, installation-wide ignored-gene list. It was removed; whatever it
+held was folded into each experiment's own list, where it can be edited by anyone with write
+access rather than only by a superuser.
+
 ## Access
 
 Four ordered roles, granted on a **project** and nowhere else:

@@ -83,8 +83,10 @@
                    so. {% endcomment %}
                 {% if show_filter_toggles %}
                 <label style="margin-left: 10px; font-weight: normal;">
-                    <input type="checkbox" name="show_global_filtered" value="1"
-                           {% if show_global_filtered %}checked{% endif %} /> Show Global Filtered
+                    {% comment %} `Show Global Filtered` stood here beside its sibling. It
+                       offered to reveal what the installation-wide ignored-gene list hid, and
+                       that list is gone -- there is one filter now, and it belongs to the
+                       experiment. {% endcomment %}
                 </label>
                 <label style="margin-left: 10px; font-weight: normal;">
                     <input type="checkbox" name="show_exp_filtered" value="1"

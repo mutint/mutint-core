@@ -2,7 +2,7 @@ from django.test import TestCase
 from aledb_seq.models import Mutation
 from aledb_seq.models import ObservedMutation
 from aledb_seq.models import ResequencingExperiment
-from aledb_filter.models import AleExperimentFilter, GlobalFilter
+from aledb_filter.models import AleExperimentFilter
 from aledb_experiment.models import TechnicalReplicate,\
     Isolate,\
     Flask,\
@@ -198,15 +198,19 @@ class TestFilter(TestCase):
         self.assertEqual(gene_mut_count_dict["geneB"], 2)
         self.assertEqual(gene_mut_count_dict["geneC"], 1)
 
-    def test_filter_observed_mutations_both_ale_and_global_filter(self):
+    def test_each_experiments_gene_list_applies_only_to_its_own_rows(self):
+        """Two experiments, two different ignored genes, the same three mutations in both.
+
+        This tested a site-wide list as well until it was removed. What is left is the part
+        worth pinning: an experiment's list must not reach another experiment's rows, and the
+        two are ORed together across a queryset that spans both.
+        """
         ale_exp1 = AleExperiment.objects.create(ale_id=1,
                                                 name="exp1",
                                                 instrument=Instrument.objects.create())
         ale_exp2 = AleExperiment.objects.create(ale_id=2,
                                                 name="exp2",
                                                 instrument=Instrument.objects.create())
-
-        GlobalFilter.objects.create(ignored_genes="geneB")
 
         AleExperimentFilter.objects.create(ale_experiment=ale_exp1, ignored_genes="geneA")
         AleExperimentFilter.objects.create(ale_experiment=ale_exp2, ignored_genes="geneC")
@@ -274,8 +278,11 @@ class TestFilter(TestCase):
         for obs_mut in obs_muts:
             gene_mut_count_dict[obs_mut.mutation.gene] += 1
 
+        # geneA is hidden in exp1 and kept in exp2; geneC the other way about. geneB is on
+        # nobody's list and survives in both -- it was 0 here when a site-wide list could
+        # reach across experiments.
         self.assertEqual(gene_mut_count_dict["geneA"], 1)
-        self.assertEqual(gene_mut_count_dict["geneB"], 0)
+        self.assertEqual(gene_mut_count_dict["geneB"], 2)
         self.assertEqual(gene_mut_count_dict["geneC"], 1)
 
     def test_filter_observed_mutations_default_filter(self):

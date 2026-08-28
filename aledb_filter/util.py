@@ -1,5 +1,5 @@
 
-from aledb_filter.models import AleExperimentFilter, GlobalFilter
+from aledb_filter.models import AleExperimentFilter
 from django.db.models import Q
 from aledb_common.util import get_gene_list
 
@@ -7,14 +7,20 @@ __author__ = 'Patrick Phaneuf, Muyao :)'
 
 
 def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_id=None,
-                                       skip_global_filter=False, skip_experiment_filter=False):
+                                       skip_experiment_filter=False):
     """The part of filtering that SQL can express, plus the gene lists that it cannot.
 
-    Returns `(queryset, global_filter_genes, exp_filter_genes_map)`. The queryset has the
-    frequency-cutoff exclusions applied; the two gene collections are what
-    `filter_observed_mutations` below still has to walk the rows to apply, because "every gene
-    this mutation touches is in the ignore list" is a set-subset test over a parsed column and
-    there is no SQL for it.
+    Returns `(queryset, exp_filter_genes_map)`. The queryset has the frequency-cutoff
+    exclusions applied; the gene map is what `filter_observed_mutations` below still has to
+    walk the rows to apply, because "every gene this mutation touches is in the ignore list"
+    is a set-subset test over a parsed column and there is no SQL for it.
+
+    **There is one filter, and it belongs to an experiment.** `GlobalFilter` was a second,
+    installation-wide ignored-gene list, superuser-only, linked from nowhere -- the only
+    reference to its page was a commented-out sidebar entry -- and empty in practice. It went
+    the way its `ignored_mutations` column had already gone, with `aledb_filter.0005` folding
+    whatever any deployment had into each experiment's own list first, so nothing that was
+    hidden became visible.
 
     **This filter no longer hides individual mutations.** `ignored_mutations` and
     `starting_strain_mutations` were comma-joined `Mutation.id` strings excluded here -- a way
@@ -27,8 +33,8 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
     Split out so that a caller wanting *counts* rather than rows can aggregate this queryset in
     the database instead of materialising it -- see `aledb_stats.util.build_experiment_summary`,
     which is the whole reason the Overview page no longer pulls an experiment's every mutation
-    into Python. When both gene collections come back empty, this queryset alone *is* the
-    filter, exactly as the `else` branch at the end of `filter_observed_mutations` says.
+    into Python. When the gene map comes back empty, this queryset alone *is* the filter,
+    exactly as the `else` branch at the end of `filter_observed_mutations` says.
 
     Deliberately not ordered or `select_related` here: those belong to rendering rows, and an
     `order_by` left on a queryset silently joins its columns into a later `.values().annotate()`
@@ -42,11 +48,6 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
                 "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"))
     else:
         exp_filters = AleExperimentFilter.objects.none()
-
-    if not skip_global_filter:
-        global_filter_genes = _get_global_filter_genes()
-    else:
-        global_filter_genes = set()
 
     exp_filter_genes_map = dict()
 
@@ -84,23 +85,22 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, experiment_i
         exp_q_query.add(q_exp, Q.AND)
         q_queries.add(exp_q_query, Q.OR)
 
-    return observed_mutation_queryset.exclude(q_queries), global_filter_genes, exp_filter_genes_map
+    return observed_mutation_queryset.exclude(q_queries), exp_filter_genes_map
 
 
 def filter_observed_mutations(observed_mutation_queryset, experiment_id=None, filter_type=None,
-                              skip_global_filter=False, skip_experiment_filter=False):
-    """
-    R. Cai - 1/19/2019
+                              skip_experiment_filter=False):
+    """The experiment's filter applied, as a list of rows ready to render.
+
     :param observed_mutation_queryset:
     :param experiment_id: experiment_id for the observed_mutation_queryset
     :param filter_type: 'AMP' or 'NOT_AMP' to filter by mutation type
-    :param skip_global_filter: if True, do not apply global filter exclusions
     :param skip_experiment_filter: if True, do not apply experiment filter exclusions
     :return: list of observed_mutations sorted and loaded with related objects
     """
-    queryset, global_filter_genes, exp_filter_genes_map = filtered_observed_mutation_queryset(
+    queryset, exp_filter_genes_map = filtered_observed_mutation_queryset(
         observed_mutation_queryset, experiment_id,
-        skip_global_filter=skip_global_filter, skip_experiment_filter=skip_experiment_filter)
+        skip_experiment_filter=skip_experiment_filter)
 
     # filter genes
     queryset = queryset.select_related(
@@ -113,8 +113,7 @@ def filter_observed_mutations(observed_mutation_queryset, experiment_id=None, fi
         'sequencing_experiment__tech_rep__tech_rep_number'
     )
     observed_mutations = []
-    deleted_global_mutations = set()
-    if filter_type or len(global_filter_genes) > 0 or len(exp_filter_genes_map) > 0:
+    if filter_type or len(exp_filter_genes_map) > 0:
         for obs_mut in queryset:
             if filter_type == 'AMP':
                 if obs_mut.mutation.mutation_type == 'AMP':
@@ -123,29 +122,20 @@ def filter_observed_mutations(observed_mutation_queryset, experiment_id=None, fi
                 if obs_mut.mutation.mutation_type != 'AMP':
                     continue
 
-            deleted = obs_mut.mutation.id in deleted_global_mutations
-            if not deleted and len(global_filter_genes) > 0 or obs_mut.get_experiment_id() in exp_filter_genes_map:
+            deleted = False
+            if obs_mut.get_experiment_id() in exp_filter_genes_map:
+                # Every gene the mutation touches has to be in the list. A mutation spanning an
+                # ignored gene and a kept one is kept -- ignoring a gene is not a claim about
+                # its neighbours.
                 genes = set(get_gene_list(obs_mut.mutation.gene))
-                if len(global_filter_genes) >= len(genes) and genes.issubset(global_filter_genes):
-                    deleted_global_mutations.add(obs_mut.mutation.id)
+                exp_filter_genes = exp_filter_genes_map[obs_mut.get_experiment_id()]
+                if len(exp_filter_genes) >= len(genes) and genes.issubset(exp_filter_genes):
                     deleted = True
-                elif obs_mut.get_experiment_id() in exp_filter_genes_map:
-                    exp_filter_genes = exp_filter_genes_map[obs_mut.get_experiment_id()]
-                    if len(exp_filter_genes) >= len(genes) and genes.issubset(exp_filter_genes):
-                        deleted = True
             if not deleted:
                 observed_mutations.append(obs_mut)
     else:
         observed_mutations = [obs_mut for obs_mut in queryset]
     return observed_mutations
-
-
-def _get_global_filter_genes():
-    """The site-wide ignored genes. Used to also return a list of ignored Mutation ids."""
-    global_filter = get_global_filter()
-    if not global_filter.ignored_genes:
-        return set()
-    return set(get_gene_list(global_filter.ignored_genes))
 
 
 def _get_exp_filter_genes(exp_filter: AleExperimentFilter):
@@ -158,11 +148,6 @@ def _get_exp_filter_genes(exp_filter: AleExperimentFilter):
     if not exp_filter.ignored_genes:
         return set()
     return set(get_gene_list(exp_filter.ignored_genes))
-
-
-def get_global_filter():
-    global_filter, created = GlobalFilter.objects.get_or_create(id=1)
-    return global_filter
 
 
 def ensure_default_experiment_filter(ale_experiment_id):

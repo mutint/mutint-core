@@ -10,9 +10,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from aledb_filter.models import AleExperimentFilter
-from aledb_filter.util import (
-    filter_observed_mutations, _get_exp_filter_genes, _get_global_filter_genes,
-)
+from aledb_filter.util import filter_observed_mutations, _get_exp_filter_genes
 from aledb_common.logger import user_extra
 from aledb_metadata.views import get_ordered_reseq_queryset, get_reseq_info_list
 from aledb_seq.models import ObservedMutation
@@ -48,7 +46,6 @@ def _get_public_filtered_queryset():
         sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project__is_public=True
     )
 
-    global_filter_genes = _get_global_filter_genes()
     exp_filters = AleExperimentFilter.objects.filter(
         ale_experiment_id__in=qs.values(
             "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id"

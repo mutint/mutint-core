@@ -42,7 +42,8 @@ class AleExperimentFilter(models.Model):
     # its change log, so what was hidden is still hidden and is now also visible and
     # restorable.
 
-
-class GlobalFilter(models.Model):
-
-    ignored_genes = models.CharField(max_length=15000, default='', blank=True)
+    # `GlobalFilter` sat here: a second ignored-gene list, one row for the whole installation,
+    # superuser-only, and linked from nowhere -- the only reference to its page was a
+    # commented-out sidebar entry. It went the way its own `ignored_mutations` column had
+    # already gone. `0005` folds whatever a deployment had in it into each experiment's list
+    # before dropping the table, so nothing that was hidden became visible.

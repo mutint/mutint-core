@@ -99,7 +99,7 @@ class OneFilterPerExperimentTestCase(TestCase):
         self._filters().update(min_cutoff=55)
         ensure_default_experiment_filter(self.experiment.ale_id)
 
-        _queryset, _genes, _map = filtered_observed_mutation_queryset(
+        _queryset, _genes_by_experiment = filtered_observed_mutation_queryset(
             ObservedMutation.objects.all(), self.experiment.ale_id)
 
         self.assertEqual(1, self._filters().count())

@@ -7,7 +7,7 @@ from aledb_filter.util import filter_observed_mutations
 from aledb_common.util import get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
 from aledb_experiment.models import TechnicalReplicate, AleExperiment
-from aledb_experiment.permissions import can_add_global_filter, can_add_experiment_filter
+from aledb_experiment.permissions import can_curate
 
 
 HTML_EMPTY_MUTATION_CELL = """<span class="empty"></span>"""
@@ -62,7 +62,7 @@ def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
         # Plain text: this used to link to <experiment_location>/<sample>.html, a breseq
         # report page that no longer exists.
         sample_header_html = sample_name
-        if can_add_global_filter(user) or can_add_experiment_filter(user, experiment):
+        if can_curate(user, experiment):
             dropdown_html = _get_replicate_tag_dropdown_entries(reseq.tech_rep)
             sample_header_html += (REP_DROPDOWN % dropdown_html)
         current_tags = _get_rep_tags(reseq.tech_rep)
@@ -79,7 +79,7 @@ def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, expe
     for mutation in mutations:
         if _contains_mutation(table_entry_list[mutation_index_dict[mutation.id]]):
             table_row = []
-            if can_add_global_filter(user) or can_add_experiment_filter(user, experiment):
+            if can_curate(user, experiment):
                 table_row.append(_build_table_cell_for_dropdown(mutation, experiment))
             else:
                 table_row.append("""""")

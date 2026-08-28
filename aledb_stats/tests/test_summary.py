@@ -28,7 +28,7 @@ from django.test import TestCase
 from aledb_experiment.models import (
     AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
 )
-from aledb_filter.models import AleExperimentFilter, GlobalFilter
+from aledb_filter.models import AleExperimentFilter
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 from aledb_stats.util import (
     build_experiment_summary,
@@ -188,9 +188,12 @@ class SummaryTestCase(TestCase):
         self.assertEqual(0, types["DEL"])
 
     # ---- the Python path ------------------------------------------------------------
-    def test_a_global_gene_filter_matches_the_original(self):
-        """A gene filter forces the row-walking path; it must reach the same answer."""
-        GlobalFilter.objects.update_or_create(id=1, defaults={"ignored_genes": "rrlA"})
+    def test_a_noncoding_gene_filter_matches_the_original(self):
+        """A gene filter forces the row-walking path; it must reach the same answer.
+
+        This case used the site-wide list before it was removed. There is one filter now, so
+        it exercises the same path through the experiment's own."""
+        self._filter(ignored_genes="rrlA")
         types, _, _, _ = self._assert_matches_original(
             "row-walking path disagrees with the Python original")
         self.assertEqual(1, types["SNP"],
@@ -208,7 +211,7 @@ class SummaryTestCase(TestCase):
         This is the branch that cannot be expressed in SQL and the reason the second path
         exists at all, so it is the one worth pinning.
         """
-        GlobalFilter.objects.update_or_create(id=1, defaults={"ignored_genes": "thrB"})
+        self._filter(ignored_genes="thrB")
         types, _, _, _ = self._assert_matches_original("subset rule diverges")
         self.assertEqual(1, types["DEL"], "thrB/thrC is not a subset of {thrB}")
 
@@ -217,7 +220,7 @@ class SummaryTestCase(TestCase):
         with_sql = compute_experiment_counts(self.experiment.ale_id)
         # A gene filter naming a gene no mutation has changes no count, but does force the
         # row-walking path -- which is precisely how to compare the two on one dataset.
-        GlobalFilter.objects.update_or_create(id=1, defaults={"ignored_genes": "notAGene"})
+        self._filter(ignored_genes="notAGene")
         with_python = compute_experiment_counts(self.experiment.ale_id)
         self.assertEqual(with_sql, with_python)
 

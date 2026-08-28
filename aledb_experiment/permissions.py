@@ -236,8 +236,29 @@ def can_delete_experiment(user, experiment):
     return can_edit_experiment(user, experiment)
 
 
-def can_add_global_filter(user):
-    return bool(user and user.is_superuser)
+def can_curate(user, experiment):
+    """Tag a mutation or a replicate, and edit an experiment's filter.
+
+    This replaces `can_add_global_filter(user) or can_add_experiment_filter(user, experiment)`,
+    which is what the mutation table's tag dropdowns and `table_actions._may_curate` both read
+    while a site-wide filter existed. That disjunction had two problems and only one of them
+    was the dead name.
+
+    **It short-circuited past the experiment lock.** The left half was `user.is_superuser`, so
+    a superuser was allowed before the right half -- which is where the lock is checked -- was
+    ever reached. `_may_curate` had to test the lock *before* the `or` to compensate, and said
+    so in a comment. Asking the question in one place removes the need for that.
+
+    **But it was load-bearing for one case**, which is why it is not simply deleted: a
+    `Mutation` with no experiment cannot be scoped to a project, so there is nothing to grant
+    against and `can_add_experiment_filter` answers False for everybody. Superusers could tag
+    one and still can. `aledb_seq.tests.test_table_actions` pins that, and it is the case the
+    removal note originally guessed wrong -- it is not about an experiment with no *project*,
+    which `effective_role` already handles by answering `owner` to a superuser.
+    """
+    if experiment is None:
+        return bool(user and user.is_superuser)
+    return can_add_experiment_filter(user, experiment)
 
 
 def can_add_experiment_filter(user, experiment):

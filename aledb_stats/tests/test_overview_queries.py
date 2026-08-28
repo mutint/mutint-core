@@ -26,12 +26,10 @@ class OverviewQueryCountTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
-        # `aledb_filter.util.get_global_filter` is a `get_or_create(id=1)`, so the first page
-        # view in the process inserts the row -- a write on a GET, and four extra queries
-        # charged to whichever experiment happened to be measured first. Settle it here so
-        # these comparisons measure the page rather than the order the tests run in.
-        from aledb_filter.models import GlobalFilter
-        GlobalFilter.objects.get_or_create(id=1)
+        # A warm-up used to be needed here: `get_global_filter` was a `get_or_create(id=1)`,
+        # so the first page view in the process inserted a row -- a write on a GET, charged to
+        # whichever experiment happened to be measured first. The global filter is gone and
+        # with it that asymmetry, so these comparisons no longer depend on test order.
 
     def _experiment(self, name, samples):
         created = self.client.post(

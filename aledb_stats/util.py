@@ -263,15 +263,18 @@ def _count_in_sql(queryset):
             protein_change_counts, observed_protein_change_counts)
 
 
-def _count_in_python(queryset, global_filter_genes, exp_filter_genes_map):
+def _count_in_python(queryset, exp_filter_genes_map):
     """The four count dicts when a gene filter makes SQL alone insufficient.
 
     The exclusion logic below is `aledb_filter.util.filter_observed_mutations`' loop, applied
     to tuples instead of model instances. It is duplicated rather than shared because that
     function returns *rows* and this one returns counts, and materialising the rows to count
-    them is the whole cost being removed -- but it must stay in step with it, quirks included.
-    The `and`/`or` precedence in the `should_test_genes` condition is one of those quirks: it
-    reads as though the parenthesisation were different, and it is copied deliberately.
+    them is the whole cost being removed -- but it must stay in step with it.
+
+    It got shorter with the global filter. The `and`/`or` precedence in the old
+    `should_test_genes` condition was a copied quirk, and the cross-experiment
+    `deleted_global_mutations` cache existed only because a globally ignored gene meant the
+    same everywhere. One list, one experiment, one test.
     """
     from aledb_common.util import get_gene_list
 
@@ -286,23 +289,13 @@ def _count_in_python(queryset, global_filter_genes, exp_filter_genes_map):
         'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id',
     ).iterator(chunk_size=2000)
 
-    deleted_global_mutations = set()
     seen_mutations = set()
     for mutation_id, mutation_type, protein_change, gene, experiment_id in rows:
-        deleted = mutation_id in deleted_global_mutations
-        should_test_genes = (not deleted and len(global_filter_genes) > 0
-                             or experiment_id in exp_filter_genes_map)
-        if should_test_genes:
+        if experiment_id in exp_filter_genes_map:
             genes = set(get_gene_list(gene))
-            if len(global_filter_genes) >= len(genes) and genes.issubset(global_filter_genes):
-                deleted_global_mutations.add(mutation_id)
-                deleted = True
-            elif experiment_id in exp_filter_genes_map:
-                exp_filter_genes = exp_filter_genes_map[experiment_id]
-                if len(exp_filter_genes) >= len(genes) and genes.issubset(exp_filter_genes):
-                    deleted = True
-        if deleted:
-            continue
+            exp_filter_genes = exp_filter_genes_map[experiment_id]
+            if len(exp_filter_genes) >= len(genes) and genes.issubset(exp_filter_genes):
+                continue
 
         first_time = mutation_id not in seen_mutations
         seen_mutations.add(mutation_id)
@@ -329,12 +322,12 @@ def compute_experiment_counts(ale_experiment_id):
     # The join, not `sequencing_experiment_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.
     queryset = get_observed_mutation_queryset(ale_experiment_id)
-    queryset, global_filter_genes, exp_filter_genes_map = filtered_observed_mutation_queryset(
+    queryset, exp_filter_genes_map = filtered_observed_mutation_queryset(
         queryset, ale_experiment_id)
 
-    if not global_filter_genes and not exp_filter_genes_map:
+    if not exp_filter_genes_map:
         return _count_in_sql(queryset)
-    return _count_in_python(queryset, global_filter_genes, exp_filter_genes_map)
+    return _count_in_python(queryset, exp_filter_genes_map)
 
 
 def build_experiment_summary(ale_experiment_id):

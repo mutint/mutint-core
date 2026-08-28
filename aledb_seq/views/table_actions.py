@@ -44,16 +44,19 @@ def _may_curate(user, experiment):
     only present in `settings_private.py`, that included anonymous callers. This enforces
     server-side what the templates already assumed.
 
-    **The lock is tested before the disjunction, and has to be.** `can_add_global_filter` is
-    `user.is_superuser`, so leaving the lock to `can_add_experiment_filter` on the right-hand
-    side would let a superuser go on tagging a locked experiment -- the `or` short-circuits
-    and never reaches it. This is the one place in the codebase where that pattern hides the
-    lock, and it hides it silently.
+    This used to read `can_add_global_filter(user) or can_add_experiment_filter(...)`, whose
+    left half was `user.is_superuser` -- so the `or` short-circuited and a superuser went on
+    tagging a locked experiment without the right half, where the lock lives, ever being
+    reached. The lock check below was written to sit *before* the disjunction for that reason.
+
+    `permissions.can_curate` asks it once now, including the reason the disjunction existed:
+    a mutation with no experiment has no project to grant against and stays superuser-only.
+    The explicit lock check stays because this is a write path, and reading a refusal out of
+    two delegations is not the same as stating it.
     """
     if experiment is not None and experiment.is_locked:
         return False
-    return (permissions.can_add_global_filter(user)
-            or permissions.can_add_experiment_filter(user, experiment))
+    return permissions.can_curate(user, experiment)
 
 
 def _toggle(existing, selected_tag):

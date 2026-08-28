@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1213 run, 0 failures** standalone; **1344** in an assembled project, where the
-plugins' own tests join them. They were 1201 and 1332 before the collected manual, 1197 and
+**Baseline: 1222 run, 0 failures** standalone; **the assembled count needs re-running** --
+it was 1344 before the global filter was removed. Re-count it rather than deriving it. They
+were 1213 and 1344 before that, 1201 and 1332 before the collected manual, 1197 and
 1328 before `./aledb docs` learned to refuse,
 1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
@@ -909,6 +910,39 @@ dropdown entry, and `save_to_experiment_filter`/`deleteRow` in `table_template.j
 changesets before `aledb_filter.0003` drops them, so what was hidden stays hidden and becomes
 inspectable and restorable; `aledb_filter.0003` depends on it, which is what stops the drop
 running first. Those changesets have `created_by` null and render as "system".
+
+### There is one filter, and it belongs to an experiment
+
+`GlobalFilter` was a second ignored-gene list -- one row for the whole installation
+(`get_or_create(id=1)`), superuser-only, and linked from nowhere: the sole reference to its page
+anywhere was a **commented-out** sidebar entry, so it was reachable only by typing the URL. It
+was empty in practice. Its `ignored_mutations` column had already gone the same way.
+`AleExperimentFilter.ignored_genes` has identical semantics, so what was lost is hiding a gene
+everywhere at once rather than per experiment.
+
+`aledb_filter.0005` **folds any global genes into every experiment's list before dropping the
+table**. Without that the removal silently un-hides them, which is the same posture
+`aledb_mutation_editor.0002` took with the ignored *mutation* lists: convert, then drop. Tested
+through the real migration executor, since the model no longer exists to build a row with.
+
+**`can_add_global_filter` became `can_curate`, and the reason is not the one you would guess.**
+Two call sites gated the tag dropdowns on
+`can_add_global_filter(user) or can_add_experiment_filter(user, experiment)`. The left half was
+`is_superuser`, so the `or` short-circuited before the lock on the right was ever consulted --
+which is why `table_actions._may_curate` had to test the lock first and left a comment saying
+so.
+
+Deleting the left half outright looked safe because `effective_role` already answers `owner` to
+a superuser. It is not: the case it really covered is a **`Mutation` with no experiment**, where
+`can_edit_experiment(user, None)` returns False for everybody and an unscoped mutation becomes
+uncurateable by anyone. `aledb_seq.tests.test_table_actions` pins it. `can_curate` keeps that
+case and asks the question once, so the lock is no longer something to route around.
+
+Two things that fell out with it: `aledb_interop_query` had been assigning `global_filter_genes`
+and never reading it, and `aledb_stats._count_in_python` -- which carries its own copy of the
+gene loop -- lost both its cross-experiment `deleted_global_mutations` cache and the copied
+`and`/`or` precedence quirk, since a global gene meaning the same thing everywhere was the only
+reason either existed.
 
 **What is left in `aledb_filter` is filtering proper**: the two frequency cutoffs and
 `ignored_genes`, which aledb-fixation, aledb-converge, `aledb_stats` and `aledb_seq` all have
