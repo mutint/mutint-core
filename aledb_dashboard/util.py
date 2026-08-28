@@ -1,6 +1,9 @@
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
 from aledb_seq.models import ObservedMutation
-from aledb_seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST, UNANNOTATED
+from aledb_seq.functional_change import (
+    FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
+)
+from aledb_seq.views.common import MUTATION_TYPE_LIST, UNANNOTATED
 from aledb_experiment.models import AleId, Isolate, Flask
 from django.db.models import Q
 
@@ -38,7 +41,7 @@ def rebuild_sample_counts():
 
 
 def _live_observation_rows():
-    """Every observation the installation still has, as `(mutation_id, type, protein_change)`.
+    """Every observation the installation still has, as `(mutation_id, type, snp_type)`.
 
     **The dashboard applies no filter, deliberately.** It is an inventory of what the
     installation holds, and an experiment's frequency cutoff or ignored-gene list is one
@@ -53,12 +56,16 @@ def _live_observation_rows():
     `rebuild_after_structural_change` refuses to run this rebuild at all because it "pulls
     every ObservedMutation in the database into Python", and that is the sentence this is
     meant to stop being true.
+
+    The third column is `snp_type`, breseq's own functional class, and used to be
+    `protein_change` -- a rendered display string that contains none of the words being looked
+    for. See `aledb_seq.functional_change`.
     """
     return ObservedMutation.objects.filter(
         **{"%s__deleted_at__isnull" % _EXPERIMENT_PATH: True,
            "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True}
     ).values_list("mutation_id", "mutation__mutation_type",
-                  "mutation__protein_change").iterator(chunk_size=2000)
+                  "mutation__snp_type").iterator(chunk_size=2000)
 
 
 def rebuild_mutation_counts():
@@ -72,10 +79,10 @@ def rebuild_mutation_counts():
     # a set of ids is the same answer without the rows.
     seen = set()
     observed_total = 0
-    for mutation_id, mutation_type, protein_change in _live_observation_rows():
+    for mutation_id, mutation_type, snp_type in _live_observation_rows():
         observed_total += 1
         bucket = _mutation_type_bucket(mutation_type)
-        change = _functional_change_bucket(protein_change)
+        change = functional_change_bucket(snp_type)
         obs_mut_count_dict[bucket] += 1
         obs_mut_func_change_type_dict[change] += 1
         if mutation_id not in seen:
@@ -125,57 +132,20 @@ def rebuild_mutation_counts():
     # whose type is not in MUTATION_TYPE_LIST is bucketed UNANNOTATED, which has no column
     # here. That difference used to be reported by a `print` on every rebuild, including
     # every test run.
-    for functional_change_type in FUNCTIONAL_CHANGE_TYPE_LIST:
-        observed_mutation_type_count = obs_mut_func_change_type_dict[functional_change_type]
-        unique_mutation_type_count = mut_func_change_type_dict[functional_change_type]
-        if functional_change_type == 'intergenic':
-            obs_mut_count_qryset.update(intergenic=observed_mutation_type_count)
-            mut_count_qryset.update(intergenic=unique_mutation_type_count)
-        elif functional_change_type == 'noncoding':
-            obs_mut_count_qryset.update(noncoding=observed_mutation_type_count)
-            mut_count_qryset.update(noncoding=unique_mutation_type_count)
-        elif functional_change_type == 'pseudogene':
-            obs_mut_count_qryset.update(pseudogene=observed_mutation_type_count)
-            mut_count_qryset.update(pseudogene=unique_mutation_type_count)
-        elif functional_change_type == 'synonymous':
-            obs_mut_count_qryset.update(synonymous=observed_mutation_type_count)
-            mut_count_qryset.update(synonymous=unique_mutation_type_count)
-        elif functional_change_type == 'nonsynonymous':
-            obs_mut_count_qryset.update(nonsynonymous=observed_mutation_type_count)
-            mut_count_qryset.update(nonsynonymous=unique_mutation_type_count)
-        elif functional_change_type == UNANNOTATED:
-            obs_mut_count_qryset.update(unannotated=observed_mutation_type_count)
-            mut_count_qryset.update(unannotated=unique_mutation_type_count)
 
-
-def _functional_change_bucket(protein_change):
-    """The first token this protein_change contains, or UNANNOTATED.
-
-    **Known issue, not introduced here: `protein_change` is probably the wrong column.**
-    The annotator writes a coding SNP's protein_change as `I34S (ATC→AGC)`, which contains
-    neither "synonymous" nor "nonsynonymous" -- so on the dev database 19,982 of 24,088
-    mutations bucket as `unannotated` while `Mutation.snp_type` holds `nonsynonymous` for
-    12,793 of them and `synonymous` for 4,878. The dead branch this replaced was named
-    `snp_type_synonymous`, which suggests the author knew where the answer lived.
-
-    Left alone deliberately: reading `snp_type` instead would move every functional-change
-    number on this page *and* on the Overview, which counts the same way from the same column,
-    and it needs its own decision and its own stale-marking migration. What is fixed here is
-    that the two columns can be written at all; they will read zero on data like the above
-    until that question is settled.
-
-    **One bucket per mutation, unlike the Overview**, which counts a mutation under every
-    token its protein_change contains and whose sums therefore exceed its mutation count.
-    Two pages, two questions; neither is the other's bug.
-
-    `FUNCTIONAL_CHANGE_TYPE_LIST`'s order is load-bearing here: `nonsynonymous` contains
-    `synonymous` as a substring and is listed first, so a nonsynonymous change is not
-    counted as a synonymous one.
-    """
-    for functional_change_type in FUNCTIONAL_CHANGE_TYPE_LIST:
-        if functional_change_type in (protein_change or ""):
-            return functional_change_type
-    return UNANNOTATED
+    # Every token in FUNCTIONAL_CHANGE_TYPE_LIST is spelled identically to its column on both
+    # count models, so the twenty-two-line if/elif chain that stood here is a dict comprehension
+    # and adding `nonsense` needed no code at all. That equality is the invariant: a token added
+    # to the vocabulary without its migration raises FieldError on the next rebuild rather than
+    # being silently dropped, which is the behaviour to want -- a bucket counted into nothing is
+    # exactly how `synonymous` and `nonsynonymous` sat at zero for years.
+    #
+    # The mutation-type chain above is left alone: 'SNP' -> single_base_substitution is a real
+    # mapping between two different vocabularies, not an identity.
+    obs_mut_count_qryset.update(**{change: obs_mut_func_change_type_dict[change]
+                                   for change in FUNCTIONAL_CHANGE_TYPE_LIST})
+    mut_count_qryset.update(**{change: mut_func_change_type_dict[change]
+                               for change in FUNCTIONAL_CHANGE_TYPE_LIST})
 
 
 def _mutation_type_bucket(mutation_type):

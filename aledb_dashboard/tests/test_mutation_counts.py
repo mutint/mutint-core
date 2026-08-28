@@ -9,10 +9,15 @@ experiment happened to carry. That is a category error twice over:
   * a filter is becoming per-user, and a shared table cannot be keyed by user -- so a filtered
     site-wide total is not merely wrong, it is not computable.
 
-These tests pin that the filter does not reach here, that the counts are still buckets over
-every live observation, and that `synonymous` / `nonsynonymous` are written at all -- the
-branch filling them tested for token names that are not in `FUNCTIONAL_CHANGE_TYPE_LIST`, so
-both columns had sat at zero since they were added.
+These tests pin that the filter does not reach here, and that the counts are buckets over every
+live observation.
+
+**They also used to be evidence of how a green test can pin the wrong thing.** The
+functional-change fixtures built `protein_change="nonsynonymous (A12T)"` -- a format the
+annotator has never produced, since `display.py` writes `I34S (ATC->AGC)` -- so the assertions
+passed while the real column matched nothing and `synonymous` and `nonsynonymous` sat at zero on
+every deployment. They are built on `snp_type` now, which is what the code reads and what breseq
+writes.
 """
 
 from django.test import TestCase
@@ -45,10 +50,14 @@ class MutationCountsTestCase(TestCase):
         tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
         return ResequencingExperiment.objects.create(tech_rep=tech_rep)
 
-    def _mutation(self, mutation_type="SNP", position=100, protein_change="", gene="thrA"):
+    def _mutation(self, mutation_type="SNP", position=100, snp_type="", gene="thrA",
+                  protein_change=""):
+        """`snp_type` is what decides the bucket. `protein_change` is still a column and still
+        the table's "Details" cell, so it stays available to the one test that proves it no
+        longer decides anything."""
         return Mutation.objects.create(
             ale_experiment=self.experiment, mutation_type=mutation_type, position=position,
-            sequence_change="A>T", protein_change=protein_change, gene=gene)
+            sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _observe(self, sample, mutation, frequency="1.0000"):
         return ObservedMutation.objects.create(
@@ -133,13 +142,12 @@ class MutationCountsTestCase(TestCase):
 
     # ---- the functional-change buckets -----------------------------------------------
     def test_synonymous_and_nonsynonymous_are_written(self):
-        """Both columns had sat at zero since they were added: the branch filling them tested
-        for `snp_type_synonymous` and `snp_type_nonsynonymous`, which are not the tokens in
-        `FUNCTIONAL_CHANGE_TYPE_LIST`."""
-        self._observe(self.sample, self._mutation(position=100,
-                                                  protein_change="synonymous (L4L)"))
-        self._observe(self.sample, self._mutation(position=200,
-                                                  protein_change="nonsynonymous (A12T)"))
+        """Both columns sat at zero on every deployment. The branch filling them tested for
+        `snp_type_synonymous` and `snp_type_nonsynonymous`, which are not tokens in the
+        vocabulary; and once that was fixed they stayed at zero, because the vocabulary was
+        being matched against `protein_change`, which never contains either word."""
+        self._observe(self.sample, self._mutation(position=100, snp_type="synonymous"))
+        self._observe(self.sample, self._mutation(position=200, snp_type="nonsynonymous"))
 
         observed, unique = self._counts()
 
@@ -148,12 +156,57 @@ class MutationCountsTestCase(TestCase):
         self.assertEqual(1, unique.synonymous)
         self.assertEqual(1, unique.nonsynonymous)
 
+    def test_protein_change_no_longer_decides_the_bucket(self):
+        """The bug, stated as an assertion. A coding SNP's `protein_change` can contain a word
+        from this vocabulary by coincidence -- an intergenic *deletion*'s reads
+        `intergenic (-52/+201)` -- and it must not be what counts."""
+        self._observe(self.sample, self._mutation(snp_type="nonsynonymous",
+                                                  protein_change="intergenic (-52/+201)"))
+
+        observed, _ = self._counts()
+
+        self.assertEqual(1, observed.nonsynonymous)
+        self.assertEqual(0, observed.intergenic, "protein_change is deciding the bucket again")
+
+    def test_nonsense_has_its_own_column(self):
+        """`nonsense` was missing from the vocabulary entirely, so a stop-codon substitution --
+        the most severe thing breseq reports -- was counted as something else."""
+        self._observe(self.sample, self._mutation(snp_type="nonsense"))
+
+        observed, unique = self._counts()
+
+        self.assertEqual(1, observed.nonsense)
+        self.assertEqual(1, unique.nonsense)
+
+    def test_a_compound_snp_type_takes_the_most_severe_bucket(self):
+        """A SNP in two overlapping reading frames carries one value per gene, joined with '|'.
+        It is one mutation and must be counted once, under the worse of the two."""
+        self._observe(self.sample, self._mutation(snp_type="synonymous|nonsynonymous"))
+
+        observed, _ = self._counts()
+
+        self.assertEqual(1, observed.nonsynonymous)
+        self.assertEqual(0, observed.synonymous)
+        self.assertEqual(1, observed.total)
+
+    def test_a_non_snp_is_unannotated(self):
+        """breseq assigns `snp_type` for SNP and RA entries only, so every DEL, INS, MOB, AMP,
+        SUB and INV lands here. That is the deliberate consequence of counting this axis from
+        `snp_type`: the breakdown is a SNP breakdown, and a deletion between two genes is no
+        longer counted as intergenic the way `protein_change` counted it."""
+        self._observe(self.sample, self._mutation(mutation_type="DEL", snp_type="",
+                                                  protein_change="intergenic (-52/+201)"))
+
+        observed, _ = self._counts()
+
+        self.assertEqual(1, observed.unannotated)
+        self.assertEqual(0, observed.intergenic)
+
     def test_a_nonsynonymous_change_is_not_counted_as_synonymous(self):
-        """`nonsynonymous` contains `synonymous` as a substring and is listed first in
-        `FUNCTIONAL_CHANGE_TYPE_LIST`. The list's order is what keeps these apart, so a tidy-up
-        that sorted it would silently move every nonsynonymous mutation into the wrong column.
-        """
-        self._observe(self.sample, self._mutation(protein_change="nonsynonymous (A12T)"))
+        """`nonsynonymous` contains `synonymous` as a substring. Tokens are split on '|' and
+        compared whole now, so this no longer depends on the list's order -- which is free to
+        mean severity instead. Kept because the hazard is real and the assertion is cheap."""
+        self._observe(self.sample, self._mutation(snp_type="nonsynonymous"))
 
         observed, _ = self._counts()
 
@@ -161,9 +214,10 @@ class MutationCountsTestCase(TestCase):
         self.assertEqual(0, observed.synonymous)
 
     def test_one_bucket_per_mutation(self):
-        """Unlike the Overview, which counts a mutation under every token its protein_change
-        contains. Two pages, two questions; neither is the other's bug."""
-        self._observe(self.sample, self._mutation(protein_change="intergenic (-52/+201)"))
+        """The Overview used to count a mutation under every token it matched, so its sums
+        exceeded its mutation count. Both pages resolve to one bucket by severity now, and
+        agree."""
+        self._observe(self.sample, self._mutation(snp_type="intergenic"))
 
         observed, _ = self._counts()
 
@@ -181,9 +235,33 @@ class MutationCountsTestCase(TestCase):
         self.assertEqual(1, observed.total)
         self.assertEqual(0, observed.single_base_substitution)
 
+    def test_the_counts_reach_the_page(self):
+        """The six functional-change columns were written and rendered nowhere, which is how
+        two of them sat at zero unnoticed. A template that silently drops them again should
+        fail here rather than on somebody's screen."""
+        from django.contrib.auth.models import User
+
+        self._observe(self.sample, self._mutation(snp_type="nonsense"))
+        self._observe(self.sample, self._mutation(position=200, snp_type="nonsynonymous"))
+        rebuild_mutation_counts()
+
+        user = User.objects.create(username="viewer", email="v@e.com", is_active=True)
+        self.client.force_login(user)
+        html = self.client.get("/dashboard", follow=True).content.decode()
+
+        self.assertIn("Functional Change Counts", html)
+        self.assertIn("Nonsense", html)
+        self.assertIn("Nonsynonymous", html)
+
     def test_an_unannotated_mutation_counts_as_unannotated(self):
-        self._observe(self.sample, self._mutation(protein_change=""))
+        """Empty, the bare separator (a non-SNP in two overlapping genes: the join is
+        unconditional) and NULL (rows imported before the annotator existed) all mean the same
+        thing here."""
+        for index, snp_type in enumerate(("", "|", None)):
+            with self.subTest(snp_type=snp_type):
+                mutation = self._mutation(position=1000 + index, snp_type=snp_type)
+                self._observe(self.sample, mutation)
 
         observed, _ = self._counts()
 
-        self.assertEqual(1, observed.unannotated)
+        self.assertEqual(3, observed.unannotated)

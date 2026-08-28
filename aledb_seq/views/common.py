@@ -12,25 +12,25 @@ __author__ = 'Patrick Phaneuf'
 
 
 
-UNANNOTATED = 'unannotated'
+# Re-exported so every existing importer keeps working. The vocabulary and the rule that reads it
+# moved to `aledb_seq.functional_change`, which is a pure str -> str module: this one pulls in
+# django.http, django.template and aledb_experiment.permissions at import time, and a rule the
+# annotator's own tests might want should not require any of that.
+#
+# The names are still breseq's own, as the comment here always said. What changed is that they are
+# `Mutation.snp_type`'s values, matched exactly, rather than substrings hunted in a rendered
+# display string -- and that their *order* now carries severity. See that module for both.
+from aledb_seq.functional_change import (  # noqa: F401  (re-export)
+    FUNCTIONAL_CHANGE_TYPE_LIST, UNANNOTATED, functional_change_bucket,
+)
+
 MUTATION_TYPE_LIST = ['SNP', 'SUB', 'DEL', 'INS', 'MOB', 'AMP', 'CON', 'INV', UNANNOTATED]
 
-# Don't change these names since they match with Breseq's HTML annotations and used when parsing.
-FUNCTIONAL_CHANGE_TYPE_LIST = ['intergenic', 'noncoding', 'pseudogene', 'nonsynonymous', 'synonymous', UNANNOTATED]
-
-COLORS = ['#FF851B', '#2ECC40', '#0074D9', '#FFDC00', '#7FDBFF', '#B7337A', '#B10DC9', '#111111', '#85144b']
-
-DEFAULT_COLOR = '#AAAAAA'
-
-
-def _set_colors(length):
-    temp = COLORS[:length]
-    temp.append(DEFAULT_COLOR)
-    return temp
-
-
-GENE_COLORS = _set_colors(len(MUTATION_TYPE_LIST) - 1)
-SEQ_COLORS = _set_colors(len(FUNCTIONAL_CHANGE_TYPE_LIST) - 1)
+# `GENE_COLORS`, `SEQ_COLORS`, `COLORS`, `DEFAULT_COLOR` and `_set_colors` stood here and are gone.
+# They were read by exactly two context keys, `seq_color_set` and `protein_types`, which reached no
+# template in core or in any plugin -- palettes for a chart that was never built. Their one
+# remaining effect was that adding a token to the vocabulary silently reshuffled a colour list
+# nobody rendered, which is a trap laid for precisely the change that added `nonsense`.
 
 # TODO: change all instance of 'seq_experiment' to 'reseq'
 

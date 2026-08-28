@@ -84,8 +84,10 @@ def stats(request):
                         "observed_mutation_sum": sum(observed_mutation_type_count_dict.values()),
                         "experiments_info_list": experiments_info_list,
                         "needle_plot_data": mark_safe(list(needle_plot_data)),
-                        "seq_color_set": mark_safe(common.SEQ_COLORS),
-                        "protein_types": mark_safe(common.FUNCTIONAL_CHANGE_TYPE_LIST),
+                        # `seq_color_set` and `protein_types` stood here and are gone with the
+                        # colour machinery in aledb_seq.views.common: a palette and a vocabulary
+                        # for a chart that was never built, and which no template has ever read.
+                        # The functional-change counts below are rendered as a table instead.
                         "ale_flask_isolate_count_list": ale_flask_isolate_count_list,
                         "ale_sum": ale_sum,
                         "flask_sum": flask_sum,

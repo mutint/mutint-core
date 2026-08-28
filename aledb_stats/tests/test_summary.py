@@ -7,9 +7,14 @@ computed where the rows already are now, and nothing is stored.
 
 **Every count is pinned literally**, including where the behaviour is surprising:
 
-  * a mutation_type outside MUTATION_TYPE_LIST is dropped, not bucketed as unannotated;
-  * a protein_change counts once per functional-change token it contains, so 'nonsynonymous'
-    also counts under 'synonymous' and those sums exceed the mutation count;
+  * a mutation_type outside MUTATION_TYPE_LIST is dropped, not bucketed as unannotated -- so
+    the *type* sums are less than the mutation count;
+  * a functional change is one bucket per mutation, resolved by severity from breseq's
+    `snp_type`, and an unrecognised value *is* bucketed, as unannotated -- so the
+    *functional-change* sums equal the mutation count exactly. The two sets of counts on this
+    page therefore have different totals, deliberately, and that used to be true for the
+    opposite reason: a mutation was counted under every token its `protein_change` contained,
+    so 'nonsynonymous' also counted under 'synonymous' and the sums *exceeded* the count;
   * "unique" means distinct mutations *surviving the filter*, not every Mutation row the
     experiment owns.
 
@@ -54,13 +59,21 @@ class SummaryTestCase(TestCase):
                         self._sample(ale=1, flask=200, isolate=1),
                         self._sample(ale=2, flask=100, isolate=1)]
 
-        # One mutation of each interesting shape.
-        self.snp = self._mutation("SNP", "nonsynonymous (A12T)", gene="thrA")
-        self.deletion = self._mutation("DEL", "intergenic (-52/+201)", gene="thrB/thrC")
-        self.noncoding = self._mutation("SNP", "noncoding (12/1541 nt)", gene="rrlA")
-        # Not in MUTATION_TYPE_LIST -- the old helpers drop it rather than bucketing it.
-        self.unknown_type = self._mutation("XYZ", "synonymous (L4L)", gene="lacZ")
-        # No annotation at all: counts under a mutation type and under no protein change.
+        # One mutation of each interesting shape. `protein_change` is set to what the
+        # annotator would really write, and is deliberately *not* what any count reads.
+        self.snp = self._mutation("SNP", "nonsynonymous", gene="thrA",
+                                  protein_change="A12T (GCA->ACA)")
+        # A DEL between two genes. Its protein_change says "intergenic" and its snp_type is
+        # empty, because breseq assigns snp_type for SNPs only -- so it is unannotated here.
+        self.deletion = self._mutation("DEL", "", gene="thrB/thrC",
+                                       protein_change="intergenic (-52/+201)")
+        self.noncoding = self._mutation("SNP", "noncoding", gene="rrlA",
+                                        protein_change="noncoding (12/1541 nt)")
+        # Not in MUTATION_TYPE_LIST, so dropped from every *type* bucket -- and still counted
+        # here, which is the asymmetry between the two tables.
+        self.unknown_type = self._mutation("XYZ", "synonymous", gene="lacZ",
+                                           protein_change="L4L (CTG->CTA)")
+        # No annotation at all.
         self.bare = self._mutation("INS", "", gene="araB")
 
         # The SNP is seen in all three samples, so "observed" and "unique" differ for it.
@@ -85,10 +98,10 @@ class SummaryTestCase(TestCase):
         return ResequencingExperiment.objects.create(
             tech_rep=tech_rep, sample_name="%d-%d-%d-1" % (ale, flask, isolate))
 
-    def _mutation(self, mutation_type, protein_change, gene):
+    def _mutation(self, mutation_type, snp_type, gene, protein_change=""):
         return Mutation.objects.create(
             ale_experiment=self.experiment, mutation_type=mutation_type, position=1,
-            sequence_change="A>T", protein_change=protein_change, gene=gene)
+            sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _filter(self, **fields):
         """Set fields on this experiment's filter, creating the row if it has none.
@@ -126,12 +139,18 @@ class SummaryTestCase(TestCase):
         self.assertEqual(sum(types.values()), 4, "the XYZ mutation is dropped, not bucketed")
 
         self.assertEqual(1, protein["nonsynonymous"])
-        self.assertEqual(2, protein["synonymous"],
-                         "the SNP's 'nonsynonymous' contains 'synonymous' and so counts "
-                         "under both, and the XYZ mutation's is 'synonymous' outright -- "
-                         "a mutation dropped from every *type* bucket still counts here")
-        self.assertEqual(1, protein["intergenic"])
+        self.assertEqual(1, protein["synonymous"],
+                         "only the XYZ mutation is synonymous -- the nonsynonymous SNP used to "
+                         "count here too, because 'nonsynonymous' contains 'synonymous' as a "
+                         "substring and tokens were matched that way")
         self.assertEqual(1, protein["noncoding"])
+        self.assertEqual(0, protein["intergenic"],
+                         "the DEL's protein_change says intergenic, but snp_type is a SNP "
+                         "concept and the DEL has none, so it is unannotated")
+        self.assertEqual(2, protein["unannotated"], "the DEL and the INS")
+        self.assertEqual(5, sum(protein.values()),
+                         "every mutation gets exactly one functional-change bucket, unlike the "
+                         "type counts above, where an unknown type is dropped")
 
     def test_a_frequency_cutoff_is_applied(self):
         """Excluded in SQL, by the queryset both paths share.
@@ -201,6 +220,60 @@ class SummaryTestCase(TestCase):
         self._filter(ignored_genes="notAGene")
         with_python = compute_experiment_counts(self.experiment.ale_id)
         self.assertEqual(with_sql, with_python)
+
+    # ---- the severity hierarchy, down both paths --------------------------------------
+    def _both_paths(self):
+        """The counts from the SQL branch and the row-walking branch, as a pair.
+
+        A gene filter naming a gene no mutation has changes no count but forces the second
+        branch, which is how one dataset exercises both. Every case below asserts the pair is
+        equal as well as correct: the two resolve buckets from different shapes -- one from
+        grouped strings, one per row -- so a hierarchy implemented twice could disagree.
+        """
+        with_sql = compute_experiment_counts(self.experiment.ale_id)
+        self._filter(ignored_genes="notAGene")
+        with_python = compute_experiment_counts(self.experiment.ale_id)
+        self.assertEqual(with_sql, with_python, "the two counting paths disagree")
+        return with_sql
+
+    def test_a_compound_snp_type_takes_the_most_severe_bucket(self):
+        """A SNP in two overlapping reading frames carries one value per gene, joined with '|'.
+        It is one mutation and counts once, under the worse of the two."""
+        self._observe(self.samples[0],
+                      self._mutation("SNP", "synonymous|nonsynonymous", gene="ovlA"))
+
+        _, _, protein, _ = self._both_paths()
+
+        self.assertEqual(2, protein["nonsynonymous"], "the fixture's SNP, and the compound")
+        self.assertEqual(1, protein["synonymous"], "the compound must not count here as well")
+
+    def test_a_nonsense_snp_lands_in_nonsense(self):
+        """`nonsense` was missing from the vocabulary, so these counted as something else."""
+        self._observe(self.samples[0], self._mutation("SNP", "nonsense", gene="thrC"))
+
+        _, _, protein, _ = self._both_paths()
+
+        self.assertEqual(1, protein["nonsense"])
+
+    def test_a_null_snp_type_is_unannotated(self):
+        """Rows imported before the annotator existed hold SQL NULL. In the grouped path that
+        is its own group with a None key, which must not raise."""
+        self._observe(self.samples[0], self._mutation("SNP", None, gene="thrD"))
+
+        _, _, protein, _ = self._both_paths()
+
+        self.assertEqual(3, protein["unannotated"], "the DEL, the INS, and the null SNP")
+
+    def test_the_counts_reach_the_page(self):
+        """`aledb_stats.views` has pushed these four names into the context for a long time and
+        `stats.html` read none of them, so the numbers were computed and discarded. Nothing
+        would have caught that; this would."""
+        html = self.client.get("/stats", {"ale_experiment_id": self.experiment.ale_id},
+                               follow=True).content.decode()
+
+        self.assertIn("functional change counts", html.lower())
+        self.assertIn("Nonsynonymous", html)
+        self.assertIn("Nonsense", html)
 
     # ---- what the page reads ---------------------------------------------------------
     def test_the_page_reads_what_computing_returns(self):

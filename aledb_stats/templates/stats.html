@@ -222,7 +222,82 @@
             </div>
         </div>
         <div class="col-sm-6 col-md-4">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">ALE experiment functional change counts</h3>
+                </div>
+                {% comment %}
+                These four context keys have been supplied by the view for a long time and read
+                by nothing, so the numbers were computed and thrown away. They are also counted
+                from breseq's `snp_type` now rather than from the rendered `protein_change`
+                string, which contained none of these words.
 
+                This table's Total equals the experiment's mutation count while the one beside
+                it does not, and the difference is deliberate: a mutation whose *type* is
+                outside MUTATION_TYPE_LIST is dropped from every type bucket, whereas every
+                mutation gets a functional-change bucket, falling through to Unannotated. Two
+                adjacent tables with different totals otherwise read as a bug.
+
+                Rows are in severity order, matching FUNCTIONAL_CHANGE_TYPE_LIST, because that
+                order is what resolves a mutation found in two overlapping genes.
+                {% endcomment %}
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Functional Change</th>
+                        <th>Unique</th>
+                        <th>Observed</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Nonsense</td>
+                        <td>{{ protein_change_type_count_dict.nonsense }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.nonsense }}</td>
+                    </tr>
+                    <tr>
+                        <td>Nonsynonymous</td>
+                        <td>{{ protein_change_type_count_dict.nonsynonymous }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.nonsynonymous }}</td>
+                    </tr>
+                    <tr>
+                        <td>Synonymous</td>
+                        <td>{{ protein_change_type_count_dict.synonymous }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.synonymous }}</td>
+                    </tr>
+                    <tr>
+                        <td>Noncoding</td>
+                        <td>{{ protein_change_type_count_dict.noncoding }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.noncoding }}</td>
+                    </tr>
+                    <tr>
+                        <td>Pseudogene</td>
+                        <td>{{ protein_change_type_count_dict.pseudogene }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.pseudogene }}</td>
+                    </tr>
+                    <tr>
+                        <td>Intergenic</td>
+                        <td>{{ protein_change_type_count_dict.intergenic }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.intergenic }}</td>
+                    </tr>
+                    <tr>
+                        <td>Unannotated</td>
+                        <td>{{ protein_change_type_count_dict.unannotated }}</td>
+                        <td>{{ observed_protein_change_type_count_dict.unannotated }}</td>
+                    </tr>
+                    <tr>
+                        <td><b>Total</b></td>
+                        <td><b>{{ protein_change_sum }}</b></td>
+                        <td><b>{{ observed_protein_change_sum }}</b></td>
+                    </tr>
+                    </tbody>
+                </table>
+                <div style="padding: 0 15px 10px 15px">
+                    <small><i>breseq reports functional change for substitutions only, so
+                        deletions, insertions and mobile-element insertions count as
+                        Unannotated here.</i></small>
+                </div>
+            </div>
         </div>
     </div>
 

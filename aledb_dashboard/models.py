@@ -17,6 +17,9 @@ class ObservedMutationCounts(models.Model):
     pseudogene = models.IntegerField(default=0)
     synonymous = models.IntegerField(default=0)
     nonsynonymous = models.IntegerField(default=0)
+    # Missing until the counts moved onto `Mutation.snp_type`. `annotator.py:470` has written
+    # `nonsense` since the port landed, so these SNPs were being counted as something else.
+    nonsense = models.IntegerField(default=0)
     unannotated = models.IntegerField(default=0)
 
     def __str__(self):
@@ -38,6 +41,9 @@ class UniqueMutationCounts(models.Model):
     pseudogene = models.IntegerField(default=0)
     synonymous = models.IntegerField(default=0)
     nonsynonymous = models.IntegerField(default=0)
+    # Missing until the counts moved onto `Mutation.snp_type`. `annotator.py:470` has written
+    # `nonsense` since the port landed, so these SNPs were being counted as something else.
+    nonsense = models.IntegerField(default=0)
     unannotated = models.IntegerField(default=0)
 
 

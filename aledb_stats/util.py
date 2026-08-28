@@ -2,7 +2,10 @@ import re
 from django.db.models import Count
 from aledb_seq.models import UnassignedMissingCoverageEvidence
 from aledb_seq.util import get_observed_mutation_queryset
-from aledb_seq.views.common import MUTATION_TYPE_LIST, FUNCTIONAL_CHANGE_TYPE_LIST
+from aledb_seq.functional_change import (
+    FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
+)
+from aledb_seq.views.common import MUTATION_TYPE_LIST
 from aledb_filter.util import filtered_observed_mutation_queryset, gene_is_filtered
 import collections
 import logging
@@ -188,15 +191,25 @@ def _empty_counts():
 def _count_in_sql(queryset):
     """The four count dicts as two aggregate queries. Requires no gene filters to be set.
 
-    One caveat worth knowing rather than discovering: `__contains` compiles to `LIKE`, which
-    SQLite applies case-insensitively to ASCII while PostgreSQL does not, where the Python
-    `in` test it replaces is always case-sensitive. Every token in FUNCTIONAL_CHANGE_TYPE_LIST
-    is lowercase and so is every `protein_change` the annotator writes
-    (`aledb_import.annotate.display.text_mutation_annotation`), so the two agree on any data
-    the import path can produce. Mixed-case data would count on SQLite where it did not
-    before, which is the one difference this rewrite can make.
+    **Both halves group; neither matches substrings.** The functional-change half used to be one
+    `Count(filter=Q(mutation__protein_change__contains=change))` per token, aliased by index
+    because the tokens overlap (`synonymous` inside `nonsynonymous`). It groups by
+    `mutation__snp_type` instead and resolves each distinct value in Python, because a severity
+    hierarchy over `|`-joined values is not something `LIKE` can express -- see
+    `aledb_seq.functional_change`.
+
+    **Summing per-group distinct counts is exact, not an approximation**, and the reason is a
+    constraint on anyone editing this: the group key is a column of `Mutation`, reached by a
+    forward foreign key, so every observation of a mutation falls in exactly one group and the
+    per-group sets of `mutation_id` are disjoint. Group by anything reached through a reverse or
+    many-to-many relation -- the sample, a tag -- and one mutation lands in several groups, and
+    the sums silently exceed the true distinct count.
+
+    A caveat that used to live here is now void, and is retracted rather than deleted so that a
+    reader who remembers it is told: `__contains` compiled to `LIKE`, which SQLite applies
+    case-insensitively to ASCII while PostgreSQL does not. There is no `LIKE` here any more.
     """
-    from django.db.models import Count, Q
+    from django.db.models import Count
 
     observed_types = {}
     unique_types = {}
@@ -206,27 +219,26 @@ def _count_in_sql(queryset):
         observed_types[row['mutation__mutation_type']] = row['observed']
         unique_types[row['mutation__mutation_type']] = row['unique']
 
-    aggregates = {}
-    for index, change in enumerate(FUNCTIONAL_CHANGE_TYPE_LIST):
-        matches = Q(mutation__protein_change__contains=change)
-        # Aliased by index: the tokens overlap as substrings ('synonymous' inside
-        # 'nonsynonymous'), and using them as identifiers invites reading one for the other.
-        aggregates['observed_%d' % index] = Count('id', filter=matches)
-        aggregates['unique_%d' % index] = Count('mutation_id', distinct=True, filter=matches)
-    protein = queryset.aggregate(**aggregates) if aggregates else {}
-
     mutation_type_counts, observed_mutation_type_counts, \
         protein_change_counts, observed_protein_change_counts = _empty_counts()
 
-    # A mutation_type outside MUTATION_TYPE_LIST is dropped, as it always was --
-    # `get_mutation_type_count_dict` only increments a key it already holds.
+    # One group per distinct snp_type -- 19 of them across the whole dev database, including a
+    # NULL group for rows imported before the annotator existed, which resolves to UNANNOTATED
+    # like every other value with no answer in it.
+    for row in (queryset.values('mutation__snp_type')
+                        .annotate(observed=Count('id'),
+                                  unique=Count('mutation_id', distinct=True))):
+        change = functional_change_bucket(row['mutation__snp_type'])
+        observed_protein_change_counts[change] += row['observed']
+        protein_change_counts[change] += row['unique']
+
+    # A mutation_type outside MUTATION_TYPE_LIST is dropped, as it always was: the original
+    # helper only incremented a key it already held. Note the asymmetry with the functional
+    # change half, where an unknown value is *bucketed* as unannotated rather than dropped --
+    # so these two sets of counts have different totals, deliberately.
     for mut_type in MUTATION_TYPE_LIST:
         mutation_type_counts[mut_type] = unique_types.get(mut_type, 0)
         observed_mutation_type_counts[mut_type] = observed_types.get(mut_type, 0)
-
-    for index, change in enumerate(FUNCTIONAL_CHANGE_TYPE_LIST):
-        protein_change_counts[change] = protein.get('unique_%d' % index, 0)
-        observed_protein_change_counts[change] = protein.get('observed_%d' % index, 0)
 
     return (mutation_type_counts, observed_mutation_type_counts,
             protein_change_counts, observed_protein_change_counts)
@@ -251,13 +263,13 @@ def _count_in_python(queryset, exp_filter_genes_map):
     rows = queryset.values_list(
         'mutation_id',
         'mutation__mutation_type',
-        'mutation__protein_change',
+        'mutation__snp_type',
         'mutation__gene',
         'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment_id',
     ).iterator(chunk_size=2000)
 
     seen_mutations = set()
-    for mutation_id, mutation_type, protein_change, gene, experiment_id in rows:
+    for mutation_id, mutation_type, snp_type, gene, experiment_id in rows:
         if gene_is_filtered(gene, exp_filter_genes_map.get(experiment_id)):
             continue
 
@@ -268,11 +280,14 @@ def _count_in_python(queryset, exp_filter_genes_map):
             observed_mutation_type_counts[mutation_type] += 1
             if first_time:
                 mutation_type_counts[mutation_type] += 1
-        for change in FUNCTIONAL_CHANGE_TYPE_LIST:
-            if change in (protein_change or ""):
-                observed_protein_change_counts[change] += 1
-                if first_time:
-                    protein_change_counts[change] += 1
+        # One bucket, resolved by severity. This was a loop over every token with no
+        # `break`, so a mutation counted under each one it matched and these sums exceeded the
+        # mutation count by design. A hierarchy picks one -- and the sums now equal it, which
+        # is also what the dashboard has always done.
+        change = functional_change_bucket(snp_type)
+        observed_protein_change_counts[change] += 1
+        if first_time:
+            protein_change_counts[change] += 1
 
     return (mutation_type_counts, observed_mutation_type_counts,
             protein_change_counts, observed_protein_change_counts)

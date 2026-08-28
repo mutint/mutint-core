@@ -127,6 +127,74 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Functional Change Counts</h3>
+                </div>
+                {% comment %}
+                These six columns have existed on both count models since they were added and
+                were rendered nowhere, so the numbers were written and never read -- which is
+                how `synonymous` and `nonsynonymous` sat at zero without anyone noticing.
+
+                Column order is Observed then Unique, matching the table above it. The Overview
+                puts them the other way round; match the neighbour, not the other page.
+
+                Rows are in severity order, matching FUNCTIONAL_CHANGE_TYPE_LIST, because that
+                order is what resolves a mutation found in two overlapping genes.
+                {% endcomment %}
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Functional Change</th>
+                        <th>Observed Mutations</th>
+                        <th>Unique Mutations</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Nonsense</td>
+                        <td>{{ observed_mutation_counts.nonsense }}</td>
+                        <td>{{ unique_mutation_counts.nonsense }}</td>
+                    </tr>
+                    <tr>
+                        <td>Nonsynonymous</td>
+                        <td>{{ observed_mutation_counts.nonsynonymous }}</td>
+                        <td>{{ unique_mutation_counts.nonsynonymous }}</td>
+                    </tr>
+                    <tr>
+                        <td>Synonymous</td>
+                        <td>{{ observed_mutation_counts.synonymous }}</td>
+                        <td>{{ unique_mutation_counts.synonymous }}</td>
+                    </tr>
+                    <tr>
+                        <td>Noncoding</td>
+                        <td>{{ observed_mutation_counts.noncoding }}</td>
+                        <td>{{ unique_mutation_counts.noncoding }}</td>
+                    </tr>
+                    <tr>
+                        <td>Pseudogene</td>
+                        <td>{{ observed_mutation_counts.pseudogene }}</td>
+                        <td>{{ unique_mutation_counts.pseudogene }}</td>
+                    </tr>
+                    <tr>
+                        <td>Intergenic</td>
+                        <td>{{ observed_mutation_counts.intergenic }}</td>
+                        <td>{{ unique_mutation_counts.intergenic }}</td>
+                    </tr>
+                    <tr>
+                        <td>Unannotated</td>
+                        <td>{{ observed_mutation_counts.unannotated }}</td>
+                        <td>{{ unique_mutation_counts.unannotated }}</td>
+                    </tr>
+                    </tbody>
+                </table>
+                <div style="padding: 0 15px 10px 15px">
+                    <small><i>breseq reports functional change for substitutions only, so
+                        deletions, insertions and mobile-element insertions count as
+                        Unannotated here.</i></small>
+                </div>
+            </div>
         </div>
 
     </div>

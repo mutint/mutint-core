@@ -61,12 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1264 run, 0 failures** standalone; **1401** in an assembled project, where the
-plugins' own tests join them. **19 of that jump is `aledb_dashboard`'s tests running for the
-first time** -- see the `__init__.py` gotcha below -- so the derived-table removals added
-fewer than the arithmetic suggests. They were 1239 and 1370 before the dashboard stopped
-filtering and `aledb_stats` stopped storing, 1213 and 1344 before the global filter went and
-the filter summary arrived, 1201 and 1332 before the collected manual, 1197 and
+**Baseline: 1287 run, 0 failures** standalone; **1424** in an assembled project, where the
+plugins' own tests join them. They were 1264 and 1401 before functional change moved onto
+`snp_type`, and 1239 and 1370 before the dashboard stopped filtering and `aledb_stats` stopped
+storing -- **19 of that earlier jump is `aledb_dashboard`'s tests running for the first time**,
+see the `__init__.py` gotcha below, so the derived-table removals added fewer than the
+arithmetic suggests. They were 1213 and 1344 before the global filter went and the filter
+summary arrived, 1201 and 1332 before the collected manual, 1197 and
 1328 before `./aledb docs` learned to refuse,
 1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
@@ -619,6 +620,13 @@ dashboard stopped applying the filter, so 73,857 becomes 74,859 again. It marks 
 `mutation_counts`, because only that changed -- `0002` marked everything because the filter
 itself had changed and every derived table read through it.
 
+**`0004` is the third application**, when the functional-change buckets moved onto
+`Mutation.snp_type`. It marks `mutation_counts` for the same reason and **depends on
+`aledb_dashboard.0003`**, which adds the `nonsense` column the ensuing rebuild writes. That
+ordering is not tidiness: `ensure_fresh` cannot raise, so a rebuild scheduled before the column
+existed would log a `FieldError` into `last_error` and leave the dashboard stale indefinitely --
+the quiet failure the registry's isolation deliberately trades for.
+
 #### The dashboard applies no filter
 
 It is an inventory of what the installation **holds**. An experiment's frequency cutoff or
@@ -640,19 +648,51 @@ Two things fell out of removing the filter, and both are worth knowing:
   `FUNCTIONAL_CHANGE_TYPE_LIST`, so both columns sat at zero from the day they were added. They
   are filled now, which is the second reason `0003` exists.
 
-**And they will still read zero, because `protein_change` is probably the wrong column.** This
-is a separate, larger, pre-existing bug and it is deliberately not fixed. The annotator writes a
-coding SNP's `protein_change` as `I34S (ATC→AGC)`, containing neither word -- so on the dev
-database 19,982 of 24,088 mutations bucket as `unannotated`, while `Mutation.snp_type` holds
-`nonsynonymous` for 12,793 of them and `synonymous` for 4,878. The dead branch's name,
-`snp_type_synonymous`, suggests the author knew. Reading `snp_type` instead would move every
-functional-change number on the dashboard **and on the Overview**, which counts the same way
-from the same column, so it needs its own decision and its own stale-marking migration.
+They still read zero after that, though, because `protein_change` was the wrong column
+altogether -- which is the change described next.
 
-Note the dashboard's buckets are **not** the Overview's, deliberately: here a mutation lands in
-one functional-change bucket (the first token its `protein_change` contains) and an unknown
-mutation type is bucketed `unannotated`; there, a mutation counts under every token it contains
-and an unknown type is dropped. Two pages, two questions.
+### Functional change is counted from `snp_type`
+
+`Mutation.snp_type` is breseq's own functional class, written by the annotator, promoted to an
+indexed column, and for a long time **read by nothing**. Both pages classified functional change
+by substring-matching `protein_change` instead -- a *display* string, `I34S (ATC→AGC)`,
+containing neither "synonymous" nor "nonsynonymous". On the dev database 19,982 of 24,088
+mutations bucketed as `unannotated`, including every one of the 12,793 nonsynonymous and 4,878
+synonymous SNPs. The comment on `FUNCTIONAL_CHANGE_TYPE_LIST` said as much all along: *"these
+names match with Breseq's HTML annotations"* -- they are `snp_type`'s vocabulary.
+
+`aledb_seq/functional_change.py` owns the vocabulary and the rule; `aledb_seq/views/common.py`
+re-exports both so no importer changed. Four things about it are load-bearing:
+
+- **`nonsense` was missing from the vocabulary**, though `annotator.py:470` has always written
+  it. 392 dev-DB SNPs carry it. Both dashboard count models gained a column.
+- **A compound resolves to its most severe token.** `annotator.py:508` joins one value per
+  overlapping gene, so `nonsynonymous|synonymous` is one base in two reading frames. The order
+  of `FUNCTIONAL_CHANGE_TYPE_LIST` *is* the hierarchy — `nonsense > nonsynonymous > synonymous >
+  noncoding > pseudogene > intergenic > unannotated` — and there is deliberately no second
+  ordered tuple to keep in step. Splitting on `|` and comparing whole tokens is also what
+  removed the substring hazard that used to force `nonsynonymous` to precede `synonymous`.
+- **The breakdown is SNP-only.** breseq assigns `snp_type` for SNP and RA entries only, so every
+  DEL, INS, MOB, AMP, SUB and INV is `unannotated` — 2,720 dev-DB mutations, of which 822 used
+  to borrow an `intergenic` bucket from `protein_change`. `annotation['gene_position']` could
+  recover them, but it answers a different question (which feature it sits in, not what it did
+  to a protein), and 1,631 non-SNPs are `coding`, a word with no bucket on this axis.
+- **`_count_in_sql` groups rather than matching.** `values('mutation__snp_type').annotate(...)`,
+  then resolve each distinct value in Python. Summing per-group distinct counts is *exact*
+  because the group key is a column of `Mutation` reached by a forward FK, so every observation
+  of a mutation lands in one group. Group by anything reached through a reverse or m2m relation
+  and the sums silently exceed the true distinct count.
+
+**Both pages now render these counts**, which they never did: the four context keys
+`aledb_stats/views.py` pushes had no reader in `stats.html`, and the dashboard's six columns had
+none in `dashboard.html`. That is how two of them sat at zero unnoticed. The two apps also agree
+now — the Overview used to count a mutation under *every* token it matched, so its
+functional-change sums exceeded its mutation count; with one bucket per mutation they equal it,
+while the *type* sums remain lower because an unknown type is dropped rather than bucketed.
+
+Gone with it: `SEQ_COLORS`, `GENE_COLORS`, `COLORS`, `DEFAULT_COLOR`, `_set_colors` and the
+`seq_color_set`/`protein_types` context keys — palettes for a chart never built, whose one live
+effect was that adding a token silently reshuffled a colour list nobody rendered.
 
 #### The dashboard counted what had been deleted
 
