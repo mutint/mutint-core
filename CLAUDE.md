@@ -61,8 +61,10 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1287 run, 0 failures** standalone; **1424** in an assembled project, where the
-plugins' own tests join them. They were 1264 and 1401 before functional change moved onto
+**Baseline: 1257 run, 0 failures** standalone; **1393** in an assembled project, where the
+plugins' own tests join them. The count went *down* because the shared filter's model tests went
+with the model; 22 new ones cover the reader's filter and its session. They were 1287 and 1424
+before filtering became per-reader, 1264 and 1401 before functional change moved onto
 `snp_type`, and 1239 and 1370 before the dashboard stopped filtering and `aledb_stats` stopped
 storing -- **19 of that earlier jump is `aledb_dashboard`'s tests running for the first time**,
 see the `__init__.py` gotcha below, so the derived-table removals added fewer than the
@@ -566,26 +568,20 @@ beside one does not read as a failure.
 ask `is_stale` is worse off than one that never registered: it has a staleness record nobody
 reads.
 
-#### A rebuild declares what it reads
+#### A rebuild used to declare what it reads
 
-`inputs=` takes `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(...,
-changed=...)` says which of them moved. Both default to *everything*, so every existing
-registration keeps being marked by every existing caller and no plugin had to change.
+`inputs=` took `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(changed=...)`
+said which had moved, so a filter save marked only what read through the filter. It existed for
+`aledb_phylogeny`, which reads `ObservedMutation` directly: marked by a cutoff edit, its page
+would have hidden itself behind a warning asking for a rebuild that redrew the identical
+topology -- the false alarm that teaches people to ignore the real one.
 
-It exists because `aledb_phylogeny.genotypes` reads `ObservedMutation` directly rather than
-through `filter_observed_mutations` -- a frequency cutoff genuinely cannot change its tree.
-Marked by one, the page would hide itself after every filter save and ask for a rebuild that
-would redraw the identical topology, which is exactly the false alarm that teaches people to
-ignore the real one. Only `aledb_filter`'s two views pass `changed=`; everything else means
-"all of it" and says nothing.
-
-An unknown input name raises at registration, for the reason `--only` refuses an unknown
-rebuild: a misspelled input silently narrows what gets marked, and the symptom is data that is
-quietly never refreshed again.
-
-**Declaring independence you do not have is the dangerous direction.** The vocabulary is two
-words on purpose; a third that nothing passes as `changed=` would be a word with no meaning
-behind it.
+**All of it is gone**, because its only producer was the page that edited an experiment's shared
+filter row. Filtering belongs to the reader now and lives in their session, so there is no
+shared filter for anything to be invalidated by, and `INPUT_FILTERS` had nobody left to pass it.
+With one value remaining the mechanism could only ever have said "everything", which is the
+default -- so it went by its own rule: *a word nothing passes as `changed=` is a word with no
+meaning behind it.*
 
 #### Freshness belongs where the data is written
 
@@ -1017,19 +1013,44 @@ changesets before `aledb_filter.0003` drops them, so what was hidden stays hidde
 inspectable and restorable; `aledb_filter.0003` depends on it, which is what stops the drop
 running first. Those changesets have `created_by` null and render as "system".
 
-### There is one filter, and it belongs to an experiment
+### There is one filter, and it belongs to the reader
 
-`GlobalFilter` was a second ignored-gene list -- one row for the whole installation
-(`get_or_create(id=1)`), superuser-only, and linked from nowhere: the sole reference to its page
-anywhere was a **commented-out** sidebar entry, so it was reachable only by typing the URL. It
-was empty in practice. Its `ignored_mutations` column had already gone the same way.
-`AleExperimentFilter.ignored_genes` has identical semantics, so what was lost is hiding a gene
-everywhere at once rather than per experiment.
+**A filter is a value a reader carries, not a row.** `AleExperimentFilter` held one frequency
+range and one ignored-gene list per experiment, edited at `/filter` by anyone with write access,
+and it was *shared*: changing your own view changed everybody's, silently, with no record of who
+did it. That conflated curating a dataset -- `aledb_mutation_editor`'s job, logged and
+reversible -- with choosing what you want to look at, which is nobody else's business.
+`aledb_filter.0006` drops the table, and logs what it discards, because there is nowhere to fold
+it forward to and "calls below 20% here are noise" is a fact about the data that somebody may
+have recorded in it.
 
-`aledb_filter.0005` **folds any global genes into every experiment's list before dropping the
-table**. Without that the removal silently un-hides them, which is the same posture
-`aledb_mutation_editor.0002` took with the ignored *mutation* lists: convert, then drop. Tested
-through the real migration executor, since the model no longer exists to build a row with.
+`aledb_filter/view_filter.py` is the value and where it lives; `util.py` is what applies it.
+Separate modules so a plugin importing the filter does not drag in `ObservedMutation`'s joins,
+and so the value's tests need no database -- pinning the gene-subset rule used to take six model
+rows. `ViewFilter` normalises `0` and `100` to `None`, which collapses "configured" and
+"actually hides something" into one question: `is_empty`.
+
+**It lives in `request.session`**, the repo's first session write, and the traps are in that
+module's docstring rather than left to be rediscovered: the JSON serializer forbids sets,
+integer dict keys come back as strings, and mutating a nested dict leaves `session.modified`
+False and loses the write with no error. Query parameters win over the session and are
+remembered into it; presence is what is tested, not truthiness, which is how a URL says "no
+filter" and how the clear link works.
+
+**No permission gate and no lock check.** `can_add_experiment_filter` and the experiment lock
+guarded a shared setting; a reader's own view has nothing to protect. That absence is the
+clearest statement of what the change is for.
+
+Two consequences worth knowing. **`/stats` and Search do not filter at all** -- neither is a page
+you read rows through, and the Overview summarises a dataset the way the dashboard does; that is
+what made `_count_in_python` unreachable, since it existed only because the gene half of a filter
+has no SQL. And **core has no experiment-scoped rebuilder left**: `experiment_filter` was the
+last one, so several tests register their own rather than borrowing whatever was lying around.
+
+`GlobalFilter` was a still earlier layer: one row for the whole installation, superuser-only,
+reachable only by typing the URL, and empty in practice. `aledb_filter.0005` folded its genes
+into each experiment before dropping it -- convert, then drop, the posture
+`aledb_mutation_editor.0002` took with the ignored *mutation* lists.
 
 **`can_add_global_filter` became `can_curate`, and the reason is not the one you would guess.**
 Two call sites gated the tag dropdowns on
@@ -1052,30 +1073,36 @@ reason either existed.
 
 ### Every table says what filtering produced it
 
-`{% filter_summary %}` renders a line under a mutation table naming the cutoffs and ignored
+`{% view_filter_summary %}` renders a line under a mutation table naming the cutoffs and ignored
 genes behind it. It exists because filtering is shared state that nothing announced: the four
 plugins each chose differently what to do about it, and once the frequency cutoff started
 actually working, `Population tree` began rendering 1,002 fewer observations in the filtered
 views than phylogeny counts, with nothing to explain the difference.
 
-**One resolution, two consumers.** `filters_in_play` returns the `AleExperimentFilter` rows
-that apply; `filtered_observed_mutation_queryset` turns them into exclusions and
-`describe_filters` turns the same rows into the sentence. Deriving the description separately
-would be a second opinion about which filters apply, and a page confidently describing
-filtering it is not doing is worse than one saying nothing. `test_describe_filters` asserts the
-two agree on one fixture, and that is the test that fails if they drift.
+**One resolution, two consumers**, and more directly than before: `describe_filters` and
+`filtered_observed_mutation_queryset` take the *same* `ViewFilter`, where they used to read the
+same rows twice. Deriving the description separately would be a second opinion about what is
+being hidden, and a page confidently describing
+filtering it is not doing is worse than one saying nothing. Taking one value rather than reading
+one source twice is what makes drifting hard rather than merely tested against.
 
 **`applied` is not "is a filter configured".** A 0-100 range with no ignored genes is
-configured and hides nothing; calling that "filtered" teaches people to ignore the word. The
-summary says *No filtering* instead.
+configured and hides nothing; calling that "filtered" teaches people to ignore the word. It used
+to need care; `ViewFilter` normalises those ends away at construction, so the two questions have
+become one and `applied` is simply `not is_empty`.
 
-**A template tag, not a context key**, and that is what makes it generic: it reads
-`ale_experiment_id`, `show_exp_filtered` and `show_filter_toggles` out of the context every
-table page already sets, so including it once in `base_table_template.html` reached
-aledb-compare, aledb-fixation and aledb-converge **without touching any of their
-repositories**. `show_filter_toggles` matters: only Compare renders the *Show Experiment
-Filtered* checkbox, and a summary telling a reader to tick a control their page does not have
-is worse than one that stays quiet.
+**Template tags, not context keys**, and that is what makes them generic: they read
+`ale_experiment_id` and the request out of the context every table page already sets, so
+including `{% view_filter_fields %}` and `{% view_filter_summary %}` once in
+`base_table_template.html` reaches aledb-compare, aledb-fixation and aledb-converge **without
+touching any of their repositories**. `{% view_filter_form %}` is the standalone variant, for a
+page with no view-control form of its own to join -- the per-sample breseq table uses it.
+
+**The tags gate themselves**, rendering nothing without an `ale_experiment_id`. That replaced a
+`show_filter_toggles` flag each page had to remember to set, which existed because a *Show
+Experiment Filtered* checkbox had rendered inert on three pages that never read it back. The
+rule it encoded still holds -- a control that does nothing is worse than no control -- but it is
+a property now rather than a thing to remember.
 
 A page filtering by its own rules passes `own_rules=` rather than rendering an empty summary
 that reads as "no filtering here" when the truth is "different filtering here". Search does,
@@ -1086,10 +1113,16 @@ states rather than excluding on it.
 `filter_type='AMP'`, so amplifications are excluded from the fixation and converge tables and
 the summary does not say so. Widening it means every caller declaring what it passed.
 
-**What is left in `aledb_filter` is filtering proper**: the two frequency cutoffs and
-`ignored_genes`, which aledb-fixation, aledb-converge, `aledb_stats` and `aledb_seq` all have
-tests on. One visible behaviour change: **"Show Experiment Filtered" no longer reveals what was
-hidden**, because it is deleted rather than filtered -- the history page is where it lives now.
+**"Show Experiment Filtered" is gone.** It offered to see through the *shared* filter -- what
+somebody else's setting was hiding from you -- which is not a question a reader has about their
+own, where clearing it is a click away.
+
+**A plugin gets both halves in two lines**, and `docs/plugin/filtering.md` is the page that says
+so; there was none before, and `quickstart.md`'s worked example queried unfiltered. The half
+worth repeating here: **a filter has to reach the derivation, not the render.** Fixation asks
+what is in an ALE's last two flasks and convergence asks which genes were hit in more than one
+ALE, so hiding a call changes the answer -- both plugins apply it when they compute their set
+and pass `view_filter=None` to `get_table_body`.
 
 Two things this shook out that are worth knowing:
 
@@ -1100,12 +1133,13 @@ Two things this shook out that are worth knowing:
   index, so they followed for free. Getting it wrong renders a table labelled one way and
   sorted another, which reads like CSS. `test_mutation_table_builder` now asserts the header
   and every row are the same width and that the constant points at "Reference Seq".
-- **An experiment filter with no cutoff at either end used to exclude the whole experiment.**
-  `filtered_observed_mutation_queryset` builds a per-experiment `Q` and hands it to
-  `.exclude()`; with an empty `q_exp` that leaves the bare experiment match. It was unreachable
-  while a non-empty ignored-mutation list could carry the clause on its own, and removing those
-  lists made a 0-100 filter reach it. Both copies of that block -- here and in
-  `aledb_interop_query.views`, which rebuilds it by hand -- now skip an empty `q_exp`.
+- **A filter with no cutoff at either end used to exclude the whole experiment.** An empty `Q`
+  handed to `.exclude()` excludes everything. The guard survives in a new form -- with no cutoff
+  the queryset is returned untouched and `.exclude()` is never called -- and the second copy of
+  that block is gone with it: `aledb_interop_query` had rebuilt the whole thing by hand, skipping
+  gene filtering as too slow, and now goes through the shared path. Its six endpoints take
+  `min_freq`/`max_freq`/`ignore_genes` and default to unfiltered, because an anonymous caller
+  used to get a view shaped by a setting they could not see.
 
 ### Creating and importing are pages, not dialogs
 

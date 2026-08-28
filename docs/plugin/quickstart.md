@@ -68,6 +68,8 @@ from django.shortcuts import render
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_view_project
+from aledb_filter.util import filtered_observed_mutation_queryset
+from aledb_filter.view_filter import get_view_filter
 from aledb_seq.models import ObservedMutation
 
 EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment"
@@ -87,10 +89,14 @@ def your_thing(request):
     if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", context, status=403)
 
+    # Through the reader's own filter -- see "Showing filtered data". `get_view_filter`
+    # never returns None, and an unfiltered reader's filter changes nothing.
+    queryset, ignored_genes = filtered_observed_mutation_queryset(
+        ObservedMutation.objects.filter(**{EXPERIMENT_PATH: experiment}),
+        view_filter=get_view_filter(request, experiment.ale_id))
+
     counts = collections.Counter(
-        ObservedMutation.objects
-        .filter(**{EXPERIMENT_PATH: experiment})
-        .values_list("mutation__mutation_type", flat=True))
+        queryset.values_list("mutation__mutation_type", flat=True))
 
     context.update({
         "ale_experiment_id": experiment.ale_id,

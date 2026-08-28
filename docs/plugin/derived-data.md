@@ -73,32 +73,10 @@ leaves the previous answer on screen with the error in `./aledb rebuild --list`,
 500ing the page. Every plugin reader should call it. For a long time only one reader in the
 whole suite did, and the result was a filter change that never reached three plugin pages.
 
-## Declaring what you read
-
-```python
-from aledb_common.rebuild_registry import INPUT_MUTATIONS, register_rebuilder
-
-register_rebuilder('aledb_yourthing', rebuild_your_table,
-                   inputs={INPUT_MUTATIONS})
-```
-
-`inputs=` says which of `INPUT_MUTATIONS` and `INPUT_FILTERS` your computation depends on, and
-**defaults to both**, so leaving it out is safe and correct for most plugins.
-
-Narrow it only when the independence is real. The case it was built for: `aledb-phylogeny`
-reads `ObservedMutation` directly rather than through `filter_observed_mutations`, so a
-frequency-cutoff edit genuinely cannot change its tree — and without declaring that, every
-filter save would mark it stale and its page would ask for a rebuild that redrew the identical
-answer.
-
-Declaring an independence you do not have is the dangerous direction: it silently stops your
-data being marked, and the symptom is data that is quietly never refreshed.
-
 ## Opting out of automatic rebuilds
 
 ```python
-register_rebuilder('aledb_yourthing', rebuild_your_table,
-                   auto=False, inputs={INPUT_MUTATIONS})
+register_rebuilder('aledb_yourthing', rebuild_your_table, auto=False)
 ```
 
 `auto=False` means your data is **tracked and marked stale like anything else, and never

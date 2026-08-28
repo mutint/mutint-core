@@ -19,6 +19,17 @@ The handler takes an experiment id and returns a queryset of `ObservedMutation`.
 what the menu shows; without it the menu shows the type string, which is a name for a URL
 rather than for a person.
 
+It may also take the reader's filter, so a download matches the page it was launched from:
+
+```python
+def get_your_observations(experiment_id, view_filter=None):
+    ...
+```
+
+The second argument is optional. The registry inspects your signature once at registration and
+hands the filter only to a handler that can take it, so one written before this existed keeps
+working untouched. See [Showing filtered data](filtering.md).
+
 `aledb_export/util.py` dispatches on the type: `mut` uses the base queryset and everything
 else is looked up here. There are no plugin names anywhere in core's export code.
 
