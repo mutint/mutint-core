@@ -49,44 +49,61 @@
         .app {
             height: 100px;
         }
+
+        /* A shade darker than `.btn-default`, which is white: locking is not one of the
+           edit actions beside it, and reads as its own thing without going as loud as the
+           red on Delete or the orange the Unlock button carries. Hover and active are
+           Bootstrap's own steps down from the base, kept in proportion. */
+        .btn-lock, .btn-lock:focus {
+            background-color: #dcdcdc;
+            border-color: #b4b4b4;
+        }
+
+        .btn-lock:hover, .btn-lock:active, .btn-lock.active {
+            background-color: #cbcbcb;
+            border-color: #a0a0a0;
+        }
     </style>
 
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - Experiment Overview{% endblock %}
 {% block experiment_actions %}
-    {% comment %} All of these were rendered to everyone. Every endpoint behind them
+    {% comment %} All of these were rendered to everyone once. Every endpoint behind them
        refuses a caller who may not edit, so nothing unsafe followed -- but clicking one
        could only ever produce a 403 in the error line, which is a dead end dressed up as
-       an action. {% endcomment %}
-    {% if can_edit %}
-    <div style="margin-top: 0.6em;">
-        <a class="btn btn-primary" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
-            + Add data</a>
-        <a class="btn btn-default"
-           href="/ale/experiment/{{ ale_experiment_id }}/edit/">Edit experiment</a>
-        <a class="btn btn-default"
-           href="/ale/experiment/{{ ale_experiment_id }}/samples/">Edit samples</a>
-        <button type="button" class="btn btn-danger" id="delete-experiment"
-                data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
-    </div>
-    {% endif %}
+       an action.
 
-    {% comment %} Its own block, outside `{% if can_edit %}`, and gated on admin instead.
-       Two reasons it cannot live in there: `can_edit` is false precisely when the
-       experiment is locked, so the unlock button would vanish exactly when it is needed,
-       and the whole value of the lock is that the people who ordinarily edit cannot lift
-       it themselves. {% endcomment %}
-    {% if can_lock %}
+       One row, three gates. The lock sits between Edit samples and Delete
+       experiment, where it belongs in the order somebody reads these, but it is gated on
+       `can_lock` rather than `can_edit` and cannot simply join that block: `can_edit` is
+       false precisely when the experiment is locked, so an Unlock button inside it would
+       vanish exactly when it is needed -- and the whole value of the lock is that the
+       people who ordinarily edit cannot lift it themselves. So the row itself is
+       unconditional and each button carries its own condition; a reader who can do
+       neither gets an empty div. {% endcomment %}
     <div style="margin-top: 0.6em;">
-        {% if experiment.is_locked %}
-            <button type="button" class="btn btn-warning" id="unlock-experiment"
-                    data-experiment-id="{{ ale_experiment_id }}">Unlock experiment</button>
-        {% else %}
-            <button type="button" class="btn btn-default" id="lock-experiment"
-                    data-experiment-id="{{ ale_experiment_id }}">Lock experiment</button>
+        {% if can_edit %}
+            <a class="btn btn-primary" href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">
+                + Add data</a>
+            <a class="btn btn-default"
+               href="/ale/experiment/{{ ale_experiment_id }}/edit/">Edit experiment</a>
+            <a class="btn btn-default"
+               href="/ale/experiment/{{ ale_experiment_id }}/samples/">Edit samples</a>
+        {% endif %}
+        {% if can_lock %}
+            {% if experiment.is_locked %}
+                <button type="button" class="btn btn-warning" id="unlock-experiment"
+                        data-experiment-id="{{ ale_experiment_id }}">Unlock experiment</button>
+            {% else %}
+                <button type="button" class="btn btn-default btn-lock" id="lock-experiment"
+                        data-experiment-id="{{ ale_experiment_id }}">Lock experiment</button>
+            {% endif %}
+        {% endif %}
+        {% if can_edit %}
+            <button type="button" class="btn btn-danger" id="delete-experiment"
+                    data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
         {% endif %}
     </div>
-    {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -302,7 +319,6 @@
     </div>
 
     <h2>Sample Resequencing Stats</h2>
-    <div><i>Note: The mutation counts shown below represent unfiltered mutation sets.</i></div>
     <div class="row">
         <table id="runs" class="table">
             <thead>

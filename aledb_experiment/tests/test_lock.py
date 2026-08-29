@@ -329,6 +329,19 @@ class StillAllowedTestCase(LockTestCase):
         self.assertContains(response, self.owner.get_username(),
                             msg_prefix="the banner names who locked it, there being no reason")
 
+    def test_lock_sits_between_edit_samples_and_delete(self):
+        """One row of actions, in reading order. Three `{% if %}`s, so it is easy to reorder
+        by accident and nothing else would notice."""
+        html = self.client.get(
+            "/stats", {"ale_experiment_id": self.experiment.ale_id},
+            follow=True).content.decode()
+
+        samples = html.index("/samples/")
+        lock = html.index('id="lock-experiment"')
+        delete = html.index('id="delete-experiment"')
+        self.assertLess(samples, lock)
+        self.assertLess(lock, delete)
+
     def test_the_edit_controls_are_gone_and_unlock_is_offered(self):
         self.lock()
         html = self.client.get(
