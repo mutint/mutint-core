@@ -61,8 +61,10 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1257 run, 0 failures** standalone; **1393** in an assembled project, where the
-plugins' own tests join them. The count went *down* because the shared filter's model tests went
+**Baseline: 1268 run, 0 failures** standalone; **1404** in an assembled project, where the
+plugins' own tests join them. They were 1257 and 1393 before an owner learned to leave a
+project by transferring rather than by removing themselves, and before `locked_reason` went.
+The count went *down* because the shared filter's model tests went
 with the model; 22 new ones cover the reader's filter and its session. They were 1287 and 1424
 before filtering became per-reader, 1264 and 1401 before functional change moved onto
 `snp_type`, and 1239 and 1370 before the dashboard stopped filtering and `aledb_stats` stopped

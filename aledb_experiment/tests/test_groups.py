@@ -167,6 +167,19 @@ class DetailPageTestCase(GroupTestCase):
                 self.assertEqual('id="gd-delete"' in html, expected)
                 self.assertEqual('id="gd-transfer-go"' in html, expected)
 
+    def test_it_states_your_own_role_under_the_members_heading(self):
+        for user, expected in ((self.owner, "Owner"), (self.manager, "Manager"),
+                               (self.member, "Member")):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+                html = self.client.get(self.base).content.decode("utf-8")
+                self.assertIn("Your group role: %s" % expected, html)
+
+    def test_the_transfer_section_says_what_it_does(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(self.base).content.decode("utf-8")
+        self.assertIn("Transfer group ownership to a different user", html)
+
     def test_it_names_the_projects_the_group_reaches(self):
         project = Project.objects.create(name="Shared", user=self.stranger)
         set_primary_owner(project, self.stranger)

@@ -408,6 +408,28 @@ def grant_project_access(project, subject, role, granted_by=None):
     return entry
 
 
+def self_revoke_refusal(user, entry):
+    """Why `user` may not remove **their own** grant, or "" if they may.
+
+    An owner leaving a project is a transfer, not a removal: give ownership to someone else
+    and then lower your own role, which `grant_project_access` allows the moment a second
+    owner exists. Removing the row instead is the one shape of that move with no intermediate
+    state where the project still has the owner it is about to lose -- and, on a project with
+    two owners, the shape that silently makes it somebody else's without saying so.
+
+    Deliberately not folded into `revoke_project_access`, which takes no actor: another owner
+    removing an owner is ordinary administration, and `./aledb project_access` is the escape
+    hatch for a project whose owner is gone. It is the *self* case that is refused, so the
+    check needs to know who is asking and therefore lives beside the view that does.
+    """
+    if entry.user_id is None or entry.user_id != getattr(user, "id", None):
+        return ""
+    if entry.role == ROLE_OWNER:
+        return ("You are an owner of this project and cannot remove your own access. "
+                "Give ownership to someone else, then lower your own role.")
+    return ""
+
+
 def revoke_project_access(project, entry):
     """Remove one grant, keeping the "a project always has an owner" invariant."""
     if entry.role == ROLE_OWNER and _remaining_owner_count(project, excluding_pk=entry.pk) == 0:

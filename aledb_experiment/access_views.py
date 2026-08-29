@@ -44,6 +44,7 @@ from aledb_experiment.models import Project, ProjectAccess
 from aledb_experiment.permissions import (
     AccessError, can_manage_project_access, can_own_project, effective_role,
     grant_project_access, resolve_group_name, resolve_username, revoke_project_access,
+    self_revoke_refusal,
 )
 from aledb_experiment.roles import ROLE_CHOICES, ROLE_OWNER, is_role, rank
 
@@ -77,9 +78,17 @@ def project_access(request, pk):
                   .select_related("user", "group")
                   .order_by("user__username", "group__name")):
         options = grantable_to_group if entry.group_id else grantable
+        editable = rank(entry.role) <= rank(actor_role)
+        # Two separate questions, and the second is not a weaker form of the first: an owner
+        # may edit their own row -- stepping down is how ownership is handed over -- while
+        # `self_revoke_refusal` still refuses to let them remove it. The button is hidden
+        # because a control whose every use the server refuses should not be on the page;
+        # `project_access_revoke` asks the same question again, which is the check.
         rows.append({
             "entry": entry,
-            "editable": rank(entry.role) <= rank(actor_role),
+            "editable": editable,
+            "is_self": entry.user_id == request.user.id,
+            "removable": editable and not self_revoke_refusal(request.user, entry),
             "options": options,
             "role_label": dict(ROLE_CHOICES).get(entry.role, entry.role),
         })
@@ -87,7 +96,10 @@ def project_access(request, pk):
     context.update({
         "project": project,
         "rows": rows,
-        "actor_role": actor_role,
+        # The label rather than the stored value, because it is read by a person at the top
+        # of the page: "Read/write", not "write". Same line the group page carries. The raw
+        # `actor_role` went with the summary list at the foot that used to render it.
+        "actor_role_label": dict(ROLE_CHOICES).get(actor_role, actor_role),
         "grantable": grantable,
         "grantable_to_group": grantable_to_group,
         "can_grant_owner": can_own_project(request.user, project),
@@ -143,6 +155,9 @@ def project_access_revoke(request, pk):
 
     By `access_id` rather than by username: unambiguous, and it cannot race with a rename or
     with the same person being added under a different spelling.
+
+    Removing *your own* grant is allowed -- leaving a project you are on does not need anyone
+    else -- except as an owner, where `self_revoke_refusal` says why.
     """
     if not request.user.is_authenticated:
         return JsonResponse({"error": "You must be signed in."}, status=403)
@@ -159,6 +174,10 @@ def project_access_revoke(request, pk):
 
     if entry.role == ROLE_OWNER and not can_own_project(request.user, project):
         return JsonResponse({"error": "Only an owner can revoke ownership."}, status=403)
+
+    refusal = self_revoke_refusal(request.user, entry)
+    if refusal:
+        return JsonResponse({"error": refusal}, status=403)
 
     try:
         revoke_project_access(project, entry)

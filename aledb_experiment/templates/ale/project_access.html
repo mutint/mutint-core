@@ -19,6 +19,10 @@
         {% endif %}
 
         <h4>Who has access</h4>
+        {% comment %} Your own role, beside the table that gives everyone else's, the way
+           the group page states your standing. The project's owner is a row in the table,
+           so there is nothing left for a summary at the foot of the page to add. {% endcomment %}
+        <p class="help-block">Your project role: {{ actor_role_label }}</p>
         <table class="table table-striped table-bordered">
             <thead class="alert-success">
             <tr>
@@ -65,10 +69,14 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if row.editable %}
+                        {% comment %} `removable`, not `editable`: an owner may edit their own
+                           row -- stepping down is how ownership is handed over -- and may not
+                           remove it. See `self_revoke_refusal`. {% endcomment %}
+                        {% if row.removable %}
                             <button type="button" class="btn btn-default btn-sm pa-remove"
                                     data-access-id="{{ row.entry.id }}"
-                                    data-subject="{{ row.entry.subject_name }}">Remove</button>
+                                    data-self="{% if row.is_self %}1{% endif %}"
+                                    data-subject="{{ row.entry.subject_name }}">{% if row.is_self %}Leave{% else %}Remove{% endif %}</button>
                         {% endif %}
                     </td>
                 </tr>
@@ -172,19 +180,17 @@
            makes an otherwise blank text box usable -- there is no autocomplete. {% endcomment %}
         <p class="help-block">
             {% if my_groups %}
-                You can add:
+                You can add these groups:
                 {% for group in my_groups %}<a href="/ale/group/{{ group.id }}/">{{ group.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
             {% else %}
                 You do not belong to any group yet.
             {% endif %}
-            <a href="/ale/groups/">Manage groups</a>
+        </p>
+        <p>
+            <a class="btn btn-default btn-sm" href="/ale/groups/">Manage Groups</a>
         </p>
 
-        <dl class="dl-horizontal" style="color: #666; margin-top: 1.5em;">
-            <dt>Your role</dt><dd>{{ actor_role }}</dd>
-            <dt>Owner</dt><dd>{{ project.owner }}</dd>
-        </dl>
-        <p class="help-block">
+        <p class="help-block" style="margin-top: 1.5em;">
             A group cannot own a project, and you cannot grant a role above your own.
         </p>
 
@@ -342,15 +348,29 @@
     });
 
     Array.prototype.forEach.call(document.querySelectorAll(".pa-remove"), function (button) {
+        var isSelf = !!button.getAttribute("data-self");
         button.addEventListener("click", function () {
             errorBox.textContent = "";
-            window.aledbConfirmDelete(
-                "access for " + button.getAttribute("data-subject")
-            ).then(function (confirmed) {
+            // Leaving asks its own question, and reloads to somewhere else afterwards: this
+            // page is admin-only, so the reload every other action ends with would land the
+            // person who just left on a 403 and read as the removal having gone wrong.
+            var ask = isSelf
+                ? swal({
+                    title: "Leave this project?",
+                    text: "You will lose your access to {{ project.name }}. Somebody who "
+                        + "administers it would have to grant it back.",
+                    icon: "warning",
+                    buttons: true,
+                    dangerMode: true
+                })
+                : window.aledbConfirmDelete("access for "
+                                            + button.getAttribute("data-subject"));
+            ask.then(function (confirmed) {
                 if (!confirmed) { return; }
                 window.aledbPost(revokeUrl, {
                     access_id: button.getAttribute("data-access-id")
-                }).then(reload).catch(fail);
+                }).then(isSelf ? function () { window.location.href = "/ale/projects/"; }
+                               : reload).catch(fail);
             });
         });
     });

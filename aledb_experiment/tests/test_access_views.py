@@ -92,6 +92,46 @@ class PageTestCase(AccessTestCase):
         self.assertNotIn('id="pa-role-%s"' % self.entry_for(self.owner).id, html)
         self.assertIn('id="pa-role-%s"' % self.entry_for(self.reader).id, html)
 
+    def test_it_states_your_own_role_above_the_table(self):
+        for user, expected in ((self.owner, "Owner"), (self.admin, "Admin")):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+                html = self.client.get(self.page).content.decode("utf-8")
+                self.assertIn("Your project role: %s" % expected, html)
+                above, below = html.split("<h4>Who has access</h4>")
+                self.assertIn("Your project role:", below.split("<table")[0])
+
+    def test_an_owners_own_row_has_no_remove_button(self):
+        """The dropdown stays -- stepping down is the transfer -- and the button goes."""
+        self.client.force_login(self.owner)
+        row = self._row_html(self.owner)
+        self.assertIn("pa-role", row)
+        self.assertNotIn("pa-remove", row)
+
+    def test_an_admins_own_row_offers_leave_rather_than_remove(self):
+        self.client.force_login(self.admin)
+        row = self._row_html(self.admin)
+        self.assertIn("pa-remove", row)
+        self.assertIn(">Leave<", row)
+
+    def test_somebody_elses_row_still_says_remove(self):
+        self.client.force_login(self.admin)
+        row = self._row_html(self.reader)
+        self.assertIn(">Remove<", row)
+
+    def _row_html(self, user):
+        entry = self.entry_for(user)
+        html = self.client.get(self.page).content.decode("utf-8")
+        return html.split('<tr data-access-id="%s">' % entry.id)[1].split("</tr>")[0]
+
+    def test_the_groups_you_can_add_are_named_and_managing_them_is_a_button(self):
+        group = AleGroup.objects.create(name="lab", owner=self.owner)
+        AleGroupMembership.objects.create(group=group, user=self.owner, is_manager=True)
+        self.client.force_login(self.owner)
+        html = self.client.get(self.page).content.decode("utf-8")
+        self.assertIn("You can add these groups:", html)
+        self.assertIn('class="btn btn-default btn-sm" href="/ale/groups/">Manage Groups', html)
+
     def test_a_public_project_says_so(self):
         self.project.is_public = True
         self.project.save(update_fields=["is_public"])
@@ -238,20 +278,62 @@ class RevokeTestCase(AccessTestCase):
         self.client.force_login(self.admin)
         self.assertEqual(self.revoke(self.entry_for(self.owner)).status_code, 403)
 
-    def test_the_last_owner_cannot_be_revoked_even_by_themselves(self):
+    def test_the_sole_owner_removing_themselves_is_refused_as_a_self_removal(self):
+        """403 from `self_revoke_refusal`, before the last-owner invariant is reached.
+
+        Which of the two answers first stops being visible once an owner may not remove their
+        own row at all -- the invariant is what refuses somebody *else* doing it, below.
+        """
         self.client.force_login(self.owner)
         response = self.revoke(self.entry_for(self.owner))
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 403)
         self.assertIn("owner", response.json()["error"])
 
+    def test_the_last_owner_cannot_be_revoked_by_anyone_else_either(self):
+        superuser = make_user("root", is_superuser=True)
+        self.client.force_login(superuser)
+        response = self.revoke(self.entry_for(self.owner))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("must have an owner", response.json()["error"])
+
     def test_revoking_the_primary_owner_repoints_project_user(self):
+        """Removed by the *other* owner: an owner cannot remove their own row."""
         grant_project_access(self.project, self.stranger, ROLE_OWNER)
-        self.client.force_login(self.owner)
+        self.client.force_login(self.stranger)
         response = self.revoke(self.entry_for(self.owner))
         self.assertEqual(response.status_code, 200)
         self.project.refresh_from_db()
         self.assertEqual(self.project.user_id, self.stranger.id)
         self.assertEqual(response.json()["owner"], "stranger")
+
+    def test_an_owner_cannot_remove_themselves_even_with_a_second_owner(self):
+        """The last-owner invariant is not what stops this, so a second owner does not lift it.
+
+        Leaving is a transfer: hand ownership over, step down, then go.
+        """
+        grant_project_access(self.project, self.stranger, ROLE_OWNER)
+        self.client.force_login(self.owner)
+        response = self.revoke(self.entry_for(self.owner))
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("owner", response.json()["error"])
+        self.assertTrue(ProjectAccess.objects.filter(project=self.project,
+                                                     user=self.owner).exists())
+
+    def test_an_admin_can_remove_themselves(self):
+        self.client.force_login(self.admin)
+        response = self.revoke(self.entry_for(self.admin))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ProjectAccess.objects.filter(project=self.project,
+                                                      user=self.admin).exists())
+
+    def test_the_transfer_path_an_owner_is_left_with(self):
+        """Grant ownership, step down, leave -- each step through the endpoints themselves."""
+        self.client.force_login(self.owner)
+        self.assertEqual(self.grant(username="stranger", role=ROLE_OWNER).status_code, 200)
+        self.assertEqual(self.grant(username="owner", role=ROLE_ADMIN).status_code, 200)
+        self.assertEqual(self.revoke(self.entry_for(self.owner)).status_code, 200)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.user_id, self.stranger.id)
 
     def test_an_unknown_access_id_is_404(self):
         self.client.force_login(self.owner)

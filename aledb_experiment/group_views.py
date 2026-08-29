@@ -110,6 +110,9 @@ def group_detail(request, pk):
         "owner_id": group.owner_id,
         "can_manage": is_group_manager(request.user, group),
         "is_owner": is_group_owner(request.user, group),
+        # The same word the groups list puts in its Standing column, so a group reads the
+        # same way from either page.
+        "standing": _standing(request.user, group),
         # What removing someone actually costs them. A manager deciding whether to take
         # somebody out of a group should be able to see what that takes away.
         "shared_projects": (ProjectAccess.objects.filter(group=group)
