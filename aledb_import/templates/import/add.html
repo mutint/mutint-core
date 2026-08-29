@@ -103,6 +103,13 @@
     // answer to that was WAL and a busy timeout on the connection, not a slow page. See
     // aledb_common.sqlite_tuning.
     var POLL_MS = 400;
+    // Until the first snapshot names the samples there is no table to draw, and that wait is
+    // the one that reads as nothing having happened. Ask more often over that stretch only:
+    // it is a handful of extra requests once per import, not a faster heartbeat throughout.
+    var POLL_MS_WAITING = 150;
+    // States the server will not move on from. Reaching one means the import is over
+    // whatever the finalize request is doing.
+    var TERMINAL_STATES = {finalized: true, failed: true};
 
     var selected = [];
     var dropzone = document.getElementById("dropzone");
@@ -338,12 +345,25 @@
     // to watch is samples, which is the part that actually takes the minutes.
     function setUnitProgress(done, total, stage) {
         progressEl.style.display = "block";
+        progressBar.className = "progress-bar";
         var pct = total ? Math.floor((done / total) * 100) : 0;
         progressBar.style.width = pct + "%";
         progressBar.textContent = pct + "%";
         var remaining = Math.max(0, total - done);
         var label = "Imported " + done + " of " + total + " \u2014 " + remaining + " remaining";
         progressText.textContent = stage ? (label + " \u00b7 " + stage) : label;
+    }
+
+    // Between the last byte landing and the server naming the samples there is nothing to
+    // count: it is opening the drop, working out which folders are samples and writing the
+    // list down. A percentage would have to be invented, so the bar goes indeterminate and
+    // says what is happening instead of implying a position it does not have.
+    function setScanningProgress() {
+        progressEl.style.display = "block";
+        progressBar.className = "progress-bar progress-bar-striped active";
+        progressBar.style.width = "100%";
+        progressBar.textContent = "";
+        progressText.textContent = "Scanning the upload for samples\u2026";
     }
 
     // Polling, not a stream. Progress reaches the server-side reporter in a callback several
@@ -353,6 +373,12 @@
     function startPolling(uploadId) {
         stopPolling();
         var mine = pollGeneration;
+        var drawn = false;
+
+        function schedule(delay) {
+            if (mine !== pollGeneration) { return; }
+            pollTimer = setTimeout(poll, delay);
+        }
 
         function poll() {
             fetch("/import/uploads/" + uploadId + "/progress")
@@ -361,26 +387,61 @@
                     // Stale: polling has stopped since this went out, so the page has
                     // already been given its final answer and this would undo it.
                     if (mine !== pollGeneration) { return; }
-                    if (!snapshot || !(snapshot.units || []).length) { return; }
-                    lastUnits = snapshot.units;
-                    setUnitProgress(snapshot.completed, snapshot.total, snapshot.stage);
-                    renderUnits(snapshot.units, null);
+                    if (snapshot && (snapshot.units || []).length) {
+                        drawn = true;
+                        lastUnits = snapshot.units;
+                        setUnitProgress(snapshot.completed, snapshot.total, snapshot.stage);
+                        renderUnits(snapshot.units, null);
+                    }
+                    // The session has reached a state it will not leave, so the import is
+                    // over -- and this page must not go on asking. The finalize response is
+                    // still the authority on the summary and replaces this the moment it
+                    // lands, but it may never: a dropped connection or a restarted server
+                    // leaves the request unanswered, and before this the page polled a
+                    // finished import for as long as it was left open.
+                    if (snapshot && TERMINAL_STATES[snapshot.state]) {
+                        stopPolling();
+                        concludeFromSnapshot(snapshot);
+                        return;
+                    }
+                    // Tight while there is still nothing to show, ordinary once there is.
+                    schedule(drawn ? POLL_MS : POLL_MS_WAITING);
                 })
                 // A missed tick is not an error -- the next one carries the whole picture
                 // again, and the finalize response is what settles the result either way.
-                .catch(function () { });
+                .catch(function () { schedule(drawn ? POLL_MS : POLL_MS_WAITING); });
         }
 
-        // At once, then on the interval. Waiting a whole tick before the first one is the
-        // gap between pressing Add and the table appearing, and it is the part of the wait
-        // that reads as nothing having happened.
+        // At once, then on a timer chained off each response rather than a fixed interval:
+        // an interval can stack requests on top of a slow one, and the delay wanted here
+        // changes as soon as there is a table to draw.
         poll();
-        pollTimer = setInterval(poll, POLL_MS);
     }
 
     function stopPolling() {
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         pollGeneration += 1;
+    }
+
+    // What to show when the snapshot says the import finished but the finalize response has
+    // not arrived. Deliberately not the success alert: this knows what was imported, not
+    // what the experiment now totals, and inventing that would be a second answer to a
+    // question the summary already answers properly.
+    function concludeFromSnapshot(snapshot) {
+        progressEl.style.display = "none";
+        var units = snapshot.units || [];
+        var note = document.createElement("div");
+        note.className = snapshot.state === "failed" ? "alert alert-danger"
+                                                     : "alert alert-info";
+        var failed = units.filter(function (u) { return u.error; }).length;
+        note.textContent = snapshot.state === "failed"
+            ? "The import stopped before it finished. What it managed is below."
+            : ("Import finished" + (failed ? " with " + failed + " problem(s)" : "")
+               + ". Reload the page if the totals below look incomplete.");
+        renderUnits(units, note);
+        // The drop is over either way, so the selection goes -- the same rule `finish`
+        // applies, for the same reason: pressing Add again would re-import it.
+        clearSelection();
     }
 
     // Everything the drop selected, forgotten. Without resetting the inputs' value the
@@ -508,7 +569,7 @@
             // is counting rather than sitting at 100% for the length of the import. How many
             // samples there are is the server's answer, and it arrives with the first poll --
             // until then the bar says what it is doing rather than inventing a denominator.
-            setProgress(0, 1, "Importing\u2026");
+            setScanningProgress();
             startPolling(uploadId);
             return postJson("/import/uploads/" + uploadId + "/finalize", {});
         }).then(function (summary) {
@@ -622,7 +683,8 @@
         go.addEventListener("click", function () {
             go.disabled = stop.disabled = true;
             lastUnits = null;
-            setProgress(1, 1, "Renaming and re-annotating…");
+            setScanningProgress();
+            progressText.textContent = "Renaming and re-annotating\u2026";
             startPolling(uploadId);
             postJson("/import/uploads/" + uploadId + "/finalize",
                      {confirm_rename: true}).then(function (summary) {

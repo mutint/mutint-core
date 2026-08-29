@@ -61,12 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1347 run, 0 failures** standalone; **1490** in an assembled project, where the
+**Baseline: 1351 run, 0 failures** standalone; **1494** in an assembled project, where the
 plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
-They were 1340 and 1483 before the import
+They were 1347 and 1490 before the page learned to
+stop polling a finished import, 1340 and 1483 before the import
 progress polling met SQLite's rollback journal, 1336 and 1479 before two breseq folders of
 one name stopped collapsing into one sample, and 1268 and 1404 before the ALE and the isolate became
 text columns, and 1257 and 1393 before an owner learned to leave a project by transferring
@@ -1683,6 +1684,14 @@ other at all; the timeout covers the writer-against-writer case WAL does not, si
 also writes a session row (`SESSION_SAVE_EVERY_REQUEST`). **It rules out one deployment:** WAL
 coordinates through shared memory, which NFS and SMB do not implement, so a database on a
 network share would need the receiver disabled.
+
+**A page must be able to end an import without being told.** The finalize response is the
+authority on the summary, and it can simply never arrive -- a dropped connection, a restarted
+server -- which used to leave the page polling a finished import for as long as it was left
+open. `upload_progress` reports the session's own state, so a snapshot reading `finalized` or
+`failed` ends the polling and renders what the snapshot holds. Deliberately *not* the success
+alert: the snapshot knows what this drop imported, not what the experiment now totals, and
+inventing that would be a second answer to what the summary already answers properly.
 
 **A late poll used to wipe the finished page.** `clearInterval` stops the next tick, not the
 one already in flight, so a poll that resolved after the summary had rendered redrew the table

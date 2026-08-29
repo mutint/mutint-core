@@ -22,6 +22,7 @@ from aledb_common.import_registry import run_import
 from aledb_experiment.models import Project
 from aledb_import import breseq_folder
 from aledb_import.models import STATE_FAILED, STATE_FINALIZED, UploadSession
+from aledb_seq.models import ObservedMutation, ResequencingExperiment
 from aledb_import.tests import breseq_fixture
 
 
@@ -283,6 +284,36 @@ class ProgressLifecycleTestCase(ImportProgressTestCase):
         self.assertGreater(summary["total_mutations"], 0)
 
 
+class GenomeDiffReplacementTestCase(ImportProgressTestCase):
+    """The bare-.gd path reports a replacement too. Its sample identity comes from the
+    filename rather than a directory name, but it resolves through the same rule, so
+    re-dropping `3-30000-1-1.gd` supersedes the sample of that name exactly as a folder
+    would -- and has to say so in the same way."""
+
+    def setUp(self):
+        super().setUp()
+        self.write_reference()
+
+    def _drop_gd(self):
+        with open(os.path.join(self.drop, "3-30000-1-1.gd"), "w") as handle:
+            handle.write(breseq_fixture.GD_TEXT)
+
+    def test_a_second_drop_of_the_same_gd_reports_what_it_replaced(self):
+        from aledb_seq.models import ObservedMutation
+
+        self._drop_gd()
+        first = self.run_drop(import_type="genomediff")[1]
+        self.assertEqual(first["files"][0].get("replaced", 0), 0)
+        observations = ObservedMutation.objects.count()
+        self.assertGreater(observations, 0)
+
+        second = self.run_drop(import_type="genomediff")[1]
+
+        self.assertEqual(second["files"][0]["replaced"], observations)
+        self.assertIsNone(second["files"][0]["error"])
+        self.assertEqual(ObservedMutation.objects.count(), observations)
+
+
 class PluginDegradationTestCase(ImportProgressTestCase):
     """A plugin's import type must not have to know this seam exists.
 
@@ -449,6 +480,43 @@ class ProgressEndpointTestCase(TestCase):
         self.assertEqual([u["file"] for u in units], ["s1", "s2"])
         self.assertEqual(units[0]["state"], "working")
         self.assertEqual(units[1]["state"], "waiting")
+
+    def test_a_second_separate_upload_reports_that_it_replaced_the_first(self):
+        """The case a person actually hits: not two folders in one drop, but the same
+        sample uploaded again later, in its own upload session. It is allowed -- that is how
+        a corrected run supersedes the one before it -- and the row says what it displaced,
+        both in the polled snapshot and in the finalize summary the page renders last.
+        """
+        first = self._upload("s1")
+        self.client.post("/import/uploads/%s/finalize" % first, {})
+        observations = ObservedMutation.objects.count()
+        self.assertGreater(observations, 0)
+
+        # A separate drop, a separate session, the same sample.
+        second = self._upload("s1")
+        self.assertNotEqual(first, second, "this must be a new upload session")
+        summary = self.client.post(
+            "/import/uploads/%s/finalize" % second, {}).json()
+
+        row = summary["files"][0]
+        self.assertEqual(row["file"], "s1")
+        self.assertIsNone(row["error"], "a re-import is not a failure")
+        self.assertEqual(row["replaced"], observations)
+        # And the same answer through the endpoint the page polls.
+        polled = self.client.get("/import/uploads/%s/progress" % second).json()
+        self.assertEqual(polled["units"][0]["replaced"], observations)
+
+        # Still one sample: it superseded, it did not accumulate.
+        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(ObservedMutation.objects.count(), observations)
+
+    def test_a_first_upload_reports_nothing_replaced(self):
+        """The guardrail: the notice must mean something, so it cannot show on every import."""
+        upload_id = self._upload("s1")
+        summary = self.client.post(
+            "/import/uploads/%s/finalize" % upload_id, {}).json()
+
+        self.assertEqual(summary["files"][0].get("replaced", 0), 0)
 
     def test_another_users_session_is_refused(self):
         upload_id = self._upload("s1")

@@ -124,6 +124,17 @@ class AddPageTestCase(TestCase):
         self.assertLess(names.index("reference"), names.index("genomediff"))
         self.assertLess(names.index("reference"), names.index("breseq_folder"))
 
+    def test_the_page_stops_polling_once_the_session_is_terminal(self):
+        """A finalize response that never arrives -- a dropped connection, a restarted
+        server -- used to leave the page polling a finished import for as long as it was
+        open. The snapshot's own state is what ends it."""
+        html = self.client.get(
+            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+        ).content.decode("utf-8")
+
+        self.assertIn("TERMINAL_STATES", html)
+        self.assertIn("concludeFromSnapshot", html)
+
     def test_the_page_polls_for_import_progress(self):
         html = self.client.get(
             "/import/add/", {"ale_experiment_id": self.experiment.ale_id}

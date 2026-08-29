@@ -54,6 +54,10 @@ ANNOTATION_PATTERNS = [".gbk", ".gb", ".gbff", ".genbank", ".gff", ".gff3",
 
 GENOMEDIFF_PATTERNS = [".gd"]
 
+# The one file that makes a directory a sample. `breseq_folder` owns the definition; this is
+# the suffix form of it, for reading sample names back off a list of claimed paths.
+GD_RELATIVE_SUFFIX = "data/output.gd"
+
 # Where each type sits in the Add page's dropdown, which is deliberately not the order they
 # run in -- see `menu_order` on `register_import_handler`. Mutations first because that is
 # what people come here for; replacing an established genome's annotation last because it is
@@ -85,17 +89,29 @@ def detect_breseq_folders(staged_root, paths):
             if p.startswith(prefixes) and matches_patterns(p, BRESEQ_PATTERNS)]
 
 
-def list_breseq_units(staged_root, _paths):
+def list_breseq_units(_staged_root, claimed):
     """One unit per sample directory, not per claimed file.
 
     A sample contributes five claimed paths -- the .gd, the reference pair and the BAM with
     its index -- so the default "one claimed file is one unit" would overstate the work
     fivefold and count nothing anybody is waiting on. The name must match what
     `breseq_folder._import_samples` reports, which is the directory's basename.
-    """
-    from aledb_import.breseq_folder import find_sample_dirs
 
-    return [os.path.basename(d.rstrip(os.sep)) for d in find_sample_dirs(staged_root)]
+    **Derived from what was claimed, not from a second walk of the tree.** A sample *is* a
+    directory holding `data/output.gd` and `detect_breseq_folders` has already found them
+    all, so re-running `find_sample_dirs` here would traverse the whole staging area a
+    second time to reach the same answer -- and the whole announcement is what the Add page
+    waits on before it can draw a single row. Reading it off the claim is both quicker and
+    one fewer opinion about which directories are samples.
+    """
+    names = []
+    for path in claimed:
+        if not path.replace(os.sep, "/").lower().endswith(GD_RELATIVE_SUFFIX):
+            continue
+        # "<anything>/<sample>/data/output.gd" -> "<sample>"
+        sample_dir = os.path.dirname(os.path.dirname(path))
+        names.append(os.path.basename(sample_dir.rstrip(os.sep)))
+    return names
 
 
 def handle_breseq_folders(experiment, staged_root, paths, user):
