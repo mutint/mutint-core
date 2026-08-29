@@ -262,6 +262,35 @@ class BreseqFolderImportTestCase(TestCase):
         self.assertTrue(all(f["error"] is None for f in summary["files"]), summary["files"])
         self.assertEqual(ResequencingExperiment.objects.count(), 2)
 
+    # --- re-import, across drops ------------------------------------------------------
+
+    def test_a_reimport_reports_what_it_replaced(self):
+        """Re-importing a sample is allowed and destructive -- it is how a corrected breseq
+        run supersedes the one before it. What it must not be is *silent*: a drop that
+        overwrote last month's calls looked identical to one that brought something new."""
+        breseq_fixture.write_sample(self.drop, "s1")
+        first = self._import()
+        self.assertEqual(first["files"][0].get("replaced", 0), 0,
+                         "nothing was there the first time")
+        observations = ObservedMutation.objects.count()
+        self.assertGreater(observations, 0)
+
+        second = self._import()
+
+        self.assertEqual(second["files"][0]["replaced"], observations)
+        self.assertIsNone(second["files"][0]["error"], "a re-import is not a failure")
+        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+
+    def test_the_replacement_notice_is_not_a_parse_warning(self):
+        """They render under different headings and mean different things -- `warnings` is
+        lines the parser could not read."""
+        breseq_fixture.write_sample(self.drop, "s1")
+        self._import()
+
+        second = self._import()
+
+        self.assertEqual(second["files"][0]["warnings"], [])
+
     # --- idempotency ------------------------------------------------------------------
 
     def test_reimport_is_idempotent(self):

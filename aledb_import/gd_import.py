@@ -200,7 +200,8 @@ def parse_warnings(document):
 def _import_one_file(uploaded, filename, context, person):
     document = _parse_document(uploaded)
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
-    _, count = import_document_as_sample(document, sample_name, context, person)
+    _, count, _replaced = import_document_as_sample(
+        document, sample_name, context, person)
     return count, parse_warnings(document)
 
 
@@ -209,7 +210,19 @@ def import_document_as_sample(document, sample_name, context, person):
 
     Shared by the bare-.gd upload, where the sample name comes from the filename, and the
     breseq folder import, where it comes from the sample directory -- so both derive sample
-    identity through exactly one rule. Returns ``(seq_experiment, mutation_count)``.
+    identity through exactly one rule.
+
+    Returns ``(seq_experiment, mutation_count, replaced)``, where ``replaced`` is how many
+    observations this sample already had. **Re-importing a sample is deliberately allowed
+    and deliberately destructive**: `_database_gd_mutations` clears the sample's
+    observations before writing its own, which is how a corrected breseq run replaces the
+    call set it supersedes, and `test_reimport_is_idempotent` pins it.
+
+    What that leaves is a silence worth breaking. A drop containing a sample the experiment
+    already holds does not add to it, it *supersedes* it -- so the count is handed back for
+    the caller to report. This is not the same as two folders of one name inside a single
+    drop, which `breseq_folder._import_samples` refuses outright: there, neither is an
+    update of the other and there is no way to tell which was meant.
     """
     _check_seq_ids(document, context["experiment"], sample_name)
 
@@ -231,8 +244,12 @@ def import_document_as_sample(document, sample_name, context, person):
             isolate_description=(sample_name
                                  if identity.shape == sample_names.SHAPE_TRIPLE else ""))
 
+    # Counted before the write, which is what clears them.
+    replaced = ObservedMutation.objects.filter(
+        sequencing_experiment=seq_experiment).count()
+
     return seq_experiment, _database_gd_mutations(
-        seq_experiment, document, context.get("experiment"))
+        seq_experiment, document, context.get("experiment")), replaced
 
 
 def _parse_document(uploaded):

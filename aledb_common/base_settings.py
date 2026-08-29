@@ -125,6 +125,11 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'default': {
                 'ENGINE': 'django.db.backends.sqlite3',
                 'NAME': os.path.join(base_dir, 'aledb_local.sqlite3'),
+                # Handed to sqlite3.connect. The Add page polls while an import writes, so
+                # two connections genuinely contend now; 5s (the default) is not long when
+                # the other one is copying an alignment. WAL and the rest are set per
+                # connection in aledb_common.sqlite_tuning, which explains the whole of it.
+                'OPTIONS': {'timeout': 30},
             },
         },
 
@@ -269,6 +274,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         settings['DATABASES']['default'] = {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': os.path.join(base_dir, 'dev.sqlite3'),
+            'OPTIONS': {'timeout': 30},
         }
 
     return settings

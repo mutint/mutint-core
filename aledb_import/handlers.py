@@ -269,9 +269,10 @@ def handle_genomediff(experiment, staged_root, paths, user):
             with transaction.atomic():
                 with open(os.path.join(staged_root, relative), "rb") as handle:
                     document = _parse_document(handle)
-                _, count = import_document_as_sample(
+                _, count, replaced = import_document_as_sample(
                     document, sample_name, context, person)
-            entry = {"file": filename, "mutations": count, "error": None}
+            entry = {"file": filename, "mutations": count, "error": None,
+                     "replaced": replaced}
             total += count
         except Exception as exc:
             logger.exception("genomediff import failed for %s", relative)

@@ -98,9 +98,11 @@
     var SUMMARY_KEY = "aledb-add-summary-" + EXPERIMENT_ID;
     var CHUNK_BYTES = 8 * 1024 * 1024;
     var MAX_CHUNK_RETRIES = 3;
-    // 1000ms, not 200: SESSION_SAVE_EVERY_REQUEST is on, so every poll is also a session
-    // write, and on a dev SQLite file those queue behind the import's own writes.
-    var POLL_MS = 1000;
+    // Fast enough to feel live. It was 1000ms out of caution over SQLite write contention
+    // -- SESSION_SAVE_EVERY_REQUEST is on, so every poll is also a session write -- but the
+    // answer to that was WAL and a busy timeout on the connection, not a slow page. See
+    // aledb_common.sqlite_tuning.
+    var POLL_MS = 400;
 
     var selected = [];
     var dropzone = document.getElementById("dropzone");
@@ -114,6 +116,12 @@
     var progressBar = document.getElementById("add-progress-bar");
     var progressText = document.getElementById("add-progress-text");
     var pollTimer = null;
+    // Bumped every time polling stops. A poll already in flight when the import finishes
+    // resolves *after* the summary has been rendered, and would then redraw the table from
+    // a snapshot taken before the end -- wiping the success alert and leaving a page that
+    // looks like it never finished. clearInterval stops the next tick, not the one already
+    // in the air, so the answer has to be to ignore its result rather than to prevent it.
+    var pollGeneration = 0;
     // The last snapshot the poll returned, kept so a failure can be shown *above* what had
     // already landed rather than replacing it.
     var lastUnits = null;
@@ -344,10 +352,15 @@
     // upload_session.finalize_upload.
     function startPolling(uploadId) {
         stopPolling();
-        pollTimer = setInterval(function () {
+        var mine = pollGeneration;
+
+        function poll() {
             fetch("/import/uploads/" + uploadId + "/progress")
                 .then(function (resp) { return resp.ok ? resp.json() : null; })
                 .then(function (snapshot) {
+                    // Stale: polling has stopped since this went out, so the page has
+                    // already been given its final answer and this would undo it.
+                    if (mine !== pollGeneration) { return; }
                     if (!snapshot || !(snapshot.units || []).length) { return; }
                     lastUnits = snapshot.units;
                     setUnitProgress(snapshot.completed, snapshot.total, snapshot.stage);
@@ -356,11 +369,18 @@
                 // A missed tick is not an error -- the next one carries the whole picture
                 // again, and the finalize response is what settles the result either way.
                 .catch(function () { });
-        }, POLL_MS);
+        }
+
+        // At once, then on the interval. Waiting a whole tick before the first one is the
+        // gap between pressing Add and the table appearing, and it is the part of the wait
+        // that reads as nothing having happened.
+        poll();
+        pollTimer = setInterval(poll, POLL_MS);
     }
 
     function stopPolling() {
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        pollGeneration += 1;
     }
 
     // Everything the drop selected, forgotten. Without resetting the inputs' value the
@@ -694,6 +714,18 @@
             statusTd.appendChild(list);
         } else {
             statusTd.textContent = "ok";
+        }
+
+        // Its own line, deliberately not folded into `warnings`: those are lines the parser
+        // could not read, and the page says so in as many words. A re-import replacing what
+        // was there before is a different kind of thing to know, and putting it under
+        // "unreadable line(s)" said something plainly untrue.
+        if (f.replaced) {
+            var note = document.createElement("div");
+            note.style.color = "#8a6d3b";
+            note.textContent = "replaced a previous import of this sample ("
+                + f.replaced + " observation(s) removed)";
+            statusTd.appendChild(note);
         }
 
         tr.appendChild(nameTd);

@@ -364,7 +364,7 @@ class _SessionProgress:
         kind = event.get("event")
         if kind == "total":
             self.units = [{"file": name, "mutations": None, "error": None,
-                           "warnings": [], "state": UNIT_WAITING}
+                           "warnings": [], "replaced": 0, "state": UNIT_WAITING}
                           for name in event.get("units") or []]
         elif kind == "begin":
             self._at(event.get("index"), lambda unit: unit.update(state=UNIT_WORKING))
@@ -374,6 +374,7 @@ class _SessionProgress:
                 mutations=event.get("mutations"),
                 error=event.get("error"),
                 warnings=event.get("warnings") or [],
+                replaced=event.get("replaced") or 0,
                 state=UNIT_DONE))
         elif kind == "stage":
             self.stage = event.get("message") or ""

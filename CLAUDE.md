@@ -61,12 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1340 run, 0 failures** standalone; **1483** in an assembled project, where the
+**Baseline: 1347 run, 0 failures** standalone; **1490** in an assembled project, where the
 plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
-They were 1336 and 1479 before two breseq folders of
+They were 1340 and 1483 before the import
+progress polling met SQLite's rollback journal, 1336 and 1479 before two breseq folders of
 one name stopped collapsing into one sample, and 1268 and 1404 before the ALE and the isolate became
 text columns, and 1257 and 1393 before an owner learned to leave a project by transferring
 rather than by removing themselves, and before `locked_reason` went.
@@ -1670,6 +1671,33 @@ Four things about it are load-bearing:
 Progress writes are swallowed on failure, and a failed poll is a skipped tick rather than an
 error. Commentary must not be able to fail an import, and the finalize response stays the
 authority on what happened.
+
+**Polling a database that is being written is what forced `aledb_common/sqlite_tuning.py`.**
+SQLite ships in rollback-journal mode, where a writer locks the whole file against *readers* --
+so the first sample whose transaction outlives the 5s busy timeout made every poll fail, and the
+contention pushed `database is locked` back onto the import itself. Reported against a real
+Ara-3 import, then reproduced: `journal=delete, 5s` fails on poll number **zero**; `journal=wal,
+30s` is clean. A `connection_created` receiver sets WAL, a 30s busy timeout and
+`synchronous=NORMAL`, for SQLite only. WAL is what stops readers and writers blocking each
+other at all; the timeout covers the writer-against-writer case WAL does not, since the poll
+also writes a session row (`SESSION_SAVE_EVERY_REQUEST`). **It rules out one deployment:** WAL
+coordinates through shared memory, which NFS and SMB do not implement, so a database on a
+network share would need the receiver disabled.
+
+**A late poll used to wipe the finished page.** `clearInterval` stops the next tick, not the
+one already in flight, so a poll that resolved after the summary had rendered redrew the table
+from a snapshot taken before the end -- taking the success alert with it, and leaving a page
+that looked like it had never finished. `stopPolling` bumps a generation counter and a poll
+whose generation is stale discards its own result.
+
+**A re-import says what it displaced.** Importing a sample the experiment already holds is
+allowed and destructive -- `_database_gd_mutations` clears the sample's observations before
+writing its own, which is how a corrected breseq run supersedes the one before it, and
+`test_reimport_is_idempotent` pins it. What it must not be is silent, so the row carries
+`replaced`, the number of observations removed. That is **not** the same as two folders of one
+name inside a single drop, which is refused outright: there, neither is an update of the other.
+It is also deliberately not a `warnings` entry -- those are lines the parser could not read, and
+the page says so in as many words.
 
 `replace_annotation` claims only GenBank and GFF3, not FASTA. A FASTA is sequence with no
 features, so there is nothing in one to install -- it used to be accepted and then rejected

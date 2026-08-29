@@ -171,7 +171,7 @@ def _import_samples(context, root, person, report_loose_gd):
 
         try:
             with transaction.atomic():
-                count, seq_experiment, warnings = _import_one_sample(
+                count, seq_experiment, warnings, replaced = _import_one_sample(
                     sample_dir, sample_name, context, person)
             # Outside the transaction on purpose: this walks the whole alignment, and holding
             # a database transaction open for it would be paid by every other writer. It is
@@ -179,7 +179,7 @@ def _import_samples(context, root, person, report_loose_gd):
             # derives, and `./aledb coverage` fills in what did not.
             coverage.build_quietly(seq_experiment)
             entry = {"file": sample_name, "mutations": count, "error": None,
-                     "warnings": warnings}
+                     "warnings": warnings, "replaced": replaced}
             total_mutations += count
         except Exception as exc:  # one bad sample must not poison the batch
             logger.exception("breseq folder import failed for %s", sample_name)
@@ -257,7 +257,7 @@ def _import_one_sample(sample_dir, sample_name, context, person):
     with open(gd_path, "rb") as handle:
         document = _parse_document(handle)
 
-    seq_experiment, count = import_document_as_sample(
+    seq_experiment, count, replaced = import_document_as_sample(
         document, sample_name, context, person)
     warnings = parse_warnings(document)
 
@@ -281,8 +281,8 @@ def _import_one_sample(sample_dir, sample_name, context, person):
 
     # The sample goes back with the count so the caller can derive from it once this
     # transaction has closed; the warnings go back so the summary can report what the
-    # parser could not read.
-    return count, seq_experiment, warnings
+    # parser could not read; `replaced` so it can report what this import displaced.
+    return count, seq_experiment, warnings, replaced
 
 
 def _establish_or_check_reference(experiment, gff3_path, fasta_path):
