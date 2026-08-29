@@ -275,11 +275,11 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
     What is *not* re-created is the Mutation row. `_resolve_mutation` returns the row it is
     handed, so the additions point back at the one the removals came off, and its primary key
     never moves. That matters because Mutation ids are stored as bare integers, with no foreign
-    key, in aledb-phylogeny's `site_mutation_ids` and `branch_mutations`, and in every exported
-    CSV -- and aledb-phylogeny is not on the rebuild
-    hook, so ids it holds are never refreshed. Minting a new row would leave all of that
-    pointing at a mutation with no observations; reusing it leaves them resolving, to the
-    corrected call.
+    key, in aledb-phylogeny's `branch_mutations` and in every exported CSV -- and nothing
+    refreshes them. What aledb-phylogeny does on a mutation edit is throw its cached trees
+    away, which corrects the ids it held by no longer holding them; an exported CSV is not
+    even reachable to correct. Minting a new row would leave all of that pointing at a
+    mutation with no observations; reusing it leaves them resolving, to the corrected call.
 
     The order below is the whole of this function. The removal snapshots have to be taken
     **before** the row moves, or both sides of the changeset would record the new identity and

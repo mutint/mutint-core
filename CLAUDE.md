@@ -430,7 +430,7 @@ reversible. `/mutation-editor/` edits one sample, `/mutation-editor/copy` copies
 
 **What it deletes is an `ObservedMutation`, never a `Mutation`.** That distinction is the whole
 design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
-prunes them, in aledb-phylogeny's `site_mutation_ids` and `branch_mutations` JSON -- whose
+prunes them, in aledb-phylogeny's `branch_mutations` JSON -- whose
 docstring says *"ids do not move"*, and which is not on the
 rebuild hook -- and in every exported CSV's "Mut ID" column. Deleting a Mutation and letting a
 re-import recreate it through `gd_import`'s seven-field `get_or_create` would mint a new pk for
@@ -560,7 +560,12 @@ anything, and `/phylogeny` drew a topology inferred from mutations that had sinc
 
 `force=True` does not override it. `run_post_experiment_hooks` forces on every import, so an
 import would otherwise build every opted-out thing there is. Being named in `only=` is what
-runs one, which is `./aledb rebuild <id> --only aledb_phylogeny` and nothing else.
+runs one.
+
+**Nothing registers `auto=False` today.** The plugin it was added for stopped needing it: what
+`aledb-phylogeny` registers now is a *deletion* of its cached trees, and a DELETE is cheap
+enough to run wherever any other rebuild does. The flag and its tests stay, because the next
+expensive stored answer will want them, but there is no live example to read.
 
 The skip lives in `run_rebuilds`, **not** in `get_rebuilders`: `request_rebuild` and
 `./aledb rebuild --list` both go through the latter and must still see manual rebuilders --
@@ -575,9 +580,9 @@ reads.
 
 `inputs=` took `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(changed=...)`
 said which had moved, so a filter save marked only what read through the filter. It existed for
-`aledb_phylogeny`, which reads `ObservedMutation` directly: marked by a cutoff edit, its page
-would have hidden itself behind a warning asking for a rebuild that redrew the identical
-topology -- the false alarm that teaches people to ignore the real one.
+`aledb_phylogeny`, which reads `ObservedMutation` directly: marked by a cutoff edit, its stored
+tree would have been thrown away and redrawn to the identical topology -- the false alarm that
+teaches people to ignore the real one.
 
 **All of it is gone**, because its only producer was the page that edited an experiment's shared
 filter row. Filtering belongs to the reader now and lives in their session, so there is no
@@ -588,15 +593,19 @@ meaning behind it.*
 
 #### Freshness belongs where the data is written
 
-`aledb_phylogeny.rebuild_phylogeny` clears its own staleness row, rather than the view doing
-it. A missing `DerivedDataState` row already counts as stale, so a tree built by any route
-other than the registry -- the page's Generate button, `load_example`, a rename resync -- read
-as stale the instant it was built, and the next page load hid a tree it had just made. That is
-how it was found: four of the example suite's branch tests started answering 409.
+`aledb_phylogeny.rebuild_phylogeny` settles its own staleness row rather than leaving it to the
+view. **A missing `DerivedDataState` row already counts as stale**, so anything built by a route
+other than the registry -- the page's own button, `load_example`, `./aledb rebuild_phylogeny` --
+is born stale and is thrown away by the very next read unless the write says otherwise. That is
+how it was found the first time: four of the example suite's branch tests started answering 409.
 
-The registered rebuild passes `mark_fresh=False`, because `run_rebuilds` does its own
-compare-and-set afterwards and would otherwise find the row already clean and log that the
-rebuild had been invalidated while it ran.
+It is now the *first* thing `rebuild_phylogeny` does rather than the last, and it discards
+rather than marking fresh -- `ensure_current`, which is `ensure_fresh` under a local name. The
+ordering is what matters and the reason is worth keeping: making the cache current *before*
+writing to it means a row written while a discard was still pending cannot end up sitting
+beside rows inferred from the mutations as they were, with the mark cleared afterwards to make
+the whole lot look current. Clear-at-the-end is the version of this that looks equivalent and
+is not.
 
 #### Derived data cannot notice that the *rules* changed
 
@@ -820,10 +829,11 @@ place. `KIND_EDIT` labels the *changeset*; its rows stay `OP_ADD` and `OP_REMOVE
 **What is not re-created is the Mutation row.** `_resolve_mutation` returns the row it is
 handed, so the additions point back at the one the removals came off and the primary key never
 moves. Mutation ids are stored as bare integers, with no foreign key, in aledb-phylogeny's
-`site_mutation_ids` and `branch_mutations`, and in every exported CSV -- and aledb-phylogeny is
-**not** on the rebuild
-hook, so ids it holds are never refreshed. Minting a new row would leave all of that pointing
-at a mutation with no observations; reusing it leaves them resolving, to the corrected call.
+`branch_mutations` and in every exported CSV -- and **nothing refreshes them**. What
+aledb-phylogeny does on a mutation edit is throw its cached trees away, which corrects the ids
+it held by no longer holding them; an exported CSV cannot be reached to correct at all. Minting
+a new row would leave all of that pointing at a mutation with no observations; reusing it
+leaves them resolving, to the corrected call.
 
 **The order inside `apply_mutation_edit` is the whole of it.** The removal snapshots are taken
 *before* the row moves. Taken after, both sides of the changeset would record the new identity
@@ -1394,7 +1404,9 @@ path added later is exactly what forgets.
 
 **What it deliberately does not stop.** Derived-data rebuilds — those recompute what the
 mutations already imply, and a locked experiment whose counts silently went stale would be
-worse, not safer. Reading and exporting. Access changes, since locking is per experiment and
+worse, not safer. That covers more than it looks: aledb-phylogeny's build button writes a row,
+and does not ask, because what it writes is a cached tree keyed by a selection one reader made.
+The test is whether the write is *shared*, not whether it is a write. Reading and exporting. Access changes, since locking is per experiment and
 access is per project. And **management commands**: the lock guards the web, so `./aledb
 upload` still writes to a locked experiment, matching by name as it always has.
 

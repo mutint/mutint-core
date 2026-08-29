@@ -77,8 +77,9 @@ class ChangeMutationTestCase(EditorTestCase):
 
     def test_the_mutation_keeps_its_primary_key(self):
         """The whole reason the row is updated rather than re-created. Mutation ids are stored
-        as bare integers in aledb-converge, in aledb-phylogeny's JSON and in every exported
-        CSV, and aledb-phylogeny is not on the rebuild hook."""
+        as bare integers in aledb-phylogeny's JSON and in every exported CSV, and nothing
+        refreshes them -- aledb-phylogeny discards the JSON rather than correcting it, and an
+        exported CSV cannot be reached at all."""
         before = self.mut_1.pk
 
         self.change(position=150)

@@ -541,10 +541,14 @@ def rebuild_after_structural_change(experiment):
 
     changed = ('sample_counts',)
     # Marked but not run: `aledb_phylogeny` stores a rendered "A1 F1500 I1 R1" per tip, so a
-    # renumber leaves its tree drawing labels that are now wrong -- but inferring a tree costs
-    # seconds and nobody asked for one by renaming a sample. It is registered `auto=False`, so
-    # naming it in `run_rebuilds` is what would build it; naming it only here marks it and
-    # lets its own page say the tree is out of date.
+    # renumber leaves its tree drawing labels that are now wrong -- but nobody asked for
+    # anything to happen to a tree by renaming a sample, so this marks and stops.
+    #
+    # What the mark now costs that plugin is a DELETE rather than an inference: it registers a
+    # discard, and its page calls `ensure_fresh` on the way in, so the first reader after a
+    # renumber finds the tree gone and is offered a new one. Leaving it out of `run_rebuilds`
+    # below is therefore about *where* that happens rather than about expense -- this call site
+    # is renaming samples and has no business inferring anything.
     request_rebuild(experiment.ale_id, only=changed + ('aledb_phylogeny',),
                     reason='samples renumbered')
     run_rebuilds(experiment.ale_id, only=changed)
