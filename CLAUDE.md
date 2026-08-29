@@ -61,11 +61,10 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1302 run, 0 failures** standalone. The assembled figure was **1404** and has not
-been re-counted since the ALE and isolate columns became text -- re-run `./mutint test` at the
-next submodule bump and correct it here rather than adding 34 to it. They were 1268 and 1404
-before that change, and 1257 and 1393 before an owner learned to leave a project by
-transferring rather than by removing themselves, and before `locked_reason` went.
+**Baseline: 1305 run, 0 failures** standalone; **1441** in an assembled project, where the
+plugins' own tests join them. They were 1268 and 1404 before the ALE and the isolate became
+text columns, and 1257 and 1393 before an owner learned to leave a project by transferring
+rather than by removing themselves, and before `locked_reason` went.
 The count went *down* because the shared filter's model tests went
 with the model; 22 new ones cover the reader's filter and its session. They were 1287 and 1424
 before filtering became per-reader, 1264 and 1401 before functional change moved onto
