@@ -230,7 +230,8 @@ class AnnouncedNamesTestCase(ImportProgressTestCase):
 
     def test_duplicate_sample_basenames_get_a_row_each(self):
         """`find_sample_dirs` walks, so two directories at different depths can share a
-        basename. Rows are paired by index, never by name, so this is a non-event."""
+        basename. Both still get a row -- the second one saying it was skipped -- and rows
+        are paired by index, never by name, so the repeat is a non-event for the pairing."""
         breseq_fixture.write_sample(os.path.join(self.drop, "a"), "s1")
         breseq_fixture.write_sample(os.path.join(self.drop, "b"), "s1")
 

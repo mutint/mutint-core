@@ -8,7 +8,12 @@ from django.test import TestCase, override_settings
 from aledb_common import store
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ExperimentReference, Mutation, ResequencingExperiment
+from aledb_seq.models import (
+    ExperimentReference,
+    Mutation,
+    ObservedMutation,
+    ResequencingExperiment,
+)
 
 OTHER_SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_B)]
 
@@ -188,6 +193,74 @@ class BreseqFolderImportTestCase(TestCase):
         summary = self._import()
         self.assertEqual(len(summary["files"]), 1)
         self.assertEqual(ResequencingExperiment.objects.count(), 1)
+
+    # --- two folders, one name --------------------------------------------------------
+
+    def test_a_repeated_sample_name_is_skipped_with_a_reason(self):
+        """`find_sample_dirs` walks, so two folders at different depths can both be called
+        `s1`. They are one sample, not two -- so the second does not join the first, it
+        replaces it. Refused, and said out loud."""
+        breseq_fixture.write_sample(os.path.join(self.drop, "plate-a"), "s1")
+        breseq_fixture.write_sample(os.path.join(self.drop, "plate-b"), "s1")
+
+        summary = self._import()
+
+        self.assertEqual(len(summary["files"]), 2, "both folders must be reported")
+        first, second = summary["files"]
+        self.assertIsNone(first["error"])
+        self.assertGreater(first["mutations"], 0)
+        self.assertIn("also called", second["error"])
+        self.assertIn("plate-a", second["error"], "it must say which one was kept")
+        self.assertEqual(second["mutations"], 0)
+
+        # One sample, from the first folder. Two would have been wrong; one silently
+        # overwritten by the other is what this exists to prevent.
+        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+
+    def test_the_first_folders_mutations_survive_the_duplicate(self):
+        """The failure this fixes was silent and total: `_database_gd_mutations` deletes the
+        sample's observations before writing its own, so the second folder took the first
+        one's data with it while both were reported as imported.
+
+        Asserted on *positions*, not on a count: the two folders carry the same number of
+        calls, so counting rows cannot tell an overwrite from a correct import. Which
+        mutations are there is the only thing that distinguishes them.
+        """
+        breseq_fixture.write_sample(os.path.join(self.drop, "plate-a"), "s1")
+        # Same shape, different calls -- 100 and 200 become 120 and 220.
+        breseq_fixture.write_sample(
+            os.path.join(self.drop, "plate-b"), "s1",
+            gd_text=breseq_fixture.GD_TEXT.replace("\t100\t", "\t120\t")
+                                          .replace("\t200\t", "\t220\t"))
+
+        self._import()
+
+        positions = set(
+            ObservedMutation.objects.values_list("mutation__position", flat=True))
+        self.assertEqual(positions, {100, 200},
+                         "the surviving sample must be plate-a's, not plate-b's")
+        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+
+    def test_three_folders_of_a_name_skip_two(self):
+        for parent in ("a", "b", "c"):
+            breseq_fixture.write_sample(os.path.join(self.drop, parent), "s1")
+
+        summary = self._import()
+
+        errors = [f["error"] for f in summary["files"]]
+        self.assertIsNone(errors[0])
+        self.assertEqual(sum(1 for e in errors[1:] if e), 2)
+        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+
+    def test_distinct_names_under_one_parent_are_both_imported(self):
+        """The guardrail: nesting is not what is refused, a repeated name is."""
+        breseq_fixture.write_sample(os.path.join(self.drop, "plate-a"), "s1")
+        breseq_fixture.write_sample(os.path.join(self.drop, "plate-a"), "s2")
+
+        summary = self._import()
+
+        self.assertTrue(all(f["error"] is None for f in summary["files"]), summary["files"])
+        self.assertEqual(ResequencingExperiment.objects.count(), 2)
 
     # --- idempotency ------------------------------------------------------------------
 

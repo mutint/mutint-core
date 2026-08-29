@@ -86,6 +86,11 @@ def find_sample_dirs(root):
     A dropped folder may be a single sample or a collection of them, so this walks rather
     than doing one os.listdir -- unlike ale_experiment._get_sample_report_list, which
     assumes exactly one level.
+
+    **Two of the returned directories may share a basename**, which is what a sample is
+    named by. Walking is what makes that reachable: ``a/s1`` and ``b/s1`` are two samples
+    called ``s1``. ``_import_samples`` imports the first and refuses the rest -- see
+    ``_duplicate_error`` for why refusing beats renaming.
     """
     found = []
     for dirpath, dirnames, _filenames in os.walk(root):
@@ -143,12 +148,27 @@ def _import_samples(context, root, person, report_loose_gd):
     sample_dirs = find_sample_dirs(root)
     file_results = []
     total_mutations = 0
+    # A sample is named by its directory's basename, and `find_sample_dirs` walks, so two
+    # folders at different depths can arrive under one name. See `_duplicate_error`.
+    imported_from = {}
 
     for sample_dir in sample_dirs:
         sample_name = os.path.basename(sample_dir.rstrip(os.sep))
         # Before the work, not after: a sample's coverage alone can run for minutes, and
         # saying which one is being worked on is most of the value of reporting at all.
         import_progress.begin(sample_name)
+
+        if sample_name in imported_from:
+            logger.warning(
+                "skipping %s: another folder in this drop is already importing as %s",
+                os.path.relpath(sample_dir, root), sample_name)
+            entry = {"file": sample_name, "mutations": 0, "warnings": [],
+                     "error": _duplicate_error(root, imported_from[sample_name], sample_dir)}
+            file_results.append(entry)
+            import_progress.report(entry)
+            continue
+        imported_from[sample_name] = sample_dir
+
         try:
             with transaction.atomic():
                 count, seq_experiment, warnings = _import_one_sample(
@@ -193,6 +213,30 @@ def _import_samples(context, root, person, report_loose_gd):
         "total_mutations": total_mutations,
         "files": file_results,
     }
+
+
+def _duplicate_error(root, kept, skipped):
+    """Why the second folder of a name was not imported.
+
+    Two directories with the same basename resolve to the same sample -- an A-F-I-R name
+    parses to one coordinate, and an auto-numbered one reuses the ResequencingExperiment
+    already matching that name. So the second folder does not arrive beside the first, it
+    *replaces* it: `_database_gd_mutations` deletes the sample's observations and writes its
+    own. The whole of the first folder's data would be gone, with nothing reported and both
+    folders listed as imported.
+
+    Skipping is deliberate, and inventing a distinct name for the second would be worse:
+    the name is the sample's identity here -- it is what `parse_sample_identity` reads the
+    ALE, flask and isolate out of -- so a name this code made up would place the sample at a
+    coordinate nobody chose, and the drop would import without ever saying so. Which of the
+    two folders was meant is a question only the person who made them can answer.
+    """
+    return ("%s was skipped: %s in the same drop is also called %r, and both would import "
+            "as the same sample -- the second would replace the first rather than join it. "
+            "Rename one of them and import it separately."
+            % (os.path.relpath(skipped, root),
+               os.path.relpath(kept, root),
+               os.path.basename(skipped.rstrip(os.sep))))
 
 
 def _import_one_sample(sample_dir, sample_name, context, person):

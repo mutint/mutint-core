@@ -61,12 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1336 run, 0 failures** standalone; **1479** in an assembled project, where the
+**Baseline: 1340 run, 0 failures** standalone; **1483** in an assembled project, where the
 plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
-They were 1268 and 1404 before the ALE and the isolate became
+They were 1336 and 1479 before two breseq folders of
+one name stopped collapsing into one sample, and 1268 and 1404 before the ALE and the isolate became
 text columns, and 1257 and 1393 before an owner learned to leave a project by transferring
 rather than by removing themselves, and before `locked_reason` went.
 The count went *down* because the shared filter's model tests went
@@ -1501,6 +1502,22 @@ that used to appear solely on `/mutations/amplifications` because Compare passed
 unnoticed.
 
 ### Reading a sample's identity out of its filename
+
+**Two breseq folders of one name are one sample, and the second is refused.**
+`find_sample_dirs` walks, so `a/s1` and `b/s1` are both samples called `s1` -- and a sample is
+named by its directory's basename. That name is its identity: an A-F-I-R name parses to one
+coordinate, and an auto-numbered one reuses the `ResequencingExperiment` already matching it.
+So the second folder never arrived *beside* the first, it **replaced** it --
+`_database_gd_mutations` deletes the sample's observations before writing its own -- and both
+folders were reported as imported. Measured: two folders of two mutations each left two
+mutations, the first folder's gone, with nothing said.
+
+`_import_samples` now imports the first and reports every later one as an error naming both
+paths. **Renaming the second automatically would be worse**, which is why it is not done: the
+name is what `parse_sample_identity` reads the ALE, flask and isolate out of, so a name this
+code invented would file the sample at a coordinate nobody chose and the drop would import
+looking entirely successful. Which of the two was meant is a question only the person who made
+them can answer.
 
 `aledb_import/sample_names.py` is the one place a filename becomes a coordinate, asked by
 `gd_import.import_document_as_sample` -- so a bare `.gd` and the breseq directory of the same
