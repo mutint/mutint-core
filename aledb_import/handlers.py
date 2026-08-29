@@ -14,6 +14,7 @@ import os
 
 from django.db import transaction
 
+from aledb_common import import_progress
 from aledb_common.import_registry import (
     PRIORITY_DATA,
     PRIORITY_REFERENCE,
@@ -53,6 +54,15 @@ ANNOTATION_PATTERNS = [".gbk", ".gb", ".gbff", ".genbank", ".gff", ".gff3",
 
 GENOMEDIFF_PATTERNS = [".gd"]
 
+# Where each type sits in the Add page's dropdown, which is deliberately not the order they
+# run in -- see `menu_order` on `register_import_handler`. Mutations first because that is
+# what people come here for; replacing an established genome's annotation last because it is
+# the rarest and the hardest to undo.
+MENU_GENOMEDIFF = 10
+MENU_BRESEQ = 20
+MENU_REFERENCE = 30
+MENU_REPLACE_ANNOTATION = 90
+
 
 # --- breseq result folders ----------------------------------------------------------------
 
@@ -73,6 +83,19 @@ def detect_breseq_folders(staged_root, paths):
         os.path.relpath(d, staged_root) + os.sep for d in sample_dirs)
     return [p for p in paths
             if p.startswith(prefixes) and matches_patterns(p, BRESEQ_PATTERNS)]
+
+
+def list_breseq_units(staged_root, _paths):
+    """One unit per sample directory, not per claimed file.
+
+    A sample contributes five claimed paths -- the .gd, the reference pair and the BAM with
+    its index -- so the default "one claimed file is one unit" would overstate the work
+    fivefold and count nothing anybody is waiting on. The name must match what
+    `breseq_folder._import_samples` reports, which is the directory's basename.
+    """
+    from aledb_import.breseq_folder import find_sample_dirs
+
+    return [os.path.basename(d.rstrip(os.sep)) for d in find_sample_dirs(staged_root)]
 
 
 def handle_breseq_folders(experiment, staged_root, paths, user):
@@ -158,22 +181,25 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
     from aledb_import import reference_store
 
     if annotation_only and not reference_store.has_reference(experiment):
-        return {"files": [{"file": p, "mutations": 0,
-                           "error": ("this experiment has no reference genome yet; set the "
-                                     "sequence first, then replace its annotation")}
-                          for p in paths],
-                "total_mutations": 0}
+        refusals = [{"file": p, "mutations": 0,
+                     "error": ("this experiment has no reference genome yet; set the "
+                               "sequence first, then replace its annotation")}
+                    for p in paths]
+        for entry in refusals:
+            import_progress.report(entry)
+        return {"files": refusals, "total_mutations": 0}
 
     results = []
     for relative in paths:
         full = os.path.join(staged_root, relative)
+        import_progress.begin(relative)
         try:
             gff3_text, sequences = reference_io.normalize_reference(
                 full, os.path.basename(relative))
             reference_store.establish_or_check(
                 experiment, gff3_text, sequences, update_annotation=True,
                 allow_rename=bool((options or {}).get("confirm_rename")))
-            results.append({"file": relative, "mutations": 0, "error": None})
+            entry = {"file": relative, "mutations": 0, "error": None}
         except reference_store.RenameRequired as ask:
             # Not an error and not a per-file result: the same genome arrived under different
             # contig names, and renaming rewrites every mutation in the experiment. It
@@ -183,13 +209,15 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
             # Named separately from the blanket handler below: this is the one failure a user
             # can act on, and the hash-vs-hash text establish_or_check raises does not say so.
             logger.info("annotation replacement refused for %s: sequence differs", relative)
-            results.append({"file": relative, "mutations": 0,
-                            "error": ("the sequence in this file is not this experiment's "
-                                      "reference genome; annotation can only be replaced "
-                                      "for the same sequence")})
+            entry = {"file": relative, "mutations": 0,
+                     "error": ("the sequence in this file is not this experiment's "
+                               "reference genome; annotation can only be replaced "
+                               "for the same sequence")}
         except Exception as exc:
             logger.exception("reference import failed for %s", relative)
-            results.append({"file": relative, "mutations": 0, "error": str(exc)})
+            entry = {"file": relative, "mutations": 0, "error": str(exc)}
+        results.append(entry)
+        import_progress.report(entry)
     return {"files": results, "total_mutations": 0}
 
 
@@ -223,28 +251,33 @@ def handle_genomediff(experiment, staged_root, paths, user):
         # A .gd carries no reference, so it cannot establish the one every sample shares.
         # In a mixed drop the reference handler has already run (lower priority), so reaching
         # here means none was supplied.
-        return {"files": [{"file": p, "mutations": 0,
-                           "error": ("this experiment has no reference genome; add one "
-                                     "(GenBank, GFF3 or FASTA) before importing .gd files")}
-                          for p in paths],
-                "total_mutations": 0}
+        refusals = [{"file": os.path.basename(p), "mutations": 0,
+                     "error": ("this experiment has no reference genome; add one "
+                               "(GenBank, GFF3 or FASTA) before importing .gd files")}
+                    for p in paths]
+        for entry in refusals:
+            import_progress.report(entry)
+        return {"files": refusals, "total_mutations": 0}
 
     results = []
     total = 0
     for relative in paths:
         filename = os.path.basename(relative)
         sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
+        import_progress.begin(filename)
         try:
             with transaction.atomic():
                 with open(os.path.join(staged_root, relative), "rb") as handle:
                     document = _parse_document(handle)
                 _, count = import_document_as_sample(
                     document, sample_name, context, person)
-            results.append({"file": filename, "mutations": count, "error": None})
+            entry = {"file": filename, "mutations": count, "error": None}
             total += count
         except Exception as exc:
             logger.exception("genomediff import failed for %s", relative)
-            results.append({"file": filename, "mutations": 0, "error": str(exc)})
+            entry = {"file": filename, "mutations": 0, "error": str(exc)}
+        results.append(entry)
+        import_progress.report(entry)
 
     if total:
         # Recompute what the new mutations changed: the experiment filter, the plugin
@@ -262,6 +295,7 @@ def handle_genomediff(experiment, staged_root, paths, user):
         # that handler -- idempotent, and cheaper than teaching the two to coordinate.
         from aledb_import.gd_import import run_post_processing
 
+        import_progress.stage("Recomputing derived data…")
         run_post_processing(experiment)
 
     return {"files": results, "total_mutations": total}
@@ -280,6 +314,7 @@ def register_core_import_handlers():
         detect=detect_reference,
         handle=handle_reference,
         accepts_options=True,
+        menu_order=MENU_REFERENCE,
         # Establishing a reference is a one-time act. Once the experiment has one,
         # offering this again invites the two things it will not do: replacing the
         # annotation (that is replace_annotation) and swapping in a different genome
@@ -300,6 +335,9 @@ def register_core_import_handlers():
         handle=handle_replace_annotation,
         accepts_options=True,
         requires_reference=True,
+        # Last, deliberately. It rewrites the genome every sample in the experiment is
+        # checked against, and is the rarest and least reversible thing on the menu.
+        menu_order=MENU_REPLACE_ANNOTATION,
         description="Refresh the gene annotation from a new GenBank or GFF3. The sequence "
                     "must be identical; only the features are replaced.")
     register_import_handler(
@@ -309,6 +347,8 @@ def register_core_import_handlers():
         priority=PRIORITY_DATA,
         detect=detect_breseq_folders,
         handle=handle_breseq_folders,
+        list_units=list_breseq_units,
+        menu_order=MENU_BRESEQ,
         description="One or more sample folders, each with a data/ holding output.gd, the reference and the alignment.")
     register_import_handler(
         name="genomediff",
@@ -317,6 +357,13 @@ def register_core_import_handlers():
         priority=PRIORITY_DATA + 10,
         detect=detect_genomediff,
         handle=handle_genomediff,
+        # Reports a bare filename, not the path it was dropped under, so the announcement
+        # has to say the same thing -- see `list_units` on `register_import_handler`.
+        list_units=lambda _root, claimed: [os.path.basename(p) for p in claimed],
+        # First in the menu. It runs last -- a .gd is hash-checked against a reference that
+        # has to exist by then -- but it is the commonest thing anybody opens this page to
+        # do, and it sat at the bottom for no reason other than that ordering.
+        menu_order=MENU_GENOMEDIFF,
         # Absent until there is a reference. A bare .gd is a thing people will arrive
         # holding, so the answer they need -- get a reference in first -- is the page's
         # banner, which says exactly that and names .gd as the case it does not cover.

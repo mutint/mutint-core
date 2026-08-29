@@ -1,9 +1,13 @@
 """Chunked upload endpoints for breseq folder import.
 
 A folder drop can be tens of GB, which cannot go through one POST. The client declares a
-manifest, uploads each file in bounded chunks, then asks the server to finalize. Every
-request stays short, so this needs no task queue -- there is neither Celery nor Channels in
-this codebase.
+manifest, uploads each file in bounded chunks, then asks the server to finalize.
+
+Every *chunk* request stays short. ``finalize_upload`` does not, and saying otherwise is what
+``WORKERS.md`` calls out: the whole ingest runs there, parse and store and coverage and every
+derived-data rebuild. There is still no task queue -- what there is instead is a progress
+snapshot written as the import goes and served by ``upload_progress``, so a long finalize
+reports itself rather than looking like a hung page.
 
 The client supplies relative paths (``webkitRelativePath`` / ``entry.fullPath``), which are
 untrusted input and the main new attack surface here. ``sanitize_relative_path`` rejects
@@ -19,9 +23,9 @@ import shutil
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
-from aledb_common import store
+from aledb_common import import_progress, store
 from aledb_common.import_registry import (
     ConfirmationRequired,
     get_import_handler,
@@ -42,6 +46,12 @@ logger = logging.getLogger("aledb_import.upload_session")
 # Bounds the temp file Django spools per part, independent of total upload size.
 MAX_CHUNK_BYTES = 64 * 1024 * 1024
 MAX_MANIFEST_ENTRIES = 20000
+
+# Where one unit of an import has got to. Named here rather than on the model because they
+# describe a row inside a JSON blob, not a column anything queries.
+UNIT_WAITING = "waiting"
+UNIT_WORKING = "working"
+UNIT_DONE = "done"
 
 
 class UploadError(Exception):
@@ -221,7 +231,25 @@ def _payload(request):
 
 
 def finalize_upload(request, upload_id):
-    """Ingest the staged tree and clear it. Returns the standard import summary."""
+    """Ingest the staged tree and clear it. Returns the standard import summary.
+
+    Long -- a sample's coverage alone runs `bedtools` and `bedGraphToBigWig` under a
+    900-second timeout, and the derived-data rebuild after the last sample counts every
+    observation in the installation. What makes that bearable to watch is
+    `_SessionProgress`, which writes a snapshot onto the session as each unit starts and
+    finishes; `upload_progress` serves it and the Add page polls.
+
+    **The progress is written from inside this request**, which is why it works with no
+    worker and no thread: every write here lands outside the per-sample `transaction.atomic()`
+    block in autocommit, so the polling request's own connection sees it immediately.
+
+    This deliberately did *not* become a streaming response. Progress arrives at
+    `import_progress.report` five frames below `run_import`, in a callback -- and a callback
+    cannot yield. Any generator wrapping `run_import` would queue every event and emit the
+    lot after the import had already finished, which is this function's behaviour with extra
+    machinery in front of it. Streaming would need the import on a worker thread, and that is
+    `WORKERS.md`, not a progress bar.
+    """
     session, error = _open_session(request, upload_id)
     if error:
         return error
@@ -238,11 +266,13 @@ def finalize_upload(request, upload_id):
 
     root = store.staging_dir(session.id)
     options = {"confirm_rename": _payload(request).get("confirm_rename")}
+    progress = _SessionProgress(session.id)
     try:
         # The registry decides what each file is and which handler takes it, so a plugin's
         # import type is reachable here with no change to this view.
-        summary = run_import(session.ale_experiment, root, request.user,
-                             import_type=session.import_type, options=options)
+        with import_progress.reporting(progress):
+            summary = run_import(session.ale_experiment, root, request.user,
+                                 import_type=session.import_type, options=options)
     except ConfirmationRequired as ask:
         # Deliberately before the blanket handler, and deliberately without the cleanup: the
         # staged tree is what the confirming request will import, so it has to survive the
@@ -250,16 +280,24 @@ def finalize_upload(request, upload_id):
         # `updated` is touched so the reaper's TTL restarts from when the question was asked
         # rather than from when the upload began.
         session.save(update_fields=["updated"])
+        # Nothing was imported, so the plan this drop announced describes work that has not
+        # happened. Left in place it would be served to the confirming POST's first poll as
+        # a table of samples already under way.
+        progress.discard()
         # 200 rather than 409: the client's postJson throws on any non-2xx and renders
         # `error`, so a status code would turn a question into a failure message.
         return JsonResponse({"needs_confirmation": ask.payload})
     except Exception as exc:
         logger.exception("breseq folder finalize failed for session %s", session.id)
+        # Before the state change, so the last poll shows which unit it died on rather than
+        # a table frozen mid-import with nothing saying why.
+        progress.fail(str(exc))
         session.state = STATE_FAILED
         session.save(update_fields=["state", "updated"])
         shutil.rmtree(root, ignore_errors=True)
         return JsonResponse({"error": str(exc)}, status=500)
 
+    progress.finish()
     shutil.rmtree(root, ignore_errors=True)
     session.state = STATE_FINALIZED
     session.save(update_fields=["state", "updated"])
@@ -270,6 +308,112 @@ def finalize_upload(request, upload_id):
     # to go and get itself re-rendered rather than keep offering the pre-reference choices.
     summary["has_reference"] = reference_store.has_reference(session.ale_experiment)
     return JsonResponse(summary)
+
+
+@require_GET
+def upload_progress(request, upload_id):
+    """How far the finalize of this session has got. Polled while it runs.
+
+    **Deliberately not `_open_session`.** That refuses anything not `STATE_OPEN`, and the
+    single most useful moment to ask this question is the tick right after finalize returned,
+    when the session is `finalized` -- so borrowing it would 409 exactly the poll that
+    matters. The ownership check is the same; the state check is not wanted here.
+
+    A session nothing has reported on yet answers with an empty unit list rather than a 404,
+    because that is the honest answer between the POST going out and the first unit starting.
+    """
+    try:
+        session = UploadSession.objects.get(pk=upload_id)
+    except (UploadSession.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Unknown upload session."}, status=404)
+
+    if session.user_id and session.user_id != getattr(request.user, "id", None):
+        return JsonResponse({"error": "Not your upload session."}, status=403)
+
+    snapshot = session.progress or {}
+    units = snapshot.get("units") or []
+    return JsonResponse({
+        "state": snapshot.get("state") or session.state,
+        "stage": snapshot.get("stage") or "",
+        # Counted here rather than in the page, so "how many remain" has one authority.
+        "total": len(units),
+        "completed": sum(1 for unit in units if unit.get("state") == UNIT_DONE),
+        "units": units,
+    })
+
+
+class _SessionProgress:
+    """Turns `import_progress` events into a snapshot on the `UploadSession` row.
+
+    A snapshot rather than an event log because the page wants a table pre-listed and filled
+    in, which is a picture of the present rather than a history: each poll re-renders from
+    whatever it is handed, so a poll that is slow, lost or doubled costs nothing and there is
+    nothing to reconcile.
+
+    Every write is swallowed on failure. Progress is commentary; the mutations are the point,
+    and a locked SQLite file must not be able to fail an import that is otherwise fine.
+    """
+
+    def __init__(self, session_id):
+        self.session_id = session_id
+        self.units = []
+        self.stage = ""
+        self.cursor = 0
+
+    def __call__(self, event):
+        kind = event.get("event")
+        if kind == "total":
+            self.units = [{"file": name, "mutations": None, "error": None,
+                           "warnings": [], "state": UNIT_WAITING}
+                          for name in event.get("units") or []]
+        elif kind == "begin":
+            self._at(event.get("index"), lambda unit: unit.update(state=UNIT_WORKING))
+        elif kind == "file":
+            self._at(event.get("index"), lambda unit: unit.update(
+                file=event.get("file", unit["file"]),
+                mutations=event.get("mutations"),
+                error=event.get("error"),
+                warnings=event.get("warnings") or [],
+                state=UNIT_DONE))
+        elif kind == "stage":
+            self.stage = event.get("message") or ""
+        self._flush()
+
+    def _at(self, index, mutate):
+        if isinstance(index, int) and 0 <= index < len(self.units):
+            mutate(self.units[index])
+
+    def fail(self, message):
+        """The whole drop stopped. Say so on the unit it stopped on, and on the rest."""
+        for unit in self.units:
+            if unit["state"] == UNIT_WORKING:
+                unit.update(state=UNIT_DONE, error=message)
+            elif unit["state"] == UNIT_WAITING:
+                unit.update(state=UNIT_DONE, error="not imported")
+        self.stage = ""
+        self._flush(state=STATE_FAILED)
+
+    def finish(self):
+        self.stage = ""
+        self._flush(state=STATE_FINALIZED)
+
+    def discard(self):
+        self.units = []
+        self.stage = ""
+        self._flush()
+
+    def _flush(self, state=STATE_OPEN):
+        payload = {"state": state, "stage": self.stage, "units": self.units}
+        try:
+            # `.update()` rather than `save()`: it is one statement, it cannot clobber a
+            # column another writer changed, and it does not need the row in memory. It also
+            # bypasses `auto_now`, so `updated` is set by hand -- without which a long import
+            # would age past the reaper's TTL while it was still running.
+            UploadSession.objects.filter(pk=self.session_id).update(
+                progress=payload, updated=timezone.now())
+        except Exception:
+            logger.warning("could not record import progress for session %s",
+                           self.session_id, exc_info=True)
 
 
 def reap_expired_sessions(now=None):

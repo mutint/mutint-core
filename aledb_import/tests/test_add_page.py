@@ -4,6 +4,7 @@ import tempfile
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
+from aledb_common import import_registry
 from aledb_experiment.models import Project
 
 
@@ -54,8 +55,6 @@ class AddPageTestCase(TestCase):
         # ImportTypesOfferedTestCase, which covers both sides of that.
 
     def test_a_plugin_type_reaches_the_dropdown(self):
-        from aledb_common import import_registry
-
         import_registry.register_import_handler(
             name="page_test_type", label="Plugin readings (.tsv)",
             patterns=[".tsv"], handle=lambda *a: {"files": [], "total_mutations": 0})
@@ -77,6 +76,62 @@ class AddPageTestCase(TestCase):
         self.assertIn(".gbk", body["types"][0]["patterns"])
         # Unfiltered here: this endpoint has no experiment to scope by.
         self.assertTrue(body["types"][1]["requires_reference"])
+
+    def test_the_dropdown_leads_with_mutations_and_ends_with_replace_annotation(self):
+        """Menu order is not run order, and this is the case that separates them.
+
+        `genomediff` runs *last* -- a bare .gd is hash-checked against a reference that has
+        to be established first -- and is the thing people most often come to this page to
+        do. `replace_annotation` rewrites the genome every sample is checked against and is
+        the rarest and least reversible entry, so it goes at the bottom. Neither position is
+        expressible in `priority` without changing what a mixed drop does.
+        """
+        from aledb_import import reference_store
+        from aledb_import.tests import breseq_fixture
+        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        reference_store.establish_or_check(
+            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
+
+        offered = [t["name"] for t
+                   in import_registry.get_import_types_for(has_reference=True)]
+
+        self.assertEqual(offered[0], "genomediff")
+        self.assertEqual(offered[-1], "replace_annotation")
+
+    def test_the_menu_order_is_what_the_page_renders(self):
+        """Asserted on the rendered <select>, not only on the registry, because the
+        template could always have re-sorted them back."""
+        from aledb_import import reference_store
+        from aledb_import.tests import breseq_fixture
+        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        reference_store.establish_or_check(
+            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
+
+        html = self.client.get(
+            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+        ).content.decode("utf-8")
+        select = html.split('id="add-type"')[1].split("</select>")[0]
+
+        self.assertLess(select.index('value="genomediff"'),
+                        select.index('value="breseq_folder"'))
+        self.assertLess(select.index('value="breseq_folder"'),
+                        select.index('value="replace_annotation"'))
+
+    def test_run_order_is_unchanged_by_the_menu_order(self):
+        """The guardrail for the above: `reference` must still run before `genomediff`,
+        or a mixed drop imports mutations against a genome that is not there yet."""
+        names = [h["name"] for h in import_registry.get_import_handlers()]
+        self.assertLess(names.index("reference"), names.index("genomediff"))
+        self.assertLess(names.index("reference"), names.index("breseq_folder"))
+
+    def test_the_page_polls_for_import_progress(self):
+        html = self.client.get(
+            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+        ).content.decode("utf-8")
+        self.assertIn("/progress", html)
+        # A completed import must forget what was dropped, or pressing Add again
+        # re-imports the samples that already landed.
+        self.assertIn("clearSelection", html)
 
     def test_replace_annotation_is_offered_only_once_a_reference_exists(self):
         """It cannot do anything before there is a sequence to hold fixed, so offering it

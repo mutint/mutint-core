@@ -32,7 +32,7 @@ import shutil
 
 from django.db import transaction
 
-from aledb_common import store
+from aledb_common import import_progress, store
 from aledb_import import coverage
 from aledb_import import reference as reference_io
 from aledb_import.breseq_summary import read_breseq_summary
@@ -146,6 +146,9 @@ def _import_samples(context, root, person, report_loose_gd):
 
     for sample_dir in sample_dirs:
         sample_name = os.path.basename(sample_dir.rstrip(os.sep))
+        # Before the work, not after: a sample's coverage alone can run for minutes, and
+        # saying which one is being worked on is most of the value of reporting at all.
+        import_progress.begin(sample_name)
         try:
             with transaction.atomic():
                 count, seq_experiment, warnings = _import_one_sample(
@@ -155,26 +158,33 @@ def _import_samples(context, root, person, report_loose_gd):
             # also best-effort -- a sample keeps its reads whether or not the coverage
             # derives, and `./aledb coverage` fills in what did not.
             coverage.build_quietly(seq_experiment)
-            file_results.append({"file": sample_name, "mutations": count, "error": None,
-                                 "warnings": warnings})
+            entry = {"file": sample_name, "mutations": count, "error": None,
+                     "warnings": warnings}
             total_mutations += count
         except Exception as exc:  # one bad sample must not poison the batch
             logger.exception("breseq folder import failed for %s", sample_name)
-            file_results.append({"file": sample_name, "mutations": 0, "error": str(exc),
-                                 "warnings": []})
+            entry = {"file": sample_name, "mutations": 0, "error": str(exc),
+                     "warnings": []}
+        file_results.append(entry)
+        import_progress.report(entry)
 
     if report_loose_gd:
         for gd_path in find_loose_gd_files(root, sample_dirs):
-            file_results.append({
+            entry = {
                 "file": os.path.basename(gd_path),
                 "mutations": 0,
                 "warnings": [],
                 "error": ("a bare .gd has no reference genome, which every sample in an "
                           "experiment must share; import it into an experiment whose "
                           "reference is already established"),
-            })
+            }
+            file_results.append(entry)
+            import_progress.report(entry)
 
     if total_mutations:
+        # The longest silence in an import: every registered rebuild runs here, the
+        # dashboard's installation-wide totals included, after the last row is already filled.
+        import_progress.stage("Recomputing derived data…")
         run_post_processing(experiment)
 
     return {

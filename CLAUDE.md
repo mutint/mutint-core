@@ -61,8 +61,12 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1305 run, 0 failures** standalone; **1441** in an assembled project, where the
-plugins' own tests join them. They were 1268 and 1404 before the ALE and the isolate became
+**Baseline: 1336 run, 0 failures** standalone; **1479** in an assembled project, where the
+plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
+an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
+plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
+that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
+They were 1268 and 1404 before the ALE and the isolate became
 text columns, and 1257 and 1393 before an owner learned to leave a project by transferring
 rather than by removing themselves, and before `locked_reason` went.
 The count went *down* because the shared filter's model tests went
@@ -1589,12 +1593,66 @@ the page classifies a drop with cannot disagree:
 a reference dropped alongside data still runs first on `priority`, which is how a first drop
 establishes one. `/import/types/` stays unscoped; it has no experiment to scope by.
 
+**The order they are listed in is not the order they run in**, and `menu_order` is what
+separates the two. `priority` decides which handler runs first and is correctness -- a
+reference genome must be established before mutations that are hash-checked against it -- so
+it cannot be moved to make the menu read better without changing what a mixed drop does. Sorted
+by it, the menu led with the two reference types and put `genomediff` last, which is the
+commonest thing anybody opens this page to do. `menu_order` defaults to `priority`, so a type
+that says nothing keeps its position; core sets `.gd` first, breseq folders second, and
+`replace_annotation` last, that one being the rarest and least reversible entry. **Only
+`get_import_types_for` sorts by it** -- `get_import_types()` stays in priority order, because
+the page walks that list to name what an unrecognised file *looks* like and wants the handler
+that would really claim it named first.
+
 Because both the menu and the banner are rendered from `has_reference` at page load, a drop
 that establishes one leaves the page stale. `finalize` therefore returns `has_reference`, and
 the page **reloads** when it flips rather than patching the menu and the banner in the client,
 where the two could drift from what the server would render. The import summary is the only
 record that the drop happened, so it rides across the reload in `sessionStorage` under
 `aledb-add-summary-<experiment>` and is re-rendered on the way back.
+
+### An import reports itself, sample by sample
+
+An import is long -- `coverage.build_quietly` runs `bedtools` and `bedGraphToBigWig` under a
+900-second timeout **per sample**, and the derived-data rebuild after the last one counts every
+observation in the installation. Reported as a single POST, all of it was a page that had
+stopped moving, which is indistinguishable from one that had broken.
+
+`aledb_common/import_progress.py` is the seam. `run_import` **announces every unit before any
+handler runs**, and each handler brackets its own work with `begin` / `report`; the Add page
+lists every sample as *waiting* immediately and fills each in as it lands, above a bar counting
+samples rather than bytes.
+
+**It polls, and it deliberately does not stream.** A `StreamingHttpResponse` emits by
+*yielding*, and progress arrives at `import_progress.report` in a callback several frames below
+`run_import` -- a callback cannot yield. Any generator wrapping the import would queue every
+event and emit the lot once it had already finished, which is the single POST it was meant to
+replace. Streaming would need the import on a worker thread, and that is `WORKERS.md`, not a
+progress bar. So `_SessionProgress` writes a snapshot onto `UploadSession.progress` as it goes
+and `/import/uploads/<id>/progress` serves it. This works with no worker because **every
+progress write lands outside the per-sample `transaction.atomic()` block**, in autocommit, so
+the polling connection sees it at once.
+
+Four things about it are load-bearing:
+
+- **A snapshot, not an event log.** The page re-renders whole from whatever the last poll
+  returned, so a poll that is slow, lost or doubled costs nothing and there is nothing to
+  reconcile. It is also what the pre-listed table wants: a picture of the present.
+- **A unit's announced name must equal the `file` key its result carries.** The two are paired
+  by position, and the handlers disagree about what that name is -- a directory basename, a
+  filename, a path relative to the drop root -- so `list_units` mirrors each handler's own
+  reporting rather than there being one rule. `test_import_progress.AnnouncedNamesTestCase`
+  pins each of them; getting it wrong renders a row that never fills in.
+- **`list_units` exists because a breseq sample is five claimed files and one unit.** Counting
+  claimed paths would report five times the work and count nothing anybody waits on.
+- **`run_import` sets the cursor per handler** rather than letting reports count themselves. A
+  plugin handler is free to report nothing -- its rows still arrive in the final summary -- and
+  without an explicit cursor its silence would shift every row after it.
+
+Progress writes are swallowed on failure, and a failed poll is a skipped tick rather than an
+error. Commentary must not be able to fail an import, and the finalize response stays the
+authority on what happened.
 
 `replace_annotation` claims only GenBank and GFF3, not FASTA. A FASTA is sequence with no
 features, so there is nothing in one to install -- it used to be accepted and then rejected

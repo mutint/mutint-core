@@ -70,6 +70,40 @@ Two optional declarations worth knowing:
 
 If your shape is not a suffix match — a directory, say — supply your own `detect`.
 
+`menu_order` is where you sit in the dropdown, and it defaults to `priority` so you need not
+pass it. The two are separate because `priority` is correctness and cannot be moved: core puts
+`.gd` first and `replace_annotation` last, which no arrangement of run order could express.
+
+### Reporting progress
+
+An import that takes minutes should say how far it has got, or the page looks hung. Nothing is
+required of you — a handler that reports nothing still returns its rows, and they still appear
+— but two lines make your type behave like core's:
+
+```python
+from aledb_common import import_progress
+
+for path in paths:
+    import_progress.begin(name_of(path))
+    ...
+    import_progress.report({'file': name_of(path), 'mutations': n, 'error': None})
+```
+
+Both are no-ops unless something is listening, so the CLI and `load_example` are unaffected.
+
+**The one rule: the name you announce must be the `file` key you report.** Units are paired by
+position, so a mismatch renders a row that never fills in. If one unit of your work is not one
+claimed file — a breseq sample is a directory of five — declare `list_units=` to say what your
+units are called, mirroring exactly what your own loop will report:
+
+```python
+register_import_handler(
+    ...,
+    list_units=lambda staged_root, claimed: [os.path.basename(p) for p in claimed])
+```
+
+It defaults to `claimed` itself, which is right whenever one file is one unit.
+
 ## A section on `/about`
 
 ```python

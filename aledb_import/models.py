@@ -1,8 +1,13 @@
 """Server-side state for chunked uploads.
 
 A breseq folder drop can be tens of GB, which cannot go through a single POST. The client
-declares a manifest, uploads each file in chunks, then asks the server to finalize. Each
-request stays short, so this needs no task queue -- the repo has neither Celery nor Channels.
+declares a manifest, uploads each file in chunks, then asks the server to finalize.
+
+That made every *transfer* request short. It did not make finalize short -- it moved the
+entire ingest there, where it is bounded by nothing, which is the case ``WORKERS.md`` records
+as having outgrown this design. There is still no task queue, and the repo has neither Celery
+nor Channels; what a long finalize has instead is ``progress``, a snapshot the Add page polls
+so the wait is legible rather than silent.
 """
 
 import uuid
@@ -48,6 +53,12 @@ class UploadSession(models.Model):
     manifest = models.JSONField(default=list)
     declared_bytes = models.BigIntegerField(default=0)
     received_bytes = models.BigIntegerField(default=0)
+
+    # How far `finalize_upload` has got, as {"state", "stage", "units": [...]}, written by
+    # `upload_session._SessionProgress` and served by `upload_session.upload_progress`. It
+    # lives here rather than in its own table so it is reaped with the session it describes,
+    # and it is a snapshot rather than a log because the page it feeds re-renders whole.
+    progress = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-created"]

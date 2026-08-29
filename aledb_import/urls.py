@@ -18,6 +18,10 @@ urlpatterns = [
             upload_session.upload_chunk, name='upload_chunk'),
     re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/finalize$',
             upload_session.finalize_upload, name='upload_finalize'),
+    # Polled while finalize runs. A GET, and the only one of these that is: it reads a
+    # snapshot the finalize request is writing as it goes.
+    re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/progress$',
+            upload_session.upload_progress, name='upload_progress'),
     # Abandoning a staged drop -- a declined rename, most often -- rather than leaving it
     # for the TTL reaper.
     re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/cancel$',

@@ -44,7 +44,8 @@ class ConfirmationRequired(Exception):
 def register_import_handler(name, label, patterns, handle,
                             priority=PRIORITY_DATA, detect=None, description="",
                             requires_reference=False,
-                            only_without_reference=False, accepts_options=False):
+                            only_without_reference=False, accepts_options=False,
+                            list_units=None, menu_order=None):
     """Register an import type.
 
     name        stable slug; the value the Add page's dropdown submits
@@ -75,6 +76,34 @@ def register_import_handler(name, label, patterns, handle,
                 because establishing one is a one-time act. Nothing enforces this
                 server-side -- re-establishing the same genome is harmless, it is
                 just not a thing worth offering.
+    list_units  optional callable(staged_root, claimed) -> [display names], for
+                naming what this handler is about to process before it starts.
+                Defaults to `claimed` itself, which is right whenever one claimed
+                file is one unit of work -- and wrong for `breseq_folder`, where a
+                sample is a directory of five claimed files and counting paths
+                would overstate the work fivefold.
+
+                **Each name must equal the `file` key the matching result carries**,
+                or a caller pairing an announcement against a result has nothing to
+                pair on. The handlers disagree about what that name is -- a
+                directory basename, a filename, a path relative to the drop root --
+                so this mirrors one handler's own reporting rather than imposing a
+                rule. `aledb_common.import_progress` is what consumes it.
+    menu_order  where this sits in the Add page's dropdown, lower first. Defaults to
+                `priority`, so a type that says nothing keeps the position it had.
+
+                **This exists because `priority` cannot be moved to do the job.**
+                `priority` is the order handlers *run* in, and a reference genome has
+                to be established before mutations that are hash-checked against it --
+                so it is correctness, not presentation, and reordering the menu by
+                editing it would silently change what a mixed drop does. What somebody
+                reaches for most often and what has to happen first are different
+                questions and now have different answers.
+
+                Only the dropdown is sorted by it. `get_import_types()` stays in
+                priority order, because the Add page walks *that* list to name what an
+                unrecognised file looks like and wants the handler that would really
+                claim it named first.
     """
     if any(handler["name"] == name for handler in _import_handlers):
         raise ValueError("import handler %r is already registered" % (name,))
@@ -89,6 +118,8 @@ def register_import_handler(name, label, patterns, handle,
         "requires_reference": requires_reference,
         "only_without_reference": only_without_reference,
         "accepts_options": accepts_options,
+        "list_units": list_units,
+        "menu_order": priority if menu_order is None else menu_order,
     })
 
 
@@ -120,6 +151,11 @@ def get_import_types_for(has_reference):
         if entry["requires_reference"] and not has_reference:
             continue
         offered.append(dict(entry))
+    # Sorted for the menu, not for the run. See `menu_order` on register_import_handler:
+    # the two orders answer different questions and a shared one served neither well --
+    # the reference types led because they run first, so the commonest thing anybody
+    # comes here to do sat at the bottom.
+    offered.sort(key=lambda entry: (entry["menu_order"], entry["name"]))
     return offered
 
 
@@ -132,6 +168,7 @@ def get_import_types():
         "description": h["description"],
         "requires_reference": h["requires_reference"],
         "only_without_reference": h["only_without_reference"],
+        "menu_order": h["menu_order"],
     } for h in get_import_handlers()]
 
 
@@ -169,6 +206,17 @@ def claim(handler, staged_root, paths):
     if handler["detect"] is not None:
         return list(handler["detect"](staged_root, paths))
     return default_detect(handler, staged_root, paths)
+
+
+def units(handler, staged_root, claimed):
+    """What this handler will report as it works, named the way it will name it.
+
+    One claimed file is one unit unless the handler says otherwise, which only
+    `breseq_folder` does -- see `list_units` on `register_import_handler`.
+    """
+    if handler.get("list_units") is not None:
+        return list(handler["list_units"](staged_root, claimed))
+    return list(claimed)
 
 
 def walk_files(staged_root):
@@ -224,11 +272,22 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
     and never again, so a session opened before the lock would otherwise still ingest after
     it. Raising `ExperimentLocked` rather than returning an error summary because this is a
     refusal of the whole drop, the same shape `ConfirmationRequired` already takes.
+
+    **Every claim is settled before any handler runs**, so the whole unit list can be
+    announced to `aledb_common.import_progress` up front rather than growing a handler at a
+    time. That is safe because claiming reads the staged tree and nothing else: all four
+    core `detect` functions match on paths and suffixes, and none consults the database. The
+    `reference` handler does establish a genome the later ones are hash-checked against, but
+    that decides their *results*, never their *claims* -- the `has_reference` tests live in
+    each `handle_*`, not in its `detect_*`. Splitting the loop therefore changes which files
+    a handler receives not at all.
     """
     # Imported here rather than at module scope: this module is in aledb_common, which the
     # registries keep free of app-level imports so it can be loaded before the app registry
     # is ready. `rebuild_registry` defers its model imports the same way.
     from aledb_experiment.permissions import ExperimentLocked
+
+    from aledb_common import import_progress
 
     if experiment is not None and getattr(experiment, "is_locked", False):
         raise ExperimentLocked(experiment.lock_message())
@@ -243,26 +302,49 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
     else:
         handlers = get_import_handlers()
 
-    file_results = []
-    total_mutations = 0
+    # Pass one: who takes what, and what each will call the pieces.
+    plan = []
     unclaimed = set(paths)
-
+    announced = []
     for handler in handlers:
         claimed = [p for p in claim(handler, staged_root, paths) if p in unclaimed]
         if not claimed:
             continue
         unclaimed -= set(claimed)
+        mine = units(handler, staged_root, claimed)
+        plan.append((handler, claimed, len(mine)))
+        announced.extend(mine)
+
+    # The leftovers are reported as failed rows below, so they are units too -- a file nobody
+    # claimed is a line somebody has to read.
+    leftovers = sorted(unclaimed)
+    announced.extend(leftovers)
+    import_progress.announce(announced)
+
+    # Pass two: run it.
+    file_results = []
+    total_mutations = 0
+
+    cursor = 0
+    for handler, claimed, unit_count in plan:
+        # Each handler writes into its own slice of the announcement, so one that reports
+        # nothing costs its rows and nobody else's.
+        import_progress.advance_to(cursor)
         summary = _call(handler, experiment, staged_root, claimed, user, options)
+        cursor += unit_count
         file_results.extend(summary.get("files") or [])
         total_mutations += summary.get("total_mutations") or 0
 
-    for path in sorted(unclaimed):
-        file_results.append({
+    import_progress.advance_to(cursor)
+    for path in leftovers:
+        entry = {
             "file": path,
             "mutations": 0,
             "error": _unclaimed_reason(path, import_type),
             "warnings": [],
-        })
+        }
+        file_results.append(entry)
+        import_progress.report(entry)
 
     return {
         "experiment_id": experiment.ale_id,
