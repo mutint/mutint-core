@@ -92,13 +92,13 @@
 {% block content %}
     {% if experiment.is_locked %}
         {% comment %} Shown to everyone, not only to whoever can unlock it. A reader who
-           finds the edit controls gone is owed the reason, and a collaborator who cannot
-           lift the lock still needs to know who to ask. {% endcomment %}
+           finds the edit controls gone is owed an explanation, and a collaborator who
+           cannot lift the lock still needs to know who to ask -- which is what the
+           timestamp and the name below it are for, now that there is no stored reason. {% endcomment %}
         <div class="alert alert-warning">
             <b>This experiment is locked.</b>
             Its mutations, samples and settings cannot be changed by anyone, including
             administrators, until it is unlocked.
-            {% if experiment.locked_reason %}<br>Reason: {{ experiment.locked_reason }}{% endif %}
             <br><small>
                 Locked {{ experiment.locked_at }}{% if experiment.locked_by %}
                 by {{ experiment.locked_by.get_username }}{% endif %}.
@@ -403,18 +403,15 @@
 
     if (lock) {
         lock.addEventListener("click", function () {
-            // A reason, not a yes/no confirm. The lock is going to refuse somebody later,
-            // and the one useful thing to record now is why -- so the refusal can say it.
             swal({
                 title: "Lock this experiment?",
                 text: "Nobody will be able to change its mutations, samples or settings "
-                    + "until it is unlocked. Why is it being locked?",
-                content: "input",
+                    + "until it is unlocked.",
+                icon: "warning",
                 buttons: true
-            }).then(function (reason) {
-                // null is Cancel; "" is OK with an empty box, which is allowed.
-                if (reason === null) { return; }
-                post(lock.dataset.experimentId, { locked: "1", reason: reason || "" });
+            }).then(function (confirmed) {
+                if (!confirmed) { return; }
+                post(lock.dataset.experimentId, { locked: "1" });
             });
         });
     }

@@ -246,7 +246,7 @@ def experiment_lock(request, pk):
 
     wants_locked = bool(request.POST.get("locked"))
     if wants_locked and not experiment.is_locked:
-        experiment.lock(request.user, reason=request.POST.get("reason") or "")
+        experiment.lock(request.user)
     elif not wants_locked and experiment.is_locked:
         experiment.unlock()
 
@@ -254,8 +254,7 @@ def experiment_lock(request, pk):
                          "locked": experiment.is_locked,
                          "locked_at": experiment.locked_at,
                          "locked_by": (experiment.locked_by.get_username()
-                                       if experiment.locked_by_id else None),
-                         "locked_reason": experiment.locked_reason})
+                                       if experiment.locked_by_id else None)})
 
 
 @require_POST

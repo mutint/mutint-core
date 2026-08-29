@@ -26,8 +26,8 @@ from aledb_seq.models import Mutation, ObservedMutation
 class LockTestCase(EditorTestCase):
     """`EditorTestCase` gives an experiment with two samples and three mutations."""
 
-    def lock(self, reason="published"):
-        return self.experiment.lock(self.owner, reason=reason)
+    def lock(self):
+        return self.experiment.lock(self.owner)
 
     def url(self, path):
         return path
@@ -43,16 +43,15 @@ class ModelTestCase(LockTestCase):
         self.assertFalse(self.experiment.is_locked)
         self.assertIsNone(self.experiment.locked_at)
 
-    def test_locking_records_who_and_when_and_why(self):
-        self.lock(reason="published in Smith 2024")
+    def test_locking_records_who_and_when(self):
+        self.lock()
 
         self.experiment.refresh_from_db()
         self.assertTrue(self.experiment.is_locked)
         self.assertIsNotNone(self.experiment.locked_at)
         self.assertEqual(self.owner, self.experiment.locked_by)
-        self.assertEqual("published in Smith 2024", self.experiment.locked_reason)
 
-    def test_unlocking_clears_all_three(self):
+    def test_unlocking_clears_both(self):
         self.lock()
         self.experiment.unlock()
 
@@ -60,19 +59,14 @@ class ModelTestCase(LockTestCase):
         self.assertFalse(self.experiment.is_locked)
         self.assertIsNone(self.experiment.locked_at)
         self.assertIsNone(self.experiment.locked_by)
-        self.assertEqual("", self.experiment.locked_reason)
 
-    def test_the_message_names_the_reason(self):
-        self.lock(reason="published in Smith 2024")
+    def test_the_message_names_the_experiment_and_the_way_out(self):
+        self.lock()
         message = self.experiment.lock_message()
 
         self.assertIn(self.experiment.name, message)
-        self.assertIn("published in Smith 2024", message)
+        self.assertIn("cannot be changed", message)
         self.assertIn("unlock", message)
-
-    def test_a_lock_with_no_reason_still_explains_itself(self):
-        self.lock(reason="")
-        self.assertIn("cannot be changed", self.experiment.lock_message())
 
     def test_the_shell_context_carries_it(self):
         """So a padlock renders on every experiment-scoped page, not just the Overview."""
@@ -115,7 +109,7 @@ class PredicateTestCase(LockTestCase):
 class LockEndpointTestCase(LockTestCase):
 
     def test_an_admin_can_lock_and_unlock(self):
-        response = self.post_lock(locked="1", reason="done")
+        response = self.post_lock(locked="1")
         self.assertEqual(200, response.status_code)
         self.assertTrue(response.json()["locked"])
 
@@ -126,11 +120,17 @@ class LockEndpointTestCase(LockTestCase):
         self.experiment.refresh_from_db()
         self.assertFalse(self.experiment.is_locked)
 
-    def test_the_response_says_who_and_why(self):
-        body = self.post_lock(locked="1", reason="published").json()
+    def test_the_response_says_who_and_when(self):
+        body = self.post_lock(locked="1").json()
         self.assertEqual("owner", body["locked_by"])
-        self.assertEqual("published", body["locked_reason"])
         self.assertIsNotNone(body["locked_at"])
+
+    def test_a_posted_reason_is_ignored_rather_than_stored(self):
+        """The column is gone and the dialog is a plain confirm; an old client cannot 500."""
+        self.assertEqual(200, self.post_lock(locked="1", reason="published").status_code)
+        self.experiment.refresh_from_db()
+        self.assertTrue(self.experiment.is_locked)
+        self.assertNotIn("published", self.experiment.lock_message())
 
     def test_a_write_user_cannot_lock(self):
         writer = User.objects.create(username="writer", email="w@e.com", is_active=True)
@@ -167,8 +167,8 @@ class LockEndpointTestCase(LockTestCase):
         self.assertEqual(403, self.post_lock(locked="1").status_code)
 
     def test_locking_twice_does_not_move_the_timestamp(self):
-        first = self.post_lock(locked="1", reason="one").json()["locked_at"]
-        second = self.post_lock(locked="1", reason="two").json()["locked_at"]
+        first = self.post_lock(locked="1").json()["locked_at"]
+        second = self.post_lock(locked="1").json()["locked_at"]
         self.assertEqual(first, second, "idempotent, as project_delete is")
 
     def test_it_refuses_a_GET(self):
@@ -305,8 +305,10 @@ class EveryWritePathTestCase(LockTestCase):
 
     def test_the_refusal_says_why(self):
         response = self.client.post("/ale/experiment/%d/delete/" % self.experiment.ale_id, {})
-        self.assertIn("locked", response.json()["error"])
-        self.assertIn("published", response.json()["error"], "the reason is carried through")
+        error = response.json()["error"]
+        self.assertIn("locked", error)
+        self.assertIn(self.experiment.name, error, "lock_message() is what is carried through")
+        self.assertIn("unlock", error)
 
 
 class StillAllowedTestCase(LockTestCase):
@@ -319,12 +321,13 @@ class StillAllowedTestCase(LockTestCase):
         self.assertEqual(200, response.status_code)
 
     def test_the_overview_says_it_is_locked(self):
-        self.lock(reason="published in Smith 2024")
+        self.lock()
         response = self.client.get("/stats", {"ale_experiment_id": self.experiment.ale_id},
                                    follow=True)
 
         self.assertContains(response, "This experiment is locked")
-        self.assertContains(response, "published in Smith 2024")
+        self.assertContains(response, self.owner.get_username(),
+                            msg_prefix="the banner names who locked it, there being no reason")
 
     def test_the_edit_controls_are_gone_and_unlock_is_offered(self):
         self.lock()

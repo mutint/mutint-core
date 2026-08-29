@@ -1348,9 +1348,15 @@ and names the one it refused.
 
 ### Locking an experiment
 
-`AleExperiment.locked_at` / `locked_by` / `locked_reason`, shaped like `SoftDeleteMixin` above
-— the timestamp is the flag, with no boolean beside it to disagree. `/ale/experiment/<pk>/lock/`
-sets it, gated on `can_admin_project`.
+`AleExperiment.locked_at` / `locked_by`, shaped like `SoftDeleteMixin` above — the timestamp
+is the flag, with no boolean beside it to disagree. `/ale/experiment/<pk>/lock/` sets it,
+gated on `can_admin_project`.
+
+**There is no `locked_reason` any more** (`aledb_experiment.0007`). It was a third column fed
+by a text box on the lock dialog, which is a plain confirm now: the questions a lock has to
+answer are whether the dataset is closed and who to ask about it, and the two remaining
+columns carry both. `lock()` takes no `reason`, `lock_message()` is the experiment's name plus
+the way out, and the endpoint ignores a posted `reason` rather than 500ing on an old client.
 
 **A lock is not a fifth role.** It answers "is this dataset still open", which outranks "who
 are you": a locked experiment refuses every web write from everyone, admins, owners and

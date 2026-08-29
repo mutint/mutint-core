@@ -107,12 +107,13 @@ class AleExperiment(SoftDeleteMixin):
     # That is what makes it a lock rather than a fifth role: it guards against the
     # accidental edit to a finished dataset, which no permission tier can.
     #
-    # `locked_reason` is the one thing SoftDeleteMixin has no equivalent of, and it earns
-    # its place: every refusal in the app can then say why rather than only no.
+    # There is no `locked_reason`. It was a third column and a text box on the lock dialog,
+    # and the dialog is a plain confirm now: the question a lock has to answer is whether
+    # this dataset is closed, and who to ask about it, both of which the two columns below
+    # carry. A free-text field nobody is required to fill in cannot be relied on for either.
     locked_at = models.DateTimeField(db_index=True, **blank_field)
     locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
                                   **blank_field)
-    locked_reason = models.TextField(blank=True, default="")
 
     class Meta:
         verbose_name_plural = "experiments"
@@ -127,12 +128,11 @@ class AleExperiment(SoftDeleteMixin):
     def is_locked(self):
         return self.locked_at is not None
 
-    def lock(self, user=None, reason="", when=None):
+    def lock(self, user=None, when=None):
         from django.utils import timezone
         self.locked_at = when or timezone.now()
         self.locked_by = user if (user and user.is_authenticated) else None
-        self.locked_reason = (reason or "").strip()
-        self.save(update_fields=["locked_at", "locked_by", "locked_reason"])
+        self.save(update_fields=["locked_at", "locked_by"])
         return self
 
     def unlock(self):
@@ -144,18 +144,15 @@ class AleExperiment(SoftDeleteMixin):
         """
         self.locked_at = None
         self.locked_by = None
-        self.locked_reason = ""
-        self.save(update_fields=["locked_at", "locked_by", "locked_reason"])
+        self.save(update_fields=["locked_at", "locked_by"])
         return self
 
     def lock_message(self):
         """Why a write was refused, written for the person who tried it."""
         if not self.is_locked:
             return ""
-        message = "%s is locked, so it cannot be changed." % self.name
-        if self.locked_reason:
-            message += " Reason: %s" % self.locked_reason
-        return message + " An administrator of its project can unlock it."
+        return ("%s is locked, so it cannot be changed. An administrator of its project "
+                "can unlock it." % self.name)
 
     def doi_as_list(self):
         if self.doi is None:
