@@ -47,8 +47,15 @@ def get_aleid_ale_id_list(experiment_id, exclude_starting_strain=False):
 
 
 def get_ale_id(request):
+    """The ALE picked in the query string, or None for "all".
+
+    No `int()` any more: `AleId.ale_id` is text (`aledb_experiment.0008`), and coercing
+    would have raised a ValueError on the first lineage called `Ara-1`. An empty parameter
+    reads as "all" too, so a cleared picker cannot filter to a nonexistent ALE.
+    """
     ale_id = request.GET.get(REQUEST_ALE_ID)
-    ale_id = None if ale_id is None or ale_id == "all" else int(ale_id)
+    if ale_id is None or ale_id in ("", "all"):
+        return None
     return ale_id
 
 def get_sample_type(request):

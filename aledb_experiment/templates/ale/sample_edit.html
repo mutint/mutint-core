@@ -29,8 +29,12 @@
 
         <div class="row">
             <div class="col-sm-3 form-group">
+                {% comment %} Text, not type="number": an ALE is named, not counted --
+                   `Ara-1` and `Ara+1` are two LTEE populations and neither is a number.
+                   Same for the isolate below. {% endcomment %}
                 <label for="se-ale">ALE</label>
-                <input type="number" min="0" class="form-control" id="se-ale" value="{{ sample.ale }}">
+                <input type="text" class="form-control" id="se-ale" maxlength="100"
+                       value="{{ sample.ale }}">
             </div>
             <div class="col-sm-3 form-group">
                 {% comment %} The column is Flask.flask_number and stays that way; "Time
@@ -44,7 +48,8 @@
             </div>
             <div class="col-sm-3 form-group">
                 <label for="se-isolate">Isolate</label>
-                <input type="number" min="0" class="form-control" id="se-isolate" value="{{ sample.isolate }}">
+                <input type="text" class="form-control" id="se-isolate" maxlength="100"
+                       value="{{ sample.isolate }}">
             </div>
             <div class="col-sm-3 form-group">
                 <label for="se-rep">Replicate</label>

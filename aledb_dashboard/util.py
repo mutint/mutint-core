@@ -4,6 +4,7 @@ from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
 from aledb_seq.views.common import MUTATION_TYPE_LIST, UNANNOTATED
+from aledb_experiment.common import STARTING_STRAIN_ALE_ID
 from aledb_experiment.models import AleId, Isolate, Flask
 from django.db.models import Q
 
@@ -20,22 +21,22 @@ _EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale
 #: Deletion here is soft: it sets `deleted_at` and leaves everything below the experiment in
 #: place, and this app's managers are deliberately unfiltered -- so these totals counted every
 #: project and experiment anybody had ever removed. Both halves are needed: deleting a project
-#: does not stamp its experiments. `~Q(ale_id=0)` below is the pre-existing sentinel exclusion
-#: and is a different thing entirely.
+#: does not stamp its experiments. The `STARTING_STRAIN_ALE_ID` exclusion below is the
+#: pre-existing sentinel exclusion and is a different thing entirely.
 
 
 def rebuild_sample_counts():
     if SampleCounts.objects.all().count() == 0:
         SampleCounts.objects.create()
-    live_ales = AleId.objects.filter(~Q(ale_id=0)).filter(
+    live_ales = AleId.objects.filter(~Q(ale_id=STARTING_STRAIN_ALE_ID)).filter(
         Q(ale_experiment__deleted_at__isnull=True)
         & Q(ale_experiment__project__deleted_at__isnull=True))
     ale_count = live_ales.count()
     SampleCounts.objects.all().update(ale_count=ale_count)
-    flask_count = Flask.objects.filter(~Q(ale_id__ale_id=0),
+    flask_count = Flask.objects.filter(~Q(ale_id__ale_id=STARTING_STRAIN_ALE_ID),
                                        ale_id__in=live_ales).count()
     SampleCounts.objects.all().update(flask_count=flask_count)
-    isolate_count = Isolate.objects.filter(~Q(flask__ale_id__ale_id=0),
+    isolate_count = Isolate.objects.filter(~Q(flask__ale_id__ale_id=STARTING_STRAIN_ALE_ID),
                                            flask__ale_id__in=live_ales).count()
     SampleCounts.objects.all().update(isolate_count=isolate_count)
 

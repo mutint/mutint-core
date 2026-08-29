@@ -84,9 +84,9 @@ class GdImportTestCase(TestCase):
         # Experiment chain synthesized from the filename 3-30000-1-1.
         self.assertEqual(AleExperiment.objects.count(), 1)
         ale_id = AleId.objects.get()
-        self.assertEqual(ale_id.ale_id, 3)
+        self.assertEqual(ale_id.ale_id, "3")
         self.assertEqual(Flask.objects.get().flask_number, 30000)
-        self.assertEqual(Isolate.objects.get().isolate_number, 1)
+        self.assertEqual(Isolate.objects.get().isolate_number, "1")
         self.assertEqual(TechnicalReplicate.objects.get().tech_rep_number, 1)
 
         # gd_data captured on every row; REFSEQ propagated to the isolate.
@@ -193,14 +193,19 @@ class GdImportTestCase(TestCase):
 
     # --- sample identity from the filename -------------------------------------------
 
-    # Real-world names like "Ara-1_500gen_762B" carry no A-F-I-R identity. They used to run
-    # through parse_ale_name, whose bare `except: return 1` mapped every one of them onto
-    # ALE 1 / flask 1 / isolate 1 / rep 1 -- so a 22-file upload collapsed into one sample.
-    NON_AFIR_NAMES = [
+    # Real-world names, and the second shape `sample_names` reads: one ALE sampled at three
+    # time points. They used to run through parse_ale_name, whose bare `except: return 1`
+    # mapped every one onto ALE 1 / flask 1 / isolate 1 -- a 22-file upload collapsing into
+    # one sample -- and then, for a while, onto an auto-numbered isolate apiece under ALE 1,
+    # which kept them addressable but still said nothing about when each was taken.
+    TRIPLE_NAMES = [
         "Ara-1_500gen_762B.gd",
         "Ara-1_1000gen_964C.gd",
         "Ara-1_50000gen_11331.gd",
     ]
+
+    #: Neither shape: two fields, so there is no telling which one is missing.
+    UNPARSEABLE_NAMES = ["REL606_clone.gd", "everything.gd"]
 
     def _import_named(self, names, experiment="gd exp"):
         self._ensure_reference(experiment)
@@ -208,52 +213,121 @@ class GdImportTestCase(TestCase):
             [_uploaded_as(CLEAN_GD, name) for name in names],
             project_name="gd project", experiment_name=experiment, person="tester")
 
-    def test_non_afir_filenames_get_distinct_isolates(self):
-        summary = self._import_named(self.NON_AFIR_NAMES)
+    def test_underscore_triple_names_are_read_as_a_time_series(self):
+        summary = self._import_named(self.TRIPLE_NAMES)
 
-        self.assertEqual(len(summary["files"]), len(self.NON_AFIR_NAMES))
+        self.assertEqual(len(summary["files"]), len(self.TRIPLE_NAMES))
         self.assertIsNone(summary["files"][0]["error"])
 
         # One sample per file, each individually addressable.
-        self.assertEqual(ResequencingExperiment.objects.count(), len(self.NON_AFIR_NAMES))
+        self.assertEqual(ResequencingExperiment.objects.count(), len(self.TRIPLE_NAMES))
         self.assertEqual(
             sorted(ResequencingExperiment.objects.values_list("sample_name", flat=True)),
-            sorted(name[:-3] for name in self.NON_AFIR_NAMES))
+            sorted(name[:-3] for name in self.TRIPLE_NAMES))
 
-        isolates = Isolate.objects.all()
-        self.assertEqual(isolates.count(), len(self.NON_AFIR_NAMES))
-        self.assertEqual(
-            sorted(isolates.values_list("isolate_number", flat=True)),
-            list(range(1, len(self.NON_AFIR_NAMES) + 1)))
-
-        # ...all still hanging off a single ALE 1 / flask 1.
+        # One ALE, named rather than numbered, sampled at three time points -- which is what
+        # makes an experiment like this fixation-shaped at all: an ALE of one flask can
+        # never fix anything, and these three used to be one flask.
         self.assertEqual(AleId.objects.count(), 1)
-        self.assertEqual(AleId.objects.get().ale_id, 1)
+        self.assertEqual(AleId.objects.get().ale_id, "Ara-1")
+        self.assertEqual(
+            sorted(Flask.objects.values_list("flask_number", flat=True)),
+            [500, 1000, 50000])
+        self.assertEqual(
+            sorted(Isolate.objects.values_list("isolate_number", flat=True)),
+            sorted(["762B", "964C", "11331"]))
+
+    def test_the_trailer_comes_off_the_time_point_only(self):
+        """`500gen` is flask 500; the ALE and the isolate keep every character."""
+        self._import_named(["Ara+3_500gen_763A.gd"])
+
+        self.assertEqual(AleId.objects.get().ale_id, "Ara+3")
+        self.assertEqual(Flask.objects.get().flask_number, 500)
+        self.assertEqual(Isolate.objects.get().isolate_number, "763A")
+
+    def test_two_lineages_differing_only_in_sign_stay_apart(self):
+        """The case that makes these columns text: `Ara-1` and `Ara+1` both end in 1."""
+        self._import_named(["Ara-1_500gen_762B.gd", "Ara+1_500gen_763A.gd"])
+
+        self.assertEqual(
+            sorted(AleId.objects.values_list("ale_id", flat=True)), ["Ara+1", "Ara-1"])
+        self.assertEqual(Flask.objects.count(), 2, "one flask 500 per ALE")
+
+    def test_two_clones_from_one_flask_are_two_isolates(self):
+        """`763A` and `763B` differ only in the trailer, which is why it is not stripped."""
+        self._import_named(["Ara-1_500gen_763A.gd", "Ara-1_500gen_763B.gd"])
+
+        self.assertEqual(AleId.objects.count(), 1)
+        self.assertEqual(Flask.objects.count(), 1)
+        self.assertEqual(
+            sorted(Isolate.objects.values_list("isolate_number", flat=True)),
+            ["763A", "763B"])
+
+    def test_a_read_name_displays_as_itself(self):
+        """`ale_flask_isolate_str` prefers the isolate description, so the label survives."""
+        self._import_named(["Ara-1_500gen_762B.gd"])
+
+        reseq = ResequencingExperiment.objects.get()
+        self.assertEqual(reseq.ale_flask_isolate_str, "Ara-1_500gen_762B")
+
+    def test_an_afir_name_still_displays_as_its_coordinate(self):
+        """It says exactly what the coordinate says, so labelling the isolate with it would
+        relabel every table column with a filename."""
+        self._import_named(["3-30000-1-1.gd"])
+
+        reseq = ResequencingExperiment.objects.get()
+        self.assertEqual(reseq.ale_flask_isolate_str, "A3 F30000 I1 R1")
+
+    def test_underscore_triple_reimport_is_idempotent(self):
+        self._import_named(self.TRIPLE_NAMES)
+        self._import_named(self.TRIPLE_NAMES)
+
+        self.assertEqual(ResequencingExperiment.objects.count(), len(self.TRIPLE_NAMES))
+        self.assertEqual(Isolate.objects.count(), len(self.TRIPLE_NAMES))
+        self.assertEqual(ObservedMutation.objects.count(),
+                         Mutation.objects.count() * len(self.TRIPLE_NAMES))
+
+    def test_a_name_of_neither_shape_is_still_auto_numbered(self):
+        summary = self._import_named(self.UNPARSEABLE_NAMES)
+        self.assertIsNone(summary["files"][0]["error"])
+
+        # One sample per file, each its own isolate, all under ALE 1 / flask 1.
+        self.assertEqual(ResequencingExperiment.objects.count(), len(self.UNPARSEABLE_NAMES))
+        self.assertEqual(AleId.objects.count(), 1)
+        self.assertEqual(AleId.objects.get().ale_id, "1")
         self.assertEqual(Flask.objects.count(), 1)
         self.assertEqual(Flask.objects.get().flask_number, 1)
+        self.assertEqual(
+            sorted(Isolate.objects.values_list("isolate_number", flat=True)), ["1", "2"])
 
-    def test_non_afir_reimport_is_idempotent(self):
-        self._import_named(self.NON_AFIR_NAMES)
-        self._import_named(self.NON_AFIR_NAMES)
+    def test_auto_numbering_counts_past_nine(self):
+        """`Max()` over a text column answers "9" for a flask already holding 1 to 10."""
+        self._import_named(["sample%d.gd" % index for index in range(1, 12)])
+
+        numbers = sorted(int(value) for value
+                         in Isolate.objects.values_list("isolate_number", flat=True))
+        self.assertEqual(numbers, list(range(1, 12)))
+
+    def test_auto_numbering_reimport_is_idempotent(self):
+        self._import_named(self.UNPARSEABLE_NAMES)
+        self._import_named(self.UNPARSEABLE_NAMES)
 
         # Auto-numbering must reuse the existing chain, not allocate a second isolate.
-        self.assertEqual(ResequencingExperiment.objects.count(), len(self.NON_AFIR_NAMES))
-        self.assertEqual(Isolate.objects.count(), len(self.NON_AFIR_NAMES))
-        self.assertEqual(ObservedMutation.objects.count(),
-                         Mutation.objects.count() * len(self.NON_AFIR_NAMES))
+        self.assertEqual(ResequencingExperiment.objects.count(), len(self.UNPARSEABLE_NAMES))
+        self.assertEqual(Isolate.objects.count(), len(self.UNPARSEABLE_NAMES))
 
     def test_afir_filename_still_uses_filename_numbering(self):
         """The strict parser must not regress names that genuinely are A-F-I-R."""
         self._import_named(["3-30000-1-1.gd"])
 
-        self.assertEqual(AleId.objects.get().ale_id, 3)
+        self.assertEqual(AleId.objects.get().ale_id, "3")
         self.assertEqual(Flask.objects.get().flask_number, 30000)
-        self.assertEqual(Isolate.objects.get().isolate_number, 1)
+        self.assertEqual(Isolate.objects.get().isolate_number, "1")
         self.assertEqual(TechnicalReplicate.objects.get().tech_rep_number, 1)
 
     def test_summary_reports_the_real_experiment_pk(self):
         """The post-import "View mutations" link is built from this id."""
-        summary = self._import_named(self.NON_AFIR_NAMES[:1])
+        summary = self._import_named(self.TRIPLE_NAMES[:1])
 
         experiment = AleExperiment.objects.get()
         self.assertEqual(summary["experiment_id"], experiment.ale_id)
@@ -268,7 +342,7 @@ class GdImportTestCase(TestCase):
         page for every experiment. This also used to guard a NULL `location` rendering as
         the literal string "None" in an href; there are no report links left to get that
         wrong."""
-        summary = self._import_named(self.NON_AFIR_NAMES)
+        summary = self._import_named(self.TRIPLE_NAMES)
         experiment_id = summary["experiment_id"]
         self.client.force_login(self.user)
 
@@ -276,7 +350,7 @@ class GdImportTestCase(TestCase):
         self.assertEqual(stats.status_code, 200)
         stats_html = stats.content.decode("utf-8")
         # Every sample is listed, as plain text rather than a dead report link.
-        for name in self.NON_AFIR_NAMES:
+        for name in self.TRIPLE_NAMES:
             self.assertIn(name[:-3], stats_html)
 
         # The per-sample table, not the cross-sample one: Compare is the aledb-compare

@@ -1,5 +1,6 @@
 import re
 from django.db.models import Count
+from aledb_experiment.ordering import sample_order
 from aledb_seq.models import UnassignedMissingCoverageEvidence
 from aledb_seq.util import get_observed_mutation_queryset
 from aledb_seq.functional_change import (
@@ -14,13 +15,7 @@ logger = logging.getLogger(__name__)
 
 #: The order `filter_observed_mutations` returns rows in. Kept here so the computed needle
 #: plot is element-for-element what the stored one was, rather than the same points shuffled.
-ROW_ORDER = (
-    'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__name',
-    'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_id',
-    'sequencing_experiment__tech_rep__isolate__flask__flask_number',
-    'sequencing_experiment__tech_rep__isolate__isolate_number',
-    'sequencing_experiment__tech_rep__tech_rep_number',
-)
+ROW_ORDER = sample_order("sequencing_experiment__")
 
 
 def get_needle_plot_data(experiment_id):

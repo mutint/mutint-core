@@ -61,9 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1268 run, 0 failures** standalone; **1404** in an assembled project, where the
-plugins' own tests join them. They were 1257 and 1393 before an owner learned to leave a
-project by transferring rather than by removing themselves, and before `locked_reason` went.
+**Baseline: 1302 run, 0 failures** standalone. The assembled figure was **1404** and has not
+been re-counted since the ALE and isolate columns became text -- re-run `./mutint test` at the
+next submodule bump and correct it here rather than adding 34 to it. They were 1268 and 1404
+before that change, and 1257 and 1393 before an owner learned to leave a project by
+transferring rather than by removing themselves, and before `locked_reason` went.
 The count went *down* because the shared filter's model tests went
 with the model; 22 new ones cover the reader's filter and its session. They were 1287 and 1424
 before filtering became per-reader, 1264 and 1401 before functional change moved onto
@@ -1212,9 +1214,10 @@ to decide what has fixed -- and real data carries values like 30000, so it is pl
 used to record cumulative divisions rather than a count of flasks. The column keeps its name;
 only the UI changed, including the validation message, which is the one place the internal
 name would otherwise reach a user. Its input is plain text, not `type="number"`: steppers are
-useless on a five-figure value. **It is still an `IntegerField`, so a fractional time point is
-refused** -- a real one needs a column change plus a decision about the A-F-I-R filename
-parsing that assumes integers.
+useless on a five-figure value. **It is still an `IntegerField`, and is now the only member
+of the coordinate that is** -- the ALE and the isolate became text (`aledb_experiment.0008`)
+and this one deliberately did not, because it is the ordinal fixation reads. A fractional
+time point is therefore still refused.
 
 **No edit page touches `person`.** The field is absent from every form *and* from what the
 endpoints assemble, so it is not merely ignored -- there is nowhere for a posted value to go.
@@ -1222,9 +1225,8 @@ Changing who owns or ran something is its own workflow: folding it into a detail
 every save rewrites it, and a form that dropped the field would silently blank it.
 
 **The trap to know about:** a renumber often changes no visible label.
-`ale_flask_isolate_str` returns `Isolate.description` verbatim whenever it is set, and
-`_get_or_create_autonumbered_chain` fills it with the filename for every sample not already
-named `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
+`ale_flask_isolate_str` returns `Isolate.description` verbatim whenever it is set, and the
+import path fills it with the filename for every sample whose name is not `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
 keep the description editable in the same form. A duplicate `sample_name` within an
 experiment is refused for a related reason -- re-import finds an existing sample by name --
 but only when the name actually *changed*, or an experiment that already had a duplicate pair
@@ -1483,18 +1485,69 @@ that used to appear solely on `/mutations/amplifications` because Compare passed
 `filter_type` whose value means *exclude*, and the `AMP` row is what stops that returning
 unnoticed.
 
+### Reading a sample's identity out of its filename
+
+`aledb_import/sample_names.py` is the one place a filename becomes a coordinate, asked by
+`gd_import.import_document_as_sample` -- so a bare `.gd` and the breseq directory of the same
+sample cannot answer differently. Two shapes are read and anything else is auto-numbered:
+
+| name | ALE | flask | isolate | replicate |
+|---|---|---|---|---|
+| `3-30000-1-1` | `3` | 30000 | `1` | 1 |
+| `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | 1 |
+
+**`AleId.ale_id` and `Isolate.isolate_number` are `CharField`s** (`aledb_experiment.0008`),
+which is what makes the second row expressible at all: `Ara-1` and `Ara+1` are two LTEE
+populations that both end in 1, and `763A` and `763B` are two clones from one flask that
+differ only in the trailer. Any rule reducing either to an integer merges rows that are not
+the same sample -- and a merge is invisible, because `aledb-fixation` builds a dict keyed by
+`(flask_number, isolate_number)` by plain assignment, so the second sample's mutations simply
+vanish.
+
+**`Flask.flask_number` stays an `IntegerField`**, and is the reason the middle field is the
+only one whose trailing text is stripped: `500gen` is 500 because a time point is a genuine
+ordinal that fixation sorts by. A middle field with no leading digit (`t0`) is not a time
+point, so the whole name falls through rather than being half-read.
+
+Three rules that look arbitrary and are not:
+
+- **Exactly three underscore-separated fields.** With two there is no telling whether
+  `Ara-2_500gen` omits the isolate or the ALE; with four, which extra field is the replicate.
+- **A-F-I-R stays strict** -- all four dash-separated fields must be integers. It is checked
+  first, so a name satisfying both shapes reads as A-F-I-R.
+- **A name of neither shape is auto-numbered**, as before: ALE `1`, flask 1, one isolate per
+  distinct sample name, and `Isolate.description` set to the filename so it still displays by
+  name. `_next_isolate_number` counts in Python because `Max()` over a text column answers
+  `"9"` for a flask holding 1 to 10.
+
+`util.parse_ale_name` and `AleName` are **gone**. They read the same fields with a bare
+`except: return 1`, so every field they could not read became 1 and a whole drop of
+non-conforming files collapsed onto one sample. Nothing should reintroduce a lenient reader:
+answering None and auto-numbering is what keeps a misread name addressable.
+
+**Ordering had to follow.** A text column sorts `10` before `2`, which on an auto-numbered
+import -- one isolate per sample, fifty-one of them in the dev database's largest experiment
+-- reorders every mutation table's columns. `aledb_experiment/ordering.py` `sample_order()`
+is what every sample listing orders by, in core and in aledb-phylogeny: it pads each text
+field with zeros for the comparison, so digits sort by value and labels still sort as text.
+
 ### A mutation is fixated in the last two flasks, so the time axis must be the flask
 
 `aledb-fixation` intersects an ALE's final two flasks by `flask_number`, so **an ALE with one
 flask can never fix anything** -- and neither can an experiment made entirely of such ALEs.
 That is the usual reason for an empty Fixed Mutations page and it is not a bug.
 
-It is easy to arrive at by accident. `gd_import` reads a strict `A-F-I-R` filename
-(`1-1500-1-1.gd` = ALE 1, flask 1500, isolate 1, replicate 1); **anything else falls to
-auto-numbering, which puts every sample under ALE 1 / flask 1 as separate isolates.** A
-51-timepoint series imported as `Ara-1_500gen_762B.gd` and friends therefore becomes 51
-isolates of one flask, with the generations in `isolate_number` -- which is exactly the shape
-of the MutInt dev database, and why fixation has never produced a row there.
+It used to be easy to arrive at by accident, and the second filename shape is what fixed
+that. `gd_import` read a strict `A-F-I-R` filename (`1-1500-1-1.gd` = ALE 1, flask 1500,
+isolate 1, replicate 1) and **anything else fell to auto-numbering, which puts every sample
+under ALE 1 / flask 1 as separate isolates** -- so a 51-timepoint series imported as
+`Ara-1_500gen_762B.gd` and friends became 51 isolates of one flask, with the generations in
+`isolate_number`. That is exactly the shape of the MutInt dev database, and why fixation has
+never produced a row there.
+
+`Ara-1_500gen_762B` is read now: ALE `Ara-1`, flask 500, isolate `762B` -- see **Reading a
+sample's identity out of its filename**. Data already imported does not move on its own; it
+takes a re-import, or the sample editor, to put those samples on a time axis.
 
 `./aledb fixation [<experiment_id>]` reports the count, and says when no ALE has more than one
 flask -- which is the difference between an empty page and an impossible one, and the reason
@@ -1746,11 +1799,8 @@ All apps use the `aledb_*` namespace. Key apps:
     GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
     Biopython has no GFF3 parser. Alignments are served with HTTP range support by
     `aledb_seq/views/alignments.py`.
-    Sample identity comes from the filename: a strict A-F-I-R name (`3-30000-1-1.gd`) is
-    parsed as such, and anything else (`Ara-1_500gen_762B.gd`) gets its own auto-numbered
-    isolate under ALE 1 / flask 1, with `Isolate.description` set to the filename so it
-    displays by name. Do not route this through `util.parse_ale_name`, whose bare
-    `except: return 1` would collapse every non-conforming file onto the same sample.
+    Sample identity comes from the filename, through `sample_names.parse_sample_identity`
+    and nowhere else -- see **Reading a sample's identity out of its filename** below.
 - **`aledb_seq/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`),
   the shared `mutation_table_builder`, and the curation endpoints at `/mutation-table/`.
   Note `/mutations/` itself is **not** a page: it was Compare, now the aledb-compare plugin.

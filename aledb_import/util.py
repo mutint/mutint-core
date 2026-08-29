@@ -1,27 +1,16 @@
 
 __author__ = 'Patrick Phaneuf'
 
-
-class AleName:
-    Ale = 0
-    Flask = 1
-    Isolate = 2
-    TechnicalReplicate = 3
+# `AleName` and `parse_ale_name` lived here and are gone. They read a coordinate out of a
+# filename with a bare `except: return 1`, so every field they could not read became 1 and
+# every non-conforming name collapsed onto the same sample. `aledb_import.sample_names` is
+# the reading of a filename now, and it answers None rather than guessing.
 
 
 def sanitize_path(path):
     if path[-1] != '/':
         path += '/'
     return path
-
-
-def parse_ale_name(ale_isolate_name, ale_name_parameter):
-    split = ale_isolate_name.split("-")
-    try:
-        ale_parameter = int(split[ale_name_parameter])
-    except:
-        ale_parameter = 1
-    return ale_parameter
 
 
 def get_ale_isolate_name_from_path(breseq_report_path):

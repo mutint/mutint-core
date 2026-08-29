@@ -24,7 +24,6 @@ import os
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.db.models import Max
 
 import aledb_metadata.parser as metadata_defaults
 from aledb_experiment.models import (
@@ -41,7 +40,8 @@ from aledb_experiment.models import (
 from aledb_import import annotation
 from aledb_import import sniff
 from aledb_import.gene_annotation import get_annotated_gene_list
-from aledb_import.util import AleName, parse_ale_name
+from aledb_import import sample_names
+from aledb_import.sample_names import parse_sample_identity
 from aledb_seq.models import (
     Mutation,
     ObservedMutation,
@@ -213,39 +213,26 @@ def import_document_as_sample(document, sample_name, context, person):
     """
     _check_seq_ids(document, context["experiment"], sample_name)
 
-    afir = _parse_afir(sample_name)
+    identity = parse_sample_identity(sample_name)
 
-    if afir is None:
-        # Name carries no A-F-I-R identity (e.g. "Ara-1_500gen_762B"). Give the sample
-        # its own isolate rather than letting every such name collapse onto 1-1-1-1.
+    if identity is None:
+        # The name says nothing about where the sample belongs. Give it its own isolate
+        # rather than letting every such name collapse onto 1-1-1-1.
         seq_experiment = _get_or_create_autonumbered_chain(
             context, document, person, sample_name)
     else:
-        ale_number, flask_number, isolate_number, tech_rep_number = afir
         seq_experiment = _get_or_create_chain(
-            context, document, ale_number, flask_number, isolate_number,
-            tech_rep_number, person, sample_name)
+            context, document, identity.ale, identity.flask, identity.isolate,
+            identity.replicate, person, sample_name,
+            # A label only where the name carries one. `3-30000-1-1` says exactly what the
+            # coordinate says, and `ale_flask_isolate_str` prefers the description over the
+            # computed `A3 F30000 I1 R1` -- so filling it for an A-F-I-R sample would
+            # relabel every table column with the filename it came from.
+            isolate_description=(sample_name
+                                 if identity.shape == sample_names.SHAPE_TRIPLE else ""))
 
     return seq_experiment, _database_gd_mutations(
         seq_experiment, document, context.get("experiment"))
-
-
-def _parse_afir(sample_name):
-    """Return ``(ale, flask, isolate, tech_rep)`` if the name is A-F-I-R, else ``None``.
-
-    ``util.parse_ale_name`` silently returns 1 for any field it cannot read, which is the
-    behaviour the CLI path relies on but which here would map every non-conforming filename
-    onto the same sample. This is the strict counterpart: all four fields must be present
-    and integral, or the caller falls back to auto-numbering."""
-    split = sample_name.split("-")
-    if len(split) <= AleName.TechnicalReplicate:
-        return None
-    try:
-        return tuple(
-            int(split[i]) for i in (
-                AleName.Ale, AleName.Flask, AleName.Isolate, AleName.TechnicalReplicate))
-    except ValueError:
-        return None
 
 
 def _parse_document(uploaded):
@@ -286,9 +273,14 @@ def _parse_document(uploaded):
 
 
 def _get_or_create_chain(context, document, ale_number, flask_number,
-                         isolate_number, tech_rep_number, person, sample_name):
+                         isolate_number, tech_rep_number, person, sample_name,
+                         isolate_description=""):
     """Synthesize the experiment chain down to a ResequencingExperiment, reading
-    reference/date/type hints from the GenomeDiff header (no breseq HTML)."""
+    reference/date/type hints from the GenomeDiff header (no breseq HTML).
+
+    `ale_number` and `isolate_number` are text and the other two are integers, which is the
+    shape `sample_names.parse_sample_identity` answers in and the shape of the columns.
+    """
     experiment = context["experiment"]
     metadata = document.metadata
 
@@ -307,7 +299,12 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
         reseq_reference=reseq_reference[:200],
         reseq_date=reseq_date[:200],
         freezer_box=context["freezer_box"],
-        person=person)
+        person=person,
+        # A label to read the sample by, on creation only: `ale_flask_isolate_str` prefers
+        # it, so `Ara-2_500gen_763A` shows as itself rather than as `AAra-2 F500 I763A R1`.
+        # In `defaults` because it is not part of the identity -- an isolate found by its
+        # coordinate keeps whatever description it was given, including one edited by hand.
+        defaults={"description": isolate_description[:300]})
     tech_rep, _ = TechnicalReplicate.objects.get_or_create(
         tech_rep_number=tech_rep_number, isolate=isolate)
     seq_experiment, _ = ResequencingExperiment.objects.get_or_create(
@@ -316,7 +313,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
 
 
 def _get_or_create_autonumbered_chain(context, document, person, sample_name):
-    """Chain for a sample whose filename has no A-F-I-R identity.
+    """Chain for a sample whose filename carries no identity at all.
 
     Everything hangs off ALE 1 / Flask 1, but each distinct sample gets its own isolate so
     the samples stay individually addressable. Re-importing a sample must not allocate a
@@ -330,16 +327,13 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         return existing
 
     metadata = document.metadata
-    ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id=1)
+    ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id="1")
     flask, _ = Flask.objects.get_or_create(
         flask_number=1, ale_id=ale_id, media=context["media"])
 
-    next_isolate_number = (Isolate.objects.filter(flask=flask).aggregate(
-        Max("isolate_number"))["isolate_number__max"] or 0) + 1
-
     isolate = Isolate.objects.create(
         flask=flask,
-        isolate_number=next_isolate_number,
+        isolate_number=_next_isolate_number(flask),
         # ale_flask_isolate_str() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3 R1".
         description=sample_name[:300],
@@ -351,6 +345,21 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     tech_rep = TechnicalReplicate.objects.create(tech_rep_number=1, isolate=isolate)
     return ResequencingExperiment.objects.create(
         tech_rep=tech_rep, sample_name=sample_name, person=person)
+
+
+def _next_isolate_number(flask):
+    """The next free number in `flask`, as text.
+
+    Counted in Python rather than by `Max("isolate_number")`, which stopped meaning
+    anything when the column became text (`aledb_experiment.0008`): `MAX` over strings
+    answers `"9"` for a flask holding 1..10, and the next sample would collide with 10.
+    Labels that are not numbers are skipped rather than counted -- an isolate called `763A`
+    says nothing about which numbers are free.
+    """
+    numbers = [int(value) for value
+               in Isolate.objects.filter(flask=flask).values_list("isolate_number", flat=True)
+               if str(value).isdigit()]
+    return str(max(numbers, default=0) + 1)
 
 
 def _check_seq_ids(document, experiment, sample_name):

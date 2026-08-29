@@ -1,8 +1,6 @@
 import unittest
 
 from aledb_import.util import sanitize_path
-from aledb_import.util import AleName
-from aledb_import.util import parse_ale_name
 from aledb_import.util import get_ale_isolate_name_from_path
 
 __author__ = 'Patrick Phaneuf'
@@ -29,37 +27,6 @@ class TestUtil(unittest.TestCase):
         expected = "asdf/qwer/"
 
         self.assertEqual(sanitized_path, expected)
-
-    def test_parse_ale_name_ale(self):
-
-        ale_name = "1-2-3"
-
-        returned_ale_value = parse_ale_name(ale_name, AleName.Ale)
-
-        expected_ale_value = 1
-
-        self.assertEqual(returned_ale_value, expected_ale_value)
-
-    def test_parse_sample_flask(self):
-
-        ale_name = "1-2-3"
-
-        returned_ale_value = parse_ale_name(ale_name, AleName.Flask)
-
-        expected_ale_value = 2
-
-        self.assertEqual(returned_ale_value, expected_ale_value)
-
-    def test_parse_sample_isolate(self):
-
-        ale_name = "1-2-3"
-
-        returned_ale_value = parse_ale_name(ale_name, AleName.Isolate)
-
-        expected_ale_value = 3
-
-        self.assertEqual(returned_ale_value, expected_ale_value)
-
 
     def test_get_ale_isolate_name_from_path(self):
 

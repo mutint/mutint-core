@@ -198,8 +198,19 @@ class AleExperiment(SoftDeleteMixin):
 
 # TODO: this model should be called "Ale".
 class AleId(models.Model):
-    """Parallel ALE's run within an ALE experiment"""
-    ale_id = models.IntegerField()
+    """Parallel ALE's run within an ALE experiment.
+
+    `ale_id` is **text**, not a number (`0008`), and so is `Isolate.isolate_number`. Real
+    lineage names are labels -- `Ara-1` and `Ara+1` are two different LTEE populations that
+    both end in 1, so any rule that reduced them to an integer merged them. `Flask` is the
+    one member of the chain that stays an `IntegerField`, because a time point is a genuine
+    ordinal: aledb-fixation sorts by it and takes the last two.
+
+    Ordering is therefore lexicographic unless asked otherwise, which puts `10` before `2`.
+    `aledb_experiment.ordering.sample_order()` is what every sample listing orders by
+    instead; see its docstring.
+    """
+    ale_id = models.CharField(max_length=100)
     description = models.CharField(max_length=300, **blank_field)
     species = models.CharField(max_length=300, **blank_field)
     strain = models.CharField(max_length=300, **blank_field)
@@ -209,8 +220,8 @@ class AleId(models.Model):
                                         **blank_field)
 
     def __unicode__(self):
-        # return "ALE #%d < %s" % (self.ale_id, self.ale_experiment.name)
-        return "ALE #%d < %s" % (self.ale_id, self.ale_experiment)
+        # return "ALE #%s < %s" % (self.ale_id, self.ale_experiment.name)
+        return "ALE #%s < %s" % (self.ale_id, self.ale_experiment)
 
     class Meta:
         unique_together = (("ale_experiment", "ale_id"),)
@@ -303,10 +314,10 @@ class Flask(models.Model):
             if self.ale_id.description.lower() == ('Not from ALE').lower():
                 return 'Not from ALE'
             else:
-                return "Flask#%d < %s" % (self.flask_number,
+                return "Flask#%s < %s" % (self.flask_number,
                                           self.ale_id)
         else:
-            return "Flask#%d < %s" % (self.flask_number,
+            return "Flask#%s < %s" % (self.flask_number,
                                       self.ale_id)
 
     def ale_experiment(self):
@@ -321,7 +332,9 @@ class Flask(models.Model):
 #TODO: Change 'reseq_reference' field to 'reseq_ref_name'
 #TODO: Change 'library_prep' field to 'wgs_kit'
 class Isolate(models.Model):
-    isolate_number = models.IntegerField()
+    #: Text, not a number -- see `AleId`. A clone is named `763A` as often as `763`, and two
+    #: clones from one flask differ only in that trailer. Unique within its flask.
+    isolate_number = models.CharField(max_length=100)
     parent_isolate = models.ForeignKey("Isolate", on_delete=models.DO_NOTHING, **blank_field)
     flask = models.ForeignKey(Flask, on_delete=models.CASCADE)
     is_population = models.BooleanField()
@@ -341,13 +354,13 @@ class Isolate(models.Model):
             else:
                 population_or_clonal = "POP" if self.is_population else "COL"
                 parent = self.parent_isolate if self.parent_isolate else self.flask
-                return "#%d %s < %s" % (self.isolate_number,
+                return "#%s %s < %s" % (self.isolate_number,
                                         population_or_clonal,
                                         parent)
         else:
             population_or_clonal = "POP" if self.is_population else "COL"
             parent = self.parent_isolate if self.parent_isolate else self.flask
-            return "#%d %s < %s" % (self.isolate_number,
+            return "#%s %s < %s" % (self.isolate_number,
                                     population_or_clonal,
                                     parent)
 

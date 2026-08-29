@@ -57,7 +57,10 @@ class ResequencingExperiment(models.Model):
 
                 return self.tech_rep.isolate.description
 
-        return u"A%d F%d I%d R%d" % (self.ale_id,
+        # `%s` throughout: the ALE and the isolate are text (`aledb_experiment.0008`), and
+        # writing the two that are still numbers as `%d` would only invite the next reader
+        # to think the difference means something here.
+        return u"A%s F%s I%s R%s" % (self.ale_id,
                                      self.flask_number,
                                      self.tech_rep.isolate.isolate_number,
                                      self.tech_rep.tech_rep_number)

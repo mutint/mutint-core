@@ -38,18 +38,27 @@ mapped, mean coverage. A sample without that file still imports with those left 
 
 ## Where a sample sits in the evolution
 
-Identity comes from the **filename**. A strict `A-F-I-R` name is parsed as such:
+Identity comes from the **filename**, and two shapes are read:
 
 ```
-3-30000-1-1.gd     ALE 3, flask 30000, isolate 1, technical replicate 1
+3-30000-1-1.gd          ALE 3,     flask 30000, isolate 1,    replicate 1
+Ara-2_500gen_763A.gd    ALE Ara-2, flask 500,   isolate 763A, replicate 1
 ```
 
-Anything else — `Ara-1_500gen_762B.gd` — gets its own auto-numbered isolate under ALE 1,
-flask 1, with the filename kept as its description so it displays by name.
+The first is four whole numbers separated by dashes. The second is three fields separated by
+underscores: a lineage name, a time point, and an isolate name. **The ALE and the isolate are
+kept exactly as written** — `Ara-1` and `Ara+1` are two different populations, and `763A` and
+`763B` two different clones from one flask, so nothing is stripped off either. Only the middle
+field is read as a number, because a time point is one: `500gen` is flask 500. A middle field
+that does not start with a digit (`t0`) is not a time point, and the name falls through to
+auto-numbering.
+
+Anything else — `REL606_clone.gd` — gets its own auto-numbered isolate under ALE 1, flask 1,
+with the filename kept as its description so it displays by name.
 
 !!! warning "Auto-numbering has a consequence worth knowing before you import"
 
-    A 51-timepoint series imported under non-conforming filenames becomes 51 isolates of a
+    A 51-timepoint series imported under names of neither shape becomes 51 isolates of a
     single flask. Analyses that read the *flask* as the time axis then have nothing to work
     with — the Fixed Mutations analysis intersects an ALE's last two flasks, so an ALE with
     one flask can never fix anything.
@@ -58,7 +67,9 @@ flask 1, with the filename kept as its description so it displays by name.
     whether it is being built alone or as part of a deployment's manual, so a link between
     components is broken in one of the two.)
 
-    If your samples have a meaningful position in the evolution, name them `A-F-I-R`.
+    If your samples have a meaningful position in the evolution, use one of the two shapes
+    above. Renaming files before a drop is cheaper than moving samples afterwards, though the
+    sample editor can do that too.
 
 ## Storage
 

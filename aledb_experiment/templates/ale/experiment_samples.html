@@ -45,11 +45,15 @@
                     <td><input type="text" class="form-control input-sm" maxlength="200"
                                id="sb-name-{{ sample.id }}"
                                value="{{ sample.reseq.sample_name|default_if_none:'' }}"></td>
-                    <td><input type="number" min="0" class="form-control input-sm"
+                    {% comment %} ALE and isolate are text: a lineage is called `Ara-1` and a
+                       clone `763A`, and `type="number"` refuses both -- silently, by sending
+                       an empty value. Only the replicate is still a number here; the time
+                       point is text for the reason `sample_edit.html` gives. {% endcomment %}
+                    <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-ale-{{ sample.id }}" value="{{ sample.ale }}"></td>
                     <td><input type="text" class="form-control input-sm"
                                id="sb-flask-{{ sample.id }}" value="{{ sample.flask }}"></td>
-                    <td><input type="number" min="0" class="form-control input-sm"
+                    <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-isolate-{{ sample.id }}" value="{{ sample.isolate }}"></td>
                     <td><input type="number" min="0" class="form-control input-sm"
                                id="sb-rep-{{ sample.id }}" value="{{ sample.rep }}"></td>

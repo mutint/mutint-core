@@ -30,6 +30,7 @@ of a `ViewFilter` quietly landing in `filter_type`.
 from django.db.models import Q
 
 from aledb_common.util import get_gene_list
+from aledb_experiment.ordering import sample_order
 from aledb_filter.view_filter import EMPTY
 
 __author__ = 'Patrick Phaneuf, Muyao :)'
@@ -87,13 +88,7 @@ def filter_observed_mutations(observed_mutation_queryset, *, filter_type=None, v
 
     queryset = queryset.select_related(
         'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment', 'mutation'
-    ).order_by(
-        'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__name',
-        'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_id',
-        'sequencing_experiment__tech_rep__isolate__flask__flask_number',
-        'sequencing_experiment__tech_rep__isolate__isolate_number',
-        'sequencing_experiment__tech_rep__tech_rep_number'
-    )
+    ).order_by(*sample_order("sequencing_experiment__"))
     if not filter_type and not ignored_genes:
         return list(queryset)
 

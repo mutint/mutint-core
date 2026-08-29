@@ -262,8 +262,8 @@ class RenumberTestCase(SampleEditTestCase):
 
         self.assertEqual(200, self.single(self.first, ale=2).status_code)
 
-        self.assertEqual((2, 1, 1, 1), self.coordinate(self.first))
-        self.assertEqual((1, 1, 2, 1), self.coordinate(self.second))
+        self.assertEqual(("2", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "2", 1), self.coordinate(self.second))
         self.second.refresh_from_db()
         self.assertEqual(sibling_tech_rep, self.second.tech_rep_id)
 
@@ -273,7 +273,7 @@ class RenumberTestCase(SampleEditTestCase):
 
         self.assertEqual(200, self.single(self.first, ale=7, flask=9).status_code)
 
-        self.assertEqual((7, 9, 1, 1), self.coordinate(self.first))
+        self.assertEqual(("7", 9, "1", 1), self.coordinate(self.first))
         self.assertEqual(original, self.first.pk)
         self.assertTrue(ResequencingExperiment.objects.filter(pk=original).exists())
 
@@ -325,7 +325,7 @@ class RenumberTestCase(SampleEditTestCase):
         response = self.single(self.first, ale=3, flask=3, isolate=9)
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual((3, 3, 9, 1), self.coordinate(self.first))
+        self.assertEqual(("3", 3, "9", 1), self.coordinate(self.first))
 
     def test_two_isolate_rows_at_one_number_do_not_break_the_lookup(self):
         """Isolate has no unique_together and gd_import get_or_creates it on six fields,
@@ -338,32 +338,59 @@ class RenumberTestCase(SampleEditTestCase):
         response = self.single(self.first, isolate=2, rep=4)
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual((1, 1, 2, 4), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "2", 4), self.coordinate(self.first))
 
     def test_the_population_flag_toggles(self):
         self.single(self.first, is_population=1)
         self.first.refresh_from_db()
         self.assertTrue(self.first.tech_rep.isolate.is_population)
 
-    def test_a_non_integer_is_refused(self):
-        self.assertEqual(400, self.single(self.first, ale="two").status_code)
-        self.assertEqual((1, 1, 1, 1), self.coordinate(self.first))
+    def test_a_named_ale_is_accepted(self):
+        """The whole point of the text columns: `Ara-1` and `Ara+1` are two populations."""
+        self.assertEqual(200, self.single(self.first, ale="Ara+1").status_code)
+        self.assertEqual(("Ara+1", 1, "1", 1), self.coordinate(self.first))
+
+    def test_and_so_is_a_named_isolate(self):
+        self.assertEqual(200, self.single(self.first, isolate="763A").status_code)
+        self.assertEqual(("1", 1, "763A", 1), self.coordinate(self.first))
+
+    def test_a_non_integer_time_point_is_still_refused(self):
+        """The flask is the one member of the coordinate that has to be a number."""
+        response = self.single(self.first, flask="five hundred")
+        self.assertEqual(400, response.status_code)
+        self.assertIn("time point must be a whole number", response.json()["error"])
+        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
+
+    def test_a_blank_ale_is_refused(self):
+        """A sample has to sit somewhere, and `strip()` makes a space blank."""
+        self.assertEqual(400, self.single(self.first, ale="  ").status_code)
+        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
+
+    def test_an_over_long_label_is_refused_rather_than_truncated(self):
+        response = self.single(self.first, isolate="x" * 101)
+        self.assertEqual(400, response.status_code)
+        self.assertIn("too long", response.json()["error"])
+
+    def test_surrounding_space_is_trimmed_from_a_label(self):
+        """Two coordinates that read identically must not point at different rows."""
+        self.assertEqual(200, self.single(self.first, ale=" Ara-1 ").status_code)
+        self.assertEqual(("Ara-1", 1, "1", 1), self.coordinate(self.first))
 
     def test_a_negative_number_is_refused(self):
         self.assertEqual(400, self.single(self.first, flask=-1).status_code)
 
     def test_ale_zero_is_allowed(self):
-        """STARTING_STRAIN_ALE_ID is 0, and the starting strain is a real sample."""
+        """STARTING_STRAIN_ALE_ID is "0", and the starting strain is a real sample."""
         self.assertEqual(200, self.single(self.first, ale=0).status_code)
-        self.assertEqual((0, 1, 1, 1), self.coordinate(self.first))
+        self.assertEqual(("0", 1, "1", 1), self.coordinate(self.first))
 
     def test_moving_onto_an_occupied_coordinate_is_refused(self):
         response = self.single(self.first, isolate=2)
 
         self.assertEqual(400, response.status_code)
         self.assertIn("cannot share one identity", response.json()["error"])
-        self.assertEqual((1, 1, 1, 1), self.coordinate(self.first))
-        self.assertEqual((1, 1, 2, 1), self.coordinate(self.second))
+        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "2", 1), self.coordinate(self.second))
 
     def test_a_non_owner_cannot_edit(self):
         stranger = User.objects.create(
@@ -436,8 +463,8 @@ class BulkSampleEditTestCase(SampleEditTestCase):
                               self.row(self.second, flask=1)])
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual((1, 2, 1, 1), self.coordinate(self.first))
-        self.assertEqual((1, 1, 1, 1), self.coordinate(self.second))
+        self.assertEqual(("1", 2, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.second))
         self.assertEqual(2, Flask.objects.count())
         self.assertEqual(2, Isolate.objects.count())
 
@@ -455,8 +482,8 @@ class BulkSampleEditTestCase(SampleEditTestCase):
                               self.row(self.second, flask=3)])
 
         self.assertEqual(400, response.status_code)
-        self.assertEqual((1, 1, 1, 1), self.coordinate(self.first))
-        self.assertEqual((1, 2, 1, 1), self.coordinate(self.second))
+        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 2, "1", 1), self.coordinate(self.second))
 
     def test_a_sample_from_another_experiment_is_refused(self):
         created = self.client.post(
@@ -467,7 +494,7 @@ class BulkSampleEditTestCase(SampleEditTestCase):
         response = self.bulk([self.row(foreign, flask=8)])
 
         self.assertEqual(400, response.status_code)
-        self.assertEqual((1, 1, 1, 1), self.coordinate(foreign))
+        self.assertEqual(("1", 1, "1", 1), self.coordinate(foreign))
 
     def test_malformed_rows_is_a_400_not_a_500(self):
         response = self.client.post(
@@ -580,7 +607,7 @@ class ExistingDuplicateNamesTestCase(SampleEditTestCase):
                               self.row(self.second)])
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual((1, 4, 1, 1), self.coordinate(self.first))
+        self.assertEqual(("1", 4, "1", 1), self.coordinate(self.first))
 
     def test_one_of_them_can_be_renamed_to_something_free(self):
         response = self.single(self.first, sample_name="distinct")
@@ -639,4 +666,4 @@ class TimePointLabellingTestCase(SampleEditTestCase):
 
     def test_a_large_time_point_saves(self):
         self.assertEqual(200, self.single(self.sample, flask=123456).status_code)
-        self.assertEqual((1, 123456, 1, 1), self.coordinate(self.sample))
+        self.assertEqual(("1", 123456, "1", 1), self.coordinate(self.sample))

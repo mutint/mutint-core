@@ -78,7 +78,10 @@ def sample_experiment(reseq):
 
 
 def sample_coordinate(reseq):
-    """(ale, flask, isolate, rep) as integers, or None for an unrooted sample."""
+    """`(ale, flask, isolate, rep)`, or None for an unrooted sample.
+
+    The ALE and the isolate are strings and the other two are integers -- see `AleId`.
+    """
     if reseq.tech_rep_id is None:
         return None
     tech_rep = reseq.tech_rep
@@ -204,9 +207,31 @@ def _positive_int(raw, label, row_label):
         raise SampleEditError(
             "%s: %s must be a whole number." % (row_label, label))
     if value < 0:
-        # 0 is legal: aledb_experiment.common.STARTING_STRAIN_ALE_ID is 0, and the
+        # 0 is legal: aledb_experiment.common.STARTING_STRAIN_ALE_ID is "0", and the
         # starting strain is a real sample.
         raise SampleEditError("%s: %s cannot be negative." % (row_label, label))
+    return value
+
+
+#: An ALE or an isolate is a label, not a number (`aledb_experiment.0008`), so the only
+#: things to check are that it is there and that it fits the column.
+_LABEL_LIMIT = 100
+
+
+def _label(raw, label, row_label):
+    """One text half of a coordinate: `Ara-1`, `763A`, or plain `2`.
+
+    Stripped, because a trailing space is invisible in the input and would make two
+    coordinates that read identically point at different rows. Refused when empty for the
+    same reason `_positive_int` refuses a blank: a sample has to sit somewhere.
+    """
+    value = ("" if raw is None else str(raw)).strip()
+    if not value:
+        raise SampleEditError("%s: %s is required." % (row_label, label))
+    if len(value) > _LABEL_LIMIT:
+        raise SampleEditError(
+            "%s: %s is too long (%d characters; the limit is %d)."
+            % (row_label, label, len(value), _LABEL_LIMIT))
     return value
 
 
@@ -258,12 +283,13 @@ def parse_rows(rows, samples_by_id):
         row_label = "Row %d" % (index + 1)
         try:
             coordinate = (
-                _positive_int(row.get("ale"), "ALE number", row_label),
+                _label(row.get("ale"), "ALE", row_label),
                 # "time point", not "flask number": the column is flask_number and stays
                 # so, but that is not what anyone calls it, and a refusal is the one place
-                # the internal name would surface to a user.
+                # the internal name would surface to a user. Still the one member of the
+                # coordinate that must be a number -- fixation orders ALEs by it.
                 _positive_int(row.get("flask"), "time point", row_label),
-                _positive_int(row.get("isolate"), "isolate number", row_label),
+                _label(row.get("isolate"), "isolate", row_label),
                 _positive_int(row.get("rep"), "replicate number", row_label),
             )
         except SampleEditError as error:
