@@ -78,8 +78,8 @@ class PageTestCase(EditorTestCase):
         response = self.get(COPY, source_reseq_id=self.sample_a.id)
 
         self.assertEqual(200, response.status_code)
-        self.assertContains(response, 'value="%d"' % self.sample_b.id)
-        self.assertNotContains(response, 'class="me-target" value="%d"' % self.sample_a.id)
+        self.assertContains(response, 'data-value="%d"' % self.sample_b.id)
+        self.assertNotContains(response, 'data-value="%d"' % self.sample_a.id)
 
     def test_the_copy_page_lists_the_sources_mutations(self):
         response = self.get(COPY, source_reseq_id=self.sample_a.id)
@@ -112,9 +112,11 @@ class PageTestCase(EditorTestCase):
                               "%s has no input, but %s needs it" % (field, entry["name"]))
 
     def test_it_lists_the_samples_to_add_to(self):
+        """`data-value` is what `aledbSelectList` reads a row's id off, so a list rendered
+        without it looks right and posts an empty selection."""
         response = self.get(ADD)
         for sample in (self.sample_a, self.sample_b):
-            self.assertContains(response, 'class="me-target" value="%d"' % sample.id)
+            self.assertContains(response, 'data-value="%d"' % sample.id)
 
     def test_the_handler_guards_its_missing_control(self):
         self.assertContains(self.get(ADD),

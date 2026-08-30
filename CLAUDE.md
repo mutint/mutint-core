@@ -249,6 +249,25 @@ Menus that run as long as the experiment has samples carry `.aledb-menu`, which 
 `max-height` and `overflow-y`: Bootstrap's `.dropdown-menu` already gives these menus everything
 else they share with the Metadata page's column menu.
 
+**A list whose highlight is its selection carries `.aledb-select-list` as well**, and
+`aledb_common/staticfiles/js/aledb_select_list.js` drives every one of them -- the genome
+browser's sample menu and the three mutation-editor pages that pick a set of samples. `active`
+on the `<li>` is the selection; there is no checkbox anywhere to hold a second opinion about it.
+The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
+toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range. Two things the
+CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
+selection across the rows it is selecting; and the fill written on `> li.active > a` rather than
+on the `<li>`, because `.active, .dot:hover { background-color: #717171 }` further up
+`common.css` is the *carousel dots'* rule and applies to any element with the class. In a
+dropdown the `<a>` covers the `<li>` so that grey never shows, which is why only the editor's
+lists would have met it.
+
+The browser's menu is a dropdown and gets its row box and fill from Bootstrap; the editor's
+three are not, and cannot borrow `.dropdown-menu` to get them -- `position: absolute; display:
+none` comes with it. So `.aledb-select-list` writes both out to match. `select_list.html` in
+`aledb_common/templates/` is the markup the editor's three share; the browser writes its own
+rows, because they carry a track's URLs and a mutant flag.
+
 ### Branding: aledb-core has none
 
 `/` is the project list, the sidebar carries no name or version, there is no icon upper-right,

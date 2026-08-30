@@ -46,12 +46,16 @@
                         </button>
                         {% comment %} A row is <li class="active"><a>, the shape DataTables'
                            column menu uses on the Metadata page: showing a sample is `active`
-                           on its <li>, which Bootstrap paints for us. The * column is a
-                           fixed-width span rather than a leading space, so a sample without
-                           the mutation still starts its name in the same place. {% endcomment %}
-                        <ul class="dropdown-menu aledb-menu" id="sample-list">
+                           on its <li>, which Bootstrap paints for us. `aledb-select-list` is
+                           what `aledbSelectList` drives, shared with the mutation editor's
+                           three sample lists -- the rows carry a track's URLs and a mutant
+                           flag, so they are written out here rather than through
+                           `select_list.html`. The * column is a fixed-width span rather than
+                           a leading space, so a sample without the mutation still starts its
+                           name in the same place. {% endcomment %}
+                        <ul class="dropdown-menu aledb-menu aledb-select-list" id="sample-list">
                             {% for sample in samples %}
-                                <li data-sample="{{ sample.id }}"
+                                <li data-value="{{ sample.id }}"
                                     data-url="{{ sample.url }}"
                                     data-index-url="{{ sample.indexURL }}"
                                     data-coverage-url="{{ sample.coverageURL|default_if_none:'' }}"
@@ -103,9 +107,11 @@
         // The sample menu is the one source of truth for what a sample is called, where its
         // files are and whether it is showing -- the track the browser opens with included.
         // `active` on the row is the state; there is no checkbox to disagree with it.
-        var rows = Array.prototype.slice.call(document.querySelectorAll("#sample-list li"));
-
-        function isShowing(row) { return row.classList.contains("active"); }
+        // `aledbSelectList` owns that class and the gestures that set it (plain click, cmd
+        // for one row, shift for a range); this page owns what a change *means*, which is a
+        // track loaded or removed. The two meet in `onSampleChange` below.
+        var sampleList = document.getElementById("sample-list");
+        var picker = null;   // -- set once the browser exists, since a change loads a track
 
         // `format` is explicit on every track: these URLs end in /bam, /fasta, /gff3 and have
         // no file extension, and igv.js otherwise infers format from the extension. So is
@@ -287,7 +293,7 @@
         }).then(function (browser) {
             igvBrowser = browser;
             fitReadsToContainer(browser);
-            if (!rows.length) { return; }
+            if (!sampleList || !sampleList.querySelector("li[data-value]")) { return; }
 
             // A sample's track is held as the *promise* of it rather than the track itself.
             // "Show all samples" fires every loadTrack at once, and a plain "have I got it
@@ -297,14 +303,16 @@
             var loaded = Object.create(null);    // sample id -> track, once it has arrived
             var byId = Object.create(null);      // sample id -> its row
 
-            rows.forEach(function (row) { byId[row.getAttribute("data-sample")] = row; });
+            var rows = Array.prototype.slice.call(
+                sampleList.querySelectorAll("li[data-value]"));
+            rows.forEach(function (row) { byId[row.getAttribute("data-value")] = row; });
 
             // A sample is one or two tracks now -- its coverage, its reads, or both -- so
             // everything here works in lists. Still one promise per sample: "Show all
             // samples" fires them at once, and a plain "have I got it yet" test would let a
             // second click load the same files again while the first was in flight.
             function show(row) {
-                var id = row.getAttribute("data-sample");
+                var id = row.getAttribute("data-value");
                 if (pending[id]) { return pending[id]; }
                 pending[id] = Promise.all(sampleTracks(row).map(function (config) {
                     return browser.loadTrack(config);
@@ -316,7 +324,7 @@
             }
 
             function hide(row) {
-                var id = row.getAttribute("data-sample");
+                var id = row.getAttribute("data-value");
                 var p = pending[id];
                 if (!p) { return; }
                 // Cleared before the removal, so the trackremoved handler below finds nothing
@@ -330,12 +338,13 @@
                 });
             }
 
-            // The one place a row's state changes, so the class and the track can never
-            // disagree. Returns the work to wait on, or null when nothing changed.
-            function setShowing(row, on) {
-                if (isShowing(row) === on) { return null; }
-                row.classList.toggle("active", on);
-                return on ? show(row) : hide(row);
+            // What a change of selection means here. The picker has already flipped the
+            // class by the time this runs, and hands over only the rows that actually moved,
+            // so `isSelected` is the new state and nothing reloads a track it already had.
+            function onSampleChange(changed) {
+                settle(changed.map(function (row) {
+                    return picker.isSelected(row) ? show(row) : hide(row);
+                }).filter(Boolean));
             }
 
             var counter = document.getElementById("sample-count");
@@ -374,7 +383,7 @@
             // the column layout changes and a class set once would go with them.
             function markMutantTracks() {
                 rows.forEach(function (row) {
-                    var tracks = loaded[row.getAttribute("data-sample")] || [];
+                    var tracks = loaded[row.getAttribute("data-value")] || [];
                     var mutant = row.getAttribute("data-mutant") === "1";
                     tracks.forEach(function (track) {
                         if (!track || !track.trackView || !track.trackView.viewports) { return; }
@@ -390,20 +399,11 @@
 
             function settle(work) {
                 Promise.all(work || []).then(function () {
-                    counter.textContent = rows.filter(isShowing).length;
+                    counter.textContent = picker.count();
                     adoptMutantTint();
                     markMutantTracks();
                     fitReadsToContainer(browser);
                 });
-            }
-
-            // Set the selection to exactly the samples `wanted` accepts. That is what makes
-            // "Show mutant samples" and its opposite a pair: each is the whole selection, not
-            // an addition to it.
-            function select(wanted) {
-                settle(rows.map(function (row) {
-                    return setShowing(row, wanted(row));
-                }).filter(Boolean));
             }
 
             var WANTED = {
@@ -413,24 +413,19 @@
                 nonmutant: function (r) { return r.getAttribute("data-mutant") === "0"; }
             };
 
-            var list = document.getElementById("sample-list");
-            // Bootstrap's data-api closes a dropdown on any click inside it, which would shut
-            // the menu on every pick. Picking samples is the point of this one, so it stays
-            // open until the click lands outside. The rows are <a href="#"> to get Bootstrap's
-            // own dropdown styling, which is also why the default has to be stopped.
-            list.addEventListener("click", function (e) {
-                e.stopPropagation();
-                e.preventDefault();
-                var row = e.target.closest("li");
-                if (!row || !row.hasAttribute("data-sample")) { return; }
-                settle([setShowing(row, !isShowing(row))].filter(Boolean));
-            });
+            // `controls: null` because this page's four presets are not the helper's own
+            // Select all / Select none pair, and the count lives in the dropdown's button
+            // rather than beside the list.
+            picker = window.aledbSelectList(sampleList,
+                                            { controls: null, onChange: onSampleChange });
 
+            // Each preset is the *whole* selection rather than an addition to it, which is
+            // what makes "Show mutant samples" and its opposite a pair.
             Array.prototype.forEach.call(
                 document.querySelectorAll(".browse-controls [data-samples]"),
                 function (button) {
                     button.addEventListener("click", function () {
-                        select(WANTED[button.getAttribute("data-samples")]);
+                        picker.select(WANTED[button.getAttribute("data-samples")]);
                     });
                 });
 
@@ -438,7 +433,7 @@
             // the showing samples are reloaded. That is what makes "Coverage Only" honest: the
             // alignment track is gone rather than hidden, and no BAM request is made.
             function reloadShowing() {
-                var showing = rows.filter(isShowing);
+                var showing = rows.filter(picker.isSelected);
                 settle(showing.map(function (row) {
                     return hide(row);
                 }).filter(Boolean).concat(showing.map(function (row) {
@@ -472,7 +467,9 @@
                     });
                     delete loaded[id];
                     delete pending[id];
-                    if (byId[id]) { byId[id].classList.remove("active"); }
+                    // Silently: this *is* the removal, so telling the picker out loud would
+                    // send us back through onSampleChange into `hide` and round again.
+                    if (byId[id]) { picker.setSelected(byId[id], false, true); }
                     changed = true;
                 });
                 if (changed) { settle(); }
@@ -481,7 +478,7 @@
             // The sample the page is about is loaded through the same path as any other, so
             // there is no second way a track can come into being and nothing to match back up
             // afterwards. createBrowser is handed no tracks at all.
-            settle(rows.filter(isShowing).map(show));
+            settle(rows.filter(picker.isSelected).map(show));
         });
     })();
     </script>

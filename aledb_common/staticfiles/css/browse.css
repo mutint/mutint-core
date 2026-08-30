@@ -39,12 +39,15 @@
     flex: 0 0 auto;
 }
 
-/* The sample menu has no rules here on purpose. It has the same shape as the Metadata page's
-   column menu, which is DataTables' colvis collection: a ul.dropdown-menu of <li><a> where a
-   showing sample is `active` on its <li>, so Bootstrap's own `.dropdown-menu > .active > a`
-   paints the row. (DataTables does put #717171 on the active <li>, but its <a> covers the
-   row, so that grey is never the colour you see -- do not copy it.) The scrollbar past a
-   screenful is `.aledb-menu` in common.css, shared with the Mutations page's picker. */
+/* The sample menu has no rules here on purpose, and now has none of its own anywhere. It has
+   the same shape as the Metadata page's column menu, which is DataTables' colvis collection:
+   a ul.dropdown-menu of <li><a> where a showing sample is `active` on its <li>, so
+   Bootstrap's own `.dropdown-menu > .active > a` paints the row. (DataTables does put #717171
+   on the active <li>, but its <a> covers the row, so that grey is never the colour you see --
+   do not copy it.) The scrollbar past a screenful is `.aledb-menu` in common.css, shared with
+   the Mutations page's picker, and the gestures are `.aledb-select-list` beside it, shared
+   with the mutation editor's three sample lists -- which are not dropdowns and so need the
+   row box and the fill written out, where this one has both from Bootstrap. */
 
 /* The green tint on the track label of a sample carrying the mutation is NOT here, and
    cannot be: igv builds its UI inside a shadow root on #igv-browser and adopts its own

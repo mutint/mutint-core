@@ -53,16 +53,7 @@
 
         <div class="col-lg-4" style="padding-left: 0;">
             <h4>Copy to</h4>
-            <div style="max-height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 8px;">
-                {% for reseq in targets %}
-                    <label style="font-weight: normal; display: block;">
-                        <input type="checkbox" class="me-target" value="{{ reseq.id }}">
-                        {{ reseq.ale_flask_isolate_str }}
-                    </label>
-                {% empty %}
-                    <p>This experiment has only one sample, so there is nowhere to copy to.</p>
-                {% endfor %}
-            </div>
+            {% include "select_list.html" with items=targets id="me-targets" empty_message="This experiment has only one sample, so there is nowhere to copy to." %}
         </div>
 
         <div class="col-lg-8">
@@ -110,6 +101,8 @@
         "use strict";
         if (!document.getElementById("me-apply")) { return; }
 
+        var targets = window.aledbSelectList(document.getElementById("me-targets"));
+
         var table = $("#me-table").DataTable({
             paging: true,
             pageLength: 100,
@@ -130,11 +123,9 @@
                 if (id) { mutationIds.push(parseInt(id, 10)); }
             });
 
-            var targetIds = [];
-            Array.prototype.forEach.call(
-                document.querySelectorAll(".me-target:checked"), function (box) {
-                    targetIds.push(parseInt(box.value, 10));
-                });
+            var targetIds = targets.selected().map(function (id) {
+                return parseInt(id, 10);
+            });
 
             if (!mutationIds.length) {
                 swal("", "Select at least one mutation to copy.", "warning");

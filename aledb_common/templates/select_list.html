@@ -1,0 +1,39 @@
+{% comment %}
+A set of samples picked by highlighting, driven by `aledbSelectList` in aledb_select_list.js.
+`active` on the <li> is the selection; there is no checkbox to disagree with it. The same
+markup is the genome browser's sample menu, which renders its own rows because they carry a
+track's URLs and a mutant flag.
+
+The page's own script does the wiring, because only it knows what to do with the answer:
+
+    var picker = window.aledbSelectList(document.getElementById("me-targets"));
+    picker.selected()   // ["3", "7", ...] -- the data-value of every highlighted row
+
+The Select all / Select none buttons and the count are wired by the helper itself: it looks
+for them in the list's parent, which is the wrapper below.
+
+  items          the objects to list; each needs `.id` and `.ale_flask_isolate_str`
+  id             the <ul> id, which the page hands to aledbSelectList
+  all_selected   start with every row highlighted rather than none
+  empty_message  what to say instead of rows when `items` is empty
+{% endcomment %}
+<div class="aledb-select">
+    {% comment %} No rows, no controls: "0 of 0 selected" beside a sentence explaining that
+       there is nothing to pick reads as a fault rather than an empty list. {% endcomment %}
+    {% if items %}
+        <div class="aledb-select-controls">
+            <button type="button" class="btn btn-default btn-xs" data-select="all">Select all</button>
+            <button type="button" class="btn btn-default btn-xs" data-select="none">Select none</button>
+            <span class="aledb-select-count"></span>
+        </div>
+    {% endif %}
+    <ul class="aledb-select-list aledb-menu" id="{{ id }}">
+        {% for item in items %}
+            <li data-value="{{ item.id }}"{% if all_selected %} class="active"{% endif %}>
+                <a href="#">{{ item.ale_flask_isolate_str }}</a>
+            </li>
+        {% empty %}
+            <li class="aledb-select-empty">{{ empty_message }}</li>
+        {% endfor %}
+    </ul>
+</div>

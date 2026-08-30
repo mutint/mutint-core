@@ -36,8 +36,8 @@
 
         <div class="row">
             <p style="color: #666;">
-                Records a mutation no sample carries yet. It is added to every sample you tick,
-                as one entry in the
+                Records a mutation no sample carries yet. It is added to every sample you
+                highlight, as one entry in the
                 <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>,
                 and can be restored away from there. A sample that already has this mutation is
                 skipped rather than given a second copy of it.
@@ -74,14 +74,7 @@
 
         <div class="col-lg-5">
             <h4>Add to</h4>
-            <div style="max-height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 8px;">
-                {% for reseq in targets %}
-                    <label style="font-weight: normal; display: block;">
-                        <input type="checkbox" class="me-target" value="{{ reseq.id }}">
-                        {{ reseq.ale_flask_isolate_str }}
-                    </label>
-                {% endfor %}
-            </div>
+            {% include "select_list.html" with items=targets id="me-targets" %}
         </div>
     {% endif %}
 
@@ -93,13 +86,12 @@
         if (!document.getElementById("me-apply")) { return; }
 
         var form = aledbMutationForm(null);
+        var targets = window.aledbSelectList(document.getElementById("me-targets"));
 
         document.getElementById("me-apply").addEventListener("click", function () {
-            var targetIds = [];
-            Array.prototype.forEach.call(
-                document.querySelectorAll(".me-target:checked"), function (box) {
-                    targetIds.push(parseInt(box.value, 10));
-                });
+            var targetIds = targets.selected().map(function (id) {
+                return parseInt(id, 10);
+            });
             if (!targetIds.length) {
                 swal("", "Select at least one sample to add the mutation to.", "warning");
                 return;
