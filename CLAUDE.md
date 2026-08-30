@@ -2382,7 +2382,8 @@ the two pages disagree about what a deletion covers while both looking correct.
 `/mutations/reference?ale_experiment_id=<pk>` (`ncbi_view.reference_view`) lists every
 sequence in an experiment's reference -- name, length, the names it used to have, and which
 NCBI record it is -- and carries the box that records an accession. It has a **nav entry** in
-`EXPERIMENT_SECTION`, registered straight after Mutations.
+`EXPERIMENT_SECTION` called **Reference Sequence**, registered first, ahead of Mutations:
+an experiment reads top-down from what it was aligned to, then what was found in it.
 
 **Nothing showed any of this before.** The Add Data page knew only `has_reference`, as a
 yes/no; the contigs, their lengths, their aliases and their NCBI status were visible nowhere

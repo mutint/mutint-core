@@ -238,7 +238,7 @@ def reference_view(request):
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
         "title": "%s reference" % experiment.name,
-        "template_header": "Reference",
+        "template_header": "Reference Sequence",
         "contigs": contigs,
         "has_reference": bool(contigs),
         "total_length": format(sum(contig["length"] for contig in contigs), ",d"),
