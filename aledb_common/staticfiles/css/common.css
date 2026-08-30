@@ -423,7 +423,18 @@ a:hover {
     transition: background-color 0.6s ease;
 }
 
-.active, .dot:hover {
+/* `.dot.active`, not a bare `.active`. This was `.active, .dot:hover`, which is a rule about
+   carousel dots written so that it painted #717171 behind *any* element carrying the class --
+   and Bootstrap puts `active` on a selected nav tab, a selected dropdown row and the current
+   sidebar entry. Mostly the inner <a> covered the grey and nobody saw it. On a nav tab it did
+   not: `.nav-tabs > li > a` has `margin-right: 2px` and no bottom border, so the grey showed
+   as a hard edge down the right and along the foot of the selected tab, which reads as a
+   badly drawn drop shadow. Measured at 5x before believing it.
+
+   (No template renders `class="dot"` any more, so the block above is dead as it stands. Left
+   in place rather than deleted here -- narrowing the selector is the fix for the bug; the
+   carousel's removal is somebody else's commit.) */
+.dot.active, .dot:hover {
     background-color: #717171;
 }
 

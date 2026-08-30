@@ -263,10 +263,18 @@ The gestures are the ones a list normally has: plain click selects only that row
 toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range. Two things the
 CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
 selection across the rows it is selecting; and the fill written on `> li.active > a` rather than
-on the `<li>`, because `.active, .dot:hover { background-color: #717171 }` further up
-`common.css` is the *carousel dots'* rule and applies to any element with the class. In a
-dropdown the `<a>` covers the `<li>` so that grey never shows, which is why only the editor's
-lists would have met it.
+on the `<li>`, for the reason in the next paragraph.
+
+**That reason was a live bug, not a hypothetical.** `common.css` carried
+`.active, .dot:hover { background-color: #717171 }` -- a rule about *carousel dots*, written so
+that it painted grey behind **any** element carrying the class. Bootstrap puts `active` on a
+selected nav tab, a selected dropdown row and the current sidebar entry. Mostly the inner `<a>`
+covered it and nobody saw it. On a nav tab it did not: `.nav-tabs > li > a` has
+`margin-right: 2px` and no bottom border, so 2px of grey showed down the right-hand side and
+along the foot of the *selected tab on every tabbed page in the suite* -- which reads as a badly
+drawn drop shadow, and was reported as one. It is `.dot.active` now. Nothing renders
+`class="dot"` any more, so the block it belongs to is dead as it stands; narrowing the selector
+is the fix for the bug, and removing the carousel is somebody else's commit.
 
 **The gap from the column beside it is on the column, not on the list.** These pages lay a
 form or a table beside the sample list as two bare `col-lg-*` under `#aledb-content`, and the
