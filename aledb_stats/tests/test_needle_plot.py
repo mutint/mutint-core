@@ -14,14 +14,20 @@ Two things are worth pinning and neither was tested before:
     the stored one it replaced rather than merely equivalent as a set.
 """
 
+import shutil
+import tempfile
+
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from aledb_experiment.models import (
     AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
 )
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
-from aledb_stats.util import get_needle_plot_data
+from aledb_import import breseq_folder
+from aledb_import.tests import breseq_fixture
+from aledb_seq.models import (ExperimentReference, Mutation, ObservedMutation,
+                              ResequencingExperiment)
+from aledb_stats.util import get_needle_plot_data, needle_plot_axis
 
 
 class NeedlePlotTestCase(TestCase):
@@ -146,3 +152,61 @@ class NeedlePlotTestCase(TestCase):
 
         self._observe(self.second, self._mutation("SNP", 250, gene="thrA"))
         self.assertEqual(2, len(self._needles()))
+
+
+class NeedlePlotAxisTestCase(TestCase):
+    """Which sequence the plot is about, and how long it is.
+
+    The axis was a hardcoded `maxCoord: 5000000` -- roughly E. coli, wrong for anything else --
+    while the points carried no sequence name, so a multi-contig reference drew every contig on
+    top of itself. Both rendered a perfectly ordinary-looking plot of the wrong genome.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(username="axis", email="a@e.com", is_active=True)
+        self.drop = tempfile.mkdtemp()
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.drop, True)
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        breseq_fixture.write_sample(self.drop, "s1")
+        breseq_folder.import_breseq_folders(
+            self.drop, project_name="P", experiment_name="e", person="axis")
+        self.experiment = ResequencingExperiment.objects.get().ale_experiment
+
+    def test_the_length_comes_from_the_stored_reference(self):
+        axis = needle_plot_axis(self.experiment.ale_id)
+        reference = ExperimentReference.objects.get(ale_experiment=self.experiment)
+        entry = next(e for e in reference.seq_ids if e["id"] == axis["contig"])
+        self.assertEqual(entry["length"], axis["length"])
+        self.assertNotEqual(5000000, axis["length"])
+
+    def test_it_names_the_contig_the_mutations_are_on(self):
+        axis = needle_plot_axis(self.experiment.ale_id)
+        self.assertEqual(
+            set(Mutation.objects.values_list("reseq_reference", flat=True)),
+            {axis["contig"]})
+        self.assertEqual(1, axis["contig_count"])
+
+    def test_the_data_is_scoped_to_that_contig(self):
+        """Two contigs' positions on one unlabelled axis is a plot of nothing."""
+        self.assertEqual([], get_needle_plot_data(self.experiment.ale_id, contig="other"))
+        self.assertTrue(get_needle_plot_data(
+            self.experiment.ale_id, contig=needle_plot_axis(self.experiment.ale_id)["contig"]))
+
+    def test_no_reference_leaves_the_length_unknown_rather_than_guessed(self):
+        """The page then falls back to the data's own extent, which is still truer than a
+        constant -- an experiment imported from bare .gd files has no reference at all."""
+        ExperimentReference.objects.filter(ale_experiment=self.experiment).delete()
+        axis = needle_plot_axis(self.experiment.ale_id)
+        self.assertIsNone(axis["length"])
+        self.assertIsNotNone(axis["contig"])
+
+    def test_an_experiment_with_no_mutations_names_no_contig(self):
+        ObservedMutation.objects.all().delete()
+        axis = needle_plot_axis(self.experiment.ale_id)
+        self.assertIsNone(axis["contig"])
+        self.assertEqual(0, axis["contig_count"])

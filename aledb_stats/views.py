@@ -5,7 +5,7 @@ from django.utils.safestring import mark_safe
 from django.conf import settings
 from aledb_seq.util import get_ordered_reseq_queryset
 from aledb_seq.views import common
-from aledb_stats.util import get_needle_plot_data,\
+from aledb_stats.util import get_needle_plot_data, needle_plot_axis,\
     get_ale_flask_isolate_count_list,\
     get_experiment_summary,\
     get_reseq_experiment_info_list
@@ -68,7 +68,11 @@ def stats(request):
         observed_protein_change_type_count_dict = summary.observed_protein_change_counts
         template = loader.get_template(STATS_TEMPLATE)
 
-        needle_plot_data = get_needle_plot_data(experiment.ale_id)
+        # Which contig, and how long it is. The plot's axis used to be a hardcoded 5 Mb and
+        # its points carried no sequence name, so a multi-contig reference drew every contig
+        # on top of itself against an axis belonging to some other genome.
+        needle_axis = needle_plot_axis(experiment.ale_id)
+        needle_plot_data = get_needle_plot_data(experiment.ale_id, needle_axis["contig"])
         context.update({"ale_experiment_name": exp_name,
                         "ale_no": ale_number,
                         "ale_experiment_id": ale_experiment_id,
@@ -83,7 +87,12 @@ def stats(request):
                         "observed_mutation_type_count_dict": observed_mutation_type_count_dict,
                         "observed_mutation_sum": sum(observed_mutation_type_count_dict.values()),
                         "experiments_info_list": experiments_info_list,
-                        "needle_plot_data": mark_safe(list(needle_plot_data)),
+                        # Handed to the page through `json_script`, not as a Python repr
+                        # interpolated into a JS literal -- which is what `mark_safe(list(...))`
+                        # was, and which only worked because a repr of this particular shape
+                        # happens to be valid JavaScript.
+                        "needle_plot_data": list(needle_plot_data),
+                        "needle_axis": needle_axis,
                         # `seq_color_set` and `protein_types` stood here and are gone with the
                         # colour machinery in aledb_seq.views.common: a palette and a vocabulary
                         # for a chart that was never built, and which no template has ever read.

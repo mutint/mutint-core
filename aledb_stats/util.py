@@ -18,7 +18,48 @@ logger = logging.getLogger(__name__)
 ROW_ORDER = sample_order("sequencing_experiment__")
 
 
-def get_needle_plot_data(experiment_id):
+def needle_plot_axis(experiment_id):
+    """Which contig the needle plot draws, and how long it is.
+
+    The plot had **no idea what genome it was describing**. Its axis was a hardcoded
+    `maxCoord: 5000000` in `muts_needle_plot.js` -- roughly E. coli, and wrong for anything
+    else -- and `get_needle_plot_data` emitted a bare `coord` with no `seq_id`, so on a
+    multi-contig reference every contig's positions were plotted on top of each other on one
+    axis. Both failed silently: the plot rendered, it was simply not about this genome.
+
+    One contig at a time is the honest fix, and the busiest one is the useful default. The
+    alternative -- laying contigs end to end on a concatenated axis -- needs offsets the
+    reader cannot see and turns every coordinate into one that matches nothing in the tables.
+
+    Returns `{contig, length, contig_count}`. `length` is None when the experiment has no
+    stored reference, and the plot then falls back to the largest coordinate it was given,
+    which is still a better axis than a constant.
+    """
+    from aledb_seq.models import ExperimentReference
+
+    counts = (get_evolved_observation_queryset(experiment_id)
+              .values("mutation__reseq_reference")
+              .annotate(n=Count("id"))
+              .order_by("-n"))
+    names = [row["mutation__reseq_reference"] for row in counts
+             if row["mutation__reseq_reference"]]
+    contig = names[0] if names else None
+
+    length = None
+    try:
+        reference = ExperimentReference.objects.get(ale_experiment_id=experiment_id)
+    except ExperimentReference.DoesNotExist:
+        reference = None
+    if reference and contig:
+        for entry in reference.seq_ids or []:
+            if entry.get("id") == contig:
+                length = entry.get("length")
+                break
+
+    return {"contig": contig, "length": length, "contig_count": len(names)}
+
+
+def get_needle_plot_data(experiment_id, contig=None):
     """`{coord, category, value}` per observed mutation, computed now.
 
     **Nothing is stored.** `StaticData` held this as a JSON blob kept current through the
@@ -42,7 +83,12 @@ def get_needle_plot_data(experiment_id):
     Two columns rather than four: the gene and the experiment were fetched only to apply the
     ignored-gene list per row.
     """
-    rows = get_evolved_observation_queryset(experiment_id).order_by(*ROW_ORDER).values_list(
+    queryset = get_evolved_observation_queryset(experiment_id)
+    if contig:
+        # Scoped to one contig, because `coord` carries no sequence name and two contigs'
+        # positions on one axis is a plot of nothing. See `needle_plot_axis`.
+        queryset = queryset.filter(mutation__reseq_reference=contig)
+    rows = queryset.order_by(*ROW_ORDER).values_list(
         "mutation__position", "mutation__mutation_type",
     ).iterator(chunk_size=2000)
 

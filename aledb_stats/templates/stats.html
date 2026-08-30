@@ -369,6 +369,15 @@
     <hr>
 
     <h2>Mutation Needle Plot</h2>
+    {% comment %} The plot draws one sequence. Said out loud when there is more than one,
+       because the axis carries no sequence name and a reader would otherwise have no way to
+       tell that the other contigs are missing rather than empty. {% endcomment %}
+    {% if needle_axis.contig_count > 1 %}
+        <p class="text-muted">
+            Showing <b>{{ needle_axis.contig }}</b>, the sequence carrying the most mutations
+            of this reference's {{ needle_axis.contig_count }}.
+        </p>
+    {% endif %}
     <div class="row">
         {% include 'muts_needle_plot.html' %} {# histograms use d3js import from this implementation #}
     </div>

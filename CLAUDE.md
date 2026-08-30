@@ -61,9 +61,10 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1587 run, 0 failures** standalone; **1743** in an assembled project, where the
-plugins' own tests join them. They were 1574 and 1730 before the database tracks, and 1568 and
-1724 before the assets were vendored. (The 1723 recorded a
+**Baseline: 1592 run, 0 failures** standalone; **1748** in an assembled project, where the
+plugins' own tests join them. They were 1587 and 1743 before the needle plot learned what
+genome it was drawing, 1574 and 1730 before the database tracks, and 1568 and 1724 before the
+assets were vendored. (The 1723 recorded a
 commit earlier was measured before the `data-autoload` test existed; the assembled suite has
 been re-run, not adjusted.) They were 1512 and 1668 before the NCBI Sequence Viewer, and
 **both of those are re-counts, because this line was wrong when the viewer was written**: it
@@ -2178,6 +2179,32 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
+
+### The needle plot knows which genome it is drawing
+
+Its axis was a hardcoded `maxCoord: 5000000` in `muts_needle_plot.js` -- roughly E. coli, and
+wrong for anything else -- and `get_needle_plot_data` emitted a bare `coord` with **no
+`seq_id`**, so a multi-contig reference drew every contig on top of itself on one axis. Both
+failed silently: the plot rendered, it simply was not about this genome.
+
+`aledb_stats.util.needle_plot_axis` names the contig carrying the most observations and reads
+its length from `ExperimentReference.seq_ids`; `get_needle_plot_data(experiment_id, contig)`
+is scoped to it, and `stats.html` says which contig when the reference has more than one.
+One contig at a time rather than a concatenated axis, because offsets the reader cannot see
+turn every coordinate into one that matches nothing in the tables.
+
+**With no stored reference the axis falls back to the data's own extent**, not to a constant --
+an experiment imported from bare `.gd` files has no reference at all, and its own largest
+coordinate is still a truer axis than somebody else's genome size.
+
+Measured on the dev database: a 160-base reference now draws a **0-160** axis rather than
+0-5,000,000 with every mutation in the leftmost pixel. On a 4.6 Mb one the visible ticks are
+unchanged, because d3 rounds that domain up to 5,000,000 anyway -- the fix is invisible exactly
+where the old constant happened to be right.
+
+The data also reaches the page through `json_script` now rather than as `mark_safe(list(...))`,
+a Python repr interpolated into a JS literal, which worked only because a repr of this
+particular shape happens to be valid JavaScript.
 
 ### The mutations are drawn from the database, not from a file
 
