@@ -8,7 +8,7 @@
        pages do is how the handler came to be missing from two of them. {% endcomment %}
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
     <script src="{% static 'js/breseq_table.js' %}?v={{ aledb_version }}"></script>
-    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
 

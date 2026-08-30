@@ -113,21 +113,37 @@ class BootstrapLoadedOnceTestCase(unittest.TestCase):
         with open(os.path.join(CORE, "aledb_common", "templates", "base.html")) as handle:
             return handle.read()
 
+    #: A DataTables combined build that carries Bootstrap. These were `cdn.datatables.net/v/bs-`
+    #: URLs and are vendored under this directory prefix now -- the naming is what these two
+    #: tests recognise a Bootstrap-carrying bundle by, so keep it if the layout ever moves.
+    BOOTSTRAP_BUNDLE = "vendor/datatables-bundle-bs"
+
     def test_no_standalone_bootstrap_beside_the_bundle(self):
         html = self._base_html()
-        bundles_bootstrap = "cdn.datatables.net/v/bs-" in html
+        bundles_bootstrap = self.BOOTSTRAP_BUNDLE in html
         # Not a bare "bootstrap.min.js" search: dataTables.bootstrap.min.js is the
         # DataTables styling integration and contains that as a substring.
-        standalone = re.search(r"bootstrap/[\d.]+/js/bootstrap\.min\.js", html) is not None
+        standalone = re.search(r"bootstrap-[\d.]+/js/bootstrap\.min\.js", html) is not None
         self.assertFalse(
             bundles_bootstrap and standalone,
             "base.html loads a bs- DataTables bundle (which contains Bootstrap) and "
             "bootstrap.min.js as well -- that is two copies of Bootstrap's data-api")
 
+    def test_the_bundle_is_still_recognisable(self):
+        """Guards the guard, and it is not hypothetical.
+
+        Both tests here located Bootstrap by searching for a `cdn.datatables.net` URL. When the
+        assets were vendored those strings vanished, and `test_no_standalone_bootstrap_beside_
+        the_bundle` did not fail -- it started passing *vacuously*, with `bundles_bootstrap`
+        false, silently stopping guarding anything. A test that cannot find its subject must
+        say so rather than agree.
+        """
+        self.assertIn(self.BOOTSTRAP_BUNDLE, self._base_html())
+
     def test_bootstrap_toggle_comes_after_bootstrap(self):
         """It extends Bootstrap, so loading it first leaves $.fn.bootstrapToggle undefined."""
         html = self._base_html()
-        bundle = html.find("cdn.datatables.net/v/bs-3.3.7")
+        bundle = html.find(self.BOOTSTRAP_BUNDLE)
         toggle = html.find("bootstrap-toggle.min.js")
         self.assertNotEqual(-1, bundle)
         self.assertNotEqual(-1, toggle)

@@ -61,8 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1567 run, 0 failures** standalone; **1723** in an assembled project, where the
-plugins' own tests join them. They were 1512 and 1668 before the NCBI Sequence Viewer, and
+**Baseline: 1574 run, 0 failures** standalone; **1730** in an assembled project, where the
+plugins' own tests join them. They were 1568 and 1724 before the assets were vendored -- the
+6 added are `test_offline.py` plus one guard in `test_templates.py`. (The 1723 recorded a
+commit earlier was measured before the `data-autoload` test existed; the assembled suite has
+been re-run, not adjusted.) They were 1512 and 1668 before the NCBI Sequence Viewer, and
 **both of those are re-counts, because this line was wrong when the viewer was written**: it
 said 1437 and 1580 while the suites actually ran 1512 and 1668. Seventy-five and eighty-eight
 tests had been added without anybody re-counting -- the trap the paragraph below warns about,
@@ -2259,6 +2262,59 @@ one work is in `common.css` and applies to every page (see **The shell's two wid
 The cell markup is coupled to two things that substring-test it: `_contains_mutation` decides
 whether a row renders by looking for `true`, and `table_template.js` colours a cell by testing
 for `class="true"`. Keep that class on the anchor, and keep `true` out of the empty-cell literal.
+
+### Everything the browser loads is served from here
+
+`aledb_common/staticfiles/vendor/` holds every third-party asset, with
+`vendor/VENDOR.md` recording the source URL and sha256 of each. **This is what makes "works
+with no outbound network" true**, and it was not true before: `base.html` could not render
+without jQuery from `ajax.googleapis.com`, while the suite pulled **22 assets from seven CDN
+hosts**. All of them were reachable at the time, so nothing was broken -- the claim was simply
+false, and the reason `igv.min.js` and phylotree are vendored had quietly stopped applying to
+anything else.
+
+**Versions are frozen at exactly what the CDNs were serving** -- jQuery 1.12.4, Bootstrap
+3.3.7, DataTables 1.10.x, select2 4.0.3, several of them long EOL. Making the app work offline
+and modernising a decade-old front end are separate problems; doing both at once leaves no way
+to tell which half broke a page.
+
+`aledb_common/tests/test_offline.py` fails on any `<script src>` or `<link href>` naming an
+external host in a first-party template. It matches **asset loads only** -- a plain
+`<a href="https://ncbi…">` is an ordinary link that costs nothing offline -- and it strips
+Django comments first, because a commented-out include is not a load (`dashboard.html` carries
+one). Two exemptions, each with its reason in the file: NCBI's sviewer (below), and Google
+Analytics, which is now inside `{% if GOOGLE_ANALYTICS_TAG %}`.
+
+**That analytics tag used to render unconditionally.** `GOOGLE_ANALYTICS_TAG` defaults to `''`,
+so every page of every deployment fetched `gtag.js` from Google and reported to an empty tag
+id, including deployments that had never asked for analytics.
+
+Four things about the vendored layout are load-bearing:
+
+- **A stylesheet drags its fonts with it.** Font Awesome asks for `url('../fonts/…woff2')` and
+  Bootstrap for `url(../fonts/glyphicons-…woff2)`, so each `css/` keeps a `fonts/` sibling.
+  Flatten the layout and every icon becomes a blank box **with no error at all** -- the page
+  renders, the glyphs are simply gone. Verified in a browser with every host but this one
+  unresolvable: Font Awesome and glyphicons both paint.
+- **The two DataTables bundles are the only files not byte-identical to their source.** They
+  embed Bootstrap and reference glyphicons at an *absolute* `/Bootstrap-3.3.x/fonts/…`, which
+  resolves against `cdn.datatables.net`'s root and would 404 from ours; their `url()` paths were
+  rewritten to a `fonts/` directory beside each bundle. `VENDOR.md` says so, and its hashes are
+  of the rewritten files.
+- **`sweetalert` had no version at all** -- `unpkg.com/sweetalert/dist/…`, resolving to whatever
+  was current (2.1.2 when vendored). A major release would have changed the `swal()` API under
+  ten templates with no commit here. Vendoring pinned it.
+- **The four DataTables bundles stay distinct.** The pages differ in which extensions they use,
+  so consolidating them is a behaviour change wearing a cleanup's clothes.
+
+`?v={{ aledb_version }}` is deliberately **not** applied to these: every vendored path already
+carries its version, so a release cannot serve half of one version and half of another.
+
+**Two tests located Bootstrap by searching `base.html` for a `cdn.datatables.net` URL.** When
+those strings vanished, one of them did not fail -- it began passing *vacuously*. `test_templates`
+now asserts it can still find its subject, which is the general lesson: a guard that cannot
+locate what it guards must say so rather than agree.
+
 
 ### The NCBI Sequence Viewer, and the check that has to come first
 

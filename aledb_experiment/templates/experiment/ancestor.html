@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% comment %}
 Designate the sample this experiment started from.
 
@@ -11,7 +12,7 @@ saying before it is chosen: this is the only setting in the product that changes
 {% block scripts_and_style %}
     {% comment %} base.html does not load sweetalert; every page that confirms something has
        to pull it in. {% endcomment %}
-    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
 {% block header %}Designate ancestor: {{ experiment.name }}{% endblock %}
 {% block content %}

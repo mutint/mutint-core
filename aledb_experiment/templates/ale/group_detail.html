@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Group {{ group.name }}{% endblock %}
 {% block header %}Group: {{ group.name }}{% endblock %}
 {% block scripts_and_style %}
     {% comment %} base.html does not load sweetalert; aledbConfirmDelete calls swal(). {% endcomment %}
-    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
 {% block content %}
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 52em;">

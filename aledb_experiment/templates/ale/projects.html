@@ -3,7 +3,7 @@
 
 {% block scripts_and_style %}
     {# aledbConfirmDelete below calls swal(); base.html does not load it. #}
-    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 
 <script type="text/javascript">
      $(document).ready(function() {
