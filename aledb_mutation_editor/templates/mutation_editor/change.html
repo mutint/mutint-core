@@ -35,10 +35,11 @@
                 and can be restored away from there.
             </p>
             <p style="color: #666;">
-                Leave every sample highlighted and the mutation itself moves, keeping its id.
-                Highlight only some and those samples come off it onto a different mutation
-                &mdash; the one this experiment already has with these values, or a new one
-                &mdash; while the rest stay on the mutation as it was.
+                Highlight every sample and the mutation itself moves, keeping its id.
+                Highlight only some &mdash; which is how this page opens when you come to it
+                from one sample's mutations &mdash; and those samples come off it onto a
+                different mutation, the one this experiment already has with these values or a
+                new one, while the rest stay on the mutation as it was.
             </p>
         </div>
 
@@ -61,11 +62,16 @@
             <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
         </div>
 
-        <div class="col-lg-5">
+        {% comment %} A bare column under #aledb-content has its gutter zeroed by
+           common.css, so this one would touch the column beside it. 30px is what
+           Bootstrap puts between two columns (15px each side), put back on the one
+           side that needs it -- the page still lines up with the title on the left
+           and the content edge on the right. {% endcomment %}
+        <div class="col-lg-5" style="padding-left: 30px;">
             <h4>Change in</h4>
-            {% include "select_list.html" with items=targets id="me-targets" all_selected=True %}
+            {% include "select_list.html" with items=targets id="me-targets" selected_ids=selected_ids %}
 
-            <h4 style="margin-top: 20px;">Currently</h4>
+            <h4>Currently</h4>
             <table class="table">
                 <tr><th>Reference</th><td>{{ mutation.reseq_reference|default_if_none:"" }}</td></tr>
                 <tr><th>Position</th><td>{{ mutation.position }}</td></tr>

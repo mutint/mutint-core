@@ -72,7 +72,12 @@
             <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
         </div>
 
-        <div class="col-lg-5">
+        {% comment %} A bare column under #aledb-content has its gutter zeroed by
+           common.css, so this one would touch the column beside it. 30px is what
+           Bootstrap puts between two columns (15px each side), put back on the one
+           side that needs it -- the page still lines up with the title on the left
+           and the content edge on the right. {% endcomment %}
+        <div class="col-lg-5" style="padding-left: 30px;">
             <h4>Add to</h4>
             {% include "select_list.html" with items=targets id="me-targets" %}
         </div>

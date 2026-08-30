@@ -51,12 +51,11 @@
             <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
         </div>
 
-        <div class="col-lg-4" style="padding-left: 0;">
-            <h4>Copy to</h4>
-            {% include "select_list.html" with items=targets id="me-targets" empty_message="This experiment has only one sample, so there is nowhere to copy to." %}
-        </div>
-
-        <div class="col-lg-8">
+        {% comment %} The mutations first and the samples on the right, which is where Add and
+           Change put their sample list too. The two columns are read in that order -- what to
+           copy, then where to -- and a page whose sample list is on the left and another's on
+           the right is a difference the person has to notice. {% endcomment %}
+        <div class="col-lg-8" style="padding-left: 0;">
             <h4>Mutations in {{ source_reseq.ale_flask_isolate_str }}</h4>
             {% comment %} Same DataTables-with-Select reasoning as the edit page: no cell here
                is an input, so selection lives in DataTables' data model and survives paging
@@ -87,6 +86,16 @@
                 {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        {% comment %} A bare column under #aledb-content has its gutter zeroed by
+           common.css, so this one would touch the column beside it. 30px is what
+           Bootstrap puts between two columns (15px each side), put back on the one
+           side that needs it -- the page still lines up with the title on the left
+           and the content edge on the right. {% endcomment %}
+        <div class="col-lg-4" style="padding-left: 30px;">
+            <h4>Copy to</h4>
+            {% include "select_list.html" with items=targets id="me-targets" empty_message="This experiment has only one sample, so there is nowhere to copy to." %}
         </div>
     {% endif %}
 

@@ -397,8 +397,7 @@ def mutation_change(request):
     """Change one mutation, in every sample that carries it or in a chosen few.
 
     The samples offered are exactly the ones carrying it -- there is nothing to change in a
-    sample that does not -- and they start selected, so the page opens on what it used to be
-    the only thing able to do.
+    sample that does not. Which of them start highlighted is `_initial_selection`.
     """
     context = get_user_context(request.user)
     try:
@@ -413,6 +412,7 @@ def mutation_change(request):
             "schema": validation.form_schema(),
             "initial": _initial_fields(mutation),
             "targets": carrying,
+            "selected_ids": _initial_selection(request, carrying),
             "sample_count": len(carrying),
             "seq_ids": sorted(validation.contig_lengths(reference_row)),
             "has_reference": reference_row is not None,
@@ -422,6 +422,24 @@ def mutation_change(request):
         return render(request, "mutation_editor/change.html", context)
     except _NotForYou as refusal:
         return refusal.response
+
+
+def _initial_selection(request, carrying):
+    """Which of the carrying samples start highlighted: the one linked from, or all of them.
+
+    A `change` link on a sample's own mutation table carries `?reseq_id=`, and the page opens
+    on that sample alone -- correcting a call you are looking at, in the sample you are
+    looking at it in, is what somebody following that link means. The grid's link carries
+    none, because its row spans every sample and there is no one sample that was clicked; the
+    whole set stays the default there, and `?reseq_id=all` lands on it too rather than on
+    nothing, since `int("all")` is not a sample.
+    """
+    ids = [reseq.id for reseq in carrying]
+    try:
+        chosen = int(request.GET.get(REQUEST_RESEQ_ID))
+    except (TypeError, ValueError):
+        return ids
+    return [chosen] if chosen in ids else ids
 
 
 def _carrying_samples(experiment, mutation):

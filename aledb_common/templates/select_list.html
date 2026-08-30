@@ -14,7 +14,7 @@ for them in the list's parent, which is the wrapper below.
 
   items          the objects to list; each needs `.id` and `.ale_flask_isolate_str`
   id             the <ul> id, which the page hands to aledbSelectList
-  all_selected   start with every row highlighted rather than none
+  selected_ids   the ids to start highlighted; omit for none
   empty_message  what to say instead of rows when `items` is empty
 {% endcomment %}
 <div class="aledb-select">
@@ -29,7 +29,7 @@ for them in the list's parent, which is the wrapper below.
     {% endif %}
     <ul class="aledb-select-list aledb-menu" id="{{ id }}">
         {% for item in items %}
-            <li data-value="{{ item.id }}"{% if all_selected %} class="active"{% endif %}>
+            <li data-value="{{ item.id }}"{% if item.id in selected_ids %} class="active"{% endif %}>
                 <a href="#">{{ item.ale_flask_isolate_str }}</a>
             </li>
         {% empty %}

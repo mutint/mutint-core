@@ -111,8 +111,12 @@
                         <td class="breseq-annotation">{{ row.annotation|safe }}</td>
                         <td class="breseq-gene">{{ row.gene|safe }}</td>
                         <td class="breseq-description">{{ row.description|safe }}</td>
-                        <td><a href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation_id }}"
-                               title="Change this mutation in every sample that carries it">change</a></td>
+                        {% comment %} `reseq_id` is what opens the Change page on this
+                           sample alone rather than on every sample sharing the mutation:
+                           correcting a call you are looking at, in the sample you are looking
+                           at it in, is the common case. {% endcomment %}
+                        <td><a href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation_id }}&amp;reseq_id={{ selected_reseq_id }}"
+                               title="Change this mutation in this sample">change</a></td>
                     </tr>
                 {% empty %}
                     <tr>

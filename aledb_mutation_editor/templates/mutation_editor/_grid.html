@@ -106,6 +106,9 @@ rendering of it, and `draw` re-applies them.
                 <td class="breseq-evidence">{{ row.mutation.mutation_type }}</td>
                 <td class="breseq-mutation">{{ row.mutation.sequence_change }}</td>
                 <td class="breseq-gene">{{ row.mutation.gene|default_if_none:"" }}</td>
+                {% comment %} No `reseq_id`, unlike the per-sample table's link: this row
+                   spans every sample, so there is no one sample the person clicked and the
+                   whole set is the honest default. {% endcomment %}
                 <td class="me-change"><a
                     href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
                     title="Change this mutation in every sample that carries it">change</a></td>

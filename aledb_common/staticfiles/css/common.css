@@ -543,6 +543,15 @@ a:hover {
     color: #777;
 }
 
+/* The block as a whole -- buttons, count and list. Only a margin below, so a heading
+   following the list does not sit on its border. The gap from the column beside it is NOT
+   here: `#aledb-content > [class*="col-"]` above zeroes a bare column's gutter on purpose,
+   so the fix belongs on the column. Putting it on this block instead would indent the list
+   away from whatever else the column holds -- on the Change page, the table under it. */
+.aledb-select {
+    margin-bottom: 20px;
+}
+
 /* The Select all / Select none buttons and the count, above the list. */
 .aledb-select-controls {
     margin-bottom: 4px;

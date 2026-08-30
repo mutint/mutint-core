@@ -70,6 +70,45 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertIn('data-value="%d"' % self.sample_a.id, html)
         self.assertNotIn('data-value="%d"' % self.sample_b.id, html)
 
+    def test_it_opens_on_the_sample_the_link_came_from(self):
+        """The per-sample table's `change` link carries `?reseq_id=`, and correcting a call
+        you are looking at in the sample you are looking at it in is what following it means.
+        `active` on the <li> is the selection, so that is what has to be there."""
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+                                      "mutation_id": self.mut_1.id,
+                                      "reseq_id": self.sample_b.id}).content.decode("utf-8")
+
+        self.assertIn('data-value="%d" class="active"' % self.sample_b.id, html)
+        self.assertIn('<li data-value="%d">' % self.sample_a.id, html)
+
+    def test_it_opens_on_every_sample_when_the_link_names_none(self):
+        """The grid's link, whose row spans every sample -- so there is no one sample that was
+        clicked and the whole set is the honest default."""
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+                                      "mutation_id": self.mut_1.id}).content.decode("utf-8")
+
+        for sample in (self.sample_a, self.sample_b):
+            self.assertIn('data-value="%d" class="active"' % sample.id, html)
+
+    def test_reseq_id_all_opens_on_every_sample(self):
+        """`?reseq_id=all` is the editor's whole-experiment sentinel. It is not a sample, so it
+        lands on the default rather than on an empty selection."""
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+                                      "mutation_id": self.mut_1.id,
+                                      "reseq_id": "all"}).content.decode("utf-8")
+
+        for sample in (self.sample_a, self.sample_b):
+            self.assertIn('data-value="%d" class="active"' % sample.id, html)
+
+    def test_a_sample_that_does_not_carry_it_is_not_preselected(self):
+        """A link naming a sample this mutation is not in cannot select nothing: the page
+        would open with a Save button that refuses."""
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+                                      "mutation_id": self.mut_2.id,
+                                      "reseq_id": self.sample_b.id}).content.decode("utf-8")
+
+        self.assertIn('data-value="%d" class="active"' % self.sample_a.id, html)
+
     def test_a_mutation_from_another_experiment_is_not_found(self):
         """Scoped through the experiment, for the reason mutation_delete scopes its ids: a
         mutation belongs to one experiment's reference genome."""

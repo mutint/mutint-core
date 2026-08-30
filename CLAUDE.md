@@ -61,9 +61,10 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1387 run, 0 failures** standalone; **1530** in an assembled project, where the
-plugins' own tests join them. They were 1375 and 1518 before Change Mutation learned to change
-a mutation in some of its samples rather than all of them. (The assembled figure was *run*, not
+**Baseline: 1391 run, 0 failures** standalone; **1534** in an assembled project, where the
+plugins' own tests join them. They were 1387 and 1530 before the Change page learned to open on
+the sample it was linked from, and 1375 and 1518 before Change Mutation learned to change a
+mutation in some of its samples rather than all of them. (The assembled figure was *run*, not
 added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/aledb-core` is a submodule
 clone of the last commit. See the trap two sentences down for why the arithmetic is not
 trusted, even when it agrees as it does here.)
@@ -266,6 +267,14 @@ on the `<li>`, because `.active, .dot:hover { background-color: #717171 }` furth
 `common.css` is the *carousel dots'* rule and applies to any element with the class. In a
 dropdown the `<a>` covers the `<li>` so that grey never shows, which is why only the editor's
 lists would have met it.
+
+**The gap from the column beside it is on the column, not on the list.** These pages lay a
+form or a table beside the sample list as two bare `col-lg-*` under `#aledb-content`, and the
+rule a few paragraphs up zeroes a bare column's gutter so its content lines up with the page
+title -- which leaves the list touching the form, measured at 0px. The column carrying the list
+puts 30px back on its left, which is what Bootstrap puts between two columns anyway. Doing it on
+the list instead would indent it away from whatever else the column holds, which on the Change
+page is the table underneath.
 
 The browser's menu is a dropdown and gets its row box and fill from Bootstrap; the editor's
 three are not, and cannot borrow `.dropdown-menu` to get them -- `position: absolute; display:
@@ -846,7 +855,18 @@ stored.
 ### Changing a mutation, in every sample or in some of them
 
 `/mutation-editor/change?mutation_id=<pk>` opens the Add form prefilled from the mutation's
-`gd_data`, beside a list of the samples carrying it with every one selected. **The scope is a
+`gd_data`, beside a list of the samples carrying it.
+
+**Which of them start highlighted depends on where the link came from**, and the two callers
+differ because the question they were asked differs. A sample's own mutation table adds
+`&reseq_id=`, and the page opens on **that sample alone** -- correcting a call you are looking
+at, in the sample you are looking at it in, is what following that link means, and defaulting to
+every sample sharing the mutation would quietly change eleven of them. The grid's link
+(`_grid.html`) carries no sample, because its row spans all of them and there is no one sample
+that was clicked; there the whole set is still the default. `?reseq_id=all`, the editor's
+whole-experiment sentinel, lands on the default too rather than on an empty selection, because
+`int("all")` is not a sample -- and an empty selection would open the page on a Save button that
+refuses. **The scope is a
 chosen set of those samples**, which it did not use to be: the page refused a subset outright
 and said so, on the grounds that changing a mutation for some samples splits one mutation into
 two. It does split one into two. That is a thing worth being able to do -- a call right in eight
