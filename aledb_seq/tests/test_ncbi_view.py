@@ -125,6 +125,23 @@ class VerifiedTestCase(_Fixture):
         self.assertIn('class="SeqViewerApp"', html)
         self.assertIn("NC_000913.3", html)
 
+    def test_the_viewer_div_carries_data_autoload(self):
+        """The attribute that makes sviewer.js instantiate the div.
+
+        Without it the class alone does nothing: the script loads, nothing raises, and the
+        page renders an empty box. That is how this shipped -- every state was asserted and
+        the one attribute that makes the viewer appear was not, because its absence looks
+        identical to a working page in every server-side check. NCBI's own demo page carries
+        it on every div it wants drawn.
+        """
+        self._verify_contig()
+        html = self._get().content.decode("utf-8")
+        self.assertIn("data-autoload", html)
+        # On the app div itself, not merely somewhere on the page.
+        match = re.search(r"<div[^>]*SeqViewerApp[^>]*>", html)
+        self.assertIsNotNone(match)
+        self.assertIn("data-autoload", match.group(0))
+
     def test_the_marker_spans_the_mutation_and_the_view_is_wider(self):
         """The marker is the mutation's own extent; the view adds context either side."""
         self._verify_contig()

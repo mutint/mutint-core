@@ -48,7 +48,12 @@
         {% elif is_verified %}
             {% comment %} The only branch that loads NCBI's script. Every other state ships no
                third-party payload at all, the same discipline browse.html applies to igv. {% endcomment %}
-            <div id="sviewer" class="SeqViewerApp">
+            {% comment %} `data-autoload` is what makes sviewer.js find this div and
+               instantiate it. Without it the class alone does nothing: the script loads, no
+               error is raised anywhere, and the page renders an empty box -- which is exactly
+               how this shipped broken. NCBI's own demo page puts it on every div it wants
+               drawn automatically. {% endcomment %}
+            <div id="sviewer" class="SeqViewerApp" data-autoload>
                 {% comment %} `:` in v= and `|` in mk= are NCBI's own delimiters and are written
                    literally, as their documentation does -- percent-encoding them relies on
                    their parser decoding first, which their note about escaping marker names
