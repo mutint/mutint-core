@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1424 run, 0 failures** standalone; **1567** in an assembled project, where the
-plugins' own tests join them. They were 1405 and 1548 before the gene-name separator and the
+**Baseline: 1437 run, 0 failures** standalone; **1580** in an assembled project, where the
+plugins' own tests join them. They were 1424 and 1567 before ownership was resynchronised on
+demotion, 1405 and 1548 before the gene-name separator and the
 1,000-gene limit, 1402 and 1545 before the Gene cell's wrapper was
 closed on both branches, 1397 and 1540 before the gene-list Show button's
 handler moved out of one template, 1391 and 1534 before editing and deleting became two
@@ -1473,10 +1474,44 @@ otherwise a group's manager could add themselves and own every project the group
 
 **`Project.user` stays, as the *primary* owner, mirrored by a `ProjectAccess` owner row.** It
 is read by `Project.owner()`, two templates, `ProjectAdmin`, `load_projects`,
-`try_creating_project` and `load_example` — which looks projects up *by* it. `set_primary_owner`
-is the only writer, and revoking the primary owner re-points it at the longest-standing
-remaining owner. Multiple owners are allowed, so a project whose only owner leaves is not
-stranded.
+`try_creating_project` and `load_example` — which looks projects up *by* it. Multiple owners are
+allowed, so a project whose only owner leaves is not stranded.
+
+**The invariant is that `Project.user` always holds an owner grant**, and it is worth stating
+that way rather than as "one writer", which this said for a while and which was never true.
+Three functions write the field, and each has to maintain it: `set_primary_owner` (creation, and
+`ProjectAdmin`), `revoke_project_access` (removing the primary owner's row re-points at the
+longest-standing remaining owner) and `grant_project_access` (**demoting** the primary owner
+re-points the same way).
+
+That last one was missing, and its absence was not cosmetic. `effective_role` grants owner from
+`Project.user` **alone** and short-circuits past the grant query, so a demotion that left the
+field alone did nothing at all: the sharing page showed the new lesser role beside somebody the
+server still treated as an owner. It sat directly on the path the product recommends — the
+refusal an owner gets says *"Give ownership to someone else, then lower your own role"*, and
+lowering it was the no-op. The end-to-end transfer test walked through the state and asserted
+only the final one, because the third step happened to repair it.
+
+**`_remaining_owner_count` counts `Project.user` as an owner**, with or without the row, for the
+same reason: a guard reading `ProjectAccess` by itself would demote away the last owner of a
+project whose owner is named only by the field — which is exactly what
+`Project.objects.create(user=...)` produces and what the suite deliberately blesses.
+
+`effective_role`'s shortcut stays. It is a safety net, not the source of truth: a missing mirror
+row should be a display bug rather than an owner locked out of their own project, which is the
+trap the guardian scheme had.
+
+**`Project.user` is `on_delete=PROTECT`** (`aledb_experiment.0009`). The column is NOT NULL and
+carries a real FK, so deleting a project's primary owner always failed — but under `DO_NOTHING`
+it failed as an `IntegrityError` from SQLite at commit, after the admin's confirmation page had
+promised otherwise. PROTECT refuses up front and names the projects in the way. `ProjectAccess.user`
+stays `CASCADE`: a grant is disposable, and the primary owner always keeps theirs.
+
+**`/admin/` goes through the same helpers.** `ProjectAdmin.save_model` calls `set_primary_owner`
+and `ProjectAccessAdmin` routes saves and deletes through `grant_project_access` /
+`revoke_project_access`, reporting an `AccessError` as a message. It is a superuser tool, but it
+should not be the one place able to express a state the application forbids — editing that table
+directly used to bypass the last-owner rule and the re-point together.
 
 **The role cache is not an optimisation.** `mutation_table_builder` calls
 `can_add_experiment_filter` once per sample column *and* once per mutation row, so a table of

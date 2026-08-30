@@ -8,7 +8,9 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import AleGroup, AleGroupMembership, Project, ProjectAccess
-from aledb_experiment.permissions import grant_project_access, set_primary_owner
+from aledb_experiment.permissions import (
+    effective_role, grant_project_access, set_primary_owner,
+)
 from aledb_experiment.roles import ROLE_ADMIN, ROLE_OWNER, ROLE_READ, ROLE_WRITE
 
 
@@ -327,13 +329,31 @@ class RevokeTestCase(AccessTestCase):
                                                       user=self.admin).exists())
 
     def test_the_transfer_path_an_owner_is_left_with(self):
-        """Grant ownership, step down, leave -- each step through the endpoints themselves."""
+        """Grant ownership, step down, leave -- each step through the endpoints themselves.
+
+        Every step is checked, not just the last. This test used to assert only the final
+        state, and walked straight through a middle step that did nothing: stepping down left
+        `Project.user` naming the outgoing owner, so `effective_role` went on answering owner
+        for them and the third step was what silently repaired it. Someone who stops after
+        step two -- which is all the refusal message asks of them -- was still an owner.
+        """
         self.client.force_login(self.owner)
+
         self.assertEqual(self.grant(username="stranger", role=ROLE_OWNER).status_code, 200)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.user_id, self.owner.id,
+                         "a second owner must not take the primary flag by itself")
+
         self.assertEqual(self.grant(username="owner", role=ROLE_ADMIN).status_code, 200)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.user_id, self.stranger.id,
+                         "stepping down has to move Project.user, or it does nothing")
+        self.assertEqual(effective_role(self.owner, self.project), ROLE_ADMIN)
+
         self.assertEqual(self.revoke(self.entry_for(self.owner)).status_code, 200)
         self.project.refresh_from_db()
         self.assertEqual(self.project.user_id, self.stranger.id)
+        self.assertIsNone(effective_role(self.owner, self.project))
 
     def test_an_unknown_access_id_is_404(self):
         self.client.force_login(self.owner)

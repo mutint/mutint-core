@@ -64,7 +64,13 @@ class Instrument(models.Model):
 
 class Project(SoftDeleteMixin):
     name = models.CharField(max_length=50)
-    user = models.ForeignKey(User, default=None, on_delete=models.DO_NOTHING, help_text="project owner")
+    # PROTECT, not DO_NOTHING: this column is NOT NULL and carries a real FK, so deleting a
+    # project's primary owner was already impossible -- but as DO_NOTHING Django emitted no
+    # handling for it and the refusal arrived from the database as an opaque IntegrityError at
+    # commit, with the admin's confirmation page giving no warning and naming no project.
+    # PROTECT asks the question up front and answers it with the list of projects in the way.
+    # Ownership is transferred, not deleted out from under a project.
+    user = models.ForeignKey(User, default=None, on_delete=models.PROTECT, help_text="project owner")
     date = models.DateTimeField(auto_now_add=True, help_text="project created date")
     is_public = models.BooleanField(default=False)
     PROJECT_STATUS = (('new', 'New'), ('in progress', 'In progress'), ('completed', 'Completed'))

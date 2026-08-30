@@ -297,12 +297,108 @@ class OwnershipInvariantTestCase(TestCase):
         self.assertEqual(self.project.user_id, self.second.id)
         self.assertIsNone(effective_role(self.owner, self.project))
 
+    def assertOwnershipConsistent(self, project):
+        """`Project.user` names someone who holds an owner grant.
+
+        The standing invariant, asserted after an operation rather than by any one of them:
+        `effective_role` grants owner from `Project.user` alone, so a primary owner whose row
+        says something lesser is an owner the sharing page cannot show and cannot take away.
+        """
+        project.refresh_from_db()
+        entry = ProjectAccess.objects.filter(
+            project=project, user_id=project.user_id, group=None).first()
+        self.assertIsNotNone(
+            entry, "Project.user names %s, who holds no grant at all" % project.user_id)
+        self.assertEqual(ROLE_OWNER, entry.role,
+                         "Project.user names %s, whose grant says %s -- effective_role still "
+                         "answers owner for them" % (project.user_id, entry.role))
+
+    def test_demoting_the_primary_owner_repoints_project_user(self):
+        """The defect. `revoke` re-pointed and `grant` did not, so a demotion did nothing.
+
+        The refusal an owner is shown tells them to give ownership away and then lower their
+        own role -- and lowering it left `Project.user` naming them, which `effective_role`
+        reads as owner on its own.
+        """
+        grant_project_access(self.project, self.second, ROLE_OWNER)
+        grant_project_access(self.project, self.owner, ROLE_ADMIN)
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.second.id, self.project.user_id)
+        self.assertEqual(ROLE_ADMIN, effective_role(self.owner, self.project))
+        self.assertOwnershipConsistent(self.project)
+
+    def test_demoting_a_second_owner_leaves_the_primary_alone(self):
+        grant_project_access(self.project, self.second, ROLE_OWNER)
+        grant_project_access(self.project, self.second, ROLE_READ)
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.owner.id, self.project.user_id)
+        self.assertOwnershipConsistent(self.project)
+
+    def test_the_primary_owner_cannot_be_demoted_without_a_mirror_row(self):
+        """`Project.user` counts as an owner, with or without the row.
+
+        `Project.objects.create(user=...)` makes exactly this shape and the suite blesses it,
+        so a guard counting only ProjectAccess would demote away the last effective owner.
+        """
+        bare = Project.objects.create(name="Bare", user=self.owner)
+        self.assertEqual(ROLE_OWNER, effective_role(self.owner, bare))
+
+        with self.assertRaises(AccessError):
+            grant_project_access(bare, self.owner, ROLE_READ)
+
     def test_a_regrant_is_an_upsert_not_a_second_row(self):
         grant_project_access(self.project, self.second, ROLE_READ)
         grant_project_access(self.project, self.second, ROLE_ADMIN)
         rows = ProjectAccess.objects.filter(project=self.project, user=self.second)
         self.assertEqual(rows.count(), 1)
         self.assertEqual(rows.first().role, ROLE_ADMIN)
+
+
+class OwnerDeletionTestCase(TestCase):
+    """Ownership is transferred, not deleted out from under a project.
+
+    `Project.user` is NOT NULL and carries a real FK, so deleting a primary owner always
+    failed -- but as DO_NOTHING it failed as an `IntegrityError` from the database at commit,
+    after the admin had already promised it would work. PROTECT refuses up front and names
+    what is in the way.
+    """
+
+    def setUp(self):
+        self.owner = make_user("owner")
+        self.second = make_user("second")
+        self.project = Project.objects.create(name="P", user=self.owner)
+        set_primary_owner(self.project, self.owner)
+
+    def test_deleting_the_primary_owner_is_refused(self):
+        from django.db.models import ProtectedError
+
+        with self.assertRaises(ProtectedError):
+            self.owner.delete()
+
+        self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+
+    def test_deleting_a_non_primary_owner_is_allowed_and_leaves_an_owner(self):
+        """Their grant cascades; the project keeps the owner it is named after."""
+        grant_project_access(self.project, self.second, ROLE_OWNER)
+
+        self.second.delete()
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.owner.id, self.project.user_id)
+        self.assertEqual(ROLE_OWNER, effective_role(self.owner, self.project))
+
+    def test_the_way_out_is_to_hand_the_project_on_first(self):
+        grant_project_access(self.project, self.second, ROLE_OWNER)
+        grant_project_access(self.project, self.owner, ROLE_READ)
+        entry = ProjectAccess.objects.get(project=self.project, user=self.owner)
+        revoke_project_access(self.project, entry)
+
+        self.owner.delete()
+
+        self.project.refresh_from_db()
+        self.assertEqual(self.second.id, self.project.user_id)
 
 
 class ResolveTestCase(TestCase):

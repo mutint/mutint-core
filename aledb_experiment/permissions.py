@@ -363,11 +363,38 @@ def resolve_group_name(name, user):
 # --- writing -------------------------------------------------------------------------------
 
 
-def _remaining_owner_count(project, excluding_pk=None):
-    owners = ProjectAccess.objects.filter(project=project, role=ROLE_OWNER)
+def _remaining_owner_count(project, excluding_pk=None, excluding_user_id=None):
+    """How many owners the project would still have.
+
+    **`Project.user` counts, with or without a mirror row.** `effective_role` grants owner from
+    that field alone, so a guard reading `ProjectAccess` by itself would happily demote away the
+    last owner of a project whose owner is named only there -- which is exactly what
+    `Project.objects.create(user=...)` produces, and what `test_project_user_is_owner_without_a_
+    grant_row` deliberately blesses. The result would be a project with an effective owner the
+    sharing page cannot show and nothing can take away.
+
+    Counted as a set of user ids, so somebody holding both the field and a row is one owner and
+    not two. `excluding_user_id` drops the subject being demoted or removed, whichever way they
+    hold it.
+    """
+    owners = ProjectAccess.objects.filter(project=project, role=ROLE_OWNER,
+                                          user__isnull=False)
     if excluding_pk is not None:
         owners = owners.exclude(pk=excluding_pk)
-    return owners.count()
+    owner_ids = set(owners.values_list("user_id", flat=True))
+    if project.user_id is not None:
+        owner_ids.add(project.user_id)
+    owner_ids.discard(excluding_user_id)
+    return len(owner_ids)
+
+
+def _successor_owner(project, excluding_pk=None):
+    """The longest-standing remaining owner, by grant age. Lowest pk is oldest."""
+    entries = ProjectAccess.objects.filter(project=project, role=ROLE_OWNER,
+                                           user__isnull=False)
+    if excluding_pk is not None:
+        entries = entries.exclude(pk=excluding_pk)
+    return entries.order_by("pk").first()
 
 
 def grant_project_access(project, subject, role, granted_by=None):
@@ -387,8 +414,19 @@ def grant_project_access(project, subject, role, granted_by=None):
         lookup = {"project": project, "user": subject}
 
     existing = ProjectAccess.objects.filter(**lookup).first()
-    if (existing is not None and existing.role == ROLE_OWNER and role != ROLE_OWNER
-            and _remaining_owner_count(project, excluding_pk=existing.pk) == 0):
+
+    # Whether this grant takes ownership away from someone who currently holds it -- through
+    # their row, or through `Project.user`, which confers owner on its own. Asked before the
+    # write, because the write is what makes the answer stop being true.
+    was_primary = (not isinstance(subject, AleGroup)
+                   and project.user_id is not None
+                   and project.user_id == getattr(subject, "id", None))
+    holds_ownership = was_primary or (existing is not None and existing.role == ROLE_OWNER)
+
+    if (holds_ownership and role != ROLE_OWNER
+            and _remaining_owner_count(project,
+                                       excluding_pk=existing.pk if existing else None,
+                                       excluding_user_id=getattr(subject, "id", None)) == 0):
         raise AccessError("A project must have an owner; give ownership to someone else first.")
 
     if existing is not None:
@@ -403,6 +441,16 @@ def grant_project_access(project, subject, role, granted_by=None):
     if role == ROLE_OWNER and project.user_id is None:
         project.user = subject
         project.save(update_fields=["user"])
+    elif was_primary and role != ROLE_OWNER:
+        # Demoting the primary owner. `Project.user` has to move with the role, or the
+        # demotion does nothing at all: `effective_role` reads that field as owner without
+        # consulting the row, so the sharing page would show the new lesser role beside
+        # somebody the server still treats as an owner. Same successor rule as
+        # `revoke_project_access` -- the guard above has already established there is one.
+        successor = _successor_owner(project, excluding_pk=entry.pk)
+        if successor is not None:
+            project.user = successor.user
+            project.save(update_fields=["user"])
 
     _bump_cache()
     return entry
@@ -432,19 +480,23 @@ def self_revoke_refusal(user, entry):
 
 def revoke_project_access(project, entry):
     """Remove one grant, keeping the "a project always has an owner" invariant."""
-    if entry.role == ROLE_OWNER and _remaining_owner_count(project, excluding_pk=entry.pk) == 0:
+    was_primary = entry.user_id is not None and project.user_id == entry.user_id
+
+    # `excluding_user_id` because the widened count credits `Project.user` with ownership: the
+    # person whose row is being deleted must not be counted as a remaining owner through the
+    # very field this removal is about to move.
+    if ((entry.role == ROLE_OWNER or was_primary)
+            and _remaining_owner_count(project, excluding_pk=entry.pk,
+                                       excluding_user_id=entry.user_id) == 0):
         raise AccessError("A project must have an owner; give ownership to someone else first.")
 
-    was_primary = entry.user_id is not None and project.user_id == entry.user_id
     entry.delete()
 
     if was_primary:
         # `Project.user` is the primary owner and is displayed as *the* owner, so it cannot be
         # left pointing at someone who no longer has any access. The lowest-pk remaining owner
         # is the longest-standing one.
-        successor = (ProjectAccess.objects
-                     .filter(project=project, role=ROLE_OWNER, user__isnull=False)
-                     .order_by("pk").first())
+        successor = _successor_owner(project)
         if successor is not None:
             project.user = successor.user
             project.save(update_fields=["user"])
