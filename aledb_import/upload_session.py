@@ -33,7 +33,8 @@ from aledb_common.import_registry import (
 )
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_edit_experiment, experiment_lock_refusal
-from aledb_import import reference_store
+from aledb_import import import_lock, reference_store
+from aledb_import.import_lock import ImportInProgress
 from aledb_import.models import (
     STATE_FAILED,
     STATE_FINALIZED,
@@ -267,6 +268,27 @@ def finalize_upload(request, upload_id):
     root = store.staging_dir(session.id)
     options = {"confirm_rename": _payload(request).get("confirm_rename")}
     progress = _SessionProgress(session.id)
+
+    # One import at a time. Refused rather than queued: this is a request, and holding it
+    # open for however long somebody else's drop takes would look like the hang the progress
+    # reporting exists to prevent. The staged files are untouched, so trying again costs
+    # nothing but the button.
+    try:
+        import_lock.acquire()
+    except ImportInProgress as busy:
+        return JsonResponse({"error": str(busy)}, status=409)
+
+    try:
+        return _finalize_holding_lock(session, request, root, options, progress)
+    finally:
+        # One release covering every way out of the function below, including the ones that
+        # return a refusal. A lock stranded here would block every later import until it
+        # went stale.
+        import_lock.release()
+
+
+def _finalize_holding_lock(session, request, root, options, progress):
+    """The body of `finalize_upload`, run with the import lock held."""
     try:
         # The registry decides what each file is and which handler takes it, so a plugin's
         # import type is reachable here with no change to this view.

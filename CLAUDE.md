@@ -61,12 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1351 run, 0 failures** standalone; **1494** in an assembled project, where the
+**Baseline: 1373 run, 0 failures** standalone; **1516** in an assembled project, where the
 plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
-They were 1347 and 1490 before the page learned to
+They were 1351 and 1494 before imports stopped losing
+samples to each other, 1347 and 1490 before the page learned to
 stop polling a finished import, 1340 and 1483 before the import
 progress polling met SQLite's rollback journal, 1336 and 1479 before two breseq folders of
 one name stopped collapsing into one sample, and 1268 and 1404 before the ALE and the isolate became
@@ -1672,6 +1673,65 @@ Four things about it are load-bearing:
 Progress writes are swallowed on failure, and a failed poll is a skipped tick rather than an
 error. Commentary must not be able to fail an import, and the finalize response stays the
 authority on what happened.
+
+### Every sample lands, and it takes three things
+
+An LTEE drop lost five `.gd` samples to `database is locked`, reported per unit and genuinely
+absent afterwards. The cause is not slowness. **Django 4.2's `atomic()` issues a deferred
+`BEGIN`**, `Mutation.objects.get_or_create` reads before it writes, and SQLite **refuses that
+read-to-write upgrade outright the moment another connection has written in between -- without
+consulting `busy_timeout`**, deliberately, because waiting could deadlock two readers each
+wanting to upgrade. No timeout and no journal mode can reach it.
+
+Measured, three concurrent importers, one transaction per sample:
+
+| | samples landed |
+|---|---|
+| deferred `BEGIN`, no retry -- what ran before | **42 / 150** |
+| `BEGIN IMMEDIATE`, no retry | 150 / 150, but **19 / 30** once a transaction outlives the timeout |
+| `BEGIN IMMEDIATE` + retry | 29 / 30 -- **bounded retry is not a guarantee either** |
+| `BEGIN IMMEDIATE` + retry + one import at a time | **30 / 30** |
+
+So all three are needed and none is sufficient:
+
+- **`aledb_common/db/sqlite_immediate/`** -- the stock SQLite backend with
+  `_start_transaction_under_autocommit` issuing `BEGIN IMMEDIATE`. **Delete it at Django
+  5.1**, which has `OPTIONS={'transaction_mode': 'IMMEDIATE'}`; 4.2 has no such setting, which
+  is the only reason a subclass of a private method exists. `test_concurrent_imports` asserts
+  both the statement issued *and* that Django still has the hook, so an upgrade that moves it
+  fails loudly rather than silently reverting every transaction to deferred.
+- **`aledb_import/import_lock.py`** -- one import at a time, and the piece that actually
+  closes it. **A row, not a Python lock**: the dev server is threaded and a deployment runs
+  several processes, neither of which an in-process lock is visible to. Acquisition is the
+  row *insert* rather than `select_for_update`, which is a documented no-op on SQLite and
+  would look like mutual exclusion while providing none. A second finalize is **refused with
+  409, not queued** -- holding a request open for somebody else's drop is the hang the
+  progress reporting exists to prevent, and the staged files survive so retrying costs only
+  the button. Stale locks are reclaimed after two hours, because a process killed mid-import
+  cannot run its own cleanup.
+- **`aledb_import/retry.py`** -- a sample that loses to some *other* writer tries again. Safe
+  because each sample is already its own transaction and re-import is idempotent, so a failed
+  attempt rolls back whole. Deliberately narrow: it matches lock wording only, since a
+  malformed file fails identically every time and retrying it turns a clear message into a
+  slow one.
+
+**What survives all three is reported, not silent** -- a sample that still cannot be written
+appears in the status table with its error, which is how the original five were found. That is
+the honest ceiling here: everything lives inside one request, so none of it survives a crash or
+a restart. A literal guarantee is durability of the *work item*, which is `WORKERS.md`.
+
+**Postgres was considered and is not needed for this.** The 30/30 above is SQLite. What
+Postgres would buy is *simultaneous* imports rather than queued ones -- a throughput question,
+not a correctness one -- at the cost of the no-external-services property `./aledb start` is
+built around. It is also not a guarantee by itself: it still raises serialisation failures and
+deadlocks, so the retry would be wanted there too.
+
+**And shortening transactions does not help.** Batching the per-record queries is worth doing
+for import *speed* -- 2,599 per-mutation SELECTs measure 1.28s against 0.05s for one indexed
+fetch, and 77% of the annotation UPDATEs rewrite identical values -- but measured against the
+same contention it made failures *more* frequent, 50% to 66%. The risk is per attempt, not per
+second held, so more and shorter transactions means more attempts. Batching is not a lock fix
+and must not be counted as one.
 
 **Polling a database that is being written is what forced `aledb_common/sqlite_tuning.py`.**
 SQLite ships in rollback-journal mode, where a writer locks the whole file against *readers* --

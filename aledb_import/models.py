@@ -10,10 +10,12 @@ nor Channels; what a long finalize has instead is ``progress``, a snapshot the A
 so the wait is legible rather than silent.
 """
 
+import datetime
 import uuid
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 
 STATE_OPEN = "open"
 STATE_FINALIZED = "finalized"
@@ -24,6 +26,43 @@ STATE_CHOICES = [
     (STATE_FINALIZED, "Finalized"),
     (STATE_FAILED, "Failed"),
 ]
+
+
+class ImportLock(models.Model):
+    """One row, held for the duration of an import, so two never run at once.
+
+    SQLite permits exactly one writer, so concurrent imports were already queueing -- badly.
+    Each sample is its own transaction, and a transaction that cannot get the write lock
+    within ``busy_timeout`` fails and takes its sample with it. Measured with three
+    importers and transactions longer than the timeout: **19 of 30 samples landed**. Holding
+    this row instead makes the queue orderly, and the same measurement gives 30 of 30.
+
+    **A database row rather than a Python lock**, because the dev server is threaded and a
+    deployment may run several processes -- an in-process lock would not be seen by either.
+    Rather than ``select_for_update`` (a no-op on SQLite, which has no row locking), the
+    guarantee comes from the primary key: ``name`` is unique, so *creating* the row is the
+    acquire and only one caller can win it. That works on every backend.
+
+    Held rows are reclaimed after ``STALE_AFTER``. A process killed mid-import would
+    otherwise block every later one for ever, and there is no cleanup path that runs on a
+    process that has already died.
+    """
+
+    # Long enough that a real import is never mistaken for a dead one -- the largest LTEE
+    # drop is minutes, not hours -- and short enough that a crash does not need a person.
+    STALE_AFTER = datetime.timedelta(hours=2)
+
+    name = models.CharField(max_length=64, primary_key=True)
+    acquired_at = models.DateTimeField(auto_now_add=True)
+    # Free text naming who holds it, for the message the loser is shown and for `./aledb`.
+    holder = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return "ImportLock %s held by %s since %s" % (
+            self.name, self.holder or "?", self.acquired_at)
+
+    def is_stale(self, now=None):
+        return (now or timezone.now()) - self.acquired_at > self.STALE_AFTER
 
 
 class UploadSession(models.Model):

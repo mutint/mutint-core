@@ -33,6 +33,7 @@ import shutil
 from django.db import transaction
 
 from aledb_common import import_progress, store
+from aledb_import.retry import with_retry
 from aledb_import import coverage
 from aledb_import import reference as reference_io
 from aledb_import.breseq_summary import read_breseq_summary
@@ -169,10 +170,15 @@ def _import_samples(context, root, person, report_loose_gd):
             continue
         imported_from[sample_name] = sample_dir
 
-        try:
+        def import_one(sample_dir=sample_dir, sample_name=sample_name):
             with transaction.atomic():
-                count, seq_experiment, warnings, replaced = _import_one_sample(
-                    sample_dir, sample_name, context, person)
+                return _import_one_sample(sample_dir, sample_name, context, person)
+
+        try:
+            # Retried only for lock contention; the transaction rolls back whole and
+            # re-import is idempotent. See aledb_import.retry.
+            count, seq_experiment, warnings, replaced = with_retry(
+                import_one, describe=sample_name)
             # Outside the transaction on purpose: this walks the whole alignment, and holding
             # a database transaction open for it would be paid by every other writer. It is
             # also best-effort -- a sample keeps its reads whether or not the coverage

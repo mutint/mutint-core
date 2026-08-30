@@ -15,6 +15,7 @@ import os
 from django.db import transaction
 
 from aledb_common import import_progress
+from aledb_import.retry import with_retry
 from aledb_common.import_registry import (
     PRIORITY_DATA,
     PRIORITY_REFERENCE,
@@ -281,12 +282,18 @@ def handle_genomediff(experiment, staged_root, paths, user):
         filename = os.path.basename(relative)
         sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
         import_progress.begin(filename)
-        try:
+
+        def import_one(relative=relative, sample_name=sample_name):
             with transaction.atomic():
                 with open(os.path.join(staged_root, relative), "rb") as handle:
                     document = _parse_document(handle)
-                _, count, replaced = import_document_as_sample(
+                return import_document_as_sample(
                     document, sample_name, context, person)
+
+        try:
+            # Retried only for lock contention, and safe to retry because the transaction
+            # above rolls back whole and re-import is idempotent. See aledb_import.retry.
+            _, count, replaced = with_retry(import_one, describe=filename)
             entry = {"file": filename, "mutations": count, "error": None,
                      "replaced": replaced}
             total += count

@@ -123,7 +123,13 @@ def get_base_settings(base_dir, aledb_core_dir=None):
 
         'DATABASES': {
             'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
+                # Not django.db.backends.sqlite3: the same backend, starting its
+                # transactions with BEGIN IMMEDIATE. Deferred transactions are refused
+                # outright when a read has to become a write and somebody else wrote
+                # first, which lost two thirds of a concurrent import. See
+                # aledb_common.db.sqlite_immediate -- and delete it at Django 5.1, which
+                # has a setting for this.
+                'ENGINE': 'aledb_common.db.sqlite_immediate',
                 'NAME': os.path.join(base_dir, 'aledb_local.sqlite3'),
                 # Handed to sqlite3.connect. The Add page polls while an import writes, so
                 # two connections genuinely contend now; 5s (the default) is not long when
@@ -272,7 +278,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
     if ('test' in sys.argv or 'test_coverage' in sys.argv or
             os.environ.get('FORCE_SQLITE') == '1'):
         settings['DATABASES']['default'] = {
-            'ENGINE': 'django.db.backends.sqlite3',
+            'ENGINE': 'aledb_common.db.sqlite_immediate',
             'NAME': os.path.join(base_dir, 'dev.sqlite3'),
             'OPTIONS': {'timeout': 30},
         }
