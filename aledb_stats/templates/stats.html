@@ -89,6 +89,11 @@
                href="/ale/experiment/{{ ale_experiment_id }}/edit/">Edit experiment</a>
             <a class="btn btn-default"
                href="/ale/experiment/{{ ale_experiment_id }}/samples/">Edit samples</a>
+            {% comment %} A link rather than a button with a handler: it opens a page that
+               explains what designating does before anything is written, which is the whole
+               reason it is a page. {% endcomment %}
+            <a class="btn btn-default"
+               href="/ale/experiment/{{ ale_experiment_id }}/ancestor/">{% if experiment.has_ancestor %}Ancestor: {{ experiment.ancestor.ale_flask_isolate_str }}{% else %}Designate ancestor{% endif %}</a>
         {% endif %}
         {% if can_lock %}
             {% if experiment.is_locked %}

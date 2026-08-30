@@ -9,10 +9,15 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
+from aledb_experiment.ancestor import exclude_all_ancestry
 from aledb_filter.util import filter_observed_mutations, filtered_observed_mutation_queryset
 from aledb_filter.view_filter import PARAMS as FILTER_PARAMS, ViewFilter
 from aledb_common.logger import user_extra
-from aledb_metadata.views import get_ordered_reseq_queryset, get_reseq_info_list
+from aledb_metadata.views import get_reseq_info_list
+# From `aledb_seq.util`, where it is defined. This used to come via `aledb_metadata.views`,
+# which merely imports it -- an accidental re-export, and the call site any signature change
+# would miss.
+from aledb_seq.util import get_ordered_reseq_queryset
 from aledb_seq.models import ObservedMutation
 
 logger = logging.getLogger(__name__)
@@ -67,6 +72,11 @@ def _public_queryset(view_filter=None):
     queryset = ObservedMutation.objects.filter(
         sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project__is_public=True
     )
+    # Designated ancestors are subtracted here too, and unlike the cutoff above that is not
+    # something the caller chose. An anonymous caller getting rows that every page on the site
+    # excludes would be a wrong answer dressed as a right one -- the same reason `parse` raises
+    # on a malformed `min_freq` rather than quietly returning everything.
+    queryset = exclude_all_ancestry(queryset)
     queryset, _ = filtered_observed_mutation_queryset(queryset, view_filter=view_filter)
     return queryset
 
@@ -417,7 +427,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         if q is None:
             continue
 
-        qs = ObservedMutation.objects.filter(public_project_q & q)
+        qs = exclude_all_ancestry(ObservedMutation.objects.filter(public_project_q & q))
         mutations = filter_observed_mutations(qs, view_filter=view_filter)
         logger.info("Found %d mutations for %s", len(mutations), item, extra=user_extra(request))
         observed_mutations.extend(mutations)

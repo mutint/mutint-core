@@ -153,10 +153,14 @@ def prune_orphans(tech_reps):
     had just been filled again -- taking its samples with it, since every downward FK
     cascades.
 
-    `Isolate` gets one extra guard. `Isolate.parent_isolate` and `AleId.starting_strain`
-    are both `on_delete=DO_NOTHING`, which means Django issues the DELETE and lets the
-    database reject it. Nothing in the suite ever writes either column, so an error about
-    one would be unexplainable to whoever hit it: keep the row and log instead.
+    `Isolate` gets one extra guard. `Isolate.parent_isolate` is `on_delete=DO_NOTHING`,
+    which means Django issues the DELETE and lets the database reject it. Nothing in the
+    suite ever writes that column, so an error about it would be unexplainable to whoever
+    hit it: keep the row and log instead.
+
+    `AleId.starting_strain` was guarded here too. It is gone -- it was a second, never
+    written spelling of the ancestor, which is now one designation on the experiment; see
+    `aledb_experiment/ancestor.py`.
     """
     for tech_rep in tech_reps:
         isolate = tech_rep.isolate
@@ -169,10 +173,9 @@ def prune_orphans(tech_reps):
 
         if isolate.technicalreplicate_set.exists():
             continue
-        if (Isolate.objects.filter(parent_isolate=isolate).exists()
-                or AleId.objects.filter(starting_strain=isolate).exists()):
-            logger.info("keeping empty isolate %s: still referenced as a parent or "
-                        "starting strain", isolate.pk)
+        if Isolate.objects.filter(parent_isolate=isolate).exists():
+            logger.info("keeping empty isolate %s: still referenced as a parent",
+                        isolate.pk)
             continue
         isolate.delete()
 

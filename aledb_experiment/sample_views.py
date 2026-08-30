@@ -43,7 +43,9 @@ def _experiment_samples(experiment):
     `ResequencingExperiment.tech_rep` names its target by string.
     """
     from aledb_seq.util import get_ordered_reseq_queryset
-    return get_ordered_reseq_queryset(experiment.ale_id)
+    # `include_ancestor=True`: this is the page that edits and deletes samples, so it has to
+    # show the designated ancestor, which every reading page hides.
+    return get_ordered_reseq_queryset(experiment.ale_id, include_ancestor=True)
 
 
 def _get_sample(pk):

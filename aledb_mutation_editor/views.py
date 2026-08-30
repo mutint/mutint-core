@@ -44,6 +44,10 @@ from aledb_mutation_editor.models import (
 )
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import Mutation, ObservedMutation
+# `include_ancestor=True` on every call below: the editor curates rather than reads, so
+# it must show the designated ancestor, which every reading page hides. It is also why
+# `history.observations_for` uses the raw observation queryset -- this app shows what is
+# stored, and ancestral rows are stored.
 from aledb_seq.util import get_reseq_ordered_dict
 
 logger = logging.getLogger(__name__)
@@ -356,7 +360,7 @@ def _listing(request, mode):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
         all_samples = request.GET.get(REQUEST_RESEQ_ID) == ALL_SAMPLES
         reseq = None if all_samples else _selected_reseq(request, reseq_dict)
 
@@ -403,7 +407,7 @@ def mutation_add(request):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
         reference_row = _reference_row(experiment)
 
         context = _page_context(request, experiment)
@@ -482,7 +486,7 @@ def _carrying_samples(experiment, mutation):
     observing = set(history.observations_for(experiment)
                     .filter(mutation=mutation)
                     .values_list("sequencing_experiment_id", flat=True))
-    return [reseq for reseq in get_reseq_ordered_dict(experiment.ale_id).values()
+    return [reseq for reseq in get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()
             if reseq.id in observing]
 
 
@@ -527,7 +531,7 @@ def mutation_copy(request):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
         source = _selected_reseq(request, reseq_dict, REQUEST_SOURCE_RESEQ_ID)
 
         context = _page_context(request, experiment)
@@ -659,7 +663,7 @@ def mutation_copy_apply(request):
             raise EditorError("Those mutations are not in the source sample.", status=404)
 
         targets = {reseq.id: reseq for reseq in
-                   get_reseq_ordered_dict(experiment.ale_id).values()
+                   get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()
                    if reseq.id in set(target_ids)}
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
@@ -741,7 +745,7 @@ def mutation_add_apply(request):
             raise EditorError("That mutation cannot be added as entered.", errors=errors)
 
         targets = {reseq.id: reseq for reseq in
-                   get_reseq_ordered_dict(experiment.ale_id).values()
+                   get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()
                    if reseq.id in set(target_ids)}
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
@@ -931,7 +935,7 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     sample_ids = [observed.sequencing_experiment_id for observed in chosen]
     present = history.live_state(experiment, sample_ids=sample_ids)
     names = {reseq.id: reseq.ale_flask_isolate_str
-             for reseq in get_reseq_ordered_dict(experiment.ale_id).values()}
+             for reseq in get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()}
 
     additions = []
     already = []

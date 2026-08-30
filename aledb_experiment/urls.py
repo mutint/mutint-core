@@ -11,6 +11,7 @@ from aledb_experiment.group_views import (
     group_member_update, group_new, group_transfer, group_update, groups,
 )
 from aledb_experiment.views import (
+    experiment_ancestor, experiment_ancestor_apply,
     experiment_create, experiment_delete, experiment_detail, experiment_edit,
     experiment_lock,
     experiment_new, experiment_update, experiments,
@@ -45,6 +46,15 @@ urlpatterns = [
     # Locking. Its own endpoint rather than a field on the edit form: a locked experiment
     # refuses `experiment_update` outright, so a checkbox there could lock and never unlock.
     re_path(r'^experiment/(?P<pk>[0-9]+)/lock/$', experiment_lock, name="experiment_lock"),
+
+    # The designated ancestor: the sample this experiment started from, whose mutations are
+    # subtracted from every other sample. A page and an apply endpoint, the pairing
+    # `aledb_mutation_editor` established -- the page checks permission itself and the write
+    # checks it again, because the button being hidden is not a permission check.
+    re_path(r'^experiment/(?P<pk>[0-9]+)/ancestor/$',
+            experiment_ancestor, name="experiment_ancestor"),
+    re_path(r'^experiment/(?P<pk>[0-9]+)/ancestor/apply/$',
+            experiment_ancestor_apply, name="experiment_ancestor_apply"),
 
     # Sharing. Every route here is anchored, so none of them can grow into a prefix trap
     # of the kind `^projects` / `^experiments` below already are.

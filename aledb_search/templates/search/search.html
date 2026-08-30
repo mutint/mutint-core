@@ -175,7 +175,7 @@
        no single filter to describe -- it says so rather than describing one experiment's as
        though it applied to all of them. Each experiment's own filter still applies to its own
        rows; `filter_observed_mutations` resolves them from the queryset. {% endcomment %}
-    {% view_filter_summary own_rules="Search spans experiments, so no single per-experiment filter applies here -- the frequency and position boxes above are this page's filter." %}
+    {% view_filter_summary own_rules="Search spans experiments, so no single per-experiment filter applies here -- the frequency and position boxes above are this page's filter. Mutations in any experiment's designated ancestor are excluded, as they are everywhere else." %}
     <br>
 <div class="row">
     <form action="" method="get">

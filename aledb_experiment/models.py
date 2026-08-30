@@ -121,6 +121,37 @@ class AleExperiment(SoftDeleteMixin):
     locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
                                   **blank_field)
 
+    # --- the designated ancestor ------------------------------------------------------
+    #
+    # The sample this experiment started from. Its mutations are the starting line rather
+    # than evolution, so they are subtracted from every other sample before anything is
+    # computed, and the sample itself leaves every listing and every analysis.
+    # `aledb_experiment/ancestor.py` is the whole mechanism.
+    #
+    # The FK *is* the flag, as `locked_at` is: null means no ancestor, with no boolean
+    # beside it to disagree. One column on the experiment also makes "exactly one per
+    # experiment" structural -- designating a new one is a single UPDATE, so there is no
+    # prior flag left to clear and no way to end up with two.
+    #
+    # Named by string because `aledb_experiment` must not import `aledb_seq` at load time;
+    # the dependency runs the other way, which is why `ResequencingExperiment.tech_rep`
+    # names its own target the same way.
+    #
+    # SET_NULL: deleting the sample leaves the experiment simply without an ancestor.
+    # That the sample belongs to *this* experiment cannot be a database constraint, so
+    # `aledb_experiment.views.experiment_ancestor_apply` checks it.
+    #
+    # The two columns beside it are not decoration. This is shared state that changes what
+    # everyone sees, which is exactly what `AleExperimentFilter` got wrong -- one row per
+    # experiment that anybody with write access could change silently, with no record of
+    # who did it. Attribution is the difference between that and this.
+    ancestor = models.ForeignKey("aledb_seq.ResequencingExperiment",
+                                 on_delete=models.SET_NULL, related_name="ancestor_of",
+                                 **blank_field)
+    ancestor_set_at = models.DateTimeField(**blank_field)
+    ancestor_set_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
+                                        **blank_field)
+
     class Meta:
         verbose_name_plural = "experiments"
 
@@ -151,6 +182,27 @@ class AleExperiment(SoftDeleteMixin):
         self.locked_at = None
         self.locked_by = None
         self.save(update_fields=["locked_at", "locked_by"])
+        return self
+
+    @property
+    def has_ancestor(self):
+        return self.ancestor_id is not None
+
+    def set_ancestor(self, reseq, user=None):
+        """Designate `reseq` as this experiment's ancestor, replacing any prior one."""
+        from django.utils import timezone
+        self.ancestor = reseq
+        self.ancestor_set_at = timezone.now()
+        self.ancestor_set_by = user if (user and user.is_authenticated) else None
+        self.save(update_fields=["ancestor", "ancestor_set_at", "ancestor_set_by"])
+        return self
+
+    def clear_ancestor(self):
+        """Forget the designation. All three columns go, as `unlock()` clears both of its."""
+        self.ancestor = None
+        self.ancestor_set_at = None
+        self.ancestor_set_by = None
+        self.save(update_fields=["ancestor", "ancestor_set_at", "ancestor_set_by"])
         return self
 
     def lock_message(self):
@@ -199,6 +251,9 @@ class AleExperiment(SoftDeleteMixin):
             # page renders the shell, and a locked experiment should say so on all of them
             # rather than only on the one page that happens to check.
             "ale_experiment_locked": self.is_locked,
+            # Sixth, and for the same reason: a page that hides the ancestor should be able
+            # to say so without asking the database again.
+            "ale_experiment_ancestor_id": self.ancestor_id,
         }
 
 
@@ -221,9 +276,6 @@ class AleId(models.Model):
     species = models.CharField(max_length=300, **blank_field)
     strain = models.CharField(max_length=300, **blank_field)
     ale_experiment = models.ForeignKey(AleExperiment, on_delete=models.CASCADE)
-    starting_strain = models.ForeignKey("Isolate", on_delete=models.DO_NOTHING,
-                                        default=None,
-                                        **blank_field)
 
     def __unicode__(self):
         # return "ALE #%s < %s" % (self.ale_id, self.ale_experiment.name)

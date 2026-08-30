@@ -1,4 +1,3 @@
-import aledb_experiment.common
 import aledb_experiment.models
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_view_project
@@ -35,15 +34,31 @@ MUTATION_TYPE_LIST = ['SNP', 'SUB', 'DEL', 'INS', 'MOB', 'AMP', 'CON', 'INV', UN
 # TODO: change all instance of 'seq_experiment' to 'reseq'
 
 
-def get_aleid_ale_id_list(experiment_id, exclude_starting_strain=False):
-    if experiment_id:
-        aleid_queryset = aledb_experiment.models.AleId.objects.filter(ale_experiment__ale_id=experiment_id)
-    else:
-        aleid_queryset = aledb_experiment.models.AleId.objects.all()
+def get_aleid_ale_id_list(experiment_id):
+    """The ALE labels the picker should offer: those that still have a visible sample.
 
-    if exclude_starting_strain:
-        aleid_queryset = aleid_queryset.exclude(ale_id=aledb_experiment.common.STARTING_STRAIN_ALE_ID)
-    return aleid_queryset.values_list("ale_id", flat=True)
+    **This used to exclude the literal string "0".** `STARTING_STRAIN_ALE_ID` was the
+    convention that ALE 0 held the starting strain, and four pages passed
+    `exclude_starting_strain=True` to keep it out of the dropdown -- while its samples went
+    on landing in every analysis the moment no ALE was picked, which is the bug that
+    convention actually had.
+
+    The question the picker is asking is "which ALEs can I show you", so it is answered from
+    the samples rather than from a magic label. An ALE holding nothing but the designated
+    ancestor now disappears on its own, and one legitimately called "0" stays.
+    """
+    # Imported here rather than at module scope: `aledb_seq.util` reaches the filter layer,
+    # and this module is imported by most of it.
+    from aledb_seq.util import get_ordered_reseq_queryset
+
+    # `.order_by()` strips the sample ordering before the subquery. An ORDER BY left on a
+    # queryset handed to `__in` adds its columns to the SELECT, which is an error on some
+    # backends and silently wrong on others.
+    visible = get_ordered_reseq_queryset(experiment_id).order_by().values("pk")
+    return (aledb_experiment.models.AleId.objects
+            .filter(flask__isolate__technicalreplicate__resequencingexperiment__in=visible)
+            .distinct()
+            .values_list("ale_id", flat=True))
 
 
 def get_ale_id(request):
@@ -112,22 +127,8 @@ def get_ale_experiment_name(request):
     return ale_experiment_name
 
 
-def filter_out_wt_reseq(reseq_ordered_dict):
-    for key, value in reseq_ordered_dict.items():
-        if value.ale_id == aledb_experiment.common.STARTING_STRAIN_ALE_ID:
-            del reseq_ordered_dict[key]
-            break
-    return reseq_ordered_dict
-
-
-def get_wt_reseq_id(seq_experiment_ordered_dict):
-
-    wt_id = None
-
-    for key, value in seq_experiment_ordered_dict.items():
-
-        if value.ale_id == aledb_experiment.common.STARTING_STRAIN_ALE_ID:
-
-            wt_id = key
-
-    return wt_id
+# `filter_out_wt_reseq` and `get_wt_reseq_id` stood here. They were the ancestor subtraction
+# that was meant to happen and never did -- neither had a single caller anywhere in the suite,
+# and both compared against `STARTING_STRAIN_ALE_ID`. What they were reaching for is
+# `aledb_experiment/ancestor.py`, which subtracts a designated sample rather than guessing
+# from an ALE label.

@@ -16,11 +16,15 @@ for them in the list's parent, which is the wrapper below.
   id             the <ul> id, which the page hands to aledbSelectList
   selected_ids   the ids to start highlighted; omit for none
   empty_message  what to say instead of rows when `items` is empty
+  single         suppress Select all / Select none, for a list where exactly one row is
+                 the answer. The helper is multi-select and stays so; a plain click already
+                 selects exactly one, and the page keeps it that way with an `onChange`.
+                 Two buttons offering to select every row would be offering nonsense.
 {% endcomment %}
 <div class="aledb-select">
     {% comment %} No rows, no controls: "0 of 0 selected" beside a sentence explaining that
        there is nothing to pick reads as a fault rather than an empty list. {% endcomment %}
-    {% if items %}
+    {% if items and not single %}
         <div class="aledb-select-controls">
             <button type="button" class="btn btn-default btn-xs" data-select="all">Select all</button>
             <button type="button" class="btn btn-default btn-xs" data-select="none">Select none</button>

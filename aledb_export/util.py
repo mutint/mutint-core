@@ -18,6 +18,20 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
     export includes AMP rows where the fixation and converge *pages* exclude them --
     `get_table_body` hardcodes `filter_type='AMP'`. Changing it would silently change every
     export anyone has ever taken, so it is recorded rather than fixed.
+
+    **The `mut` export does not subtract the designated ancestor**, which is why this reaches
+    for `get_observed_mutation_queryset` rather than the `get_evolved_*` sibling every
+    analysis uses. A download called "all mutations" that quietly dropped a sample and a set
+    of rows would be a worse answer than a faithful one; a reader who wants the subtracted set
+    takes it from the page that shows it. The columns follow for free -- they are built from
+    `get_ordered_reseq_dict(observed_mutations)`, i.e. from the rows themselves, so the
+    ancestor's column comes back with its rows and nothing here special-cases it.
+
+    A *derived* export is a different question and answers it differently. `fixed_mut` and
+    `converged_mut` come from `get_export_handler`, and those sets are computed with the
+    ancestor already subtracted -- there is no un-subtracted version of "what converged". So
+    the rule is: the raw export is what is stored, and a derived export is exactly what its
+    page showed.
     """
     if mut_type_str == MUT_TYPE_STR:
         obs_mut_qryset = get_observed_mutation_queryset(exp_id)

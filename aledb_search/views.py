@@ -12,6 +12,7 @@ from functools import reduce
 from aledb_seq.views import mutation_table_builder
 from aledb_experiment.utils import get_user_projects, get_strains
 from aledb_seq.util import get_ref_sequences
+from aledb_experiment.ancestor import exclude_all_ancestry
 from aledb_filter.util import filter_observed_mutations
 from aledb_common.util import get_user_context
 from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
@@ -260,5 +261,10 @@ def _get_mut_qryset(include_argument_list, exclude_argument_list):
     else:
         mut_qryset = ObservedMutation.objects.filter(include_argument_list)
 
-    return mut_qryset
+    # Designated ancestors are subtracted, across every experiment at once. Search is the one
+    # page with no single experiment to name, so it cannot say *which* ancestor -- but showing
+    # rows here that every experiment page excludes would make the two contradict each other,
+    # and the reader has no way to tell which is answering their question. The summary line
+    # says so in `own_rules`.
+    return exclude_all_ancestry(mut_qryset)
 

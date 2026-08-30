@@ -4,8 +4,9 @@ from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
 from aledb_seq.views.common import MUTATION_TYPE_LIST, UNANNOTATED
-from aledb_experiment.common import STARTING_STRAIN_ALE_ID
-from aledb_experiment.models import AleId, Isolate, Flask
+from aledb_experiment.ancestor import (exclude_all_ancestry,
+                                       exclude_ancestor_samples)
+from aledb_experiment.models import AleExperiment, AleId, Isolate, Flask
 from django.db.models import Q
 
 
@@ -21,24 +22,60 @@ _EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale
 #: Deletion here is soft: it sets `deleted_at` and leaves everything below the experiment in
 #: place, and this app's managers are deliberately unfiltered -- so these totals counted every
 #: project and experiment anybody had ever removed. Both halves are needed: deleting a project
-#: does not stamp its experiments. The `STARTING_STRAIN_ALE_ID` exclusion below is the
-#: pre-existing sentinel exclusion and is a different thing entirely.
+#: does not stamp its experiments.
+
+
+def _evolved_samples():
+    from aledb_seq.models import ResequencingExperiment
+    return exclude_ancestor_samples(ResequencingExperiment.objects.all())
+
+
+def _purely_ancestral(model, sample_path):
+    """Rows of `model` whose every sample is a designated ancestor.
+
+    `STARTING_STRAIN_ALE_ID` stood here: three `~Q(ale_id="0")` clauses approximating "do not
+    count the ancestor" from an ALE label. This asks the real question instead, and an ALE
+    genuinely labelled "0" is counted like any other.
+
+    **It still counts rows, not samples.** An AleId, Flask or Isolate carrying no samples at
+    all has always been counted here and still is -- dropping those would move the published
+    totals for a reason that has nothing to do with ancestors. What is dropped is only a row
+    that has samples and whose samples are *all* ancestral, which is the case the ALE-0 rule
+    was really reaching for. A flask holding the ancestor alongside other samples still counts.
+
+    Two of the three original clauses were also redundant: the flask and isolate counts
+    already filtered `ale_id__in=live_ales`, which had excluded ALE 0 once over.
+    """
+    ancestors = AleExperiment.objects.filter(ancestor__isnull=False).values("ancestor")
+    if not ancestors.exists():
+        return model.objects.none()
+    return (model.objects.filter(**{"%s__in" % sample_path: ancestors})
+            .exclude(**{"%s__in" % sample_path:
+                        _evolved_samples().order_by().values("pk")}))
+
+
+#: Where a sample sits, seen from each of the three rows counted below.
+_SAMPLE_FROM_ALE = "flask__isolate__technicalreplicate__resequencingexperiment"
+_SAMPLE_FROM_FLASK = "isolate__technicalreplicate__resequencingexperiment"
+_SAMPLE_FROM_ISOLATE = "technicalreplicate__resequencingexperiment"
 
 
 def rebuild_sample_counts():
     if SampleCounts.objects.all().count() == 0:
         SampleCounts.objects.create()
-    live_ales = AleId.objects.filter(~Q(ale_id=STARTING_STRAIN_ALE_ID)).filter(
+    live_ales = AleId.objects.filter(
         Q(ale_experiment__deleted_at__isnull=True)
         & Q(ale_experiment__project__deleted_at__isnull=True))
-    ale_count = live_ales.count()
-    SampleCounts.objects.all().update(ale_count=ale_count)
-    flask_count = Flask.objects.filter(~Q(ale_id__ale_id=STARTING_STRAIN_ALE_ID),
-                                       ale_id__in=live_ales).count()
-    SampleCounts.objects.all().update(flask_count=flask_count)
-    isolate_count = Isolate.objects.filter(~Q(flask__ale_id__ale_id=STARTING_STRAIN_ALE_ID),
-                                           flask__ale_id__in=live_ales).count()
-    SampleCounts.objects.all().update(isolate_count=isolate_count)
+
+    ale_count = live_ales.exclude(
+        pk__in=_purely_ancestral(AleId, _SAMPLE_FROM_ALE)).distinct().count()
+    flask_count = Flask.objects.filter(ale_id__in=live_ales).exclude(
+        pk__in=_purely_ancestral(Flask, _SAMPLE_FROM_FLASK)).distinct().count()
+    isolate_count = Isolate.objects.filter(flask__ale_id__in=live_ales).exclude(
+        pk__in=_purely_ancestral(Isolate, _SAMPLE_FROM_ISOLATE)).distinct().count()
+
+    SampleCounts.objects.all().update(ale_count=ale_count, flask_count=flask_count,
+                                      isolate_count=isolate_count)
 
 
 def _live_observation_rows():
@@ -62,11 +99,19 @@ def _live_observation_rows():
     `protein_change` -- a rendered display string that contains none of the words being looked
     for. See `aledb_seq.functional_change`.
     """
-    return ObservedMutation.objects.filter(
+    queryset = ObservedMutation.objects.filter(
         **{"%s__deleted_at__isnull" % _EXPERIMENT_PATH: True,
-           "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True}
-    ).values_list("mutation_id", "mutation__mutation_type",
-                  "mutation__snp_type").iterator(chunk_size=2000)
+           "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True})
+
+    # The designated ancestors *are* subtracted, unlike the reader's filter above. A frequency
+    # cutoff is one person's view of one experiment; an ancestor is a fact about the dataset,
+    # and counting the starting line as evolution inflates the headline number this page
+    # exists to report. One exclusion for every experiment at once -- see
+    # `exclude_all_ancestry` for why that is safe rather than merely cheap.
+    queryset = exclude_all_ancestry(queryset)
+
+    return queryset.values_list("mutation_id", "mutation__mutation_type",
+                                "mutation__snp_type").iterator(chunk_size=2000)
 
 
 def rebuild_mutation_counts():

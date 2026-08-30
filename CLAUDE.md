@@ -1283,6 +1283,81 @@ gene loop -- lost both its cross-experiment `deleted_global_mutations` cache and
 `and`/`or` precedence quirk, since a global gene meaning the same thing everywhere was the only
 reason either existed.
 
+### The ancestor belongs to the dataset, not to the reader
+
+An ALE starts from an ancestor, and that ancestor already differs from the reference genome.
+Those differences are the starting line rather than evolution, so
+`AleExperiment.ancestor` names one sample and everything follows from that column:
+its mutations are subtracted from every other sample before anything is computed, and the
+sample itself leaves every listing. `aledb_experiment/ancestor.py` is the whole mechanism.
+
+**It sits next to the section above and is the opposite of it on every count**, which is why it
+is not in `aledb_filter`. A `ViewFilter` is per-person, session-scoped, ephemeral and clearable
+in a click; this is shared, permanent, has no toggle and no query parameter, and reaches
+aledb-phylogeny, which never touches the filter layer. Putting an unconditional exclusion inside
+that package would undo the distinction it exists to draw.
+
+**The idea was already here four times, and none of them subtracted anything.**
+`AleId.starting_strain`, a FK to `Isolate` that no code path ever wrote. `filter_out_wt_reseq`
+and `get_wt_reseq_id`, helpers with no callers -- the subtraction that was meant to happen and
+never did. `STARTING_STRAIN_ALE_ID = "0"`, which kept ALE 0 out of four pickers and three
+dashboard counts while its samples went on landing in every analysis the moment no ALE was
+picked, *which is the bug that convention actually had*. And
+`AleExperimentFilter.starting_strain_mutations`, a hand-curated id list already migrated into
+delete changesets. All four are gone; `aledb_experiment.0010` drops the columns and backfills
+the designation.
+
+**That migration is the load-bearing part of retiring the label.** Nothing reads `"0"`
+afterwards, so without a backfill every existing A0 starting strain would silently reappear
+everywhere. Each experiment with exactly one sample under ALE `0` gets it as `ancestor`;
+**ambiguity is skipped, not guessed** -- several samples under ALE 0 is a question about the
+data only whoever ran the experiment can answer, and choosing for them would be a silent wrong
+answer rather than a visible absent one.
+
+**Two defaults, pointing opposite ways, and the asymmetry is the reason.**
+`get_observed_mutation_queryset` stays raw and `get_evolved_observation_queryset` is the one
+that subtracts; `get_ordered_reseq_queryset` subtracts by default and takes
+`include_ancestor=True`. Forgetting to opt *in* hides the ancestor from a curation page, which
+is visible and gets reported the same day. Forgetting to opt *out* leaves ancestral data in an
+analysis, which is invisible and wrong. So each is defaulted to whichever mistake is louder.
+
+`observations_for_samples(reseq_ids, experiment_id)` is what a plugin derives from -- it was
+`get_all_observed_mutations`, which had no callers because four repos had each written that one
+line out by hand. **Dropping the ancestor from a sample list is not enough**: that removes its
+column while its mutations sit in every other sample, and since an ancestral mutation is in
+every ALE by construction, convergence reports all of them as convergent and fixation all of
+them as fixed. The subtraction has to reach the derivation, not the render.
+
+`exclude_all_ancestry` is the cross-experiment form, for search, the interop API and the
+dashboard. One global exclusion is unambiguous because `Mutation` rows are per experiment, so an
+id observed in one experiment's ancestor cannot appear in another's samples.
+
+**Four deliberate exceptions**, and each one is stated where it is taken:
+
+- **`/mutations/breseq` shows ancestral rows, tinted `ancestral_table_row`.** It is what breseq
+  called in one sample, not a conclusion drawn from it; a row silently missing would make the
+  page disagree with the report it was imported from. It passes
+  `{% view_filter_summary ancestor_subtracted=False %}` so the shared summary does not claim a
+  subtraction it did not do -- that rule cuts both ways. `_selected_reseq` needs its fallback
+  for the same page: the picker does not list the ancestor, so without it a link to the ancestor
+  renders a *different* sample and looks entirely normal doing it.
+- **The mutation editor and the Edit-samples page** pass `include_ancestor=True` everywhere.
+  They curate; they must be able to change what they are hiding.
+- **The genome browser** keeps it, because the ancestor's own evidence link lands there and
+  `is_current` would match nothing.
+- **The `mut` export does not subtract**; a derived export (`fixed_mut`, `converged_mut`) is
+  exactly what its page showed, because there is no un-subtracted version of "what converged".
+
+**Designating is attributed** (`ancestor_set_at` / `ancestor_set_by`) and gated on
+`can_edit_experiment`, so a locked experiment refuses it -- including refusing to *clear* it.
+This is the only setting in the product that changes what everyone sees, which is exactly what
+`AleExperimentFilter` got wrong.
+
+Deleting the designated sample is the quiet failure: `SET_NULL` clears the column and the
+derived data does not notice. `ancestor.note_sample_deleted` is a `pre_delete` receiver --
+`pre`, because afterwards there is no way left to tell it was the ancestor -- and it marks
+rather than runs, since it can fire in the middle of a cascade destroying the whole experiment.
+
 ### Every table says what filtering produced it
 
 `{% view_filter_summary %}` renders a line under a mutation table naming the cutoffs and ignored

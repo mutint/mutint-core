@@ -57,6 +57,48 @@ the rule to keep: a control that does nothing is worse than no control. There us
 `show_filter_toggles` flag each page had to set for exactly this reason, and it was forgotten on
 three pages, which rendered a dead checkbox for a year.
 
+## Ancestral mutations, which are not a filter
+
+An experiment may designate one sample as its **ancestor**. Its mutations were there before the
+first flask, so they are subtracted from every other sample before anything is computed, and the
+sample itself leaves every listing.
+
+**This is the opposite of everything above.** The reader's filter is theirs, lives in their
+session, dies with their browser and is one click from cleared. This belongs to the dataset, is
+the same for everyone, and **there is no opting out** — no toggle, no query parameter, no
+`ancestor=None` to pass. If you are deriving something, you subtract it.
+
+```python
+from aledb_seq.util import observations_for_samples
+
+queryset = observations_for_samples(list(reseq_dict), experiment_id)
+queryset, ignored_genes = filtered_observed_mutation_queryset(queryset, view_filter=view_filter)
+```
+
+That is the same two lines you already write, with the first one changed. Do not write
+`ObservedMutation.objects.filter(sequencing_experiment_id__in=...)` by hand — four repos did,
+which is why this helper exists.
+
+**Dropping the ancestor from your sample list is not enough**, and this is the mistake to avoid
+because it looks almost right. `get_reseq_ordered_dict` already excludes the ancestor, so its
+column disappears from your table and the page looks correct — while its mutations sit in every
+other sample. An ancestral mutation is present in every ALE by construction, so convergence
+reports every one of them as convergent and fixation reports every one as fixed. The subtraction
+has to reach the derivation, exactly as the section below says the reader's filter does.
+
+If your page curates rather than reads — it edits or deletes samples — pass
+`get_reseq_ordered_dict(experiment_id, include_ancestor=True)`. Nothing else should.
+
+For a queryset spanning experiments, `aledb_experiment.ancestor.exclude_all_ancestry(queryset)`
+takes no experiment id. It is unambiguous because `Mutation` rows are per experiment, so an id
+observed in one experiment's ancestor cannot turn up in another's samples.
+
+`{% view_filter_summary %}` names the ancestor for you. A page passing `own_rules=` still gets
+that sentence — `own_rules` says you have a different *frequency* rule, not that you skipped the
+subtraction. The one page that genuinely does not subtract passes
+`{% view_filter_summary ancestor_subtracted=False %}`, and it is the per-sample breseq table,
+which tints those rows red instead of hiding them.
+
 ## Filter *before* you analyse, not after
 
 If your plugin derives something — what has fixated, what has converged — **the filter has to

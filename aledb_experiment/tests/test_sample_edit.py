@@ -439,15 +439,12 @@ class OrphanPruningTestCase(SampleEditTestCase):
         self.assertEqual(200, response.status_code, response.content)
         self.assertTrue(Isolate.objects.filter(pk=isolate.pk).exists())
 
-    def test_an_isolate_referenced_as_a_starting_strain_is_kept(self):
-        isolate = self.only.tech_rep.isolate
-        AleId.objects.create(ale_experiment=self.experiment, ale_id=42,
-                             starting_strain=isolate)
-
-        response = self.single(self.only, ale=2)
-
-        self.assertEqual(200, response.status_code, response.content)
-        self.assertTrue(Isolate.objects.filter(pk=isolate.pk).exists())
+    # `test_an_isolate_referenced_as_a_starting_strain_is_kept` stood here. It pinned the
+    # orphan guard against `AleId.starting_strain`, a FK to Isolate that no code path in the
+    # suite ever wrote -- so the case it protected could not arise. The column is gone
+    # (`aledb_experiment.0010`) along with the guard clause; `AleExperiment.ancestor` is the
+    # one designation now, and it points at a sample rather than an isolate. The neighbouring
+    # `parent_isolate` half of that guard is still live and still tested above.
 
 
 class BulkSampleEditTestCase(SampleEditTestCase):

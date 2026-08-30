@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% comment %}
+Designate the sample this experiment started from.
+
+One page rather than a control on the experiment's edit form, because the consequence needs
+saying before it is chosen: this is the only setting in the product that changes what
+*everyone* sees, and the repo already has a scar from one that did that silently
+(`AleExperimentFilter`, one shared row anybody with write access could edit).
+{% endcomment %}
+{% block title %}Designate ancestor{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} base.html does not load sweetalert; every page that confirms something has
+       to pull it in. {% endcomment %}
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+{% endblock %}
+{% block header %}Designate ancestor: {{ experiment.name }}{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% csrf_token %}
+
+        <div class="alert alert-warning">
+            <p><strong>The designated ancestor is excluded from every view and analysis of
+                this experiment</strong>, and every mutation observed in it is subtracted
+                from every other sample before anything is computed.</p>
+            <p style="margin-bottom: 0;">That reaches the mutation tables, convergence,
+                fixation, the Overview counts and the phylogeny. It is not a filter: no
+                reader can turn it off, and it changes what everyone sees, not just you.
+                Its own sample page still opens, with those mutations shown in red.</p>
+        </div>
+
+        {% if experiment.has_ancestor %}
+            <p style="color: #666;">
+                Currently <strong>{{ experiment.ancestor.ale_flask_isolate_str }}</strong>,
+                set {% if experiment.ancestor_set_at %}on
+                    {{ experiment.ancestor_set_at|date:"Y-m-d" }}{% endif %}
+                by {{ experiment.ancestor_set_by.get_username|default:"the system" }}.
+            </p>
+        {% else %}
+            <p style="color: #666;">
+                No ancestor is designated, so every sample is shown and analysed.
+            </p>
+        {% endif %}
+
+        {% if lock_refusal %}
+            <div class="alert alert-warning">{{ lock_refusal }}</div>
+        {% elif not can_edit %}
+            <div class="alert alert-warning">
+                You do not have permission to change this experiment.
+            </div>
+        {% endif %}
+
+        <h4 style="margin-top: 1.5em;">Ancestor</h4>
+        {% comment %} `single`: exactly one row is the answer, so the helper's Select all /
+           Select none buttons are suppressed. {% endcomment %}
+        {% include "select_list.html" with items=samples id="anc-samples" selected_ids=selected_ids single=True empty_message="This experiment has no samples yet." %}
+
+        <div style="margin-top: 1.5em;">
+            {% if can_edit %}
+                <button type="button" class="btn btn-primary" id="anc-save">Save</button>
+                <button type="button" class="btn btn-default" id="anc-clear">No ancestor</button>
+            {% endif %}
+            <a class="btn btn-default"
+               href="/stats?ale_experiment_id={{ experiment.ale_id }}">Back to experiment</a>
+        </div>
+        <div id="anc-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var list = document.getElementById("anc-samples");
+    var save = document.getElementById("anc-save");
+    if (!list || !save) { return; }
+
+    // The helper is multi-select and stays that way. A plain click already selects exactly
+    // one row; ctrl/shift-click is what can add a second, so the onChange trims back to the
+    // row that just moved. Trimming here rather than adding a `single` mode to the helper
+    // keeps the one selection model the rest of the product uses.
+    var picker = window.aledbSelectList(list, {
+        controls: null,
+        onChange: function (changed) {
+            if (picker.count() <= 1) { return; }
+            var keep = changed[changed.length - 1];
+            picker.select(function (row) { return row === keep; });
+        }
+    });
+
+    function post(data, confirmText) {
+        swal({title: "", text: confirmText, type: "warning",
+              showCancelButton: true, confirmButtonText: "Yes"},
+            function (ok) {
+                if (!ok) { return; }
+                window.aledbPost(
+                    "/ale/experiment/{{ experiment.ale_id }}/ancestor/apply/", data
+                ).then(function () {
+                    window.location.reload();
+                }).catch(function (err) {
+                    document.getElementById("anc-error").textContent = err.message;
+                });
+            });
+    }
+
+    save.addEventListener("click", function () {
+        var chosen = picker.selected();
+        if (chosen.length !== 1) {
+            document.getElementById("anc-error").textContent =
+                "Pick exactly one sample, or choose No ancestor.";
+            return;
+        }
+        post({reseq_id: chosen[0]},
+             "This sample will be excluded from every view and analysis, and its mutations "
+             + "subtracted from every other sample. Everyone sees this change.");
+    });
+
+    var clear = document.getElementById("anc-clear");
+    if (clear) {
+        clear.addEventListener("click", function () {
+            post({}, "Every sample will be shown and analysed again, including the mutations "
+                   + "currently subtracted. Everyone sees this change.");
+        });
+    }
+})();
+</script>
+{% endblock %}

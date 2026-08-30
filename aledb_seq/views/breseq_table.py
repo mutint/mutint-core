@@ -26,6 +26,7 @@ from aledb_filter.util import filter_observed_mutations
 from aledb_filter.view_filter import get_view_filter
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.models import ExperimentReference, ObservedMutation
+from aledb_experiment.ancestor import ancestral_mutation_ids
 from aledb_seq.util import get_reseq_ordered_dict
 
 logger = logging.getLogger(__name__)
@@ -43,14 +44,17 @@ def breseq_table(request):
 
         reseq_dict = get_reseq_ordered_dict(experiment.ale_id, ale_number,
                                             sample_type, request)
-        reseq = _selected_reseq(request, reseq_dict)
+        reseq = _selected_reseq(request, reseq_dict, experiment)
 
         view_filter = get_view_filter(request, experiment.ale_id)
-        rows = _rows_for(experiment, reseq, view_filter) if reseq is not None else []
+        # Resolved once for the whole page: the tint is a membership test per rendered row.
+        ancestral_ids = ancestral_mutation_ids(experiment.ale_id)
+        rows = (_rows_for(experiment, reseq, view_filter, ancestral_ids)
+                if reseq is not None else [])
 
         context.update(experiment.experiment_context())
         context.update({
-            "ales": aledb_seq.views.common.get_aleid_ale_id_list(experiment.ale_id, True),
+            "ales": aledb_seq.views.common.get_aleid_ale_id_list(experiment.ale_id),
             "ale_no": ale_number,
             "ale_experiment_name": experiment.name,
             "ale_project_name": experiment.project.name if experiment.project else "",
@@ -60,6 +64,8 @@ def breseq_table(request):
             "selected_reseq": reseq,
             "selected_reseq_id": reseq.id if reseq is not None else None,
             "is_population": is_population(reseq),
+            "is_ancestor": reseq is not None and reseq.id == experiment.ancestor_id,
+            "ancestral_count": sum(1 for row in rows if row["ancestral"]),
             "rows": rows,
             "unannotated_count": sum(1 for row in rows if not row["annotated"]),
             "reference": _reference(experiment),
@@ -83,8 +89,18 @@ def breseq_table(request):
         return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def _selected_reseq(request, reseq_dict):
-    """The requested sample, or the experiment's first one."""
+def _selected_reseq(request, reseq_dict, experiment):
+    """The requested sample, or the experiment's first one.
+
+    **`reseq_dict` is the picker, and the picker does not list the designated ancestor.** So a
+    requested id that is not in it gets a second look, scoped to this experiment, rather than
+    falling through to the first sample. Without that, a link to the ancestor would quietly
+    render a *different* sample -- which is the worst of the available outcomes, because the
+    page would look entirely normal while showing the wrong thing.
+
+    Still scoped to the experiment, so this is not a way around anything: an id from another
+    experiment finds nothing here just as it found nothing in the dict.
+    """
     requested = request.GET.get(REQUEST_RESEQ_ID)
     if requested:
         try:
@@ -93,19 +109,30 @@ def _selected_reseq(request, reseq_dict):
             reseq_id = None
         if reseq_id in reseq_dict:
             return reseq_dict[reseq_id]
+        if reseq_id is not None:
+            hidden = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
+            if reseq_id in hidden:
+                return hidden[reseq_id]
     for reseq in reseq_dict.values():
         return reseq
     return None
 
 
-def _rows_for(experiment, reseq, view_filter=None):
+def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
+    """This sample's rows, ancestor included.
+
+    Deliberately the raw observation queryset. Every page that analyses the data subtracts the
+    designated ancestor; this one tints those rows instead, because it is a view of what
+    breseq called in one sample rather than a conclusion drawn from it.
+    """
     observed = filter_observed_mutations(
         ObservedMutation.objects.filter(sequencing_experiment=reseq).select_related("mutation"),
         view_filter=view_filter)
     # filter_observed_mutations orders across samples; within one sample breseq
     # orders by reference then position.
     observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
-    return build_rows(observed, browse_url=_browse_url(reseq))
+    return build_rows(observed, browse_url=_browse_url(reseq),
+                      ancestral_mutation_ids=ancestral_ids)
 
 
 def _browse_url(reseq):

@@ -64,8 +64,23 @@
            not the bare fields: this page has no view-control form of its own to drop them
            into, and inputs with no way to submit are the control-that-does-nothing this
            design is trying to avoid. {% endcomment %}
+        {% if is_ancestor %}
+            {% comment %} Reached by URL rather than by the picker, which does not list it.
+               Says what designating it did, and offers the way back. {% endcomment %}
+            <div class="alert alert-warning" style="margin-bottom: 10px;">
+                <strong>This is the designated ancestor.</strong>
+                It is excluded from every view and analysis of this experiment, and the
+                mutations below are subtracted from every other sample before anything is
+                computed.
+                <a href="/ale/experiment/{{ ale_experiment_id }}/ancestor/">Change</a>
+            </div>
+        {% endif %}
         {% view_filter_form %}
-        {% view_filter_summary %}
+        {% comment %} `ancestor_subtracted=False`: this is the one page in the suite that does
+           *not* subtract the designated ancestor, so the shared summary must not claim it did.
+           A page describing filtering it did not do is the failure `aledb_filter` is built to
+           prevent, and it cuts both ways. {% endcomment %}
+        {% view_filter_summary ancestor_subtracted=False %}
         <div class="row">
             {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." %}
         </div>
@@ -91,6 +106,11 @@
                 <span class="snp_type_nonsense">nonsense</span>.
                 The changed base in a codon is
                 <span class="mutation_in_codon">underlined red</span>.
+                {% if ancestral_count %}
+                    <span style="background-color: rgb(255, 218, 218);">Rows shaded red</span>
+                    ({{ ancestral_count }}) are in this experiment's designated ancestor and
+                    are subtracted everywhere else.
+                {% endif %}
                 {% if is_population %}
                     Rows shaded green are polymorphic &mdash; below 100% frequency.
                 {% endif %}

@@ -8,6 +8,7 @@ from .permissions import (
     can_lock_experiment, can_view_project, experiment_lock_refusal,
 )
 from .roles import ROLE_WRITE
+from aledb_common.logger import user_extra
 from aledb_common.util import get_user_context
 import logging
 
@@ -224,6 +225,97 @@ def project_delete(request, pk):
         project.soft_delete(request.user)
         _mark_totals_stale('project deleted')
     return JsonResponse({"project_id": project.id, "deleted_at": project.deleted_at})
+
+
+def experiment_ancestor(request, pk):
+    """The page that designates one sample as this experiment's ancestor.
+
+    A page of its own rather than a field on the edit form, for the reason
+    `experiment_lock` gives: a details form rewrites every field it carries on every save,
+    and this one needs to say what it is about to do before it does it.
+
+    Rendered for anyone who can view the experiment; the list is read-only without write
+    access, and `experiment_ancestor_apply` refuses the write regardless -- the button being
+    hidden is not a permission check.
+    """
+    experiment = get_object_or_404(AleExperiment, pk=pk)
+    context = get_user_context(request.user)
+    if not can_view_project(request.user, experiment.project):
+        return render(request, "403.html", context, status=403)
+
+    from aledb_seq.util import get_ordered_reseq_queryset
+
+    # `include_ancestor=True`: the current ancestor has to appear in the list that changes it.
+    samples = list(get_ordered_reseq_queryset(experiment.ale_id, include_ancestor=True))
+    context.update(experiment.experiment_context())
+    context.update({
+        "experiment": experiment,
+        "samples": samples,
+        "selected_ids": [experiment.ancestor_id] if experiment.ancestor_id else [],
+        "can_edit": can_edit_experiment(request.user, experiment),
+        "lock_refusal": experiment_lock_refusal(experiment),
+        "title": "%s ancestor" % experiment.name,
+        "template_header": "Designate ancestor",
+    })
+    return render(request, "experiment/ancestor.html", context)
+
+
+@require_POST
+def experiment_ancestor_apply(request, pk):
+    """Set or clear the designated ancestor. Write access, and not while locked.
+
+    Posting no `reseq_id` clears the designation, which is what the "No ancestor" row does.
+
+    **`can_edit_experiment`, not `can_edit_project`.** A predicate handed the project cannot
+    see the lock on the experiment, and this is exactly the kind of write a lock exists to
+    stop: it changes what every reader of a finished dataset sees. It also means a locked
+    experiment cannot have its ancestor *cleared* either, which is correct -- an admin
+    unlocks, changes it, and locks it again.
+    """
+    experiment = get_object_or_404(AleExperiment, pk=pk)
+    if not can_edit_experiment(request.user, experiment):
+        return JsonResponse(
+            {"error": (experiment_lock_refusal(experiment)
+                       or "You do not have permission to change this experiment.")},
+            status=403)
+
+    raw = (request.POST.get("reseq_id") or "").strip()
+    if not raw:
+        experiment.clear_ancestor()
+    else:
+        from aledb_seq.util import get_ordered_reseq_queryset
+        try:
+            reseq_id = int(raw)
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "That is not a sample id."}, status=400)
+
+        # Resolved out of *this experiment's* samples rather than by bare pk. Nothing in the
+        # schema stops the column pointing at another experiment's sample, and a mutation
+        # belongs to one experiment's reference genome -- subtracting a foreign sample's
+        # mutations would be meaningless where it was not simply a no-op.
+        reseq = get_ordered_reseq_queryset(
+            experiment.ale_id, include_ancestor=True).filter(pk=reseq_id).first()
+        if reseq is None:
+            return JsonResponse(
+                {"error": "That sample is not in this experiment."}, status=404)
+        experiment.set_ancestor(reseq, request.user)
+
+    # Everything derived changes: the ancestor's mutations leave or rejoin every other sample.
+    # Marked *and* run, the shape `aledb_mutation_editor.history.rebuild_after_edit` uses for
+    # "the mutations effectively changed" -- experiment scope now, so phylogeny's cached trees
+    # are discarded before anyone reads one; site scope left marked for the dashboard's own
+    # `ensure_fresh`.
+    from aledb_common.rebuild_registry import EXPERIMENT_SCOPE, request_rebuild, run_rebuilds
+    request_rebuild(experiment.ale_id, reason="ancestor designated")
+    run_rebuilds(experiment.ale_id, scope=EXPERIMENT_SCOPE)
+
+    logger.info("ancestor designated", extra=user_extra(request))
+    return JsonResponse({
+        "experiment_id": experiment.ale_id,
+        "ancestor_id": experiment.ancestor_id,
+        "ancestor_set_by": (experiment.ancestor_set_by.get_username()
+                            if experiment.ancestor_set_by_id else None),
+    })
 
 
 @require_POST

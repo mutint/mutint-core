@@ -11,10 +11,25 @@ There is no "Change" link any more. It pointed at `/filter`, a page that edited 
 by everyone; the controls are on this page now, a few lines above.
 {% endcomment %}
 <div class="row" style="margin: 6px 0 10px 0; color: #666; font-size: 12px;">
+    {% if ancestor %}
+        {% comment %} Stated first, and stated separately from everything below. The reader's
+           filter is theirs and clearable in a click; this is a property of the dataset that
+           nobody reading can turn off, so folding the two into one sentence would suggest it
+           is one more thing they chose. {% endcomment %}
+        <div>
+            Mutations in the designated ancestor
+            (<a href="/mutations/breseq?ale_experiment_id={{ experiment_id }}&amp;reseq_id={{ ancestor.sample_id }}">{{ ancestor.name }}</a>)
+            are excluded, and so is that sample.
+        </div>
+    {% endif %}
     {% if own_rules %}
         {{ own_rules }}
     {% elif not summary.applied %}
-        No filtering: every stored mutation for this experiment is shown.
+        {% if ancestor %}
+            No filtering of your own: every other stored mutation is shown.
+        {% else %}
+            No filtering: every stored mutation for this experiment is shown.
+        {% endif %}
     {% else %}
         {% spaceless %}Showing only{% if summary.cutoff %} frequencies
             {{ summary.cutoff.0 }}&ndash;{{ summary.cutoff.1 }}%{% endif %}{% if summary.cutoff and summary.genes %},

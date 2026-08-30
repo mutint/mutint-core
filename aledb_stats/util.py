@@ -2,7 +2,7 @@ import re
 from django.db.models import Count
 from aledb_experiment.ordering import sample_order
 from aledb_seq.models import UnassignedMissingCoverageEvidence
-from aledb_seq.util import get_observed_mutation_queryset
+from aledb_seq.util import get_evolved_observation_queryset
 from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
@@ -42,7 +42,7 @@ def get_needle_plot_data(experiment_id):
     Two columns rather than four: the gene and the experiment were fetched only to apply the
     ignored-gene list per row.
     """
-    rows = get_observed_mutation_queryset(experiment_id).order_by(*ROW_ORDER).values_list(
+    rows = get_evolved_observation_queryset(experiment_id).order_by(*ROW_ORDER).values_list(
         "mutation__position", "mutation__mutation_type",
     ).iterator(chunk_size=2000)
 
@@ -91,12 +91,20 @@ def get_reseq_experiment_info_list(reseq_experiments):
 
     They are two queries rather than two annotations on one, for the standard reason: two
     joined aggregates on the same row multiply each other's counts.
+
+    **The mutation count subtracts the designated ancestor**, because the Overview totals
+    above it do. These two numbers sit on one page: a per-sample column counting ancestral
+    rows beside a summary that excluded them would not add up, and the reader has no way to
+    tell which of the two is answering their question.
     """
     from django.db.models import Count
+    from aledb_experiment.ancestor import exclude_ancestry
     from aledb_seq.models import ObservedMutation
 
     reseq_experiments = list(reseq_experiments)
     reseq_ids = [reseq.id for reseq in reseq_experiments]
+    experiment_id = (reseq_experiments[0].ale_experiment.ale_id
+                     if reseq_experiments else None)
 
     missing_coverage_counts = dict(
         UnassignedMissingCoverageEvidence.objects
@@ -104,8 +112,9 @@ def get_reseq_experiment_info_list(reseq_experiments):
         .values_list('sequencing_experiment_id')
         .annotate(total=Count('id')))
     mutation_counts = dict(
-        ObservedMutation.objects
-        .filter(sequencing_experiment_id__in=reseq_ids)
+        exclude_ancestry(
+            ObservedMutation.objects.filter(sequencing_experiment_id__in=reseq_ids),
+            experiment_id)
         .values_list('sequencing_experiment_id')
         .annotate(total=Count('id')))
 
@@ -235,11 +244,11 @@ def compute_experiment_counts(ale_experiment_id):
     Nothing is filtered now, so there is nothing SQL cannot express, and `_count_in_python` went
     with the branch that chose it.
     """
-    from aledb_seq.util import get_observed_mutation_queryset
+    from aledb_seq.util import get_evolved_observation_queryset
 
     # The join, not `sequencing_experiment_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.
-    return _count_in_sql(get_observed_mutation_queryset(ale_experiment_id))
+    return _count_in_sql(get_evolved_observation_queryset(ale_experiment_id))
 
 
 #: What `/stats` reads. An `ExperimentSummary` row stood here with these four field names,

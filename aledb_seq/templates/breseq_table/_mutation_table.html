@@ -25,7 +25,7 @@
     </thead>
     <tbody>
     {% for row in rows %}
-        <tr class="{{ row.row_class }}">
+        <tr class="{{ row.row_class }}{% if row.ancestral %} ancestral_table_row{% endif %}">
             <td class="breseq-evidence">
                 {% if row.evidence_url %}
                     <a href="{{ row.evidence_url }}"

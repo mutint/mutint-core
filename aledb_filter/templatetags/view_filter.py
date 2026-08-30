@@ -19,6 +19,7 @@ is not connected to anything.
 
 from django import template
 
+from aledb_experiment.ancestor import describe_ancestor
 from aledb_filter.util import describe_filters
 from aledb_filter.view_filter import GENES_PARAM, MAX_PARAM, MIN_PARAM, get_view_filter
 
@@ -67,18 +68,35 @@ def view_filter_form(context):
 
 
 @register.inclusion_tag("filter/_summary.html", takes_context=True)
-def view_filter_summary(context, own_rules=None):
+def view_filter_summary(context, own_rules=None, ancestor_subtracted=True):
     """Say what filtering shaped the rows on this page.
 
     `own_rules` is for a page filtering by rules of its own -- aledb-phylogeny encodes frequency
     in three states rather than excluding on it, and search spans experiments so no one reader's
     filter applies. A sentence says so, where an empty summary would read as "no filtering here"
     when the truth is "different filtering here".
-    """
-    if own_rules:
-        return {"own_rules": own_rules, "summary": None, "experiment_id": None}
 
+    `ancestor_subtracted` is the designated ancestor, and it is **not** part of the reader's
+    filter -- it is a fact about the dataset that nobody reading can turn off. It gets a
+    sentence of its own for the same reason everything else here does: without one, the empty
+    branch below claims "every stored mutation for this experiment is shown", which stops being
+    true the moment an ancestor exists.
+
+    It is resolved and stated **independently of `own_rules`**, because the pages that pass
+    `own_rules` -- phylogeny and search -- are describing a *different frequency rule*, not
+    opting out of the subtraction. Only `ancestor_subtracted=False` says a page did not
+    subtract, and exactly one page passes it: the per-sample breseq table, which tints those
+    rows rather than hiding them.
+    """
     experiment_id, view_filter = _resolved(context)
+    ancestor = describe_ancestor(experiment_id) if ancestor_subtracted else None
+
+    if own_rules:
+        # `experiment_id` is carried even here: the ancestor sentence links to that sample,
+        # and phylogeny passes `own_rules` while still subtracting.
+        return {"own_rules": own_rules, "summary": None, "experiment_id": experiment_id,
+                "ancestor": ancestor}
+
     return {
         "own_rules": None,
         # The same object the exclusion is built from, so the sentence and the rows cannot
@@ -86,4 +104,5 @@ def view_filter_summary(context, own_rules=None):
         # that says nothing.
         "summary": describe_filters(view_filter),
         "experiment_id": experiment_id,
+        "ancestor": ancestor,
     }

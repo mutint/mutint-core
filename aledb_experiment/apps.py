@@ -11,3 +11,12 @@ class ExperimentConfig(AppConfig):
         register_nav_item('Projects', url='/ale/projects/', section=MAIN_SECTION)
         register_nav_item('Experiments', url='/ale/experiments/', section=MAIN_SECTION)
         register_nav_item('Groups', url='/ale/groups/', section=MAIN_SECTION)
+
+        # Deleting the designated ancestor un-subtracts its mutations everywhere. A signal
+        # rather than a call in each delete path, because there are several -- `remove_flask`,
+        # `delete_isolate`, the experiment purge -- and the one added next is exactly the one
+        # that would forget. See `aledb_experiment.ancestor.note_sample_deleted`.
+        from django.db.models.signals import pre_delete
+        from aledb_experiment.ancestor import note_sample_deleted
+        pre_delete.connect(note_sample_deleted, sender="aledb_seq.ResequencingExperiment",
+                           dispatch_uid="aledb_experiment.ancestor")

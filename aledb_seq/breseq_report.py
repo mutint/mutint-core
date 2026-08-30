@@ -80,12 +80,21 @@ def _frequency(observed):
     return "%.1f%%" % (value * 100), True
 
 
-def build_rows(observed_mutations, browse_url=None):
+def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=frozenset()):
     """One breseq-style row per observed mutation, ready for the template.
 
     ``browse_url`` is called with an ObservedMutation and returns where its
     evidence cell should link, or None for no link -- which is how a sample with
     no stored alignment renders its type as plain text.
+
+    ``ancestral_mutation_ids`` tints the rows observed in the experiment's designated
+    ancestor. **This is the one page that shows them**: everything that analyses the data
+    subtracts them, but this table is what breseq called in one sample, and a row silently
+    missing from it would make the page disagree with the report it was imported from.
+
+    A separate key rather than a third `row_class`: that one is a choice between breseq's
+    striping and its green polymorphism fill, and folding a tint into it would cost whichever
+    lost. Keyword-only because two callers already pass `browse_url` positionally.
     """
     rows = []
     for index, observed in enumerate(observed_mutations):
@@ -103,5 +112,6 @@ def build_rows(observed_mutations, browse_url=None):
         # breseq alternates row shading and colours a polymorphic call green.
         row["row_class"] = ("polymorphism_table_row" if is_polymorphism
                             else "alternate_table_row_%d" % (index % 2))
+        row["ancestral"] = observed.mutation_id in ancestral_mutation_ids
         rows.append(row)
     return rows

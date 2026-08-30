@@ -8,7 +8,26 @@ HTML_ECOCYC = """<a href = "https://ecocyc.org/ECOLI/substring-search?type=GENE&
 
 
 def get_observed_mutation_queryset(experiment_id):
+    """Every observation this experiment holds -- what is *stored*, ancestor included.
+
+    **Usually not what you want.** An experiment may designate an ancestor, whose mutations
+    are the starting line rather than evolution; anything analysing or summarising the data
+    wants `get_evolved_observation_queryset` below. This raw form is for the three places
+    that mean "what is stored": the CSV export, the mutation editor, and the per-sample
+    breseq page, which tints ancestral rows rather than hiding them.
+    """
     return aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id)
+
+
+def get_evolved_observation_queryset(experiment_id):
+    """This experiment's observations with its designated ancestor subtracted.
+
+    The default choice for anything that analyses or counts. See
+    `aledb_experiment/ancestor.py` for what subtraction means and why it is not the reader's
+    filter. With no ancestor designated this is `get_observed_mutation_queryset` exactly.
+    """
+    from aledb_experiment.ancestor import exclude_ancestry
+    return exclude_ancestry(get_observed_mutation_queryset(experiment_id), experiment_id)
 
 
 def get_all_observed_mutations_filtered(experiment_id, *, filter_type=None, view_filter=None):
@@ -19,15 +38,49 @@ def get_all_observed_mutations_filtered(experiment_id, *, filter_type=None, view
     asked to see through a *shared* filter -- a question that stops meaning anything once the
     filter is yours to clear.
     """
-    queryset = get_observed_mutation_queryset(experiment_id)
+    queryset = get_evolved_observation_queryset(experiment_id)
     return filter_observed_mutations(queryset, filter_type=filter_type, view_filter=view_filter)
 
 
-def get_all_observed_mutations(reseq_id_list):
-    return aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment_id__in=reseq_id_list)
+def observations_for_samples(reseq_id_list, experiment_id):
+    """Observations in these samples, with the experiment's designated ancestor subtracted.
+
+    The entry point for a plugin that derives something. It was `get_all_observed_mutations`,
+    which did the `filter` half and had no callers left -- aledb-compare, aledb-converge,
+    aledb-fixation and aledb-phylogeny had each written that one line out by hand instead.
+
+    That hand-copying is exactly what this fixes. Dropping the ancestor from a *sample* list
+    removes its column from a table but leaves its mutations sitting in every other sample --
+    and because an ancestral mutation is present in every ALE, convergence would report all of
+    them as convergent and fixation all of them as fixed. **The subtraction has to reach the
+    derivation, not the render**, the same rule `docs/plugin/filtering.md` states for the
+    reader's filter and for the same reason.
+    """
+    from aledb_experiment.ancestor import exclude_ancestry
+    queryset = aledb_seq.models.ObservedMutation.objects.filter(
+        sequencing_experiment_id__in=reseq_id_list)
+    return exclude_ancestry(queryset, experiment_id)
 
 
-def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None):
+def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None, *,
+                               include_ancestor=False):
+    """An experiment's samples in A/F/I/R order, without its designated ancestor.
+
+    **The ancestor is excluded by default**, and the few callers that curate rather than
+    read pass `include_ancestor=True`: the Edit-samples page and the mutation editor, which
+    must still be able to see and change it.
+
+    Defaulting this way round is deliberate, and it is the opposite of what
+    `get_observed_mutation_queryset` does. The two mistakes are not symmetric. Forgetting to
+    opt *in* hides the ancestor from a curation page, which is visible and gets reported the
+    same day; forgetting to opt *out* leaves ancestral data in an analysis, which is
+    invisible and wrong. It also means aledb-compare, aledb-converge and aledb-fixation need
+    no edit here at all.
+
+    Keyword-only: this module already carries a scar from `get_reseq_ordered_dict` being
+    called with a `request` in the `sample_type` slot, which silently dropped every
+    population sample from two plugin pages.
+    """
     reseq_qryset = aledb_seq.models.ResequencingExperiment.objects.select_related(
         'tech_rep__isolate__flask__ale_id__ale_experiment', 'tech_rep__isolate__flask__media'
     ).order_by(*sample_order())
@@ -43,15 +96,21 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None)
         if sample_type == 'population':
             flag = 1
         reseq_qryset = reseq_qryset.filter(tech_rep__isolate__is_population=flag)
+    if not include_ancestor:
+        from aledb_experiment.ancestor import exclude_ancestor_samples
+        reseq_qryset = exclude_ancestor_samples(reseq_qryset, ale_experiment_id)
     return reseq_qryset
 
 
-def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, request=None):
+def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, request=None,
+                           *, include_ancestor=False):
     """
     Args:
         ale_experiment_id:
         ale_no:
         sample_type: population sample
+        include_ancestor: keep the designated ancestor, for a page that curates rather
+            than reads. See `get_ordered_reseq_queryset`, which this wraps.
 
     Returns:
         reseq_ordered_dict: a ordered dictionary of reseq values and their ID's as keys.
@@ -60,7 +119,8 @@ def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, req
         :param request:
 
     """
-    reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, ale_no, sample_type)
+    reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, ale_no, sample_type,
+                                                include_ancestor=include_ancestor)
     if request and request.GET.get('tag_select'):
         tag = request.GET.get('tag_select').split(':')
         if tag[0] == 'Hide Tag':
