@@ -18,6 +18,26 @@ saying before it is chosen: this is the only setting in the product that changes
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
         {% csrf_token %}
 
+        {% comment %} Named at the top, before the explanation, because after a save this is
+           the one thing the reader came back to check. The page reloads onto it. {% endcomment %}
+        {% if experiment.has_ancestor %}
+            <div class="alert alert-info" style="font-size: 15px;">
+                Ancestor:
+                <strong>{{ experiment.ancestor.ale_flask_isolate_str }}</strong>
+                <div style="color: #555; font-size: 13px; margin-top: 4px;">
+                    Set{% if experiment.ancestor_set_at %} on
+                        {{ experiment.ancestor_set_at|date:"Y-m-d H:i" }}{% endif %}
+                    by {{ experiment.ancestor_set_by.get_username|default:"the system" }}.
+                    <a href="/mutations/breseq?ale_experiment_id={{ experiment.ale_id }}&amp;reseq_id={{ experiment.ancestor_id }}">See its mutations</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info" style="font-size: 15px;">
+                <strong>No ancestor is designated.</strong>
+                Every sample is shown and analysed.
+            </div>
+        {% endif %}
+
         <div class="alert alert-warning">
             <p><strong>The designated ancestor is excluded from every view and analysis of
                 this experiment</strong>, and every mutation observed in it is subtracted
@@ -27,19 +47,6 @@ saying before it is chosen: this is the only setting in the product that changes
                 reader can turn it off, and it changes what everyone sees, not just you.
                 Its own sample page still opens, with those mutations shown in red.</p>
         </div>
-
-        {% if experiment.has_ancestor %}
-            <p style="color: #666;">
-                Currently <strong>{{ experiment.ancestor.ale_flask_isolate_str }}</strong>,
-                set {% if experiment.ancestor_set_at %}on
-                    {{ experiment.ancestor_set_at|date:"Y-m-d" }}{% endif %}
-                by {{ experiment.ancestor_set_by.get_username|default:"the system" }}.
-            </p>
-        {% else %}
-            <p style="color: #666;">
-                No ancestor is designated, so every sample is shown and analysed.
-            </p>
-        {% endif %}
 
         {% if lock_refusal %}
             <div class="alert alert-warning">{{ lock_refusal }}</div>
@@ -71,43 +78,58 @@ saying before it is chosen: this is the only setting in the product that changes
     var list = document.getElementById("anc-samples");
     var save = document.getElementById("anc-save");
     if (!list || !save) { return; }
+    var error = document.getElementById("anc-error");
 
     // The helper is multi-select and stays that way. A plain click already selects exactly
-    // one row; ctrl/shift-click is what can add a second, so the onChange trims back to the
-    // row that just moved. Trimming here rather than adding a `single` mode to the helper
-    // keeps the one selection model the rest of the product uses.
+    // one row; ctrl/shift-click is what can add a second, so this trims back to one.
+    //
+    // `changed` is the rows that *moved*, and that includes rows that moved *off* -- so the
+    // last one is not necessarily the one just clicked. Today it always is, because every
+    // gesture that leaves more than one row selected only ever turns rows on, and the plain
+    // click that does deselect leaves exactly one and returns above. The filter costs a line
+    // and removes the dependency on that reasoning holding inside the shared helper.
     var picker = window.aledbSelectList(list, {
         controls: null,
         onChange: function (changed) {
             if (picker.count() <= 1) { return; }
-            var keep = changed[changed.length - 1];
-            picker.select(function (row) { return row === keep; });
+            var on = changed.filter(picker.isSelected);
+            var keep = on[on.length - 1];
+            if (keep) { picker.select(function (row) { return row === keep; }); }
         }
     });
 
-    function post(data, confirmText) {
-        swal({title: "", text: confirmText, type: "warning",
-              showCancelButton: true, confirmButtonText: "Yes"},
-            function (ok) {
-                if (!ok) { return; }
-                window.aledbPost(
+    function show(message) { if (error) { error.textContent = message; } }
+
+    function post(data, question, detail) {
+        // sweetalert 2: `icon` / `buttons` and a promise. The v1 spelling -- `type`,
+        // `showCancelButton`, and a callback as the second argument -- is silently ignored
+        // here, which makes the button look dead rather than broken.
+        swal({title: question, text: detail, icon: "warning", buttons: true})
+            .then(function (confirmed) {
+                if (!confirmed) { return; }
+                show("Saving\u2026");
+                return window.aledbPost(
                     "/ale/experiment/{{ experiment.ale_id }}/ancestor/apply/", data
                 ).then(function () {
+                    // Reload rather than patch the page in place: designating changes what
+                    // every panel on it would say, and the banner at the top is what the
+                    // reader came here to read back.
                     window.location.reload();
-                }).catch(function (err) {
-                    document.getElementById("anc-error").textContent = err.message;
                 });
+            })
+            .catch(function (err) {
+                show((err && err.message) || "Could not save the ancestor.");
             });
     }
 
     save.addEventListener("click", function () {
+        show("");
         var chosen = picker.selected();
         if (chosen.length !== 1) {
-            document.getElementById("anc-error").textContent =
-                "Pick exactly one sample, or choose No ancestor.";
+            show("Pick exactly one sample, or choose No ancestor.");
             return;
         }
-        post({reseq_id: chosen[0]},
+        post({reseq_id: chosen[0]}, "Designate this ancestor?",
              "This sample will be excluded from every view and analysis, and its mutations "
              + "subtracted from every other sample. Everyone sees this change.");
     });
@@ -115,8 +137,10 @@ saying before it is chosen: this is the only setting in the product that changes
     var clear = document.getElementById("anc-clear");
     if (clear) {
         clear.addEventListener("click", function () {
-            post({}, "Every sample will be shown and analysed again, including the mutations "
-                   + "currently subtracted. Everyone sees this change.");
+            show("");
+            post({}, "Remove the designation?",
+                 "Every sample will be shown and analysed again, including the mutations "
+                 + "currently subtracted. Everyone sees this change.");
         });
     }
 })();

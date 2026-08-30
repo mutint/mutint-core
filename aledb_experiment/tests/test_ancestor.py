@@ -53,6 +53,31 @@ class TestThePage(AncestorPageTestCase):
     def test_it_says_what_designating_will_do(self):
         self.assertContains(self.page(), "subtracted")
 
+    def test_it_names_the_current_ancestor_at_the_top(self):
+        """What the reader comes back to check after saving; the page reloads onto it."""
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        body = self.page().content.decode()
+        self.assertIn("Ancestor:", body)
+        self.assertIn(self.sample_a.ale_flask_isolate_str, body)
+        self.assertIn(self.owner.get_username(), body)
+
+    def test_it_says_so_when_there_is_no_ancestor(self):
+        self.assertContains(self.page(), "No ancestor is designated")
+
+    def test_it_uses_the_sweetalert_2_api(self):
+        """A live bug this pins: written against sweetalert 1 -- `type`, `showCancelButton`
+        and a callback as the second argument -- the confirm never fires and the Save button
+        looks dead rather than broken, with no error anywhere. base.html loads sweetalert 2,
+        whose options are `icon`/`buttons` and which returns a promise."""
+        body = self.page().content.decode()
+        self.assertIn('icon: "warning"', body)
+        self.assertIn("buttons: true", body)
+        # The option syntax, with the colon: the bare words appear in the comment above the
+        # call, which is where the v1 spelling is named so nobody reintroduces it.
+        self.assertNotIn("showCancelButton:", body)
+        self.assertNotIn("confirmButtonText:", body)
+        self.assertNotIn("type: \"warning\"", body)
+
 
 class TestTheWrite(AncestorPageTestCase):
 
