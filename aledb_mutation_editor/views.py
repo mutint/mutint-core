@@ -34,6 +34,7 @@ import aledb_seq.views.common as seq_common
 from aledb_common.logger import user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment
+from aledb_experiment.ordering import sample_sort_key
 from aledb_experiment.permissions import (
     can_add_experiment_filter, experiment_lock_refusal,
 )
@@ -589,9 +590,14 @@ def _changeset_context(change_set):
     """
     added = removed = 0
     samples = {}
-    for change in change_set.changes.all():
+    for change in change_set.changes.select_related(
+            "sample__tech_rep__isolate__flask__ale_id").all():
+        # A deleted sample sorts last: it has no coordinate, and keeping the rows nobody can
+        # act on together at the end beats interleaving them.
+        order = (0, sample_sort_key(change.sample)) if change.sample_id else (1, ())
         label = change.sample.ale_flask_isolate_str if change.sample_id else "(deleted sample)"
-        tally = samples.setdefault(label, {"label": label, "added": 0, "removed": 0})
+        tally = samples.setdefault(
+            label, {"label": label, "added": 0, "removed": 0, "order": order})
         if change.operation == "add":
             added += 1
             tally["added"] += 1
@@ -602,7 +608,12 @@ def _changeset_context(change_set):
         "change_set": change_set,
         "added": added,
         "removed": removed,
-        "samples": sorted(samples.values(), key=lambda entry: entry["label"]),
+        # By coordinate, not by label. Sorting on `ale_flask_isolate_str` is a lexicographic
+        # sort over text, which puts `A1 F10 I1` above `A1 F2 I1` -- the exact thing
+        # `aledb_experiment.ordering` exists to prevent, and it read as correct here because
+        # single-digit flasks are the common case. It also sorted by the *isolate description*
+        # wherever one is set, since that is what `ale_flask_isolate_str` returns.
+        "samples": sorted(samples.values(), key=lambda entry: entry["order"]),
     }
 
 

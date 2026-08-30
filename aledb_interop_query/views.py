@@ -17,7 +17,7 @@ from aledb_metadata.views import get_reseq_info_list
 # From `aledb_seq.util`, where it is defined. This used to come via `aledb_metadata.views`,
 # which merely imports it -- an accidental re-export, and the call site any signature change
 # would miss.
-from aledb_seq.util import get_ordered_reseq_queryset
+from aledb_seq.util import get_ordered_reseq_dict, get_ordered_reseq_queryset
 from aledb_seq.models import ObservedMutation
 
 logger = logging.getLogger(__name__)
@@ -435,15 +435,23 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
     if not observed_mutations:
         return JsonResponse({'mutations': [], 'count': 0, 'message': invalid_msg})
 
-    reseq_dict = collections.OrderedDict({obs_mut.sequencing_experiment.id: obs_mut.sequencing_experiment
-                                            for obs_mut in observed_mutations})
-    
-    ale_experiment_ids = set()
+    # Sorted, not first-appearance. `observed_mutations` is a concatenation of one filtered
+    # list per requested id; each block is in A/F/I/R order but the concatenation is not, and
+    # a sample appearing in two blocks keeps the position of the first. `get_ordered_reseq_dict`
+    # sorts, so the samples come out in the same order every other list on the site uses.
+    reseq_dict = get_ordered_reseq_dict(observed_mutations)
+
+    # A list, not a set: this is iterated below to build the response's metadata, and a set's
+    # iteration order is not stable between runs -- so two identical requests could return
+    # the experiments in different orders, which is exactly the kind of thing a caller
+    # diffing two responses would chase for an afternoon.
+    ale_experiment_ids = []
 
     for observed_mutation in observed_mutations:
         ale_experiment_id = observed_mutation.sequencing_experiment.ale_experiment.ale_id
         logging.info("Processing mutation with ID: %s", ale_experiment_id, extra=user_extra(request))
-        ale_experiment_ids.add(ale_experiment_id)
+        if ale_experiment_id not in ale_experiment_ids:
+            ale_experiment_ids.append(ale_experiment_id)
         if observed_mutation.sequencing_experiment_id in reseq_dict.keys():
             sample_name = reseq_dict[observed_mutation.sequencing_experiment_id].exp_ale_flask_isolate_str
             # Initialised here, and not only inside the branch below: it used to be assigned
@@ -462,7 +470,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
 
     metadata = []
 
-    for ale_experiment_id in ale_experiment_ids:
+    for ale_experiment_id in sorted(ale_experiment_ids):
         logging.info("Processing reseq experiment with ID: %s", ale_experiment_id, extra=user_extra(request))
         experiment = AleExperiment.objects.get(ale_id=ale_experiment_id)
         if experiment:

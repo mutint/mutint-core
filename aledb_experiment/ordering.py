@@ -49,14 +49,43 @@ def sample_order(prefix=""):
     a tuple for `order_by(*sample_order())` -- expressions rather than field names, because
     two of the five need the padding above.
 
-    The flask is a plain `F()`: it is still an `IntegerField` and the database already
-    orders it correctly.
+    The flask needs no padding -- it is still an `IntegerField` and the database orders it
+    correctly -- but it *is* nullable, so it needs `nulls_first`. Without it the answer is
+    the backend's: PostgreSQL sorts NULLs last ascending, SQLite and MySQL sort them first,
+    so a flask-less sample would land in a different place in production than in the test
+    suite. Stated rather than inherited, and first because a sample with no time point is
+    one nobody has placed yet.
     """
     chain = prefix + _CHAIN
     return (
         F(chain + "ale_experiment__name"),
         natural(chain + "ale_id"),
-        F(prefix + "tech_rep__isolate__flask__flask_number"),
+        F(prefix + "tech_rep__isolate__flask__flask_number").asc(nulls_first=True),
         natural(prefix + "tech_rep__isolate__isolate_number"),
         F(prefix + "tech_rep__tech_rep_number"),
     )
+
+
+def sample_sort_key(reseq):
+    """A sample's A/F/I/R coordinate as a sortable tuple, for a list already in memory.
+
+    `sample_order()` above is the database form and is what every listing uses. This is for
+    the two places that cannot re-query: the CSV export, which has collapsed observations
+    into the samples that appear in them, and the mutation editor's history tally, which has
+    collapsed changes into a per-sample count.
+
+    **It has to agree with `natural()`**, so it pads the same two text fields the same way --
+    that is what puts `F2` before `F10`, and it is the whole reason this exists rather than
+    `sorted(..., key=lambda r: r.ale_flask_isolate_str)`, which is a lexicographic sort over
+    a *display* string and gets both the numbers and, wherever an isolate description is set,
+    the field itself wrong.
+
+    A null flask sorts first, as it does in the SQL form.
+    """
+    isolate = reseq.tech_rep.isolate
+    flask = isolate.flask
+    return (flask.ale_id.ale_experiment.name,
+            str(flask.ale_id.ale_id).rjust(PAD, "0"),
+            flask.flask_number if flask.flask_number is not None else -1,
+            str(isolate.isolate_number).rjust(PAD, "0"),
+            reseq.tech_rep.tech_rep_number)

@@ -1,7 +1,7 @@
 import collections
 import aledb_seq.models
 from aledb_common.util import is_int
-from aledb_experiment.ordering import sample_order
+from aledb_experiment.ordering import sample_order, sample_sort_key
 from aledb_filter.util import filter_observed_mutations
 
 HTML_ECOCYC = """<a href = "https://ecocyc.org/ECOLI/substring-search?type=GENE&object={gene}">{gene}</a>"""
@@ -137,15 +137,26 @@ def get_mutations_from_observed_muations(observed_mutations):
 
 
 def get_ordered_reseq_dict(observed_mutations):
+    """The samples appearing in these observations, `{id: reseq}`, in A/F/I/R order.
+
+    **It sorts rather than trusting what it was handed.** The name said "ordered" and nothing
+    here did any ordering: the dict came out in first-appearance order, which is A/F/I/R only
+    because `filter_observed_mutations` applies `sample_order` two modules away. Its one
+    caller is the CSV export, so every exported file's column order rested on an `order_by`
+    that carries no comment saying anything depends on it -- and which
+    `filtered_observed_mutation_queryset` explicitly warns callers to strip before
+    aggregating. Sorting here costs nothing on a list already in the right order and makes
+    the guarantee local to the function that claims it.
+
+    Still only the samples that *appear*: a sample with no observations left after filtering
+    gets no column, where the on-screen table builds its columns from the sample list and so
+    keeps an empty one. That difference is left alone -- a CSV of the rows it contains is a
+    defensible thing for an export to be -- but it is a difference, not an oversight.
     """
-    Get reseq {id: reseq} map
-    :param observed_mutations:
-    :return: ordered map
-    """
-    seq_experiment_ordered_dict = collections.OrderedDict()
-    for observed_mutation in observed_mutations:
-        seq_experiment_ordered_dict[observed_mutation.sequencing_experiment.id] = observed_mutation.sequencing_experiment
-    return seq_experiment_ordered_dict
+    by_id = {observed.sequencing_experiment.id: observed.sequencing_experiment
+             for observed in observed_mutations}
+    return collections.OrderedDict(
+        (reseq.id, reseq) for reseq in sorted(by_id.values(), key=sample_sort_key))
 
 
 def get_ecocyc_gene_list(gene_list, is_ecocyc_gene: bool = False):

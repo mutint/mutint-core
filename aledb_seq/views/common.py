@@ -54,10 +54,16 @@ def get_aleid_ale_id_list(experiment_id):
     # `.order_by()` strips the sample ordering before the subquery. An ORDER BY left on a
     # queryset handed to `__in` adds its columns to the SELECT, which is an error on some
     # backends and silently wrong on others.
+    from aledb_experiment.ordering import natural
+
     visible = get_ordered_reseq_queryset(experiment_id).order_by().values("pk")
+    # Ordered by the same natural sort a sample list uses. `AleId.ale_id` is text, so the
+    # database's own order puts ALE 10 above ALE 2 -- and this dropdown had no `order_by` at
+    # all, so it was whatever the join happened to produce.
     return (aledb_experiment.models.AleId.objects
             .filter(flask__isolate__technicalreplicate__resequencingexperiment__in=visible)
             .distinct()
+            .order_by(natural("ale_id"))
             .values_list("ale_id", flat=True))
 
 
