@@ -144,6 +144,28 @@
     margin-left: 1.5em;
 }
 
+/* The designated ancestor in the sample picker, tinted the same red its mutations carry in
+   the table (`ancestral_table_row` above), so the dropdown and the rows read as one
+   statement. `> a` rather than the <li>: Bootstrap paints the anchor, so a background on the
+   <li> alone is covered on hover and on the active row. */
+.dropdown-menu > li.reseq-ancestor > a {
+    background-color: rgb(255, 218, 218);
+}
+
+.dropdown-menu > li.reseq-ancestor.active > a,
+.dropdown-menu > li.reseq-ancestor > a:hover,
+.dropdown-menu > li.reseq-ancestor > a:focus {
+    background-color: rgb(245, 185, 185);
+}
+
+.reseq-ancestor-tag {
+    color: #a94442;
+    font-size: 85%;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 0.4em;
+}
+
 .breseq-legend {
     color: #666;
     font-size: 9pt;

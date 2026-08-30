@@ -32,9 +32,15 @@
                 {{ selected_reseq.ale_flask_isolate_str }} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu aledb-menu">
+                {% comment %} The designated ancestor is listed, first, and tinted the same
+                   red its mutations are in the table below. One sample at a time is exactly
+                   the view where there is no reason to hide it: nothing aggregates here, so
+                   nothing is contaminated, and it is the row the others are read against.
+                   The tint is the same colour as `ancestral_table_row` so the two read as
+                   one statement rather than two coincidences. {% endcomment %}
                 {% for reseq in reseq_list %}
-                    <li {% if reseq.id == selected_reseq_id %}class="active"{% endif %}>
-                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                    <li class="{% if reseq.id == selected_reseq_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
+                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
                     </li>
                 {% endfor %}
             </ul>

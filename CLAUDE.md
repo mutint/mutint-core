@@ -1334,13 +1334,19 @@ id observed in one experiment's ancestor cannot appear in another's samples.
 
 **Four deliberate exceptions**, and each one is stated where it is taken:
 
-- **`/mutations/breseq` shows ancestral rows, tinted `ancestral_table_row`.** It is what breseq
+- **`/mutations/breseq` keeps the ancestor entirely** -- its rows tinted `ancestral_table_row`,
+  and the sample itself listed in the picker, first, tinted the same red. It is what breseq
   called in one sample, not a conclusion drawn from it; a row silently missing would make the
-  page disagree with the report it was imported from. It passes
-  `{% view_filter_summary ancestor_subtracted=False %}` so the shared summary does not claim a
-  subtraction it did not do -- that rule cuts both ways. `_selected_reseq` needs its fallback
-  for the same page: the picker does not list the ancestor, so without it a link to the ancestor
-  renders a *different* sample and looks entirely normal doing it.
+  page disagree with the report it was imported from. And **nothing aggregates here**, so
+  there is nothing for an ancestral call to contaminate -- while this is the only picker that
+  could reach the ancestor, so hiding it made the sample unreachable rather than merely
+  excluded. (It was hidden at first, on the general rule. One sample at a time is the case the
+  general rule does not fit.) It passes `{% view_filter_summary ancestor_subtracted=False %}`
+  so the shared summary does not claim a subtraction it did not do -- that rule cuts both ways.
+  **Listed first is not selected first**: `_selected_reseq` opens on the first *non*-ancestor
+  sample, because this view reads as "what evolved in this sample" and the one sample whose
+  answer is "nothing, by definition" is a poor first thing to show. Its scoped fallback stays,
+  for the ALE, sample-type and tag filters, which can still legitimately drop a requested id.
 - **The mutation editor and the Edit-samples page** pass `include_ancestor=True` everywhere.
   They curate; they must be able to change what they are hiding.
 - **The genome browser** keeps it, because the ancestor's own evidence link lands there and

@@ -55,11 +55,37 @@ class TestReachingTheAncestor(BreseqAncestorTestCase):
         start = body.index('<ul class="dropdown-menu aledb-menu">')
         return body[start:body.index("</ul>", start)]
 
-    def test_the_picker_does_not_list_it(self):
+    def test_the_picker_lists_it_first_and_tinted(self):
+        """The one listing that keeps the ancestor. Nothing aggregates on this page, so there
+        is nothing for it to contaminate -- and this is the only picker that could reach it,
+        so hiding it here made it unreachable rather than merely excluded."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
         picker = self.picker(self.get(reseq_id=self.sample_b.id))
-        self.assertNotIn("reseq_id=%d" % self.sample_a.id, picker)
+        self.assertIn("reseq_id=%d" % self.sample_a.id, picker)
         self.assertIn("reseq_id=%d" % self.sample_b.id, picker)
+        self.assertLess(picker.index("reseq_id=%d" % self.sample_a.id),
+                        picker.index("reseq_id=%d" % self.sample_b.id))
+        self.assertIn("reseq-ancestor", picker)
+
+    def test_only_the_ancestor_is_tinted_in_the_picker(self):
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        picker = self.picker(self.get(reseq_id=self.sample_b.id))
+        self.assertEqual(picker.count("reseq-ancestor\""), 1)
+
+    def test_the_picker_is_untinted_without_a_designation(self):
+        self.assertNotIn("reseq-ancestor", self.picker(self.get()))
+
+    def test_the_page_does_not_open_on_the_ancestor(self):
+        """Listed first, but not what the page opens on: this view reads as "what evolved in
+        this sample", and the one sample where the answer is "nothing, by definition" is a
+        poor first thing to show. One click away, which is the point of listing it."""
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        self.assertEqual(self.get().context["selected_reseq"].id, self.sample_b.id)
+
+    def test_an_experiment_of_only_the_ancestor_still_shows_it(self):
+        self.sample_b.delete()
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        self.assertEqual(self.get().context["selected_reseq"].id, self.sample_a.id)
 
     def test_its_own_page_still_opens(self):
         """`_selected_reseq` resolves it outside the picker. Without that fallback a link to
