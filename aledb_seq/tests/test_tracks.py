@@ -1,0 +1,132 @@
+"""igv tracks built from database rows.
+
+The coordinate assertions are the point of this file. igv features are 0-based and
+end-exclusive while GenomeDiff positions are 1-based inclusive, and an off-by-one here does
+not fail -- it draws every mutation one base from where it is, beside the gene it is actually
+in, entirely plausibly.
+"""
+
+import shutil
+import tempfile
+
+from django.contrib.auth.models import User
+from django.test import TestCase, override_settings
+
+from aledb_import import breseq_folder
+from aledb_import.tests import breseq_fixture
+from aledb_seq import tracks
+from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+
+
+class _Fixture(TestCase):
+    def setUp(self):
+        self.user = User.objects.create(username="t", email="t@e.com", is_active=True)
+        self.drop = tempfile.mkdtemp()
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.drop, True)
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        breseq_fixture.write_sample(self.drop, "s1")
+        breseq_folder.import_breseq_folders(
+            self.drop, project_name="P", experiment_name="e", person="t")
+        self.reseq = ResequencingExperiment.objects.get()
+        self.experiment = self.reseq.ale_experiment
+
+
+class CoordinateTestCase(_Fixture):
+    def test_a_feature_starts_one_before_the_stored_position(self):
+        """1-based inclusive in, 0-based end-exclusive out."""
+        mutation = Mutation.objects.filter(reseq_reference__isnull=False).first()
+        features = tracks.mutation_features(self.experiment.ale_id)
+        feature = next(f for f in features if f["mutationId"] == mutation.id)
+
+        self.assertEqual(mutation.position - 1, feature["start"])
+        self.assertEqual(mutation.position, feature["end"])
+        self.assertEqual(mutation.reseq_reference, feature["chr"])
+
+    def test_a_span_keeps_its_length(self):
+        """end - start is the number of bases covered, which is what end-exclusive buys."""
+        Mutation.objects.filter(pk=Mutation.objects.first().pk).update(
+            start_position=100, end_position=109)
+        feature = next(f for f in tracks.mutation_features(self.experiment.ale_id)
+                       if f["start"] == 99)
+        self.assertEqual(109, feature["end"])
+        self.assertEqual(10, feature["end"] - feature["start"])
+
+    def test_position_one_does_not_go_negative(self):
+        Mutation.objects.filter(pk=Mutation.objects.first().pk).update(
+            position=1, start_position=None, end_position=None)
+        self.assertTrue(all(f["start"] >= 0
+                            for f in tracks.mutation_features(self.experiment.ale_id)))
+
+
+class MutationTrackTestCase(_Fixture):
+    def test_it_finds_a_mutation_owned_by_no_experiment(self):
+        """The reason this reads through the observations rather than through
+        `Mutation.ale_experiment`. Two rows in the dev database were observed in an
+        experiment while owned by none, so filtering on the column drew an empty Mutations
+        track beside a populated per-sample one."""
+        Mutation.objects.all().update(ale_experiment=None)
+        self.assertTrue(tracks.mutation_features(self.experiment.ale_id))
+
+    def test_both_tracks_describe_the_same_mutations(self):
+        built = tracks.database_tracks(self.experiment.ale_id)
+        by_name = {t["name"]: t for t in built}
+        starts = {f["start"] for f in by_name["Mutations"]["features"]}
+        sample_starts = {f["start"] for f in by_name["Mutations by sample"]["features"]}
+        self.assertTrue(sample_starts)
+        self.assertTrue(sample_starts.issubset(starts))
+
+    def test_the_colour_comes_from_the_functional_change_vocabulary(self):
+        Mutation.objects.all().update(snp_type="nonsense")
+        feature = tracks.mutation_features(self.experiment.ale_id)[0]
+        self.assertEqual(tracks.BUCKET_COLOURS["nonsense"], feature["color"])
+
+    def test_an_unknown_snp_type_is_still_coloured(self):
+        """`functional_change_bucket` answers UNANNOTATED for a token it does not know, and a
+        page that raised on one would be worse than a page that called it unannotated."""
+        Mutation.objects.all().update(snp_type="something_new")
+        feature = tracks.mutation_features(self.experiment.ale_id)[0]
+        self.assertEqual(tracks.BUCKET_COLOURS[tracks.UNANNOTATED], feature["color"])
+
+    def test_the_label_does_not_carry_a_whole_gene_list(self):
+        Mutation.objects.all().update(gene=", ".join("gene%d" % i for i in range(500)))
+        name = tracks.mutation_features(self.experiment.ale_id)[0]["name"]
+        self.assertIn("+499 more", name)
+        self.assertLess(len(name), 100)
+
+    def test_a_contig_filter_narrows_it(self):
+        self.assertEqual([], tracks.mutation_features(self.experiment.ale_id, contig="nope"))
+
+
+class SampleTrackTestCase(_Fixture):
+    def test_rows_are_named_by_the_shared_sample_label(self):
+        """Not `isolate__description`, which is null for most samples -- pulling that through
+        values_list collapsed every sample onto one row called "sample"."""
+        features = tracks.sample_features(self.experiment.ale_id)
+        self.assertTrue(features)
+        self.assertEqual({self.reseq.ale_flask_isolate_str},
+                         {f["sample"] for f in features})
+
+    def test_presence_is_uniform_and_frequency_rides_alongside(self):
+        """The colour says only "called here". See SEG_PRESENT: seg autoscales to its own
+        data range, so a frequency-derived colour would mean different things on different
+        experiments' pages."""
+        features = tracks.sample_features(self.experiment.ale_id)
+        self.assertEqual({tracks.SEG_PRESENT}, {f["value"] for f in features})
+        self.assertTrue(all("frequency" in f for f in features))
+
+    def test_absent_observations_are_not_drawn(self):
+        ObservedMutation.objects.all().update(present=False)
+        self.assertEqual([], tracks.sample_features(self.experiment.ale_id))
+
+
+class EmptyTestCase(_Fixture):
+    def test_an_experiment_with_nothing_gets_no_tracks(self):
+        """An empty track is worse than no track: igv draws its name and a blank lane, which
+        reads as "no mutations here" rather than "nothing to show"."""
+        ObservedMutation.objects.all().delete()
+        self.assertEqual([], tracks.database_tracks(self.experiment.ale_id))

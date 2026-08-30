@@ -101,10 +101,15 @@
     {# ~1.4 MB, so it is loaded on this page only rather than from base.html. #}
     <script src="{% static "js/igv.min.js" %}"></script>
     {{ reference|json_script:"igv-reference" }}
+    {% comment %} The mutations, as inline igv features. json_script rather than interpolating
+       JSON into a JS literal: a mutation's gene names and sequence change reach this array,
+       and one apostrophe in a product name would otherwise end the string. {% endcomment %}
+    {{ db_tracks|json_script:"igv-db-tracks" }}
     <script type="text/javascript">
     (function () {
         "use strict";
         var reference = JSON.parse(document.getElementById("igv-reference").textContent);
+        var dbTracks = JSON.parse(document.getElementById("igv-db-tracks").textContent);
 
         // The sample menu is the one source of truth for what a sample is called, where its
         // files are and whether it is showing -- the track the browser opens with included.
@@ -291,7 +296,13 @@
                 }]
             },
             locus: "{{ locus|escapejs }}",
-            tracks: []
+            // Names the rows of the per-sample frequency track. Without it a seg track draws
+            // its rows unlabelled, so a stack of samples says nothing about which is which.
+            showSampleNames: true,
+            // The database's own tracks -- the mutations called in this experiment, and
+            // their frequency per sample. Sample alignment tracks are added afterwards by
+            // the menu below, at order 100+, so these stay above them.
+            tracks: dbTracks
         }).then(function (browser) {
             igvBrowser = browser;
             fitReadsToContainer(browser);

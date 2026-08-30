@@ -19,6 +19,7 @@ from aledb_common.util import get_user_context
 from aledb_experiment.permissions import can_view_project
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.locus import LOCUS_BUFFER_BASES, mutation_extent
+from aledb_seq.tracks import database_tracks
 from aledb_seq.models import ExperimentReference, ObservedMutation
 from aledb_seq.util import get_ordered_reseq_queryset
 
@@ -68,6 +69,11 @@ def browse_mutation(request):
         # reasons stay next to the data that determines them.
         "has_alignment": bool(reseq.bam_stored),
         "reference": _reference_urls(experiment),
+        # The mutations themselves, drawn from the database rather than from a file. Until
+        # this existed igv was handed `tracks: []` and the only thing the database
+        # contributed was the locus string -- so the page drew the reads and the reference
+        # but not the calls the reads were opened to look at.
+        "db_tracks": database_tracks(experiment.ale_id, mutation.reseq_reference),
         "samples": _sample_tracks(experiment, mutation, current_id=reseq.id),
     })
 

@@ -61,9 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1574 run, 0 failures** standalone; **1730** in an assembled project, where the
-plugins' own tests join them. They were 1568 and 1724 before the assets were vendored -- the
-6 added are `test_offline.py` plus one guard in `test_templates.py`. (The 1723 recorded a
+**Baseline: 1587 run, 0 failures** standalone; **1743** in an assembled project, where the
+plugins' own tests join them. They were 1574 and 1730 before the database tracks, and 1568 and
+1724 before the assets were vendored. (The 1723 recorded a
 commit earlier was measured before the `data-autoload` test existed; the assembled suite has
 been re-run, not adjusted.) They were 1512 and 1668 before the NCBI Sequence Viewer, and
 **both of those are re-counts, because this line was wrong when the viewer was written**: it
@@ -2178,6 +2178,50 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
+
+### The mutations are drawn from the database, not from a file
+
+`aledb_seq/tracks.py` builds igv features out of database rows. Until it existed `browse.html`
+passed igv **`tracks: []`** -- the page drew the reference, the gene track and the reads, and
+not the calls the reads were opened to look at. The only thing the database contributed was
+the locus string that positioned the view.
+
+igv takes features as an inline array, so this needs **no route, no store whitelist slot and
+no `EXTENSION_CONTENT_TYPES` entry**. The module is pure, in the shape `locus.py` and
+`functional_change.py` are, and reads `values_list` tuples the way `get_needle_plot_data` does.
+
+Two tracks: **Mutations** (`annotation`, coloured by `functional_change_bucket`) and
+**Mutations by sample** (`seg`, one row per sample in `get_ordered_reseq_queryset` order).
+
+**Coordinates are the trap.** igv features are 0-based end-exclusive; GenomeDiff positions are
+1-based inclusive. `start = start_1 - 1`, `end = end_1`. Wrong, it draws every mutation one
+base from where it is, beside the gene it is actually in, and nothing looks broken.
+
+**Both tracks are reached through the observations, not through `Mutation.ale_experiment`.**
+That column can be null -- the unscoped-mutation case `can_curate` exists for -- and two such
+rows in the dev database were observed in an experiment while owned by none, so filtering on
+it drew an empty Mutations track beside a populated per-sample one. Going through the
+observations also makes both ancestor-subtracted, which is correct: an ancestral mutation is
+in every sample by construction.
+
+**The per-sample track marks presence, and deliberately does not encode frequency in colour.**
+Three browser probes decided that. igv's `seg` scale is diverging around zero and built for
+log2 copy ratios: raw frequencies in [0, 1] paint 5% and 100% the identical blue; mapped into
+[0.35, 1.5] they rendered *lighter* as frequency rose; a symmetric [-1.5, 1.5] track rendered
+*darker* toward both ends. Those are only consistent if the track **autoscales to its own data
+range** -- which is the disqualifying property, not any particular direction: the same
+frequency would look different on two experiments' pages and nobody could learn to read it.
+Every feature carries `value = SEG_PRESENT` and the frequency rides alongside for igv's popup,
+where it is a number rather than a suggestion.
+
+`showSampleNames: true` is set on the browser, or a seg track draws its rows unlabelled.
+
+**The sample label cannot come out of `values_list`.** `ale_flask_isolate_str` is a property
+falling back through the isolate's description to a computed `A# F# I# R#`, so pulling
+`...isolate__description` instead -- which this did first -- yields NULL for every sample
+without one and collapses the whole experiment onto a single row named "sample". One small
+query for the samples and a dict; there are tens of them, not thousands.
+
 
 ### Coverage comes from a BigWig, not from igv
 
