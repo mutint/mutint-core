@@ -176,13 +176,25 @@ class BackendTestCase(TestCase):
             hasattr(sqlite_base.DatabaseWrapper, "_start_transaction_under_autocommit"),
             "Django moved the hook; aledb_common.db.sqlite_immediate no longer applies")
 
-    def test_the_engine_is_the_immediate_backend(self):
-        from django.conf import settings
+    def test_the_running_connection_is_the_immediate_backend(self):
+        """Asserted on the live wrapper, not on the ENGINE string, because what matters is
+        the class actually in use.
 
-        if connections["default"].vendor != "sqlite":
+        **This test earned its place immediately.** MutInt's `config/settings_local.py`
+        replaced the whole `DATABASES` dict with a hardcoded
+        `django.db.backends.sqlite3` and no OPTIONS -- so the assembled project, the one
+        people import into and the one that lost the five samples, ran on the stock backend
+        with a 5s timeout while aledb-core had moved on. `./mutint check` passed throughout;
+        only running this in the assembled project found it.
+        """
+        from aledb_common.db.sqlite_immediate.base import DatabaseWrapper
+
+        wrapper = connections["default"]
+        if wrapper.vendor != "sqlite":
             self.skipTest("not running on SQLite")
-        self.assertEqual(settings.DATABASES["default"]["ENGINE"],
-                         "aledb_common.db.sqlite_immediate")
+        self.assertIsInstance(
+            wrapper, DatabaseWrapper,
+            "this project overrode ENGINE and is running deferred transactions")
 
 
 class SqliteContentionTestCase(TestCase):
