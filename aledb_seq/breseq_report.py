@@ -80,7 +80,8 @@ def _frequency(observed):
     return "%.1f%%" % (value * 100), True
 
 
-def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=frozenset()):
+def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=frozenset(),
+               refseq_url=None):
     """One breseq-style row per observed mutation, ready for the template.
 
     ``browse_url`` is called with an ObservedMutation and returns where its
@@ -95,6 +96,11 @@ def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=fr
     A separate key rather than a third `row_class`: that one is a choice between breseq's
     striping and its green polymorphism fill, and folding a tint into it would cost whichever
     lost. Keyword-only because two callers already pass `browse_url` positionally.
+
+    ``refseq_url`` is the same idea for the Reference column -- called with an
+    ObservedMutation, returning where its contig name should link, or None. It is how a row
+    reaches the NCBI Sequence Viewer, and it is None on the NCBI page itself, where the link
+    would point at the page you are already on.
     """
     rows = []
     for index, observed in enumerate(observed_mutations):
@@ -109,6 +115,7 @@ def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=fr
         # and one mutation is observed in many samples. Unused by the read-only tables.
         row["observed_id"] = observed.id
         row["evidence_url"] = browse_url(observed) if browse_url else None
+        row["refseq_url"] = refseq_url(observed) if refseq_url else None
         # breseq alternates row shading and colours a polymorphic call green.
         row["row_class"] = ("polymorphism_table_row" if is_polymorphism
                             else "alternate_table_row_%d" % (index % 2))

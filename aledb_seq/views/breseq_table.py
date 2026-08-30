@@ -169,7 +169,8 @@ def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
     # orders by reference then position.
     observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
     return build_rows(observed, browse_url=_browse_url(reseq),
-                      ancestral_mutation_ids=ancestral_ids)
+                      ancestral_mutation_ids=ancestral_ids,
+                      refseq_url=_refseq_url())
 
 
 def _browse_url(reseq):
@@ -178,6 +179,21 @@ def _browse_url(reseq):
         return None
     return lambda observed: "%s?observed_mut_id=%s" % (
         reverse("browse_mutation"), observed.id)
+
+
+def _refseq_url():
+    """Link the Reference cell at that contig's entry in NCBI's annotation.
+
+    Takes no experiment lookup and makes no query: whether the contig has been matched to
+    an NCBI record decides what that page *shows*, not whether it is worth opening.
+    """
+    def url_for(observed):
+        if not observed.mutation.reseq_reference:
+            return None
+        return "%s?mutation_id=%s&reseq_id=%s" % (
+            reverse("ncbi_view"), observed.mutation_id, observed.sequencing_experiment_id)
+
+    return url_for
 
 
 def _reference(experiment):

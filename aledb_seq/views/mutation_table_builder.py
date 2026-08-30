@@ -8,6 +8,7 @@ from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
 from aledb_experiment.models import TechnicalReplicate, AleExperiment
 from aledb_experiment.permissions import can_curate
+from aledb_seq.ncbi import verified_contig_names
 
 
 HTML_EMPTY_MUTATION_CELL = """<span class="empty"></span>"""
@@ -75,6 +76,10 @@ def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
 def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, experiment: AleExperiment = None, is_gene_table: bool = False):
     mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_dict, observed_mutations)
 
+    # Resolved once for the whole table rather than per row: an experiment's table runs to
+    # hundreds of mutations and they all share a handful of contigs.
+    verified_contigs = verified_contig_names(experiment)
+
     protein_changes = {}
     table_body = []
     for mutation in mutations:
@@ -86,7 +91,7 @@ def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, expe
                 table_row.append("""""")
 
             table_row.append(_get_mutation_tags(mutation.tags))
-            table_row.append("" if mutation.reseq_reference is None else mutation.reseq_reference)
+            table_row.append(_refseq_cell(mutation, verified_contigs))
             table_row.append(format(mutation.position, ',d'))
             table_row.append(mutation.mutation_type)
             table_row.append(mutation.sequence_change)
@@ -296,3 +301,29 @@ def _get_rep_tags(replicate: TechnicalReplicate):
     return current_tags
 
 
+def _refseq_cell(mutation, verified_contigs):
+    """The Reference Seq cell: the contig name, linked into the NCBI viewer.
+
+    **Every contig is linked, verified or not**, and that is a correction rather than the
+    original intent. It first followed `_cell_html`'s rule -- do not link to a page that can
+    only explain an absence -- but that rule fits a sample with no BAM, where the page is a
+    dead end. This page is *actionable*: unverified, it names the contig and offers the box
+    that records its accession. Gating the link on verification made the only page carrying
+    that box reachable solely once the work it exists for was already done.
+
+    Two things this markup must not do, both of which fail silently. It must not carry
+    `class="true"`, and the string `true` must not appear in it at all: `_contains_mutation`
+    substring-tests the row for that literal to decide whether the row renders, and
+    `table_template.js` tests for it to colour a sample cell. And it must not add or remove a
+    column -- everything in `table_template.js` is indexed relative to
+    `REFSEQ_COLUMN_IN_MUT_TABLE`, and `aledb_export.util` re-derives this value itself rather
+    than reusing this cell, so the CSV is unaffected by the anchor.
+    """
+    name = mutation.reseq_reference
+    if name is None:
+        return ""
+
+    title = ("Show this position in the NCBI annotation" if name in verified_contigs
+             else "This sequence has not been matched to an NCBI record yet")
+    return """<a href="%s?mutation_id=%d" title="%s">%s</a>""" % (
+        reverse("ncbi_view"), mutation.id, title, name)

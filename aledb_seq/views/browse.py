@@ -16,18 +16,13 @@ from django.template import loader
 from django.urls import reverse
 
 from aledb_common.util import get_user_context
-from aledb_import.annotate.annotator import mutation_interval
 from aledb_experiment.permissions import can_view_project
 from aledb_seq.breseq_report import build_rows, is_population
+from aledb_seq.locus import LOCUS_BUFFER_BASES, mutation_extent
 from aledb_seq.models import ExperimentReference, ObservedMutation
 from aledb_seq.util import get_ordered_reseq_queryset
 
 logger = logging.getLogger(__name__)
-
-# How much context to show either side of the mutation's own extent. A view bounded by the
-# mutation alone would put its ends at the very edge, and for a deletion the two junctions
-# are the part worth seeing.
-LOCUS_BUFFER_BASES = 200
 
 
 def browse_mutation(request):
@@ -66,7 +61,7 @@ def browse_mutation(request):
         # The mutation is described by breseq's own table rather than by a sentence of this
         # page's own, so the row reads exactly as it does on the Samples page. One row, and
         # no evidence link -- its destination is the page you are already on.
-        "rows": build_rows([observed]),
+        "rows": build_rows([observed], refseq_url=_ncbi_url()),
         "is_population": is_population(reseq),
         "locus": _locus(mutation),
         # Each state the template renders is decided here rather than in the template, so the
@@ -78,6 +73,23 @@ def browse_mutation(request):
 
     template = loader.get_template("browse/browse.html")
     return HttpResponse(template.render(context, request), content_type="text/html")
+
+
+def _ncbi_url():
+    """Link this row's Reference cell into the NCBI viewer at the same locus.
+
+    The way across from reads to annotation: the pileup answers "what do the data show here"
+    and NCBI's viewer answers "what is here", and they are one click apart rather than two
+    pages that do not know about each other. No evidence link is passed alongside it, because
+    that one's destination is the page you are already on.
+    """
+    def url_for(observed):
+        if not observed.mutation.reseq_reference:
+            return None
+        return "%s?mutation_id=%s&reseq_id=%s" % (
+            reverse("ncbi_view"), observed.mutation_id, observed.sequencing_experiment_id)
+
+    return url_for
 
 
 def _may_view(user, experiment):
@@ -99,26 +111,16 @@ def _locus(mutation):
     the FASTA's sequence names because both take the first whitespace-delimited token of the
     header, the same rule samtools uses.
     """
-    start, end = _extent(mutation)
+    start, end = mutation_extent(mutation)
     return "%s:%d-%d" % (mutation.reseq_reference,
                          max(1, start - LOCUS_BUFFER_BASES),
                          end + LOCUS_BUFFER_BASES)
 
 
-def _extent(mutation):
-    """The reference interval the mutation occupies, 1-based inclusive.
-
-    `start_position`/`end_position` are what the annotator already wrote from breseq's own
-    rule (`mutation_interval`, the port of `cDiffEntry::get_reference_coordinate_start`/
-    `_end`), so they are used as-is. A mutation imported before a reference was available
-    has neither, and is measured from its raw `gd_data` by that same function rather than by
-    a second derivation that could disagree with it.
-    """
-    if mutation.start_position and mutation.end_position:
-        return mutation.start_position, mutation.end_position
-    if mutation.gd_data:
-        return mutation_interval(mutation.gd_data)
-    return mutation.position, mutation.position
+# The extent rule and the buffer moved to `aledb_seq.locus` when the NCBI Sequence Viewer
+# became a second page drawing the same interval. Kept as a name here because this module's
+# tests and readers know it, but there is one implementation.
+_extent = mutation_extent
 
 
 def _reference_urls(experiment):

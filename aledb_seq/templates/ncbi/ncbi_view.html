@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    {# The mutation is shown in breseq's own table, so this page needs its stylesheet -- and #}
+    {# its script, which is what makes the Show button on a wide deletion's gene list work. #}
+    <link rel="stylesheet" type="text/css" href="{% static "css/breseq_table.css" %}?v={{ aledb_version }}">
+    <script src="{% static "js/breseq_table.js" %}?v={{ aledb_version }}"></script>
+    <link href="{% static "css/ncbi_view.css" %}?v={{ aledb_version }}" rel="stylesheet">
+{% endblock %}
+{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <p class="ncbi-summary">
+            Contig <b>{{ contig_name }}</b>
+            {% comment %} Back the way you came: to the sample's own mutations when a sample was
+               named, and to the experiment's page otherwise -- this page can be reached from a
+               cross-sample table, where no one sample is the one you left. {% endcomment %}
+            {% if reseq_id %}
+                <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq_id }}">&laquo; back to mutations</a>
+            {% else %}
+                <a href="/stats?ale_experiment_id={{ ale_experiment_id }}">&laquo; back to the experiment</a>
+            {% endif %}
+            {% if is_verified %}
+                &middot; <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ accession }}"
+                            target="_blank" rel="noopener">{{ accession }} at NCBI</a>
+            {% endif %}
+        </p>
+
+        {% comment %} The mutation itself, in breseq's own table -- the same row, from the same
+           builder, as the Samples page shows. {% endcomment %}
+        {% if rows %}{% include "breseq_table/_mutation_table.html" %}{% endif %}
+
+        {% if not has_reference %}
+            <div class="alert alert-warning">
+                {% comment %} Three different absences land here -- no reference at all, a
+                   contig that is not in it, and a reference established before per-sequence
+                   hashing -- and they share an answer, because in all three there is nothing
+                   to check an accession against. {% endcomment %}
+                There is no stored reference sequence for <b>{{ contig_name }}</b>, so there is
+                nothing to check an NCBI accession against. A reference arrives with a breseq
+                result folder, or from the experiment's <b>Add data</b> page.
+            </div>
+
+        {% elif is_verified %}
+            {% comment %} The only branch that loads NCBI's script. Every other state ships no
+               third-party payload at all, the same discipline browse.html applies to igv. {% endcomment %}
+            <div id="sviewer" class="SeqViewerApp">
+                {% comment %} `:` in v= and `|` in mk= are NCBI's own delimiters and are written
+                   literally, as their documentation does -- percent-encoding them relies on
+                   their parser decoding first, which their note about escaping marker names
+                   by hand suggests it may not. What makes that safe is that the marker label
+                   is sanitised in the view, so nothing reaching here carries a delimiter,
+                   whitespace or an HTML-significant character. {% endcomment %}
+                <a href="?embedded=true&amp;appname=aledb&amp;id={{ sviewer.id }}&amp;v={{ sviewer.view }}&amp;mk={{ sviewer.marker }}"></a>
+            </div>
+            <p class="ncbi-footnote">
+                Drawn from NCBI's annotation of <b>{{ accession }}</b>, whose sequence was
+                confirmed to match this experiment's reference exactly. The marker spans
+                {{ sviewer.start }}&ndash;{{ sviewer.end }}.
+            </p>
+            {% comment %} Loaded last and only here. Unlike igv.min.js this cannot be vendored:
+               it is a client for NCBI's own backend, so the page needs ncbi.nlm.nih.gov
+               reachable whatever we do with the file. {% endcomment %}
+            <script type="text/javascript"
+                    src="https://www.ncbi.nlm.nih.gov/projects/sviewer/js/sviewer.js"></script>
+
+        {% else %}
+            <div class="alert {% if status == 'unchecked' %}alert-info{% else %}alert-warning{% endif %}">
+                {% if status == 'unchecked' %}
+                    <p>
+                        Nobody has said which NCBI record <b>{{ contig_name }}</b> is. Nothing is
+                        guessed from the name here: a contig called <code>NC_000913</code> is
+                        usually an accession and one called <code>REL606</code> is not, and a
+                        wrong guess would draw a convincing picture of the wrong gene.
+                    </p>
+                {% else %}
+                    <p><b>{{ detail }}</b></p>
+                    {% if status == 'mismatch' %}
+                        <p>
+                            This contig is not drawn against a record whose sequence differs from
+                            it, because NCBI's coordinates would not be this genome's coordinates.
+                        </p>
+                    {% endif %}
+                {% endif %}
+
+                {% if may_check %}
+                    <form id="ncbi-check-form" class="form-inline ncbi-check">
+                        {% csrf_token %}
+                        <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id }}">
+                        <input type="hidden" name="seq_id" value="{{ contig_name }}">
+                        <label for="ncbi-accession">NCBI accession for {{ contig_name }}</label>
+                        <input type="text" class="form-control" id="ncbi-accession"
+                               name="accession" value="{{ accession }}"
+                               placeholder="e.g. NC_000913.3" autocomplete="off">
+                        <button type="submit" class="btn btn-primary" id="ncbi-check-button">
+                            Check against NCBI
+                        </button>
+                        <span id="ncbi-check-status" class="ncbi-check-status"></span>
+                    </form>
+                    <p class="ncbi-check-help">
+                        The accession is only a proposal: it is accepted only if NCBI's record
+                        for it is byte-for-byte this contig's sequence. Every sequence in this
+                        experiment's reference is listed on its
+                        <a href="/mutations/reference?ale_experiment_id={{ ale_experiment_id }}">Reference</a>
+                        page.
+                    </p>
+                {% else %}
+                    <p class="ncbi-check-help">
+                        Someone with write access to this experiment can record its accession,
+                        here or on the
+                        <a href="/mutations/reference?ale_experiment_id={{ ale_experiment_id }}">Reference</a>
+                        page.
+                    </p>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if may_check and has_reference and not is_verified %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var form = document.getElementById("ncbi-check-form");
+    if (!form) { return; }
+    var button = document.getElementById("ncbi-check-button");
+    var status = document.getElementById("ncbi-check-status");
+
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        // A verification is one esummary plus, if that passes, a whole genome -- seconds,
+        // not milliseconds. Saying so beats a button that looks ignored.
+        button.disabled = true;
+        status.textContent = "Asking NCBI…";
+
+        fetch("{% url 'ncbi_check' %}", {
+            method: "POST",
+            body: new FormData(form),
+            credentials: "same-origin"
+        }).then(function (response) {
+            return response.json().then(function (data) {
+                return {ok: response.ok, data: data};
+            });
+        }).then(function (result) {
+            if (result.data.verified) {
+                // Reload rather than injecting the viewer: the whole page differs between
+                // the verified and unverified states, and rebuilding it here would be a
+                // second opinion about what the view already decides.
+                window.location.reload();
+                return;
+            }
+            button.disabled = false;
+            status.textContent = result.data.detail || result.data.error || "The check failed.";
+        }).catch(function () {
+            button.disabled = false;
+            status.textContent = "The check could not be sent.";
+        });
+    });
+}());
+</script>
+{% endif %}
+{% endblock %}

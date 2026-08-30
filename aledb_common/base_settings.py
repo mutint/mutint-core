@@ -74,6 +74,21 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         # Chunked uploads staged but never finalized are reaped after this many hours.
         'ALEDB_UPLOAD_SESSION_TTL_HOURS': int(
             os.environ.get('ALEDB_UPLOAD_SESSION_TTL_HOURS', '24')),
+        # NCBI E-utilities, used by aledb_seq.ncbi to confirm that a reference contig
+        # really is the accession somebody said it was. All optional: with none of them set
+        # the check still works, just politely slower and anonymously.
+        #
+        # NCBI asks callers to identify themselves and rate-limits to 3 requests/second, or
+        # 10 with a key. Nothing here is a secret in the credential sense -- the key only
+        # raises a rate limit -- but it comes from the environment like everything else.
+        'ALEDB_NCBI_EMAIL': os.environ.get('ALEDB_NCBI_EMAIL', ''),
+        'ALEDB_NCBI_API_KEY': os.environ.get('ALEDB_NCBI_API_KEY', ''),
+        # Seconds. Deliberately short: this runs from a management command and from a button,
+        # and a check that hangs is worse than one that says it could not reach NCBI.
+        'ALEDB_NCBI_TIMEOUT': float(os.environ.get('ALEDB_NCBI_TIMEOUT', '30')),
+        # Refuse to stream a record larger than this rather than pulling a human chromosome
+        # through a verification that was designed around bacterial genomes.
+        'ALEDB_NCBI_MAX_BASES': int(os.environ.get('ALEDB_NCBI_MAX_BASES', str(50_000_000))),
 
         'ALLOWED_HOSTS': [os.environ.get('DJANGO_SERVER_HOST', 'localhost'), 'localhost', '127.0.0.1'],
         'SESSION_EXPIRE_AT_BROWSER_CLOSE': True,

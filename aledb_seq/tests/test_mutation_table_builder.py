@@ -119,7 +119,15 @@ class AmplificationsRemovedTestCase(TestCase):
 
     def test_the_row_holds_the_reference_at_that_index(self):
         """The other half of the same invariant: the header says where it is, and the body
-        has to actually put it there."""
+        has to actually put it there.
+
+        Compared on the cell's *text*, because the cell is an anchor into the NCBI Sequence
+        Viewer -- the contig name is what it reads, not what the whole cell equals. The
+        invariant being pinned is which column carries the reference, and that is unchanged
+        by the name being linked.
+        """
+        from django.utils.html import strip_tags
+
         from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
         from aledb_seq.util import get_reseq_ordered_dict
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
@@ -129,7 +137,7 @@ class AmplificationsRemovedTestCase(TestCase):
         row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
 
         references = {mutation.reseq_reference for mutation in Mutation.objects.all()}
-        self.assertIn(row[REFSEQ_COLUMN_IN_MUT_TABLE], references)
+        self.assertIn(strip_tags(row[REFSEQ_COLUMN_IN_MUT_TABLE]).strip(), references)
 
     def test_the_close_icon_column_is_gone(self):
         """It removed the row from the client-side table until the next reload -- the same

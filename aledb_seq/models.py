@@ -291,3 +291,79 @@ class ExperimentReference(models.Model):
         if self.sequence_sha256:
             return self.sequence_sha256 == sequence_sha256
         return fasta_sha256 is not None and self.fasta_sha256 == fasta_sha256
+
+
+class NcbiSequence(models.Model):
+    """One reference contig, matched -- or not -- to an NCBI nucleotide record.
+
+    The NCBI Sequence Viewer draws a locus from NCBI's own annotation, and it is addressed by
+    accession rather than by a file. Nothing in this repo stores an accession: the importer
+    takes a GenBank's LOCUS name (`NC_000913`) and not its VERSION (`NC_000913.3`), because
+    breseq does, and every seq_id in a `.gd` is therefore unversioned. So a contig name is an
+    accession only by convention -- and drawing a mutation in the coordinate space of the
+    wrong genome is not a visible failure, it is a convincing page pointing at the wrong gene.
+
+    Hence this table, and the rule it exists to enforce: **a contig is drawn in NCBI's
+    coordinates only once NCBI has confirmed the record is byte-for-byte our sequence.** The
+    name is never the evidence.
+
+    Keyed on the sequence digest rather than on a contig name or an experiment, so that the
+    verdict *cannot outlive the sequence it was about*: the key is the bases, and there is no
+    path by which a stored accession survives onto a different sequence. It also means the
+    same genome imported into ten experiments is verified once, and that a contig rename --
+    which does not change the bases -- cannot invalidate it.
+
+    `accession` is only ever a proposal until `status` is VERIFIED. Anyone with write access
+    to any experiment carrying this sequence may propose one, which is a cross-experiment
+    write and is deliberate: what decides the status is NCBI's sequence, not the proposer, so
+    a wrong proposal can become a rejected verdict but never a wrong one.
+    """
+
+    #: Nobody has said what this contig is. A missing row means this, so no backfill is ever
+    #: needed -- the same convention `DerivedDataState` uses for staleness.
+    UNCHECKED = "unchecked"
+    #: NCBI's record for `accession` is byte-for-byte this sequence. The only drawable state.
+    VERIFIED = "verified"
+    #: There is such a record and it is a different sequence -- a sibling strain, or another
+    #: assembly version. The interesting failure, and the one worth wording carefully.
+    MISMATCH = "mismatch"
+    #: NCBI has no record under that accession.
+    NOT_FOUND = "not_found"
+    #: The check could not be completed -- no network, a timeout, a malformed answer. Says
+    #: nothing about whether the sequence matches, which is why it is not MISMATCH.
+    ERROR = "error"
+
+    STATUS_CHOICES = [
+        (UNCHECKED, "Not checked"),
+        (VERIFIED, "Verified against NCBI"),
+        (MISMATCH, "Sequence does not match"),
+        (NOT_FOUND, "No such NCBI record"),
+        (ERROR, "Check failed"),
+    ]
+
+    #: aledb_import.reference.sequence_digest() of this contig -- sha256 of its uppercased
+    #: bases alone. Equal to the `sha256` of an ExperimentReference.seq_ids entry, which is
+    #: how a contig finds its row.
+    sha256 = models.CharField(max_length=64, unique=True)
+    length = models.BigIntegerField()
+    #: Versioned once verified: NCBI's own `accessionversion`, not whatever was typed. An
+    #: unversioned proposal that verifies is stored as the version that actually matched.
+    accession = models.CharField(max_length=64, blank=True, default="")
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=UNCHECKED)
+    #: Why it failed, in words, for a page and for `./aledb ncbi_accessions --list`. A status
+    #: alone cannot distinguish "4,641,652 bases here, 4,558,660 there" from "same length,
+    #: different bases", and those call for different next steps.
+    detail = models.TextField(blank=True, default="")
+    checked_at = models.DateTimeField(**blank_field)
+    proposed_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, **blank_field)
+
+    class Meta:
+        verbose_name = "NCBI sequence"
+        verbose_name_plural = "NCBI sequences"
+
+    def __str__(self):
+        return "%s (%s)" % (self.accession or self.sha256[:12], self.status)
+
+    @property
+    def is_verified(self):
+        return self.status == self.VERIFIED

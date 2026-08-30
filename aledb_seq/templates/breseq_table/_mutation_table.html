@@ -34,7 +34,14 @@
                     {{ row.mutation_type }}
                 {% endif %}
             </td>
-            <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
+            <td class="breseq-seq-id">
+                {% if row.refseq_url %}
+                    <a href="{{ row.refseq_url }}"
+                       title="Show this position in the NCBI annotation">{{ row.seq_id|safe }}</a>
+                {% else %}
+                    {{ row.seq_id|safe }}
+                {% endif %}
+            </td>
             <td class="breseq-position">{{ row.position|safe }}</td>
             <td class="breseq-mutation">{{ row.mutation|safe }}</td>
             {% if is_population %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}

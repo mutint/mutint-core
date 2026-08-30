@@ -1,0 +1,43 @@
+/* The NCBI Sequence Viewer page. Margins match the genome browser's, which match every
+   other page's 25px -- see "The shell's two widths" in CLAUDE.md. */
+
+.ncbi-summary {
+    margin-bottom: 15px;
+}
+
+.ncbi-summary a {
+    margin-left: 10px;
+}
+
+/* NCBI builds the viewer into this div at its own width. Give it room and let it scroll
+   sideways rather than pushing the page over, the rule every wide table here follows. */
+#sviewer {
+    margin-top: 15px;
+    min-height: 500px;
+    overflow-x: auto;
+}
+
+.ncbi-footnote,
+.ncbi-check-help {
+    margin-top: 10px;
+    color: #717171;
+    font-size: 12px;
+}
+
+.ncbi-check {
+    margin-top: 10px;
+}
+
+.ncbi-check label {
+    margin-right: 8px;
+}
+
+.ncbi-check input[type="text"] {
+    /* Wide enough for a versioned WGS accession without wrapping the row. */
+    width: 220px;
+    margin-right: 8px;
+}
+
+.ncbi-check-status {
+    margin-left: 10px;
+}
