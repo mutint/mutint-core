@@ -21,8 +21,8 @@ from aledb_mutation_editor.models import (
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import Mutation, ObservedMutation
 
-PAGE = "/mutation-editor/change"
-APPLY = "/mutation-editor/change/apply"
+PAGE = "/mutation-editor/edit"
+APPLY = "/mutation-editor/edit/apply"
 
 
 class ChangeMutationTestCase(EditorTestCase):

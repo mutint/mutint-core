@@ -3,11 +3,6 @@
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
-    {% comment %} breseq's own cell styling, borrowed so this table reads exactly like the
-       Samples page it is the editable counterpart of. {% endcomment %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
-    {% comment %} base.html does not load sweetalert; every page that confirms something has
-       to pull it in. {% endcomment %}
     <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
@@ -16,206 +11,136 @@
     {% include "mutation_editor/_toolbar.html" with active='edit' %}
     {% csrf_token %}
 
-    <div class="row breseq-picker">
-        <b>Sample:</b>
-        <div class="btn-group" id="reseq_picker">
-            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
-                    aria-haspopup="true" aria-expanded="false">
-                {% if all_samples %}All samples{% else %}{{ selected_reseq.ale_flask_isolate_str }}{% endif %}
-                <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu aledb-menu">
-                {% comment %} The whole experiment is an entry in the sample picker rather
-                   than a separate control: it is the same question -- which samples am I
-                   editing -- and two controls could disagree about the answer. {% endcomment %}
-                <li {% if all_samples %}class="active"{% endif %}>
-                    <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ all_samples_value }}"><b>All samples</b></a>
-                </li>
-                <li role="separator" class="divider"></li>
-                {% for reseq in reseq_list %}
-                    <li {% if reseq.id == selected_reseq_id %}class="active"{% endif %}>
-                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% if all_samples %}
-            <a href="/compare/?ale_experiment_id={{ ale_experiment_id }}"
-               class="breseq-crosslink">compare this experiment &raquo;</a>
-        {% else %}
-            <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ selected_reseq_id }}"
-               class="breseq-crosslink">view this sample &raquo;</a>
-        {% endif %}
-    </div>
+    {{ schema|json_script:"mutation-schema" }}
+    {{ initial|json_script:"mutation-initial" }}
 
-    {% if not all_samples and not selected_reseq %}
-        <p>This experiment has no resequencing samples to edit.</p>
-    {% elif not can_edit %}
-        <p>You have read access to this project, so this page is showing you what is stored
-           without offering to change it. Editing mutations needs write access.</p>
-    {% elif all_samples %}
-        {% include "mutation_editor/_grid.html" %}
+    {% if not can_edit %}
+        <p>Editing a mutation needs write access to this project.</p>
     {% else %}
+        {% if not has_reference %}
+        <div class="alert alert-warning">
+            <b>This experiment has no reference genome.</b> The fields below are still checked
+            for shape, but nothing can be compared against the sequence, so a change that would
+            leave the genome unaltered cannot be detected and will be accepted.
+        </div>
+        {% endif %}
+
         <div class="row">
             <p style="color: #666;">
-                Every mutation stored for this sample is listed, including any the experiment's
-                gene or frequency filters hide elsewhere &mdash; a filtered mutation is still
-                stored, and hiding it here would leave no way to remove it. Deleting is
-                recorded and can be undone from the
-                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>.
+                Edits a mutation in the samples you highlight, out of the
+                <b>{{ sample_count }}</b> that carr{{ sample_count|pluralize:"ies,y" }} it.
+                Each keeps its own frequency and read counts &mdash; what changes is what the
+                mutation <i>is</i>. It is one entry in the
+                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>
+                and can be restored away from there.
+            </p>
+            <p style="color: #666;">
+                Highlight every sample and the mutation itself moves, keeping its id.
+                Highlight only some &mdash; which is how this page opens when you come to it
+                from one sample's mutations &mdash; and those samples come off it onto a
+                different mutation, the one this experiment already has with these values or a
+                new one, while the rest stay on the mutation as it was.
             </p>
         </div>
 
-        <div class="row" style="margin-bottom: 10px;">
-            <button type="button" class="btn btn-danger" id="me-apply">&minus; Delete selected</button>
-            <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
-            <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
+        <div class="col-lg-7" style="padding-left: 0;">
+            <div class="form-group">
+                <label for="me-type">Mutation type</label>
+                <select class="form-control" id="me-type">
+                    {% for entry in schema.types %}
+                        <option value="{{ entry.name }}">{{ entry.label }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-block" id="me-type-help"></p>
+            </div>
+
+            {% include "mutation_editor/_mutation_fields.html" %}
+
+            <button type="button" class="btn btn-primary" id="me-apply">Save changes</button>
+            <a href="/mutation-editor/?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ all_samples_value|default:'all' }}"
+               class="btn btn-link">cancel</a>
+            <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
         </div>
 
-        <div class="row">
-            {% comment %} A DataTable, unlike the sample editor's plain table next door, and
-               the difference is that nothing in here is an <input>. That table avoids
-               DataTables because deferRender never builds the DOM for undrawn rows, so a value
-               typed on page two would not exist to read back on save. Selection is held in
-               DataTables' own data model rather than the DOM, so a row selected on another
-               page or behind a search box still comes back from rows({selected:true}) -- which
-               is what makes paging and search safe to have here, and they are worth having on
-               a sample with several hundred mutations.
+        {% comment %} A bare column under #aledb-content has its gutter zeroed by
+           common.css, so this one would touch the column beside it. 30px is what
+           Bootstrap puts between two columns (15px each side), put back on the one
+           side that needs it -- the page still lines up with the title on the left
+           and the content edge on the right. {% endcomment %}
+        <div class="col-lg-5" style="padding-left: 30px;">
+            <h4>Edit in</h4>
+            {% include "select_list.html" with items=targets id="me-targets" selected_ids=selected_ids %}
 
-               If a cell in this table ever becomes editable, this reasoning stops holding and
-               the table has to become a plain one. {% endcomment %}
-            <table class="table breseq-table" id="me-table">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th class="breseq-evidence">Type</th>
-                        <th class="breseq-seq-id">Reference</th>
-                        <th class="breseq-position">Position</th>
-                        <th class="breseq-mutation">Mutation</th>
-                        {% if is_population %}<th class="breseq-freq">Freq</th>{% endif %}
-                        <th class="breseq-annotation">Annotation</th>
-                        <th class="breseq-gene">Gene</th>
-                        <th class="breseq-description">Description</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for row in rows %}
-                    <tr data-observed-id="{{ row.observed_id }}">
-                        <td></td>
-                        <td class="breseq-evidence">{{ row.mutation_type }}</td>
-                        <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
-                        <td class="breseq-position">{{ row.position|safe }}</td>
-                        <td class="breseq-mutation">{{ row.mutation|safe }}</td>
-                        {% if is_population %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}
-                        <td class="breseq-annotation">{{ row.annotation|safe }}</td>
-                        <td class="breseq-gene">{{ row.gene|safe }}</td>
-                        <td class="breseq-description">{{ row.description|safe }}</td>
-                        {% comment %} `reseq_id` is what opens the Change page on this
-                           sample alone rather than on every sample sharing the mutation:
-                           correcting a call you are looking at, in the sample you are looking
-                           at it in, is the common case. {% endcomment %}
-                        <td><a href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation_id }}&amp;reseq_id={{ selected_reseq_id }}"
-                               title="Change this mutation in this sample">change</a></td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="{% if is_population %}10{% else %}9{% endif %}">
-                            This sample has no mutations stored.</td>
-                    </tr>
-                {% endfor %}
-                </tbody>
+            <h4>Currently</h4>
+            <table class="table">
+                <tr><th>Reference</th><td>{{ mutation.reseq_reference|default_if_none:"" }}</td></tr>
+                <tr><th>Position</th><td>{{ mutation.position }}</td></tr>
+                <tr><th>Type</th><td>{{ mutation.mutation_type }}</td></tr>
+                <tr><th>Change</th><td>{{ mutation.sequence_change }}</td></tr>
+                <tr><th>Gene</th><td>{{ mutation.gene|default_if_none:"" }}</td></tr>
+                <tr><th>Mutation id</th><td>{{ mutation.id }}</td></tr>
+                <tr><th>Samples</th><td>{{ sample_count }}</td></tr>
             </table>
+            <p style="color: #666;">
+                The mutation id above stays put when every sample moves, and it is worth
+                keeping: it is stored as a plain number in convergence, phylogeny and every
+                exported table, and nothing refreshes those. Change only some samples and
+                they move to a different id, while this one goes on meaning what it always
+                did for the samples left on it.
+            </p>
         </div>
-
     {% endif %}
 
-        {% if recent_changes %}
-        <div class="row" style="margin-top: 20px;">
-            <h4>Recent changes</h4>
-            <ul style="list-style: none; padding-left: 0;">
-                {% for entry in recent_changes %}
-                    <li style="margin-bottom: 4px;">
-                        <code>{{ entry.change_set.created_at }}</code>
-                        &mdash; {{ entry.change_set.note }}
-                        <span style="color: #666;">
-                            ({% if entry.change_set.is_system %}system{% else %}{{ entry.change_set.created_by }}{% endif %})
-                        </span>
-                    </li>
-                {% endfor %}
-            </ul>
-            <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">Full history &raquo;</a>
-        </div>
-        {% endif %}
-
     <script type="text/javascript">
-    // $(document).ready, not a bare IIFE: base.html loads the DataTables Select and Buttons
-    // extensions in the last <script> of <body>, after this block. Initialising at parse time
-    // silently drops `select:` and `buttons:` -- the table draws either way and the checkbox
-    // column still gets its class from the stylesheet, so the failure looks like styling
-    // rather than a load-order problem. /ale/experiments/ does the same thing for the same
-    // reason.
-    $(document).ready(function () {
-        "use strict";
-        // Guarded on the table, not on the Delete button: the page renders without either
-        // for a reader and for an experiment with no samples, but the *grid* renders its own
-        // `me-apply` -- so guarding on the button would bind this handler a second time on
-        // top of the grid's, and every delete would go through whichever won.
-        if (!document.getElementById("me-table")) { return; }
+    {% include "mutation_editor/_mutation_form.js" %}
 
-        var table = $("#me-table").DataTable({
-            paging: true,
-            pageLength: 100,
-            lengthMenu: [50, 100, 500, 1000],
-            deferRender: true,
-            order: [[2, "asc"], [3, "asc"]],
-            columnDefs: [{ targets: 0, orderable: false, className: "select-checkbox" }],
-            select: { style: "multi", selector: "td:first-child" },
-            dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
-            buttons: [{ extend: "collection", text: "Select",
-                        buttons: ["selectAll", "selectNone"] }]
-        });
+    (function () {
+        "use strict";
+        if (!document.getElementById("me-apply")) { return; }
+
+        // Seeded from the mutation's own gd_data, so the form opens on what is stored rather
+        // than on blanks, and an untouched field round-trips to the value it already had.
+        var initial = JSON.parse(document.getElementById("mutation-initial").textContent);
+        initial.__type = "{{ mutation.mutation_type }}";
+        var form = aledbMutationForm(initial);
+        var targets = window.aledbSelectList(document.getElementById("me-targets"));
 
         document.getElementById("me-apply").addEventListener("click", function () {
-            var ids = [];
-            // rows({selected:true}) reads DataTables' own selection model, so rows on other
-            // pages and rows hidden by the search box are included.
-            table.rows({ selected: true }).every(function () {
-                var id = this.node().getAttribute("data-observed-id");
-                if (id) { ids.push(parseInt(id, 10)); }
+            var targetIds = targets.selected().map(function (id) {
+                return parseInt(id, 10);
             });
-
-            if (!ids.length) {
-                swal("", "Select at least one mutation, then try again.", "warning");
+            if (!targetIds.length) {
+                swal("", "Select at least one sample to edit it in.", "warning");
                 return;
             }
 
-            // Deliberately not aledbConfirmDelete, whose text says the deletion is permanent.
-            // Here it is the opposite: the point of this page is that it is recorded and can
-            // be put back, and a dialog that said otherwise would stop people using it.
-            swal({
-                title: "Delete " + ids.length + " mutation(s)?",
-                text: "They are removed from this sample and the change is recorded, so you "
-                    + "can restore them from the history page.",
-                icon: "warning",
-                buttons: true,
-                dangerMode: true
-            }).then(function (confirmed) {
-                if (!confirmed) { return; }
-                document.getElementById("me-error").textContent = "";
-                // One POST for the whole batch, not one per row: it is what makes this a
-                // single entry in the history rather than eleven.
-                window.aledbPost("/mutation-editor/delete", {
-                    experiment_id: "{{ ale_experiment_id }}",
-                    reseq_id: "{{ selected_reseq_id }}",
-                    observed_ids: JSON.stringify(ids)
-                }).then(function () {
-                    window.location.reload();
-                }).catch(function (err) {
-                    document.getElementById("me-error").textContent = err.message;
-                });
+            form.clearFieldErrors();
+
+            var payload = {
+                experiment_id: "{{ ale_experiment_id }}",
+                mutation_id: "{{ mutation.id }}",
+                mutation_type: form.type(),
+                target_reseq_ids: JSON.stringify(targetIds)
+            };
+            var fields = form.fields();
+            Object.keys(fields).forEach(function (name) { payload[name] = fields[name]; });
+
+            window.aledbPost("/mutation-editor/edit/apply", payload).then(function (body) {
+                var message = "Changed in " + body.samples + " sample(s).";
+                if (body.already && body.already.length) {
+                    message += " Already had this mutation: "
+                             + body.already.join(", ") + ".";
+                }
+                swal("", message, "success")
+                    .then(function () {
+                        window.location.href =
+                            "/mutation-editor/?ale_experiment_id={{ ale_experiment_id }}&reseq_id=all";
+                    });
+            }).catch(function (err) {
+                document.getElementById("me-error").textContent = err.message;
+                form.showFieldErrors(err.body && err.body.errors);
             });
         });
-    });
+    })();
     </script>
 {% endblock %}

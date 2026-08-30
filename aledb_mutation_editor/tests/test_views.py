@@ -13,6 +13,7 @@ from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import ObservedMutation
 
 EDIT = "/mutation-editor/"
+DELETE = "/mutation-editor/delete"
 ADD = "/mutation-editor/add"
 COPY = "/mutation-editor/copy"
 HISTORY = "/mutation-editor/history"
@@ -55,11 +56,11 @@ class PageTestCase(EditorTestCase):
     def test_the_handler_guards_its_missing_control(self):
         """The button is absent for a reader, so the script must not assume it."""
         self.assertContains(
-            self.get(EDIT),
+            self.get(DELETE),
             'if (!document.getElementById("me-apply")) { return; }')
 
     def test_the_delete_button_is_there_for_an_editor(self):
-        self.assertContains(self.get(EDIT), 'id="me-apply"')
+        self.assertContains(self.get(DELETE), 'id="me-apply"')
 
     def test_it_renders_a_csrf_token(self):
         """aledbPost reads the CSRF cookie, and the token tag is what sets it."""
@@ -67,10 +68,50 @@ class PageTestCase(EditorTestCase):
 
     def test_it_does_not_promise_the_deletion_is_permanent(self):
         """aledbConfirmDelete says "This is permanent", which is the opposite of true here."""
-        html = self.get(EDIT).content.decode()
+        html = self.get(DELETE).content.decode()
         # base.html names the helper in a comment on every page, so look for the call.
         self.assertNotIn("aledbConfirmDelete(", html)
         self.assertIn("restore them from the history", html)
+
+    # --- the two tabs over one listing ----------------------------------------------------
+
+    def test_the_edit_tab_offers_a_link_and_no_delete(self):
+        """The whole point of the split: the tab you are on decides what the next click can
+        mean, rather than which column you happen to aim at."""
+        html = self.get(EDIT, reseq_id=self.sample_a.id).content.decode()
+
+        self.assertIn("/mutation-editor/edit?", html)
+        self.assertNotIn('id="me-apply"', html)
+        self.assertNotIn("select-checkbox", html)
+
+    def test_the_delete_tab_offers_selection_and_no_link(self):
+        html = self.get(DELETE, reseq_id=self.sample_a.id).content.decode()
+
+        self.assertIn('id="me-apply"', html)
+        self.assertIn("select-checkbox", html)
+        self.assertNotIn("/mutation-editor/edit?", html)
+
+    def test_each_tab_marks_itself_active_in_the_toolbar(self):
+        """`active` is what Bootstrap paints, and the toolbar is included with `active=mode`
+        -- a mode that did not reach it would leave every tab looking unvisited, and both
+        pages would be indistinguishable from each other at a glance."""
+        self.assertEqual("Edit", self._active_tab(self.get(EDIT)))
+        self.assertEqual("Delete", self._active_tab(self.get(DELETE)))
+
+    def _active_tab(self, response):
+        """The label of the one toolbar tab carrying `active`, or None.
+
+        Matched on the <li>/<a> pair rather than on an exact string so re-indenting the
+        toolbar does not fail this; asserting there is exactly one is what catches a mode
+        that lit up two.
+        """
+        import re
+
+        found = re.findall(r'<li class="active">\s*<a href="/mutation-editor/[^"]*">'
+                           r'([^<]+)</a>',
+                           response.content.decode())
+        self.assertEqual(1, len(found), "expected exactly one active tab, got %r" % found)
+        return found[0]
 
     # --- the copy page --------------------------------------------------------------------
 

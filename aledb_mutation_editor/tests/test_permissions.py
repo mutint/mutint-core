@@ -19,7 +19,7 @@ from aledb_mutation_editor.models import MutationChangeSet
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import ObservedMutation
 
-DELETE = "/mutation-editor/delete"
+DELETE = "/mutation-editor/delete/apply"
 COPY = "/mutation-editor/copy/apply"
 ADD = "/mutation-editor/add/apply"
 RESTORE = "/mutation-editor/restore"
@@ -118,7 +118,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
     def test_a_writer_may_change_a_mutation(self):
         self.client.force_login(self._writer())
 
-        response = self.client.post("/mutation-editor/change/apply", {
+        response = self.client.post("/mutation-editor/edit/apply", {
             "experiment_id": self.experiment.ale_id,
             "mutation_id": self.mut_1.id,
             "mutation_type": "SNP",
@@ -133,7 +133,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         buttons would leave a writer unable to reach them."""
         self.client.force_login(self._writer())
 
-        html = self.client.get("/mutation-editor/", {
+        html = self.client.get("/mutation-editor/delete", {
             "ale_experiment_id": self.experiment.ale_id,
             "reseq_id": "all"}).content.decode("utf-8")
 

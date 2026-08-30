@@ -1,4 +1,8 @@
-"""The whole experiment at once: `/mutation-editor/?reseq_id=all`.
+"""The whole experiment at once: `/mutation-editor/delete?reseq_id=all`.
+
+The grid is on both tabs, but selection is the Delete tab's -- so that is where these run. The
+Edit tab renders the same rows with an `edit` link instead of a checkbox and no selection at
+all, which `EditGridTestCase` at the foot covers.
 
 The fixture is two samples and three mutations, and only `mut_1` is in both -- so a grid over
 it has a row that is full, two that are half empty, and one column shorter than the other. That
@@ -12,7 +16,7 @@ from aledb_mutation_editor.models import MutationChangeSet
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import ObservedMutation
 
-PAGE = "/mutation-editor/"
+PAGE = "/mutation-editor/delete"
 
 
 class GridPageTestCase(EditorTestCase):
@@ -110,7 +114,7 @@ class GridPageTestCase(EditorTestCase):
                ObservedMutation.objects.filter(mutation=self.mut_1)]
         self.assertEqual(2, len(ids))
 
-        response = self.client.post("/mutation-editor/delete", {
+        response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.ale_id,
             "observed_ids": json.dumps(ids)})
 
@@ -126,7 +130,7 @@ class GridPageTestCase(EditorTestCase):
         ids = [observed.id for observed in
                ObservedMutation.objects.filter(mutation=self.mut_1)]
 
-        self.client.post("/mutation-editor/delete", {
+        self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.ale_id,
             "observed_ids": json.dumps(ids)})
 
@@ -144,7 +148,7 @@ class GridPageTestCase(EditorTestCase):
                   ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
                                                mutation=self.mut_3).id]
 
-        self.client.post("/mutation-editor/delete", {
+        self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.ale_id,
             "observed_ids": json.dumps(doomed)})
 
@@ -175,7 +179,7 @@ class GridPageTestCase(EditorTestCase):
                                         experiment=other),
             present=True)
 
-        response = self.client.post("/mutation-editor/delete", {
+        response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.ale_id,
             "observed_ids": json.dumps([outside.id])})
 
@@ -209,7 +213,7 @@ class GridPageTestCase(EditorTestCase):
         ids = [observed.id for observed in
                ObservedMutation.objects.filter(mutation=self.mut_1)]
 
-        self.client.post("/mutation-editor/delete", {
+        self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.ale_id,
             "observed_ids": json.dumps(ids)})
 
@@ -302,3 +306,35 @@ class GridPageTestCase(EditorTestCase):
         by_mutation = json.loads(self._json_script(html, "me-by-mutation"))
 
         self.assertEqual([str(self.mut_2.id)], list(by_mutation))
+
+
+class EditGridTestCase(EditorTestCase):
+    """The same grid under the Edit tab, which offers a link rather than a selection."""
+
+    def grid(self):
+        return self.client.get("/mutation-editor/", {
+            "ale_experiment_id": self.experiment.ale_id, "reseq_id": "all"})
+
+    def test_it_offers_an_edit_link_per_mutation(self):
+        html = self.grid().content.decode("utf-8")
+
+        for mutation in (self.mut_1, self.mut_2, self.mut_3):
+            self.assertIn("mutation_id=%d" % mutation.id, html)
+
+    def test_it_has_no_selection_at_all(self):
+        """Not merely a hidden button: the checkbox column, the cell ids and the two maps are
+        all absent, so there is nothing on the page a stray click could select."""
+        html = self.grid().content.decode("utf-8")
+
+        self.assertNotIn('class="me-row-box"', html)
+        self.assertNotIn('id="me-apply"', html)
+        self.assertNotIn('id="me-by-mutation"', html)
+
+    def test_the_delete_tab_still_has_them(self):
+        """The counterpart, so a mode that rendered nothing anywhere would not pass the two
+        assertions above by being broken."""
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+                                      "reseq_id": "all"}).content.decode("utf-8")
+
+        self.assertIn('class="me-row-box"', html)
+        self.assertIn('id="me-by-mutation"', html)

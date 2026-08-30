@@ -61,10 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1391 run, 0 failures** standalone; **1534** in an assembled project, where the
-plugins' own tests join them. They were 1387 and 1530 before the Change page learned to open on
-the sample it was linked from, and 1375 and 1518 before Change Mutation learned to change a
-mutation in some of its samples rather than all of them. (The assembled figure was *run*, not
+**Baseline: 1397 run, 0 failures** standalone; **1540** in an assembled project, where the
+plugins' own tests join them. They were 1391 and 1534 before editing and deleting became two
+tabs, 1387 and 1530 before the Edit page learned to open on the sample it was linked from, and
+1375 and 1518 before it learned to edit a mutation in some of its samples rather than all of
+them. (The assembled figure was *run*, not
 added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/aledb-core` is a submodule
 clone of the last commit. See the trap two sentences down for why the arithmetic is not
 trusted, even when it agrees as it does here.)
@@ -473,10 +474,28 @@ depends on where it falls in a given database's graph.
 
 ### Editing a sample's mutations, and the history that makes it safe
 
-`aledb_mutation_editor` owns two operations -- **delete** an observation from a sample, and
-**batch-copy** one from a sibling sample -- and an append-only change log that makes both
-reversible. `/mutation-editor/` edits one sample, `/mutation-editor/copy` copies between them,
-`/mutation-editor/history` lists what has been done and restores from it.
+`aledb_mutation_editor` owns four operations -- **edit** a mutation, **delete** an observation
+from a sample, **add** one nothing carries yet and **batch-copy** one from a sibling sample --
+and an append-only change log that makes all of them reversible. The toolbar is
+`/mutation-editor/` (Edit), `/mutation-editor/delete`, `/mutation-editor/add`,
+`/mutation-editor/copy` and `/mutation-editor/history`, and `/mutation-editor/edit` is the one
+mutation's form the Edit tab links to.
+
+**Edit and Delete are two tabs over one listing**, and that is a split rather than a
+duplication. The page used to carry a checkbox column *and* a per-row link, so the next thing
+you clicked might have meant either -- and one of the two is destructive. `_listing(request,
+mode)` builds the rows once and the mode decides one column and one button; two views over two
+templates would be two places for the "listings here are unfiltered" rule to drift apart.
+
+**Both tabs put their control in the first column** -- a checkbox, or the `edit` link. Last
+would have been tidier to write and unusable to read: the gene column alone can run to
+thousands of characters, so this table is wider than the window on a real experiment and a
+control at the far right is one nobody reaches without scrolling sideways. Both modes adding
+exactly one leading column is also what lets the JavaScript hold one set of column indices
+rather than two.
+
+Every write is `<what>/apply` -- `delete/apply`, `add/apply`, `copy/apply`, `edit/apply`.
+Deleting used to be a bare `^delete$`, the odd one out, and the Delete *tab* needed that name.
 
 **What it deletes is an `ObservedMutation`, never a `Mutation`.** That distinction is the whole
 design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
@@ -860,10 +879,11 @@ elements into the genome browser, which would fight a click meaning "select", an
 `get_table_body` filters through `filter_observed_mutations` while this page must show what is
 stored.
 
-### Changing a mutation, in every sample or in some of them
+### Editing a mutation, in every sample or in some of them
 
-`/mutation-editor/change?mutation_id=<pk>` opens the Add form prefilled from the mutation's
-`gd_data`, beside a list of the samples carrying it.
+`/mutation-editor/edit?mutation_id=<pk>` opens the Add form prefilled from the mutation's
+`gd_data`, beside a list of the samples carrying it. It is reached from a row of the Edit tab
+rather than from the toolbar, because it needs a mutation to be about.
 
 **Which of them start highlighted depends on where the link came from**, and the two callers
 differ because the question they were asked differs. A sample's own mutation table adds

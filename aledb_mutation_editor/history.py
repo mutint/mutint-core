@@ -164,7 +164,7 @@ def mutation_for_identity(experiment, identity):
     `get_or_create` on exactly the fields `gd_import` keys on, so a row minted here is the row
     a re-import would have produced -- and a later import finds it rather than adding a second.
     That single behaviour is what both callers want and why it is one function: `_resolve_mutation`
-    puts a swept mutation back, and `mutation_change_apply` moves observations onto the row that
+    puts a swept mutation back, and `mutation_edit_apply` moves observations onto the row that
     already holds the corrected values or onto a new one, which is the same question asked with
     a different motive.
 

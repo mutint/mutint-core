@@ -209,7 +209,7 @@ class EveryWritePathTestCase(LockTestCase):
         """(name, callable) for every experiment-scoped write the web offers."""
         experiment_id = self.experiment.ale_id
         return (
-            ("mutation delete", lambda: self.client.post("/mutation-editor/delete", {
+            ("mutation delete", lambda: self.client.post("/mutation-editor/delete/apply", {
                 "experiment_id": experiment_id,
                 "observed_ids": json.dumps([self.observed.id])})),
             ("mutation add", lambda: self.client.post("/mutation-editor/add/apply", {
@@ -390,7 +390,7 @@ class StillAllowedTestCase(LockTestCase):
 
         observed = ObservedMutation.objects.filter(
             sequencing_experiment=self.sample_a).first()
-        response = self.client.post("/mutation-editor/delete", {
+        response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.ale_id,
             "observed_ids": json.dumps([observed.id])})
         self.assertEqual(200, response.status_code)

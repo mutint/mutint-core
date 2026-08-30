@@ -56,6 +56,14 @@ REQUEST_SOURCE_RESEQ_ID = "source_reseq_id"
 #: link per entry and there is no state in which both are set and disagree.
 ALL_SAMPLES = "all"
 
+#: The two tabs over one listing. Editing and deleting are different decisions about the same
+#: rows, and they were one page with a checkbox column *and* a per-row link -- so the next
+#: thing you clicked might have meant either. The mode decides which column the listing grows
+#: and which button sits above it; everything else about the page is identical, which is why
+#: this is a parameter rather than a second template.
+MODE_EDIT = "edit"
+MODE_DELETE = "delete"
+
 _REFUSED = "You do not have permission to edit this experiment's mutations."
 
 
@@ -315,7 +323,21 @@ def _error_response(error):
 
 @ensure_csrf_cookie
 def mutation_editor(request):
-    """Mutations, selectable, with Delete selected -- one sample or the whole experiment.
+    """The Edit tab: this experiment's mutations, each with a link to change it.
+
+    `^$` rather than `^edit$` because this is where the sidebar's "Edit Mutations" link lands.
+    """
+    return _listing(request, MODE_EDIT)
+
+
+@ensure_csrf_cookie
+def mutation_delete(request):
+    """The Delete tab: the same listing, selectable, with Delete selected."""
+    return _listing(request, MODE_DELETE)
+
+
+def _listing(request, mode):
+    """Mutations, one sample or the whole experiment, in whichever mode the tab asked for.
 
     The two modes exist because the questions are different. One sample reads like breseq's
     own report and is where somebody checks a single run; all samples is where the same bad
@@ -325,6 +347,11 @@ def mutation_editor(request):
     Per-sample stays the default. The grid is the more useful view of a large experiment and
     also the more expensive one, and arriving at a page that has to lay out every mutation
     against every sample is not what somebody following a link from a sample expects.
+
+    Both modes render the same template and the same rows. What differs is one column -- an
+    `edit` link or a selection checkbox -- and the button above the table. Building the rows
+    twice, in two views over two templates, would be two places for the "listings here are
+    unfiltered" rule to drift apart.
     """
     context = get_user_context(request.user)
     try:
@@ -343,8 +370,12 @@ def mutation_editor(request):
             "is_population": is_population(reseq),
             "rows": _rows_for(reseq) if reseq is not None else [],
             "recent_changes": _recent_changes(experiment),
-            "title": "Edit %s mutations" % experiment.name,
-            "template_header": "Edit Mutations",
+            "mode": mode,
+            "is_delete_mode": mode == MODE_DELETE,
+            "title": ("Delete %s mutations" if mode == MODE_DELETE
+                      else "Edit %s mutations") % experiment.name,
+            "template_header": ("Delete Mutations" if mode == MODE_DELETE
+                                else "Edit Mutations"),
         })
         if all_samples:
             query = request.GET.get("q", "")
@@ -361,7 +392,7 @@ def mutation_editor(request):
                 "grid_truncated": total > shown,
                 "grid_limit": GRID_ROW_LIMIT,
             })
-        return render(request, "mutation_editor/edit.html", context)
+        return render(request, "mutation_editor/mutations.html", context)
     except _NotForYou as refusal:
         return refusal.response
 
@@ -393,8 +424,8 @@ def mutation_add(request):
 
 
 @ensure_csrf_cookie
-def mutation_change(request):
-    """Change one mutation, in every sample that carries it or in a chosen few.
+def mutation_edit(request):
+    """Edit one mutation, in every sample that carries it or in a chosen few.
 
     The samples offered are exactly the ones carrying it -- there is nothing to change in a
     sample that does not. Which of them start highlighted is `_initial_selection`.
@@ -416,10 +447,10 @@ def mutation_change(request):
             "sample_count": len(carrying),
             "seq_ids": sorted(validation.contig_lengths(reference_row)),
             "has_reference": reference_row is not None,
-            "title": "Change a mutation",
-            "template_header": "Change Mutation",
+            "title": "Edit a mutation",
+            "template_header": "Edit Mutation",
         })
-        return render(request, "mutation_editor/change.html", context)
+        return render(request, "mutation_editor/edit.html", context)
     except _NotForYou as refusal:
         return refusal.response
 
@@ -575,7 +606,7 @@ def _changeset_context(change_set):
 
 
 @require_POST
-def mutation_delete(request):
+def mutation_delete_apply(request):
     """Remove selected observations from one sample."""
     try:
         experiment = _experiment_for_write(request)
@@ -786,8 +817,8 @@ def _plan_add(experiment, identity, observation, targets):
 
 
 @require_POST
-def mutation_change_apply(request):
-    """Change a mutation, in every sample that carries it or in the ones chosen.
+def mutation_edit_apply(request):
+    """Edit a mutation, in every sample that carries it or in the ones chosen.
 
     Which of two paths runs is decided by two independent questions: does the whole set move,
     and do the new values already name a mutation this experiment has?

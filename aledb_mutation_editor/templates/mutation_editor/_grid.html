@@ -15,8 +15,14 @@ rendering of it, and `draw` re-applies them.
 <div class="row">
     <p style="color: #666;">
         Every observation stored for this experiment, including any the gene or frequency
-        filters hide elsewhere. Click a cell to select it; use the box in a mutation's row or
-        the header of a sample's column to take the whole of either. Deleting is recorded and
+        filters hide elsewhere.
+        {% if is_delete_mode %}
+            Click a cell to select it; use the box in a mutation's row or the header of a
+            sample's column to take the whole of either. Deleting is recorded and
+        {% else %}
+            A cell shows what each sample carries; the <b>edit</b> link changes the mutation
+            itself. Editing is recorded and
+        {% endif %}
         can be undone from the
         <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>.
     </p>
@@ -54,27 +60,37 @@ rendering of it, and `draw` re-applies them.
     </div>
 {% endif %}
 
+{% if is_delete_mode %}
 <div class="row" style="margin-bottom: 10px;">
     <button type="button" class="btn btn-danger" id="me-apply">&minus; Delete selected</button>
     <button type="button" class="btn btn-default" id="me-none">Clear selection</button>
     <span id="me-count" style="color: #666; margin-left: 0.5em;">Nothing selected.</span>
     <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
 </div>
+{% endif %}
 
-{{ by_mutation|json_script:"me-by-mutation" }}
-{{ by_sample|json_script:"me-by-sample" }}
+{% if is_delete_mode %}
+    {% comment %} Only the Delete tab reads these, and they are one entry per *observation* --
+       the largest experiment here has 52,139 of them. Emitting them for a tab that never
+       looks is a measurable slice of the page for nothing. {% endcomment %}
+    {{ by_mutation|json_script:"me-by-mutation" }}
+    {{ by_sample|json_script:"me-by-sample" }}
+{% endif %}
 
 <div class="row" style="overflow-x: auto;">
     <table class="table breseq-table" id="me-grid">
         <thead>
             <tr>
+                {% comment %} The mode's control, first in both tabs -- a select-all-samples
+                   checkbox, or the edit link. So the samples start at the same index either
+                   way, `FIXED_COLUMNS` below is one number, and a grid this wide never puts
+                   its only control past the right-hand edge. {% endcomment %}
                 <th></th>
                 <th class="breseq-seq-id">Reference</th>
                 <th class="breseq-position">Position</th>
                 <th class="breseq-evidence">Type</th>
                 <th class="breseq-mutation">Mutation</th>
                 <th class="breseq-gene">Gene</th>
-                <th></th>
                 {% for column in grid_columns %}
                     {% comment %} The header is the column selector. A link rather than a
                        checkbox so Bootstrap styles it and the column stays narrow; the
@@ -98,20 +114,23 @@ rendering of it, and `draw` re-applies them.
         <tbody>
         {% for row in grid_rows %}
             <tr>
-                <td><input type="checkbox" class="me-row-box"
-                           data-mutation="{{ row.mutation.id }}"
-                           title="Select this mutation in every sample"></td>
+                {% if is_delete_mode %}
+                    <td><input type="checkbox" class="me-row-box"
+                               data-mutation="{{ row.mutation.id }}"
+                               title="Select this mutation in every sample"></td>
+                {% else %}
+                    {% comment %} No `reseq_id`, unlike the per-sample table's link: this row
+                       spans every sample, so there is no one sample the person clicked and
+                       the whole set is the honest default. {% endcomment %}
+                    <td class="me-change"><a
+                        href="/mutation-editor/edit?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
+                        title="Edit this mutation in every sample that carries it">edit</a></td>
+                {% endif %}
                 <td class="breseq-seq-id">{{ row.mutation.reseq_reference|default_if_none:"" }}</td>
                 <td class="breseq-position">{{ row.mutation.position }}</td>
                 <td class="breseq-evidence">{{ row.mutation.mutation_type }}</td>
                 <td class="breseq-mutation">{{ row.mutation.sequence_change }}</td>
                 <td class="breseq-gene">{{ row.mutation.gene|default_if_none:"" }}</td>
-                {% comment %} No `reseq_id`, unlike the per-sample table's link: this row
-                   spans every sample, so there is no one sample the person clicked and the
-                   whole set is the honest default. {% endcomment %}
-                <td class="me-change"><a
-                    href="/mutation-editor/change?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
-                    title="Change this mutation in every sample that carries it">change</a></td>
                 {% for cell in row.cells %}
                     {% if cell %}
                         <td class="me-cell me-{{ cell.state }}" data-obs="{{ cell.id }}"
@@ -124,7 +143,7 @@ rendering of it, and `draw` re-applies them.
                 {% endfor %}
             </tr>
         {% empty %}
-            <tr><td colspan="{{ grid_columns|length|add:7 }}">
+            <tr><td colspan="{{ grid_columns|length|add:6 }}">
                 {% if grid_query %}No mutation matches &ldquo;{{ grid_query }}&rdquo;.
                 {% else %}This experiment has no mutations stored.{% endif %}</td></tr>
         {% endfor %}
@@ -133,8 +152,11 @@ rendering of it, and `draw` re-applies them.
 </div>
 
 <style>
-    /* The cell is the control, so it has to look like one. */
-    #me-grid td.me-cell { cursor: pointer; text-align: center; }
+    /* The cell is the control on the Delete tab, so it has to look like one there. On the
+       Edit tab it is only a reading of what the sample carries, and a pointer cursor over
+       something that does nothing is a promise the page does not keep. */
+    #me-grid td.me-cell { text-align: center; }
+    {% if is_delete_mode %}#me-grid td.me-cell { cursor: pointer; }{% endif %}
     #me-grid td.me-absent, #me-grid td.me-unknown { color: #999; }
     #me-grid td.me-selected { background: #d9534f; color: #fff; font-weight: bold; }
     #me-grid th.me-sample-head { white-space: nowrap; }
@@ -148,13 +170,13 @@ rendering of it, and `draw` re-applies them.
 // the DataTables extensions in the last <script> of <body>, after this block.
 $(document).ready(function () {
     "use strict";
-    if (!document.getElementById("me-apply")) { return; }
+    // Guarded on the grid, not on the Delete button: the Edit tab renders this table with no
+    // button at all, and guarding on the button would leave its DataTable uninitialised --
+    // paging, ordering and search silently gone, with the table still drawing.
+    if (!document.getElementById("me-grid")) { return; }
 
-    var byMutation = JSON.parse(document.getElementById("me-by-mutation").textContent);
-    var bySample = JSON.parse(document.getElementById("me-by-sample").textContent);
-    var selected = new Set();
-
-    var FIXED_COLUMNS = 7;   // the mutation's own columns, before the samples begin
+    var FIXED_COLUMNS = 6;   // the mutation's own columns, before the samples begin --
+                             // five of data plus whichever one this mode adds
 
     var table = $("#me-grid").DataTable({
         paging: true,
@@ -163,7 +185,8 @@ $(document).ready(function () {
         deferRender: true,
         order: [[1, "asc"], [2, "asc"]],
         columnDefs: [
-            { targets: [0, 6], orderable: false },
+            // The mode's control column, first either way and worth ordering by in neither.
+            { targets: [0], orderable: false },
             // Sorting a sample column would order rows by the cell's text, which is a
             // frequency in one row and a tick in the next. Nothing useful comes of it, and
             // the header is a control -- a click there selects the column.
@@ -173,6 +196,16 @@ $(document).ready(function () {
         ],
         dom: 'l<"pull-right"f>rt<<"pull-left"i><"pull-right"p>>'
     });
+
+    // Everything below is selection, which only the Delete tab has. The Edit tab's control is
+    // the per-row link, and its cells are a reading rather than a set of buttons.
+    {% if not is_delete_mode %}
+    return;
+    {% endif %}
+
+    var byMutation = JSON.parse(document.getElementById("me-by-mutation").textContent);
+    var bySample = JSON.parse(document.getElementById("me-by-sample").textContent);
+    var selected = new Set();
 
     function count() {
         var n = selected.size;
@@ -245,7 +278,7 @@ $(document).ready(function () {
             document.getElementById("me-error").textContent = "";
             // One POST for the whole batch across every sample it touches -- which is what
             // makes it one entry in the history rather than one per sample.
-            window.aledbPost("/mutation-editor/delete", {
+            window.aledbPost("/mutation-editor/delete/apply", {
                 experiment_id: "{{ ale_experiment_id }}",
                 observed_ids: JSON.stringify(ids)
             }).then(function () {
