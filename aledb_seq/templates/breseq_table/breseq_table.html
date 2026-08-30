@@ -4,23 +4,13 @@
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
+    {% comment %} These two travel together: the cell markup is generated in Python, by
+       aledb_import.annotate.display, so any template rendering a breseq-style row needs both
+       the stylesheet and the Show button's handler. The handler was inline here once, and the
+       button was inert on the other two pages that render the same rows.
+       aledb_common.tests.test_templates keeps the pair together. {% endcomment %}
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
-    <script type="text/javascript">
-        // The Show/Hide button on a large deletion's gene list, as breseq's report
-        // has. Delegated from the table rather than bound per row: the markup comes
-        // from aledb_import.annotate.display, which emits no element ids -- breseq
-        // numbers each block and wires an inline onclick to a global function, which
-        // needs ids that stay unique inside a page it does not own.
-        document.addEventListener('click', function (event) {
-            var button = event.target.closest('.breseq_gene_toggle');
-            if (!button) { return; }
-            var list = button.parentNode.querySelector('.breseq_gene_list');
-            if (!list) { return; }
-            var showing = !list.hasAttribute('hidden');
-            if (showing) { list.setAttribute('hidden', ''); } else { list.removeAttribute('hidden'); }
-            button.textContent = showing ? 'Show' : 'Hide';
-        });
-    </script>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ aledb_version }}"></script>
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
 

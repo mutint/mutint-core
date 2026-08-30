@@ -113,6 +113,15 @@ class BreseqTablePageTestCase(TestCase):
         self.assertIn("<i>thrA</i>", content)
         self.assertIn("&rarr;", content)
 
+    def test_the_gene_list_toggle_script_is_loaded(self):
+        """Rendered, not read off the file: a <script> outside a block is discarded silently.
+
+        Past 15 genes a deletion's Description collapses behind a Show button, and the
+        handler for it lives in a shared file precisely because three pages render that
+        markup and only this one used to carry the script.
+        """
+        self.assertIn("js/breseq_table.js", self.content())
+
     def test_a_deletion_renders_breseq_style(self):
         # Δ1,000 bp, non-breaking, as breseq writes it.
         self.assertIn("&Delta;1,000&nbsp;bp", self.content())

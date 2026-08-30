@@ -3,8 +3,10 @@
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
-    {# The mutation is shown in breseq's own table, so this page needs its stylesheet too. #}
+    {# The mutation is shown in breseq's own table, so this page needs its stylesheet -- and #}
+    {# its script, which is what makes the Show button on a wide deletion's gene list work. #}
     <link rel="stylesheet" type="text/css" href="{% static "css/breseq_table.css" %}?v={{ aledb_version }}">
+    <script src="{% static "js/breseq_table.js" %}?v={{ aledb_version }}"></script>
     <link href="{% static "css/browse.css" %}?v={{ aledb_version }}" rel="stylesheet">
 {% endblock %}
 {% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}

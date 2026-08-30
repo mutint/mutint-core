@@ -61,8 +61,11 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1397 run, 0 failures** standalone; **1540** in an assembled project, where the
-plugins' own tests join them. They were 1391 and 1534 before editing and deleting became two
+**Baseline: 1424 run, 0 failures** standalone; **1567** in an assembled project, where the
+plugins' own tests join them. They were 1405 and 1548 before the gene-name separator and the
+1,000-gene limit, 1402 and 1545 before the Gene cell's wrapper was
+closed on both branches, 1397 and 1540 before the gene-list Show button's
+handler moved out of one template, 1391 and 1534 before editing and deleting became two
 tabs, 1387 and 1530 before the Edit page learned to open on the sample it was linked from, and
 1375 and 1518 before it learned to edit a mutation in some of its samples rather than all of
 them. (The assembled figure was *run*, not
@@ -350,6 +353,19 @@ the port of the code that wrote the report the sample was imported from. A row i
 annotation lives in one JSON column rather than twenty scalar ones: rendering is a dict
 merge, not a rebuild. It is server-rendered rather than fed to DataTables as a JSON blob,
 because the markup already exists by the time the view runs.
+
+**Because that markup is generated in Python, its behaviour cannot live in a page.** Past
+`MAX_GENES_BEFORE_SUMMARY` (15) genes a deletion's Description collapses behind a **Show**
+button, and the click handler for it was an inline `<script>` in *this* page's template --
+while three pages render rows from `build_rows`: this one, the genome browser and the mutation
+editor's Edit/Delete listing. On the other two the button rendered, was styled by the shared
+stylesheet, and did nothing. The handler is `aledb_common/staticfiles/js/breseq_table.js` now
+and travels with `breseq_table.css`: **link the stylesheet, load the script**, with no
+exception for a page that has no Description column today -- the Copy tab loads it and does not
+need it, because deciding that per page is what went wrong.
+`aledb_common/tests/test_templates.py` keeps the pair together, and the three pages each assert
+the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
+silently.
 
 It is called **Mutations** in the nav and on the page. **Compare** used to sit beside it
 here; it is registered by the aledb-compare plugin now, so on a deployment without that
@@ -727,6 +743,46 @@ Two things fell out of removing the filter, and both are worth knowing:
 
 They still read zero after that, though, because `protein_change` was the wrong column
 altogether -- which is the change described next.
+
+### A gene list has two separators, and a ceiling
+
+`Mutation.gene` is written by `aledb_import.gene_annotation.get_annotated_gene_list` and read
+by `aledb_common.util.get_gene_list`, and for a long time the two disagreed about what
+separates a name.
+
+- A mutation spanning a **gene range** stores every name breseq listed, and those come through
+  `annotate.annotator`, which joins with a bare comma (`GENE_LIST_SEPARATOR = ','`).
+- Every other shape -- intergenic, single gene -- is joined by the import path with `", "`.
+
+`get_gene_list` split on `", "` only, so a 4,318-gene inversion read back as **one gene name
+23,003 characters long**. Nothing about that was visible as an error: the Gene column's
+expander is gated on `len(...) > 10`, so it never appeared on any real mutation; ecocyc
+rendering made one broken link out of the whole string; and a reader's ignored-gene list could
+not name a single gene inside it. Measured on the dev database: 0 cells with an expander before,
+218 after. A reader typing `thrA,thrB` without the space had the same problem -- `_gene_tuple`
+parses with the same function, so the filter matched nothing.
+
+`GENE_LIST_SPLIT` (`,\s*`) accepts both. **The writer is deliberately not corrected**, and
+that is the load-bearing part: `gene` is one of the seven fields
+`Mutation.objects.get_or_create` keys on, so re-joining a range's names with `", "` would
+change the stored string for every range mutation and fork all of them on the next import. The
+column holds two spellings and the reader takes both.
+
+**Past `GENE_LIST_LIMIT` (1,000) genes the names are neither recorded nor rendered.** A
+structural variant can span most of a chromosome, and 23,003 characters had already overflowed
+`gene`'s own `CharField(max_length=19000)` -- silently, because SQLite does not enforce it and
+Postgres would have refused the row. Over the limit the importer records the **range**
+(`mokC–[fimA]`, breseq's own Gene column for such a mutation) and both renderers show a count
+rather than a list, with no expander to open. The limit lives in `aledb_common/util.py` because
+the importer and the renderers have to agree: a row written under one limit and read under
+another would show a truncation nothing performed.
+
+`aledb_seq.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
+is not tidying: a row left holding the long string no longer matches what the importer computes,
+so re-importing that sample would mint a second `Mutation` and split its observations across
+both. What it writes is `annotation['gene_name']`, which is exactly what
+`get_annotated_gene_list` now returns, and `test_gene_cap_migration` asserts that equality
+rather than asserting the string merely got shorter.
 
 ### Functional change is counted from `snp_type`
 

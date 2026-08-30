@@ -60,6 +60,14 @@ class BrowseMutationTestCase(TestCase):
         self.assertIn("/mutations/reference/%d/fai" % self.experiment.ale_id, html)
         self.assertIn("js/igv.min.js", html)
 
+    def test_the_gene_list_toggle_script_is_loaded(self):
+        """This page renders breseq's table too, and the Show button was inert on it.
+
+        The handler was an inline script in the Samples page's own template, so a wide
+        deletion opened here showed `N genes` beside a button that did nothing.
+        """
+        self.assertIn("js/breseq_table.js", self._get().content.decode("utf-8"))
+
     def test_the_locus_buffers_the_whole_mutation_not_just_its_start(self):
         """A deletion has to open showing the deletion, not 200 bp of its left junction."""
         from aledb_seq.views.browse import LOCUS_BUFFER_BASES, _locus

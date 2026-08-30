@@ -51,6 +51,51 @@ class TemplateCommentsTestCase(unittest.TestCase):
         self.assertTrue(any(p.endswith("base.html") for p in found))
 
 
+class BreseqTableAssetsTravelTogetherTestCase(unittest.TestCase):
+    """breseq's table markup is generated in Python, so its behaviour cannot live in a page.
+
+    `aledb_import.annotate.display` collapses a wide deletion's gene list behind a Show
+    button, and every page rendering a row from `aledb_seq.breseq_report.build_rows` gets
+    that markup: the Samples page, the genome browser and the mutation editor's Edit/Delete
+    listing. The click handler was an inline script in the first of those three, so on the
+    other two the button rendered, was styled by the shared stylesheet, and did nothing.
+
+    The rule now is that the two assets are one thing -- link `breseq_table.css`, load
+    `breseq_table.js` -- with no exception for a page that has no Description column today,
+    because deciding which pages need it per page is what went wrong.
+    """
+
+    CSS = "css/breseq_table.css"
+    JS = "js/breseq_table.js"
+
+    def test_every_template_with_the_stylesheet_loads_the_script(self):
+        missing = []
+        users = 0
+        for path in _templates():
+            with open(path, errors="ignore") as handle:
+                text = handle.read()
+            if self.CSS not in text:
+                continue
+            users += 1
+            if self.JS not in text:
+                missing.append(os.path.relpath(path, CORE))
+
+        self.assertGreater(users, 1, "expected several templates to link %s" % self.CSS)
+        self.assertEqual(
+            [], missing,
+            "these link %s without loading %s, so the Show button on a collapsed gene list "
+            "renders and does nothing: %s" % (self.CSS, self.JS, ", ".join(missing)))
+
+    def test_the_script_exists_and_drives_the_generated_class_names(self):
+        """The classes are underscored because htmlize() rewrites a hyphen as &#8209;."""
+        path = os.path.join(CORE, "aledb_common", "staticfiles", "js", "breseq_table.js")
+        self.assertTrue(os.path.exists(path), "%s is missing" % self.JS)
+        with open(path) as handle:
+            script = handle.read()
+        self.assertIn("breseq_gene_toggle", script)
+        self.assertIn("breseq_gene_list", script)
+
+
 class BootstrapLoadedOnceTestCase(unittest.TestCase):
     """Bootstrap's JS must be evaluated exactly once.
 

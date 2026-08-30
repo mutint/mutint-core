@@ -91,6 +91,17 @@ class PageTestCase(EditorTestCase):
         self.assertIn("select-checkbox", html)
         self.assertNotIn("/mutation-editor/edit?", html)
 
+    def test_both_listing_tabs_load_the_gene_list_toggle_script(self):
+        """This listing renders breseq's rows too, and the Show button was inert on it.
+
+        The handler was inline in the Samples page's template; here a wide deletion showed
+        `N genes` beside a button that did nothing.
+        """
+        for url in (EDIT, DELETE):
+            with self.subTest(page=url):
+                self.assertContains(self.get(url, reseq_id=self.sample_a.id),
+                                    "js/breseq_table.js")
+
     def test_each_tab_marks_itself_active_in_the_toolbar(self):
         """`active` is what Bootstrap paints, and the toolbar is included with `active=mode`
         -- a mode that did not reach it would leave every tab looking unvisited, and both

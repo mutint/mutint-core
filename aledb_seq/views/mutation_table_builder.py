@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils.html import strip_tags
 from aledb_seq.util import get_ecocyc_gene_list
 from aledb_filter.util import filter_observed_mutations
-from aledb_common.util import get_gene_list
+from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
 from aledb_experiment.models import TechnicalReplicate, AleExperiment
 from aledb_experiment.permissions import can_curate
@@ -15,6 +15,7 @@ HTML_MUTATION_PRESENT_FALSE_CELL_HTML = """<span class="false">%d/%d</span>"""
 
 EXPANDABLE_COLUMN_PLUS_SIGN = """<i onclick="expand_collapse_gene_entry(this)" class="fa fa-plus pull-left" aria-hidden="true" data-toggle="collapse" data-target="#%s"></i>"""
 EXPANDABLE_GENE_ENTRY = """<div class="collapse pull-left" id="%s">%s</div>"""
+GENE_CELL_WRAPPER = """<div style="width: 150px; white-space: nowrap; overflow-x: scroll;">%s</div>"""
 non_decimal = re.compile(r'[^\d.]+')
 evidence = re.compile(r'[A-Z]\d+[A-Z]')
 REP_DROPDOWN = '<div class="dropdown tag_dropdown"><button class="btn btn-default btn-xs dropdown-toggle" type="button" id="dropdownMenu2" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">' \
@@ -162,15 +163,43 @@ def get_table_body(user: User,
 
 
 def get_gene_table_entry(mutation):
-    table_entry = """<div style="width: 150px; white-space: nowrap; overflow-x: scroll;">"""
-    cleaned_gene_list = get_ecocyc_gene_list(get_gene_list(mutation.gene), mutation.is_ecocyc_gene())
+    """One Gene cell: the names in a fixed-width strip that scrolls sideways.
+
+    Past ten genes the list is collapsed behind Bootstrap's own collapse, driven by the
+    fa-plus icon -- `expand_collapse_gene_entry` in `table_template.js` only swaps the icon,
+    the showing and hiding is `data-toggle`/`data-target`. This is not the Show button on the
+    breseq-style table, which is different markup from `aledb_import.annotate.display` and has
+    its own handler in `breseq_table.js`.
+
+    **The wrapper is closed once, here, rather than inside each branch.** It went unclosed on
+    the expandable branch for a long time with no visible effect, and the reason is worth
+    knowing before treating the shape as free: `table_body` reaches the page as a JS literal
+    and DataTables sets each cell as its own `<td>`'s innerHTML, so the parser closed the div
+    at the end of the fragment and the DOM came out byte-identical (measured, both branches).
+    A fragment that only parses correctly because of where it happens to be delivered is one
+    change of delivery away from not, and the asymmetry reads as a bug every time somebody
+    finds it.
+    """
+    names = get_gene_list(mutation.gene)
+
+    # Past GENE_LIST_LIMIT the names are not rendered at all, and there is nothing to open.
+    # The import path stops recording them at the same limit, so this is reached only by rows
+    # written before it existed -- `aledb_seq.0012` moves the ones this database had. Counted
+    # before `get_ecocyc_gene_list`, which wraps every name in an <a>: on an ecocyc reference
+    # the widest mutation here would otherwise build a 0.36 MB cell, measured.
+    if len(names) > GENE_LIST_LIMIT:
+        return GENE_CELL_WRAPPER % ("%d genes" % len(names))
+
+    cleaned_gene_list = get_ecocyc_gene_list(names, mutation.is_ecocyc_gene())
+    joined = ", ".join(cleaned_gene_list)
 
     if len(cleaned_gene_list) > 10:
-        table_entry += EXPANDABLE_COLUMN_PLUS_SIGN % str(mutation.id)
-        table_entry += EXPANDABLE_GENE_ENTRY % (str(mutation.id), ", ".join(cleaned_gene_list))
+        body = (EXPANDABLE_COLUMN_PLUS_SIGN % str(mutation.id)
+                + EXPANDABLE_GENE_ENTRY % (str(mutation.id), joined))
     else:
-        table_entry += ", ".join(cleaned_gene_list) + "</div>"
-    return table_entry
+        body = joined
+
+    return GENE_CELL_WRAPPER % body
 
 
 def _initialize_table(experiment_id_idx_mapping, mutations):

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 
 from aledb_experiment.models import TechnicalReplicate
@@ -106,7 +107,42 @@ def is_int(s):
 
 
 # Gene annotation parsing — used across aledb_seq, aledb_filter, aledb_converge, aledb_stats
+#
+# `Mutation.gene` is written with this delimiter, and is *also* read back holding the other
+# spelling -- see GENE_LIST_SPLIT below for why both exist and why this one cannot simply be
+# corrected.
 GENE_RANGE_ANNOTATION_DELIMITER = ", "
+
+# What splits a stored gene string, and it is deliberately tolerant of the space.
+#
+# A mutation spanning a gene range stores every name breseq listed, and those arrive through
+# `annotate.annotator`, which joins them with a bare comma (`GENE_LIST_SEPARATOR = ','`). Every
+# other shape -- intergenic, single gene -- is joined by the import path with ", ". So the
+# column holds both spellings, and splitting on ", " alone read a 4,318-gene inversion as one
+# gene name 23,003 characters long: no expander in the Gene column, no ecocyc links, and a
+# reader's ignored-gene list that could never match any of the names in it.
+#
+# **The writer is not the thing to fix.** `gene` is one of the seven fields
+# `Mutation.objects.get_or_create` keys on, so re-joining that list with ", " would change the
+# stored string for exactly these mutations and fork every one of them on the next import. The
+# stored data is inconsistent, and a reader that accepts both spellings is the honest response
+# to that -- not a rewrite of what 41,671 rows already say.
+GENE_LIST_SPLIT = re.compile(r",\s*")
+
+# Past this many genes the names are neither recorded nor rendered.
+#
+# A structural variant can span most of a chromosome -- the widest in the dev database is a
+# 4,318-gene inversion -- and the names are then 23,003 characters of `Mutation.gene`, which is
+# a `CharField(max_length=19000)`: over its own limit already, silently, because SQLite does not
+# enforce one and Postgres would have refused the row. Nothing reads a list that long. It is not
+# a gene annotation any more, it is the chromosome.
+#
+# So `get_annotated_gene_list` records the *range* instead (`mokC–[fimA]`, breseq's own Gene
+# column for such a mutation) and the tables render that, with no expander to open. The limit
+# lives here rather than in either caller because the importer and the renderer have to agree:
+# a row written under one limit and read under another would show a truncation nothing did.
+GENE_LIST_LIMIT = 1000
+
 INTRAGENIC_LEFT_CHAR = ']'
 INTRAGENIC_RIGHT_CHAR = '['
 
@@ -121,8 +157,13 @@ def _find_between(s, first, last):
 
 
 def get_gene_list(annotated_gene_list_str):
-    """Parse a breseq gene annotation string into a clean list of gene names."""
-    annotated_gene_list = annotated_gene_list_str.split(GENE_RANGE_ANNOTATION_DELIMITER)
+    """Parse a breseq gene annotation string into a clean list of gene names.
+
+    Split with `GENE_LIST_SPLIT`, which accepts a comma with or without the space after it,
+    because the column holds both spellings -- see the constant for which writer produces
+    which, and why the writer is the wrong end to correct.
+    """
+    annotated_gene_list = GENE_LIST_SPLIT.split(annotated_gene_list_str)
     clean_gene_list = []
     for gene in annotated_gene_list:
         gene = gene.replace(INTRAGENIC_LEFT_CHAR, '').replace(INTRAGENIC_RIGHT_CHAR, '')

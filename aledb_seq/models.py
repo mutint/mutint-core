@@ -1,5 +1,5 @@
 from django.db import models
-from aledb_common.util import get_gene_list
+from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_seq.util import get_ecocyc_gene_list
 from django.utils.safestring import mark_safe
 
@@ -191,11 +191,17 @@ class Mutation(models.Model):
         return name == self.ECOCYC_ACCESSION or name.startswith(self.ECOCYC_ACCESSION + '.')
 
     def ecocyc_gene_urls(self) -> str:
+        """Gene links for a mutation table cell.
+
+        A mutation spanning more than `GENE_LIST_LIMIT` genes renders its count instead of its
+        names, the same answer `get_gene_table_entry` gives -- one link per gene over a
+        4,318-gene inversion is a third of a megabyte in one cell, and no list that long is
+        read. The import path stops recording the names at the same limit.
         """
-        get gene links string for table cell display
-        :return: gene links for display in mutation table
-        """
-        return mark_safe(", ".join(get_ecocyc_gene_list(get_gene_list(self.gene), self.is_ecocyc_gene())))
+        names = get_gene_list(self.gene)
+        if len(names) > GENE_LIST_LIMIT:
+            return mark_safe("%d genes" % len(names))
+        return mark_safe(", ".join(get_ecocyc_gene_list(names, self.is_ecocyc_gene())))
 
 
 class ObservedMutation(models.Model):

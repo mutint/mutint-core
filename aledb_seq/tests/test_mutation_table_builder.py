@@ -278,3 +278,71 @@ class ManuallyAddedMutationTestCase(TestCase):
         body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
         row = [entry for entry in body if str(entry[3]) == "4,242"][0]
         self.assertIn("1.00", "".join(str(cell) for cell in row[-len(reseq_dict):]))
+
+
+class GeneCellTestCase(TestCase):
+    """The Gene cell's wrapper div, on both sides of the ten-gene branch.
+
+    The expandable branch used to leave the wrapper unclosed. That was invisible -- each cell
+    is set as its own `<td>`'s innerHTML, so the parser closed it at the end of the fragment
+    and the DOM came out identical -- but the string was malformed, and a malformed string
+    only stays harmless while nothing changes how it is delivered.
+
+    A unit test, with no database: `get_gene_table_entry` reads three attributes off whatever
+    it is handed, and standing an experiment up to assert on tag balance would say nothing the
+    stub does not.
+    """
+
+    class _Mutation:
+        def __init__(self, gene, mutation_id=7):
+            self.gene = gene
+            self.id = mutation_id
+
+        def is_ecocyc_gene(self):
+            return False
+
+    def _cell(self, count):
+        from aledb_seq.views.mutation_table_builder import get_gene_table_entry
+
+        # `Mutation.gene` is comma-SPACE separated -- that is what
+        # `aledb_common.util.GENE_RANGE_ANNOTATION_DELIMITER` splits on, and a bare comma
+        # yields one long "gene" that never reaches the expandable branch.
+        return get_gene_table_entry(
+            self._Mutation(", ".join("gene%04d" % index for index in range(count))))
+
+    def test_both_branches_balance_their_tags(self):
+        for count in (1, 10, 11, 40):
+            with self.subTest(genes=count):
+                cell = self._cell(count)
+                self.assertEqual(cell.count("<div"), cell.count("</div>"),
+                                 "unbalanced <div> in a %d-gene cell: %s" % (count, cell))
+
+    def test_only_a_long_list_is_collapsed(self):
+        """Ten is not more than ten -- the boundary is where an off-by-one would hide."""
+        self.assertNotIn("fa-plus", self._cell(10))
+        self.assertIn("fa-plus", self._cell(11))
+
+    def test_a_list_over_the_limit_is_counted_rather_than_rendered(self):
+        """Reached only by rows written before the importer capped -- `aledb_seq.0012` moves
+        the ones this database had. No expander, because there is nothing to open."""
+        from aledb_common.util import GENE_LIST_LIMIT
+
+        cell = self._cell(GENE_LIST_LIMIT + 1)
+        self.assertIn("%d genes" % (GENE_LIST_LIMIT + 1), cell)
+        self.assertNotIn("fa-plus", cell)
+        self.assertNotIn("gene0000", cell)
+        self.assertEqual(cell.count("<div"), cell.count("</div>"))
+
+    def test_a_list_at_the_limit_is_still_rendered_in_full(self):
+        from aledb_common.util import GENE_LIST_LIMIT
+
+        cell = self._cell(GENE_LIST_LIMIT)
+        self.assertIn("fa-plus", cell)
+        self.assertIn("gene0999", cell)
+
+    def test_the_collapsed_list_is_inside_the_wrapper_and_carries_every_gene(self):
+        cell = self._cell(25)
+        self.assertTrue(cell.startswith("<div style="), cell[:40])
+        self.assertTrue(cell.endswith("</div>"), cell[-40:])
+        self.assertIn('id="7"', cell)          # what the icon's data-target names
+        self.assertIn("gene0024", cell)
