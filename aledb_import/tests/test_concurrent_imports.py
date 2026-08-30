@@ -386,6 +386,81 @@ class FinalizeUnderLockTestCase(TestCase):
                           "a failed import must not strand the lock for everyone else")
 
 
+class PollMustNotWriteTestCase(TestCase):
+    """The progress poll has to be a pure reader, and this is why.
+
+    Under WAL a reader never blocks and is never blocked -- so a poll that only reads returns
+    instantly however long the import's transaction is. A poll that *writes* has to wait for
+    the write lock, which the importer holds for the whole of each sample under
+    `BEGIN IMMEDIATE`. The page then updates once per sample instead of continuously, which
+    on a 20-30 sample GenomeDiff drop looks like the progress bar refreshing every few
+    seconds and the table arriving late.
+
+    `SESSION_SAVE_EVERY_REQUEST` is what made it a writer: it saves the session on *every*
+    request, so each poll wrote a `django_session` row it had no need to.
+    """
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        from django.contrib.auth.models import User
+        from django.test import override_settings
+
+        from aledb_experiment.models import Project
+        from aledb_experiment.views import _create_experiment
+        from aledb_import.models import UploadSession
+
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.user = User.objects.create(username="poller", email="p@e.com", is_active=True)
+        self.user.set_password("pw")
+        self.user.save()
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="poll project", user=self.user)
+        experiment = _create_experiment(project, "poll exp", self.user)
+        self.session = UploadSession.objects.create(
+            user=self.user, ale_experiment=experiment,
+            import_type="genomediff", manifest=[], declared_bytes=0)
+
+    def test_polling_progress_issues_no_writes(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(
+                "/import/uploads/%s/progress" % self.session.id)
+
+        self.assertEqual(response.status_code, 200)
+        writes = [q["sql"] for q in queries.captured_queries
+                  if q["sql"].strip().split()[0].upper()
+                  in ("INSERT", "UPDATE", "DELETE")]
+        self.assertEqual(
+            writes, [],
+            "a poll that writes waits for the import's write lock, so progress only "
+            "updates once per sample: %s" % writes[:2])
+
+    def test_ordinary_pages_still_save_their_session(self):
+        """The opt-out is for the poll and nothing else. Turning
+        SESSION_SAVE_EVERY_REQUEST off globally would have fixed the poll by changing when
+        everybody gets logged out, which is not a trade worth making for one endpoint."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get("/ale/experiments/")
+
+        session_writes = [q["sql"] for q in queries.captured_queries
+                          if "django_session" in q["sql"]
+                          and q["sql"].strip().split()[0].upper() != "SELECT"]
+        self.assertTrue(session_writes,
+                        "a normal page must still have its session kept alive")
+
+
 class ImportLockVisibilityTestCase(TransactionTestCase):
     """The lock has to be visible to another *process*, not just another thread.
 

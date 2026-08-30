@@ -343,7 +343,18 @@ def upload_progress(request, upload_id):
 
     A session nothing has reported on yet answers with an empty unit list rather than a 404,
     because that is the honest answer between the POST going out and the first unit starting.
+
+    **It must not write anything.** Under WAL a reader is never blocked, so this answers
+    immediately however long the import's transaction is running; a single write would make it
+    queue for the write lock that `BEGIN IMMEDIATE` holds for the whole of each sample, and the
+    poll would then take as long as the sample in flight. `SESSION_SAVE_EVERY_REQUEST` was
+    doing exactly that -- one `UPDATE django_session` per poll -- which is why a 20-30 sample
+    drop looked like it refreshed every few seconds and showed no table until the first sample
+    had committed.
     """
+    # Read-only: see the docstring. `aledb_common.session_middleware` honours this.
+    request.aledb_skip_session_save = True
+
     try:
         session = UploadSession.objects.get(pk=upload_id)
     except (UploadSession.DoesNotExist, ValueError, TypeError):

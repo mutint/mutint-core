@@ -61,12 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1373 run, 0 failures** standalone; **1516** in an assembled project, where the
+**Baseline: 1375 run, 0 failures** standalone; **1518** in an assembled project, where the
 plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
-They were 1351 and 1494 before imports stopped losing
+They were 1373 and 1516 before the progress poll stopped
+writing, 1351 and 1494 before imports stopped losing
 samples to each other, 1347 and 1490 before the page learned to
 stop polling a finished import, 1340 and 1483 before the import
 progress polling met SQLite's rollback journal, 1336 and 1479 before two breseq folders of
@@ -1714,6 +1715,26 @@ So all three are needed and none is sufficient:
   attempt rolls back whole. Deliberately narrow: it matches lock wording only, since a
   malformed file fails identically every time and retrying it turns a clear message into a
   slow one.
+
+**A poll must not write, and that is a consequence of the above rather than a detail.** Under
+WAL a reader is never blocked, so a poll that only reads answers instantly however long the
+importer's transaction runs -- but `BEGIN IMMEDIATE` holds the write lock for the *whole* of
+each sample, so a poll that writes has to queue for it. `SESSION_SAVE_EVERY_REQUEST` made every
+poll write one `django_session` row, and that was enough. Measured on a 30-second three-sample
+drop:
+
+| | polls | median latency | table appeared |
+|---|---|---|---|
+| poll writes a session row | **2** | **30.4s** | after 30.6s -- the whole import |
+| poll reads only | **190** | **0.003s** | after 0.18s |
+
+It was not slow, it was starved: the poll never got the write lock until the importer was
+finished, so the page showed *Scanning the upload for samples…* for the entire run and the
+table arrived with the result. `aledb_common/session_middleware.py` is a `SessionMiddleware`
+subclass that skips the save for a request that sets `aledb_skip_session_save`, and
+`upload_progress` is the only thing that sets it. **Deliberately not
+`SESSION_SAVE_EVERY_REQUEST = False`**: that would fix one endpoint by changing when everybody
+gets logged out.
 
 **What survives all three is reported, not silent** -- a sample that still cannot be written
 appears in the status table with its error, which is how the original five were found. That is

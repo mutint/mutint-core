@@ -147,7 +147,11 @@ def get_base_settings(base_dir, aledb_core_dir=None):
 
         'MIDDLEWARE': [
             'django.middleware.common.CommonMiddleware',
-            'django.contrib.sessions.middleware.SessionMiddleware',
+            # Django's, plus an opt-out a view can set. SESSION_SAVE_EVERY_REQUEST
+            # writes a session row on every request, and the Add page's progress poll
+            # must not write at all: a writing poll queues behind the import it is
+            # reporting on. See aledb_common.session_middleware.
+            'aledb_common.session_middleware.SkipSaveSessionMiddleware',
             'debug_toolbar.middleware.DebugToolbarMiddleware',
             'django.middleware.csrf.CsrfViewMiddleware',
             'django.contrib.auth.middleware.AuthenticationMiddleware',
