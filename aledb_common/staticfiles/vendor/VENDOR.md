@@ -167,22 +167,36 @@ Source URL is where each file came from. Regenerate a hash with
 ## Vendored before this file existed
 
 These predate the manifest above and were committed with no record of where they came from.
-Hashes are of what is on disk now, so a future upgrade at least has a before-picture.
+Hashes are of what is on disk.
 
-**`igv.min.js`'s version cannot be established from the file.** It carries two conflicting
-strings -- `i.version="3.4.12"` and a session-schema `version:"3.8.5"` -- so the library
-version actually shipped is unknown, and any upgrade starts by guessing. This is precisely
-what this file exists to prevent happening again. It is igv.js 3.x, it supports inline
-`features:` arrays and `seg`/`mut` sample-row tracks (verified in the bundle), and the next
-person to touch it should re-download a known release and record it here.
+**`igv.min.js` is igv.js 3.8.5, established by comparison, not by reading the file.** It carries
+two version strings -- `i.version="3.4.12"` and `version:"3.8.5"` -- and it is not possible to
+tell from the bundle which is the library's. It was settled by downloading
+`https://unpkg.com/igv@3.8.5/dist/igv.min.js` and finding it **byte-identical**, sha256
+`62fc5c78…`, 1,502,117 bytes. So `3.4.12` belongs to something bundled inside it.
 
-`bio-pv.min.js`, `csv.min.js` and the sb-admin-2 theme are listed for completeness;
-`bio-pv.min.js` is referenced by no template.
+That is also the current release: npm's `igv@latest` is 3.8.5. (GitHub's latest *release* tag
+reads v3.7.0 -- the project publishes to npm ahead of tagging, so npm is the one to check.)
+There was nothing to upgrade.
 
-| file | bytes | sha256 | source |
-|---|---|---|---|
-| `../js/igv.min.js` | 1502117 | `62fc5c7860306e7567e191e997fac2391d3a80e05fdd832619082f2a60c588cf` | *unrecorded* |
-| `../js/bio-pv.min.js` | 146432 | `bf03692bc2440179584bbf10d612cf8ead92b566f9751f7c6f28c9ff1b0b7bcb` | *unrecorded* |
-| `../js/csv.min.js` | 5030 | `781a36a1356cf67eddd6d349b5faffc027e8618d3bcbb16bec13edc525c332b6` | *unrecorded* |
-| `../js/sb-admin-2.min.js` | 845 | `634679a53e2a3c66a85121e8c56f89f1f2168d09e373bbf4dd6044527b7d490d` | *unrecorded* |
-| `../css/sb-admin-2.css` | 8303 | `f214c13c1eaabd8ed93c9c3753bfd54d3c82818a00949c5263c1d1da0cc3994e` | *unrecorded* |
+The lesson this file exists for: the version was recoverable only because the exact published
+build could be fetched and diffed. Record the source URL when vendoring and nobody has to do
+that again.
+
+`bio-pv.min.js`, `csv.min.js` and the sb-admin-2 theme remain unrecorded; `bio-pv.min.js` is
+referenced by no template.
+
+| file | version | bytes | sha256 | source |
+|---|---|---|---|---|
+| `../js/igv.min.js` | **3.8.5** | 1502117 | `62fc5c7860306e7567e191e997fac2391d3a80e05fdd832619082f2a60c588cf` | https://unpkg.com/igv@3.8.5/dist/igv.min.js |
+| `../js/bio-pv.min.js` | *unknown* | 146432 | `bf03692bc2440179584bbf10d612cf8ead92b566f9751f7c6f28c9ff1b0b7bcb` | *unrecorded* |
+| `../js/csv.min.js` | *unknown* | 5030 | `781a36a1356cf67eddd6d349b5faffc027e8618d3bcbb16bec13edc525c332b6` | *unrecorded* |
+| `../js/sb-admin-2.min.js` | *unknown* | 845 | `634679a53e2a3c66a85121e8c56f89f1f2168d09e373bbf4dd6044527b7d490d` | *unrecorded* |
+| `../css/sb-admin-2.css` | *unknown* | 8303 | `f214c13c1eaabd8ed93c9c3753bfd54d3c82818a00949c5263c1d1da0cc3994e` | *unrecorded* |
+
+### What igv.js 3.8.5 can do that we are not using
+
+Confirmed in this bundle rather than in the docs: inline `features:` arrays
+(`new Tl({features: t.features})`, `loadFeaturesNoIndex`), `updateFeatures()` for changing a
+track's data without a reload, and `sampleKeys` for row-per-sample `seg`/`mut` tracks. The
+browse page passes `tracks: []`, so none of it is in use yet.
