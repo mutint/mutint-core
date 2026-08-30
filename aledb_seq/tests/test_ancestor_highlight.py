@@ -47,10 +47,19 @@ class TestTheTint(BreseqAncestorTestCase):
 
 class TestReachingTheAncestor(BreseqAncestorTestCase):
 
+    def picker(self, response):
+        """Just the sample dropdown. The assertion below has to be scoped to it: the legend
+        links the ancestor by design, so "the page never mentions it" is the wrong question
+        and stopped being true the moment that link was added."""
+        body = response.content.decode()
+        start = body.index('<ul class="dropdown-menu aledb-menu">')
+        return body[start:body.index("</ul>", start)]
+
     def test_the_picker_does_not_list_it(self):
         self.experiment.set_ancestor(self.sample_a, self.owner)
-        response = self.get(reseq_id=self.sample_b.id)
-        self.assertNotContains(response, "reseq_id=%d" % self.sample_a.id)
+        picker = self.picker(self.get(reseq_id=self.sample_b.id))
+        self.assertNotIn("reseq_id=%d" % self.sample_a.id, picker)
+        self.assertIn("reseq_id=%d" % self.sample_b.id, picker)
 
     def test_its_own_page_still_opens(self):
         """`_selected_reseq` resolves it outside the picker. Without that fallback a link to
@@ -88,3 +97,35 @@ class TestWhatThePageClaims(BreseqAncestorTestCase):
     def test_the_legend_explains_the_red(self):
         self.experiment.set_ancestor(self.sample_a, self.owner)
         self.assertContains(self.get(reseq_id=self.sample_b.id), "Rows shaded red")
+
+    def test_the_legend_names_and_links_the_ancestor(self):
+        """Which sample turned these rows red is the question the tint provokes, so the
+        legend answers it rather than leaving the reader to go and look."""
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        body = self.get(reseq_id=self.sample_b.id).content.decode()
+        self.assertIn(self.sample_a.ale_flask_isolate_str, body)
+        self.assertIn("reseq_id=%d" % self.sample_a.id, body)
+
+    def test_the_legend_is_its_own_row(self):
+        """`.breseq-legend > div` carries the row spacing and the 9pt type, so this belongs in
+        a div of its own rather than trailing the amino-acid colour key -- it is not about how
+        a cell is rendered, it is about rows being excluded everywhere else."""
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        body = self.get(reseq_id=self.sample_b.id).content.decode()
+        legend = body[body.index('class="breseq-legend"'):]
+        red = legend.index("Rows shaded red")
+        # The nearest tag opening before the text is this row's own <div>, not the colour
+        # key's -- i.e. nothing but whitespace and the swatch span sits between them.
+        self.assertNotIn("nonsense", legend[legend.rindex("<div>", 0, red):red])
+
+    def test_it_does_not_link_the_ancestor_to_itself(self):
+        """On the ancestor's own page the name is still given, without a link back here."""
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        body = self.get(reseq_id=self.sample_a.id).content.decode()
+        legend = body[body.index("Rows shaded red"):]
+        row = legend[:legend.index("</div>")]
+        self.assertIn("this sample", row)
+        self.assertNotIn("<a ", row)
+
+    def test_no_legend_row_without_a_designation(self):
+        self.assertNotContains(self.get(reseq_id=self.sample_b.id), "Rows shaded red")

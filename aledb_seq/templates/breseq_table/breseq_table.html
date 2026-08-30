@@ -106,15 +106,21 @@
                 <span class="snp_type_nonsense">nonsense</span>.
                 The changed base in a codon is
                 <span class="mutation_in_codon">underlined red</span>.
-                {% if ancestral_count %}
-                    <span style="background-color: rgb(255, 218, 218);">Rows shaded red</span>
-                    ({{ ancestral_count }}) are in this experiment's designated ancestor and
-                    are subtracted everywhere else.
-                {% endif %}
                 {% if is_population %}
                     Rows shaded green are polymorphic &mdash; below 100% frequency.
                 {% endif %}
             </div>
+            {% comment %} Its own row rather than trailing the colour key above: this one is
+               not about how a cell is rendered, it is about rows being excluded everywhere
+               else, and it names the sample responsible. {% endcomment %}
+            {% if ancestral_count %}
+                <div>
+                    <span style="background-color: rgb(255, 218, 218);">Rows shaded red</span>
+                    ({{ ancestral_count }}) are in this experiment's designated ancestor{% if ancestor %}
+                    ({% if is_ancestor %}{{ ancestor.name }}, this sample{% else %}<a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ ancestor.sample_id }}">{{ ancestor.name }}</a>{% endif %}){% endif %}
+                    and are subtracted everywhere else.
+                </div>
+            {% endif %}
         </div>
     {% endif %}
 {% endblock %}
