@@ -144,8 +144,9 @@
                 target_reseq_ids: JSON.stringify(targetIds)
             }).then(function (body) {
                 var message = "Copied " + body.added + " observation(s).";
-                if (body.skipped) {
-                    message += " " + body.skipped + " were already present and were skipped.";
+                if (body.already && body.already.length) {
+                    message += " Already carried some of them: "
+                             + body.already.join(", ") + ".";
                 }
                 swal("", message, "success").then(function () { window.location.reload(); });
             }).catch(function (err) {

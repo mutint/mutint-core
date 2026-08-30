@@ -158,12 +158,34 @@ def _entry_key(entry):
 # --- applying -------------------------------------------------------------------------------
 
 
-def _resolve_mutation(experiment, mutation, identity):
-    """The Mutation row an addition should point at, recreating it if it has been swept.
+def mutation_for_identity(experiment, identity):
+    """The experiment's row holding `identity`, minted if it has none. `(row, created)`.
 
-    `get_or_create` on exactly the fields `gd_import` uses, so a recreated row is the row a
-    re-import would have produced -- and a later import finds it rather than adding a second.
+    `get_or_create` on exactly the fields `gd_import` keys on, so a row minted here is the row
+    a re-import would have produced -- and a later import finds it rather than adding a second.
+    That single behaviour is what both callers want and why it is one function: `_resolve_mutation`
+    puts a swept mutation back, and `mutation_change_apply` moves observations onto the row that
+    already holds the corrected values or onto a new one, which is the same question asked with
+    a different motive.
+
+    `created` matters to a caller because the promoted annotation columns are not part of the
+    identity: a row minted here has them empty and needs `record_builder.apply_annotation`,
+    while one that was already here keeps what it has.
     """
+    lookup = {field: identity.get(field) for field in MUTATION_KEY_FIELDS}
+    return Mutation.objects.get_or_create(
+        ale_experiment=experiment,
+        defaults={
+            "gd_data": identity.get("gd_data"),
+            "annotation": identity.get("annotation"),
+            "product": identity.get("product") or "",
+            "protein_change": identity.get("protein_change") or "",
+        },
+        **lookup)
+
+
+def _resolve_mutation(experiment, mutation, identity):
+    """The Mutation row an addition should point at, recreating it if it has been swept."""
     if mutation is not None and mutation.pk is not None:
         live = Mutation.objects.filter(pk=mutation.pk).first()
         # The row has to still *be* the mutation the identity describes. It is not enough that
@@ -174,16 +196,7 @@ def _resolve_mutation(experiment, mutation, identity):
         if live is not None and mutation_key(live) == key_from_identity(identity):
             return live
 
-    lookup = {field: identity.get(field) for field in MUTATION_KEY_FIELDS}
-    recreated, created = Mutation.objects.get_or_create(
-        ale_experiment=experiment,
-        defaults={
-            "gd_data": identity.get("gd_data"),
-            "annotation": identity.get("annotation"),
-            "product": identity.get("product") or "",
-            "protein_change": identity.get("protein_change") or "",
-        },
-        **lookup)
+    recreated, created = mutation_for_identity(experiment, identity)
     if created:
         logger.info("recreated mutation %s for experiment %s from a change-log snapshot",
                     recreated.pk, experiment.ale_id)

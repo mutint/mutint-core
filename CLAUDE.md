@@ -61,8 +61,13 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1375 run, 0 failures** standalone; **1518** in an assembled project, where the
-plugins' own tests join them. They were 1305 and 1441 before the Add page learned to report
+**Baseline: 1387 run, 0 failures** standalone; **1530** in an assembled project, where the
+plugins' own tests join them. They were 1375 and 1518 before Change Mutation learned to change
+a mutation in some of its samples rather than all of them. (The assembled figure was *run*, not
+added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/aledb-core` is a submodule
+clone of the last commit. See the trap two sentences down for why the arithmetic is not
+trusted, even when it agrees as it does here.)
+They were 1305 and 1441 before the Add page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
@@ -838,13 +843,63 @@ elements into the genome browser, which would fight a click meaning "select", an
 `get_table_body` filters through `filter_observed_mutations` while this page must show what is
 stored.
 
-### Changing a mutation, everywhere it is observed
+### Changing a mutation, in every sample or in some of them
 
 `/mutation-editor/change?mutation_id=<pk>` opens the Add form prefilled from the mutation's
-`gd_data` and moves the mutation itself. **The scope is the mutation, not a set of samples** --
-a `Mutation` is experiment-scoped and shared by every sample observing it, so correcting a
-mis-called position is one correction. Changing it for *some* samples would be splitting one
-mutation into two, which is delete-and-add and stays that way; the page says so.
+`gd_data`, beside a list of the samples carrying it with every one selected. **The scope is a
+chosen set of those samples**, which it did not use to be: the page refused a subset outright
+and said so, on the grounds that changing a mutation for some samples splits one mutation into
+two. It does split one into two. That is a thing worth being able to do -- a call right in eight
+samples and wrong in three should not mean deleting it from three and retyping it by hand -- and
+`apply_changes` could already do it.
+
+**Which of two paths runs is decided by two independent questions**: does the whole set move,
+and do the new values already name a mutation this experiment has?
+
+| samples | values already held by another row? | what happens |
+|---|---|---|
+| all of them | no | `apply_mutation_edit` moves the row itself; **its primary key never changes** |
+| all of them | yes | the observations move onto that row; the emptied one is left in place |
+| some | no | the chosen observations move onto a newly minted row |
+| some | yes | the chosen observations move onto the row already holding those values |
+
+Only the first row keeps the primary key, and it is kept there because it can be: mutation ids
+are stored as bare integers, with no foreign key, in aledb-phylogeny's `branch_mutations` and in
+every exported CSV, and nothing refreshes them.
+
+**The last three paths are one call, and it is the one that was already there.**
+`history.mutation_for_identity` `get_or_create`s on the six `MUTATION_KEY_FIELDS` -- which *is*
+"the existing row if these values name one, a new row otherwise", asked once rather than
+branched on -- and `apply_changes(removals=..., additions=...)` moves the observations. It was
+extracted from `_resolve_mutation`, which needed the same thing to put a swept mutation back, so
+there is still one definition of how a `Mutation` is minted from an identity. Nothing else in
+`history.py` changed: `KIND_EDIT` labels the changeset and its rows are `OP_ADD`/`OP_REMOVE`
+either way, so `state_after`, `plan_restore` and `restore` needed nothing.
+
+**A restore across a subset change reuses the original row**, which is the opposite of what a
+restore across a whole-set change does and is not arranged -- it falls out. The row never moved,
+so `_resolve_mutation` finds it still holding the old identity and hands the observation straight
+back to the same primary key. On the whole-set path the row *has* moved, so `get_or_create` from
+the logged identity finds nothing and mints one; see below.
+
+**A merge is allowed and is not announced as one.** `_refuse_collision` is gone. What the result
+names instead is the *samples*: a chosen sample that already carries the target gets the removal
+and no addition, so it observes the mutation once rather than twice and keeps the frequency and
+read counts it already had. That is the same choice `_plan_add` and `_plan_copy` make, and it is
+the one part of the outcome a person cannot read off the page afterwards. Add and Copy report
+their skipped samples by name now too, for the same reason -- a count of skipped observations is
+not a thing anybody can act on.
+
+**An emptied row is left in place, not deleted.** That is the posture delete takes with a
+`Mutation` as well, and it is what lets the restore above resolve back to the same pk.
+`aledb_import.ale_experiment._delete_all_orphaned_mutations` sweeps it if something else triggers
+a sweep.
+
+**The mutation the unchosen samples were left on is not re-annotated**, and that is a live trap
+rather than an observation: the old code called `record_builder.apply_annotation(mutation, ...)`
+unconditionally after the edit, which is right only when the row itself moved. On the move path
+the annotation belongs to the row the observations landed on, and only when that row was minted
+by this request -- one that was already there keeps what it has.
 
 **The observations are logged as removed and re-added, and that is not bookkeeping.** The
 change log is keyed on `(sample_id, mutation_key, source)` and `mutation_key` is derived from
@@ -852,19 +907,20 @@ the six `MUTATION_KEY_FIELDS`. Move a Mutation without saying so and `live_state
 computing a different key than every earlier entry recorded, with no changeset for
 `state_after` to undo -- so "restore to before the edit" would silently leave the edit in
 place. `KIND_EDIT` labels the *changeset*; its rows stay `OP_ADD` and `OP_REMOVE`, which is why
-`state_after`, `plan_restore` and `restore` needed no change at all.
+`state_after`, `plan_restore` and `restore` needed no change at all -- and why the subset paths,
+which are `apply_changes` with removals and additions, needed nothing either.
 
-**What is not re-created is the Mutation row.** `_resolve_mutation` returns the row it is
-handed, so the additions point back at the one the removals came off and the primary key never
-moves. Mutation ids are stored as bare integers, with no foreign key, in aledb-phylogeny's
+**What the whole-set path does not re-create is the Mutation row.** `_resolve_mutation` returns
+the row it is handed, so the additions point back at the one the removals came off and the
+primary key never moves. Mutation ids are stored as bare integers, with no foreign key, in aledb-phylogeny's
 `branch_mutations` and in every exported CSV -- and **nothing refreshes them**. What
 aledb-phylogeny does on a mutation edit is throw its cached trees away, which corrects the ids
 it held by no longer holding them; an exported CSV cannot be reached to correct at all. Minting
 a new row would leave all of that pointing at a mutation with no observations; reusing it
 leaves them resolving, to the corrected call.
 
-**The order inside `apply_mutation_edit` is the whole of it.** The removal snapshots are taken
-*before* the row moves. Taken after, both sides of the changeset would record the new identity
+**The order inside `apply_mutation_edit` is the whole of that path.** The removal snapshots are
+taken *before* the row moves. Taken after, both sides of the changeset would record the new identity
 and `state_after` would read the edit as having changed nothing.
 
 Two refusals, before anything is written:
@@ -872,10 +928,16 @@ Two refusals, before anything is written:
 - **A change that changes nothing.** Checked on the six key fields *and* `gd_data`, because the
   record can move without the identity -- a MOB's `strand`, say -- and that is a real change to
   what `to_gd_line()` writes.
-- **A collision.** Two rows sharing the six-field `get_or_create` key is a state `gd_import`
-  cannot produce and would resolve arbitrarily if it met one; an edit is the only way to reach
-  it. Refused, naming the other mutation. Merging instead would silently destroy a row when the
-  person may not have realised the two were the same.
+- **A sample that does not carry the mutation.** `target_reseq_ids` is scoped to the samples
+  observing it, for the reason the mutation is scoped to the experiment: a hand-typed id must
+  not reach past what the page offered, and there is nothing to change in a sample that does not
+  have it. An **absent or empty** list means every carrying sample, which is what the page posted
+  before it could pick a subset -- so the endpoint's older contract still holds and most of
+  `test_change.py` still exercises it unchanged.
+
+Two rows sharing the six-field `get_or_create` key is still a state `gd_import` cannot produce,
+and this still cannot reach it: `mutation_for_identity` joins the existing row rather than
+minting a second.
 
 **`_resolve_mutation` now checks that the row still *is* the identity**, not merely that its pk
 still exists. That is a consequence of reusing the row, and the bug it fixes was silent: a
@@ -883,15 +945,19 @@ restore to before an edit arrives holding the old identity and a row that has si
 something else, and the old code handed the observations back to the *edited* mutation and
 reported success having undone nothing.
 
-So **a restore to before an edit mints a new Mutation row** -- `get_or_create` from the logged
-identity finds nothing matching and creates it, leaving the edited row with no observations, as
-a swept mutation would be. It is the one place an edit does not preserve the pk, and making it
-do so would mean `state_after` replaying mutation-level state, which nothing else needs.
+So **a restore to before a whole-set edit mints a new Mutation row** -- `get_or_create` from the
+logged identity finds nothing matching and creates it, leaving the edited row with no
+observations, as a swept mutation would be. It is the one place an edit does not preserve the
+pk, and making it do so would mean `state_after` replaying mutation-level state, which nothing
+else needs. A restore across a *subset* edit does not have this problem, for the reason above:
+the row it is restoring to never moved, so the same check that rejects it here accepts it there.
 
 **The two forms share their fields and their machinery.** `_mutation_fields.html` is every
 input any type can ask for, and `_mutation_form.js` -- a template inside `<script>`, the
 `table_template.js` idiom -- is the type switching, the values that survive a type change, and
-the per-field error display. Add and Change differ only in what they post. A field added to
+the per-field error display. `select_list.html` is now shared too: both pages pick a set of
+samples, and Add's "Add to" and Change's "Change in" are the same control over different lists.
+Add and Change differ only in what they post. A field added to
 `genomediff.schema.TYPE_SPECIFIC_FIELDS` should need one edit, not two.
 
 ### breseq's own field guards, and where we are stricter

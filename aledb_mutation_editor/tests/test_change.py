@@ -1,11 +1,17 @@
-"""Changing a mutation's own fields, everywhere it is observed.
+"""Changing a mutation, in every sample that carries it or in the ones chosen.
 
-The operation is the mutation, not a set of samples: a `Mutation` is experiment-scoped and
-shared by every sample observing it, so correcting a mis-called position is one correction.
+Two paths, and which runs depends on two independent questions: does the whole set move, and
+do the new values already name a mutation this experiment has? Only "the whole set, onto
+values nothing else holds" moves the `Mutation` row itself and keeps its primary key.
+Everything else moves the chosen observations *off* it and onto a different row, leaving the
+samples that were not chosen where they were.
+
 The fixture's `mut_1` is in both samples and `mut_2` in one, which is the difference that
-matters -- an edit has to take every observation with it, however many there are.
+matters -- an edit has to take every chosen observation with it, however many there are, and
+a subset of two is the smallest subset there is.
 """
 
+import json
 from decimal import Decimal
 
 from aledb_mutation_editor import history
@@ -21,7 +27,9 @@ APPLY = "/mutation-editor/change/apply"
 
 class ChangeMutationTestCase(EditorTestCase):
 
-    def change(self, mutation=None, **fields):
+    def change(self, mutation=None, target_reseq_ids=None, **fields):
+        """POST the change form. `target_reseq_ids` left out is the endpoint's older contract,
+        "every sample carrying it", and is what most of this file exercises."""
         payload = {
             "experiment_id": self.experiment.ale_id,
             "mutation_id": (mutation or self.mut_1).id,
@@ -30,6 +38,8 @@ class ChangeMutationTestCase(EditorTestCase):
             "position": 100,
             "new_seq": "T",
         }
+        if target_reseq_ids is not None:
+            payload["target_reseq_ids"] = json.dumps(target_reseq_ids)
         payload.update(fields)
         return self.client.post(APPLY, payload)
 
@@ -48,7 +58,17 @@ class ChangeMutationTestCase(EditorTestCase):
         html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
                                       "mutation_id": self.mut_1.id}).content.decode("utf-8")
 
-        self.assertIn("<b>2</b> sample", html)
+        self.assertIn("<b>2</b> that carr", html)
+
+    def test_the_page_offers_only_the_samples_carrying_it(self):
+        """There is nothing to change in a sample that does not carry the mutation, and
+        `data-value` is what `aledbSelectList` reads a row's id off -- a list rendered without
+        it looks right and posts an empty selection."""
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+                                      "mutation_id": self.mut_2.id}).content.decode("utf-8")
+
+        self.assertIn('data-value="%d"' % self.sample_a.id, html)
+        self.assertNotIn('data-value="%d"' % self.sample_b.id, html)
 
     def test_a_mutation_from_another_experiment_is_not_found(self):
         """Scoped through the experiment, for the reason mutation_delete scopes its ids: a
@@ -184,7 +204,143 @@ class ChangeMutationTestCase(EditorTestCase):
             ObservedMutation.objects.filter(mutation__pk=original).exists(),
             "the edited row is left with no observations, as a swept mutation would be")
 
+    # --- a subset of the samples ----------------------------------------------------------
+
+    def test_only_the_chosen_samples_move(self):
+        """The point of the whole thing: a call right in one sample and wrong in another is
+        one correction to make, not a delete and a retype."""
+        response = self.change(position=150, target_reseq_ids=[self.sample_b.id])
+
+        self.assertEqual(200, response.status_code, response.content)
+        moved = ObservedMutation.objects.get(sequencing_experiment=self.sample_b,
+                                             mutation__position=150)
+        stayed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+                                              mutation=self.mut_1)
+        self.assertNotEqual(self.mut_1.pk, moved.mutation_id)
+        self.assertEqual(self.mut_1.pk, stayed.mutation_id)
+
+    def test_the_row_they_came_off_is_left_alone(self):
+        """It has not changed. Its remaining samples still observe the call it always was --
+        and its primary key still means that to every exported CSV holding it."""
+        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+
+        self.mut_1.refresh_from_db()
+        self.assertEqual(100, self.mut_1.position)
+        self.assertEqual(1, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+
+    def test_a_subset_mints_a_row_when_the_values_are_new(self):
+        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+
+        minted = Mutation.objects.get(ale_experiment=self.experiment, position=150)
+        self.assertNotEqual(self.mut_1.pk, minted.pk)
+        self.assertEqual("SNP", minted.mutation_type)
+        self.assertEqual("NC_000913", minted.reseq_reference)
+
+    def test_a_subset_joins_a_row_that_already_holds_the_values(self):
+        """`mutation_for_identity` get_or_creates on the six fields `gd_import` keys on, so
+        "the existing row if these values name one, a new row otherwise" is one question with
+        one answer rather than two code paths."""
+        self.change(mutation=self.mut_2, position=150)
+        self.mut_2.refresh_from_db()
+
+        response = self.change(mutation=self.mut_1, position=150,
+                               target_reseq_ids=[self.sample_b.id])
+
+        self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
+        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
+        self.assertEqual(1, Mutation.objects.filter(ale_experiment=self.experiment,
+                                                    position=150).count())
+
+    def test_the_minted_row_carries_the_new_record_and_the_old_one_keeps_its_own(self):
+        """`gd_data` is what `to_gd_line()` round-trips for gdtools APPLY, so the two rows
+        have to disagree about it -- the mutation the unchosen samples were left on has not
+        changed, and re-annotating it as though it had is the bug this pins."""
+        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+
+        minted = Mutation.objects.get(ale_experiment=self.experiment, position=150)
+        self.mut_1.refresh_from_db()
+        self.assertEqual(150, minted.gd_data["position"])
+        self.assertEqual(100, self.mut_1.gd_data["position"])
+
+    def test_a_sample_that_already_carries_the_target_is_not_given_a_second_copy(self):
+        """It loses the old call and keeps the observation it already had, frequency and read
+        counts included -- and is named back, because that is the one part of the result a
+        person cannot read off the page."""
+        self.observe(self.sample_b, self.mut_2, frequency="0.1000")
+        # mut_2 goes through the form first so its stored identity is the shape the form
+        # produces: the fixture writes `sequence_change` by hand as "C>G", which
+        # `synthesize_sequence_change` never emits, so the two could not otherwise meet.
+        self.change(mutation=self.mut_2, position=200, new_seq="G")
+
+        response = self.change(mutation=self.mut_1, position=200, new_seq="G",
+                               target_reseq_ids=[self.sample_b.id])
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.assertEqual([self.sample_b.ale_flask_isolate_str], response.json()["already"])
+        observations = ObservedMutation.objects.filter(sequencing_experiment=self.sample_b,
+                                                       mutation=self.mut_2)
+        self.assertEqual(1, observations.count())
+        self.assertEqual(Decimal("0.1000"), observations.first().frequency)
+        self.assertFalse(ObservedMutation.objects.filter(
+            sequencing_experiment=self.sample_b, mutation=self.mut_1).exists())
+
+    def test_a_subset_is_one_changeset_of_removals_and_additions(self):
+        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+
+        change_set = MutationChangeSet.objects.get()
+        self.assertEqual(KIND_EDIT, change_set.kind)
+        self.assertEqual(1, change_set.changes.filter(operation="remove").count())
+        self.assertEqual(1, change_set.changes.filter(operation="add").count())
+
+    def test_restoring_across_a_subset_change_reuses_the_original_row(self):
+        """The opposite of the whole-set path, and it falls out rather than being arranged:
+        the row never moved, so `_resolve_mutation` finds it still holding the old identity
+        and hands the observation straight back to the same primary key."""
+        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+
+        history.restore(self.experiment, self.owner, change_set=None)
+
+        self.assertEqual(
+            {self.mut_1.pk},
+            set(ObservedMutation.objects.filter(mutation__position=100)
+                .values_list("mutation_id", flat=True)))
+        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+
+    def test_naming_every_carrying_sample_is_the_whole_set(self):
+        """The two paths are decided on the *set*, not on whether the request named it."""
+        before = self.mut_1.pk
+
+        self.change(position=150,
+                    target_reseq_ids=[self.sample_a.id, self.sample_b.id])
+
+        self.mut_1.refresh_from_db()
+        self.assertEqual(before, self.mut_1.pk)
+        self.assertEqual(150, self.mut_1.position)
+
+    def test_naming_no_samples_still_means_all_of_them(self):
+        """The endpoint's contract before it could take a subset, which callers that do not
+        care about samples still post."""
+        before = self.mut_1.pk
+
+        response = self.change(position=150)
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.mut_1.refresh_from_db()
+        self.assertEqual(before, self.mut_1.pk)
+        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+
     # --- refusals -------------------------------------------------------------------------
+
+    def test_a_sample_that_does_not_carry_it_is_refused(self):
+        """Scoped to the samples carrying it for the reason the mutation is scoped to the
+        experiment: a hand-typed id must not reach past what the page offered."""
+        response = self.change(mutation=self.mut_2, position=250,
+                               target_reseq_ids=[self.sample_b.id])
+
+        self.assertEqual(404, response.status_code)
+        self.assertIn("do not carry", response.json()["error"])
+        self.mut_2.refresh_from_db()
+        self.assertEqual(200, self.mut_2.position)
 
     def test_changing_nothing_is_refused(self):
         """Applied twice: the first is a real change, the second asks for what it already
@@ -198,20 +354,35 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertIn("already has", response.json()["error"])
         self.assertEqual(1, MutationChangeSet.objects.count())
 
-    def test_an_edit_that_would_duplicate_another_mutation_is_refused(self):
+    def test_a_change_onto_values_another_mutation_holds_joins_it(self):
         """Two rows sharing the six-field get_or_create key is a state the importer cannot
-        produce and would resolve arbitrarily if it met one. Reached by moving mut_2 onto the
-        values mut_1 is then asked to take -- `sequence_change` is derived, so two mutations
-        collide only when everything that derives it agrees."""
+        produce, so this cannot mint a second row -- but joining the existing one is a real
+        correction and used to be refused outright. Reached by moving mut_2 onto the values
+        mut_1 is then asked to take; `sequence_change` is derived, so two mutations meet only
+        when everything deriving it agrees.
+
+        The emptied row is left in place rather than deleted, which is what delete does with a
+        Mutation as well -- and is what lets a restore hand the observations back to the same
+        primary key."""
         self.change(mutation=self.mut_2, position=150)
+        self.mut_2.refresh_from_db()
 
         response = self.change(mutation=self.mut_1, position=150)
 
-        self.assertEqual(400, response.status_code)
-        self.assertIn("already has", response.json()["error"])
-        self.assertIn(str(self.mut_2.id), response.json()["error"])
+        self.assertEqual(200, response.status_code, response.content)
+        self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
+        # sample_a already carries mut_2, so it gets the removal and no addition: two
+        # observations afterwards rather than three, and it is named back.
+        self.assertEqual([self.sample_a.ale_flask_isolate_str], response.json()["already"])
+        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
+        self.assertFalse(ObservedMutation.objects.filter(mutation=self.mut_1).exists())
+        self.assertTrue(Mutation.objects.filter(pk=self.mut_1.pk).exists())
+        self.assertEqual(1, Mutation.objects.filter(ale_experiment=self.experiment,
+                                                    position=150).count(),
+                         "joined the existing row rather than minting a second at 150")
         self.mut_1.refresh_from_db()
-        self.assertEqual(100, self.mut_1.position)
+        self.assertEqual(100, self.mut_1.position,
+                         "the emptied row is left as it was, not moved as well")
 
     def test_a_value_breseq_would_reject_is_refused_per_field(self):
         response = self.change(position=0)

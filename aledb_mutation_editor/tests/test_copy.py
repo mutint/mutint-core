@@ -61,7 +61,7 @@ class CopyTestCase(EditorTestCase):
 
         body = response.json()
         self.assertEqual(0, body["added"])
-        self.assertEqual(1, body["skipped"])
+        self.assertEqual([self.sample_b.ale_flask_isolate_str], body["already"])
         self.assertEqual(1, ObservedMutation.objects.filter(
             sequencing_experiment=self.sample_b, mutation=self.mut_1).count())
 

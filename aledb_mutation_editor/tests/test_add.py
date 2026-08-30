@@ -144,7 +144,8 @@ class AddTestCase(EditorTestCase):
         response = self.snp()
 
         self.assertEqual(0, response.json()["added"])
-        self.assertEqual(1, response.json()["skipped"])
+        self.assertEqual([self.sample_a.ale_flask_isolate_str],
+                         response.json()["already"])
         self.assertEqual(1, ObservedMutation.objects.filter(mutation__position=5000).count())
 
     def test_skipping_everything_writes_no_changeset(self):

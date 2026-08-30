@@ -110,8 +110,8 @@
 
             window.aledbPost("/mutation-editor/add/apply", payload).then(function (body) {
                 var message = "Added to " + body.added + " sample(s).";
-                if (body.skipped) {
-                    message += " " + body.skipped + " already had it and were skipped.";
+                if (body.already && body.already.length) {
+                    message += " Already had it: " + body.already.join(", ") + ".";
                 }
                 swal("", message, "success").then(function () { window.location.reload(); });
             }).catch(function (err) {
