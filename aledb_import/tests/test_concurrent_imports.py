@@ -211,7 +211,19 @@ class SqliteContentionTestCase(TestCase):
     pins the other half -- that this application actually asks for IMMEDIATE.
     """
 
-    def _run(self, begin, rounds=60, workers=2):
+    # Four writers, not two, and they are released together by a barrier. The race this
+    # measures used to be produced incidentally -- by whatever the machine happened to be
+    # doing when the test ran -- and that is not a property to rest a guarantee on: it
+    # reproduced for years and then stopped when an unrelated change upstream in this same
+    # app removed a `bedtools` subprocess from the import path, which was enough to alter the
+    # scheduling two threads needed to collide. `lost` staying empty made this test fail while
+    # asserting nothing about the code under test.
+    #
+    # The barrier makes the overlap deliberate: every writer blocks until all of them are
+    # ready, so their first upgrade attempts land at the same moment rather than by luck.
+    # `test_immediate_transactions_lose_nothing` runs through the same path and is the control
+    # -- if this only manufactured noise, IMMEDIATE would start losing writes too.
+    def _run(self, begin, rounds=60, workers=4):
         import os
         import shutil
         import sqlite3
@@ -228,9 +240,16 @@ class SqliteContentionTestCase(TestCase):
         setup.close()
 
         lost = []
+        # timeout so a writer that dies before reaching it cannot hang the suite; a broken
+        # barrier just means the threads start unsynchronised, which is where this began.
+        ready = threading.Barrier(workers, timeout=30)
 
         def writer(tag):
             handle = sqlite3.connect(path, timeout=5, isolation_level=None)
+            try:
+                ready.wait()
+            except threading.BrokenBarrierError:
+                pass
             for i in range(rounds):
                 try:
                     handle.execute(begin)

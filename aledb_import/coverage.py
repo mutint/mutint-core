@@ -39,8 +39,6 @@ import os
 import subprocess
 import tempfile
 
-import numpy
-
 from aledb_common import store
 from aledb_common.tools import ToolMissing, require
 
@@ -125,6 +123,16 @@ def write_weighted_bedgraph(bam_path, sizes, out_path):
     `until_eof=True` reads the file through rather than seeking by region, so no BAM index is
     needed and every record is seen exactly once.
     """
+    # numpy and pysam are imported here rather than at module scope, and it is not style.
+    # Test discovery imports every test module, so a module-level import here is loaded into
+    # the process before any test runs -- and numpy's BLAS brings up a thread pool as it
+    # loads. `test_concurrent_imports` measures a race between two SQLite writers, and that
+    # extra process state was enough to stop the race reproducing, failing a test that runs
+    # long before this code does. Deferring the import keeps a module nothing has called out
+    # of the process, which is also why a deployment that never derives coverage does not pay
+    # htslib's load.
+    import numpy
+
     lengths = _sizes_map(sizes)
     tally = CoverageTally()
     # One extra cell so a read ending at the last base has somewhere to write its -w.
@@ -187,7 +195,12 @@ def _emit_contig(target, name, depth):
 
     The run boundaries come from `numpy.diff` rather than a Python loop over every base --
     a 4.6 Mb contig is 4.6 million iterations otherwise, per sample.
+
+    Imported here as well as in the caller; see the note there for why it is not at module
+    scope. After the first import this is a dict lookup.
     """
+    import numpy
+
     if not depth.size:
         return
     # A boundary wherever the value changes, plus the two ends.
