@@ -403,6 +403,15 @@ class SwitchingMutationTestCase(TestCase):
             "/mutations/browse", {"observed_mut_id": self.observed.id}).content.decode()
         self.assertIn("showCoverage", html)
 
+    def test_the_sample_menu_toggles_rather_than_replacing(self):
+        """Each row is a loaded BAM, so the helper's default -- a plain click selecting only
+        that row -- unloaded every other showing sample to show one, with no gesture that put
+        them back. Asserted because losing the flag restores that quietly."""
+        html = self.client.get(
+            "/mutations/browse", {"observed_mut_id": self.observed.id}).content.decode()
+        self.assertIn("aledbSelectList", html)
+        self.assertIn("toggle: true", html)
+
     def test_the_page_names_the_clickable_track(self):
         """The handler matches on the track id rather than on its label, and the id reaches
         the page from tracks.py rather than being written out twice."""

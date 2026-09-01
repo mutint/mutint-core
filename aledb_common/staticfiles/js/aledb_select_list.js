@@ -9,6 +9,13 @@
  *   shift-click            the range from the anchor to here, replacing the selection
  *   ctrl/cmd + shift-click add that range to the selection
  *
+ * `{toggle: true}` swaps the plain click for the ctrl/cmd one, so every click toggles the row
+ * it lands on and shift-click adds a range rather than replacing the selection. That is the
+ * behaviour of a list of checkboxes, and it suits a list whose rows are independent of each
+ * other -- the genome browser's sample menu, where each row is a BAM that is either loaded or
+ * not, and where "select only this one" silently unloads everything else. The default stays
+ * select-only for the lists that are choosing *a* set rather than ticking members of one.
+ *
  * The anchor is the last row picked by a plain or ctrl-click. Arrow-key navigation is
  * deliberately not here; "Select all" and "Select none" are what a long list needs, and they
  * are also what makes a stray plain click cheap to undo.
@@ -32,12 +39,15 @@
      *           controls               element holding [data-select="all"|"none"] buttons and
      *                                  an optional .aledb-select-count; defaults to the list's
      *                                  parent, which is what `select_list.html` renders
+     *           toggle                 plain click toggles one row instead of replacing the
+     *                                  selection; see the note above
      */
     window.aledbSelectList = function (list, options) {
         options = options || {};
         var onChange = options.onChange || function () {};
         var controls = options.controls === undefined ? list.parentNode : options.controls;
         var rows = rowsOf(list);
+        var toggleMode = !!options.toggle;
         var anchor = null;
 
         function isOn(row) { return row.classList.contains("active"); }
@@ -87,7 +97,10 @@
             // this list and return a row belonging to something else.
             if (!row || rows.indexOf(row) < 0) { return; }
 
-            var additive = event.ctrlKey || event.metaKey;
+            // In toggle mode every click is the additive one: there is no gesture that
+            // replaces the whole selection, because that is the gesture this mode exists to
+            // remove. The presets still set the selection outright.
+            var additive = toggleMode || event.ctrlKey || event.metaKey;
             var changed;
             if (event.shiftKey) {
                 var span = spanBetween(anchor || rows[0], row);

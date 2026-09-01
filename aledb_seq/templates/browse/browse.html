@@ -139,9 +139,10 @@
         // The sample menu is the one source of truth for what a sample is called, where its
         // files are and whether it is showing -- the track the browser opens with included.
         // `active` on the row is the state; there is no checkbox to disagree with it.
-        // `aledbSelectList` owns that class and the gestures that set it (plain click, cmd
-        // for one row, shift for a range); this page owns what a change *means*, which is a
-        // track loaded or removed. The two meet in `onSampleChange` below.
+        // `aledbSelectList` owns that class and the gestures that set it -- here in its
+        // `toggle` mode, so a click adds or removes one sample and shift takes a range; this
+        // page owns what a change *means*, which is a track loaded or removed. The two meet
+        // in `onSampleChange` below.
         var sampleList = document.getElementById("sample-list");
         var picker = null;   // -- set once the browser exists, since a change loads a track
 
@@ -337,10 +338,13 @@
         // per-track gear menu can remove any of them -- so until this existed, removing the
         // Mutations track by accident meant reloading the page, with nothing saying so.
         //
-        // Independent toggles rather than a selection, which is why this is wired by hand
-        // instead of through `aledbSelectList`: there a plain click means "only this row",
-        // and here each row is its own checkbox. `active` on the <li> is the state, and
-        // Bootstrap's own .dropdown-menu > .active > a paints it.
+        // Wired by hand rather than through `aledbSelectList`, though that helper can toggle
+        // now and the sample menu above uses it that way. Two things differ here: these rows
+        // are built by script once the browser exists, so there is no list for the helper to
+        // adopt at setup; and `active` is not the state but a report of it -- what is really
+        // showing lives in `held`/`shown`, and `trackremoved` is the writer, because igv can
+        // take a track away without this menu being asked. Bootstrap's own
+        // .dropdown-menu > .active > a paints the row either way.
         var trackList = document.getElementById("track-list");
 
         function setUpTrackMenu(browser) {
@@ -583,8 +587,15 @@
             // `controls: null` because this page's four presets are not the helper's own
             // Select all / Select none pair, and the count lives in the dropdown's button
             // rather than beside the list.
-            picker = window.aledbSelectList(sampleList,
-                                            { controls: null, onChange: onSampleChange });
+            //
+            // `toggle: true` so a click adds or removes that one sample and leaves the rest
+            // alone, the way the Tracks menu beside it behaves. The helper's default -- a
+            // plain click selecting only the row it lands on -- suits a list that is choosing
+            // *a* set, and is wrong here: every other showing sample is a loaded BAM, so the
+            // default quietly unloaded all of them to show one, and getting back to where you
+            // were meant reloading each by hand.
+            picker = window.aledbSelectList(
+                sampleList, { controls: null, toggle: true, onChange: onSampleChange });
 
             // Each preset is the *whole* selection rather than an addition to it, which is
             // what makes "Show mutant samples" and its opposite a pair.

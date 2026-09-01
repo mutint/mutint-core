@@ -79,8 +79,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1621 run, 0 failures** standalone; **1777** in an assembled project, where the
-plugins' own tests join them. They were 1620 and 1776 before the reads track stopped drawing
+**Baseline: 1622 run, 0 failures** standalone; **1778** in an assembled project, where the
+plugins' own tests join them. They were 1621 and 1777 before the sample menu started toggling,
+1620 and 1776 before the reads track stopped drawing
 its own coverage row, 1610 and 1766 before coverage started weighting each
 alignment by breseq's X1 redundancy tag, 1599 and 1755 before the genome browser dropped its
 per-sample track and learned to switch mutation on a click, 1592 and 1748 before deleting data
@@ -304,8 +305,18 @@ else they share with the Metadata page's column menu.
 browser's sample menu and the three mutation-editor pages that pick a set of samples. `active`
 on the `<li>` is the selection; there is no checkbox anywhere to hold a second opinion about it.
 The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
-toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range. Two things the
-CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
+toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range.
+
+**`{toggle: true}` is the other mode, and the genome browser's sample menu is why it exists.**
+There every click toggles the row it lands on and shift adds a range -- a list of checkboxes
+rather than a selection. The distinction is whether the rows are independent of one another:
+the mutation editor's three lists are choosing *a* set of samples to act on, where "only this
+one" is a useful gesture, while each row of the browser's menu is a BAM that is either loaded
+or not, and there a plain click silently unloaded every other sample to show one. Getting back
+then meant reloading each by hand. The default stays select-only, so nothing but the browser
+changed.
+
+Two things the CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
 selection across the rows it is selecting; and the fill written on `> li.active > a` rather than
 on the `<li>`, for the reason in the next paragraph.
 
@@ -2372,7 +2383,12 @@ which will waste an afternoon if you do not know them:
 
 The **sample menu** is a dropdown over every sample in the experiment with an alignment, the
 one being viewed included: it is shown and hidden like the rest, so *Hide all samples* leaves
-only the reference and gene tracks. It has the same shape as the column menu on the Metadata
+only the reference and gene tracks. **Clicking a row toggles that one sample** -- it runs
+`aledbSelectList` in `{toggle: true}` mode, matching the Tracks menu beside it. It used to run
+the helper's default, where a plain click selects only the row it lands on: on a list of
+samples that meant showing one silently unloaded every other, and there is no gesture that
+puts them back except clicking each again. The four presets still set the whole selection,
+which is what makes them presets. It has the same shape as the column menu on the Metadata
 page -- DataTables' colvis collection -- a `ul.dropdown-menu` of `<li><a>` where a showing
 sample is `active` on its `<li>`, so Bootstrap's own `.dropdown-menu > .active > a` paints the
 row and there is nothing to restyle. (DataTables does put `#717171` on the active `<li>`, but
