@@ -390,6 +390,19 @@ class SwitchingMutationTestCase(TestCase):
 
     # --- what the page hands the click handler ------------------------------------------
 
+    def test_the_reads_track_does_not_draw_its_own_coverage_row(self):
+        """igv puts a coverage row inside every alignment track, and the BigWig above it is
+        the same depth drawn again -- measured in a browser as two histograms in one column,
+        one blue and one grey, both scaled 0-169.
+
+        They stopped agreeing when coverage started weighting reads by 1/X1: igv counts every
+        alignment once, so its row still towers over a repeat while the track above it does
+        not. Asserted here because deleting the flag brings the second row back silently.
+        """
+        html = self.client.get(
+            "/mutations/browse", {"observed_mut_id": self.observed.id}).content.decode()
+        self.assertIn("showCoverage", html)
+
     def test_the_page_names_the_clickable_track(self):
         """The handler matches on the track id rather than on its label, and the id reaches
         the page from tracks.py rather than being written out twice."""

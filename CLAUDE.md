@@ -79,8 +79,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1620 run, 0 failures** standalone; **1776** in an assembled project, where the
-plugins' own tests join them. They were 1610 and 1766 before coverage started weighting each
+**Baseline: 1621 run, 0 failures** standalone; **1777** in an assembled project, where the
+plugins' own tests join them. They were 1620 and 1776 before the reads track stopped drawing
+its own coverage row, 1610 and 1766 before coverage started weighting each
 alignment by breseq's X1 redundancy tag, 1599 and 1755 before the genome browser dropped its
 per-sample track and learned to switch mutation on a click, 1592 and 1748 before deleting data
 made you type DELETE, 1587 and 1743 before the needle plot learned what
@@ -2301,6 +2302,18 @@ The **Display menu decides which tracks are loaded**, not which rows of one trac
 That distinction is the whole feature: *Display Coverage Only* does not load the alignment track
 at all, so **no BAM request is made** — measured, 0 BAM requests against 9 for the BigWig. It
 changes track identity rather than a flag, so choosing an item reloads whatever is showing.
+
+**The alignment track's own coverage row is off wherever the BigWig replaces it**
+(`showCoverage: !t.coverageURL`). igv draws one inside every alignment track, so a sample was
+showing the same depth twice in one column -- measured in a browser as two histograms, the
+blue BigWig and a grey one directly beneath it, both scaled 0-169. Since coverage started
+weighting reads by `1/X1` the two no longer even agree: igv counts every alignment once, so
+its row still towers over a repeat while the track above it does not, and two coverage rows
+disagreeing is worse than either alone.
+
+Kept where there is *no* BigWig -- a sample imported before coverage existed, or one whose
+derivation failed -- because igv's row is then the only coverage that sample has. Unnormalized,
+but better than none, and `./aledb coverage` is what replaces it.
 
 A sample imported before coverage existed simply has no wig track until `./aledb coverage` runs.
 

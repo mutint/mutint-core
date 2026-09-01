@@ -217,6 +217,18 @@
                 // Immediately after its own coverage track, so a sample reads as one block.
                 order: TRACK_ORDER_BASE + t.order * 2 + 1,
                 visibilityWindow: READS_VISIBILITY_WINDOW,
+                // igv draws its own coverage row inside every alignment track. It is off
+                // wherever the BigWig above replaces it, for two reasons: it is the same
+                // depth drawn twice in one viewport, and since coverage started weighting
+                // each read by 1/X1 the two no longer agree -- igv counts every alignment
+                // once, so its row still towers over an IS element while the track above it
+                // does not. Two coverage rows disagreeing is worse than either alone.
+                //
+                // Kept where there is no BigWig: a sample imported before coverage existed,
+                // or one whose derivation failed, has no wig track, and igv's row is then
+                // the only coverage it has. Unnormalized, but better than none, and
+                // `./aledb coverage` is what replaces it.
+                showCoverage: !t.coverageURL,
                 // On by default here, off by default in igv. This page exists to look at one
                 // called position, and a clipped end is often what tells you why the call
                 // looks the way it does. Still the same flag the track's gear menu toggles,
