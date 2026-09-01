@@ -724,12 +724,26 @@
         resultEl.appendChild(div);
     }
 
+    // What the drop actually delivered. A reference genome is not "0 mutations": it carried
+    // none because it is not a mutation file, and reporting the count anyway reads as a
+    // mutation import that landed nothing. Read off the same rows the table renders, so the
+    // headline cannot say one thing while the rows beneath it say another.
+    function whatLanded(summary) {
+        if (summary.total_mutations) {
+            return summary.total_mutations + " mutations.";
+        }
+        var references = (summary.files || []).filter(function (f) {
+            return f.kind === "reference" && !f.error;
+        }).length;
+        return references ? "Reference." : "0 mutations.";
+    }
+
     function successAlert(summary) {
         var alert = document.createElement("div");
         alert.className = "alert alert-success";
         alert.appendChild(document.createTextNode(
             "Added to " + summary.experiment + " (#" + summary.experiment_id + "): "
-            + summary.total_mutations + " mutations. "));
+            + whatLanded(summary) + " "));
         var link = document.createElement("a");
         link.href = "/stats?ale_experiment_id=" + encodeURIComponent(summary.experiment_id);
         link.textContent = "View experiment";
@@ -746,8 +760,14 @@
         var nameTd = document.createElement("td");
         nameTd.textContent = f.file;
         var countTd = document.createElement("td");
-        countTd.textContent = (f.mutations === null || f.mutations === undefined)
-            ? "" : f.mutations;
+        if (f.kind === "reference") {
+            // Not a mutation count. This file is the genome the mutations are called
+            // against, so there is no number for this column to hold.
+            countTd.textContent = "Reference";
+        } else {
+            countTd.textContent = (f.mutations === null || f.mutations === undefined)
+                ? "" : f.mutations;
+        }
         var statusTd = document.createElement("td");
 
         if (f.state === "waiting") {

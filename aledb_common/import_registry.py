@@ -27,6 +27,12 @@ _import_handlers = []
 PRIORITY_REFERENCE = 10
 PRIORITY_DATA = 50
 
+# What a file result's count column is about. A file that carried no mutations because it is
+# not a mutation file has no count to report: rendering the 0 it technically imported reads as
+# a mutation file that imported nothing, which is the one thing a reference genome is not.
+# Absent from an entry means the count is a mutation count, which is every other handler.
+KIND_REFERENCE = "reference"
+
 
 class ConfirmationRequired(Exception):
     """A handler will not proceed until the user agrees to something.
@@ -56,7 +62,9 @@ def register_import_handler(name, label, patterns, handle,
     handle      callable(experiment, staged_root, paths, user) -> summary dict with
                 keys 'files' (list of {file, mutations, error, warnings}) and
                 'total_mutations'. `error` means the file failed; `warnings` lists what
-                the parser could not read in a file that otherwise imported.
+                the parser could not read in a file that otherwise imported. An entry
+                whose count is not a mutation count says so with `kind` -- see
+                KIND_REFERENCE -- and sets `mutations` to None.
     priority    lower runs first; use PRIORITY_REFERENCE for anything that must be
                 in place before data is imported
     detect      optional callable(staged_root, paths) -> claimed paths, for handlers

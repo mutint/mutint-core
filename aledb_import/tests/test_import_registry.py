@@ -390,3 +390,76 @@ class PostProcessingTestCase(TestCase):
                 run_import(self.experiment, self.staged, self.user)
 
         self.assertEqual([], seen)
+
+
+class ReferenceResultKindTestCase(TestCase):
+    """A reference genome's row says what it is rather than how many mutations it carried.
+
+    Reported as `mutations: 0` it read as a mutation file that imported nothing -- which is
+    the one thing a reference is not, and the Add page said so twice: once in the file
+    table's count column and once in "Added to E (#1): 0 mutations". The count is absent
+    now and `kind` carries what the file was, so the page has something to render instead of
+    a number that was never about this file.
+    """
+
+    FIXTURES = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            "annotate", "tests", "fixtures")
+
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+
+        self.staged = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.staged, True)
+        shutil.copy(os.path.join(self.FIXTURES, "synthetic.gbk"),
+                    os.path.join(self.staged, "synthetic.gbk"))
+        with open(os.path.join(self.staged, "1-100-1-1.gd"), "w") as handle:
+            handle.write("#=GENOME_DIFF\t1.0\n"
+                         "#=COMMAND\tbreseq -r synthetic.gbk -o s r.fastq\n"
+                         "#=REFSEQ\tsynthetic.gbk\n"
+                         "SNP\t1\t.\tSYN001\t150\tT\tfrequency=1\n")
+
+    def _run(self):
+        from aledb_common.import_registry import run_import
+
+        with tempfile.TemporaryDirectory() as store:
+            with override_settings(ALEDB_STORE_DIR=store):
+                summary = run_import(self.experiment, self.staged, self.user)
+        return {entry["file"]: entry for entry in summary["files"]}, summary
+
+    def test_the_reference_reports_a_kind_and_no_count(self):
+        results, _ = self._run()
+
+        reference = results["synthetic.gbk"]
+        self.assertEqual(import_registry.KIND_REFERENCE, reference["kind"])
+        self.assertIsNone(reference["mutations"])
+
+    def test_a_mutation_file_still_reports_a_count_and_no_kind(self):
+        """The kind is what marks the exception, so every other handler must not carry one --
+        a row with no `kind` is a row whose number is a mutation count."""
+        results, summary = self._run()
+
+        gd = results["1-100-1-1.gd"]
+        self.assertIsNone(gd.get("kind"))
+        self.assertEqual(1, gd["mutations"])
+        self.assertEqual(1, summary["total_mutations"])
+
+    def test_the_progress_snapshot_carries_the_kind_through(self):
+        """The table is drawn from the poll while the import runs and from the summary
+        afterwards. A kind that reached only the second would make the reference's row change
+        what it said the moment the import finished."""
+        from aledb_common import import_progress
+
+        events = []
+        with tempfile.TemporaryDirectory() as store:
+            with override_settings(ALEDB_STORE_DIR=store):
+                with import_progress.reporting(events.append):
+                    self._run()
+
+        reported = [e for e in events
+                    if e.get("event") == "file" and e.get("file") == "synthetic.gbk"]
+        self.assertEqual(1, len(reported), events)
+        self.assertEqual(import_registry.KIND_REFERENCE, reported[0]["kind"])

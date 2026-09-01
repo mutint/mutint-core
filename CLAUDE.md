@@ -79,8 +79,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1622 run, 0 failures** standalone; **1778** in an assembled project, where the
-plugins' own tests join them. They were 1621 and 1777 before the sample menu started toggling,
+**Baseline: 1625 run, 0 failures** standalone; **1781** in an assembled project, where the
+plugins' own tests join them. They were 1622 and 1778 before a reference stopped reporting a
+mutation count, 1621 and 1777 before the sample menu started toggling,
 1620 and 1776 before the reads track stopped drawing
 its own coverage row, 1610 and 1766 before coverage started weighting each
 alignment by breseq's X1 redundancy tag, 1599 and 1755 before the genome browser dropped its
@@ -2143,6 +2144,17 @@ writing its own, which is how a corrected breseq run supersedes the one before i
 name inside a single drop, which is refused outright: there, neither is an update of the other.
 It is also deliberately not a `warnings` entry -- those are lines the parser could not read, and
 the page says so in as many words.
+
+**A reference genome has no mutation count, and reporting one said something false.** Every
+file result carries `mutations`, so the reference handler filled it with the 0 it truthfully
+imported -- and the Add page rendered that twice, in the table's Mutations column and in
+*Added to E (#1): 0 mutations*, both of which read as a mutation file that landed nothing.
+The entry sets `mutations` to None and declares `kind=KIND_REFERENCE`
+(`aledb_common/import_registry.py`) instead; the page prints **Reference** in that column and
+uses it for the headline when the drop imported no mutations. The kind rides through
+`import_progress` onto the `UploadSession` snapshot as well, or the row would say one thing
+while the import ran and another the moment it finished. Absent `kind` means the count is a
+mutation count, which is every other handler -- so no plugin's handler changed.
 
 `replace_annotation` claims only GenBank and GFF3, not FASTA. A FASTA is sequence with no
 features, so there is nothing in one to install -- it used to be accepted and then rejected

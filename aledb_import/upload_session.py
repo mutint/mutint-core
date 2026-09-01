@@ -394,22 +394,25 @@ class _SessionProgress:
         self.cursor = 0
 
     def __call__(self, event):
-        kind = event.get("event")
-        if kind == "total":
-            self.units = [{"file": name, "mutations": None, "error": None,
+        # `event["event"]` says which kind of event this is; `event["kind"]` says what kind of
+        # thing the unit was. Two different questions, hence the longer name here.
+        event_kind = event.get("event")
+        if event_kind == "total":
+            self.units = [{"file": name, "mutations": None, "kind": "", "error": None,
                            "warnings": [], "replaced": 0, "state": UNIT_WAITING}
                           for name in event.get("units") or []]
-        elif kind == "begin":
+        elif event_kind == "begin":
             self._at(event.get("index"), lambda unit: unit.update(state=UNIT_WORKING))
-        elif kind == "file":
+        elif event_kind == "file":
             self._at(event.get("index"), lambda unit: unit.update(
                 file=event.get("file", unit["file"]),
                 mutations=event.get("mutations"),
+                kind=event.get("kind") or "",
                 error=event.get("error"),
                 warnings=event.get("warnings") or [],
                 replaced=event.get("replaced") or 0,
                 state=UNIT_DONE))
-        elif kind == "stage":
+        elif event_kind == "stage":
             self.stage = event.get("message") or ""
         self._flush()
 

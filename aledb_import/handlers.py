@@ -17,6 +17,7 @@ from django.db import transaction
 from aledb_common import import_progress
 from aledb_import.retry import with_retry
 from aledb_common.import_registry import (
+    KIND_REFERENCE,
     PRIORITY_DATA,
     PRIORITY_REFERENCE,
     matches_patterns,
@@ -198,7 +199,7 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
     from aledb_import import reference_store
 
     if annotation_only and not reference_store.has_reference(experiment):
-        refusals = [{"file": p, "mutations": 0,
+        refusals = [{"file": p, "mutations": None, "kind": KIND_REFERENCE,
                      "error": ("this experiment has no reference genome yet; set the "
                                "sequence first, then replace its annotation")}
                     for p in paths]
@@ -216,7 +217,8 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
             reference_store.establish_or_check(
                 experiment, gff3_text, sequences, update_annotation=True,
                 allow_rename=bool((options or {}).get("confirm_rename")))
-            entry = {"file": relative, "mutations": 0, "error": None}
+            entry = {"file": relative, "mutations": None,
+                     "kind": KIND_REFERENCE, "error": None}
         except reference_store.RenameRequired as ask:
             # Not an error and not a per-file result: the same genome arrived under different
             # contig names, and renaming rewrites every mutation in the experiment. It
@@ -226,13 +228,15 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
             # Named separately from the blanket handler below: this is the one failure a user
             # can act on, and the hash-vs-hash text establish_or_check raises does not say so.
             logger.info("annotation replacement refused for %s: sequence differs", relative)
-            entry = {"file": relative, "mutations": 0,
+            entry = {"file": relative, "mutations": None,
+                     "kind": KIND_REFERENCE,
                      "error": ("the sequence in this file is not this experiment's "
                                "reference genome; annotation can only be replaced "
                                "for the same sequence")}
         except Exception as exc:
             logger.exception("reference import failed for %s", relative)
-            entry = {"file": relative, "mutations": 0, "error": str(exc)}
+            entry = {"file": relative, "mutations": None,
+                     "kind": KIND_REFERENCE, "error": str(exc)}
         results.append(entry)
         import_progress.report(entry)
     return {"files": results, "total_mutations": 0}
