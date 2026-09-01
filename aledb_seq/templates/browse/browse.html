@@ -23,8 +23,14 @@
         </p>
 
         {% comment %} The mutation itself, in breseq's own table -- the same row, from the same
-           builder, as the Samples page shows. {% endcomment %}
-        {% include "breseq_table/_mutation_table.html" %}
+           builder, as the Samples page shows. Wrapped so that clicking another mutation on
+           the Mutations track can swap it: /mutations/browse/at renders this same partial
+           from the same build_rows call, so the replacement cannot drift from the original.
+           breseq_table.js delegates from the document, so the Show button on a wide
+           deletion's gene list keeps working with nothing to re-bind. {% endcomment %}
+        <div id="mutation-row">
+            {% include "breseq_table/_mutation_table.html" %}
+        </div>
 
         {% if not reference %}
             <div class="alert alert-warning">
@@ -79,6 +85,25 @@
                        showing and becomes the default for tracks added afterwards, but igv's
                        own gear menu can then change any one track, so nothing here could
                        honestly claim to be the current state. {% endcomment %}
+                    {% comment %} The tracks that are not samples. Genes and Mutations are
+                       handed to igv once, at createBrowser, so igv's own per-track gear menu
+                       could remove either with nothing on the page able to put it back --
+                       a reload was the only way, and nothing said so.
+
+                       A plain dropdown of independent toggles, not `aledb-select-list`: that
+                       one is a *selection*, where a plain click means "only this row", which
+                       is the wrong gesture for two checkboxes. `active` on the <li> is the
+                       state and Bootstrap's own .dropdown-menu > .active > a paints it, the
+                       same thing the sample menu relies on. Rows are written by the script
+                       from the tracks actually loaded, so this list is never a second
+                       opinion about what the page put on screen. {% endcomment %}
+                    <div class="btn-group" id="track-menu">
+                        <button type="button" class="btn btn-default dropdown-toggle"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Tracks <span class="caret"></span>
+                        </button>
+                        <ul class="dropdown-menu aledb-menu" id="track-list"></ul>
+                    </div>
                     <div class="btn-group" id="display-menu">
                         <button type="button" class="btn btn-default dropdown-toggle"
                                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -128,6 +153,24 @@
         // the bottom otherwise, so hiding and re-showing one would shuffle the stack. The
         // base is well clear of the reference and gene tracks' own ordering.
         var TRACK_ORDER_BASE = 100;
+
+        // The reference's gene track, hoisted out of the createBrowser literal so the Tracks
+        // menu below can put it back with exactly the config it was loaded with rather than
+        // a second copy that has to be kept in step.
+        //
+        // `order` is explicit for the reason the sample tracks carry one: igv appends a
+        // re-loaded track at the bottom of the stack, so a gene track recovered from the
+        // menu would come back underneath the reads it belongs above.
+        var GENE_TRACK = {
+            id: "aledb-genes",
+            name: "Genes",
+            type: "annotation",
+            format: "gff3",
+            url: reference.gff3URL,
+            displayMode: "EXPANDED",
+            indexed: false,
+            order: 0
+        };
 
         // Which of a sample's two tracks are loaded. The Display menu sets this and reloads
         // whatever is showing; it is never read back into the menu, because igv's own gear
@@ -275,6 +318,99 @@
         fitContainer();
         window.addEventListener("resize", onResize);
 
+        // --- the Tracks menu ---------------------------------------------------------
+        //
+        // Everything on screen that is not a sample: the genes, and whatever database tracks
+        // the view built. All of them are handed to igv once, at createBrowser, and igv's own
+        // per-track gear menu can remove any of them -- so until this existed, removing the
+        // Mutations track by accident meant reloading the page, with nothing saying so.
+        //
+        // Independent toggles rather than a selection, which is why this is wired by hand
+        // instead of through `aledbSelectList`: there a plain click means "only this row",
+        // and here each row is its own checkbox. `active` on the <li> is the state, and
+        // Bootstrap's own .dropdown-menu > .active > a paints it.
+        var trackList = document.getElementById("track-list");
+
+        function setUpTrackMenu(browser) {
+            if (!trackList) { return; }
+
+            // Whatever the page actually loaded, so an experiment with no mutations offers
+            // Genes alone and a re-enabled DRAW_SAMPLE_TRACK appears here without an edit.
+            var entries = [GENE_TRACK].concat(dbTracks);
+            var configs = Object.create(null);
+            var held = Object.create(null);   // id -> Promise<track>, so a double click
+            var shown = Object.create(null);  // id -> track, once it has arrived
+
+            function remember(id, promise) {
+                held[id] = promise;
+                promise.then(function (track) { shown[id] = track; });
+                return promise;
+            }
+
+            entries.forEach(function (config) {
+                if (!config.id) { return; }
+                configs[config.id] = config;
+                remember(config.id, Promise.resolve(browser.findTracks(function (t) {
+                    return t.id === config.id;
+                })[0]));
+
+                var row = document.createElement("li");
+                row.className = "active";
+                row.setAttribute("data-track", config.id);
+                var link = document.createElement("a");
+                link.href = "#";
+                link.textContent = config.name;
+                row.appendChild(link);
+                trackList.appendChild(row);
+            });
+
+            function rowFor(id) {
+                return trackList.querySelector('li[data-track="' + id + '"]');
+            }
+
+            trackList.addEventListener("click", function (e) {
+                e.preventDefault();
+                // The menu stays open: these are several independent toggles, and Bootstrap's
+                // data-api would close the dropdown on the first one.
+                e.stopPropagation();
+                var row = e.target.closest("li[data-track]");
+                if (!row) { return; }
+                var id = row.getAttribute("data-track");
+
+                if (row.classList.contains("active")) {
+                    // The row is deliberately *not* unticked here. Removing the track fires
+                    // `trackremoved`, and that handler is the single place a row comes off --
+                    // whether the removal came from this menu or from igv's own gear menu.
+                    // Two paths writing the same class is how the tick and the track drift
+                    // apart, which is the very fault this menu exists to make visible.
+                    var pending = held[id];
+                    if (pending) {
+                        pending.then(function (track) {
+                            if (track) { browser.removeTrack(track); }
+                        });
+                    }
+                    return;
+                }
+                row.classList.add("active");
+                remember(id, browser.loadTrack(configs[id]));
+            });
+
+            // Every removal lands here: this menu's own, igv's per-track gear menu, and a
+            // track discarded because it failed to load. One place unticks a row, so the tick
+            // cannot disagree with what is on screen -- which is the whole job of this menu.
+            // A second handler on the same event is fine: igv runs every handler and takes
+            // the first one's return value.
+            browser.on("trackremoved", function (track) {
+                Object.keys(shown).forEach(function (id) {
+                    if (shown[id] !== track) { return; }
+                    delete shown[id];
+                    delete held[id];
+                    var row = rowFor(id);
+                    if (row) { row.classList.remove("active"); }
+                });
+            });
+        }
+
         igv.createBrowser(container, {
             reference: {
                 id: reference.id,
@@ -286,18 +422,13 @@
                 // is built key by key rather than spread from `reference`, so anything the
                 // view adds has to be named here too or it is silently dropped.
                 aliasURL: reference.aliasURL,
-                tracks: [{
-                    name: "Genes",
-                    type: "annotation",
-                    format: "gff3",
-                    url: reference.gff3URL,
-                    displayMode: "EXPANDED",
-                    indexed: false
-                }]
+                tracks: [GENE_TRACK]
             },
             locus: "{{ locus|escapejs }}",
-            // Names the rows of the per-sample frequency track. Without it a seg track draws
-            // its rows unlabelled, so a stack of samples says nothing about which is which.
+            // Names the rows of a seg track. Nothing draws one today -- tracks.py's
+            // DRAW_SAMPLE_TRACK is off -- and this is kept as the other half of that switch:
+            // without it the per-sample track comes back with unlabelled rows, which is a
+            // subtle enough fault to be worth not rediscovering.
             showSampleNames: true,
             // The database's own tracks -- the mutations called in this experiment, and
             // their frequency per sample. Sample alignment tracks are added afterwards by
@@ -306,6 +437,7 @@
         }).then(function (browser) {
             igvBrowser = browser;
             fitReadsToContainer(browser);
+            setUpTrackMenu(browser);
             if (!sampleList || !sampleList.querySelector("li[data-value]")) { return; }
 
             // A sample's track is held as the *promise* of it rather than the track itself.
@@ -400,10 +532,20 @@
                     var mutant = row.getAttribute("data-mutant") === "1";
                     tracks.forEach(function (track) {
                         if (!track || !track.trackView || !track.trackView.viewports) { return; }
+                        // The `*` is part of the track's name, and the page's mutation can
+                        // change under an already-loaded track -- so the prefix is recomputed
+                        // here rather than only being baked in when the track was built. The
+                        // existing prefix is stripped rather than the suffix being known,
+                        // which keeps this out of the business of what a sample's two tracks
+                        // are called.
+                        var base = String(track.name || "").replace(/^\* /, "");
+                        track.name = (mutant ? "* " : "") + base;
                         track.trackView.viewports.forEach(function (viewport) {
                             if (viewport.trackLabelElement) {
                                 viewport.trackLabelElement.classList.toggle(
                                     "aledb-mutant-track", mutant);
+                                viewport.trackLabelElement.textContent = track.name;
+                                viewport.trackLabelElement.title = track.name;
                             }
                         });
                     });
@@ -486,6 +628,82 @@
                     changed = true;
                 });
                 if (changed) { settle(); }
+            });
+
+            // --- clicking a mutation switches the page to it -------------------------
+            //
+            // The Mutations track draws every mutation in the experiment, so a click on one
+            // is a request to look at *that* mutation -- which is what the breseq row at the
+            // top of the page and the `*` flags in the sample menu are about. Until now the
+            // page went on describing whichever mutation it was opened at.
+            //
+            // Swapped in place rather than navigated to: a page load would rebuild igv and
+            // re-fetch the reads in order to show a locus already on screen. The locus is
+            // deliberately not moved -- you clicked the feature, so you are looking at it.
+            var MUTATIONS_TRACK_ID = "{{ mutations_track_id|escapejs }}";
+            var switching = false;
+
+            function pageUrlFor(mutationId) {
+                return "{% url 'browse_mutation' %}?mutation_id=" + encodeURIComponent(mutationId)
+                    + "&reseq_id={{ reseq_id }}";
+            }
+
+            // The `*` follows the mutation, not the sample, so every row is rewritten from
+            // the new answer. This is the menu's half of the switch; markMutantTracks below
+            // carries the same signal onto igv's own track labels.
+            function applyCalling(calling) {
+                var called = Object.create(null);
+                (calling || []).forEach(function (id) { called[String(id)] = true; });
+                rows.forEach(function (row) {
+                    var mutant = !!called[row.getAttribute("data-value")];
+                    row.setAttribute("data-mutant", mutant ? "1" : "0");
+                    var flag = row.querySelector(".mut-flag");
+                    if (flag) { flag.textContent = mutant ? "*" : ""; }
+                });
+                adoptMutantTint();
+                markMutantTracks();
+            }
+
+            function switchToMutation(mutationId) {
+                if (switching) { return; }
+                switching = true;
+                fetch("{% url 'browse_at' %}?mutation_id=" + encodeURIComponent(mutationId)
+                      + "&reseq_id={{ reseq_id }}")
+                    .then(function (resp) {
+                        if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+                        return resp.json();
+                    })
+                    .then(function (data) {
+                        document.getElementById("mutation-row").innerHTML = data.table_html;
+                        document.title = data.title;
+                        // So a reload, or the link copied out of the address bar, lands on
+                        // the mutation being shown rather than the one the page opened at.
+                        history.replaceState(null, "", data.url);
+                        applyCalling(data.calling);
+                        switching = false;
+                    })
+                    .catch(function () {
+                        // The swap is an optimisation over following a link, so falling back
+                        // to the link is the honest failure: the click still takes you to the
+                        // mutation, it just costs a page load. A click that silently did
+                        // nothing would read as the feature being broken.
+                        window.location.href = pageUrlFor(mutationId);
+                    });
+            }
+
+            // igv hands annotation tracks the features actually under the cursor. The return
+            // value decides the popup: undefined or true gives igv's own, a string replaces
+            // it, and anything else suppresses it -- so the popup is dropped for a mutation
+            // we switched to, where the full row at the top of the page is the better answer,
+            // and left alone for every other track.
+            browser.on("trackclick", function (track, popupData, genomicLocation, features) {
+                if (!track || track.id !== MUTATIONS_TRACK_ID) { return undefined; }
+                var clicked = (features || []).filter(function (f) {
+                    return f && f.mutationId;
+                })[0];
+                if (!clicked) { return undefined; }
+                switchToMutation(clicked.mutationId);
+                return false;
             });
 
             // The sample the page is about is loaded through the same path as any other, so

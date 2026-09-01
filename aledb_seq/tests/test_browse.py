@@ -246,3 +246,156 @@ class BrowseMutationTestCase(TestCase):
                   for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
 
         self.assertTrue(marked[other.id])
+
+
+class SwitchingMutationTestCase(TestCase):
+    """Clicking a mutation on the Mutations track makes it the page's mutation.
+
+    The track draws every mutation in the *experiment*, so a click can land on one the sample
+    on screen does not call -- which has no ObservedMutation to name it by. That is the whole
+    reason `?mutation_id=&reseq_id=` exists beside `?observed_mut_id=`.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(
+            username="tester", email="t@e.com", is_active=True, is_staff=True)
+        self.client.force_login(self.user)
+
+        self.drop = tempfile.mkdtemp()
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.drop, True)
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        breseq_fixture.write_sample(self.drop, "s1")
+        breseq_folder.import_breseq_folders(
+            self.drop, project_name="P", experiment_name="e", person="tester")
+
+        self.reseq = ResequencingExperiment.objects.get()
+        self.observed = ObservedMutation.objects.filter(
+            sequencing_experiment=self.reseq).first()
+        self.experiment = self.reseq.ale_experiment
+
+    # --- the second spelling of the page's address --------------------------------------
+
+    def test_the_pair_renders_the_same_page_as_the_observation(self):
+        by_observation = self.client.get(
+            "/mutations/browse", {"observed_mut_id": self.observed.id})
+        by_pair = self.client.get("/mutations/browse", {
+            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+        self.assertEqual(200, by_observation.status_code)
+        self.assertEqual(200, by_pair.status_code)
+        # The locus is what positions the browser, and it must not depend on how the page
+        # was addressed.
+        self.assertEqual(by_observation.context["locus"], by_pair.context["locus"])
+        self.assertEqual(by_observation.context["rows"][0]["mutation_id"],
+                         by_pair.context["rows"][0]["mutation_id"])
+
+    def _sibling_sample(self):
+        """A second sample in the same experiment, carrying the same mutations.
+
+        Needed to express "this sample does not call it": deleting the only observation of a
+        mutation takes the mutation out of the experiment altogether, which is a 404 and a
+        different case entirely.
+        """
+        breseq_fixture.write_sample(self.drop, "s2")
+        breseq_folder.import_breseq_folders(
+            self.drop, project_name="P", experiment_name="e", person="tester")
+        return ResequencingExperiment.objects.exclude(pk=self.reseq.pk).get()
+
+    def test_a_mutation_this_sample_does_not_call_still_renders(self):
+        """The case the pair spelling exists for. An unsaved ObservedMutation carries it, so
+        `build_rows` needed no change -- the Freq cell simply comes out empty."""
+        self._sibling_sample()
+        ObservedMutation.objects.filter(
+            mutation=self.observed.mutation, sequencing_experiment=self.reseq).delete()
+        response = self.client.get("/mutations/browse", {
+            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+        self.assertEqual(200, response.status_code)
+        row = response.context["rows"][0]
+        self.assertEqual(self.observed.mutation_id, row["mutation_id"])
+        self.assertEqual("", row["freq"])
+
+    def test_a_sample_and_a_mutation_from_different_experiments_are_refused(self):
+        """Two ids arrive from the client, and nothing else stops them being paired: a
+        mutation from another experiment would render a row about a locus these reads cannot
+        contain."""
+        other = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, other, True)
+        breseq_fixture.write_sample(other, "s2")
+        breseq_folder.import_breseq_folders(
+            other, project_name="P2", experiment_name="e2", person="tester")
+        stranger = ObservedMutation.objects.exclude(
+            sequencing_experiment=self.reseq).first()
+
+        response = self.client.get("/mutations/browse", {
+            "mutation_id": stranger.mutation_id, "reseq_id": self.reseq.id})
+        self.assertEqual(404, response.status_code)
+
+    def test_an_unknown_pair_is_a_404(self):
+        for params in ({"mutation_id": 999999, "reseq_id": self.reseq.id},
+                       {"mutation_id": self.observed.mutation_id, "reseq_id": 999999},
+                       {"mutation_id": "x", "reseq_id": "y"},
+                       {}):
+            with self.subTest(params=params):
+                self.assertEqual(
+                    404, self.client.get("/mutations/browse", params).status_code)
+
+    # --- the endpoint the click calls ---------------------------------------------------
+
+    def test_it_returns_the_row_and_who_calls_it(self):
+        response = self.client.get("/mutations/browse/at", {
+            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+        self.assertEqual(200, response.status_code)
+        body = response.json()
+        self.assertEqual(self.observed.mutation_id, body["mutation_id"])
+        self.assertEqual(self.observed.id, body["observed_mut_id"])
+        self.assertIn(self.reseq.id, body["calling"])
+        self.assertIn("breseq-table", body["table_html"])
+        self.assertIn("observed_mut_id=%d" % self.observed.id, body["url"])
+
+    def test_a_mutation_the_sample_does_not_call_reports_it_by_omission(self):
+        """There is no "called here" field: `calling` is what the menu's `*` flags are drawn
+        from, and the sample's absence from it *is* the answer."""
+        sibling = self._sibling_sample()
+        ObservedMutation.objects.filter(
+            mutation=self.observed.mutation, sequencing_experiment=self.reseq).delete()
+        body = self.client.get("/mutations/browse/at", {
+            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id}).json()
+        self.assertNotIn(self.reseq.id, body["calling"])
+        # The sibling still calls it, which is what the menu's `*` will now mark.
+        self.assertIn(sibling.id, body["calling"])
+        self.assertIsNone(body["observed_mut_id"])
+        # No observation to name it by, so the URL has to be the pair spelling or a reload
+        # would 404 on the page it just came from.
+        self.assertIn("mutation_id=%d" % self.observed.mutation_id, body["url"])
+        self.assertIn("reseq_id=%d" % self.reseq.id, body["url"])
+
+    def test_it_404s_an_unknown_mutation(self):
+        self.assertEqual(404, self.client.get("/mutations/browse/at", {
+            "mutation_id": 999999, "reseq_id": self.reseq.id}).status_code)
+
+    def test_a_stranger_is_refused(self):
+        """Through the same `_may_view` the page uses -- one answer to "may you see it"."""
+        self.experiment.project.is_public = False
+        self.experiment.project.save()
+        stranger = User.objects.create(
+            username="nobody", email="n@e.com", is_active=True)
+        self.client.force_login(stranger)
+        response = self.client.get("/mutations/browse/at", {
+            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+        self.assertEqual(403, response.status_code)
+
+    # --- what the page hands the click handler ------------------------------------------
+
+    def test_the_page_names_the_clickable_track(self):
+        """The handler matches on the track id rather than on its label, and the id reaches
+        the page from tracks.py rather than being written out twice."""
+        from aledb_seq.tracks import MUTATION_TRACK_ID
+
+        html = self.client.get(
+            "/mutations/browse", {"observed_mut_id": self.observed.id}).content.decode()
+        self.assertIn(MUTATION_TRACK_ID, html)
+        self.assertIn("trackclick", html)

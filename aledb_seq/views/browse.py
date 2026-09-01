@@ -1,8 +1,13 @@
-"""Genome browser for one observed mutation.
+"""Genome browser for one mutation in one sample.
 
-Reached from a frequency cell in the mutation table. An ObservedMutation is the right handle
-because it is exactly what a cell represents -- one mutation in one sample -- so it carries
-both the locus (via `mutation`) and the alignment (via `sequencing_experiment`).
+Reached from a frequency cell in the mutation table, which is exactly that pair -- so an
+`ObservedMutation` carries both the locus (via `mutation`) and the alignment (via
+`sequencing_experiment`), and `?observed_mut_id=` is how every link here is written.
+
+It is not the only way in any more. Clicking a mutation on the Mutations track switches the
+page to it, and that track draws every mutation in the *experiment* -- including ones the
+sample on screen does not call, which have no ObservedMutation to name. `_resolve` takes
+`?mutation_id=&reseq_id=` for those, and `browse_at` is what the click actually calls.
 
 The files themselves come from `aledb_seq.views.alignments`, which serves BAM/BAI and the
 reference by primary key with HTTP range support. This view contributes no file access of its
@@ -11,33 +16,114 @@ own; it renders the configuration igv.js needs to fetch them.
 
 import logging
 
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.template import loader
 from django.urls import reverse
+from django.utils.http import urlencode
 
 from aledb_common.util import get_user_context
 from aledb_experiment.permissions import can_view_project
 from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.locus import LOCUS_BUFFER_BASES, mutation_extent
-from aledb_seq.tracks import database_tracks
-from aledb_seq.models import ExperimentReference, ObservedMutation
-from aledb_seq.util import get_ordered_reseq_queryset
+from aledb_seq.tracks import MUTATION_TRACK_ID, database_tracks
+from aledb_seq.models import (ExperimentReference, Mutation, ObservedMutation,
+                              ResequencingExperiment)
+from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_queryset
 
 logger = logging.getLogger(__name__)
 
 
+def _resolve(request):
+    """`(reseq, mutation, observed)` from either spelling of this page's address.
+
+    Two spellings, because the page is about a mutation *in a sample* and only one of those
+    pairs is always a stored row:
+
+    - `?observed_mut_id=` -- an `ObservedMutation`, and what every link into this page uses.
+    - `?mutation_id=&reseq_id=` -- a mutation and a sample named separately, which is the
+      only way to address a mutation the sample does **not** call. Clicking a feature on the
+      Mutations track reaches exactly that: the track draws every mutation in the experiment,
+      and the sample whose reads are on screen carries only some of them.
+
+    `observed` is None in that last case, and callers hand `_row_observation` an unsaved
+    instance rather than growing a second rendering path -- see there.
+
+    The pair is checked to be one experiment's. Two ids arrive from the client and nothing
+    else stops a mutation from one experiment being asked for beside a sample from another,
+    which would render a row about a locus the reads cannot contain.
+    """
+    observed_id = request.GET.get("observed_mut_id")
+    if observed_id:
+        try:
+            observed = (ObservedMutation.objects
+                        .select_related("mutation", "sequencing_experiment")
+                        .get(pk=observed_id))
+        except (ObservedMutation.DoesNotExist, ValueError, TypeError):
+            raise Http404("No such observed mutation.")
+        if observed.sequencing_experiment is None:
+            raise Http404("This mutation is not attached to a sample.")
+        return observed.sequencing_experiment, observed.mutation, observed
+
+    try:
+        # `ale_experiment` is a property over tech_rep -> isolate -> flask -> ale_id, not a
+        # column, so the chain is named the way `aledb_seq.util` names it.
+        reseq = (ResequencingExperiment.objects
+                 .select_related("tech_rep__isolate__flask__ale_id__ale_experiment")
+                 .get(pk=request.GET.get("reseq_id")))
+        mutation = Mutation.objects.get(pk=request.GET.get("mutation_id"))
+    except (ResequencingExperiment.DoesNotExist, Mutation.DoesNotExist, ValueError, TypeError):
+        raise Http404("No such mutation or sample.")
+
+    # Reached through the observations rather than through `Mutation.ale_experiment`, which
+    # may be null -- the unscoped case `permissions.can_curate` exists for -- and would refuse
+    # a mutation this experiment plainly observes. `get_observed_mutation_queryset` is the
+    # shared spelling of "observed in this experiment".
+    #
+    # Deliberately the *raw* queryset, so what is accepted is a superset of what the Mutations
+    # track draws: the track subtracts the ancestor, while this page shows an ancestral
+    # mutation quite happily when a table links to one. Being stricter here would refuse an
+    # address the rest of the product hands out.
+    if not get_observed_mutation_queryset(
+            reseq.ale_experiment.ale_id).filter(mutation=mutation).exists():
+        raise Http404("That mutation is not in this sample's experiment.")
+
+    observed = (ObservedMutation.objects
+                .filter(mutation=mutation, sequencing_experiment=reseq).first())
+    return reseq, mutation, observed
+
+
+def _row_observation(reseq, mutation, observed):
+    """What `build_rows` is handed, which is an ObservedMutation even when there is none.
+
+    A mutation the sample does not call has no row to show, and an **unsaved**
+    `ObservedMutation` renders correctly with no change to `breseq_report`: `_frequency`
+    already answers `("", False)` for a null frequency, so the Freq cell comes out empty, and
+    `_ncbi_url` reads `mutation_id` and `sequencing_experiment_id`, which are both set on it.
+
+    Nothing says "not called here" beside it. The Samples menu already answers that -- the
+    `*` flags follow the mutation, so the current sample simply appears without one.
+    """
+    if observed is not None:
+        return observed
+    return ObservedMutation(mutation=mutation, sequencing_experiment=reseq)
+
+
+def browse_url_for(mutation, reseq, observed):
+    """This page's address for a mutation in a sample, in whichever spelling fits.
+
+    The stored-observation spelling is preferred where there is one, so a link copied out of
+    the address bar is the same one the mutation tables hand out.
+    """
+    if observed is not None and observed.pk:
+        return "%s?%s" % (reverse("browse_mutation"),
+                          urlencode({"observed_mut_id": observed.pk}))
+    return "%s?%s" % (reverse("browse_mutation"),
+                      urlencode({"mutation_id": mutation.pk, "reseq_id": reseq.pk}))
+
+
 def browse_mutation(request):
     """igv.js at one mutation's position, starting with the sample that was clicked."""
-    try:
-        observed = (ObservedMutation.objects
-                    .select_related("mutation", "sequencing_experiment")
-                    .get(pk=request.GET.get("observed_mut_id")))
-    except (ObservedMutation.DoesNotExist, ValueError, TypeError):
-        raise Http404("No such observed mutation.")
-
-    reseq = observed.sequencing_experiment
-    if reseq is None:
-        raise Http404("This mutation is not attached to a sample.")
+    reseq, mutation, observed = _resolve(request)
 
     experiment = reseq.ale_experiment
     if not _may_view(request.user, experiment):
@@ -45,7 +131,6 @@ def browse_mutation(request):
             loader.get_template("403.html").render(get_user_context(request.user), request),
             status=403)
 
-    mutation = observed.mutation
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
@@ -62,7 +147,11 @@ def browse_mutation(request):
         # The mutation is described by breseq's own table rather than by a sentence of this
         # page's own, so the row reads exactly as it does on the Samples page. One row, and
         # no evidence link -- its destination is the page you are already on.
-        "rows": build_rows([observed], refseq_url=_ncbi_url()),
+        "rows": build_rows([_row_observation(reseq, mutation, observed)],
+                           refseq_url=_ncbi_url()),
+        # Which samples call it, for the menu's `*` -- and read back by the switch endpoint,
+        # so the flags mean the same thing after a click as they did on load.
+        "calling": sorted(_samples_calling(mutation)),
         "is_population": is_population(reseq),
         "locus": _locus(mutation),
         # Each state the template renders is decided here rather than in the template, so the
@@ -74,11 +163,48 @@ def browse_mutation(request):
         # contributed was the locus string -- so the page drew the reads and the reference
         # but not the calls the reads were opened to look at.
         "db_tracks": database_tracks(experiment.ale_id, mutation.reseq_reference),
+        # Named here rather than written out in the template, so the click handler and the
+        # track config cannot come to disagree about which track is the clickable one.
+        "mutations_track_id": MUTATION_TRACK_ID,
         "samples": _sample_tracks(experiment, mutation, current_id=reseq.id),
     })
 
     template = loader.get_template("browse/browse.html")
     return HttpResponse(template.render(context, request), content_type="text/html")
+
+
+def browse_at(request):
+    """The page's state for a different mutation, as JSON, without reloading the browser.
+
+    Clicking a feature on the Mutations track switches which mutation this page is about. A
+    navigation would do it too, and would rebuild igv and re-fetch the BAM to show a locus
+    already on screen -- so the page swaps the parts that changed and leaves igv alone.
+
+    What comes back is rendered by the *same* `build_rows` call and the same template the
+    full page uses, so a switched-to row cannot drift from a loaded one; `calling` is the
+    same `_samples_calling` the menu's `*` flags were built from.
+
+    A GET, and it writes nothing. `_resolve` and `_may_view` are shared with the page, so
+    there is one answer to "does this pair exist" and one to "may you see it".
+    """
+    reseq, mutation, observed = _resolve(request)
+
+    if not _may_view(request.user, reseq.ale_experiment):
+        return JsonResponse({"error": "You do not have access to this experiment."}, status=403)
+
+    rows = build_rows([_row_observation(reseq, mutation, observed)], refseq_url=_ncbi_url())
+    table_html = loader.get_template("breseq_table/_mutation_table.html").render(
+        {"rows": rows, "is_population": is_population(reseq), "empty_message": ""}, request)
+
+    return JsonResponse({
+        "mutation_id": mutation.pk,
+        "observed_mut_id": observed.pk if observed is not None else None,
+        "url": browse_url_for(mutation, reseq, observed),
+        "title": "%s %s:%s" % (reseq.ale_experiment.name,
+                               mutation.reseq_reference, mutation.position),
+        "calling": sorted(_samples_calling(mutation)),
+        "table_html": table_html,
+    })
 
 
 def _ncbi_url():

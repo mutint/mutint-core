@@ -43,6 +43,10 @@ BUCKET_COLOURS = {
 #: here so a far larger one degrades to a partial track instead of a page nobody can load.
 MAX_FEATURES = 20000
 
+#: igv track ids, so the page can find a track without matching on the name it displays.
+MUTATION_TRACK_ID = "aledb-mutations"
+SAMPLE_TRACK_ID = "aledb-mutations-by-sample"
+
 #: Every `seg` feature is drawn with the same value, so the track marks **presence, not
 #: magnitude**, and the frequency rides along for igv's popup instead.
 #:
@@ -58,6 +62,21 @@ MAX_FEATURES = 20000
 #: two experiments' pages, and nobody can learn to read it. A uniform mark that says "called
 #: here, in this sample" is a smaller claim and a true one.
 SEG_PRESENT = -1.0
+
+#: Whether `database_tracks` offers the per-sample seg track it can build.
+#:
+#: Off. The Mutations track answers "what was called here"; this one laid the same calls out
+#: again as a band per sample, and in use it was not worth the vertical space it took beneath
+#: them -- the sample menu's `*` already says which samples carry the mutation being looked at.
+#:
+#: A switch rather than a deletion, because what was decided is that the track does not earn
+#: its place, not that it is wrong: `sample_features` is unchanged and still tested directly,
+#: so turning this back on restores a working track rather than resurrecting rotted code.
+#: `browse.html`'s `showSampleNames` is the other half of it -- seg rows draw unlabelled
+#: without it -- and is kept for the same reason.
+DRAW_SAMPLE_TRACK = False
+
+
 def _interval(position, start_position, end_position):
     """`(start, end)` for igv: 0-based, end-exclusive.
 
@@ -221,6 +240,10 @@ def database_tracks(experiment_id, contig=None):
     mutations = mutation_features(experiment_id, contig)
     if mutations:
         tracks.append({
+            # Stable across a rename of the label. The page reads a clicked feature off this
+            # track to switch which mutation it is about, and matching on the display name
+            # would make rewording it silently break the click.
+            "id": MUTATION_TRACK_ID,
             "name": "Mutations",
             "type": "annotation",
             "displayMode": "EXPANDED",
@@ -229,13 +252,15 @@ def database_tracks(experiment_id, contig=None):
             "features": mutations,
         })
 
-    per_sample = sample_features(experiment_id, contig)
-    if per_sample:
-        tracks.append({
-            "name": "Mutations by sample",
-            "type": "seg",
-            "displayMode": "EXPANDED",
-            "order": 2,
-            "features": per_sample,
-        })
+    if DRAW_SAMPLE_TRACK:
+        per_sample = sample_features(experiment_id, contig)
+        if per_sample:
+            tracks.append({
+                "id": SAMPLE_TRACK_ID,
+                "name": "Mutations by sample",
+                "type": "seg",
+                "displayMode": "EXPANDED",
+                "order": 2,
+                "features": per_sample,
+            })
     return tracks

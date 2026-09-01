@@ -79,9 +79,10 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1599 run, 0 failures** standalone; **1755** in an assembled project, where the
-plugins' own tests join them. They were 1592 and 1748 before deleting data made you type
-DELETE, 1587 and 1743 before the needle plot learned what
+**Baseline: 1610 run, 0 failures** standalone; **1766** in an assembled project, where the
+plugins' own tests join them. They were 1599 and 1755 before the genome browser dropped its
+per-sample track and learned to switch mutation on a click, 1592 and 1748 before deleting data
+made you type DELETE, 1587 and 1743 before the needle plot learned what
 genome it was drawing, 1574 and 1730 before the database tracks, and 1568 and 1724 before the
 assets were vendored. (The 1723 recorded a
 commit earlier was measured before the `data-autoload` test existed; the assembled suite has
@@ -2236,14 +2237,28 @@ igv takes features as an inline array, so this needs **no route, no store whitel
 no `EXTENSION_CONTENT_TYPES` entry**. The module is pure, in the shape `locus.py` and
 `functional_change.py` are, and reads `values_list` tuples the way `get_needle_plot_data` does.
 
-Two tracks: **Mutations** (`annotation`, coloured by `functional_change_bucket`) and
-**Mutations by sample** (`seg`, one row per sample in `get_ordered_reseq_queryset` order).
+One track is offered: **Mutations** (`annotation`, coloured by `functional_change_bucket`).
+A second, **Mutations by sample** (`seg`, one row per sample in `get_ordered_reseq_queryset`
+order), is still built by `sample_features` and **switched off** by `DRAW_SAMPLE_TRACK = False`.
+
+**A switch rather than a deletion, and the distinction is the point.** What was decided in use
+is that the per-sample band did not earn the vertical space it took under the Mutations track
+-- not that it is wrong. `sample_features` is unchanged and still tested directly, so flipping
+the flag restores a working track rather than resurrecting code that has rotted meanwhile.
+`browse.html`'s `showSampleNames: true` is the other half of the switch and is kept for the
+same reason: without it a seg track comes back with unlabelled rows, which is subtle enough to
+be worth not rediscovering. `test_tracks.py` asserts both halves -- that only Mutations is
+offered, and that `sample_features` still returns features -- so the day the flag moves, the
+failure says which half moved.
+
+Each track config carries an **`id`** (`MUTATION_TRACK_ID`), which is how the page finds the
+clickable track without matching on the label a reader might reword.
 
 **Coordinates are the trap.** igv features are 0-based end-exclusive; GenomeDiff positions are
 1-based inclusive. `start = start_1 - 1`, `end = end_1`. Wrong, it draws every mutation one
 base from where it is, beside the gene it is actually in, and nothing looks broken.
 
-**Both tracks are reached through the observations, not through `Mutation.ale_experiment`.**
+**Both are reached through the observations, not through `Mutation.ale_experiment`.**
 That column can be null -- the unscoped-mutation case `can_curate` exists for -- and two such
 rows in the dev database were observed in an experiment while owned by none, so filtering on
 it drew an empty Mutations track beside a populated per-sample one. Going through the
@@ -2345,6 +2360,84 @@ track name, so a stack of pileups says which of them carry the call — igv puts
 a track name. In the menu a sample without one gets a same-width empty span so the names stay in
 a column; on the track there is deliberately no such padding, because an igv track label is its
 own shrink-to-fit badge with centred text and has no column to align to.
+
+#### Clicking a mutation makes it the page's mutation
+
+The Mutations track draws every mutation in the *experiment*, so a click on one is a request
+to look at that mutation -- which is exactly what the breseq row at the top of the page and
+the `*` flags in the sample menu are about. They used to go on describing whichever mutation
+the page was opened at, while `tracks.py` had been carrying a `mutationId` on every feature
+since the track was written, for a reader that did not exist.
+
+**Swapped in place, not navigated to.** A page load would rebuild igv and re-fetch the BAM in
+order to show a locus already on screen. `/mutations/browse/at` (`browse_at`) returns the new
+row's HTML, the ids of the samples calling it, and the URL; the page replaces `#mutation-row`,
+rewrites the menu's flags, retints igv's track labels and `history.replaceState`s the address.
+**The locus is deliberately not moved** -- you clicked the feature, so you are looking at it.
+
+`table_html` is rendered from the same `build_rows` call and the same
+`breseq_table/_mutation_table.html` the full page uses, so a swapped-in row cannot drift from
+a loaded one. `breseq_table.js` delegates from the document, so the Show button on a wide
+deletion's gene list survives the swap with nothing to re-bind.
+
+**The page has a second address, and this is what needed it.** `?mutation_id=&reseq_id=` names
+a mutation and a sample separately, because a mutation the sample does *not* call has no
+`ObservedMutation` to name -- and the track offers plenty of those. `_resolve` takes either
+spelling and `?observed_mut_id=` stays canonical, so every existing link is untouched. The
+pair is checked to be one experiment's: two ids arrive from the client, and nothing else stops
+a mutation from one experiment being paired with a sample from another.
+
+**A missing observation needed no new rendering path.** `_frequency` already answers
+`("", False)` for a null frequency, so an **unsaved** `ObservedMutation` renders the row with
+an empty Freq cell and `breseq_report.py` did not change. Nothing announces "not called in
+this sample" either -- the Samples menu already says so, because the `*` follows the mutation
+and the current sample is simply left without one.
+
+**The `*` in a track's name is recomputed, not baked in.** It is part of the name
+`sampleTracks` builds, and the page's mutation can now change under an already-loaded track --
+so `markMutantTracks` strips any leading `* ` and re-adds it, rather than knowing what a
+sample's two tracks are called.
+
+igv's `trackclick` hands an annotation track the features actually under the cursor. Its
+return value decides the popup: `undefined`/`true` gives igv's own, a string replaces it, and
+**anything else suppresses it** -- so the popup is dropped for a mutation we switched to,
+where the row at the top of the page is the fuller answer, and left alone for every other
+track. Verified in a browser both ways: clicking the Mutations track switches with no popup,
+clicking the gene track still pops up the gene.
+
+#### The Tracks menu, because a removed track could not be got back
+
+Genes and the database tracks are handed to igv once, at `createBrowser`, and igv's own
+per-track gear menu has *Remove track*. Removing the Mutations track by accident meant
+reloading the page, with nothing on the page saying so. The samples had a menu that showed
+what was on screen and put it back; these had nothing.
+
+`#track-menu` lists every non-sample track, ticked when it is on screen. It is built from
+`[GENE_TRACK].concat(dbTracks)` rather than hardcoded, so it lists what the page actually
+loaded -- an experiment with no mutations offers Genes alone, and a re-enabled
+`DRAW_SAMPLE_TRACK` appears in it with no edit here.
+
+**Deliberately not a Reset button.** Getting a track back should not cost the sample selection
+you had arranged or send the Display setting back to Both, and it does not touch either.
+
+**Independent toggles, so not `aledbSelectList`.** That helper is a *selection*, where a plain
+click means "only this row"; these are checkboxes. It is a plain `ul.dropdown-menu` whose rows
+carry `active`, which Bootstrap's own `.dropdown-menu > .active > a` paints -- the same thing
+the sample menu relies on -- and the click handler stops propagation so the menu stays open
+across several toggles.
+
+Two things it gets right that are easy to get wrong:
+
+- **`GENE_TRACK` is hoisted out of the `reference: {tracks: [...]}` literal** and given an
+  explicit `order`. Without the hoist the menu would hold a second copy of the config to drift
+  from; without the order igv appends a re-loaded track at the bottom, so a recovered gene
+  track would come back underneath the reads it belongs above.
+- **`trackremoved` is the single place a row unticks** -- this menu's own hiding does not clear
+  the class itself, it removes the track and lets the handler do it. igv removes tracks by
+  itself too, and two paths writing the same class is exactly how a tick comes to disagree with
+  what is on screen, which is the fault this menu exists to make visible. igv runs every
+  handler registered for an event and takes the first one's return, so this sits beside the
+  sample menu's handler without either knowing about the other.
 
 All four margins round the browser measure the same 25px; the header trim that makes the top
 one work is in `common.css` and applies to every page (see **The shell's two widths**).

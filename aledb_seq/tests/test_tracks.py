@@ -6,6 +6,7 @@ not fail -- it draws every mutation one base from where it is, beside the gene i
 in, entirely plausibly.
 """
 
+from unittest import mock
 import shutil
 import tempfile
 
@@ -72,13 +73,31 @@ class MutationTrackTestCase(_Fixture):
         Mutation.objects.all().update(ale_experiment=None)
         self.assertTrue(tracks.mutation_features(self.experiment.ale_id))
 
-    def test_both_tracks_describe_the_same_mutations(self):
-        built = tracks.database_tracks(self.experiment.ale_id)
-        by_name = {t["name"]: t for t in built}
-        starts = {f["start"] for f in by_name["Mutations"]["features"]}
-        sample_starts = {f["start"] for f in by_name["Mutations by sample"]["features"]}
+    def test_both_feature_sets_describe_the_same_mutations(self):
+        """Asked of the builders rather than of `database_tracks`, which no longer offers the
+        per-sample track -- see `DRAW_SAMPLE_TRACK`. The relationship between the two is still
+        the thing worth pinning, and `sample_features` is still what would be drawn."""
+        starts = {f["start"] for f in tracks.mutation_features(self.experiment.ale_id)}
+        sample_starts = {f["start"] for f in tracks.sample_features(self.experiment.ale_id)}
         self.assertTrue(sample_starts)
         self.assertTrue(sample_starts.issubset(starts))
+
+    def test_only_the_mutations_track_is_offered(self):
+        """The per-sample seg track is switched off, not broken: `sample_features` still
+        builds features and `database_tracks` simply does not offer them. Both halves are
+        asserted, so the day the switch flips this test says which half moved."""
+        built = tracks.database_tracks(self.experiment.ale_id)
+        self.assertEqual(["Mutations"], [t["name"] for t in built])
+        self.assertEqual(tracks.MUTATION_TRACK_ID, built[0]["id"])
+        self.assertFalse(tracks.DRAW_SAMPLE_TRACK)
+        self.assertTrue(tracks.sample_features(self.experiment.ale_id))
+
+    def test_flipping_the_switch_brings_it_back(self):
+        """What `DRAW_SAMPLE_TRACK` is for. Left as a switch rather than deleted because the
+        track works; what was decided is that it does not earn the space."""
+        with mock.patch.object(tracks, "DRAW_SAMPLE_TRACK", True):
+            built = tracks.database_tracks(self.experiment.ale_id)
+        self.assertEqual(["Mutations", "Mutations by sample"], [t["name"] for t in built])
 
     def test_the_colour_comes_from_the_functional_change_vocabulary(self):
         Mutation.objects.all().update(snp_type="nonsense")

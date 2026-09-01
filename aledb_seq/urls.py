@@ -16,6 +16,9 @@ urlpatterns = [
 
     # igv.js at one observed mutation's position, linked from the mutation table's cells.
     re_path(r'^browse$', aledb_seq.views.browse.browse_mutation, name='browse_mutation'),
+    # What a click on the Mutations track calls: the page's state for a different mutation,
+    # so the switch does not rebuild igv and re-fetch the reads to show a locus already up.
+    re_path(r'^browse/at$', aledb_seq.views.browse.browse_at, name='browse_at'),
 
     # NCBI's Sequence Viewer at one mutation's locus, linked from the Reference Seq column.
     # A mutation rather than an observed one: this page draws no sample data, so the handle
