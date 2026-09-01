@@ -189,7 +189,7 @@ class NeedlePlotAxisTestCase(TestCase):
         self.assertEqual(
             set(Mutation.objects.values_list("reseq_reference", flat=True)),
             {axis["contig"]})
-        self.assertEqual(1, axis["contig_count"])
+        self.assertEqual([axis["contig"]], [e["id"] for e in axis["contigs"]])
 
     def test_the_data_is_scoped_to_that_contig(self):
         """Two contigs' positions on one unlabelled axis is a plot of nothing."""
@@ -205,8 +205,147 @@ class NeedlePlotAxisTestCase(TestCase):
         self.assertIsNone(axis["length"])
         self.assertIsNotNone(axis["contig"])
 
-    def test_an_experiment_with_no_mutations_names_no_contig(self):
+    def test_an_experiment_with_no_mutations_still_names_its_reference_sequence(self):
+        """The sequences come from the reference, so they are known whether or not anything
+        was found on them -- and an empty axis over the right genome is an answer."""
         ObservedMutation.objects.all().delete()
         axis = needle_plot_axis(self.experiment.ale_id)
+        self.assertIsNotNone(axis["contig"])
+        self.assertEqual([0], [e["count"] for e in axis["contigs"]])
+
+    def test_with_neither_a_reference_nor_mutations_there_is_nothing_to_name(self):
+        ObservedMutation.objects.all().delete()
+        ExperimentReference.objects.filter(ale_experiment=self.experiment).delete()
+        axis = needle_plot_axis(self.experiment.ale_id)
         self.assertIsNone(axis["contig"])
-        self.assertEqual(0, axis["contig_count"])
+        self.assertEqual([], axis["contigs"])
+
+
+class ContigPickerTestCase(TestCase):
+    """A multi-contig reference offers every one of its sequences, longest first.
+
+    The plot draws one sequence, and that sequence used to be decided for the reader: the
+    contig with the most observations was hardcoded as the answer rather than as the default,
+    so a plasmid's mutations were on no page in the product at all. The page said which contig
+    it was drawing, which made the omission visible without making it fixable.
+
+    Two rules meet here and are tested apart, because a fixture where they agree would pass
+    under either: the *list* is every sequence the reference has, mutations or none, and the
+    *default* is the longest of them rather than the busiest.
+    """
+
+    #: Deliberately more mutations on the short sequence than on the long one: the default is
+    #: the longest, and a fixture where the two rules agree would pass under either.
+    GD_TEXT = ("#=GENOME_DIFF\t1.0\n"
+               "#=REFSEQ\ttest_ref\n"
+               "SNP\t1\t.\tchrom\t100\tA\tgene_name=thrA\tfrequency=1\n"
+               "SNP\t2\t.\tplasmid\t40\tT\tgene_name=bla\tfrequency=1\n"
+               "DEL\t3\t.\tplasmid\t60\t5\tgene_name=tet\tfrequency=0.5\n")
+
+    def setUp(self):
+        self.user = User.objects.create(username="picker", email="p@e.com", is_active=True)
+        self.drop = tempfile.mkdtemp()
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.drop, True)
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        breseq_fixture.write_sample(
+            self.drop, "s1",
+            sequences=[("chrom", breseq_fixture.SEQUENCE_A),
+                       ("plasmid", breseq_fixture.SEQUENCE_B)],
+            gd_text=self.GD_TEXT)
+        breseq_folder.import_breseq_folders(
+            self.drop, project_name="P", experiment_name="e", person="picker")
+        self.experiment = ResequencingExperiment.objects.get().ale_experiment
+
+    def test_every_sequence_is_offered_longest_first(self):
+        axis = needle_plot_axis(self.experiment.ale_id)
+
+        self.assertEqual([("chrom", 1), ("plasmid", 2)],
+                         [(e["id"], e["count"]) for e in axis["contigs"]])
+
+    def test_the_default_is_the_longest_sequence_not_the_busiest(self):
+        """The chromosome is what somebody opening an experiment means by "the genome". A
+        small plasmid under strong selection can carry more mutations than it, and the page
+        opening on the plasmid would be a surprise about the reference dressed up as a fact
+        about the data. Length is a property of the reference; a count moves with the data."""
+        axis = needle_plot_axis(self.experiment.ale_id)
+
+        self.assertEqual("chrom", axis["contig"])
+        self.assertEqual(2, max(e["count"] for e in axis["contigs"]),
+                         "the busiest sequence is the one not chosen")
+        self.assertEqual(1, dict(
+            (e["id"], e["count"]) for e in axis["contigs"])[axis["contig"]])
+
+    def test_each_offered_contig_carries_its_own_length(self):
+        """The axis has to change with the contig, or a 4.6 Mb chromosome's scale is used to
+        draw a plasmid and every mutation lands in the leftmost pixel -- which is the fault
+        the hardcoded 5 Mb axis had, one level down."""
+        axis = needle_plot_axis(self.experiment.ale_id)
+
+        lengths = {e["id"]: e["length"] for e in axis["contigs"]}
+        self.assertEqual(len(breseq_fixture.SEQUENCE_A), lengths["chrom"])
+        self.assertEqual(len(breseq_fixture.SEQUENCE_B), lengths["plasmid"])
+
+    def test_choosing_a_contig_moves_the_axis_and_the_data(self):
+        axis = needle_plot_axis(self.experiment.ale_id, "plasmid")
+
+        self.assertEqual("plasmid", axis["contig"])
+        self.assertEqual(len(breseq_fixture.SEQUENCE_B), axis["length"])
+        self.assertEqual(
+            ["40", "60"],
+            sorted(point["coord"] for point in
+                   get_needle_plot_data(self.experiment.ale_id, axis["contig"])))
+
+    def test_an_unknown_contig_falls_back_to_the_default(self):
+        """A hand-typed or stale name draws the default rather than an empty plot: the
+        picker is a view control, not an identity, and an empty plot of a contig that does
+        not exist is indistinguishable from one that has no mutations."""
+        axis = needle_plot_axis(self.experiment.ale_id, "no-such-contig")
+
+        self.assertEqual("chrom", axis["contig"])
+
+    def test_a_sequence_with_no_mutations_is_still_offered(self):
+        """Its plot is an empty axis, which is an answer -- the reader asked what is on the
+        plasmid and the page says nothing is. Left out of the menu it would be
+        indistinguishable from a sequence this reference does not have, and the count beside
+        the name is what tells those apart."""
+        ObservedMutation.objects.filter(mutation__reseq_reference="plasmid").delete()
+
+        axis = needle_plot_axis(self.experiment.ale_id)
+
+        self.assertEqual([("chrom", 1), ("plasmid", 0)],
+                         [(e["id"], e["count"]) for e in axis["contigs"]])
+        self.assertEqual(
+            [], get_needle_plot_data(self.experiment.ale_id, "plasmid"))
+
+    def test_a_contig_the_reference_does_not_have_is_offered_last(self):
+        """A mutation can name a contig the stored reference does not list. It has no length,
+        so it sorts below everything that does -- but dropping it would leave mutations the
+        experiment holds on no axis at all."""
+        Mutation.objects.filter(reseq_reference="plasmid").update(reseq_reference="contig9")
+
+        axis = needle_plot_axis(self.experiment.ale_id)
+
+        self.assertEqual(["chrom", "plasmid", "contig9"],
+                         [e["id"] for e in axis["contigs"]])
+        self.assertIsNone(axis["contigs"][-1]["length"])
+
+    def test_the_page_renders_the_chosen_contig(self):
+        self.client.force_login(self.user)
+        self.experiment.project.user = self.user
+        self.experiment.project.save()
+
+        # follow=True: `/stats` is an APPEND_SLASH redirect, as every other test of this
+        # page has to do too.
+        response = self.client.get(
+            "/stats?ale_experiment_id=%s&contig=plasmid" % self.experiment.ale_id,
+            follow=True)
+
+        self.assertEqual(200, response.status_code)
+        body = response.content.decode()
+        self.assertIn("contig_picker", body)
+        self.assertIn("contig=plasmid", body)

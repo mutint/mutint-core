@@ -71,7 +71,11 @@ def stats(request):
         # Which contig, and how long it is. The plot's axis used to be a hardcoded 5 Mb and
         # its points carried no sequence name, so a multi-contig reference drew every contig
         # on top of itself against an axis belonging to some other genome.
-        needle_axis = needle_plot_axis(experiment.ale_id)
+        #
+        # `?contig=` is the picker's own parameter, in the URL rather than the session so a
+        # plasmid's plot is a link somebody can send. An unrecognised value falls back to the
+        # default, which is the reference's longest sequence -- see `needle_plot_axis`.
+        needle_axis = needle_plot_axis(experiment.ale_id, request.GET.get("contig"))
         needle_plot_data = get_needle_plot_data(experiment.ale_id, needle_axis["contig"])
         context.update({"ale_experiment_name": exp_name,
                         "ale_no": ale_number,

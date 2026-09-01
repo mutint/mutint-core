@@ -596,3 +596,11 @@ a:hover {
     margin-right: 0.6em;
     opacity: 0.7;
 }
+
+/* A one-of-many picker above the thing it picks for: a bold label beside a Bootstrap
+   dropdown of links. `.breseq-picker` is the same idea in `breseq_table.css`, which is
+   loaded only by the pages that render a breseq table -- this one is here so any page can
+   use it, which the needle plot's sequence picker on /stats is the first to do. */
+.aledb-picker {
+    margin-bottom: 0.75em;
+}

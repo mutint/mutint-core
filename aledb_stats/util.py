@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 ROW_ORDER = sample_order("sequencing_experiment__")
 
 
-def needle_plot_axis(experiment_id):
-    """Which contig the needle plot draws, and how long it is.
+def needle_plot_axis(experiment_id, contig=None):
+    """Which sequence the needle plot draws, how long it is, and what else it could draw.
 
     The plot had **no idea what genome it was describing**. Its axis was a hardcoded
     `maxCoord: 5000000` in `muts_needle_plot.js` -- roughly E. coli, and wrong for anything
@@ -27,36 +27,75 @@ def needle_plot_axis(experiment_id):
     multi-contig reference every contig's positions were plotted on top of each other on one
     axis. Both failed silently: the plot rendered, it was simply not about this genome.
 
-    One contig at a time is the honest fix, and the busiest one is the useful default. The
-    alternative -- laying contigs end to end on a concatenated axis -- needs offsets the
-    reader cannot see and turns every coordinate into one that matches nothing in the tables.
+    One sequence at a time is the honest fix. The alternative -- laying contigs end to end on a
+    concatenated axis -- needs offsets the reader cannot see and turns every coordinate into
+    one that matches nothing in the tables.
 
-    Returns `{contig, length, contig_count}`. `length` is None when the experiment has no
-    stored reference, and the plot then falls back to the largest coordinate it was given,
-    which is still a better axis than a constant.
+    **Which one is the reader's to choose**, and that half was missing: one contig was
+    hardcoded as the answer rather than as the default, so a plasmid's mutations were on no
+    page in the product. `contig` is what the reader asked for, and an unrecognised one falls
+    back to the default rather than drawing an empty plot -- the same posture
+    `breseq_table._selected_reseq` takes with a sample id that its own filters exclude.
+
+    Returns `{contig, length, contigs}`. `contigs` is every sequence the plot could draw,
+    longest first, each carrying its own `count` and `length` -- the list the picker is built
+    from, and the reason there is no separate count of it to disagree with.
+
+    **The default is the longest sequence, not the busiest.** Those are usually the same and
+    the difference matters when they are not: the chromosome is what somebody opening an
+    experiment means by "the genome", while a small plasmid under strong selection can
+    outnumber it and would then be what the page opened on. Length is a property of the
+    reference; a mutation count is a property of this experiment's data, and it moves.
+
+    **A sequence with no mutations is offered too.** It draws an empty axis, which is an
+    answer -- the reader asked what is on the plasmid and the plot says nothing is. Left out,
+    it is indistinguishable from a sequence the reference does not have. Its entry carries
+    `count` 0, so the menu says which is which without a sentence beside it.
+
+    `length` is None only when the experiment has no stored reference, and the plot then falls
+    back to the largest coordinate it was given, which is still a better axis than a constant.
+    That is also the one case where the sequences are not known independently of the
+    mutations, so the list is what the mutations name and the busiest is the default.
     """
     from aledb_seq.models import ExperimentReference
 
-    counts = (get_evolved_observation_queryset(experiment_id)
-              .values("mutation__reseq_reference")
-              .annotate(n=Count("id"))
-              .order_by("-n"))
-    names = [row["mutation__reseq_reference"] for row in counts
-             if row["mutation__reseq_reference"]]
-    contig = names[0] if names else None
+    counts = {row["mutation__reseq_reference"]: row["n"]
+              for row in (get_evolved_observation_queryset(experiment_id)
+                          .values("mutation__reseq_reference")
+                          .annotate(n=Count("id")))
+              if row["mutation__reseq_reference"]}
 
-    length = None
+    lengths = {}
     try:
         reference = ExperimentReference.objects.get(ale_experiment_id=experiment_id)
     except ExperimentReference.DoesNotExist:
         reference = None
-    if reference and contig:
+    if reference:
         for entry in reference.seq_ids or []:
-            if entry.get("id") == contig:
-                length = entry.get("length")
-                break
+            lengths[entry.get("id")] = entry.get("length")
 
-    return {"contig": contig, "length": length, "contig_count": len(names)}
+    # The reference says what sequences there are; the mutations can only add to that, and a
+    # contig named by a mutation but absent from the reference is a state worth still being
+    # able to plot rather than one to drop silently.
+    names = set(lengths) | set(counts)
+
+    contigs = [{"id": name,
+                "count": counts.get(name, 0),
+                "length": lengths.get(name)}
+               # Longest first, so the chromosome leads and the plasmids follow it. With no
+               # stored reference every length is None and this degrades to busiest first,
+               # which is the most the data alone can say. The name is the final tie-break, or
+               # two equal contigs swap places between page loads and the default becomes
+               # whichever the database felt like.
+               for name in sorted(names, key=lambda n: (-(lengths.get(n) or 0),
+                                                        -counts.get(n, 0), n))]
+
+    ids = [entry["id"] for entry in contigs]
+    chosen = contig if contig in ids else (ids[0] if ids else None)
+
+    return {"contig": chosen,
+            "length": lengths.get(chosen),
+            "contigs": contigs}
 
 
 def get_needle_plot_data(experiment_id, contig=None):

@@ -79,8 +79,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1625 run, 0 failures** standalone; **1781** in an assembled project, where the
-plugins' own tests join them. They were 1622 and 1778 before a reference stopped reporting a
+**Baseline: 1634 run, 0 failures** standalone; **1790** in an assembled project, where the
+plugins' own tests join them. They were 1625 and 1781 before the needle plot got a sequence
+picker, 1622 and 1778 before a reference stopped reporting a
 mutation count, 1621 and 1777 before the sample menu started toggling,
 1620 and 1776 before the reads track stopped drawing
 its own coverage row, 1610 and 1766 before coverage started weighting each
@@ -2232,11 +2233,48 @@ wrong for anything else -- and `get_needle_plot_data` emitted a bare `coord` wit
 `seq_id`**, so a multi-contig reference drew every contig on top of itself on one axis. Both
 failed silently: the plot rendered, it simply was not about this genome.
 
-`aledb_stats.util.needle_plot_axis` names the contig carrying the most observations and reads
-its length from `ExperimentReference.seq_ids`; `get_needle_plot_data(experiment_id, contig)`
-is scoped to it, and `stats.html` says which contig when the reference has more than one.
-One contig at a time rather than a concatenated axis, because offsets the reader cannot see
+`aledb_stats.util.needle_plot_axis` names the sequence to draw and reads its length from
+`ExperimentReference.seq_ids`; `get_needle_plot_data(experiment_id, contig)` is scoped to it.
+One sequence at a time rather than a concatenated axis, because offsets the reader cannot see
 turn every coordinate into one that matches nothing in the tables.
+
+**Which sequence is the reader's to choose, and for a while it was not.** One contig was
+hardcoded as the answer rather than as the default, so on a chromosome-plus-plasmid reference
+the plasmid's mutations were on **no page in the product** -- and the line saying which contig
+was drawn made that visible without making it fixable. `needle_plot_axis(experiment_id,
+contig)` takes the reader's choice, `?contig=` carries it, and `needle_axis["contigs"]` is the
+menu, each entry carrying its own `count` and `length`. There is deliberately no separate count
+of that list to disagree with it, which is what the old `contig_count` was.
+
+**The default is the longest sequence, not the busiest**, and the two rules are independent
+enough that a fixture where they agree tests neither. The chromosome is what somebody opening
+an experiment means by "the genome"; a small plasmid under strong selection can carry more
+mutations than it, and a page opening on the plasmid would be a surprise about the reference
+dressed up as a fact about the data. Length is a property of the reference. A count moves.
+
+**The list is every sequence the reference has, mutations or none.** A plasmid with nothing on
+it draws an empty axis, which is an answer -- the reader asked and the page says nothing is
+there. Left out, it is indistinguishable from a sequence the reference does not have, and the
+count beside each name is what tells those apart. (A sentence saying *"1 of this reference's 2
+sequences carry mutations"* stood in for this briefly, and the menu says it better. Its
+predecessor said "of this reference's N" while N counted contigs with mutations, not sequences
+in the reference.)
+
+Three more things about it:
+
+- **The picker is links, not a form**, the same shape as the per-sample page's sample picker,
+  so it needs no script and a plasmid's plot is a URL somebody can send.
+- **An unrecognised `?contig=` falls back to the default** rather than drawing an empty plot,
+  as `breseq_table._selected_reseq` does with a sample its own filters exclude. An empty plot
+  of a contig that does not exist reads exactly like a contig with no mutations -- and that
+  second thing is now a state the page renders on purpose.
+- **A contig a mutation names but the reference does not list is offered last.** It has no
+  length to sort by, and dropping it would leave mutations the experiment holds on no axis.
+
+**With no stored reference there are no lengths at all**, so the list is what the mutations
+name and the order degrades to busiest first -- the most the data alone can say. The sort's
+final tie-break is the name, or two equal contigs swap places between page loads and the
+default becomes whichever the database felt like.
 
 **With no stored reference the axis falls back to the data's own extent**, not to a constant --
 an experiment imported from bare `.gd` files has no reference at all, and its own largest

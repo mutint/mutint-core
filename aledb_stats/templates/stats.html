@@ -384,14 +384,32 @@
     <hr>
 
     <h2>Mutation Needle Plot</h2>
-    {% comment %} The plot draws one sequence. Said out loud when there is more than one,
-       because the axis carries no sequence name and a reader would otherwise have no way to
-       tell that the other contigs are missing rather than empty. {% endcomment %}
-    {% if needle_axis.contig_count > 1 %}
-        <p class="text-muted">
-            Showing <b>{{ needle_axis.contig }}</b>, the sequence carrying the most mutations
-            of this reference's {{ needle_axis.contig_count }}.
-        </p>
+    {% comment %} The plot draws one sequence, so which one is the reader's to choose. The
+       menu is the same shape as the per-sample page's sample picker: ordinary links carrying
+       the pair the page reads, so it needs no script at all and a plasmid's plot is a URL
+       somebody can send. It appears only when there is a choice to make -- one contig was
+       until now the only answer available, chosen for the reader.
+
+       Every sequence in the reference is listed, including one with no mutations: its plot is
+       an empty axis, which is an answer. The count beside each name is what distinguishes a
+       sequence with nothing on it from one the reference does not have. {% endcomment %}
+    {% if needle_axis.contigs|length > 1 %}
+        <div class="aledb-picker">
+        <b>Sequence:</b>
+        <div class="btn-group" id="contig_picker">
+            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
+                    aria-haspopup="true" aria-expanded="false">
+                {{ needle_axis.contig }} <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu aledb-menu">
+                {% for entry in needle_axis.contigs %}
+                    <li{% if entry.id == needle_axis.contig %} class="active"{% endif %}>
+                        <a href="?ale_experiment_id={{ ale_experiment_id }}{% if ale_no %}&amp;ale_no={{ ale_no }}{% endif %}&amp;contig={{ entry.id|urlencode }}">{{ entry.id }} <span class="text-muted">({{ entry.count }})</span></a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        </div>
     {% endif %}
     <div class="row">
         {% include 'muts_needle_plot.html' %} {# histograms use d3js import from this implementation #}
