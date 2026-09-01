@@ -48,11 +48,29 @@ coverage run ./aledb test && coverage report
 
 ### Testing notes
 
-**The suite is fast: ~13 seconds for the whole thing.** Per-app it is 0-8s; most of that is
-Django starting up, not the tests. The test database is in-memory SQLite, so runs do not
+**The suite takes about 2½ minutes.** Measured repeatedly: 140s standalone, 142-148s
+assembled. Per-app it runs from 1.9s (`aledb_stats`, 32 tests) to 96s (`aledb_experiment`,
+416) -- and that one app is two thirds of the whole run. Inside it `test_access_views` is 57s
+and `test_groups` 34s, 90 of its 96 between them: both call `User.set_password` per user in
+setUp, and Django 4.2's default PBKDF2 hasher costs a few tenths of a second every time.
+Nothing else in the suite pays that, and a test-only `PASSWORD_HASHERS` override is the usual
+answer if it ever becomes worth fixing. The test database is in-memory SQLite, so runs do not
 contend for a file and can be repeated freely.
 
-**If a test run appears to hang, it is almost certainly not the tests.** Two things cause it:
+**This said "~13 seconds" for a long time, and was wrong by an order of magnitude** -- the
+same drift the test *count* above warns about, in the figure right beside it. What made it
+worth correcting is that the explanation travelled with it: *"most of that is Django starting
+up, not the tests"* was true at 13 seconds and is not true now. Startup is a couple of
+seconds; the tests are the rest. Measure it rather than adjusting it by what you think you
+added.
+
+**A full run outlasts a two-minute command timeout**, which is new and is the first thing to
+suspect when a run appears to die near the end having printed nothing. Give it a longer
+timeout, or run one app at a time -- everything except `aledb_experiment` finishes in under
+half a minute.
+
+**If a test run appears to hang, that aside, it is almost certainly not the tests.** Two
+things cause it:
 
 1. *Chaining the run onto slow setup.* `patch files && migrate && ./aledb test` can blow a
    command timeout in the earlier steps, and the run looks stuck when it never really started.
