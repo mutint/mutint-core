@@ -39,6 +39,20 @@ numpy==1.25.2
 oauthlib==3.2.2
 packaging==23.2
 pandas==2.1.0
+# Reads the stored BAM in aledb_import/coverage.py, to weight each alignment by 1/X1 --
+# breseq's redundancy tag, the number of places a read mapped equally well. Without that
+# weighting a read matching ten IS copies is counted once at each and repeats dominate the
+# coverage track.
+#
+# The reason it is a dependency rather than a hand-rolled reader: htslib stores an integer
+# aux tag in the SMALLEST type that fits, so breseq's `X1:i:<n>` is not type `i` in the
+# file. Measured on a stored BAM, bowtie2's own `AS:i:` is stored as `C` (and `c` when
+# negative), never `i`. A reader matching one type would silently find no tags, weight every
+# read 1, and report success. read.get_tag() is htslib's own decode and has no such edge.
+#
+# It also writes BAMs, which is what makes the tagged test fixtures possible: there is no
+# samtools in env/tools, so before this there was no way to produce one.
+pysam==0.24.0
 python-dateutil==2.8.2
 requests==2.31.0
 six==1.11.0

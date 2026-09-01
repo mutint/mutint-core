@@ -79,8 +79,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1610 run, 0 failures** standalone; **1766** in an assembled project, where the
-plugins' own tests join them. They were 1599 and 1755 before the genome browser dropped its
+**Baseline: 1620 run, 0 failures** standalone; **1776** in an assembled project, where the
+plugins' own tests join them. They were 1610 and 1766 before coverage started weighting each
+alignment by breseq's X1 redundancy tag, 1599 and 1755 before the genome browser dropped its
 per-sample track and learned to switch mutation on a click, 1592 and 1748 before deleting data
 made you type DELETE, 1587 and 1743 before the needle plot learned what
 genome it was drawing, 1574 and 1730 before the database tracks, and 1568 and 1724 before the
@@ -1977,7 +1978,7 @@ record that the drop happened, so it rides across the reload in `sessionStorage`
 
 ### An import reports itself, sample by sample
 
-An import is long -- `coverage.build_quietly` runs `bedtools` and `bedGraphToBigWig` under a
+An import is long -- `coverage.build_quietly` walks the BAM and runs `bedGraphToBigWig` under a
 900-second timeout **per sample**, and the derived-data rebuild after the last one counts every
 observation in the installation. Reported as a single POST, all of it was a page that had
 stopped moving, which is indistinguishable from one that had broken.
@@ -2302,6 +2303,46 @@ at all, so **no BAM request is made** — measured, 0 BAM requests against 9 for
 changes track identity rather than a flag, so choosing an item reloads whatever is showing.
 
 A sample imported before coverage existed simply has no wig track until `./aledb coverage` runs.
+
+**Each alignment counts 1/X1, not 1**, and that is most of what `aledb_import/coverage.py` is
+for. X1 is breseq's redundancy tag: how many places the read mapped equally well. A read
+matching all ten copies of an IS element is written to the BAM ten times, once per copy, so
+counting each as 1 gave every copy ten times its real depth and the trace was dominated by
+repeats. Weighting by 1/X1 is breseq's own rule -- `coverage_output.cpp` accumulates
+`unique_cov++` at redundancy 1 and `redundant_cov += 1.0/redundancy` otherwise, and reports the
+sum -- so the browser now agrees with breseq's own coverage plots.
+
+**A read with no X1 counts 1**, which is breseq's rule too (`alignment.cpp`: *"Defaults to 1
+when custom breseq tag is missing"*). So a BAM from anything else is unaffected: there is a test
+asserting the derivation reproduces what the old `bedtools genomecov -ibam -bg` pipeline
+produced, and it was checked byte for byte against real bedtools output on a stored BAM before
+that pipeline was removed.
+
+Three things about it are load-bearing:
+
+- **`bedtools` is gone and `pysam` replaced it.** `genomecov` cannot express a per-read weight
+  -- its `-scale` is one factor for the whole file -- so the counting moved in-process. Only
+  `bedGraphToBigWig` is still external. The obvious alternative, `bedtools bamtobed -tag X1`,
+  **must not be used**: on a BAM whose reads lack the tag it writes a partial line, prints its
+  error into the middle of its own stdout, and **exits 0**.
+- **The tag is not stored as the type it is written as.** breseq spells `X1:i:<n>` in SAM text,
+  but htslib stores an integer aux tag in the narrowest type that fits, so in the file it is
+  `C`. Measured on a stored BAM, bowtie2's own `AS:i:` is `C` (and `c` when negative), never
+  `i`. A hand-rolled reader matching type `i` would find no tags, weight every read 1 and report
+  success -- the unnormalized answer, silently. `read.get_tag()` is htslib's own decode; that is
+  the main reason this is a dependency rather than forty lines of struct parsing, and
+  `test_coverage` pins both the storage type and every integer width.
+- **pysam's failures have to become `CoverageError`.** It raises `ValueError` for a header it
+  cannot parse, which is not in `build_quietly`'s except clause -- so untranslated it escaped
+  and failed the whole sample import over a coverage track. A sample keeps its reads whether or
+  not its coverage builds; there is a test.
+
+**Nothing records which rule a stored BigWig was built under**, deliberately -- no column, no
+migration. So every file built before this change is still the old unnormalized kind until
+`./aledb coverage --force` re-derives it, and the only thing that can say whether a rebuild
+changed anything is the tally that command now prints per sample: how much of the BAM was
+redundantly mapped, or that it carried no X1 at all. That last line is the answer to "I rebuilt
+and the repeats still spike" -- only breseq writes the tag.
 
 **igv builds its entire UI inside a shadow root on `#igv-browser`**, with its own stylesheet
 adopted there (`attachShadow({mode:'open'})` + `adoptedStyleSheets`). Two consequences, both of

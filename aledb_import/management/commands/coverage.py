@@ -10,6 +10,13 @@ tools were not installed yet.
     ./aledb coverage 4 --force  # rebuild even where a track already exists
 
 Nothing is regenerated implicitly: a sample that already has one is skipped unless --force.
+
+Each built sample reports what its BAM held -- how much of it was redundantly mapped, or that
+it carried no X1 tag at all. Coverage weights each alignment by 1/X1 (breseq's redundancy
+tag), and nothing in the database records which rule an existing BigWig was built under, so
+this output is the only way to tell a normalized track from one that predates that change.
+
+**Every BigWig built before it is still the old, unnormalized kind.** `--force` re-derives them.
 """
 
 from django.core.management.base import BaseCommand
@@ -43,7 +50,7 @@ class Command(BaseCommand):
             self.stdout.write("Nothing to do: every stored sample already has coverage.")
             return
 
-        built = failed = 0
+        built = failed = untagged = 0
         for reseq in samples:
             name = reseq.ale_flask_isolate_str
             if options["dry_run"]:
@@ -52,9 +59,16 @@ class Command(BaseCommand):
             # One sample's missing tool or corrupt BAM must not stop the rest, exactly as the
             # importer isolates a bad sample from its batch.
             try:
-                coverage.build_for(reseq)
+                # The tally is the only thing that can say whether the weighting did
+                # anything: nothing in the database records which rule a stored BigWig was
+                # built under, so an IS element still towering over the trace could mean an
+                # old file, a BAM with no X1, or a broken derivation. Printed per sample so
+                # that question is answered where it is asked.
+                tally = coverage.build_for(reseq)
                 built += 1
-                self.stdout.write("  %s  built" % name)
+                self.stdout.write("  %s  built  (%s)" % (name, tally.describe()))
+                if not tally.normalized:
+                    untagged += 1
             except Exception as error:  # noqa: BLE001
                 failed += 1
                 self.stderr.write("  %s  failed: %s" % (name, error))

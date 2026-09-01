@@ -9,11 +9,27 @@ A BigWig has its own zoom levels, so one file answers a whole-genome question an
 one alike, over the byte-range serving the store already does. It is what lets the browser page
 stop loading reads above 4 kb without losing the coverage.
 
-Two external tools, declared in aledb-core's tools.txt and found through aledb_common.tools:
+**Each alignment counts 1/X1, not 1.** X1 is breseq's redundancy tag: the number of places a
+read mapped equally well. A read matching all ten copies of an IS element is written to the BAM
+ten times, so counting each as 1 gives every copy ten times the true depth and repeats dominate
+the trace. Weighting by 1/X1 is breseq's own rule -- `coverage_output.cpp` accumulates
+`unique_cov++` for redundancy 1 and `redundant_cov += 1.0/redundancy` otherwise, and its total
+is the sum of the two, which is what this file computes.
 
-    bedtools genomecov -ibam aligned.bam -bg   ->  bedGraph of depth
+**A read with no X1 counts 1**, which is also breseq's rule (`alignment.cpp`: "Defaults to 1
+when custom breseq tag is missing"). So a BAM from anything but breseq gives exactly what it
+gave before this existed -- there is a test asserting that against the old pipeline's output.
+
+`bedtools genomecov` cannot do this: its `-scale` is one factor for the whole file, not per
+read. So the counting happens here, over pysam, and only the BigWig conversion stays external:
+
+    pysam + a difference array                 ->  bedGraph of weighted depth
     sort -k1,1 -k2,2n                          ->  bedGraphToBigWig will not take it unsorted
     bedGraphToBigWig - chrom.sizes coverage.bw
+
+`bedtools bamtobed -tag X1` looks like it would do the job with the tool that was already
+installed. It must not be used: on a BAM whose reads lack the tag it writes a partial line,
+prints its error into the middle of its own stdout, and exits 0.
 
 Not megadepth, which would do the lot in one call: bioconda has no osx-arm64 build of it.
 """
@@ -23,13 +39,17 @@ import os
 import subprocess
 import tempfile
 
+import numpy
+
 from aledb_common import store
 from aledb_common.tools import ToolMissing, require
 
 logger = logging.getLogger(__name__)
 
-BEDTOOLS = "bedtools"
 BEDGRAPH_TO_BIGWIG = "bedGraphToBigWig"
+
+#: breseq's redundancy tag -- how many places this read mapped equally well.
+REDUNDANCY_TAG = "X1"
 
 # A sample's whole genome is walked, so this is not instant; it is bounded so a wedged tool
 # cannot hold an import request open indefinitely.
@@ -57,8 +77,148 @@ def chrom_sizes_from_fai(fai_path, out_path):
     return out_path
 
 
+class CoverageTally:
+    """What the sweep saw, so a caller can say whether normalization did anything.
+
+    There is no column recording which rule a stored BigWig was built under, so this is the
+    only thing that can answer "is my coverage actually normalized". Without it, an IS element
+    still towering over the trace could mean the BigWig predates this change, or the BAM has no
+    X1, or the weighting is broken -- three very different problems that look identical.
+
+    Counting is free: the sweep visits every record anyway.
+    """
+
+    def __init__(self):
+        self.alignments = 0        # mapped alignments counted into the depth
+        self.tagged = 0            # ...of which carried X1 at all
+        self.redundant = 0         # ...of which carried X1 > 1
+        self.redundancy_total = 0  # sum of X1 over tagged reads, for the mean
+
+    @property
+    def normalized(self):
+        """Did any read actually weigh less than 1? If not, this is the old answer."""
+        return self.redundant > 0
+
+    def describe(self):
+        if not self.alignments:
+            return "no mapped alignments"
+        if not self.tagged:
+            return "no X1 tags -- coverage is NOT normalized"
+        share = 100.0 * self.redundant / self.alignments
+        mean = self.redundancy_total / self.tagged
+        return ("%s alignments, %.1f%% redundant, mean redundancy %.1f"
+                % (f"{self.alignments:,}", share, mean))
+
+
+def write_weighted_bedgraph(bam_path, sizes, out_path):
+    """Walk the BAM once, weighting each alignment by 1/X1, and write a bedGraph.
+
+    A **difference array** per contig rather than adding across each read's span: `+w` at the
+    start and `-w` at the end is O(1) per read where the span walk is O(read length), and one
+    cumulative sum at the end turns it back into depth. Float, because the weights are.
+
+    Only unmapped reads are skipped. Secondary and supplementary alignments are counted,
+    because `bedtools genomecov -ibam` counted them and this must differ from the old pipeline
+    in the weighting and nothing else -- filtering them here would quietly change every
+    existing trace at the same time as the change actually being made.
+
+    `until_eof=True` reads the file through rather than seeking by region, so no BAM index is
+    needed and every record is seen exactly once.
+    """
+    lengths = _sizes_map(sizes)
+    tally = CoverageTally()
+    # One extra cell so a read ending at the last base has somewhere to write its -w.
+    deltas = {name: numpy.zeros(length + 1, dtype=numpy.float64)
+              for name, length in lengths.items()}
+
+    try:
+        _accumulate(bam_path, deltas, tally)
+    except (ValueError, OSError) as error:
+        # pysam raises ValueError for a file whose header will not parse -- "file does not
+        # have a valid header ... is it BAM/CRAM format?" -- and that has to arrive as this
+        # module's own error, or it escapes `build_quietly` and fails the whole sample import
+        # over a coverage track. A sample keeps its reads whether or not its coverage builds.
+        raise CoverageError("could not read %s: %s" % (os.path.basename(bam_path), error))
+
+    with open(out_path, "w") as target:
+        for name in sorted(deltas):
+            _emit_contig(target, name, numpy.cumsum(deltas[name])[:-1])
+    return tally
+
+
+def _accumulate(bam_path, deltas, tally):
+    """The walk itself, split out so its failures have one place to be translated."""
+    import pysam
+
+    with pysam.AlignmentFile(bam_path, "rb") as bam:
+        for read in bam.fetch(until_eof=True):
+            if read.is_unmapped or read.reference_name is None:
+                continue
+            delta = deltas.get(read.reference_name)
+            if delta is None:
+                # A contig the reference index does not name. bedGraphToBigWig would reject
+                # the row anyway; dropping it here keeps the failure to this one read.
+                continue
+            start, end = read.reference_start, read.reference_end
+            if end is None or end <= start:
+                continue
+
+            weight = 1.0
+            if read.has_tag(REDUNDANCY_TAG):
+                # get_tag goes through htslib, which decodes whichever integer width the tag
+                # was stored in. breseq writes `X1:i:` as SAM text, but htslib stores an
+                # integer aux tag in the smallest type that fits, so in the file it is
+                # usually `C`. Matching on one type by hand is how this silently reads no
+                # tags at all and produces the unnormalized answer while reporting success.
+                redundancy = int(read.get_tag(REDUNDANCY_TAG))
+                tally.tagged += 1
+                tally.redundancy_total += redundancy
+                if redundancy > 1:
+                    tally.redundant += 1
+                    weight = 1.0 / redundancy
+
+            tally.alignments += 1
+            delta[start] += weight
+            delta[end] -= weight
+
+
+def _emit_contig(target, name, depth):
+    """bedGraph rows for one contig: runs of equal non-zero depth.
+
+    The run boundaries come from `numpy.diff` rather than a Python loop over every base --
+    a 4.6 Mb contig is 4.6 million iterations otherwise, per sample.
+    """
+    if not depth.size:
+        return
+    # A boundary wherever the value changes, plus the two ends.
+    edges = numpy.flatnonzero(numpy.diff(depth)) + 1
+    starts = numpy.concatenate(([0], edges))
+    ends = numpy.concatenate((edges, [depth.size]))
+    for start, end in zip(starts.tolist(), ends.tolist()):
+        value = depth[start]
+        if value <= 0:
+            continue
+        # %g so a whole number prints as `3` and not `3.0`: that is what bedtools emitted,
+        # and an untagged BAM has to produce the identical file.
+        target.write("%s\t%d\t%d\t%g\n" % (name, start, end, value))
+
+
+def _sizes_map(sizes_path):
+    lengths = {}
+    with open(sizes_path) as handle:
+        for line in handle:
+            fields = line.split("\t")
+            if len(fields) >= 2:
+                lengths[fields[0]] = int(fields[1])
+    return lengths
+
+
 def build_for(reseq):
     """Derive and store the BigWig for one ResequencingExperiment; set `coverage_stored`.
+
+    Returns a `CoverageTally` describing what the BAM turned out to hold -- how much of it was
+    redundantly mapped, and whether it carried X1 at all. It returned the output path before,
+    which nothing read.
 
     Raises CoverageError (or ToolMissing) rather than returning a flag, so a caller that wants
     it to be best-effort has to say so.
@@ -78,7 +238,6 @@ def build_for(reseq):
             "experiment %s has no stored reference index; coverage needs one for the "
             "sequence lengths" % experiment.ale_id)
 
-    bedtools = require(BEDTOOLS)
     to_bigwig = require(BEDGRAPH_TO_BIGWIG)
 
     out_path = store.sample_path(reseq.id, store.SAMPLE_BIGWIG)
@@ -88,12 +247,10 @@ def build_for(reseq):
         sizes = chrom_sizes_from_fai(fai_path, os.path.join(scratch, "chrom.sizes"))
         bedgraph = os.path.join(scratch, "coverage.bedgraph")
 
-        # Piped through sort rather than trusting the BAM's order: bedGraphToBigWig rejects
-        # unsorted input outright, and a coordinate-sorted BAM still emits its references in
-        # header order, which is not the byte order sort wants. LC_ALL=C so the collation is
-        # the byte order it asks for whatever the machine's locale is.
-        # `bedtools` is a dispatcher: the subcommand comes before its own flags.
-        _run([bedtools, "genomecov", "-ibam", bam_path, "-bg"], stdout_path=bedgraph)
+        # Sorted rather than trusted: bedGraphToBigWig rejects unsorted input outright, and
+        # contig order here is the reference index's, which is not the byte order sort wants.
+        # LC_ALL=C so the collation is that byte order whatever the machine's locale is.
+        tally = write_weighted_bedgraph(bam_path, sizes, bedgraph)
         _sort_in_place(bedgraph, scratch)
 
         # Written to a temporary name and moved into place, so an interrupted run cannot
@@ -104,7 +261,8 @@ def build_for(reseq):
 
     reseq.coverage_stored = True
     reseq.save(update_fields=["coverage_stored"])
-    return out_path
+    logger.info("coverage for sample %s: %s", reseq.id, tally.describe())
+    return tally
 
 
 def build_quietly(reseq):

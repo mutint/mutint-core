@@ -83,3 +83,45 @@ def write_sample(root, sample_name, sequences=None, gd_text=None,
             handle.write(b"BAI\x01" + b"\xff" * 64)
 
     return sample_dir
+
+
+def write_alignment_bam(path, sequences, reads, tag_value_type=None):
+    """A real, readable BAM -- unlike the placeholder bytes `write_sample` drops in.
+
+    `write_sample` writes a stub that is enough for the importer to store and hash, and is not
+    a BAM at all, so nothing that actually *reads* one could be tested before pysam arrived.
+    There is no samtools in `env/tools`, so this could not have been assembled any other way
+    short of hand-writing BGZF.
+
+    `reads` is a list of `(seq_id, start, length, redundancy)`, 0-based start, `redundancy`
+    None to write no X1 tag at all -- which is the case every non-breseq BAM is in.
+
+    `tag_value_type` is None by default, which lets htslib choose the storage type as it does
+    for real data -- and it chooses the narrowest that fits, so a small X1 lands as `C` rather
+    than the `i` breseq spells in its SAM text. That is the case the coverage reader has to
+    survive, so the default must not sidestep it. Pass an explicit type only to prove the
+    reader copes with that one.
+    """
+    import pysam
+
+    order = {name: index for index, (name, _) in enumerate(sequences)}
+    header = {
+        "HD": {"VN": "1.6", "SO": "coordinate"},
+        "SQ": [{"SN": name, "LN": len(seq)} for name, seq in sequences],
+    }
+    with pysam.AlignmentFile(path, "wb", header=header) as out:
+        for index, (seq_id, start, length, redundancy) in enumerate(
+                sorted(reads, key=lambda r: (order[r[0]], r[1]))):
+            record = pysam.AlignedSegment()
+            record.query_name = "read%d" % index
+            record.query_sequence = "A" * length
+            record.flag = 0
+            record.reference_id = order[seq_id]
+            record.reference_start = start
+            record.mapping_quality = 60
+            record.cigartuples = [(0, length)]          # length M
+            record.query_qualities = pysam.qualitystring_to_array("I" * length)
+            if redundancy is not None:
+                record.set_tag("X1", redundancy, value_type=tag_value_type)
+            out.write(record)
+    return path

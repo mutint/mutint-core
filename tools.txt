@@ -3,11 +3,16 @@
 # collects requirements.txt, and installs them into env/tools with micromamba. Code finds
 # them through aledb_common.tools.tool_path(), which falls back to PATH.
 #
-# Used by aledb_import/coverage.py to derive a per-sample BigWig from its BAM:
-#     bedtools genomecov -ibam aligned.bam -bg | sort | bedGraphToBigWig - sizes coverage.bw
+# Used by aledb_import/coverage.py to turn a bedGraph into the BigWig igv reads:
+#     <weighted bedGraph> | sort | bedGraphToBigWig - sizes coverage.bw
 #
-# Not megadepth, which would do this in one step: bioconda has no osx-arm64 build of it, so
-# an Apple Silicon machine would need an --platform osx-64 environment under Rosetta. Both of
-# these build natively everywhere.
-bedtools
+# bedtools was here too, for `genomecov -ibam`, and is gone. Coverage now weights each
+# alignment by 1/X1 -- breseq's redundancy tag -- and genomecov cannot express that: its
+# -scale is one factor for the whole file, not per read. The counting moved into Python over
+# pysam (see requirements.txt), which left bedtools with no caller in the suite, and a
+# dependency every deployment installs and nothing uses is worse than one fewer.
+#
+# Not megadepth, which would have done the old job in one step: bioconda has no osx-arm64
+# build of it, so an Apple Silicon machine would need an --platform osx-64 environment under
+# Rosetta. This one builds natively everywhere.
 ucsc-bedgraphtobigwig
