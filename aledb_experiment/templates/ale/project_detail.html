@@ -67,10 +67,23 @@
             <img src='{% static "img/Ajax-loader.gif" %}'>
         </div>
         <br>
+        {% comment %} Deleting from here, and not only from the installation-wide list:
+           this is the page that shows a project's experiments in context, so it is where
+           somebody is standing when they decide one of them should go.
+
+           Gated on `can_edit` -- project write -- rather than on being signed in, as the
+           flat list is: that list spans projects and cannot tell, while this page knows
+           exactly one. An experiment that is *locked* still refuses from the endpoint and
+           is named in #del-error, because the lock lives on the experiment and only the
+           experiment can answer for it. {% endcomment %}
         {% if can_edit %}
         <div style="margin-bottom: 1em;">
             <a class="btn btn-primary"
                href="/ale/experiments/new/?project={{ project.id }}">+ New experiment</a>
+            <button type="button" class="btn btn-danger" id="delete-selected">
+                &minus; Delete selected</button>
+            <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
+            <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
         </div>
         {% endif %}
 
@@ -108,4 +121,14 @@
         </table>
     </div>
 
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("delete-selected")) { return; }   // no write access
+    document.getElementById("delete-selected").addEventListener("click", function () {
+        window.aledbDeleteSelected({tableId: "exp_table", path: "/ale/experiment/",
+                                    noun: "experiment"});
+    });
+})();
+</script>
 {% endblock %}

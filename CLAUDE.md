@@ -61,8 +61,9 @@ contend for a file and can be repeated freely.
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1592 run, 0 failures** standalone; **1748** in an assembled project, where the
-plugins' own tests join them. They were 1587 and 1743 before the needle plot learned what
+**Baseline: 1599 run, 0 failures** standalone; **1755** in an assembled project, where the
+plugins' own tests join them. They were 1592 and 1748 before deleting data made you type
+DELETE, 1587 and 1743 before the needle plot learned what
 genome it was drawing, 1574 and 1730 before the database tracks, and 1568 and 1724 before the
 assets were vendored. (The 1723 recorded a
 commit earlier was measured before the `data-autoload` test existed; the assembled suite has
@@ -2673,13 +2674,52 @@ Creation and deletion are nested under the objects they act on:
   Both POST `/ale/experiments/create/` and land on the new experiment's Add page. The picker
   lists only projects `can_edit_project` allows, so it never offers one the POST would 403 on;
   a user with no editable project is shown **+ New project** instead.
-- Shared JS for those controls — `aledbPost`, `aledbConfirmDelete`, `aledbTogglePanel` — lives in
-  `aledb_common/staticfiles/js/aledb_crud.js`, loaded from `base.html`. It was duplicated inline
-  in two templates before. A page using `aledbPost` must render `{% csrf_token %}` somewhere:
-  that is what sets the cookie it reads. `aledbConfirmDelete` calls `swal()`, which `base.html`
-  does **not** load — pull sweetalert in per template.
+- **`/ale/project/<pk>/` deletes selected experiments too**, which for a long time it could
+  not: it had the checkbox column all along — it includes the same
+  `ale/experiment_datatables.js` the flat list does — and nothing that consumed the selection
+  but Export. It is the page that shows a project's experiments in context, so it is where
+  somebody is standing when they decide one should go. Gated on `can_edit` (project write)
+  rather than on being signed in, as the flat list is: that list spans projects and cannot
+  tell, while this page knows exactly one. A **locked** experiment in the selection still
+  refuses from the endpoint and is named in `#del-error` — the lock lives on the experiment
+  and only the experiment can answer for it.
+- Shared JS for those controls lives in `aledb_common/staticfiles/js/aledb_crud.js`, loaded
+  from `base.html`: `aledbPost`, the two confirm dialogs below, and `aledbDeleteSelected` —
+  the whole gather-confirm-post-reload routine, which was inline in `ale/projects.html` and
+  `ale/experiments.html` near enough byte for byte, and which the project page wanting it as
+  well turned from two copies into an argument for none. (`aledbTogglePanel` was a third
+  helper and is **gone**; the create forms are modals opened declaratively by Bootstrap. This
+  line listed it for a while after it had been deleted, and
+  `aledb_import/tests/test_add_page.py` asserts it is absent.) A page using `aledbPost` must
+  render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
+  call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
+- **Deleting data makes you type `DELETE`.** `aledbConfirmTypedDelete` is the dialog behind
+  the four controls that destroy something — the two bulk deletes above, the project list's,
+  and **Delete experiment** on `/stats` — and it resolves true only for that exact word.
+  `aledbConfirmDelete`, the plain yes/no, stays for `ale/group_detail.html` and
+  `ale/project_access.html`: removing a membership or revoking a grant destroys nothing, and
+  a dialog that feels the same for both is what teaches people to click through the one that
+  matters. The wording lives with each helper, so a page carries no delete copy of its own.
+  - **It is client-side only, deliberately.** The endpoints already check the role and the
+    lock, which is what actually protects the data; a server-side "must post DELETE" field
+    would be a contract `./aledb delete` does not honour and one `curl` away from bypass,
+    while reading like a security control. It guards the mis-aimed click and nothing more.
+  - The trap in writing it: sweetalert resolves the **input's value**, not a boolean — `null`
+    when dismissed, `""` when confirmed with an empty box. Both are falsy, so the
+    `if (!confirmed)` idiom the plain helper's callers use swallows the second silently, and
+    somebody who pressed Delete and saw nothing happen cannot tell that from a broken page.
+    The two cases are separated so only one of them says anything.
 - An experiment's page (`/stats?ale_experiment_id=<pk>`) carries **+ Add data** and **Delete**,
   rendered through `{% block experiment_actions %}` in `aledb_common/templates/base.html`.
+  **Deleting lands on the experiment's project**, not on the flat experiment list it used to
+  go to — having just removed one experiment out of a project, the project is where the rest
+  of them are. The destination rides on the button as `data-after-delete` rather than being
+  rebuilt in the handler, so it is decided where the template can see whether there is a
+  project at all. Its else-branch is a guard and not a live path: `AleExperiment.project` is
+  nullable, but `effective_role` answers `None` for a null project before it reaches its
+  superuser branch, so a projectless experiment is viewable by nobody and this page does not
+  render for one — superuser included. There is a test pinning that, so the branch is not
+  later read as a case somebody exercised.
 - There is no Amplifications page. `/mutations/amplifications` was a copy of `mutation_table`
   differing in one argument, and it was the only page showing `AMP` mutations, because
   Compare passed `filter_type="AMP"` — a value that means **exclude** AMP, not include it.

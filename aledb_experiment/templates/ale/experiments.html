@@ -82,36 +82,8 @@
     "use strict";
     if (!document.getElementById("delete-selected")) { return; }   // signed out
     document.getElementById("delete-selected").addEventListener("click", function () {
-        var table = $("#exp_table").DataTable();
-        var ids = [];
-        table.rows({selected: true}).every(function () {
-            var link = $(this.node()).find("a[href*='/ale/experiment/']").attr("href");
-            if (link) {
-                var match = link.match(/\/ale\/experiment\/(\d+)/);
-                if (match) { ids.push(match[1]); }
-            }
-        });
-        if (!ids.length) {
-            swal("", "Please select experiments and try again.", "warning");
-            return;
-        }
-        window.aledbConfirmDelete(ids.length + " experiment(s)").then(function (confirmed) {
-            if (!confirmed) { return; }
-            // allSettled, not all: deleting requires ownership of the experiment's project,
-            // so a mixed selection legitimately 403s on some rows. Promise.all would abort on
-            // the first of those after others had already been deleted, and never reload.
-            Promise.allSettled(ids.map(function (id) {
-                return window.aledbPost("/ale/experiment/" + id + "/delete/", {});
-            })).then(function (results) {
-                var failed = results.filter(function (r) { return r.status === "rejected"; });
-                if (failed.length) {
-                    document.getElementById("del-error").textContent =
-                        failed.length + " of " + ids.length + " could not be deleted: " +
-                        failed[0].reason.message;
-                }
-                window.location.reload();
-            });
-        });
+        window.aledbDeleteSelected({tableId: "exp_table", path: "/ale/experiment/",
+                                    noun: "experiment"});
     });
 })();
 </script>

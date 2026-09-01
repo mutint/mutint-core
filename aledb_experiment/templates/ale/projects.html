@@ -79,37 +79,8 @@
     "use strict";
     if (!document.getElementById("delete-selected")) { return; }   // signed out
     document.getElementById("delete-selected").addEventListener("click", function () {
-        var table = $("#project_table").DataTable();
-        var ids = [];
-        table.rows({selected: true}).every(function () {
-            var link = $(this.node()).find("a[href*='/ale/project/']").attr("href");
-            if (link) {
-                var match = link.match(/\/ale\/project\/(\d+)/);
-                if (match) { ids.push(match[1]); }
-            }
-        });
-        if (!ids.length) {
-            swal("", "Please select projects and try again.", "warning");
-            return;
-        }
-        window.aledbConfirmDelete(ids.length + " project(s)").then(function (confirmed) {
-            if (!confirmed) { return; }
-            // allSettled, not all: this list shows every project the user may *view*, while
-            // deleting requires ownership, so a mixed selection legitimately 403s on some
-            // rows. Promise.all would abort on the first of those after others had already
-            // been deleted, and then never reload.
-            Promise.allSettled(ids.map(function (id) {
-                return window.aledbPost("/ale/project/" + id + "/delete/", {});
-            })).then(function (results) {
-                var failed = results.filter(function (r) { return r.status === "rejected"; });
-                if (failed.length) {
-                    document.getElementById("del-error").textContent =
-                        failed.length + " of " + ids.length + " could not be deleted: " +
-                        failed[0].reason.message;
-                }
-                window.location.reload();
-            });
-        });
+        window.aledbDeleteSelected({tableId: "project_table", path: "/ale/project/",
+                                    noun: "project"});
     });
 })();
 </script>

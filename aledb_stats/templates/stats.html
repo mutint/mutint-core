@@ -106,8 +106,23 @@
             {% endif %}
         {% endif %}
         {% if can_edit %}
+            {% comment %} Where to go afterwards rides on the button rather than being
+               rebuilt in the handler, so it is decided in the one place that can see
+               whether there is a project at all. Having just deleted one experiment out of
+               a project, the project is where the rest of them are; the flat
+               installation-wide list, which this used to land on, is not about the thing
+               that was being worked on.
+
+               The {% templatetag openblock %} else {% templatetag closeblock %} branch is a
+               guard rather than a live path. `AleExperiment.project` is nullable, but
+               `effective_role` answers None for a null project before it reaches its
+               superuser branch -- so nobody can view a projectless experiment and this page
+               refuses to render for one at all. It stays because the alternative is
+               emitting `/ale/project//` if that ever stops being true, which is a broken
+               link rather than a visible failure. {% endcomment %}
             <button type="button" class="btn btn-danger" id="delete-experiment"
-                    data-experiment-id="{{ ale_experiment_id }}">&minus; Delete experiment</button>
+                    data-experiment-id="{{ ale_experiment_id }}"
+                    data-after-delete="{% if experiment.project_id %}/ale/project/{{ experiment.project_id }}/{% else %}/ale/experiments/{% endif %}">&minus; Delete experiment</button>
         {% endif %}
     </div>
 {% endblock %}
@@ -387,31 +402,19 @@
     var button = document.getElementById("delete-experiment");
     if (!button) { return; }
 
-    function getCookie(name) {
-        var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
-        return match ? decodeURIComponent(match[2]) : "";
-    }
-
+    // aledbConfirmTypedDelete and aledbPost rather than a hand-rolled swal, getCookie and
+    // fetch: this was the last block in the file still carrying its own copies of all
+    // three, and the lock handler below already says there is no reason for a second one.
     button.addEventListener("click", function () {
-        swal({
-            title: "Delete this experiment?",
-            text: "Are you sure you want to delete. This is permanent.",
-            icon: "warning",
-            buttons: true,
-            dangerMode: true
-        }).then(function (confirmed) {
+        window.aledbConfirmTypedDelete("this experiment").then(function (confirmed) {
             if (!confirmed) { return; }
-            fetch("/ale/experiment/" + button.dataset.experimentId + "/delete/", {
-                method: "POST",
-                headers: { "X-CSRFToken": getCookie("csrftoken") }
-            }).then(function (resp) {
-                return resp.json().then(function (body) {
-                    if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
-                    window.location.href = "/ale/experiments/";
+            window.aledbPost("/ale/experiment/" + button.dataset.experimentId + "/delete/", {})
+                .then(function () {
+                    window.location.href = button.dataset.afterDelete;
+                })
+                .catch(function (err) {
+                    swal("", err.message || "Delete failed", "error");
                 });
-            }).catch(function (err) {
-                swal("", err.message || "Delete failed", "error");
-            });
         });
     });
 })();

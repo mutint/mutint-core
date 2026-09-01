@@ -197,7 +197,10 @@ class AddPageTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("/import/add/?ale_experiment_id=%d" % self.experiment.ale_id, html)
         self.assertIn("delete-experiment", html)
-        self.assertIn("This is permanent.", html)
+        # The dialog copy used to be inlined here, and this asserted the literal
+        # "This is permanent." Deleting an experiment is one of the four controls behind
+        # the typed gate now, and the wording lives in aledb_crud.js with it.
+        self.assertIn("aledbConfirmTypedDelete", html)
 
     def test_list_pages_offer_create_and_delete(self):
         projects = self.client.get("/ale/projects/").content.decode("utf-8")
@@ -225,9 +228,12 @@ class AddPageTestCase(TestCase):
         self.assertIsNotNone(path)
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
-        for helper in ("aledbPost", "aledbConfirmDelete"):
+        for helper in ("aledbPost", "aledbConfirmDelete", "aledbConfirmTypedDelete",
+                       "aledbDeleteSelected"):
             self.assertIn(helper, source)
         self.assertNotIn("aledbTogglePanel", source)
+        # aledbConfirmDelete keeps its wording; it is the plain confirm the group and
+        # sharing pages use. If this line fails, the wrong helper was edited.
         self.assertIn("This is permanent.", source)
 
         for url in ("/ale/projects/", "/ale/experiments/"):

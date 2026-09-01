@@ -10,7 +10,8 @@ from django.utils import timezone
 
 from aledb_common import store
 from aledb_experiment.models import AleExperiment, Project
-from aledb_experiment.permissions import set_primary_owner
+from aledb_experiment.permissions import grant_project_access, set_primary_owner
+from aledb_experiment.roles import ROLE_READ
 from aledb_experiment.utils import get_all_user_exps, get_user_projects
 
 
@@ -160,6 +161,124 @@ class SoftDeleteTestCase(TestCase):
         first = self.client.post(url).json()["deleted_at"]
         second = self.client.post(url).json()["deleted_at"]
         self.assertEqual(first, second)
+
+
+class DeleteControlsTestCase(TestCase):
+    """Where the delete controls appear, and which confirm dialog they use.
+
+    Deleting an experiment or a project destroys data; revoking somebody's access or
+    removing them from a group does not. The two are behind different dialogs -- the
+    first makes you type DELETE -- and this is what keeps them from converging back
+    onto one, which is how a guard stops being noticed.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.owner)
+        created = self.client.post(
+            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+        self.project = Project.objects.get(pk=created["project_id"])
+        self.experiment = AleExperiment.objects.get(project=self.project)
+
+    def _html(self, url):
+        return self.client.get(url).content.decode()
+
+    def _project_page(self):
+        return self._html("/ale/project/%d/" % self.project.id)
+
+    # --- the new control on the project page ---------------------------------------
+
+    def test_the_project_page_offers_delete_selected(self):
+        self.assertIn('id="delete-selected"', self._project_page())
+
+    def test_a_reader_is_not_offered_it(self):
+        """Read access opens the page; it does not offer a way to empty it.
+
+        The endpoint refuses them anyway, so this is not the check that protects the
+        data -- it is what stops the page advertising an action that can only 403.
+        """
+        reader = User.objects.create(username="reader", email="r@e.com", is_active=True)
+        grant_project_access(self.project, reader, ROLE_READ, granted_by=self.owner)
+        self.client.force_login(reader)
+        html = self._project_page()
+        self.assertNotIn('id="delete-selected"', html)
+        self.assertEqual(200, self.client.get("/ale/project/%d/" % self.project.id).status_code)
+
+    def test_the_handler_survives_the_button_being_gone(self):
+        """The script is unconditional and the button is not, so the guard is what
+        stands between a reader and a page whose JavaScript throws on load.
+
+        Asserted for a reader rather than signed out: a private project answers 403 to
+        an anonymous request, so there would be no script on the page to guard and the
+        check would pass by finding nothing.
+        """
+        reader = User.objects.create(username="reader", email="r@e.com", is_active=True)
+        grant_project_access(self.project, reader, ROLE_READ, granted_by=self.owner)
+        self.client.force_login(reader)
+        html = self._project_page()
+        self.assertIn('document.getElementById("delete-selected").addEventListener', html)
+        self.assertNotIn('id="delete-selected"', html)
+        self.assertIn('if (!document.getElementById("delete-selected")) { return; }', html)
+
+    # --- which dialog each control uses --------------------------------------------
+
+    def test_the_data_deletes_make_you_type_it(self):
+        """All four, and each assertion first proves it found its subject.
+
+        A check that looks for a call in a page is one renamed id away from passing
+        because it matched nothing at all, which this repo has been bitten by before.
+
+        The three bulk controls reach the typed dialog through aledbDeleteSelected
+        rather than naming it, so the last assertion below is what makes that route
+        mean what the other three say.
+        """
+        for url, control, call in (
+                ("/ale/projects/", 'id="delete-selected"', "aledbDeleteSelected"),
+                ("/ale/experiments/", 'id="delete-selected"', "aledbDeleteSelected"),
+                ("/ale/project/%d/" % self.project.id,
+                 'id="delete-selected"', "aledbDeleteSelected"),
+                ("/stats/?ale_experiment_id=%d" % self.experiment.ale_id,
+                 'id="delete-experiment"', "aledbConfirmTypedDelete")):
+            with self.subTest(url=url):
+                html = self._html(url)
+                self.assertIn(control, html)
+                self.assertIn(call, html)
+
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("js/aledb_crud.js"), encoding="utf-8") as handle:
+            source = handle.read()
+        gather = source[source.index("window.aledbDeleteSelected"):]
+        self.assertIn("aledbConfirmTypedDelete", gather)
+
+    def test_revoking_access_stays_a_plain_confirm(self):
+        """Removing a grant destroys nothing, and should not feel like it does."""
+        html = self._html("/ale/project/%d/access/" % self.project.id)
+        self.assertIn("aledbConfirmDelete(", html)
+        self.assertNotIn("aledbConfirmTypedDelete", html)
+
+    # --- where a single delete lands -----------------------------------------------
+
+    def test_deleting_the_experiment_you_are_looking_at_returns_to_its_project(self):
+        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.ale_id)
+        self.assertIn('data-after-delete="/ale/project/%d/"' % self.project.id, html)
+
+    def test_an_experiment_with_no_project_has_no_delete_button_to_aim(self):
+        """Which is why the button's fallback destination is a guard, not a live path.
+
+        `AleExperiment.project` is nullable, so the template has an else-branch pointing
+        at the flat list. Nothing can reach it: `effective_role` answers None for a null
+        project before it reaches its superuser branch, so a projectless experiment is
+        viewable by nobody and this page does not render for one -- superuser included.
+        Pinned here so the else-branch is not read later as a case somebody tested.
+        """
+        self.experiment.project = None
+        self.experiment.save()
+        self.owner.is_superuser = True
+        self.owner.save()
+        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.ale_id)
+        self.assertNotIn('id="delete-experiment"', html)
+        self.assertIn("permission", html)
 
 
 class ProjectDetailIsReadOnlyTestCase(TestCase):
