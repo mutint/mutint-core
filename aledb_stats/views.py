@@ -5,13 +5,13 @@ from django.utils.safestring import mark_safe
 from django.conf import settings
 from aledb_seq.util import get_ordered_reseq_queryset
 from aledb_seq.views import common
-from aledb_stats.util import get_needle_plot_data, needle_plot_axis,\
-    get_ale_flask_isolate_count_list,\
+from aledb_stats.util import get_ale_flask_isolate_count_list,\
     get_experiment_summary,\
     get_reseq_experiment_info_list
 from aledb_common.util import get_user_context
 import logging
 from aledb_common.context_registry import get_experiment_context
+from aledb_common.panel_registry import render_overview_panels
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_edit_experiment, can_lock_experiment
 from aledb_common.logger import user_extra, join_extras
@@ -68,15 +68,11 @@ def stats(request):
         observed_protein_change_type_count_dict = summary.observed_protein_change_counts
         template = loader.get_template(STATS_TEMPLATE)
 
-        # Which contig, and how long it is. The plot's axis used to be a hardcoded 5 Mb and
-        # its points carried no sequence name, so a multi-contig reference drew every contig
-        # on top of itself against an axis belonging to some other genome.
-        #
-        # `?contig=` is the picker's own parameter, in the URL rather than the session so a
-        # plasmid's plot is a link somebody can send. An unrecognised value falls back to the
-        # default, which is the reference's longest sequence -- see `needle_plot_axis`.
-        needle_axis = needle_plot_axis(experiment.ale_id, request.GET.get("contig"))
-        needle_plot_data = get_needle_plot_data(experiment.ale_id, needle_axis["contig"])
+        # Whatever the installed components put on this page under what it owns itself.
+        # The needle plot was the first, and lived in this app until it became one: it is
+        # `aledb-needle` now, and a deployment without that component simply has no such
+        # section. See aledb_common/panel_registry.py.
+        panels = render_overview_panels(experiment, request)
         context.update({"ale_experiment_name": exp_name,
                         "ale_no": ale_number,
                         "ale_experiment_id": ale_experiment_id,
@@ -91,12 +87,7 @@ def stats(request):
                         "observed_mutation_type_count_dict": observed_mutation_type_count_dict,
                         "observed_mutation_sum": sum(observed_mutation_type_count_dict.values()),
                         "experiments_info_list": experiments_info_list,
-                        # Handed to the page through `json_script`, not as a Python repr
-                        # interpolated into a JS literal -- which is what `mark_safe(list(...))`
-                        # was, and which only worked because a repr of this particular shape
-                        # happens to be valid JavaScript.
-                        "needle_plot_data": list(needle_plot_data),
-                        "needle_axis": needle_axis,
+                        "panels": panels,
                         # `seq_color_set` and `protein_types` stood here and are gone with the
                         # colour machinery in aledb_seq.views.common: a palette and a vocabulary
                         # for a chart that was never built, and which no template has ever read.

@@ -1,6 +1,6 @@
 # The registries
 
-There are seven, all in `aledb_common`. Each is a module holding a list, a `register_*`
+There are eight, all in `aledb_common`. Each is a module holding a list, a `register_*`
 function an app calls from `AppConfig.ready()`, and a `get_*` function core calls when it
 renders. That is the whole mechanism — there is no plugin base class, no manifest and no
 entry-point scanning.
@@ -20,13 +20,24 @@ holds core's three import types. A plugin is just another caller.
 | [`about_registry`](../reference/about_registry.md) | a template | gives your component a section on `/about` |
 | [`example_registry`](../reference/example_registry.md) | a directory of data | loads it with `./aledb load_example` |
 | [`context_registry`](../reference/context_registry.md) | a callable | adds to the experiment views' context |
+| [`panel_registry`](../reference/panel_registry.md) | a template and a context callable | draws your panel on the experiment Overview |
+
+`context_registry` and `panel_registry` are close enough together to be worth telling apart.
+The first hands the experiment views extra *context*, which some template must already be
+written to render — so it can enrich a page core draws, and cannot add a section to one. The
+second hands over a **template as well**, which is what lets a component put content of its own
+on `/stats` with no edit to core. `aledb-needle`, the needle plot, is a component that
+registers a panel and nothing else at all: no URL, no nav entry, no model.
 
 ## Direction
 
-Six of the seven run one way: an app contributes something and core consumes it. Registration
+Seven of the eight run one way: an app contributes something and core consumes it. Registration
 is additive and core never calls back.
 
 `rebuild_registry` is the exception and the only one that runs **both** ways.
+(`panel_registry` looks like a second exception, because core calls your context callable while
+rendering. It is not: that call is core consuming what you registered, in the request that
+draws it -- nothing tells you an experiment has changed.)
 
 - Core → you: when an experiment's mutations change, core marks your derived data stale and,
   unless you opted out, calls your rebuild function.
@@ -47,7 +58,7 @@ determines whether you get to ask for a position at all.
   before anything that counts mutations through them, and installation-wide totals must be
   counted after the per-experiment tables they aggregate.
 - **Everything else is `INSTALLED_APPS` order**, and deliberately has no `order` parameter. A
-  nav entry's position is cosmetic; to move one, move its app. Plugins load after every core
+  nav entry's position is cosmetic, and so is a panel's; to move one, move its app. Plugins load after every core
   app, so a plugin's nav entry lands at the end of its section, and plugins order among
   themselves by their order in the assembled project's `.gitmodules`.
 

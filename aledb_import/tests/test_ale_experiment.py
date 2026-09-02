@@ -108,14 +108,19 @@ class UploadCommandTestCase(TestCase):
 
     def test_derived_data_is_available_after_the_import(self):
         """This asserted that `StaticData` had a row. Nothing is stored now, so what the
-        import has to leave behind is an *answer*: the needle plot is built from the rows the
-        upload just wrote."""
-        from aledb_stats.util import get_needle_plot_data
+        import has to leave behind is an *answer* -- one computed from the rows the upload
+        just wrote.
+
+        It used to ask the needle plot for that answer, which core can no longer do: the plot
+        is the aledb-needle component and is not installed here. The Overview's counts are the
+        same question asked of something core owns."""
+        from aledb_stats.util import get_experiment_summary
 
         self.upload()
         experiment = AleExperiment.objects.get()
 
-        self.assertTrue(get_needle_plot_data(experiment.ale_id))
+        summary = get_experiment_summary(experiment.ale_id)
+        self.assertTrue(sum(summary.mutation_type_counts.values()))
 
     def test_a_directory_with_no_metadata_is_skipped(self):
         shutil.rmtree(os.path.join(self.experiment_dir, "metadata"))

@@ -8,10 +8,12 @@ Convergence and the dashboard showing what was true under the previous cutoff, w
 short of `./aledb rebuild` that would ever correct them.
 
 The sharpest case was one page: `/stats` renders `get_experiment_summary`, which refreshed, and
-`get_needle_plot_data`, which did not -- two numbers derived from the same mutations,
+the needle plot's data, which did not -- two numbers derived from the same mutations,
 disagreeing in the same viewport. **Neither is stored any more**, so that particular
-disagreement is now impossible rather than merely tested for; the page-level assertion below
-is kept anyway, because what it states is a property of the page rather than of a cache.
+disagreement is now impossible rather than merely tested for. The assertion that they still
+agree has moved to `aledb_needle`, which is where the plot lives now and the only place both
+halves can be read; what is left here is the half core owns, which is that nothing is
+registered to rebuild the plot.
 
 Each remaining test has the same shape: make the data current, change the mutations *behind*
 the reader's back, mark stale the way a filter edit does, and read through the public entry
@@ -39,38 +41,18 @@ class LazyRebuildTestCase(EditorTestCase):
 
     # --- the needle plot ------------------------------------------------------------------
 
-    def test_the_needle_plot_has_nothing_to_rebuild(self):
+    def test_nothing_is_registered_to_rebuild_the_needle_plot(self):
         """It used to be `StaticData`, and this test used to prove the reader refreshed it.
 
-        There is no stored copy to be stale now, so the property worth asserting is the
-        stronger one the removal bought: the change is visible without anything marking,
-        rebuilding, or being asked to. `static_data` is not a registered rebuilder any more,
-        and `get_rebuilders` skipping an unknown name is what makes that silent -- so this
-        also pins that nobody has to remember to ask.
+        There is no stored copy to be stale now. What core can still assert is that nobody is
+        registered to keep one -- `get_rebuilders` skips an unknown name silently, so a
+        rebuilder coming back for a table that no longer exists would be quiet. That the
+        plot itself reflects a change immediately is asserted in `aledb_needle`, which is the
+        only place the plot can be read from.
         """
         from aledb_common.rebuild_registry import get_rebuilder
-        from aledb_stats.util import get_needle_plot_data
 
         self.assertIsNone(get_rebuilder('static_data'), "the rebuilder is gone")
-
-        before = len(get_needle_plot_data(self.experiment.ale_id))
-        self._add_a_mutation()
-
-        self.assertEqual(before + 1, len(get_needle_plot_data(self.experiment.ale_id)))
-
-    def test_the_needle_plot_and_the_overview_agree_on_one_page(self):
-        """They are rendered together by `/stats`, and used to be two caches that could fall
-        out of step. They are two queries over the same rows now, which is why this is left
-        marked stale and not rebuilt: whatever `request_rebuild` did or did not do, both
-        halves of the page have to answer for the same mutations."""
-        from aledb_stats.util import get_experiment_summary, get_needle_plot_data
-
-        self._add_a_mutation()
-        request_rebuild(self.experiment.ale_id, reason='test')
-
-        summary = get_experiment_summary(self.experiment.ale_id)
-        needle = get_needle_plot_data(self.experiment.ale_id)
-        self.assertEqual(sum(summary.observed_mutation_type_counts.values()), len(needle))
 
     # --- the dashboard --------------------------------------------------------------------
 

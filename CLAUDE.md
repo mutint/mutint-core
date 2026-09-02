@@ -79,8 +79,11 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1634 run, 0 failures** standalone; **1790** in an assembled project, where the
-plugins' own tests join them. They were 1625 and 1781 before the needle plot got a sequence
+**Baseline: 1620 run, 0 failures** standalone; **1801** in an assembled project, where the
+plugins' own tests join them. **The standalone figure went down and the assembled one up**,
+which is what extracting a component looks like: the needle plot's 22 tests left this repo with
+the plot and 25 run in aledb-needle, and 8 new ones cover `panel_registry` here. They were 1634
+and 1790 before that, 1625 and 1781 before the needle plot got a sequence
 picker, 1622 and 1778 before a reference stopped reporting a
 mutation count, 1621 and 1777 before the sample menu started toggling,
 1620 and 1776 before the reads track stopped drawing
@@ -440,9 +443,12 @@ recomputes them in place against the stored reference -- re-importing is not nee
 on a broken link). Output goes to `site/`, which is git-ignored. Nothing is hosted.
 
 **The toolchain is MkDocs + Material + mkdocstrings, and the reason is the docstrings.** The
-seven registries carry 360 non-blank lines of docstring containing 90 single-backtick code
-spans, written as markdown. Sphinx's `autodoc` parses docstrings as reStructuredText, where a
-single backtick is a *title reference* -- all 90 would render as italics and warn. MyST changes
+eight registries carry **465** non-blank lines of docstring containing **143** single-backtick
+code spans, written as markdown. (This said 360 and 90, of seven registries; re-counted over
+every docstring in `aledb_common/*_registry.py`, the seven were already 413 and 117 before the
+eighth was added. Measured, not adjusted -- the same drift the test counts above warn about.)
+Sphinx's `autodoc` parses docstrings as reStructuredText, where a single backtick is a *title
+reference* -- all 143 would render as italics and warn. MyST changes
 how `.md` pages parse, not how docstrings do. `mkdocstrings` parses them as markdown, so the
 reference renders correctly with no edit to any docstring. (Secondarily: on this repo's Python
 3.9, pip caps Sphinx at 7.4.x while `mkdocs-material` is current.)
@@ -649,7 +655,7 @@ comment -- *"Each page rebuilds its own on next view"* -- described something th
 been implemented.
 
 The sharpest case was a single page: `/stats` renders `get_experiment_summary`, which
-refreshed, beside `get_needle_plot_data`, which did not -- two counts of the same mutations
+refreshed, beside the needle plot's data, which did not -- two counts of the same mutations
 disagreeing in the same viewport. Every reader calls `ensure_fresh` now.
 
 **That page then went further and stopped storing either of them**, which is the better answer
@@ -2226,68 +2232,54 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
 `igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
 
-### The needle plot knows which genome it is drawing
+### A component can put a panel on the Overview
 
-Its axis was a hardcoded `maxCoord: 5000000` in `muts_needle_plot.js` -- roughly E. coli, and
-wrong for anything else -- and `get_needle_plot_data` emitted a bare `coord` with **no
-`seq_id`**, so a multi-contig reference drew every contig on top of itself on one axis. Both
-failed silently: the plot rendered, it simply was not about this genome.
+`aledb_common/panel_registry.py` is the eighth registry, and the first that lets an app put
+**its own rendered content** on a core page rather than contribute a link, a heading, a handler
+or a name. An app registers from `AppConfig.ready()`:
 
-`aledb_stats.util.needle_plot_axis` names the sequence to draw and reads its length from
-`ExperimentReference.seq_ids`; `get_needle_plot_data(experiment_id, contig)` is scoped to it.
-One sequence at a time rather than a concatenated axis, because offsets the reader cannot see
-turn every coordinate into one that matches nothing in the tables.
+```python
+register_overview_panel(self, name='needle_plot', title='Mutation Needle Plot',
+                        template='needle/panel.html', context=needle_panel_context)
+```
 
-**Which sequence is the reader's to choose, and for a while it was not.** One contig was
-hardcoded as the answer rather than as the default, so on a chromosome-plus-plasmid reference
-the plasmid's mutations were on **no page in the product** -- and the line saying which contig
-was drawn made that visible without making it fixable. `needle_plot_axis(experiment_id,
-contig)` takes the reader's choice, `?contig=` carries it, and `needle_axis["contigs"]` is the
-menu, each entry carrying its own `count` and `length`. There is deliberately no separate count
-of that list to disagree with it, which is what the old `contig_count` was.
+`/stats` draws the heading and the rule; the panel's template is the **body only**, so two
+components cannot disagree about what a section there looks like.
 
-**The default is the longest sequence, not the busiest**, and the two rules are independent
-enough that a fixture where they agree tests neither. The chromosome is what somebody opening
-an experiment means by "the genome"; a small plasmid under strong selection can carry more
-mutations than it, and a page opening on the plasmid would be a surprise about the reference
-dressed up as a fact about the data. Length is a property of the reference. A count moves.
+**It exists because there was no seam for something that is one panel and not a page.** Every
+earlier way to be seen was `register_plugin_urlpatterns` plus `register_nav_item` -- which is
+what aledb-compare, aledb-fixation and aledb-converge are. `context_registry` gets *context*
+onto an experiment view and stops there: some template must already be written to render it,
+which is exactly the compile-time knowledge of a plugin core is built not to have. So the
+needle plot lived in `aledb_stats` beside the Overview's counts for no better reason than that
+`/stats` is where it is drawn. **It is the aledb-needle component now**, and standalone
+aledb-core has no needle plot at all -- see that repo's `CLAUDE.md` for the plot's own design.
 
-**The list is every sequence the reference has, mutations or none.** A plasmid with nothing on
-it draws an empty axis, which is an answer -- the reader asked and the page says nothing is
-there. Left out, it is indistinguishable from a sequence the reference does not have, and the
-count beside each name is what tells those apart. (A sentence saying *"1 of this reference's 2
-sequences carry mutations"* stood in for this briefly, and the menu says it better. Its
-predecessor said "of this reference's N" while N counted contigs with mutations, not sequences
-in the reference.)
+Four things about the mechanism:
 
-Three more things about it:
+- **A template plus a callable**, not HTML in a setting, for the reason `about_registry` gives:
+  a template ships inside the app and a deployment overrides any component's panel by writing
+  a file at the same path.
+- **The callable takes `(experiment, request)`**. The request as well, because a panel may
+  legitimately depend on the query string -- the needle plot's sequence picker is a `?contig=`
+  away.
+- **Each panel renders on its own**, rather than every panel's context being merged into one
+  dict for `{% include %}` to sort out: two panels using the name `data` would otherwise
+  silently read each other's. It is also what makes the isolation below expressible at all.
+  `request=` is passed to the renderer, so a panel sees the same `aledb_version`, user and
+  static configuration as the page around it.
+- **A panel that raises is dropped with a logged warning** and the rest of the page renders --
+  the posture `nav_registry` takes with a `url_name` that will not reverse. The trade is that
+  a broken panel is quiet, which is why the warning names the app and the panel: the symptom
+  is a missing section, which nobody can work backwards from.
 
-- **The picker is links, not a form**, the same shape as the per-sample page's sample picker,
-  so it needs no script and a plasmid's plot is a URL somebody can send.
-- **An unrecognised `?contig=` falls back to the default** rather than drawing an empty plot,
-  as `breseq_table._selected_reseq` does with a sample its own filters exclude. An empty plot
-  of a contig that does not exist reads exactly like a contig with no mutations -- and that
-  second thing is now a state the page renders on purpose.
-- **A contig a mutation names but the reference does not list is offered last.** It has no
-  length to sort by, and dropping it would leave mutations the experiment holds on no axis.
+Ordering is INSTALLED_APPS order with no parameter, as with `nav_registry` and
+`about_registry` -- a panel's position is cosmetic.
 
-**With no stored reference there are no lengths at all**, so the list is what the mutations
-name and the order degrades to busiest first -- the most the data alone can say. The sort's
-final tie-break is the name, or two equal contigs swap places between page loads and the
-default becomes whichever the database felt like.
-
-**With no stored reference the axis falls back to the data's own extent**, not to a constant --
-an experiment imported from bare `.gd` files has no reference at all, and its own largest
-coordinate is still a truer axis than somebody else's genome size.
-
-Measured on the dev database: a 160-base reference now draws a **0-160** axis rather than
-0-5,000,000 with every mutation in the leftmost pixel. On a 4.6 Mb one the visible ticks are
-unchanged, because d3 rounds that domain up to 5,000,000 anyway -- the fix is invisible exactly
-where the old constant happened to be right.
-
-The data also reaches the page through `json_script` now rather than as `mark_safe(list(...))`,
-a Python repr interpolated into a JS literal, which worked only because a repr of this
-particular shape happens to be valid JavaScript.
+**Core's own tests may only assert on the panels they register.** `test_panel_registry` was
+written comparing the rendered list outright; it passed standalone and failed four ways under
+`./mutint test`, because aledb-needle's panel is in that list too. Same rule as the About and
+nav tests, sprung again in a new place.
 
 ### The mutations are drawn from the database, not from a file
 
@@ -2878,20 +2870,22 @@ All apps use the `aledb_*` namespace. Key apps:
   **Adding a mutation by hand** above.
 - **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
 - **`aledb_export/`** — Data export in various formats.
-- **`aledb_stats/`** — The `/stats` page: the Overview's mutation counts and the needle
-  plot. **It has no models.** Both were stored — `ExperimentSummary` and `StaticData`, each
-  with its own rebuilder — and both are computed by the request that renders them now, in
-  0.07s and 0.05s on the largest experiment in the dev database. What made that possible is
-  reading the three or four columns each answer needs as `values_list` tuples instead of
-  materialising every ObservedMutation in the experiment as a model.
+- **`aledb_stats/`** — The `/stats` page: the Overview's mutation counts, the sample table,
+  and whatever the installed components register as panels. **It has no models.** Its counts
+  were stored as `ExperimentSummary` with its own rebuilder, and are computed by the request
+  that renders them now, in 0.07s on the largest experiment in the dev database — by reading
+  the three or four columns the answer needs as `values_list` tuples instead of materialising
+  every ObservedMutation as a model. The needle plot was the other half of this app, stored as
+  `StaticData` and then computed the same way; it is the **aledb-needle** component now and
+  reaches the page through `panel_registry`.
 - **`aledb_search/`** — Cross-experiment search.
 - **`aledb_bibliome/`** — Publication/bibliography management.
 - **`aledb_dashboard/`** — Dashboard views and timeline events.
 - **`aledb_accounts_noauth/`** — Default auth stub: Django's built-in login/logout, no enforcement. Swap for `aledb_accounts` (brute-force protection) or any other auth app by changing `INSTALLED_APPS`.
 - **`aledb_accounts/`** — Enhanced auth with `django-defender` brute-force protection. Optional; used in production (`settings_private.py`).
-- **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the seven
-  registries (context, import, plugin, nav, about, example and **rebuild**), and global static
-  files. `DerivedDataState` is its only model.
+- **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eight
+  registries (context, import, plugin, nav, about, example, **panel** and **rebuild**), and
+  global static files. `DerivedDataState` is its only model.
 - **`config/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
 
 ### Adding and deleting through the UI
@@ -2977,9 +2971,9 @@ user-facing lists exclude deleted rows explicitly via `aledb_experiment.models.l
 
 ### Import types are pluggable
 
-`aledb_common/import_registry.py` is one of seven registries in `aledb_common/` -- alongside
-`plugin_registry`, `nav_registry`, `about_registry`, `context_registry`, `example_registry` and
-`rebuild_registry`. An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
+`aledb_common/import_registry.py` is one of eight registries in `aledb_common/` -- alongside
+`plugin_registry`, `nav_registry`, `about_registry`, `context_registry`, `example_registry`,
+`panel_registry` and `rebuild_registry`. An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
 page's type dropdown and in auto-detect, with no edit to core:
 
 ```python

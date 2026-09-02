@@ -120,6 +120,36 @@ name and its git revision, so the page is an inventory as much as prose. Registe
 words under your heading. A template that does not exist drops to a bare heading with a logged
 warning rather than breaking a page that is mostly other components' content.
 
+## A panel on the experiment Overview
+
+```python
+from aledb_common.panel_registry import register_overview_panel
+
+register_overview_panel(self, name='needle_plot',
+                        title='Mutation Needle Plot',
+                        template='needle/panel.html',
+                        context=needle_panel_context)
+```
+
+`/stats` draws a heading and your rendered template under the counts and the sample table it
+owns itself. Your `context` callable takes `(experiment, request)` and returns a dict — the
+request as well as the experiment, because a panel may legitimately depend on the query string:
+the needle plot's sequence picker is a `?contig=` away.
+
+**Your template is the body only.** The heading and the rule above it are drawn by the page, so
+two components cannot disagree about what a section there looks like.
+
+Each panel is rendered on its own, with its own context, so two panels using the name `data`
+for different things cannot read each other's. A panel whose callable or template raises is
+dropped with a logged warning and the rest of the page renders — the same posture as a nav
+entry whose route will not reverse.
+
+This is the seam to reach for when what you have is *one panel and not a page*.
+[`aledb-needle`](https://github.com/barricklab) — the mutation needle plot — is a component
+that registers a panel and an About section and nothing else whatever: no URL, no nav entry, no
+model, no migration. Before this registry existed it had to live in aledb-core, for no better
+reason than that `/stats` is where it is drawn.
+
 ## Context for the experiment views
 
 ```python
@@ -130,8 +160,9 @@ register_experiment_context_provider(add_your_context)
 
 Your callable contributes to the context of core's experiment views, which is how
 `aledb_bibliome` puts publication data on those pages without core depending on it. Use it
-when your data belongs *on somebody else's page*; use a nav entry and your own view when it
-deserves its own.
+when your data belongs *on somebody else's page* and that page already renders it; reach for
+`register_overview_panel` above when you are bringing the markup too, and use a nav entry and
+your own view when it deserves its own page.
 
 ## When contigs are renamed
 
