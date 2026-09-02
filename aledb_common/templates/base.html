@@ -99,14 +99,33 @@
             </div>
             <ul class="nav in" id="side-menu">
                 {% if user.is_authenticated %}
-                    <li><a href="#"><b>{{ user.username }}</b></a>
+                    {% comment %} The account block: who you are, and the things you can do
+                       about that. Indented with three &nbsp; and `class="small"`, which is
+                       what makes them read as nested under the username rather than as peers
+                       of the nav entries below. The username's own <li> used to be left open
+                       and a stray </li> closed it two entries later. {% endcomment %}
+                    <li><a href="#"><b>{{ user.username }}</b></a></li>
                     <li>
+                        {% comment %} A GET link, which Django 4.2 still accepts and Django 5.0
+                           removes -- LogoutView is POST-only there. Whoever does that upgrade
+                           has to turn this into a posting form. {% endcomment %}
                         <a href="{% url 'accounts:logout' %}" class="small">&nbsp;&nbsp;&nbsp;Logout</a>
                     </li>
                     <li>
-                        <a href="/admin/password_change/" class="small">&nbsp;&nbsp;&nbsp;Change Password</a>
+                        {% comment %} Local, and it did not used to be: this linked
+                           /admin/password_change/, which is wrapped in admin_view and so
+                           bounced every non-staff user to the admin login. {% endcomment %}
+                        <a href="{% url 'accounts:password_change' %}" class="small">&nbsp;&nbsp;&nbsp;Change Password</a>
                     </li>
-                    </li>
+                    {% comment %} Superusers, not staff. Django's admin admits anyone with
+                       is_staff -- but `load_projects` creates every imported user with
+                       is_staff=True, so a staff gate would offer this to nearly everyone on a
+                       real deployment and land most of them in an empty admin. {% endcomment %}
+                    {% if user.is_superuser %}
+                        <li>
+                            <a href="{% url 'admin:index' %}" class="small">&nbsp;&nbsp;&nbsp;Django admin</a>
+                        </li>
+                    {% endif %}
                 {% else %}
                     <li><a href="{% url 'accounts:login' %}">Login</a></li>
                 {% endif %}

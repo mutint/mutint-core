@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+{% block header %}Please Login{% endblock %}
+{% comment %} The house form shape, copied from ale/group_new.html: a plain container, one
+   `form-group` per field, a visible label before its input, and one `btn btn-primary`.
+
+   It used to be none of those. This was the only template in the product written against
+   Bootstrap *4* class names -- `form-signin`, `form-label-group`, `align-content-lg-center` --
+   which exist in no stylesheet here and in no version of the vendored Bootstrap 3.3.7. They
+   were inert, which is why the two boxes had no space between them: nothing supplied a margin,
+   where `form-group` supplies 15px. Its button was the only `btn-lg btn-block` in the codebase.
+
+   It also lives in aledb_common now rather than in the default auth app. Both auth apps render
+   it, and `aledb_accounts` has no templates directory of its own -- so swapping the auth slot
+   used to mean `TemplateDoesNotExist` on the login page. {% endcomment %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% comment %} An empty action rather than a hardcoded /accounts/login/, so a query
+           string survives the post. {% endcomment %}
+        <form method="post" action="">
+            {% csrf_token %}
+            {% comment %} `LoginView.get_success_url()` prefers `next` over the view's
+               `next_page`, so a @login_required bounce returns you where you were going.
+               (`LoginRequiredMiddleware` redirects without a ?next= at all -- that is its own
+               fix, not this one.) {% endcomment %}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            {% comment %} The errors were rendered nowhere at all, so a wrong password
+               silently re-rendered a blank form. AuthenticationForm puts both "please enter a
+               correct username and password" and "this account is inactive" in
+               non_field_errors. {% endcomment %}
+            {% if form.errors %}
+                <div style="color: #a00; margin-top: 1em;">
+                    {{ form.non_field_errors|join:" " }}
+                    {{ form.username.errors|join:" " }}
+                    {{ form.password.errors|join:" " }}
+                </div>
+            {% endif %}
+
+            {% comment %} The name= values are the contract with AuthenticationForm and are not
+               ours to rename; the ids are ours. The username is repopulated so a mistyped
+               password does not blank both boxes. {% endcomment %}
+            <div class="form-group">
+                <label for="lg-username">Username</label>
+                <input type="text" class="form-control" id="lg-username" name="username"
+                       value="{{ form.username.value|default:'' }}"
+                       autocomplete="username" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="lg-password">Password</label>
+                <input type="password" class="form-control" id="lg-password" name="password"
+                       autocomplete="current-password" required>
+            </div>
+
+            <div style="margin-top: 1.5em;">
+                <button type="submit" class="btn btn-primary">Sign in</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}

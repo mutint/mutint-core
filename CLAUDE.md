@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ALEdb is a Django 5 web application for managing Adaptive Laboratory Evolution (ALE) experiments. It stores experimental data, parses genomic sequencing output (breseq `.gd` files), and provides analysis tools for mutations, convergence, and enrichment.
+ALEdb is a Django 4.2 web application for managing Adaptive Laboratory Evolution (ALE)
+experiments. (This said "Django 5" for a long time and was wrong: `requirements.txt` pins
+`Django>=4.2,<5.0` and 4.2.30 is what installs. It matters in at least one place -- the
+sidebar's Logout is a GET link, which 4.2 still accepts and 5.0 removes.) It stores experimental data, parses genomic sequencing output (breseq `.gd` files), and provides analysis tools for mutations, convergence, and enrichment.
 
 ### Role of this repo
 
@@ -79,8 +82,11 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1620 run, 0 failures** standalone; **1801** in an assembled project, where the
-plugins' own tests join them. **The standalone figure went down and the assembled one up**,
+**Baseline: 1644 run, 0 failures** standalone; **1825** in an assembled project, where the
+plugins' own tests join them. They were 1620 and 1801 before the account pages -- the login
+page's normalisation, the local change-password page and the sidebar's admin link -- which
+added 24 tests to a corner that had none at all.
+**The standalone figure went down and the assembled one up** at the entry before that,
 which is what extracting a component looks like: the needle plot's 22 tests left this repo with
 the plot and 25 run in aledb-needle, and 8 new ones cover `panel_registry` here. They were 1634
 and 1790 before that, 1625 and 1781 before the needle plot got a sequence
@@ -349,6 +355,72 @@ three are not, and cannot borrow `.dropdown-menu` to get them -- `position: abso
 none` comes with it. So `.aledb-select-list` writes both out to match. `select_list.html` in
 `aledb_common/templates/` is the markup the editor's three share; the browser writes its own
 rows, because they carry a track's URLs and a mutant flag.
+
+### The account pages, and the sidebar block that reaches them
+
+Login, logout and changing a password. The routes are `aledb_common/account_urls.py` and the
+templates `aledb_common/templates/accounts/`, shared by both auth apps -- see **Auth slot**
+below for why they are not in the slot.
+
+**`registration/` is a template namespace `django.contrib.admin` owns, and this is the trap to
+know.** Django's `PasswordChangeView` defaults to `registration/password_change_form.html`, and
+admin ships a file at exactly that path -- along with `password_change_done.html`,
+`logged_out.html` and the four `password_reset_*` ones. `django.contrib.admin` is **first** in
+INSTALLED_APPS, so with `APP_DIRS=True` its copy wins over any app registered later, whatever
+that app intended. The failure is not an error: the page renders, correctly, in admin's chrome.
+Every template here is therefore named `accounts/...` and passed explicitly as `template_name=`,
+which sidesteps the race rather than depending on app order. `test_accounts` asserts
+`assertTemplateNotUsed('registration/password_change_form.html')` as the tripwire.
+
+**`PasswordChangeView.success_url` must be given, and its default fails only on success.** The
+default is `reverse_lazy("password_change_done")` -- *un-namespaced* -- and these patterns are
+included under `namespace='accounts'`, so left alone it raises `NoReverseMatch` after the new
+password has already been saved. The test follows the redirect through rather than asserting a
+302, because a test that stops at the 302 passes straight through this.
+
+**The validators reach the page for free, and the page has to say so.**
+`AUTH_PASSWORD_VALIDATORS` is configured with all four of Django's and the length minimum raised
+to **9**; `PasswordChangeForm.clean_new_password2` calls `validate_password`, so nothing here
+implements any of it. But `validate_password` runs *only* from a Django auth form, which until
+now meant the admin page ordinary users were bounced from -- so this is the first place an
+ordinary user meets those rules at all. Because the fields are hand-written, as every form in
+this repo is, `{{ form.new_password1.help_text }}` has to be rendered deliberately or the rules
+reach people only as a rejection. It needs `|safe` (Django builds a `<ul>`) and a `<div>` rather
+than the `<small>` the rest of the repo uses for `help-block`, since a `<ul>` may not sit inside
+a `<small>`.
+
+**Hand-written fields are checked against the form.** The house style is markup, not rendered
+Django forms, and its one hole is that a renamed field or a deleted input yields a form that
+silently fails validation forever. `test_accounts.HandWrittenFieldsTestCase` compares the
+`name=` attributes the rendered page posts against `set(PasswordChangeForm(user).fields)` and
+`set(AuthenticationForm().fields)`.
+
+**The login page was the one template following no house convention.** It was written against
+Bootstrap **4** class names -- `form-signin`, `form-label-group`, `align-content-lg-center` --
+which exist in no stylesheet here and in no version of the vendored Bootstrap 3.3.7. Being
+inert is exactly why it had no space between its two inputs: nothing supplied a margin, where
+`form-group` supplies 15px. Its button was the only `btn-lg btn-block` in the codebase, its
+`<div class="row ` never closed its quote (swallowing the spacer div after it), and it rendered
+`{{ form.errors }}` nowhere, so a wrong password silently re-rendered a blank form. The
+replacement is `ale/group_new.html`'s shape. A test names each dead class, because "it looks
+like every other page" is a claim that rots quietly.
+
+**The sidebar's account block is the shell's own, not a nav entry.** Username, Logout, Change
+Password and -- for a superuser -- Django admin, indented under the username with `class="small"`
+and three `&nbsp;`. It is written into `base.html` rather than registered, because
+`nav_registry` has no per-user visibility concept and `base.html` already has `user`; adding a
+`visible_to=` predicate for one entry would be a mechanism with a single producer.
+
+**The admin link is gated on `is_superuser`, not `is_staff`, and the difference is not
+pedantic.** Django's admin admits anyone with `is_staff`, so a staff gate would be the one that
+matches who gets in -- but `load_projects` creates every imported user with `is_staff=True`, so
+on a real deployment that is nearly everybody, most of whom would land in an admin with nothing
+in it. There is a test for the staff case specifically.
+
+**Change Password used to link `/admin/password_change/`**, which is wrapped in
+`AdminSite.admin_view` -- so it bounced every non-staff user to the admin login with "Please
+enter the correct username and password for a staff account". It was broken for exactly the
+people most likely to click it, and for staff it worked by leaving the product.
 
 ### Branding: aledb-core has none
 
@@ -2996,7 +3068,25 @@ anything uploads — so a plugin gets both of those by registering, with no edit
 
 Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
-**Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in its `urls.py` is auto-discovered by `config/urls.py`. Default: `aledb_accounts_noauth`. Production: `aledb_accounts`.
+**Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in
+its `urls.py` is auto-discovered by `config/urls.py`. Default: `aledb_accounts_noauth`.
+Production: `aledb_accounts`, which adds django-defender's brute-force protection.
+
+**The routes and templates are shared, and the apps are not where they live.**
+`aledb_common/account_urls.py` holds all four — login, logout, `password/` and
+`password/done/` — and each auth app's `urls.py` is three lines that serve that list. The
+templates are `aledb_common/templates/accounts/`. Both live outside the slot because only one
+auth app is installed at a time, so anything defined in one is missing from the other, and
+because `aledb_accounts` has no templates directory at all.
+
+Keeping two hand-written copies is not a hypothetical cost — they had already drifted into two
+bugs that nothing exercised, because `aledb_accounts` is installed in no settings module in
+this repo. It passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict** rather than to
+`as_view()`, which raises `TypeError` on the first login, and it had no `registration/login.html`,
+so swapping the slot also meant `TemplateDoesNotExist`. Both went with the consolidation.
+`aledb_common/tests/test_accounts.py` asserts the two apps serve the same route names, which is
+the only thing exercising the production app at all. django-defender patches `LoginView.dispatch`
+from middleware, so there is nothing an auth app needs to say in its URLconf.
 
 **Experiment context providers** — registered via `aledb_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `aledb_bibliome` to inject publication data into experiment views without a hard dependency.
 
