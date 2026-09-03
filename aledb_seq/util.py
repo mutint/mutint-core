@@ -3,6 +3,7 @@ import aledb_seq.models
 from aledb_common.util import is_int
 from aledb_experiment.ordering import sample_order, sample_sort_key
 from aledb_filter.util import filter_observed_mutations
+from aledb_experiment import paths
 
 HTML_ECOCYC = """<a href = "https://ecocyc.org/ECOLI/substring-search?type=GENE&object={gene}">{gene}</a>"""
 
@@ -16,7 +17,7 @@ def get_observed_mutation_queryset(experiment_id):
     that mean "what is stored": the CSV export, the mutation editor, and the per-sample
     breseq page, which tints ancestral rows rather than hiding them.
     """
-    return aledb_seq.models.ObservedMutation.objects.filter(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id)
+    return aledb_seq.models.ObservedMutation.objects.filter(**{paths.to_experiment_id(paths.FROM_OBSERVATION): experiment_id})
 
 
 def get_evolved_observation_queryset(experiment_id):
@@ -82,15 +83,15 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
     population sample from two plugin pages.
     """
     reseq_qryset = aledb_seq.models.ResequencingExperiment.objects.select_related(
-        'tech_rep__isolate__flask__ale_id__ale_experiment', 'tech_rep__isolate__flask__media'
+        paths.to_experiment(), paths.to_flask(field='media')
     ).order_by(*sample_order())
     if ale_experiment_id:
-        reseq_qryset = reseq_qryset.filter(tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=ale_experiment_id)
+        reseq_qryset = reseq_qryset.filter(**{paths.to_experiment_id(): ale_experiment_id})
     # `is not None`, not truthiness: the starting strain's ALE is "0"
     # (`common.STARTING_STRAIN_ALE_ID`), which was falsy while this column held integers and
     # so quietly selected every ALE instead of that one.
     if ale_id is not None and ale_id != "":
-        reseq_qryset = reseq_qryset.filter(tech_rep__isolate__flask__ale_id__ale_id=ale_id)
+        reseq_qryset = reseq_qryset.filter(**{paths.to_ale_label(): ale_id})
     if sample_type:
         flag = 0
         if sample_type == 'population':
@@ -184,7 +185,7 @@ def get_ref_sequences():
 
 def get_matching_observed_mutation_ids(mutation_id, experiment_id):
     local_observed_mutations = aledb_seq.models.ObservedMutation.objects.filter(
-        sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=experiment_id,
+        **{paths.to_experiment_id(paths.FROM_OBSERVATION): experiment_id},
         mutation__id=mutation_id).order_by(*sample_order("sequencing_experiment__"))
     matching_observed_mutation_ids = []
     for local_observed_mutation in local_observed_mutations:

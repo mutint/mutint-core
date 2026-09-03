@@ -34,6 +34,7 @@ from django.db.models import Q
 from aledb_common.util import get_gene_list
 from aledb_experiment.ordering import sample_order
 from aledb_filter.view_filter import EMPTY
+from aledb_experiment import paths
 
 __author__ = 'Patrick Phaneuf, Muyao :)'
 
@@ -95,7 +96,7 @@ def filter_observed_mutations(observed_mutation_queryset, *, filter_type=None, v
         observed_mutation_queryset, view_filter=view_filter)
 
     queryset = queryset.select_related(
-        'sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment', 'mutation'
+        paths.to_experiment(paths.FROM_OBSERVATION), 'mutation'
     ).order_by(*sample_order("sequencing_experiment__"))
     if not filter_type and not ignored_genes:
         return list(queryset)

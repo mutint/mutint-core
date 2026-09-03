@@ -21,6 +21,7 @@ import json
 
 from aledb_common.logger import user_extra, join_extras
 import logging
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -240,18 +241,18 @@ def _add_project_to_query(request, include_argument_list, user_projects):
         project_id = request.GET['project']
         ok = int(project_id) in project_ids
         if ok:
-            include_argument_list.append(Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project_id=project_id))
+            include_argument_list.append(Q(**{paths.to_experiment(paths.FROM_OBSERVATION, 'project_id'): project_id}))
         return ok
     elif not request.user.is_superuser:
         include_argument_list.append(
-            Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project_id__in=project_ids))
+            Q(**{paths.to_experiment(paths.FROM_OBSERVATION, 'project_id__in'): project_ids}))
     return False
 
 
 def _add_strain_to_query(request, include_argument_list):
     strain = request.GET['strain']
     if strain and len(strain) > 0:
-        include_argument_list.append(Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__strain=strain))
+        include_argument_list.append(Q(**{paths.to_ale(paths.FROM_OBSERVATION, 'strain'): strain}))
         return True
     return False
 

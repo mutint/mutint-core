@@ -23,6 +23,7 @@ from django.core.management.base import BaseCommand
 
 from aledb_import import coverage
 from aledb_seq.models import ResequencingExperiment
+from aledb_experiment import paths
 
 
 class Command(BaseCommand):
@@ -38,10 +39,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         samples = ResequencingExperiment.objects.filter(bam_stored=True).select_related(
-            "tech_rep__isolate__flask__ale_id__ale_experiment")
+            paths.to_experiment())
         if options["experiment_id"] is not None:
             samples = samples.filter(
-                tech_rep__isolate__flask__ale_id__ale_experiment__ale_id=options["experiment_id"])
+                **{paths.to_experiment_id(): options["experiment_id"]})
         if not options["force"]:
             samples = samples.exclude(coverage_stored=True)
 

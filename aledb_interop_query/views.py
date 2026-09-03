@@ -19,6 +19,7 @@ from aledb_metadata.views import get_reseq_info_list
 # would miss.
 from aledb_seq.util import get_ordered_reseq_dict, get_ordered_reseq_queryset
 from aledb_seq.models import ObservedMutation
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def _public_queryset(view_filter=None):
     do not need it -- see `_without_ignored_genes`.
     """
     queryset = ObservedMutation.objects.filter(
-        sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project__is_public=True
+        **{paths.to_experiment(paths.FROM_OBSERVATION, 'project__is_public'): True}
     )
     # Designated ancestors are subtracted here too, and unlike the cutoff above that is not
     # something the caller chose. An anonymous caller getting rows that every page on the site
@@ -151,7 +152,7 @@ def strains(request):
         view_filter = _requested_filter(request)
         mut_qryset = _public_queryset(view_filter)
         strain_values = mut_qryset.values_list(
-            'sequencing_experiment__tech_rep__isolate__flask__ale_id__strain', flat=True
+            paths.to_ale(paths.FROM_OBSERVATION, 'strain'), flat=True
         ).distinct()
         strains = sorted([s for s in strain_values if s and s != " N/A"])
 
@@ -179,7 +180,7 @@ def gene_strain_pairs(request):
         view_filter = _requested_filter(request)
         pairs_qs = _public_queryset(view_filter).values_list(
             'mutation__gene',
-            'sequencing_experiment__tech_rep__isolate__flask__ale_id__strain',
+            paths.to_ale(paths.FROM_OBSERVATION, 'strain'),
         ).distinct()
 
         # Expand comma-separated genes, strip HTML tags, into individual pairs
@@ -236,7 +237,7 @@ def query_by_pair(request):
             request,
             pairs,
             q_builder=lambda p: (
-                Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__strain=p.get("strain", "").strip()) &
+                Q(**{paths.to_ale(paths.FROM_OBSERVATION, 'strain'): p.get("strain", "").strip()}) &
                 Q(mutation__gene__icontains=p.get("gene", "").strip())
             ) if p.get("gene") and p.get("strain") else None,
             empty_msg="No gene/strain pairs provided",
@@ -268,7 +269,7 @@ def query_by_strain(request):
         return _run_query(
             request,
             ids,
-            q_builder=lambda strain: Q(sequencing_experiment__tech_rep__isolate__flask__ale_id__strain=strain),
+            q_builder=lambda strain: Q(**{paths.to_ale(paths.FROM_OBSERVATION, 'strain'): strain}),
             empty_msg='No strains provided',
             invalid_msg='No valid strains provided'
         )
@@ -416,7 +417,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         return JsonResponse({'error': str(bad_request)}, status=400)
 
     public_project_q = Q(
-        sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment__project__is_public=True
+        **{paths.to_experiment(paths.FROM_OBSERVATION, 'project__is_public'): True}
     )
 
     observed_mutations = []

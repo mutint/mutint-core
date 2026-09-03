@@ -28,6 +28,7 @@ from django.db import transaction
 
 from aledb_common.plugin_registry import run_sequence_rename_hooks
 from aledb_import import reference as reference_io
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -386,7 +387,7 @@ def _rename_mutations(Mutation, experiment, mapping):
 def _rename_evidence(Evidence, experiment, mapping):
     """Missing-coverage evidence, rewritten the same way and for the same swap reason."""
     queryset = Evidence.objects.filter(
-        sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment=experiment,
+        **{paths.to_experiment(paths.FROM_OBSERVATION): experiment},
         seq_id__in=list(mapping)).only("id", "seq_id")
     batch, total = [], 0
     for row in queryset.iterator(chunk_size=BATCH):

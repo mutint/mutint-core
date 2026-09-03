@@ -50,6 +50,7 @@ from aledb_seq.models import Mutation, ObservedMutation
 # `history.observations_for` uses the raw observation queryset -- this app shows what is
 # stored, and ancestral rows are stored.
 from aledb_seq.util import get_reseq_ordered_dict
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -575,7 +576,7 @@ def _changesets(experiment, limit=None):
     queryset = (MutationChangeSet.objects
                 .filter(ale_experiment=experiment)
                 .select_related("created_by")
-                .prefetch_related("changes__sample__tech_rep__isolate__flask__ale_id"))
+                .prefetch_related(paths.to_ale("changes__" + paths.FROM_CHANGE)))
     if limit is not None:
         queryset = queryset[:limit]
     return [_changeset_context(change_set) for change_set in queryset]
@@ -595,7 +596,7 @@ def _changeset_context(change_set):
     added = removed = 0
     samples = {}
     for change in change_set.changes.select_related(
-            "sample__tech_rep__isolate__flask__ale_id").all():
+            paths.to_ale(paths.FROM_CHANGE)).all():
         # A deleted sample sorts last: it has no coordinate, and keeping the rows nobody can
         # act on together at the end beats interleaving them.
         order = (0, sample_sort_key(change.sample)) if change.sample_id else (1, ())

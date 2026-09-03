@@ -49,6 +49,7 @@ from aledb_seq.models import (
 
 from genomediff import GenomeDiff
 from genomediff.records import TYPE_SPECIFIC_FIELDS
+from aledb_experiment import paths
 
 logger = logging.getLogger("aledb_import.gd_import")
 
@@ -326,7 +327,7 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
 
     existing = ResequencingExperiment.objects.filter(
         sample_name=sample_name,
-        tech_rep__isolate__flask__ale_id__ale_experiment=experiment).first()
+        **{paths.to_experiment(): experiment}).first()
     if existing is not None:
         return existing
 

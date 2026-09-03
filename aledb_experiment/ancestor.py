@@ -53,6 +53,7 @@ aledb-phylogeny's cached trees -- is stored and does go stale.
 import logging
 
 from aledb_experiment.models import AleExperiment
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ def describe_ancestor(experiment_id):
     from aledb_seq.models import ResequencingExperiment
 
     reseq = (ResequencingExperiment.objects
-             .select_related("tech_rep__isolate__flask__ale_id")
+             .select_related(paths.to_ale())
              .filter(pk=ancestor_id).first())
     if reseq is None:
         # SET_NULL should make this unreachable; a page saying nothing beats a page 500ing.

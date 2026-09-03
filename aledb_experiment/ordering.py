@@ -28,13 +28,12 @@ custom function on SQLite, which is what the test suite runs on.
 from django.db.models import CharField, F, Value
 from django.db.models.functions import Cast, LPad
 
+from aledb_experiment import paths
+
 #: Wide enough for a flask number in cumulative divisions (five figures) and for the kind of
 #: label a lineage carries. Sorting-only, so widening it later changes no stored data.
 PAD = 20
 
-#: The chain from a `ResequencingExperiment` up to its experiment. Every consumer is either
-#: rooted there or one step below it on `ObservedMutation`, which is what `prefix` is for.
-_CHAIN = "tech_rep__isolate__flask__ale_id__"
 
 
 def natural(field_path):
@@ -56,13 +55,12 @@ def sample_order(prefix=""):
     suite. Stated rather than inherited, and first because a sample with no time point is
     one nobody has placed yet.
     """
-    chain = prefix + _CHAIN
     return (
-        F(chain + "ale_experiment__name"),
-        natural(chain + "ale_id"),
-        F(prefix + "tech_rep__isolate__flask__flask_number").asc(nulls_first=True),
-        natural(prefix + "tech_rep__isolate__isolate_number"),
-        F(prefix + "tech_rep__tech_rep_number"),
+        F(paths.to_experiment(prefix, "name")),
+        natural(paths.to_ale_label(prefix)),
+        F(paths.to_flask_ordinal(prefix)).asc(nulls_first=True),
+        natural(paths.join(prefix, "tech_rep__isolate__isolate_number")),
+        F(paths.join(prefix, "tech_rep__tech_rep_number")),
     )
 
 

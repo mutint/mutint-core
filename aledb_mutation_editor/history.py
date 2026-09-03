@@ -40,6 +40,7 @@ from aledb_mutation_editor.models import (
     MutationChange, MutationChangeSet,
 )
 from aledb_seq.models import Mutation, ObservedMutation
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ _DECIMAL_FIELDS = ("frequency",)
 
 #: The join from an ObservedMutation up to its experiment. Spelled once here; it is the same
 #: traversal `aledb_seq.util` and `aledb_filter.util` use.
-_EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment"
+_EXPERIMENT_PATH = paths.to_experiment(paths.FROM_OBSERVATION)
 
 
 # --- snapshotting ---------------------------------------------------------------------------

@@ -29,6 +29,7 @@ from aledb_seq.tracks import MUTATION_TRACK_ID, database_tracks
 from aledb_seq.models import (ExperimentReference, Mutation, ObservedMutation,
                               ResequencingExperiment)
 from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_queryset
+from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def _resolve(request):
         # `ale_experiment` is a property over tech_rep -> isolate -> flask -> ale_id, not a
         # column, so the chain is named the way `aledb_seq.util` names it.
         reseq = (ResequencingExperiment.objects
-                 .select_related("tech_rep__isolate__flask__ale_id__ale_experiment")
+                 .select_related(paths.to_experiment())
                  .get(pk=request.GET.get("reseq_id")))
         mutation = Mutation.objects.get(pk=request.GET.get("mutation_id"))
     except (ResequencingExperiment.DoesNotExist, Mutation.DoesNotExist, ValueError, TypeError):

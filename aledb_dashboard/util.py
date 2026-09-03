@@ -8,6 +8,7 @@ from aledb_experiment.ancestor import (exclude_all_ancestry,
                                        exclude_ancestor_samples)
 from aledb_experiment.models import AleExperiment, AleId, Isolate, Flask
 from django.db.models import Q
+from aledb_experiment import paths
 
 
 def rebuild_dashboard_data():
@@ -17,7 +18,7 @@ def rebuild_dashboard_data():
 
 #: The join from an ObservedMutation up to its experiment, as `aledb_seq.util`,
 #: `aledb_filter.util` and `aledb_mutation_editor.history` all spell it.
-_EXPERIMENT_PATH = "sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment"
+_EXPERIMENT_PATH = paths.to_experiment(paths.FROM_OBSERVATION)
 
 #: Deletion here is soft: it sets `deleted_at` and leaves everything below the experiment in
 #: place, and this app's managers are deliberately unfiltered -- so these totals counted every

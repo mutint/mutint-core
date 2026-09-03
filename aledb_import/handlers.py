@@ -23,6 +23,7 @@ from aledb_common.import_registry import (
     matches_patterns,
     register_import_handler,
 )
+from aledb_experiment import paths
 
 logger = logging.getLogger("aledb_import.handlers")
 
@@ -176,9 +177,9 @@ def _rename_payload(experiment, plan, filename):
             ale_experiment=experiment,
             reseq_reference__in=list(plan.mapping)).count(),
         "samples": ResequencingExperiment.objects.filter(
-            tech_rep__isolate__flask__ale_id__ale_experiment=experiment).count(),
+            **{paths.to_experiment(): experiment}).count(),
         "alignments": ResequencingExperiment.objects.filter(
-            tech_rep__isolate__flask__ale_id__ale_experiment=experiment,
+            **{paths.to_experiment(): experiment},
             bam_stored=True).count(),
     }
     payload = dict(plan.as_payload(counts), kind="rename", file=filename)

@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from aledb_common import store
 from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment import paths
 
 DEFAULT_RETENTION_DAYS = 30
 
@@ -88,4 +89,4 @@ class Command(BaseCommand):
 
         # Nothing below AleId carries an experiment id, so this is the four-hop traversal.
         return ResequencingExperiment.objects.filter(
-            tech_rep__isolate__flask__ale_id__ale_experiment=experiment)
+            **{paths.to_experiment(): experiment})
