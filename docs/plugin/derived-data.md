@@ -52,8 +52,11 @@ request_rebuild(experiment_id)   # "this is stale now" -- one UPDATE, safe from 
 run_rebuilds(experiment_id)      # "so recompute it"   -- expensive
 ```
 
-Marking is cheap enough to do from any request, including one that invalidates every
-experiment at once — a global filter edit is exactly that. Running happens in one of three
+Marking is cheap enough to do from any request, including one that invalidates data across
+every experiment at once — deleting a project is exactly that, since the dashboard's totals
+count the whole installation. Note what that caller does anyway: it passes `only=` naming the
+two aggregates, because removing one experiment cannot make another's needle plot wrong, and
+`request_rebuild()` with no experiment and no `only=` would mark every derived thing there is. Running happens in one of three
 places: eagerly at the end of an import, lazily by the page that reads the data, or in bulk
 from `./aledb rebuild`.
 

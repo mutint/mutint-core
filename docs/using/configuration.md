@@ -41,38 +41,56 @@ protection**; an app that adds it is the intended way to have it.
 
 ## Filtering
 
-An experiment has one filter: a **frequency range** and a list of **ignored genes**. A mutation
-is hidden when its frequency falls outside the range, or when *every* gene it touches is on the
-list — ignoring one gene of two ignores nothing.
+Two controls sit above every mutation table: a **frequency range** and a list of **ignored
+genes**. A mutation is hidden when its frequency falls outside the range, or when *every* gene
+it touches is on the list — ignoring one gene of two ignores nothing.
 
-!!! warning "The filter is shared, not personal"
+!!! note "The filter is yours alone"
 
-    It is stored per experiment, with no user field, so a cutoff one person changes is a cutoff
-    everyone sees. Editing it needs **write** access to the project, and a locked experiment
-    refuses it like any other write.
+    It lives in your session, not in a table. Changing it changes nothing for anybody else,
+    nothing records that you did it, and it asks for no permission — a locked experiment
+    filters like any other, because there is nothing here to protect.
 
-    What *is* per-viewer is the **Show Filtered** checkbox on a mutation table: it reveals what
-    the filter hides for you alone, in that request, and stores nothing.
+    It used to be the opposite, and the change is worth knowing if you remember the old
+    behaviour: there was one row per experiment, editable by anyone with write access, so a
+    cutoff one person set was a cutoff everyone saw, silently. That conflated *curating a
+    dataset* — which is the mutation editor's job, and is attributed and reversible — with
+    *choosing what you want to look at*, which is nobody else's business.
+
+    A filter is remembered per experiment, so narrowing one leaves the others alone. The
+    controls also read from the query string, and what a URL says wins and is then remembered:
+    a link you paste to a colleague shows them the same rows you were looking at, and leaves
+    their session filtering that experiment the same way. The **Clear** link works by the same
+    rule — it is a URL that says *no filter*.
+
+There is no separate filter page and no **Show Filtered** checkbox. Both existed for the
+shared filter: one to edit what everyone saw, the other to see through what somebody else had
+hidden from you. Neither is a question you have about your own filter, where the controls are
+on the table itself and clearing them is one click.
 
 **Every mutation table says what filtering produced it**, in a line under the controls: the
-cutoffs in force, the genes excluded, and a link to change them. A table whose filter hides
-nothing says *No filtering* rather than describing a range that excludes nothing — those are
-different facts about a deployment.
+cutoffs in force and the genes excluded. A table whose filter hides nothing says *No
+filtering: every stored mutation for this experiment is shown* rather than describing a range
+that excludes nothing — those are different facts about what you are looking at.
 
 A page that filters by its own rules says so instead. The phylogeny page is the one to know
 about: it encodes frequency in three states rather than excluding on it, so a call between 0
 and 100 % becomes *ambiguous* rather than absent, and its site count will not match the
-mutation tables.
+mutation tables. Search says so too, because it spans experiments and no one filter applies.
+
+!!! warning "The ancestor is not part of your filter"
+
+    If an experiment designates an ancestral sample, its mutations are subtracted from every
+    other sample before anything is computed, and the sample itself leaves most listings. That
+    is a fact about the dataset rather than a view of it: it is shared, it is permanent, and
+    **there is no toggle** — so the summary line names it separately from your own filtering,
+    and links to the sample it is about.
 
 Filtering is not deleting. A filtered mutation is still stored and comes back when the filter
 changes; a deleted one is removed from the sample, recorded against whoever did it, and
 restorable from the mutation editor's history. The two were once the same mechanism and that
 was the bug — the old ignored-mutation lists were a delete that kept the row, per experiment,
 attributed to nobody, with no way back.
-
-There used to be a second, installation-wide ignored-gene list. It was removed; whatever it
-held was folded into each experiment's own list, where it can be edited by anyone with write
-access rather than only by a superuser.
 
 ## Access
 
