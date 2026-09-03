@@ -228,30 +228,49 @@ class HandWrittenFieldsTestCase(TestCase):
         self.assertEqual(set(PasswordChangeForm(self.user).fields), field_names(html))
 
 
-class AuthAppParityTestCase(TestCase):
-    """Both auth apps serve the same routes.
+class AuthSlotTestCase(TestCase):
+    """The auth slot still resolves, with one occupant.
 
-    `aledb_accounts` is installed in no settings module in this repo, so nothing else exercises
-    it at all -- which is how it came to pass `next_page` as `re_path`'s extra-kwargs dict
-    (a `TypeError` on every login) and to ship no login template, both unnoticed. They share
-    one list now, and this is what says so.
+    This was `AuthAppParityTestCase`, which asserted that two apps served the same routes.
+    There is one app now: `aledb_accounts` existed to be the occupant carrying
+    django-defender's brute-force protection, and with defender gone it was byte-for-byte the
+    same behaviour as the default -- an alternative that was not an alternative.
+
+    What the parity test was really guarding is still guarded, and by construction rather than
+    by assertion: both apps had drifted into separate bugs (a `next_page` passed as `re_path`'s
+    extra-kwargs dict, raising `TypeError` on every login; and no login template at all)
+    because each hand-wrote its own URLconf. They were consolidated onto
+    `aledb_common.account_urls` long before this, which is what made the second app redundant.
+
+    So what is left to check is the mechanism: an app declaring `auth_app = True` is what
+    `get_core_urlpatterns` mounts at `/accounts/`, and a deployment swapping in its own is
+    still how authentication is replaced.
     """
 
-    def test_the_two_auth_apps_serve_the_same_routes(self):
-        from aledb_accounts import urls as production
-        from aledb_accounts_noauth import urls as default
+    def test_the_installed_auth_app_declares_the_slot(self):
+        from django.apps import apps as django_apps
 
-        names = {p.name for p in default.urlpatterns}
-        self.assertEqual(names, {p.name for p in production.urlpatterns})
-        self.assertEqual(
-            {"login", "logout", "password_change", "password_change_done"}, names)
+        slots = [cfg for cfg in django_apps.get_app_configs()
+                 if getattr(cfg, "auth_app", False)]
 
-    def test_neither_declares_a_different_namespace(self):
-        from aledb_accounts import urls as production
-        from aledb_accounts_noauth import urls as default
+        self.assertEqual(1, len(slots), "the slot takes the first match, so two is ambiguous")
+        self.assertEqual("aledb_accounts_noauth", slots[0].name)
 
-        self.assertEqual("accounts", default.app_name)
-        self.assertEqual("accounts", production.app_name)
+    def test_it_serves_the_four_routes_under_one_namespace(self):
+        from aledb_accounts_noauth import urls as installed
+
+        self.assertEqual("accounts", installed.app_name)
+        self.assertEqual({"login", "logout", "password_change", "password_change_done"},
+                         {p.name for p in installed.urlpatterns})
+
+    def test_those_routes_are_what_is_actually_mounted(self):
+        """Through the resolver, not the module: the slot is only worth anything if what it
+        declares is what `/accounts/` reaches."""
+        from django.urls import reverse
+
+        self.assertEqual("/accounts/login/", reverse("accounts:login"))
+        self.assertEqual("/accounts/logout/", reverse("accounts:logout"))
+        self.assertEqual("/accounts/password/", reverse("accounts:password_change"))
 
 
 class LogoutTestCase(TestCase):

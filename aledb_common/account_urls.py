@@ -1,18 +1,20 @@
 """The account pages every auth app serves: login, logout and changing a password.
 
-**Shared because the auth slot is pluggable.** Two apps carry `auth_app = True` --
-`aledb_accounts_noauth` (the default) and `aledb_accounts` (production, django-defender) -- and
-only one is installed at a time, so a route added to one is simply missing from the other.
-`aledb_common.urls` includes whichever app it finds under `^accounts/` with namespace
-`accounts`; this module is what that app serves.
+**Shared because the auth slot is pluggable.** An app carrying `auth_app = True` is what
+`aledb_common.urls` mounts under `^accounts/` with namespace `accounts`, and this module is
+what that app serves. Only one is installed at a time, so a deployment replacing
+authentication replaces the app and inherits these routes rather than restating them.
 
-They used to be two hand-written lists, and they had already drifted into two live bugs that
-nothing exercised: `aledb_accounts` passed `{'next_page': '/'}` as `re_path`'s *extra kwargs*
-rather than to `as_view()`, which raises `TypeError: login() got an unexpected keyword argument
-'next_page'` on the first request, and it had no templates directory at all, so swapping to it
-also meant `TemplateDoesNotExist`. Neither app has any reason to differ here -- django-defender
-patches `LoginView.dispatch` from middleware rather than from the URLconf -- so there is one
-list and both apps use it.
+`aledb_accounts_noauth` is the only occupant in this repo. There were two: `aledb_accounts`
+existed to be the one carrying django-defender's brute-force protection, and when defender
+went it was left identical to the default -- an alternative that was not one.
+
+The consolidation is why this module exists, and the reason outlives the second app. The two
+were hand-written lists that had already drifted into live bugs nothing exercised:
+`aledb_accounts` passed `{'next_page': '/'}` as `re_path`'s *extra kwargs* rather than to
+`as_view()`, raising `TypeError` on the first login, and it shipped no templates at all, so
+swapping to it also meant `TemplateDoesNotExist`. Anything added here reaches whatever occupies
+the slot next, which is the point.
 
 Two things in here are load-bearing and invisible at the call site:
 

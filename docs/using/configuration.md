@@ -33,8 +33,11 @@ setting a real deployment must think about — it holds the BAMs.
 Pluggable by changing `INSTALLED_APPS`. Any app with `auth_app = True` on its `AppConfig` and
 `app_name = 'accounts'` in its `urls.py` is discovered automatically.
 
-- `aledb_accounts_noauth` — the default. Django's built-in login, nothing enforced.
-- `aledb_accounts` — production, with `django-defender` brute-force protection.
+- `aledb_accounts_noauth` — the only one shipped. Django's built-in login, nothing enforced.
+
+The routes and templates live in `aledb_common`, not in the app, so a replacement inherits
+login, logout and change-password rather than restating them. **ALEdb ships no brute-force
+protection**; an app that adds it is the intended way to have it.
 
 ## Filtering
 

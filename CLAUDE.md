@@ -103,7 +103,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1617 run, 0 failures** standalone; **1798** in an assembled project, where the
+**Baseline: 1618 run, 0 failures** standalone; **1799** in an assembled project, where the
 plugins' own tests join them. They were 1646 and 1827 before the platform move, which deleted
 six test modules that drove named migrations through the real executor and added the lifecycle,
 task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
@@ -3005,8 +3005,7 @@ All apps use the `aledb_*` namespace. Key apps:
 - **`aledb_search/`** — Cross-experiment search.
 - **`aledb_bibliome/`** — Publication/bibliography management.
 - **`aledb_dashboard/`** — Dashboard views and timeline events.
-- **`aledb_accounts_noauth/`** — Default auth stub: Django's built-in login/logout, no enforcement. Swap for `aledb_accounts` (brute-force protection) or any other auth app by changing `INSTALLED_APPS`.
-- **`aledb_accounts/`** — Enhanced auth with `django-defender` brute-force protection. Optional; used in production (`settings_private.py`).
+- **`aledb_accounts_noauth/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
 - **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eight
   registries (context, import, plugin, nav, about, example, **panel** and **rebuild**), and
   global static files. `DerivedDataState` is its only model.
@@ -3121,24 +3120,32 @@ anything uploads — so a plugin gets both of those by registering, with no edit
 Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 **Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in
-its `urls.py` is auto-discovered by `config/urls.py`. Default: `aledb_accounts_noauth`.
-Production: `aledb_accounts`, which adds django-defender's brute-force protection.
+its `urls.py` is auto-discovered by `config/urls.py`. `aledb_accounts_noauth` is the only
+occupant, and the resolver takes the **first** match, so a second installed one is ambiguous
+rather than additive.
 
-**The routes and templates are shared, and the apps are not where they live.**
+**There is no brute-force protection, and that is a gap rather than an omission.** There was a
+second app, `aledb_accounts`, whose entire reason to exist was carrying `django-defender`. It
+was in no settings module's `INSTALLED_APPS` and defender was in no `requirements.txt`, so the
+"production" auth app could not actually be installed — and once defender went, what remained
+was identical to the default. An alternative that is not an alternative is worse than one
+occupant and an honest sentence, which is what this is. Anything that replaces it inherits the
+routes below rather than restating them.
+
+**The routes and templates are shared, and the slot is not where they live.**
 `aledb_common/account_urls.py` holds all four — login, logout, `password/` and
-`password/done/` — and each auth app's `urls.py` is three lines that serve that list. The
-templates are `aledb_common/templates/accounts/`. Both live outside the slot because only one
-auth app is installed at a time, so anything defined in one is missing from the other, and
-because `aledb_accounts` has no templates directory at all.
+`password/done/` — and an auth app's `urls.py` is three lines that serve that list. The
+templates are `aledb_common/templates/accounts/`. Both sit outside the slot so that whatever
+occupies it next inherits them, rather than being expected to write them again.
 
-Keeping two hand-written copies is not a hypothetical cost — they had already drifted into two
-bugs that nothing exercised, because `aledb_accounts` is installed in no settings module in
-this repo. It passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict** rather than to
-`as_view()`, which raises `TypeError` on the first login, and it had no `registration/login.html`,
-so swapping the slot also meant `TemplateDoesNotExist`. Both went with the consolidation.
-`aledb_common/tests/test_accounts.py` asserts the two apps serve the same route names, which is
-the only thing exercising the production app at all. django-defender patches `LoginView.dispatch`
-from middleware, so there is nothing an auth app needs to say in its URLconf.
+**That is the lesson the second app left behind, and it is why this is worth a paragraph.**
+When there were two hand-written lists they had already drifted into two live bugs nothing
+exercised: `aledb_accounts` passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict**
+rather than to `as_view()`, raising `TypeError` on the first login, and it had no
+`registration/login.html`, so swapping the slot also meant `TemplateDoesNotExist`. Neither was
+found by running it — nothing installed it. `aledb_common/tests/test_accounts.py` now asserts
+the *mechanism* instead: exactly one app declares the slot, and what it declares is what
+`/accounts/` actually reverses to.
 
 **Experiment context providers** — registered via `aledb_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `aledb_bibliome` to inject publication data into experiment views without a hard dependency.
 
@@ -3146,7 +3153,8 @@ from middleware, so there is nothing an auth app needs to say in its URLconf.
 
 - `config/defaults.py` — Delegates to `aledb_common.base_settings.get_base_settings()`; adds `ROOT_URLCONF` and `WSGI_APPLICATION`. SQLite fallback when `FORCE_SQLITE=1` or running tests.
 - `config/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./aledb start`.
-- `config/settings_private.py` — Production with auth enforcement and `aledb_accounts`.
+- `config/settings_private.py` — Production: adds `LoginRequiredMiddleware`, and nothing
+  else. It never swapped the auth app, whatever this line used to say.
 - `config/settings_public.py` — Public read-only deployment.
 - Select with `DJANGO_SETTINGS_MODULE`.
 
