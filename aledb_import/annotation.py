@@ -55,16 +55,16 @@ def reference_sequences_for(experiment):
     Memoised per process: parsing a bacterial genome takes a couple of seconds and
     every sample in an import annotates against the same reference.
     """
-    path = reference_store.annotation_reference_path(experiment.ale_id)
+    path = reference_store.annotation_reference_path(experiment.id)
     if not path:
         return None
 
-    key = (experiment.ale_id, os.path.getmtime(path))
+    key = (experiment.id, os.path.getmtime(path))
     if key not in _reference_cache:
         try:
             _reference_cache[key] = load_reference(path)
         except (UnsupportedReferenceFormat, ValueError) as error:
-            logger.warning("cannot annotate experiment %s: %s", experiment.ale_id, error)
+            logger.warning("cannot annotate experiment %s: %s", experiment.id, error)
             return None
     return _reference_cache[key]
 
@@ -82,7 +82,7 @@ def annotate_records(records, experiment):
     references = reference_sequences_for(experiment)
     if references is None:
         return False
-    return annotate_records_with(records, references, experiment.ale_id)
+    return annotate_records_with(records, references, experiment.id)
 
 
 def annotate_records_with(records, references, experiment_id=None):
@@ -227,7 +227,7 @@ def reannotate_experiment(experiment, mutations=None, references=None, dry_run=F
     if references is None:
         raise ReferenceUnavailable(
             "Experiment %s has no readable reference to annotate against."
-            % (experiment.ale_id,))
+            % (experiment.id,))
 
     annotated = changed = failed = 0
     skipped = sum(1 for mutation in mutations if not mutation.gd_data)
@@ -247,7 +247,7 @@ def reannotate_experiment(experiment, mutations=None, references=None, dry_run=F
                 on_error("  failed to annotate a sample: %s" % error)
             else:
                 logger.warning("failed to annotate a sample of experiment %s: %s",
-                               experiment.ale_id, error)
+                               experiment.id, error)
             continue
 
         for mutation, record in payloads:

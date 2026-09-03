@@ -25,7 +25,7 @@ class OverviewTableTestCase(TestCase):
         self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
-        context = prepare_experiment_by_id(self.experiment.ale_id)
+        context = prepare_experiment_by_id(self.experiment.id)
 
         ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=30000,
@@ -43,7 +43,7 @@ class OverviewTableTestCase(TestCase):
 
     def _html(self):
         return self.client.get(
-            "/stats?ale_experiment_id=%d" % self.experiment.ale_id,
+            "/stats?ale_experiment_id=%d" % self.experiment.id,
             follow=True).content.decode()
 
     def test_the_headings_are_the_short_ones(self):

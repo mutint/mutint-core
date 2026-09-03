@@ -51,9 +51,9 @@ class AlignmentServingTestCase(TestCase):
 
     def test_bai_and_reference_files_are_served(self):
         for url in ("/mutations/alignments/%d/bai" % self.reseq.id,
-                    "/mutations/reference/%d/fasta" % self.experiment.ale_id,
-                    "/mutations/reference/%d/fai" % self.experiment.ale_id,
-                    "/mutations/reference/%d/gff3" % self.experiment.ale_id):
+                    "/mutations/reference/%d/fasta" % self.experiment.id,
+                    "/mutations/reference/%d/fai" % self.experiment.id,
+                    "/mutations/reference/%d/gff3" % self.experiment.id):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200, url)
             self.assertTrue(self._body(response), url)

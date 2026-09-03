@@ -112,7 +112,7 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
         run_post_processing(experiment)
 
     return {
-        "experiment_id": experiment.ale_id,
+        "experiment_id": experiment.id,
         "experiment": experiment.name,
         "total_mutations": total_mutations,
         "files": file_results,
@@ -398,7 +398,7 @@ def _check_seq_ids(document, experiment, sample_name):
             "reference on the Add data page, or run `./aledb rename_contigs %s --ref "
             "<file>` -- and a different genome belongs in its own experiment."
             % (sample_name, ", ".join(unknown), ", ".join(sorted(known)),
-               experiment.ale_id if experiment is not None else "<id>"))
+               experiment.id if experiment is not None else "<id>"))
 
 
 def _database_gd_mutations(seq_experiment, document, experiment=None):
@@ -594,5 +594,5 @@ def run_post_processing(experiment):
     all, and a plugin hook that raised took the whole import down with it."""
     from aledb_common.rebuild_registry import request_rebuild, run_rebuilds
 
-    request_rebuild(experiment.ale_id, reason='experiment data imported')
-    run_rebuilds(experiment.ale_id)
+    request_rebuild(experiment.id, reason='experiment data imported')
+    run_rebuilds(experiment.id)

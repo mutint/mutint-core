@@ -51,9 +51,9 @@ def export(request):
                             # experiment's own filter, so every file is what that
                             # experiment's page was showing.
                             writer.writerows(get_csv_str(
-                                experiment.ale_id, mut_type_str,
-                                get_view_filter(request, experiment.ale_id)))
-                            filename = f"Proj_{safe_filename(experiment.project.name)}_Exp_{safe_filename(experiment.name)}_ExpID{experiment.ale_id}_{mut_type_str}.csv"
+                                experiment.id, mut_type_str,
+                                get_view_filter(request, experiment.id)))
+                            filename = f"Proj_{safe_filename(experiment.project.name)}_Exp_{safe_filename(experiment.name)}_ExpID{experiment.id}_{mut_type_str}.csv"
                             zf.writestr(filename, csv_buffer.getvalue())
                             logger.info(f"Added {filename} to zip", extra=user_extra(request))
 

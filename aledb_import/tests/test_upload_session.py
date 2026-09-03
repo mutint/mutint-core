@@ -65,7 +65,7 @@ class UploadSessionEndpointTestCase(TestCase):
         return self.client.post(
             "/import/uploads/",
             data=json.dumps({
-                "ale_experiment_id": (self.experiment.ale_id if experiment_id is None
+                "ale_experiment_id": (self.experiment.id if experiment_id is None
                                       else experiment_id),
                 "import_type": import_type,
                 "files": files}),

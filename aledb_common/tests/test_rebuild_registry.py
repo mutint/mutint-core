@@ -87,22 +87,22 @@ class RebuildRegistryTestCase(TestCase):
         """No row is the same answer as an invalidated row, so a newly registered rebuild
         needs no backfill and a new experiment needs no seeding."""
         self._register("test.fresh")
-        self.assertTrue(is_stale("test.fresh", self.experiment.ale_id))
+        self.assertTrue(is_stale("test.fresh", self.experiment.id))
         self.assertFalse(DerivedDataState.objects.filter(name="test.fresh").exists())
 
     def test_running_it_makes_it_current(self):
         self._register("test.run")
-        run_rebuilds(self.experiment.ale_id, only=["test.run"])
+        run_rebuilds(self.experiment.id, only=["test.run"])
 
-        self.assertFalse(is_stale("test.run", self.experiment.ale_id))
-        self.assertEqual([("test.run", self.experiment.ale_id)], self.calls)
+        self.assertFalse(is_stale("test.run", self.experiment.id))
+        self.assertEqual([("test.run", self.experiment.id)], self.calls)
 
     def test_requesting_a_rebuild_makes_it_stale_again(self):
         self._register("test.again")
-        run_rebuilds(self.experiment.ale_id, only=["test.again"])
-        request_rebuild(self.experiment.ale_id, only=["test.again"])
+        run_rebuilds(self.experiment.id, only=["test.again"])
+        request_rebuild(self.experiment.id, only=["test.again"])
 
-        self.assertTrue(is_stale("test.again", self.experiment.ale_id))
+        self.assertTrue(is_stale("test.again", self.experiment.id))
 
     def test_requesting_with_no_experiment_marks_every_experiment(self):
         """The global-filter case: every experiment's counts are computed through it."""
@@ -111,33 +111,33 @@ class RebuildRegistryTestCase(TestCase):
         other = AleExperiment.objects.get(pk=second["experiment_id"])
 
         self._register("test.global")
-        run_rebuilds(self.experiment.ale_id, only=["test.global"])
-        run_rebuilds(other.ale_id, only=["test.global"])
+        run_rebuilds(self.experiment.id, only=["test.global"])
+        run_rebuilds(other.id, only=["test.global"])
         request_rebuild(only=["test.global"])
 
-        self.assertTrue(is_stale("test.global", self.experiment.ale_id))
-        self.assertTrue(is_stale("test.global", other.ale_id))
+        self.assertTrue(is_stale("test.global", self.experiment.id))
+        self.assertTrue(is_stale("test.global", other.id))
 
     def test_only_narrows_what_is_marked(self):
         self._register("test.wanted")
         self._register("test.untouched")
-        run_rebuilds(self.experiment.ale_id, only=["test.wanted", "test.untouched"])
-        request_rebuild(self.experiment.ale_id, only=["test.wanted"])
+        run_rebuilds(self.experiment.id, only=["test.wanted", "test.untouched"])
+        request_rebuild(self.experiment.id, only=["test.wanted"])
 
-        self.assertTrue(is_stale("test.wanted", self.experiment.ale_id))
-        self.assertFalse(is_stale("test.untouched", self.experiment.ale_id))
+        self.assertTrue(is_stale("test.wanted", self.experiment.id))
+        self.assertFalse(is_stale("test.untouched", self.experiment.id))
 
     def test_a_current_rebuild_is_not_run_again(self):
         self._register("test.skip")
-        run_rebuilds(self.experiment.ale_id, only=["test.skip"])
-        run_rebuilds(self.experiment.ale_id, only=["test.skip"])
+        run_rebuilds(self.experiment.id, only=["test.skip"])
+        run_rebuilds(self.experiment.id, only=["test.skip"])
 
         self.assertEqual(1, len(self.calls))
 
     def test_force_runs_it_anyway(self):
         self._register("test.force")
-        run_rebuilds(self.experiment.ale_id, only=["test.force"])
-        run_rebuilds(self.experiment.ale_id, only=["test.force"], force=True)
+        run_rebuilds(self.experiment.id, only=["test.force"])
+        run_rebuilds(self.experiment.id, only=["test.force"], force=True)
 
         self.assertEqual(2, len(self.calls))
 
@@ -145,8 +145,8 @@ class RebuildRegistryTestCase(TestCase):
     def test_ensure_fresh_builds_once_and_then_does_nothing(self):
         """What the Overview calls: the first view after a change pays, the rest do not."""
         self._register("test.ensure")
-        self.assertTrue(ensure_fresh("test.ensure", self.experiment.ale_id))
-        self.assertTrue(ensure_fresh("test.ensure", self.experiment.ale_id))
+        self.assertTrue(ensure_fresh("test.ensure", self.experiment.id))
+        self.assertTrue(ensure_fresh("test.ensure", self.experiment.id))
 
         self.assertEqual(1, len(self.calls))
 
@@ -154,7 +154,7 @@ class RebuildRegistryTestCase(TestCase):
     def test_a_site_scoped_rebuild_takes_no_experiment(self):
         self._register("test.site", fn=lambda: self.calls.append(("test.site",)),
                        scope=SITE_SCOPE)
-        run_rebuilds(self.experiment.ale_id, only=["test.site"])
+        run_rebuilds(self.experiment.id, only=["test.site"])
 
         self.assertEqual([("test.site",)], self.calls)
         self.assertFalse(is_stale("test.site"))
@@ -178,31 +178,31 @@ class RebuildRegistryTestCase(TestCase):
         self._register("test.explodes", fn=self._explode, priority=PRIORITY_SETTINGS)
         self._register("test.survives")
 
-        results = run_rebuilds(self.experiment.ale_id,
+        results = run_rebuilds(self.experiment.id,
                                only=["test.explodes", "test.survives"])
 
         self.assertEqual({"test.explodes": False, "test.survives": True}, results)
-        self.assertEqual([("test.survives", self.experiment.ale_id)], self.calls)
+        self.assertEqual([("test.survives", self.experiment.id)], self.calls)
 
     def test_a_failure_leaves_the_data_stale(self):
         """Recoverable, and recorded: the next reader tries again and `--list` shows why."""
         self._register("test.fails", fn=self._explode)
-        run_rebuilds(self.experiment.ale_id, only=["test.fails"], force=True)
+        run_rebuilds(self.experiment.id, only=["test.fails"], force=True)
 
-        self.assertTrue(is_stale("test.fails", self.experiment.ale_id))
+        self.assertTrue(is_stale("test.fails", self.experiment.id))
         state = DerivedDataState.objects.get(name="test.fails")
         self.assertIn("the rebuild went wrong", state.last_error)
 
     def test_a_failure_does_not_propagate_out_of_ensure_fresh(self):
         """A page whose derived data will not rebuild should render what it has, not 500."""
         self._register("test.page_fails", fn=self._explode)
-        self.assertFalse(ensure_fresh("test.page_fails", self.experiment.ale_id))
+        self.assertFalse(ensure_fresh("test.page_fails", self.experiment.id))
 
     def test_a_successful_rebuild_clears_a_previous_error(self):
         outcomes = iter([self._explode, lambda experiment_id: None])
         self._register("test.recovers", fn=lambda experiment_id: next(outcomes)(experiment_id))
-        run_rebuilds(self.experiment.ale_id, only=["test.recovers"], force=True)
-        run_rebuilds(self.experiment.ale_id, only=["test.recovers"], force=True)
+        run_rebuilds(self.experiment.id, only=["test.recovers"], force=True)
+        run_rebuilds(self.experiment.id, only=["test.recovers"], force=True)
 
         state = DerivedDataState.objects.get(name="test.recovers")
         self.assertEqual("", state.last_error)
@@ -211,7 +211,7 @@ class RebuildRegistryTestCase(TestCase):
     def test_being_invalidated_mid_rebuild_leaves_it_stale(self):
         """The rebuild that just finished never saw the second change, so clearing the flag
         would lose it silently."""
-        experiment_id = self.experiment.ale_id
+        experiment_id = self.experiment.id
 
         def invalidate_myself(_experiment_id):
             request_rebuild(experiment_id, only=["test.racy"], reason="changed again")
@@ -233,8 +233,8 @@ class RebuildRegistryTestCase(TestCase):
         self.addCleanup(unregister_rebuilder, name)
 
         self.assertIsNotNone(get_rebuilder(name))
-        run_post_experiment_hooks(self.experiment.ale_id)
-        self.assertEqual([self.experiment.ale_id], seen)
+        run_post_experiment_hooks(self.experiment.id)
+        self.assertEqual([self.experiment.id], seen)
 
     def test_two_anonymous_hooks_from_one_module_both_register(self):
         """The old API was a list and allowed it; deriving a name from the module must not
@@ -306,13 +306,13 @@ class RebuildCommandTestCase(TestCase):
 
     def test_naming_an_experiment_and_all_is_refused(self):
         with self.assertRaises(CommandError):
-            self._run(str(self.experiment.ale_id), "--all")
+            self._run(str(self.experiment.id), "--all")
 
     def _rebuilt(self, experiment):
-        return experiment.ale_id in self.rebuilt
+        return experiment.id in self.rebuilt
 
     def test_it_rebuilds_the_named_experiment(self):
-        self._run(str(self.experiment.ale_id), only=["test.watched"])
+        self._run(str(self.experiment.id), only=["test.watched"])
 
         self.assertTrue(self._rebuilt(self.experiment))
 
@@ -337,9 +337,9 @@ class RebuildCommandTestCase(TestCase):
         self.assertFalse(self._rebuilt(self.experiment))
 
     def test_a_second_run_reports_everything_current(self):
-        self._run(str(self.experiment.ale_id), only=["test.watched"])
+        self._run(str(self.experiment.id), only=["test.watched"])
         self.assertIn("0 rebuilt",
-                      self._run(str(self.experiment.ale_id), only=["test.watched"]))
+                      self._run(str(self.experiment.id), only=["test.watched"]))
 
 
 class RegistrationTestCase(TestCase):

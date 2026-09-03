@@ -38,7 +38,7 @@ class TableActionsTestCase(TestCase):
             ale_experiment=self.experiment)
 
         from aledb_import.gd_import import prepare_experiment_by_id
-        context = prepare_experiment_by_id(self.experiment.ale_id)
+        context = prepare_experiment_by_id(self.experiment.id)
         ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=context["media"])
         isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,

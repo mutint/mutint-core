@@ -58,9 +58,9 @@
         {% for experiment in experiments %}
             <tr>
                 <td></td>
-                <td>{{ experiment.ale_id }}</td>
+                <td>{{ experiment.id }}</td>
                 <td>
-                    <a href="/ale/experiment/{{ experiment.ale_id }}">{{ experiment.name }}</a>
+                    <a href="/ale/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
                 </td>
                 <td>
                     <a href="/ale/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>

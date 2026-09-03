@@ -34,7 +34,7 @@ class AddTestCase(EditorTestCase):
         if targets is self.DEFAULT_TARGETS:
             targets = [self.sample_a]
         payload = {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_type": mutation_type,
             "target_reseq_ids": json.dumps([s.id for s in targets]),
         }
@@ -256,13 +256,13 @@ class NoReferenceTestCase(EditorTestCase):
 
     def test_the_page_says_the_sequence_checks_are_off(self):
         response = self.client.get("/mutation-editor/add",
-                                   {"ale_experiment_id": self.experiment.ale_id})
+                                   {"ale_experiment_id": self.experiment.id})
         self.assertContains(response, "no reference genome")
 
     def test_a_mutation_that_would_change_nothing_is_accepted(self):
         """Nothing can know, and pretending otherwise would be worse than saying so."""
         response = self.client.post(ADD, {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_type": "SNP",
             "seq_id": "NC_000913",
             "position": 1,
@@ -272,7 +272,7 @@ class NoReferenceTestCase(EditorTestCase):
 
     def test_shape_is_still_enforced(self):
         response = self.client.post(ADD, {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_type": "MOB",
             "seq_id": "NC_000913",
             "position": 1,
@@ -325,7 +325,7 @@ class AnnotatedAddTestCase(EditorTestCase):
 
     def add(self, mutation_type="SNP", targets=None, **fields):
         payload = {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_type": mutation_type,
             "target_reseq_ids": json.dumps(
                 [s.id for s in (targets if targets is not None else [self.sample_a])]),
@@ -383,7 +383,7 @@ class AnnotatedAddTestCase(EditorTestCase):
 
     def test_the_page_offers_the_reference_contigs(self):
         response = self.client.get("/mutation-editor/add",
-                                   {"ale_experiment_id": self.experiment.ale_id})
+                                   {"ale_experiment_id": self.experiment.id})
         self.assertContains(response, 'id="me-f-seq_id"')
         self.assertContains(response, self.SEQ)
         self.assertNotContains(response, "no reference genome")

@@ -85,7 +85,19 @@ class Project(SoftDeleteMixin):
 
 
 class AleExperiment(SoftDeleteMixin):
-    ale_id = models.AutoField(primary_key=True)
+    # The primary key is Django's implicit `id`, and used to be an explicit
+    # `ale_id = AutoField(primary_key=True)`. Two things were wrong with that.
+    #
+    # It made `ale_id` mean three different things depending on what you were holding: this
+    # experiment's pk, `AleId.ale_id`'s text label, and `Flask.ale_id`'s foreign key to an
+    # AleId row. Every query in the suite traverses that chain, so "the path ending in
+    # ale_id" was two destinations and a reader could not tell which.
+    #
+    # And being explicit meant DEFAULT_AUTO_FIELD did not reach it: this was the only
+    # 32-bit `integer` primary key left among 26 `bigint` ones, and every foreign key
+    # pointing at it was 32-bit too.
+    #
+    # The query parameter has always been `ale_experiment_id`, so the URLs did not move.
     name = models.CharField(max_length=200)
     person = models.CharField(max_length=200)
     date = models.DateTimeField(auto_now_add=True)
@@ -144,7 +156,7 @@ class AleExperiment(SoftDeleteMixin):
         verbose_name_plural = "experiments"
 
     def __unicode__(self):
-        return "#%d-%s" % (self.ale_id, self.name)
+        return "#%d-%s" % (self.id, self.name)
 
     def __str__(self):
         return self.name
@@ -232,7 +244,7 @@ class AleExperiment(SoftDeleteMixin):
         """
         return {
             "ale_experiment_name": self.name,
-            "ale_experiment_id": self.ale_id,
+            "ale_experiment_id": self.id,
             "ale_project_name": self.project.name if self.project else "",
             "ale_project_id": self.project_id,
             # Fifth, and here for the same reason as the other four: every experiment-scoped
@@ -326,7 +338,7 @@ class Flask(models.Model):
                                       self.ale_id)
 
     def ale_experiment(self):
-        return self.ale_id.ale_experiment.ale_id
+        return self.ale_id.ale_experiment.id
     class Meta:
         unique_together = (("ale_id",
                             "flask_number"),)

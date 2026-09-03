@@ -110,11 +110,11 @@ class Command(BaseCommand):
                 raise CommandError(
                     "%s is already loaded as experiment %s. "
                     "Re-run with --replace to rebuild it."
-                    % (name, existing.ale_id))
+                    % (name, existing.id))
             # Soft: the row survives for purge_deleted, and its mutations go with it out of
             # every list. Rebuilding into the old experiment instead would mix two imports.
             existing.soft_delete(user)
-            self.stdout.write("Replacing experiment %s." % existing.ale_id)
+            self.stdout.write("Replacing experiment %s." % existing.id)
 
         project = live(Project.objects.filter(name=EXAMPLE_PROJECT, user=user)).first()
         if project is None:
@@ -169,7 +169,7 @@ class Command(BaseCommand):
         failed = [entry for entry in files if entry.get("error")]
 
         self.stdout.write("Loaded %s as experiment %s (%s)."
-                          % (dataset["name"], experiment.ale_id, experiment.name))
+                          % (dataset["name"], experiment.id, experiment.name))
         self.stdout.write("  %d file(s), %d mutation(s)."
                           % (len(files), (summary or {}).get("total_mutations") or 0))
         for entry in failed:
@@ -178,4 +178,4 @@ class Command(BaseCommand):
             raise CommandError(
                 "%d of %d file(s) were not imported; the example is incomplete."
                 % (len(failed), len(files)))
-        self.stdout.write("  /stats?ale_experiment_id=%s" % experiment.ale_id)
+        self.stdout.write("  /stats?ale_experiment_id=%s" % experiment.id)

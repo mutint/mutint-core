@@ -83,7 +83,7 @@ class BuildPreconditionsTestCase(TestCase):
 
     def test_a_missing_reference_index_says_what_it_was_for(self):
         os.remove(store.experiment_reference_path(
-            self.reseq.ale_experiment.ale_id, store.REFERENCE_FAI))
+            self.reseq.ale_experiment.id, store.REFERENCE_FAI))
 
         with self.assertRaises(coverage.CoverageError) as caught:
             coverage.build_for(self.reseq)

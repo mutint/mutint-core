@@ -68,7 +68,7 @@ class ReannotateTestCase(TestCase):
 
     def run_command(self, *args, **options):
         out = StringIO()
-        call_command("reannotate", self.experiment.ale_id, *args,
+        call_command("reannotate", self.experiment.id, *args,
                      stdout=out, stderr=out, **options)
         return out.getvalue()
 
@@ -120,7 +120,7 @@ class ReannotateTestCase(TestCase):
         self.assertEqual(reference_store.digest(expected), stored.gff3_sha256)
         # And it is on disk, ready for the next re-annotation.
         self.assertTrue(os.path.isfile(store.experiment_reference_path(
-            self.experiment.ale_id, store.REFERENCE_GFF3)))
+            self.experiment.id, store.REFERENCE_GFF3)))
 
     def test_genbank_gives_the_same_result_as_gff3(self):
         self.run_command(reference_path=SYNTHETIC_GBK, skip_rebuilds=True)
@@ -204,7 +204,7 @@ class ReannotateWithoutAReferenceTestCase(TestCase):
 
     def test_it_says_so_rather_than_doing_nothing(self):
         with self.assertRaises(CommandError) as caught:
-            call_command("reannotate", self.experiment.ale_id, stdout=StringIO())
+            call_command("reannotate", self.experiment.id, stdout=StringIO())
         self.assertIn("--ref", str(caught.exception))
 
 
@@ -243,7 +243,7 @@ class ReannotateOtherExperimentsTestCase(TestCase):
         other = os.path.join(self.store, "other.fasta")
         with open(other, "w") as handle:
             handle.write(">SYN001\n%s\n" % ("ACGT" * 40))
-        call_command("reannotate", self.first.ale_id, reference_path=other,
+        call_command("reannotate", self.first.id, reference_path=other,
                      replace=True, skip_rebuilds=True, stdout=StringIO())
 
         for pk, before in untouched.items():

@@ -199,7 +199,7 @@ class AccessTestCase(_Fixture):
         stranger = User.objects.create(username="reader", is_active=True)
         self.client.force_login(stranger)
         response = self.client.post("/mutations/ncbi/check", {
-            "ale_experiment_id": self.experiment.ale_id,
+            "ale_experiment_id": self.experiment.id,
             "seq_id": self.entry["id"], "accession": "NC_000913.3"})
         self.assertIn(response.status_code, (403, 404))
         self.assertEqual(NcbiSequence.objects.count(), 0)
@@ -211,14 +211,14 @@ class AccessTestCase(_Fixture):
         self.experiment.locked_by = self.user
         self.experiment.save()
         response = self.client.post("/mutations/ncbi/check", {
-            "ale_experiment_id": self.experiment.ale_id,
+            "ale_experiment_id": self.experiment.id,
             "seq_id": self.entry["id"], "accession": "NC_000913.3"})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(NcbiSequence.objects.count(), 0)
 
     def test_an_empty_accession_is_refused_without_asking_ncbi(self):
         response = self.client.post("/mutations/ncbi/check", {
-            "ale_experiment_id": self.experiment.ale_id,
+            "ale_experiment_id": self.experiment.id,
             "seq_id": self.entry["id"], "accession": "  "})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(NcbiSequence.objects.count(), 0)
@@ -251,7 +251,7 @@ class TableLinkTestCase(_Fixture):
     def _cells(self):
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
         from aledb_seq.util import get_reseq_ordered_dict
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id)
         observed = list(ObservedMutation.objects.filter(
             sequencing_experiment__in=reseq_dict.keys()).select_related("mutation"))
         return get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
@@ -307,7 +307,7 @@ class BreseqTableLinkTestCase(_Fixture):
 
     def _html(self):
         return self.client.get("/mutations/breseq", {
-            "ale_experiment_id": self.experiment.ale_id,
+            "ale_experiment_id": self.experiment.id,
             "reseq_id": self.reseq.id}).content.decode("utf-8")
 
     def test_the_contig_is_linked_before_it_is_verified(self):
@@ -342,7 +342,7 @@ class ReferencePageTestCase(_Fixture):
     """
 
     def _get_ref(self, **extra):
-        params = {"ale_experiment_id": self.experiment.ale_id}
+        params = {"ale_experiment_id": self.experiment.id}
         params.update(extra)
         return self.client.get("/mutations/reference", params)
 
@@ -427,12 +427,12 @@ class BootstrapJourneyTestCase(_Fixture):
 
         # 1. The Reference nav entry reaches a page that offers the box.
         page = self.client.get("/mutations/reference",
-                               {"ale_experiment_id": self.experiment.ale_id})
+                               {"ale_experiment_id": self.experiment.id})
         self.assertIn('name="accession"', page.content.decode("utf-8"))
 
         # 2. So does the mutation table's Reference column, with nothing yet verified.
         table = self.client.get("/mutations/breseq", {
-            "ale_experiment_id": self.experiment.ale_id,
+            "ale_experiment_id": self.experiment.id,
             "reseq_id": self.reseq.id}).content.decode("utf-8")
         self.assertIn("/mutations/ncbi?mutation_id=", table)
 
@@ -446,7 +446,7 @@ class BootstrapJourneyTestCase(_Fixture):
             with mock.patch("aledb_seq.ncbi.sequence_digest_stream",
                             return_value=(self.entry["sha256"], self.entry["length"])):
                 response = self.client.post("/mutations/ncbi/check", {
-                    "ale_experiment_id": self.experiment.ale_id,
+                    "ale_experiment_id": self.experiment.id,
                     "seq_id": self.entry["id"],
                     "accession": "NC_000913"})
         self.assertEqual(response.status_code, 200)

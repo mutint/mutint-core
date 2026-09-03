@@ -41,7 +41,7 @@ class OrderingTestCase(TestCase):
 
     def order(self):
         return [r.sample_name for r in
-                get_ordered_reseq_queryset(self.experiment.ale_id, include_ancestor=True)]
+                get_ordered_reseq_queryset(self.experiment.id, include_ancestor=True)]
 
 
 class TestTheRule(OrderingTestCase):

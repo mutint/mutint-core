@@ -32,7 +32,7 @@ class EditorTestCase(TestCase):
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
 
-        self.context = prepare_experiment_by_id(self.experiment.ale_id)
+        self.context = prepare_experiment_by_id(self.experiment.id)
         self.ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
 
         self.sample_a = self.make_sample(flask_number=1)

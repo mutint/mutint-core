@@ -56,7 +56,7 @@ class BreseqTablePageTestCase(TestCase):
         self.client.force_login(self.user)
 
     def get_page(self, **params):
-        params.setdefault("ale_experiment_id", self.experiment.ale_id)
+        params.setdefault("ale_experiment_id", self.experiment.id)
         return self.client.get(PAGE, params)
 
     def content(self, **params):
@@ -268,10 +268,10 @@ class BreseqTablePermissionTestCase(TestCase):
         stranger = User.objects.create(username="stranger", email="s@e.com",
                                        is_active=True, date_joined=datetime.now())
         self.client.force_login(stranger)
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id})
+        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id})
         self.assertNotContains(response, "breseq-table", status_code=200)
 
     def test_an_experiment_with_no_samples_says_so(self):
         self.client.force_login(User.objects.get(username="tester"))
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id})
+        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id})
         self.assertContains(response, "no resequencing samples")

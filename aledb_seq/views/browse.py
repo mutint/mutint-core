@@ -85,7 +85,7 @@ def _resolve(request):
     # mutation quite happily when a table links to one. Being stricter here would refuse an
     # address the rest of the product hands out.
     if not get_observed_mutation_queryset(
-            reseq.ale_experiment.ale_id).filter(mutation=mutation).exists():
+            reseq.ale_experiment.id).filter(mutation=mutation).exists():
         raise Http404("That mutation is not in this sample's experiment.")
 
     observed = (ObservedMutation.objects
@@ -163,7 +163,7 @@ def browse_mutation(request):
         # this existed igv was handed `tracks: []` and the only thing the database
         # contributed was the locus string -- so the page drew the reads and the reference
         # but not the calls the reads were opened to look at.
-        "db_tracks": database_tracks(experiment.ale_id, mutation.reseq_reference),
+        "db_tracks": database_tracks(experiment.id, mutation.reseq_reference),
         # Named here rather than written out in the template, so the click handler and the
         # track config cannot come to disagree about which track is the clickable one.
         "mutations_track_id": MUTATION_TRACK_ID,
@@ -264,13 +264,13 @@ def _reference_urls(experiment):
         return None
 
     config = {
-        "id": str(experiment.ale_id),
+        "id": str(experiment.id),
         "name": experiment.name,
         # `format` is explicit on every URL below: these routes end in /fasta, /fai, /bam and
         # carry no file extension, and igv.js infers format from the extension.
-        "fastaURL": reverse("reference_fasta", args=[experiment.ale_id]),
-        "indexURL": reverse("reference_fai", args=[experiment.ale_id]),
-        "gff3URL": reverse("reference_gff3", args=[experiment.ale_id]),
+        "fastaURL": reverse("reference_fasta", args=[experiment.id]),
+        "indexURL": reverse("reference_fai", args=[experiment.id]),
+        "gff3URL": reverse("reference_gff3", args=[experiment.id]),
         # Only the id and length: the per-sequence hashes seq_ids also carries are identity
         # material, and this dict is rendered into the page for anyone who can see it.
         "seq_ids": [{"id": entry["id"], "length": entry["length"]}
@@ -280,7 +280,7 @@ def _reference_urls(experiment):
     # Only when a sequence has actually been renamed. An experiment that never has one gains
     # no extra request, and igv treats a missing aliasURL as "names are already right".
     if any(entry.get("aliases") for entry in reference.seq_ids):
-        config["aliasURL"] = reverse("reference_chromalias", args=[experiment.ale_id])
+        config["aliasURL"] = reverse("reference_chromalias", args=[experiment.id])
     return config
 
 
@@ -326,7 +326,7 @@ def _sample_tracks(experiment, mutation, current_id):
             # it, and the ancestor's own evidence link lands here. Hiding its track would
             # leave `is_current` matching nothing on the very sample that was clicked.
             for reseq in get_ordered_reseq_queryset(
-                experiment.ale_id, include_ancestor=True).filter(bam_stored=True)]
+                experiment.id, include_ancestor=True).filter(bam_stored=True)]
 
 
 def _samples_calling(mutation):

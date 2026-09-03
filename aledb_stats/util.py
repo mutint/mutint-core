@@ -64,7 +64,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
 
     reseq_experiments = list(reseq_experiments)
     reseq_ids = [reseq.id for reseq in reseq_experiments]
-    experiment_id = (reseq_experiments[0].ale_experiment.ale_id
+    experiment_id = (reseq_experiments[0].ale_experiment.id
                      if reseq_experiments else None)
 
     missing_coverage_counts = dict(

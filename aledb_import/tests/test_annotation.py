@@ -70,10 +70,10 @@ class AnnotatedImportTestCase(TestCase):
         # The same file the store hashes and igv.js draws -- there is no second
         # artifact kept alongside it.
         path = store.experiment_reference_path(
-            self.experiment.ale_id, store.REFERENCE_GFF3)
+            self.experiment.id, store.REFERENCE_GFF3)
         self.assertTrue(os.path.isfile(path))
         self.assertEqual(
-            path, reference_store.annotation_reference_path(self.experiment.ale_id))
+            path, reference_store.annotation_reference_path(self.experiment.id))
 
     def test_the_stored_reference_still_hashes_as_expected(self):
         stored = ExperimentReference.objects.get()
@@ -207,12 +207,12 @@ class UnannotatedImportTestCase(TestCase):
         # Possible for experiments predating the store, or after a store wipe.
         self._establish(SYNTHETIC_GFF3)
         os.unlink(store.experiment_reference_path(
-            self.experiment.ale_id, store.REFERENCE_GFF3))
+            self.experiment.id, store.REFERENCE_GFF3))
 
         self._import()
 
         self.assertIsNone(
-            reference_store.annotation_reference_path(self.experiment.ale_id))
+            reference_store.annotation_reference_path(self.experiment.id))
         self.assertEqual(36, Mutation.objects.count())
         self.assertLessEqual(self._categories(), {None, ""})
 

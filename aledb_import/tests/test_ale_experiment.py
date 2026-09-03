@@ -119,7 +119,7 @@ class UploadCommandTestCase(TestCase):
         self.upload()
         experiment = AleExperiment.objects.get()
 
-        summary = get_experiment_summary(experiment.ale_id)
+        summary = get_experiment_summary(experiment.id)
         self.assertTrue(sum(summary.mutation_type_counts.values()))
 
     def test_a_directory_with_no_metadata_is_skipped(self):
@@ -154,7 +154,7 @@ class DeleteExperimentsTestCase(TestCase):
         self.assertEqual(2, Mutation.objects.count())
         experiment = AleExperiment.objects.get()
 
-        delete_ale_experiments([experiment.ale_id])
+        delete_ale_experiments([experiment.id])
 
         self.assertEqual(0, AleExperiment.objects.count())
         self.assertEqual(0, ObservedMutation.objects.count())

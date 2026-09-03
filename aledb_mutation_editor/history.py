@@ -200,7 +200,7 @@ def _resolve_mutation(experiment, mutation, identity):
     recreated, created = mutation_for_identity(experiment, identity)
     if created:
         logger.info("recreated mutation %s for experiment %s from a change-log snapshot",
-                    recreated.pk, experiment.ale_id)
+                    recreated.pk, experiment.id)
     return recreated
 
 
@@ -384,8 +384,8 @@ def rebuild_after_edit(experiment):
         EXPERIMENT_SCOPE, request_rebuild, run_rebuilds,
     )
 
-    request_rebuild(experiment.ale_id, reason='mutations edited')
-    run_rebuilds(experiment.ale_id, scope=EXPERIMENT_SCOPE)
+    request_rebuild(experiment.id, reason='mutations edited')
+    run_rebuilds(experiment.id, scope=EXPERIMENT_SCOPE)
 
 
 # --- reconstructing -------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import json
 from aledb_experiment.models import TechnicalReplicate
 from aledb_experiment.models import Media
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
+from aledb_experiment import paths
 
 __author__ = 'Denny Gosting, Patrick Phaneuf, Muyao'
 
@@ -142,8 +143,8 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
                     tech_rep_number=metadata_dict[TECH_REP_NUMBER],
                     isolate__isolate_number=metadata_dict[ISOLATE_NUMBER],
                     isolate__flask__flask_number=metadata_dict[FLASK_NUMBER],
-                    isolate__flask__ale_id__ale_id=metadata_dict[ALE_NUMBER],
-                    isolate__flask__ale_id__ale_experiment__ale_id=ale_experiment_primary_key)
+                    **{paths.to_ale_label(root="tech_rep"): metadata_dict[ALE_NUMBER],
+                       paths.to_experiment_id(root="tech_rep"): ale_experiment_primary_key})
             except Exception as e:
                 print("Error for " + metadata_dict[ALE_NUMBER] + "-" + metadata_dict[FLASK_NUMBER] + "-" + metadata_dict[ISOLATE_NUMBER] + '-' + metadata_dict[TECH_REP_NUMBER] + ": ", e)
                 continue

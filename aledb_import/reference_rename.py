@@ -137,9 +137,9 @@ def apply_rename(experiment, reference, plan, actor=""):
     # finished state. A hook must never see names a rollback could take away, and one that
     # fails must not undo a rename that is already true -- `run_sequence_rename_hooks`
     # isolates each.
-    run_sequence_rename_hooks(experiment.ale_id, mapping)
+    run_sequence_rename_hooks(experiment.id, mapping)
     logger.info("renamed %d sequence(s) on experiment %s: %s",
-                len(mapping), experiment.ale_id,
+                len(mapping), experiment.id,
                 ", ".join("%s -> %s" % pair for pair in plan.pairs))
     return counts
 
@@ -159,7 +159,7 @@ def _reannotate(experiment):
     except Exception:  # noqa: BLE001
         logger.exception(
             "re-annotation after renaming experiment %s failed; run `./aledb reannotate %s`",
-            experiment.ale_id, experiment.ale_id)
+            experiment.id, experiment.id)
 
 
 def describe_difference(reference, sequences):

@@ -39,7 +39,7 @@ class Command(BaseCommand):
         reference = ExperimentReference.objects.filter(ale_experiment=experiment).first()
         if reference is None:
             raise CommandError("Experiment %s has no reference genome."
-                               % experiment.ale_id)
+                               % experiment.id)
 
         if options["repair"]:
             return self._repair(reference)
@@ -73,7 +73,7 @@ class Command(BaseCommand):
 
     def _experiment(self, experiment_id):
         try:
-            return AleExperiment.objects.get(ale_id=experiment_id)
+            return AleExperiment.objects.get(pk=experiment_id)
         except AleExperiment.DoesNotExist:
             raise CommandError("No experiment with id %s." % experiment_id)
 

@@ -32,7 +32,7 @@ def metadata(request):
         start_time = time.time()
         context = get_user_context(request.user)
         experiment = common.get_ale_experiment(request)
-        ale_experiment_id = experiment.ale_id
+        ale_experiment_id = experiment.id
         ale_id = request.GET.get(REQUEST_ALE_ID)
 
         reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, ale_id)

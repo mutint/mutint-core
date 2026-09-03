@@ -31,7 +31,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """POST the change form. `target_reseq_ids` left out is the endpoint's older contract,
         "every sample carrying it", and is what most of this file exercises."""
         payload = {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_id": (mutation or self.mut_1).id,
             "mutation_type": "SNP",
             "seq_id": "NC_000913",
@@ -46,7 +46,7 @@ class ChangeMutationTestCase(EditorTestCase):
     # --- the page -------------------------------------------------------------------------
 
     def test_the_page_opens_on_what_is_stored(self):
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                           "mutation_id": self.mut_1.id})
         html = response.content.decode("utf-8")
 
@@ -55,7 +55,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertIn('id="mutation-initial"', html)
 
     def test_the_page_says_how_many_samples_follow(self):
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id}).content.decode("utf-8")
 
         self.assertIn("<b>2</b> that carr", html)
@@ -64,7 +64,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """There is nothing to change in a sample that does not carry the mutation, and
         `data-value` is what `aledbSelectList` reads a row's id off -- a list rendered without
         it looks right and posts an empty selection."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_2.id}).content.decode("utf-8")
 
         self.assertIn('data-value="%d"' % self.sample_a.id, html)
@@ -74,7 +74,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """The per-sample table's `change` link carries `?reseq_id=`, and correcting a call
         you are looking at in the sample you are looking at it in is what following it means.
         `active` on the <li> is the selection, so that is what has to be there."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id,
                                       "reseq_id": self.sample_b.id}).content.decode("utf-8")
 
@@ -84,7 +84,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_it_opens_on_every_sample_when_the_link_names_none(self):
         """The grid's link, whose row spans every sample -- so there is no one sample that was
         clicked and the whole set is the honest default."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id}).content.decode("utf-8")
 
         for sample in (self.sample_a, self.sample_b):
@@ -93,7 +93,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_reseq_id_all_opens_on_every_sample(self):
         """`?reseq_id=all` is the editor's whole-experiment sentinel. It is not a sample, so it
         lands on the default rather than on an empty selection."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id,
                                       "reseq_id": "all"}).content.decode("utf-8")
 
@@ -103,7 +103,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_a_sample_that_does_not_carry_it_is_not_preselected(self):
         """A link naming a sample this mutation is not in cannot select nothing: the page
         would open with a Save button that refuses."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_2.id,
                                       "reseq_id": self.sample_b.id}).content.decode("utf-8")
 
@@ -119,7 +119,7 @@ class ChangeMutationTestCase(EditorTestCase):
         other = AleExperiment.objects.get(pk=created["experiment_id"])
         stranger = self.make_mutation(position=1, sequence_change="A>C", experiment=other)
 
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.ale_id,
+        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
                                           "mutation_id": stranger.id})
 
         self.assertEqual(404, response.status_code)

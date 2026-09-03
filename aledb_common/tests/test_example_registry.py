@@ -201,7 +201,7 @@ class LoadExampleCommandTestCase(TestCase):
 
         alive = live(AleExperiment.objects.filter(name="test-example"))
         self.assertEqual(1, alive.count(), "exactly one live copy")
-        self.assertNotEqual(first.ale_id, alive.first().ale_id, "a fresh experiment")
+        self.assertNotEqual(first.id, alive.first().id, "a fresh experiment")
         first.refresh_from_db()
         self.assertIsNotNone(first.deleted_at, "the old one is soft-deleted, not destroyed")
 

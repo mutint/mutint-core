@@ -35,7 +35,7 @@ class SampleEditTestCase(TestCase):
         from aledb_import.gd_import import prepare_experiment_by_id
         # Never _prepare_experiment: its name-based lookup reaches find_user, which
         # prompts on stdin and raises EOFError under the test runner.
-        context = prepare_experiment_by_id(self.experiment.ale_id)
+        context = prepare_experiment_by_id(self.experiment.id)
         self.media = context["media"]
 
     def make_sample(self, ale, flask, isolate, rep, name="", experiment=None,
@@ -67,7 +67,7 @@ class SampleEditTestCase(TestCase):
     def bulk(self, rows, experiment=None):
         experiment = experiment or self.experiment
         return self.client.post(
-            "/ale/experiment/%d/samples/update/" % experiment.ale_id,
+            "/ale/experiment/%d/samples/update/" % experiment.id,
             {"rows": json.dumps(rows)})
 
     def single(self, reseq, **overrides):
@@ -105,7 +105,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         stranger_sample = self.make_sample(1, 1, 1, 1, name="elsewhere", experiment=other)
 
         html = self.client.get(
-            "/ale/experiment/%d/samples/" % self.experiment.ale_id).content.decode()
+            "/ale/experiment/%d/samples/" % self.experiment.id).content.decode()
 
         self.assertIn('data-reseq-id="%d"' % self.sample.pk, html)
         self.assertNotIn('data-reseq-id="%d"' % stranger_sample.pk, html)
@@ -120,7 +120,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         isolate.save()
 
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.ale_id):
+                    "/ale/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 html = self.client.get(url).content.decode()
                 self.assertIn("Ara-1_500gen_762B", html)
@@ -129,7 +129,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
     def test_signed_out_they_are_forbidden(self):
         self.client.logout()
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.ale_id):
+                    "/ale/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
@@ -139,13 +139,13 @@ class SampleEditPagesTestCase(SampleEditTestCase):
             username="stranger", email="s@e.com", is_active=True, is_staff=True)
         self.client.force_login(stranger)
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.ale_id):
+                    "/ale/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
     def test_every_handler_guards_its_missing_control(self):
         for url, control in (("/ale/sample/%d/edit/" % self.sample.pk, "se-save"),
-                             ("/ale/experiment/%d/samples/" % self.experiment.ale_id,
+                             ("/ale/experiment/%d/samples/" % self.experiment.id,
                               "sb-save")):
             with self.subTest(url=url):
                 self.assertContains(
@@ -154,7 +154,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
 
     def test_neither_is_a_modal_and_both_offer_a_way_back(self):
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.ale_id):
+                    "/ale/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertNotContains(response, 'data-toggle="modal"')
@@ -477,13 +477,13 @@ class BulkSampleEditTestCase(SampleEditTestCase):
 
     def test_malformed_rows_is_a_400_not_a_500(self):
         response = self.client.post(
-            "/ale/experiment/%d/samples/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/samples/update/" % self.experiment.id,
             {"rows": "not json"})
         self.assertEqual(400, response.status_code)
 
     def test_rows_must_be_a_list(self):
         response = self.client.post(
-            "/ale/experiment/%d/samples/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/samples/update/" % self.experiment.id,
             {"rows": json.dumps({"id": "1"})})
         self.assertEqual(400, response.status_code)
 
@@ -610,7 +610,7 @@ class TimePointLabellingTestCase(SampleEditTestCase):
 
     def test_both_pages_label_it_time_point(self):
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.ale_id):
+                    "/ale/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 # {% comment %} blocks never render, so the internal name in the
                 # template's own notes cannot make this pass by accident.

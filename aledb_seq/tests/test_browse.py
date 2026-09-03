@@ -56,8 +56,8 @@ class BrowseMutationTestCase(TestCase):
         self.assertIn("%s:" % mutation.reseq_reference, html)          # locus contig
         self.assertIn("/mutations/alignments/%d/bam" % self.reseq.id, html)
         self.assertIn("/mutations/alignments/%d/bai" % self.reseq.id, html)
-        self.assertIn("/mutations/reference/%d/fasta" % self.experiment.ale_id, html)
-        self.assertIn("/mutations/reference/%d/fai" % self.experiment.ale_id, html)
+        self.assertIn("/mutations/reference/%d/fasta" % self.experiment.id, html)
+        self.assertIn("/mutations/reference/%d/fai" % self.experiment.id, html)
         self.assertIn("js/igv.min.js", html)
 
     def test_the_gene_list_toggle_script_is_loaded(self):
@@ -146,7 +146,7 @@ class BrowseMutationTestCase(TestCase):
         html = self._get().content.decode("utf-8")
 
         self.assertIn('"aliasURL"', html)
-        self.assertIn("/mutations/reference/%d/chromalias" % self.experiment.ale_id, html)
+        self.assertIn("/mutations/reference/%d/chromalias" % self.experiment.id, html)
 
     def test_the_page_does_not_publish_per_sequence_hashes(self):
         """seq_ids also carries the sequence hashes that establish reference identity;

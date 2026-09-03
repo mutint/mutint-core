@@ -45,7 +45,7 @@ def _experiment_samples(experiment):
     from aledb_seq.util import get_ordered_reseq_queryset
     # `include_ancestor=True`: this is the page that edits and deletes samples, so it has to
     # show the designated ancestor, which every reading page hides.
-    return get_ordered_reseq_queryset(experiment.ale_id, include_ancestor=True)
+    return get_ordered_reseq_queryset(experiment.id, include_ancestor=True)
 
 
 def _get_sample(pk):
@@ -149,12 +149,12 @@ def _save(experiment, rows):
     from aledb_import.gd_import import prepare_experiment_by_id
     # Once per request, not once per row: it get_or_creates the placeholder Media, and it
     # is only ever a fallback for a sample with nothing to inherit.
-    placeholders = prepare_experiment_by_id(experiment.ale_id)
+    placeholders = prepare_experiment_by_id(experiment.id)
 
     try:
         touched = apply_rows(experiment, parsed, media=placeholders["media"])
     except IntegrityError:
-        logger.warning("concurrent edit on experiment %s", experiment.ale_id)
+        logger.warning("concurrent edit on experiment %s", experiment.id)
         raise SampleEditError(
             "Another edit changed this sample while you were working. "
             "Reload the page and try again.", status=409)
@@ -199,7 +199,7 @@ def sample_update(request, pk):
 
     reseq.refresh_from_db()
     return JsonResponse({"sample_id": reseq.pk,
-                         "experiment_id": experiment.ale_id,
+                         "experiment_id": experiment.id,
                          "coordinate": coordinate_str(sample_coordinate(reseq))})
 
 
@@ -229,6 +229,6 @@ def experiment_samples_update(request, pk):
     except SampleEditError as error:
         return _error_response(error)
 
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "updated": touched,
                          "structural": structural})

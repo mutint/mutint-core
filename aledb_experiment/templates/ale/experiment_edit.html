@@ -38,9 +38,9 @@
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="ee-save">Save experiment</button>
             <a class="btn btn-default"
-               href="/stats?ale_experiment_id={{ experiment.ale_id }}">Cancel</a>
+               href="/stats?ale_experiment_id={{ experiment.id }}">Cancel</a>
             <a class="btn btn-default" style="margin-left: 1em;"
-               href="/ale/experiment/{{ experiment.ale_id }}/samples/">Edit samples &raquo;</a>
+               href="/ale/experiment/{{ experiment.id }}/samples/">Edit samples &raquo;</a>
         </div>
         <div id="ee-error" style="color: #a00; margin-top: 1em;"></div>
     </div>
@@ -51,13 +51,13 @@
     if (!document.getElementById("ee-save")) { return; }
     document.getElementById("ee-save").addEventListener("click", function () {
         var project = document.getElementById("ee-project");
-        window.aledbPost("/ale/experiment/{{ experiment.ale_id }}/update/", {
+        window.aledbPost("/ale/experiment/{{ experiment.id }}/update/", {
             name: document.getElementById("ee-name").value,
             project: project ? project.value : "",
             doi: document.getElementById("ee-doi").value,
             notes: document.getElementById("ee-notes").value
         }).then(function () {
-            window.location.href = "/stats?ale_experiment_id={{ experiment.ale_id }}";
+            window.location.href = "/stats?ale_experiment_id={{ experiment.id }}";
         }).catch(function (err) {
             document.getElementById("ee-error").textContent = err.message;
         });

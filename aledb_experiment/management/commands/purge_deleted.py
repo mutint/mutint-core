@@ -54,7 +54,7 @@ class Command(BaseCommand):
         for experiment in experiments:
             self.stdout.write("%s experiment #%s %s"
                               % ("Would purge" if dry_run else "Purging",
-                                 experiment.ale_id, experiment.name))
+                                 experiment.id, experiment.name))
             if not dry_run:
                 self._purge_experiment(experiment)
 
@@ -72,7 +72,7 @@ class Command(BaseCommand):
     def _purge_experiment(self, experiment):
         from aledb_import.ale_experiment import delete_ale_experiments
 
-        experiment_id = experiment.ale_id
+        experiment_id = experiment.id
         sample_dirs = [store.sample_dir(reseq.id)
                        for reseq in self._resequencing_experiments(experiment)]
 

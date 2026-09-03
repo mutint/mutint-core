@@ -93,14 +93,14 @@ class SoftDeleteTestCase(TestCase):
 
     def test_delete_flags_rather_than_removes(self):
         response = self.client.post(
-            "/ale/experiment/%d/delete/" % self.experiment.ale_id)
+            "/ale/experiment/%d/delete/" % self.experiment.id)
 
         self.assertEqual(response.status_code, 200, response.content)
         self.experiment.refresh_from_db()
         self.assertIsNotNone(self.experiment.deleted_at)
         self.assertEqual(self.experiment.deleted_by_id, self.user.id)
         # The row is still there -- that is the whole point.
-        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.ale_id).exists())
+        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_deleted_experiment_disappears_from_the_list(self):
         self.assertIn(self.experiment, list(get_all_user_exps(self.user)))
@@ -124,7 +124,7 @@ class SoftDeleteTestCase(TestCase):
         self.client.force_login(stranger)
 
         self.assertEqual(
-            self.client.post("/ale/experiment/%d/delete/" % self.experiment.ale_id
+            self.client.post("/ale/experiment/%d/delete/" % self.experiment.id
                              ).status_code, 403)
         self.assertEqual(
             self.client.post("/ale/project/%d/delete/" % self.project.id).status_code, 403)
@@ -140,7 +140,7 @@ class SoftDeleteTestCase(TestCase):
             self.client.post("/ale/project/%d/delete/" % self.project.id).status_code, 200)
 
     def test_delete_is_idempotent(self):
-        url = "/ale/experiment/%d/delete/" % self.experiment.ale_id
+        url = "/ale/experiment/%d/delete/" % self.experiment.id
         first = self.client.post(url).json()["deleted_at"]
         second = self.client.post(url).json()["deleted_at"]
         self.assertEqual(first, second)
@@ -237,7 +237,7 @@ class DeleteControlsTestCase(TestCase):
                 ("/ale/experiments/", 'id="delete-selected"', "aledbDeleteSelected"),
                 ("/ale/project/%d/" % self.project.id,
                  'id="delete-selected"', "aledbDeleteSelected"),
-                ("/stats/?ale_experiment_id=%d" % self.experiment.ale_id,
+                ("/stats/?ale_experiment_id=%d" % self.experiment.id,
                  'id="delete-experiment"', "aledbConfirmTypedDelete")):
             with self.subTest(url=url):
                 html = self._html(url)
@@ -260,7 +260,7 @@ class DeleteControlsTestCase(TestCase):
     # --- where a single delete lands -----------------------------------------------
 
     def test_deleting_the_experiment_you_are_looking_at_returns_to_its_project(self):
-        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.ale_id)
+        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.id)
         self.assertIn('data-after-delete="/ale/project/%d/"' % self.project.id, html)
 
     def test_an_experiment_with_no_project_has_no_delete_button_to_aim(self):
@@ -276,7 +276,7 @@ class DeleteControlsTestCase(TestCase):
         self.experiment.save()
         self.owner.is_superuser = True
         self.owner.save()
-        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.ale_id)
+        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.id)
         self.assertNotIn('id="delete-experiment"', html)
         self.assertIn("permission", html)
 
@@ -516,13 +516,13 @@ class PurgeDeletedTestCase(TestCase):
     def test_recently_deleted_rows_survive(self):
         self.experiment.soft_delete(self.user)
         self._purge("--older-than", "30")
-        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.ale_id).exists())
+        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_expired_rows_are_removed(self):
         self.experiment.soft_delete(
             self.user, when=timezone.now() - timezone.timedelta(days=40))
         self._purge("--older-than", "30")
-        self.assertFalse(AleExperiment.objects.filter(pk=self.experiment.ale_id).exists())
+        self.assertFalse(AleExperiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_dry_run_changes_nothing(self):
         self.experiment.soft_delete(
@@ -530,7 +530,7 @@ class PurgeDeletedTestCase(TestCase):
         output = self._purge("--older-than", "30", "--dry-run")
 
         self.assertIn("Would purge", output)
-        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.ale_id).exists())
+        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_purging_a_project_takes_its_experiments(self):
         """AleExperiment.project is DO_NOTHING, so the experiments must go first."""
@@ -539,11 +539,11 @@ class PurgeDeletedTestCase(TestCase):
         self._purge("--older-than", "30")
 
         self.assertFalse(Project.objects.filter(pk=self.project.id).exists())
-        self.assertFalse(AleExperiment.objects.filter(pk=self.experiment.ale_id).exists())
+        self.assertFalse(AleExperiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_purge_removes_the_stored_reference_files(self):
         reference_dir = store.ensure_dir(
-            store.experiment_reference_dir(self.experiment.ale_id))
+            store.experiment_reference_dir(self.experiment.id))
         marker = os.path.join(reference_dir, store.REFERENCE_FASTA)
         with open(marker, "w") as handle:
             handle.write(">x\nACGT\n")
@@ -812,7 +812,7 @@ class ExperimentEditTestCase(TestCase):
         self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
 
     def test_the_page_renders_with_the_current_values(self):
-        response = self.client.get("/ale/experiment/%d/edit/" % self.experiment.ale_id)
+        response = self.client.get("/ale/experiment/%d/edit/" % self.experiment.id)
 
         self.assertEqual(200, response.status_code)
         self.assertContains(response, 'id="ee-name"')
@@ -821,7 +821,7 @@ class ExperimentEditTestCase(TestCase):
 
     def test_saving_changes_the_experiment(self):
         response = self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/update/" % self.experiment.id,
             {"name": "Ara-1", "notes": "ran hot",
              "doi": "10.1/abc 10.1/def", "project": self.project.id})
 
@@ -835,10 +835,10 @@ class ExperimentEditTestCase(TestCase):
         """Changing an owner is its own workflow. A details form that carried the field
         would rewrite it on every save, and one that dropped it would blank it."""
         self.assertNotContains(
-            self.client.get("/ale/experiment/%d/edit/" % self.experiment.ale_id),
+            self.client.get("/ale/experiment/%d/edit/" % self.experiment.id),
             'id="ee-person"')
 
-        self.client.post("/ale/experiment/%d/update/" % self.experiment.ale_id,
+        self.client.post("/ale/experiment/%d/update/" % self.experiment.id,
                          {"name": "first", "person": "impostor"})
 
         self.experiment.refresh_from_db()
@@ -849,7 +849,7 @@ class ExperimentEditTestCase(TestCase):
             "/ale/projects/create/", {"name": "Q"}).json()["project_id"])
 
         response = self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/update/" % self.experiment.id,
             {"name": "first", "project": other.id})
 
         self.assertEqual(200, response.status_code, response.content)
@@ -866,7 +866,7 @@ class ExperimentEditTestCase(TestCase):
         theirs = Project.objects.create(name="Theirs", user=stranger)
 
         response = self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/update/" % self.experiment.id,
             {"name": "first", "project": theirs.id})
 
         self.assertEqual(403, response.status_code)
@@ -879,22 +879,22 @@ class ExperimentEditTestCase(TestCase):
         Project.objects.create(name="NotYours", user=stranger)
 
         html = self.client.get(
-            "/ale/experiment/%d/edit/" % self.experiment.ale_id).content.decode()
+            "/ale/experiment/%d/edit/" % self.experiment.id).content.decode()
 
         self.assertIn("P", html)
         self.assertNotIn("NotYours", html)
 
     def test_a_blank_name_is_refused(self):
         self.assertEqual(400, self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/update/" % self.experiment.id,
             {"name": "  "}).status_code)
 
     def test_signed_out_the_page_and_the_endpoint_both_refuse(self):
         self.client.logout()
         self.assertEqual(403, self.client.get(
-            "/ale/experiment/%d/edit/" % self.experiment.ale_id).status_code)
+            "/ale/experiment/%d/edit/" % self.experiment.id).status_code)
         self.assertEqual(403, self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.ale_id,
+            "/ale/experiment/%d/update/" % self.experiment.id,
             {"name": "x"}).status_code)
 
     def test_the_experiment_page_offers_the_controls_only_to_an_owner(self):
@@ -903,10 +903,10 @@ class ExperimentEditTestCase(TestCase):
         only ever produce a 403, which is a dead end dressed up as an action."""
         # follow=True: /stats has no trailing slash, so APPEND_SLASH redirects first and
         # an unfollowed GET returns an empty 301 body.
-        url = "/stats?ale_experiment_id=%d" % self.experiment.ale_id
+        url = "/stats?ale_experiment_id=%d" % self.experiment.id
         html = self.client.get(url, follow=True).content.decode()
-        self.assertIn('href="/ale/experiment/%d/edit/"' % self.experiment.ale_id, html)
-        self.assertIn('href="/ale/experiment/%d/samples/"' % self.experiment.ale_id, html)
+        self.assertIn('href="/ale/experiment/%d/edit/"' % self.experiment.id, html)
+        self.assertIn('href="/ale/experiment/%d/samples/"' % self.experiment.id, html)
         self.assertIn('id="delete-experiment"', html)
 
         stranger = User.objects.create(

@@ -245,11 +245,11 @@ def build_for(reseq):
                             % (reseq.id, bam_path))
 
     experiment = reseq.ale_experiment
-    fai_path = store.experiment_reference_path(experiment.ale_id, store.REFERENCE_FAI)
+    fai_path = store.experiment_reference_path(experiment.id, store.REFERENCE_FAI)
     if not os.path.isfile(fai_path):
         raise CoverageError(
             "experiment %s has no stored reference index; coverage needs one for the "
-            "sequence lengths" % experiment.ale_id)
+            "sequence lengths" % experiment.id)
 
     to_bigwig = require(BEDGRAPH_TO_BIGWIG)
 

@@ -545,6 +545,6 @@ def rebuild_after_structural_change(experiment):
     # renumber finds the tree gone and is offered a new one. Leaving it out of `run_rebuilds`
     # below is therefore about *where* that happens rather than about expense -- this call site
     # is renaming samples and has no business inferring anything.
-    request_rebuild(experiment.ale_id, only=changed + ('aledb_phylogeny',),
+    request_rebuild(experiment.id, only=changed + ('aledb_phylogeny',),
                     reason='samples renumbered')
-    run_rebuilds(experiment.ale_id, only=changed)
+    run_rebuilds(experiment.id, only=changed)

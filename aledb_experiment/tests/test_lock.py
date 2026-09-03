@@ -34,7 +34,7 @@ class LockTestCase(EditorTestCase):
 
     def post_lock(self, **data):
         return self.client.post(
-            "/ale/experiment/%d/lock/" % self.experiment.ale_id, data)
+            "/ale/experiment/%d/lock/" % self.experiment.id, data)
 
 
 class ModelTestCase(LockTestCase):
@@ -173,7 +173,7 @@ class LockEndpointTestCase(LockTestCase):
 
     def test_it_refuses_a_GET(self):
         self.assertEqual(
-            405, self.client.get("/ale/experiment/%d/lock/" % self.experiment.ale_id).status_code)
+            405, self.client.get("/ale/experiment/%d/lock/" % self.experiment.id).status_code)
 
 
 class EveryWritePathTestCase(LockTestCase):
@@ -207,7 +207,7 @@ class EveryWritePathTestCase(LockTestCase):
 
     def writes(self):
         """(name, callable) for every experiment-scoped write the web offers."""
-        experiment_id = self.experiment.ale_id
+        experiment_id = self.experiment.id
         return (
             ("mutation delete", lambda: self.client.post("/mutation-editor/delete/apply", {
                 "experiment_id": experiment_id,
@@ -277,10 +277,10 @@ class EveryWritePathTestCase(LockTestCase):
 
     def test_the_edit_pages_refuse_as_well(self):
         """Not only the endpoints: a form you can fill in and never save is a dead end."""
-        for url in ("/ale/experiment/%d/edit/" % self.experiment.ale_id,
-                    "/ale/experiment/%d/samples/" % self.experiment.ale_id,
+        for url in ("/ale/experiment/%d/edit/" % self.experiment.id,
+                    "/ale/experiment/%d/samples/" % self.experiment.id,
                     "/ale/sample/%d/edit/" % self.sample_a.id,
-                    "/import/add/?ale_experiment_id=%d" % self.experiment.ale_id):
+                    "/import/add/?ale_experiment_id=%d" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
@@ -304,7 +304,7 @@ class EveryWritePathTestCase(LockTestCase):
                        import_type="genomediff")
 
     def test_the_refusal_says_why(self):
-        response = self.client.post("/ale/experiment/%d/delete/" % self.experiment.ale_id, {})
+        response = self.client.post("/ale/experiment/%d/delete/" % self.experiment.id, {})
         error = response.json()["error"]
         self.assertIn("locked", error)
         self.assertIn(self.experiment.name, error, "lock_message() is what is carried through")
@@ -316,13 +316,13 @@ class StillAllowedTestCase(LockTestCase):
 
     def test_reading_the_experiment_still_works(self):
         self.lock()
-        response = self.client.get("/stats", {"ale_experiment_id": self.experiment.ale_id},
+        response = self.client.get("/stats", {"ale_experiment_id": self.experiment.id},
                                    follow=True)
         self.assertEqual(200, response.status_code)
 
     def test_the_overview_says_it_is_locked(self):
         self.lock()
-        response = self.client.get("/stats", {"ale_experiment_id": self.experiment.ale_id},
+        response = self.client.get("/stats", {"ale_experiment_id": self.experiment.id},
                                    follow=True)
 
         self.assertContains(response, "This experiment is locked")
@@ -333,7 +333,7 @@ class StillAllowedTestCase(LockTestCase):
         """One row of actions, in reading order. Three `{% if %}`s, so it is easy to reorder
         by accident and nothing else would notice."""
         html = self.client.get(
-            "/stats", {"ale_experiment_id": self.experiment.ale_id},
+            "/stats", {"ale_experiment_id": self.experiment.id},
             follow=True).content.decode()
 
         samples = html.index("/samples/")
@@ -345,7 +345,7 @@ class StillAllowedTestCase(LockTestCase):
     def test_the_edit_controls_are_gone_and_unlock_is_offered(self):
         self.lock()
         html = self.client.get(
-            "/stats", {"ale_experiment_id": self.experiment.ale_id},
+            "/stats", {"ale_experiment_id": self.experiment.id},
             follow=True).content.decode()
 
         self.assertNotIn('id="delete-experiment"', html)
@@ -391,7 +391,7 @@ class StillAllowedTestCase(LockTestCase):
         observed = ObservedMutation.objects.filter(
             sequencing_experiment=self.sample_a).first()
         response = self.client.post("/mutation-editor/delete/apply", {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "observed_ids": json.dumps([observed.id])})
         self.assertEqual(200, response.status_code)
 

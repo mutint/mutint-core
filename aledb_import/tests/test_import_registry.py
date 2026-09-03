@@ -344,7 +344,7 @@ class PostProcessingTestCase(TestCase):
             with override_settings(ALEDB_STORE_DIR=store):
                 run_import(self.experiment, self.staged, self.user)
 
-        self.assertEqual([self.experiment.ale_id], seen,
+        self.assertEqual([self.experiment.id], seen,
                          "the hook must fire once, after every file")
 
     @override_settings(ALEDB_STORE_DIR=None)

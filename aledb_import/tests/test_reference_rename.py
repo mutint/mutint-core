@@ -290,7 +290,7 @@ class RenameApplicationTestCase(TestCase):
 
         self._rename()
 
-        self.assertEqual([(self.experiment.ale_id, {"test_ref": "NC_TEST.1"})], seen)
+        self.assertEqual([(self.experiment.id, {"test_ref": "NC_TEST.1"})], seen)
 
     def test_a_failing_hook_does_not_undo_a_committed_rename(self):
         def explode(experiment_id, renames):
@@ -354,7 +354,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
 
         from aledb_common import store
         for filename in (store.REFERENCE_FASTA, store.REFERENCE_GFF3, store.REFERENCE_FAI):
-            path = store.experiment_reference_path(self.experiment.ale_id, filename)
+            path = store.experiment_reference_path(self.experiment.id, filename)
             with open(path) as handle:
                 body = handle.read()
             self.assertIn("NC_TEST.1", body, filename)
@@ -371,7 +371,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
             allow_rename=True)
 
         from aledb_common import store
-        path = store.experiment_reference_path(self.experiment.ale_id, store.REFERENCE_GFF3)
+        path = store.experiment_reference_path(self.experiment.id, store.REFERENCE_GFF3)
         with open(path) as handle:
             stored = handle.read()
         self.assertIn("NC_TEST.1", stored)

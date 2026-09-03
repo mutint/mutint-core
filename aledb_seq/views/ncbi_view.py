@@ -103,7 +103,7 @@ def ncbi_check(request):
     handed the project cannot see the lock that lives on the experiment.
     """
     try:
-        experiment = AleExperiment.objects.get(ale_id=request.POST.get("ale_experiment_id"))
+        experiment = AleExperiment.objects.get(pk=request.POST.get("ale_experiment_id"))
     except (AleExperiment.DoesNotExist, ValueError, TypeError):
         raise Http404("No such experiment.")
 

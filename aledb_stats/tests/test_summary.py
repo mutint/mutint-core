@@ -52,7 +52,7 @@ class SummaryTestCase(TestCase):
         self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
-        self.context = prepare_experiment_by_id(self.experiment.ale_id)
+        self.context = prepare_experiment_by_id(self.experiment.id)
 
         self.samples = [self._sample(ale=1, flask=100, isolate=1),
                         self._sample(ale=1, flask=200, isolate=1),
@@ -121,14 +121,14 @@ class SummaryTestCase(TestCase):
             present=True, frequency="1.0000")
 
     def _counts(self):
-        return compute_experiment_counts(self.experiment.ale_id)
+        return compute_experiment_counts(self.experiment.id)
 
     # ---- the SQL path ---------------------------------------------------------------
     def test_the_counts_are_the_ones_the_page_shows(self):
         """The whole fixture, stated. Every rule below is one somebody could reasonably
         "fix" and be wrong, so each is asserted with the reason beside it."""
         types, observed_types, protein, observed_protein = compute_experiment_counts(
-            self.experiment.ale_id)
+            self.experiment.id)
 
         self.assertEqual(2, types["SNP"], "snp and noncoding are both SNPs")
         self.assertEqual(4, observed_types["SNP"], "the SNP is seen in three samples")
@@ -203,7 +203,7 @@ class SummaryTestCase(TestCase):
     def _both_paths(self):
         """The counts. Named for the two paths there used to be -- one aggregating in SQL, one
         walking rows because a gene filter cannot be expressed in SQL. There is one now."""
-        return compute_experiment_counts(self.experiment.ale_id)
+        return compute_experiment_counts(self.experiment.id)
 
     def test_a_compound_snp_type_takes_the_most_severe_bucket(self):
         """A SNP in two overlapping reading frames carries one value per gene, joined with '|'.
@@ -237,7 +237,7 @@ class SummaryTestCase(TestCase):
         """`aledb_stats.views` has pushed these four names into the context for a long time and
         `stats.html` read none of them, so the numbers were computed and discarded. Nothing
         would have caught that; this would."""
-        html = self.client.get("/stats", {"ale_experiment_id": self.experiment.ale_id},
+        html = self.client.get("/stats", {"ale_experiment_id": self.experiment.id},
                                follow=True).content.decode()
 
         self.assertIn("functional change counts", html.lower())
@@ -253,7 +253,7 @@ class SummaryTestCase(TestCase):
         from aledb_stats.util import get_experiment_summary
 
         types, observed_types, protein, observed_protein = self._counts()
-        summary = get_experiment_summary(self.experiment.ale_id)
+        summary = get_experiment_summary(self.experiment.id)
 
         self.assertEqual(types, summary.mutation_type_counts)
         self.assertEqual(observed_types, summary.observed_mutation_type_counts)
@@ -267,9 +267,9 @@ class SummaryTestCase(TestCase):
         from aledb_stats.util import get_experiment_summary
 
         self.assertEqual(0, get_experiment_summary(
-            self.experiment.ale_id).mutation_type_counts["AMP"])
+            self.experiment.id).mutation_type_counts["AMP"])
 
         self._observe(self.samples[0], self._mutation("AMP", "", gene="galK"))
 
         self.assertEqual(1, get_experiment_summary(
-            self.experiment.ale_id).mutation_type_counts["AMP"])
+            self.experiment.id).mutation_type_counts["AMP"])

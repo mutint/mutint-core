@@ -18,7 +18,7 @@ class ExperimentInline(admin.TabularInline):
 class AleExperimentAdmin(admin.ModelAdmin):
     # fetch project
     list_select_related = ('project',)
-    list_display = ('ale_id', 'name', 'project', 'person', 'date')
+    list_display = ('id', 'name', 'project', 'person', 'date')
     search_fields = ('name', 'person', 'project')
 
 

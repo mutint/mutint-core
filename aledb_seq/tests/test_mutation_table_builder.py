@@ -53,7 +53,7 @@ class AmplificationsRemovedTestCase(TestCase):
 
     def test_the_amplifications_route_no_longer_resolves(self):
         response = self.client.get(
-            "/mutations/amplifications", {"ale_experiment_id": self.experiment.ale_id})
+            "/mutations/amplifications", {"ale_experiment_id": self.experiment.id})
         self.assertEqual(response.status_code, 404)
 
     def test_no_amplifications_entry_in_the_sidebar(self):
@@ -75,7 +75,7 @@ class AmplificationsRemovedTestCase(TestCase):
 
     def test_amp_mutations_are_in_the_mutation_table(self):
         """The regression this whole change hangs on. /mutations used to exclude these."""
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        observed = get_all_observed_mutations_filtered(self.experiment.id)
         types = {obs.mutation.mutation_type for obs in observed}
 
         self.assertIn("AMP", types)
@@ -96,8 +96,8 @@ class AmplificationsRemovedTestCase(TestCase):
             get_mutation_table_body, get_table_header,
         )
 
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.id)
 
         header = get_table_header(self.user, reseq_dict, self.experiment)
         body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
@@ -132,8 +132,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.util import get_reseq_ordered_dict
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
 
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.id)
         row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
 
         references = {mutation.reseq_reference for mutation in Mutation.objects.all()}
@@ -145,8 +145,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.util import get_reseq_ordered_dict
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
 
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.id)
         row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
 
         self.assertNotIn("deleteRow", "".join(str(cell) for cell in row))
@@ -158,8 +158,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.util import get_reseq_ordered_dict
         from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
 
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = sorted(get_all_observed_mutations_filtered(self.experiment.ale_id),
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = sorted(get_all_observed_mutations_filtered(self.experiment.id),
                           key=lambda o: o.id)[0]
         reseq_dict[observed.sequencing_experiment_id].bam_stored = True
 
@@ -175,8 +175,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.util import get_reseq_ordered_dict
         from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
 
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = sorted(get_all_observed_mutations_filtered(self.experiment.ale_id),
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = sorted(get_all_observed_mutations_filtered(self.experiment.id),
                           key=lambda o: o.id)[0]
         reseq_dict[observed.sequencing_experiment_id].bam_stored = False
 
@@ -196,7 +196,7 @@ class AmplificationsRemovedTestCase(TestCase):
         """filter_type is now unused by core, but fixation and converge still pass it
         through get_table_body. Its values read backwards: 'AMP' means exclude AMP."""
         observed = get_all_observed_mutations_filtered(
-            self.experiment.ale_id, filter_type="AMP")
+            self.experiment.id, filter_type="AMP")
         types = {obs.mutation.mutation_type for obs in observed}
 
         self.assertNotIn("AMP", types)
@@ -252,7 +252,7 @@ class ManuallyAddedMutationTestCase(TestCase):
             mutation_type="SNP",
             sequence_change="A->G",
             gene="thrA")
-        sample = list(get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
+        sample = list(get_reseq_ordered_dict(self.experiment.id, None, None, None)
                       .values())[0]
         ObservedMutation.objects.create(
             sequencing_experiment=sample,
@@ -266,8 +266,8 @@ class ManuallyAddedMutationTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
 
         mutation = self._add_by_hand()
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.id)
 
         body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
         positions = {str(row[3]) for row in body}
@@ -282,8 +282,8 @@ class ManuallyAddedMutationTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
 
         self._add_by_hand()
-        reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        observed = get_all_observed_mutations_filtered(self.experiment.id)
 
         body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
         row = [entry for entry in body if str(entry[3]) == "4,242"][0]

@@ -51,20 +51,30 @@ class ResolutionTestCase(TestCase):
 
 
 class TwoColumnsOneWordTestCase(TestCase):
-    """`EXPERIMENT_PK` and `ALE_LABEL` are the same string and different columns. They are
-    separate constants so that renaming one is an edit here rather than an audit of every
-    lookup in the suite -- which is the reason this module was written."""
+    """`EXPERIMENT_PK` and `ALE_LABEL` were the same string and different columns.
+
+    They are not any more: the experiment's primary key is `id`, like every other table's.
+    Separating them into two constants first is what made that rename an edit of one line,
+    and this class is the record of it -- `test_they_no_longer_share_a_spelling` failed the
+    moment the rename landed, which is the only reason to have written it that way round.
+    """
 
     def test_the_experiment_pk_is_the_experiments_primary_key(self):
         self.assertEqual(paths.EXPERIMENT_PK, AleExperiment._meta.pk.name)
+
+    def test_the_experiment_has_no_ale_id_any_more(self):
+        """The rename's whole point. `experiment.ale_id` was the pk; `flask.ale_id` is a row
+        and `ale.ale_id` is a string, and all three read identically at the call site."""
+        with self.assertRaises(Exception):
+            AleExperiment._meta.get_field("ale_id")
 
     def test_the_ale_label_is_a_field_on_the_ale(self):
         field = AleId._meta.get_field(paths.ALE_LABEL)
         self.assertNotEqual(field, AleId._meta.pk,
                             "the ALE's label is not its primary key")
 
-    def test_they_are_the_same_word_today_and_reach_different_columns(self):
-        self.assertEqual(paths.EXPERIMENT_PK, paths.ALE_LABEL)
+    def test_they_no_longer_share_a_spelling(self):
+        self.assertNotEqual(paths.EXPERIMENT_PK, paths.ALE_LABEL)
         self.assertNotEqual(paths.to_experiment_id(), paths.to_ale_label())
 
     def test_the_flask_ordinal_is_the_one_fixation_sorts_by(self):
@@ -84,3 +94,32 @@ class JoinTestCase(TestCase):
     def test_an_absent_prefix_is_skipped_rather_than_leading_the_path(self):
         self.assertFalse(paths.to_ale().startswith("_"))
         self.assertEqual(paths.TO_ALE, paths.to_ale(""))
+
+
+class RootTestCase(TestCase):
+    """A queryset that starts part-way along the chain gets the same definition.
+
+    This is not hypothetical tidiness. `aledb_metadata.parser` is rooted at a
+    `TechnicalReplicate` and spelled `isolate__flask__ale_id__ale_experiment__ale_id` by
+    hand -- so it survived a sweep that searched for the chain's *first* segment, and was
+    still filtering on a column that no longer existed. It failed loudly, but only because
+    a test happened to cover that parser.
+    """
+
+    def test_each_root_drops_the_segments_before_it(self):
+        self.assertEqual("tech_rep__isolate__flask__ale_id__ale_experiment",
+                         paths.chain("sample"))
+        self.assertEqual("isolate__flask__ale_id__ale_experiment", paths.chain("tech_rep"))
+        self.assertEqual("flask__ale_id__ale_experiment", paths.chain("isolate"))
+        self.assertEqual("ale_id__ale_experiment", paths.chain("flask"))
+
+    def test_a_rooted_path_resolves(self):
+        from aledb_experiment.models import Isolate, TechnicalReplicate
+
+        for model, root in ((TechnicalReplicate, "tech_rep"), (Isolate, "isolate")):
+            for path in (paths.to_experiment_id(root=root), paths.to_ale_label(root=root)):
+                with self.subTest(model=model.__name__, path=path):
+                    try:
+                        str(model.objects.filter(**{path: 1}).query)
+                    except FieldError as error:
+                        self.fail("%s cannot follow %r: %s" % (model.__name__, path, error))

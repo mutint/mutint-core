@@ -214,17 +214,17 @@ class ExperimentSidebarLabelTestCase(TestCase):
 
         html = self.client.get(url, follow=True).content.decode()
         match = re.search(
-            r'<a href="/stats\?ale_experiment_id=%d"><b>(.*?)</b>' % self.experiment.ale_id,
+            r'<a href="/stats\?ale_experiment_id=%d"><b>(.*?)</b>' % self.experiment.id,
             html)
         return match.group(1).strip() if match else None
 
     def test_every_experiment_page_labels_it_the_same_way(self):
         """No leading colon, no doubled project -- on the pages that used to have each."""
         pages = {
-            "edit samples": "/ale/experiment/%d/samples/" % self.experiment.ale_id,
-            "add data": "/import/add/?ale_experiment_id=%d" % self.experiment.ale_id,
-            "overview": "/stats/?ale_experiment_id=%d" % self.experiment.ale_id,
-            "metadata": "/metadata/?ale_experiment_id=%d" % self.experiment.ale_id,
+            "edit samples": "/ale/experiment/%d/samples/" % self.experiment.id,
+            "add data": "/import/add/?ale_experiment_id=%d" % self.experiment.id,
+            "overview": "/stats/?ale_experiment_id=%d" % self.experiment.id,
+            "metadata": "/metadata/?ale_experiment_id=%d" % self.experiment.id,
         }
         for name, url in pages.items():
             with self.subTest(page=name):

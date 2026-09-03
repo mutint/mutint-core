@@ -11,7 +11,7 @@
 {% block content %}
 <div class="col-lg-8">
     <p>Everything you drop here goes into <b>{{ experiment.name }}</b> (experiment
-       #{{ experiment.ale_id }}).</p>
+       #{{ experiment.id }}).</p>
 
     {% if not has_reference %}
         <div class="alert alert-warning">
@@ -24,7 +24,7 @@
 
     <form id="add-form">
         {% csrf_token %}
-        <input type="hidden" id="add-experiment-id" value="{{ experiment.ale_id }}">
+        <input type="hidden" id="add-experiment-id" value="{{ experiment.id }}">
         <input type="hidden" id="add-had-reference" value="{{ has_reference|yesno:"1,0" }}">
 
         <div class="form-group">
@@ -69,7 +69,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary" id="add-submit" disabled>Add</button>
-        <a class="btn btn-default" href="/stats?ale_experiment_id={{ experiment.ale_id }}">Back to experiment</a>
+        <a class="btn btn-default" href="/stats?ale_experiment_id={{ experiment.id }}">Back to experiment</a>
     </form>
 
     <div id="add-result" style="margin-top: 1.5em;"></div>

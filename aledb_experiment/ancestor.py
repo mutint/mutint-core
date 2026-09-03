@@ -67,7 +67,7 @@ def get_ancestor(experiment_id):
     """
     if experiment_id in (None, "", "all"):
         return None
-    return (AleExperiment.objects.filter(ale_id=experiment_id)
+    return (AleExperiment.objects.filter(pk=experiment_id)
             .select_related("ancestor")
             .values_list("ancestor", flat=True)
             .first())
@@ -203,7 +203,7 @@ def note_sample_deleted(sender, instance, **kwargs):
     """
     experiment_ids = list(AleExperiment.objects
                           .filter(ancestor=instance)
-                          .values_list("ale_id", flat=True))
+                          .values_list("pk", flat=True))
     if not experiment_ids:
         return
 

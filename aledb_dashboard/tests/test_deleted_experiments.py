@@ -53,17 +53,17 @@ class DeletedExperimentTestCase(EditorTestCase):
     # --- and the totals are told about it -------------------------------------------------
 
     def test_deleting_an_experiment_marks_the_totals_stale(self):
-        run_rebuilds(self.experiment.ale_id, force=True)
+        run_rebuilds(self.experiment.id, force=True)
         self.assertFalse(is_stale("mutation_counts"))
 
         response = self.client.post(
-            "/ale/experiment/%d/delete/" % self.experiment.ale_id, {})
+            "/ale/experiment/%d/delete/" % self.experiment.id, {})
 
         self.assertEqual(200, response.status_code)
         self.assertTrue(is_stale("mutation_counts"))
 
     def test_deleting_a_project_marks_the_totals_stale(self):
-        run_rebuilds(self.experiment.ale_id, force=True)
+        run_rebuilds(self.experiment.id, force=True)
         self.assertFalse(is_stale("sample_counts"))
 
         response = self.client.post(
@@ -91,12 +91,12 @@ class DeletedExperimentTestCase(EditorTestCase):
         register_rebuilder("test.other_experiment", lambda experiment_id: None)
         self.addCleanup(unregister_rebuilder, "test.other_experiment")
         other = self._second_experiment()
-        run_rebuilds(other.ale_id, force=True)
-        self.assertFalse(is_stale("test.other_experiment", other.ale_id))
+        run_rebuilds(other.id, force=True)
+        self.assertFalse(is_stale("test.other_experiment", other.id))
 
-        self.client.post("/ale/experiment/%d/delete/" % self.experiment.ale_id, {})
+        self.client.post("/ale/experiment/%d/delete/" % self.experiment.id, {})
 
-        self.assertFalse(is_stale("test.other_experiment", other.ale_id),
+        self.assertFalse(is_stale("test.other_experiment", other.id),
                          "deleting one experiment marked another's derived data stale")
 
     def _second_experiment(self):

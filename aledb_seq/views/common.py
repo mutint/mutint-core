@@ -92,7 +92,7 @@ def get_ale_experiment(request):
     :return: experiment or raise exception
     """
     exp_id = request.GET.get(REQUEST_ALE_EXPERIMENT_ID)
-    experiment = AleExperiment.objects.get(ale_id=exp_id)
+    experiment = AleExperiment.objects.get(pk=exp_id)
     if experiment:
         if can_view_project(request.user, experiment.project):
             return experiment
@@ -125,7 +125,7 @@ def get_ale_experiment_name(request):
 
     if ale_experiment_id is not None and ale_experiment_id != "all":
 
-        ale_experiment = aledb_experiment.models.AleExperiment.objects.filter(ale_id=ale_experiment_id)
+        ale_experiment = aledb_experiment.models.AleExperiment.objects.filter(pk=ale_experiment_id)
 
         # TODO: should only ever be returning 1 experiment. Implement error handling for more than one returned.
         ale_experiment_name = ale_experiment[0].name

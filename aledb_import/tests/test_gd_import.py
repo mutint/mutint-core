@@ -160,7 +160,7 @@ class GdImportTestCase(TestCase):
 
         created = self.client.post(
             "/import/uploads/",
-            data=json.dumps({"ale_experiment_id": experiment.ale_id,
+            data=json.dumps({"ale_experiment_id": experiment.id,
                              "import_type": "genomediff",
                              "files": [{"path": "3-30000-1-1.gd", "size": len(payload)}]}),
             content_type="application/json")
@@ -330,7 +330,7 @@ class GdImportTestCase(TestCase):
         summary = self._import_named(self.TRIPLE_NAMES[:1])
 
         experiment = AleExperiment.objects.get()
-        self.assertEqual(summary["experiment_id"], experiment.ale_id)
+        self.assertEqual(summary["experiment_id"], experiment.id)
         self.assertEqual(summary["experiment"], experiment.name)
 
     # --- the pages the post-import link lands on ---------------------------------------

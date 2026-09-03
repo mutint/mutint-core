@@ -106,14 +106,14 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
             # instead. A GenBank or GFF3 already arrives annotated under the new names.
             new_gff3_text = gff3_text
             if not reference_rename.has_annotation(gff3_text):
-                stored = _stored_gff3_text(experiment.ale_id)
+                stored = _stored_gff3_text(experiment.id)
                 if stored is not None:
                     new_gff3_text = reference_rename.rename_gff3_text(stored, plan.mapping)
 
             reference_rename.apply_rename(experiment, existing, plan, actor=actor)
             # Files after rows: a rollback cannot unwrite a file, so the store must never
             # lead the database.
-            _write_store(experiment.ale_id, new_gff3_text, fasta_text)
+            _write_store(experiment.id, new_gff3_text, fasta_text)
             existing.gff3_sha256 = digest(new_gff3_text)
             existing.fasta_sha256 = fasta_sha
             existing.save(update_fields=["gff3_sha256", "fasta_sha256"])
@@ -129,13 +129,13 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
             _apply_sequence_fields(existing, sequences, fasta_sha, sequence_sha)
             return existing, False
         # Same genome, same names, different annotation, and the caller asked for it.
-        _write_store(experiment.ale_id, gff3_text, fasta_text)
+        _write_store(experiment.id, gff3_text, fasta_text)
         existing.gff3_sha256 = gff3_sha
         _apply_sequence_fields(existing, sequences, fasta_sha, sequence_sha,
                                extra=["gff3_sha256"])
         return existing, False
 
-    _write_store(experiment.ale_id, gff3_text, fasta_text)
+    _write_store(experiment.id, gff3_text, fasta_text)
 
     defaults = dict(_sequence_fields(sequences, fasta_sha, sequence_sha),
                     gff3_sha256=gff3_sha)

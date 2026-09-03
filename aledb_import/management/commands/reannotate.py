@@ -88,7 +88,7 @@ class Command(BaseCommand):
 
     def _experiment(self, experiment_id):
         try:
-            return AleExperiment.objects.get(ale_id=experiment_id)
+            return AleExperiment.objects.get(pk=experiment_id)
         except AleExperiment.DoesNotExist:
             raise CommandError("No experiment with ale_id=%s" % experiment_id)
 

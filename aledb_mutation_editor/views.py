@@ -289,7 +289,7 @@ def _experiment_for_write(request):
     """
     raw = request.POST.get("experiment_id")
     try:
-        experiment = AleExperiment.objects.get(ale_id=raw)
+        experiment = AleExperiment.objects.get(pk=raw)
     except (AleExperiment.DoesNotExist, ValueError, TypeError):
         raise EditorError("No such experiment.", status=404)
     if not can_add_experiment_filter(request.user, experiment):
@@ -366,7 +366,7 @@ def _listing(request, mode):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
+        reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
         all_samples = request.GET.get(REQUEST_RESEQ_ID) == ALL_SAMPLES
         reseq = None if all_samples else _selected_reseq(request, reseq_dict)
 
@@ -413,7 +413,7 @@ def mutation_add(request):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
+        reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
         reference_row = _reference_row(experiment)
 
         context = _page_context(request, experiment)
@@ -492,7 +492,7 @@ def _carrying_samples(experiment, mutation):
     observing = set(history.observations_for(experiment)
                     .filter(mutation=mutation)
                     .values_list("sequencing_experiment_id", flat=True))
-    return [reseq for reseq in get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()
+    return [reseq for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
             if reseq.id in observing]
 
 
@@ -537,7 +537,7 @@ def mutation_copy(request):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
+        reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
         source = _selected_reseq(request, reseq_dict, REQUEST_SOURCE_RESEQ_ID)
 
         context = _page_context(request, experiment)
@@ -649,7 +649,7 @@ def mutation_delete_apply(request):
 
     history.rebuild_after_edit(experiment)
     logger.info("mutations deleted", extra=user_extra(request))
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "removed": len(removals),
                          "change_set_id": change_set.pk if change_set else None})
 
@@ -679,7 +679,7 @@ def mutation_copy_apply(request):
             raise EditorError("Those mutations are not in the source sample.", status=404)
 
         targets = {reseq.id: reseq for reseq in
-                   get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()
+                   get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
                    if reseq.id in set(target_ids)}
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
@@ -694,7 +694,7 @@ def mutation_copy_apply(request):
     if change_set is not None:
         history.rebuild_after_edit(experiment)
     logger.info("mutations copied", extra=user_extra(request))
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "added": len(additions),
                          "already": already,
                          "change_set_id": change_set.pk if change_set else None})
@@ -761,7 +761,7 @@ def mutation_add_apply(request):
             raise EditorError("That mutation cannot be added as entered.", errors=errors)
 
         targets = {reseq.id: reseq for reseq in
-                   get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()
+                   get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
                    if reseq.id in set(target_ids)}
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
@@ -788,7 +788,7 @@ def mutation_add_apply(request):
         history.rebuild_after_edit(experiment)
 
     logger.info("mutation added", extra=user_extra(request))
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "added": len(additions),
                          "already": already,
                          "change_set_id": change_set.pk if change_set else None})
@@ -909,7 +909,7 @@ def mutation_edit_apply(request):
     if change_set is not None:
         history.rebuild_after_edit(experiment)
     logger.info("mutation changed", extra=user_extra(request))
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "mutation_id": landed_on.pk,
                          "samples": len(chosen),
                          "already": already,
@@ -951,7 +951,7 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     sample_ids = [observed.sequencing_experiment_id for observed in chosen]
     present = history.live_state(experiment, sample_ids=sample_ids)
     names = {reseq.id: reseq.ale_flask_isolate_str
-             for reseq in get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True).values()}
+             for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()}
 
     additions = []
     already = []
@@ -1035,6 +1035,6 @@ def mutation_restore(request):
         return _error_response(error)
 
     logger.info("mutations restored", extra=user_extra(request))
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "change_set_id": change.pk if change else None,
                          "changed": change is not None})

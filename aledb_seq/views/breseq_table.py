@@ -48,20 +48,20 @@ def breseq_table(request):
         # -- and hiding the ancestor from the only picker that could reach it made it
         # unreachable rather than merely excluded. It is listed first and tinted; the
         # analyses that aggregate across samples still leave it out.
-        reseq_dict = get_reseq_ordered_dict(experiment.ale_id, ale_number,
+        reseq_dict = get_reseq_ordered_dict(experiment.id, ale_number,
                                             sample_type, request, include_ancestor=True)
         reseq_dict = _ancestor_first(reseq_dict, experiment.ancestor_id)
         reseq = _selected_reseq(request, reseq_dict, experiment)
 
-        view_filter = get_view_filter(request, experiment.ale_id)
+        view_filter = get_view_filter(request, experiment.id)
         # Resolved once for the whole page: the tint is a membership test per rendered row.
-        ancestral_ids = ancestral_mutation_ids(experiment.ale_id)
+        ancestral_ids = ancestral_mutation_ids(experiment.id)
         rows = (_rows_for(experiment, reseq, view_filter, ancestral_ids)
                 if reseq is not None else [])
 
         context.update(experiment.experiment_context())
         context.update({
-            "ales": aledb_seq.views.common.get_aleid_ale_id_list(experiment.ale_id),
+            "ales": aledb_seq.views.common.get_aleid_ale_id_list(experiment.id),
             "ale_no": ale_number,
             "ale_experiment_name": experiment.name,
             "ale_project_name": experiment.project.name if experiment.project else "",
@@ -76,7 +76,7 @@ def breseq_table(request):
             # The name and pk, so the legend can link the tinted rows to the sample they
             # came from. `describe_ancestor` is what the summary line under every other
             # table already uses, rather than a second way of spelling the same thing.
-            "ancestor": describe_ancestor(experiment.ale_id),
+            "ancestor": describe_ancestor(experiment.id),
             "rows": rows,
             "unannotated_count": sum(1 for row in rows if not row["annotated"]),
             "reference": _reference(experiment),
@@ -143,7 +143,7 @@ def _selected_reseq(request, reseq_dict, experiment):
         if reseq_id in reseq_dict:
             return reseq_dict[reseq_id]
         if reseq_id is not None:
-            hidden = get_reseq_ordered_dict(experiment.ale_id, include_ancestor=True)
+            hidden = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
             if reseq_id in hidden:
                 return hidden[reseq_id]
     for reseq in reseq_dict.values():

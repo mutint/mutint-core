@@ -169,7 +169,7 @@ class RenderedPanelTestCase(TestCase):
         self.client.force_login(self.user)
 
         body = self.client.get(
-            "/stats?ale_experiment_id=%s" % self.experiment.ale_id,
+            "/stats?ale_experiment_id=%s" % self.experiment.id,
             follow=True).content.decode()
 
         self.assertIn("A Panel Title", body)

@@ -16,7 +16,7 @@ def add_publication_to_experiment(experiment_ids, doi, replace=False):
     for id in experiment_ids:
 
         try:
-            curr_experiment = AleExperiment.objects.get(ale_id=id)
+            curr_experiment = AleExperiment.objects.get(pk=id)
             curr_doi = curr_experiment.doi
             if replace:
                 curr_experiment.doi = doi

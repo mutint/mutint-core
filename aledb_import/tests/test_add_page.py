@@ -32,7 +32,7 @@ class AddPageTestCase(TestCase):
 
     def test_page_renders_scoped_to_the_experiment(self):
         response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id})
+            "/import/add/", {"ale_experiment_id": self.experiment.id})
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
@@ -43,7 +43,7 @@ class AddPageTestCase(TestCase):
 
     def test_dropdown_lists_the_registered_types_this_experiment_can_use(self):
         response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id})
+            "/import/add/", {"ale_experiment_id": self.experiment.id})
         html = response.content.decode("utf-8")
 
         # No Auto-detect: the type is chosen, never guessed.
@@ -63,7 +63,7 @@ class AddPageTestCase(TestCase):
             [h for h in import_registry._import_handlers if h["name"] != "page_test_type"]))
 
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+            "/import/add/", {"ale_experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         self.assertIn("Plugin readings (.tsv)",
                       html.split('id="add-type"')[1].split("</select>")[0])
@@ -108,7 +108,7 @@ class AddPageTestCase(TestCase):
             self.experiment, breseq_fixture.gff3_text(sequences), sequences)
 
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+            "/import/add/", {"ale_experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         select = html.split('id="add-type"')[1].split("</select>")[0]
 
@@ -129,7 +129,7 @@ class AddPageTestCase(TestCase):
         server -- used to leave the page polling a finished import for as long as it was
         open. The snapshot's own state is what ends it."""
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+            "/import/add/", {"ale_experiment_id": self.experiment.id}
         ).content.decode("utf-8")
 
         self.assertIn("TERMINAL_STATES", html)
@@ -137,7 +137,7 @@ class AddPageTestCase(TestCase):
 
     def test_the_page_polls_for_import_progress(self):
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+            "/import/add/", {"ale_experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         self.assertIn("/progress", html)
         # A completed import must forget what was dropped, or pressing Add again
@@ -149,7 +149,7 @@ class AddPageTestCase(TestCase):
         would just be a way to get an error message."""
         def dropdown():
             html = self.client.get(
-                "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+                "/import/add/", {"ale_experiment_id": self.experiment.id}
             ).content.decode("utf-8")
             # The <select> alone: the page also embeds the unscoped registry for naming
             # stray files, so every label appears somewhere regardless.
@@ -187,15 +187,15 @@ class AddPageTestCase(TestCase):
         self.client.force_login(stranger)
 
         response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id})
+            "/import/add/", {"ale_experiment_id": self.experiment.id})
         self.assertEqual(response.status_code, 403)
 
     def test_experiment_page_offers_add_and_delete(self):
-        response = self.client.get("/stats/", {"ale_experiment_id": self.experiment.ale_id})
+        response = self.client.get("/stats/", {"ale_experiment_id": self.experiment.id})
         html = response.content.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("/import/add/?ale_experiment_id=%d" % self.experiment.ale_id, html)
+        self.assertIn("/import/add/?ale_experiment_id=%d" % self.experiment.id, html)
         self.assertIn("delete-experiment", html)
         # The dialog copy used to be inlined here, and this asserted the literal
         # "This is permanent." Deleting an experiment is one of the four controls behind
@@ -278,7 +278,7 @@ class ImportTypesOfferedTestCase(TestCase):
 
     def _html(self):
         return self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.ale_id}
+            "/import/add/", {"ale_experiment_id": self.experiment.id}
         ).content.decode("utf-8")
 
     def _dropdown(self):

@@ -254,7 +254,7 @@ class FinalizeUnderLockTestCase(TestCase):
 
         created = self.client.post(
             "/import/uploads/",
-            data=json.dumps({"ale_experiment_id": self.experiment.ale_id,
+            data=json.dumps({"ale_experiment_id": self.experiment.id,
                              "import_type": "breseq_folder",
                              "files": [{"path": p, "size": len(b)} for p, b in entries]}),
             content_type="application/json")

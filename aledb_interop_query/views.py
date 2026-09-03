@@ -399,7 +399,7 @@ def _serialize_mutations(mutations, search_gene=None):
         exp = getattr(m, 'experiment', None)
         if isinstance(exp, dict):
             item['experiment'] = {
-                'ale_experiment_id': exp.get('ale_experiment_id', m.sequencing_experiment.ale_experiment.ale_id),
+                'ale_experiment_id': exp.get('ale_experiment_id', m.sequencing_experiment.ale_experiment.id),
                 'sequencing_experiment_id': exp.get('sequencing_experiment_id', m.sequencing_experiment.id),
                 'sample_name': exp.get('name'),
                 'genotype': exp.get('type'),
@@ -460,7 +460,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
     ale_experiment_ids = []
 
     for observed_mutation in observed_mutations:
-        ale_experiment_id = observed_mutation.sequencing_experiment.ale_experiment.ale_id
+        ale_experiment_id = observed_mutation.sequencing_experiment.ale_experiment.id
         logging.info("Processing mutation with ID: %s", ale_experiment_id, extra=user_extra(request))
         if ale_experiment_id not in ale_experiment_ids:
             ale_experiment_ids.append(ale_experiment_id)
@@ -474,7 +474,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
                 sample_type = ("%2f" % float(observed_mutation.frequency)
                                if observed_mutation.frequency is not None else "")
             observed_mutation.experiment = {
-                'ale_experiment_id': observed_mutation.sequencing_experiment.ale_experiment.ale_id,
+                'ale_experiment_id': observed_mutation.sequencing_experiment.ale_experiment.id,
                 'sequencing_experiment_id': observed_mutation.sequencing_experiment.id,
                 'name': sample_name,
                 'type': sample_type
@@ -484,7 +484,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
 
     for ale_experiment_id in sorted(ale_experiment_ids):
         logging.info("Processing reseq experiment with ID: %s", ale_experiment_id, extra=user_extra(request))
-        experiment = AleExperiment.objects.get(ale_id=ale_experiment_id)
+        experiment = AleExperiment.objects.get(pk=ale_experiment_id)
         if experiment:
             reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, None)
             reseq_info_list = get_reseq_info_list(reseq_queryset)

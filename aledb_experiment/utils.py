@@ -26,7 +26,7 @@ def get_all_user_exps(user):
 
 def _ale_exp_exists(ale_id, recent_experiments):
     try:
-        recent_experiments.append(AleExperiment.objects.get(ale_id=ale_id))
+        recent_experiments.append(AleExperiment.objects.get(pk=ale_id))
     except ObjectDoesNotExist:
         pass
     return recent_experiments

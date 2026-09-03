@@ -267,7 +267,7 @@ def handle_genomediff(experiment, staged_root, paths, user):
     from aledb_import.reference_store import has_reference
 
     person = _person(user)
-    context = prepare_experiment_by_id(experiment.ale_id)
+    context = prepare_experiment_by_id(experiment.id)
 
     if not has_reference(experiment):
         # A .gd carries no reference, so it cannot establish the one every sample shares.

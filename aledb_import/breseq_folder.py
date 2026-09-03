@@ -139,7 +139,7 @@ def import_samples_into(experiment, root, person):
     """
     from aledb_import.gd_import import prepare_experiment_by_id
 
-    context = prepare_experiment_by_id(experiment.ale_id)
+    context = prepare_experiment_by_id(experiment.id)
     return _import_samples(context, root, person, report_loose_gd=False)
 
 
@@ -223,7 +223,7 @@ def _import_samples(context, root, person, report_loose_gd):
         run_post_processing(experiment)
 
     return {
-        "experiment_id": experiment.ale_id,
+        "experiment_id": experiment.id,
         "experiment": experiment.name,
         "total_mutations": total_mutations,
         "files": file_results,

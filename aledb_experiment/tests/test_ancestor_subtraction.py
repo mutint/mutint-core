@@ -21,7 +21,7 @@ class SubtractionTestCase(EditorTestCase):
         self.experiment.set_ancestor(self.sample_a, self.owner)
 
     def evolved_mutation_ids(self):
-        return set(get_evolved_observation_queryset(self.experiment.ale_id)
+        return set(get_evolved_observation_queryset(self.experiment.id)
                    .values_list("mutation_id", flat=True))
 
 
@@ -30,18 +30,18 @@ class TestNothingHappensWithoutADesignation(SubtractionTestCase):
     def test_the_queryset_is_returned_untouched(self):
         """The common case must add no SQL, and must not be an empty `.exclude()` -- an empty
         Q handed to exclude() excludes everything, which once emptied a whole experiment."""
-        raw = get_observed_mutation_queryset(self.experiment.ale_id)
-        self.assertEqual(str(exclude_ancestry(raw, self.experiment.ale_id).query),
+        raw = get_observed_mutation_queryset(self.experiment.id)
+        self.assertEqual(str(exclude_ancestry(raw, self.experiment.id).query),
                          str(raw.query))
 
     def test_every_sample_is_listed(self):
-        self.assertEqual(set(get_reseq_ordered_dict(self.experiment.ale_id)),
+        self.assertEqual(set(get_reseq_ordered_dict(self.experiment.id)),
                          {self.sample_a.id, self.sample_b.id})
 
     def test_there_is_nothing_to_describe(self):
-        self.assertIsNone(describe_ancestor(self.experiment.ale_id))
-        self.assertIsNone(get_ancestor(self.experiment.ale_id))
-        self.assertEqual(ancestral_mutation_ids(self.experiment.ale_id), frozenset())
+        self.assertIsNone(describe_ancestor(self.experiment.id))
+        self.assertIsNone(get_ancestor(self.experiment.id))
+        self.assertEqual(ancestral_mutation_ids(self.experiment.id), frozenset())
 
 
 class TestSubtraction(SubtractionTestCase):
@@ -53,7 +53,7 @@ class TestSubtraction(SubtractionTestCase):
 
     def test_the_ancestor_sample_leaves_the_observations(self):
         self.designate_a()
-        remaining = set(get_evolved_observation_queryset(self.experiment.ale_id)
+        remaining = set(get_evolved_observation_queryset(self.experiment.id)
                         .values_list("sequencing_experiment_id", flat=True))
         self.assertNotIn(self.sample_a.id, remaining)
 
@@ -61,7 +61,7 @@ class TestSubtraction(SubtractionTestCase):
         """`get_observed_mutation_queryset` means "what is stored" and has to keep meaning it:
         the export, the editor and the per-sample page all depend on that."""
         self.designate_a()
-        self.assertEqual(get_observed_mutation_queryset(self.experiment.ale_id).count(), 4)
+        self.assertEqual(get_observed_mutation_queryset(self.experiment.id).count(), 4)
 
     def test_a_mutation_missing_from_a_sample_subtracts_cleanly(self):
         """The miscall case, stated in the requirement: nothing requires an ancestral mutation
@@ -82,24 +82,24 @@ class TestListings(SubtractionTestCase):
 
     def test_the_ancestor_is_not_listed(self):
         self.designate_a()
-        self.assertEqual(set(get_reseq_ordered_dict(self.experiment.ale_id)),
+        self.assertEqual(set(get_reseq_ordered_dict(self.experiment.id)),
                          {self.sample_b.id})
 
     def test_a_curation_page_can_still_ask_for_it(self):
         """The Edit-samples page and the mutation editor must still be able to change it."""
         self.designate_a()
         self.assertIn(self.sample_a.id,
-                      get_reseq_ordered_dict(self.experiment.ale_id, include_ancestor=True))
+                      get_reseq_ordered_dict(self.experiment.id, include_ancestor=True))
 
     def test_the_edit_samples_page_still_shows_it(self):
         self.designate_a()
-        response = self.client.get("/ale/experiment/%d/samples/" % self.experiment.ale_id)
+        response = self.client.get("/ale/experiment/%d/samples/" % self.experiment.id)
         self.assertContains(response, self.sample_a.sample_name)
 
     def test_the_mutation_editor_still_shows_it(self):
         self.designate_a()
         response = self.client.get("/mutation-editor/",
-                                   {"ale_experiment_id": self.experiment.ale_id})
+                                   {"ale_experiment_id": self.experiment.id})
         self.assertContains(response, self.sample_a.ale_flask_isolate_str)
 
 
@@ -112,7 +112,7 @@ class TestThePluginEntryPoint(SubtractionTestCase):
     def test_it_subtracts_the_mutations_not_merely_the_sample(self):
         self.designate_a()
         both = [self.sample_a.id, self.sample_b.id]
-        ids = set(observations_for_samples(both, self.experiment.ale_id)
+        ids = set(observations_for_samples(both, self.experiment.id)
                   .values_list("mutation_id", flat=True))
         self.assertNotIn(self.mut_1.id, ids)
 
@@ -159,12 +159,12 @@ class TestDeletingTheAncestorSample(SubtractionTestCase):
         self.addCleanup(unregister_rebuilder, "test.ancestor_delete")
 
         # Start from fresh, so being stale afterwards can only have come from the deletion.
-        run_rebuilds(self.experiment.ale_id, only=["test.ancestor_delete"], force=True)
-        self.assertFalse(is_stale("test.ancestor_delete", self.experiment.ale_id))
+        run_rebuilds(self.experiment.id, only=["test.ancestor_delete"], force=True)
+        self.assertFalse(is_stale("test.ancestor_delete", self.experiment.id))
 
         self.sample_a.delete()
 
-        self.assertTrue(is_stale("test.ancestor_delete", self.experiment.ale_id))
+        self.assertTrue(is_stale("test.ancestor_delete", self.experiment.id))
 
     def test_the_designation_goes_with_the_sample(self):
         from aledb_experiment.models import AleExperiment
@@ -180,8 +180,8 @@ class TestDeletingTheAncestorSample(SubtractionTestCase):
         self.designate_a()
         register_rebuilder("test.ordinary_delete", lambda experiment_id: None)
         self.addCleanup(unregister_rebuilder, "test.ordinary_delete")
-        run_rebuilds(self.experiment.ale_id, only=["test.ordinary_delete"], force=True)
+        run_rebuilds(self.experiment.id, only=["test.ordinary_delete"], force=True)
 
         self.sample_b.delete()
 
-        self.assertFalse(is_stale("test.ordinary_delete", self.experiment.ale_id))
+        self.assertFalse(is_stale("test.ordinary_delete", self.experiment.id))

@@ -27,7 +27,7 @@ class SummaryTestCase(EditorTestCase):
     def render(self, template=TEMPLATE):
         request = RequestFactory().get("/")
         request.session = {}
-        return template.render(Context({"ale_experiment_id": self.experiment.ale_id,
+        return template.render(Context({"ale_experiment_id": self.experiment.id,
                                         "request": request}))
 
 

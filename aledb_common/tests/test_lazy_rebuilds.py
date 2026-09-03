@@ -31,7 +31,7 @@ class LazyRebuildTestCase(EditorTestCase):
 
     def setUp(self):
         super().setUp()
-        run_rebuilds(self.experiment.ale_id, force=True)
+        run_rebuilds(self.experiment.id, force=True)
 
     def _add_a_mutation(self):
         """A change the derived tables cannot see until they are rebuilt."""

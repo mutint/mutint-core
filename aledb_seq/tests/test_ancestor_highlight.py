@@ -16,7 +16,7 @@ BRESEQ = "/mutations/breseq"
 class BreseqAncestorTestCase(EditorTestCase):
 
     def get(self, **params):
-        params.setdefault("ale_experiment_id", self.experiment.ale_id)
+        params.setdefault("ale_experiment_id", self.experiment.id)
         return self.client.get(BRESEQ, params)
 
 
@@ -105,7 +105,7 @@ class TestReachingTheAncestor(BreseqAncestorTestCase):
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
         from aledb_experiment.models import AleExperiment
         foreign = AleExperiment.objects.get(pk=other["experiment_id"])
-        response = self.client.get(BRESEQ, {"ale_experiment_id": foreign.ale_id,
+        response = self.client.get(BRESEQ, {"ale_experiment_id": foreign.id,
                                             "reseq_id": self.sample_a.id})
         self.assertNotEqual(getattr(response.context.get("selected_reseq"), "id", None),
                             self.sample_a.id)

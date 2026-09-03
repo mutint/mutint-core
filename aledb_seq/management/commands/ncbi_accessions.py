@@ -136,7 +136,7 @@ class Command(BaseCommand):
             record = records.get(sha256)
             status = record.status if record else NcbiSequence.UNCHECKED
             accession = (record.accession if record else "") or "-"
-            line = "%-24s %-14s %-22s %s" % (name[:24], str(experiment.ale_id)[:14],
+            line = "%-24s %-14s %-22s %s" % (name[:24], str(experiment.id)[:14],
                                              accession[:22], status)
             if record and not record.is_verified and record.detail:
                 line += "\n%s%s" % (" " * 24, record.detail)

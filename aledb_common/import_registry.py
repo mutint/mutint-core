@@ -355,7 +355,7 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
         import_progress.report(entry)
 
     return {
-        "experiment_id": experiment.ale_id,
+        "experiment_id": experiment.id,
         "experiment": experiment.name,
         "total_mutations": total_mutations,
         "files": file_results,

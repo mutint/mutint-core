@@ -38,21 +38,40 @@ FROM_OBSERVATION = "sequencing_experiment"
 #: `MutationChange` already calls it what the product calls it.
 FROM_CHANGE = "sample"
 
+#: The chain, segment by segment, from a sample up to the experiment. Everything below is
+#: composed from this, so a queryset that starts **part-way along** it gets the same
+#: definition rather than a second hand-written one. That gap was real: the metadata parser
+#: is rooted at a `TechnicalReplicate` and spelled `isolate__flask__ale_id__ale_experiment`
+#: by hand, so it survived a sweep that searched for the chain's first segment.
+SEGMENTS = ("tech_rep", "isolate", "flask", "ale_id", "ale_experiment")
+
+#: Where a queryset starts, as a position in SEGMENTS. `prefix` is for roots that sit
+#: *before* a sample -- an observation, a change-log row -- and `root` for roots along the
+#: chain itself.
+ROOTS = {"sample": 0, "tech_rep": 1, "isolate": 2, "flask": 3, "ale": 4}
+
+
+def chain(root="sample", upto="ale_experiment"):
+    """The lookup path from `root` up to and including `upto`."""
+    return "__".join(SEGMENTS[ROOTS[root]:SEGMENTS.index(upto) + 1])
+
+
 #: A sample to the flask it was drawn from.
-TO_FLASK = "tech_rep__isolate__flask"
+TO_FLASK = chain(upto="flask")
 
 #: ...to the ALE lineage.
-TO_ALE = TO_FLASK + "__ale_id"
+TO_ALE = chain(upto="ale_id")
 
 #: ...to the experiment.
-TO_EXPERIMENT = TO_ALE + "__ale_experiment"
+TO_EXPERIMENT = chain()
 
-#: `AleExperiment`'s primary key. There is no `id` on that model -- this *is* the pk -- which
-#: is why it reads like a column name rather than like one.
-EXPERIMENT_PK = "ale_id"
+#: `AleExperiment`'s primary key -- now Django's implicit `id`, like every other table. It
+#: was `ale_id`, the same word as `ALE_LABEL` below, and this constant is what made changing
+#: it an edit of one line rather than an audit of every lookup in the suite.
+EXPERIMENT_PK = "id"
 
-#: `AleId`'s text label: `Ara-1`, `3`. **The same word as EXPERIMENT_PK above and a different
-#: column**, which is the whole reason this module exists.
+#: `AleId`'s text label: `Ara-1`, `3`. It shared its spelling with the experiment's primary
+#: key until that was renamed, which is the confusion this module was written against.
 ALE_LABEL = "ale_id"
 
 #: `Flask`'s ordinal. Labelled "Time point" everywhere a person can see it.
@@ -71,27 +90,27 @@ def join(*steps):
     return "__".join(step.strip("_") for step in steps if step and step.strip("_"))
 
 
-def to_flask(prefix="", field=""):
-    return join(prefix, TO_FLASK, field)
+def to_flask(prefix="", field="", root="sample"):
+    return join(prefix, chain(root, "flask"), field)
 
 
-def to_ale(prefix="", field=""):
-    return join(prefix, TO_ALE, field)
+def to_ale(prefix="", field="", root="sample"):
+    return join(prefix, chain(root, "ale_id"), field)
 
 
-def to_experiment(prefix="", field=""):
-    return join(prefix, TO_EXPERIMENT, field)
+def to_experiment(prefix="", field="", root="sample"):
+    return join(prefix, chain(root), field)
 
 
-def to_experiment_id(prefix=""):
+def to_experiment_id(prefix="", root="sample"):
     """The experiment's primary key -- what `?ale_experiment_id=` carries."""
-    return join(prefix, TO_EXPERIMENT, EXPERIMENT_PK)
+    return join(prefix, chain(root), EXPERIMENT_PK)
 
 
-def to_ale_label(prefix=""):
+def to_ale_label(prefix="", root="sample"):
     """The ALE's label, which is *not* the experiment's pk however alike they read."""
-    return join(prefix, TO_ALE, ALE_LABEL)
+    return join(prefix, chain(root, "ale_id"), ALE_LABEL)
 
 
-def to_flask_ordinal(prefix=""):
-    return join(prefix, TO_FLASK, FLASK_ORDINAL)
+def to_flask_ordinal(prefix="", root="sample"):
+    return join(prefix, chain(root, "flask"), FLASK_ORDINAL)

@@ -42,7 +42,7 @@ class OverviewQueryCountTestCase(TestCase):
         experiment = AleExperiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
-        context = prepare_experiment_by_id(experiment.ale_id)
+        context = prepare_experiment_by_id(experiment.id)
 
         ale = AleId.objects.create(ale_experiment=experiment, ale_id=1)
         for number in range(samples):
@@ -65,7 +65,7 @@ class OverviewQueryCountTestCase(TestCase):
     def _queries(self, experiment):
         with CaptureQueriesContext(connection) as captured:
             response = self.client.get(
-                "/stats?ale_experiment_id=%d" % experiment.ale_id, follow=True)
+                "/stats?ale_experiment_id=%d" % experiment.id, follow=True)
         self.assertEqual(200, response.status_code)
         return len(captured)
 
@@ -99,7 +99,7 @@ class OverviewQueryCountTestCase(TestCase):
     def test_the_page_still_shows_the_right_counts(self):
         """A query-count test that stopped rendering the numbers would still pass."""
         experiment = self._experiment("shown", samples=3)
-        html = self.client.get("/stats?ale_experiment_id=%d" % experiment.ale_id,
+        html = self.client.get("/stats?ale_experiment_id=%d" % experiment.id,
                                follow=True).content.decode()
         self.assertIn('<td class="mutation_count">1</td>', html)
         self.assertIn('<td class="missing_coverage_count">0</td>', html)

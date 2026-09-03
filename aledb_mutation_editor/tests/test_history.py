@@ -186,4 +186,4 @@ class RebuildTestCase(EditorTestCase):
 
         history.rebuild_after_edit(self.experiment)
 
-        self.assertFalse(is_stale("test.warmed", self.experiment.ale_id))
+        self.assertFalse(is_stale("test.warmed", self.experiment.id))

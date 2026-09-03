@@ -22,10 +22,10 @@ APPLY = "/ale/experiment/%d/ancestor/apply/"
 class AncestorPageTestCase(EditorTestCase):
 
     def page(self):
-        return self.client.get(PAGE % self.experiment.ale_id)
+        return self.client.get(PAGE % self.experiment.id)
 
     def apply(self, **data):
-        return self.client.post(APPLY % self.experiment.ale_id, data)
+        return self.client.post(APPLY % self.experiment.id, data)
 
     def reloaded(self):
         return AleExperiment.objects.get(pk=self.experiment.pk)
@@ -108,7 +108,7 @@ class TestTheWrite(AncestorPageTestCase):
         other = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
         foreign = AleExperiment.objects.get(pk=other["experiment_id"])
-        response = self.client.post(APPLY % foreign.ale_id, {"reseq_id": self.sample_a.id})
+        response = self.client.post(APPLY % foreign.id, {"reseq_id": self.sample_a.id})
         self.assertEqual(404, response.status_code)
         self.assertIsNone(AleExperiment.objects.get(pk=foreign.pk).ancestor_id)
 

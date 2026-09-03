@@ -113,7 +113,7 @@ def _serve_reference(request, experiment_id, filename):
         return HttpResponseForbidden("You do not have access to this experiment.")
 
     return serve_file(
-        request, store.experiment_reference_path(experiment.ale_id, filename), filename)
+        request, store.experiment_reference_path(experiment.id, filename), filename)
 
 
 def _may_view(user, experiment):

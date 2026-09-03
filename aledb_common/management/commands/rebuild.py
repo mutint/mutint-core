@@ -69,15 +69,15 @@ class Command(BaseCommand):
             experiments = list(live(AleExperiment.objects.all()))
         else:
             try:
-                experiments = [AleExperiment.objects.get(ale_id=experiment_id)]
+                experiments = [AleExperiment.objects.get(pk=experiment_id)]
             except AleExperiment.DoesNotExist:
                 raise CommandError("no such experiment: %s" % experiment_id)
 
         force = options.get("force")
         totals = {"rebuilt": 0, "current": 0, "failed": 0}
         for experiment in experiments:
-            results = run_rebuilds(experiment.ale_id, only=only, force=force)
-            self._report(str(experiment.ale_id), experiment.name, results, totals,
+            results = run_rebuilds(experiment.id, only=only, force=force)
+            self._report(str(experiment.id), experiment.name, results, totals,
                          len(get_rebuilders(scope=EXPERIMENT_SCOPE, only=only)))
 
         if get_rebuilders(scope=SITE_SCOPE, only=only):

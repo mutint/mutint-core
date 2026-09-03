@@ -34,20 +34,20 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
                                                 mutation=self.mut_2)
         return self.client.post(DELETE, {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "reseq_id": self.sample_a.id,
             "observed_ids": json.dumps([observed.id])})
 
     def _copy_one(self):
         return self.client.post(COPY, {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "source_reseq_id": self.sample_a.id,
             "mutation_ids": json.dumps([self.mut_2.id]),
             "target_reseq_ids": json.dumps([self.sample_b.id])})
 
     def _add_one(self):
         return self.client.post(ADD, {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_type": "SNP",
             "seq_id": "NC_000913",
             "position": 4242,
@@ -56,7 +56,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
 
     def _restore(self):
         return self.client.post(RESTORE, {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "change_set_id": "",
             "reseq_ids": "[]"})
 
@@ -119,7 +119,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         self.client.force_login(self._writer())
 
         response = self.client.post("/mutation-editor/edit/apply", {
-            "experiment_id": self.experiment.ale_id,
+            "experiment_id": self.experiment.id,
             "mutation_id": self.mut_1.id,
             "mutation_type": "SNP",
             "seq_id": "NC_000913",
@@ -134,7 +134,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         self.client.force_login(self._writer())
 
         html = self.client.get("/mutation-editor/delete", {
-            "ale_experiment_id": self.experiment.ale_id,
+            "ale_experiment_id": self.experiment.id,
             "reseq_id": "all"}).content.decode("utf-8")
 
         self.assertIn('id="me-apply"', html)
@@ -205,7 +205,7 @@ class PagePermissionTestCase(EditorTestCase):
         for url in PAGES:
             with self.subTest(url=url):
                 self.assertEqual(200, self.client.get(
-                    url, {"ale_experiment_id": self.experiment.ale_id}).status_code)
+                    url, {"ale_experiment_id": self.experiment.id}).status_code)
 
     def test_a_stranger_cannot_see_the_experiment_at_all(self):
         """`get_ale_experiment` gates on can_view_project before this app is consulted."""
@@ -214,7 +214,7 @@ class PagePermissionTestCase(EditorTestCase):
         for url in PAGES:
             with self.subTest(url=url):
                 response = self.client.get(
-                    url, {"ale_experiment_id": self.experiment.ale_id})
+                    url, {"ale_experiment_id": self.experiment.id})
                 self.assertEqual(403, response.status_code)
 
     def test_a_reader_is_shown_the_data_without_the_controls(self):
@@ -227,7 +227,7 @@ class PagePermissionTestCase(EditorTestCase):
         self.client.force_login(reader)
 
         response = self.client.get("/mutation-editor/",
-                                   {"ale_experiment_id": self.experiment.ale_id})
+                                   {"ale_experiment_id": self.experiment.id})
         self.assertEqual(200, response.status_code)
         self.assertNotContains(response, 'id="me-apply"')
         self.assertContains(response, "needs write access")

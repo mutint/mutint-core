@@ -22,7 +22,7 @@ HISTORY = "/mutation-editor/history"
 class PageTestCase(EditorTestCase):
 
     def get(self, url, **params):
-        params.setdefault("ale_experiment_id", self.experiment.ale_id)
+        params.setdefault("ale_experiment_id", self.experiment.id)
         return self.client.get(url, params)
 
     # --- the edit page --------------------------------------------------------------------
@@ -221,7 +221,7 @@ class PageTestCase(EditorTestCase):
             with self.subTest(url=url):
                 self.assertContains(
                     self.get(url),
-                    "/mutation-editor/history?ale_experiment_id=%d" % self.experiment.ale_id)
+                    "/mutation-editor/history?ale_experiment_id=%d" % self.experiment.id)
 
 
 class NoExperimentTestCase(EditorTestCase):

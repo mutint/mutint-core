@@ -42,11 +42,11 @@ def stats(request):
         # second project FK query and a second permission check, then discarded the object
         # the lines above had already fetched. The duplicate import is gone with it.
         exp_name = experiment.name
-        ale_experiment_id = experiment.ale_id
+        ale_experiment_id = experiment.id
         ale_number = common.get_ale_id(request)
 
         ale_id = ale_number
-        reseq_queryset = get_ordered_reseq_queryset(experiment.ale_id, ale_id)
+        reseq_queryset = get_ordered_reseq_queryset(experiment.id, ale_id)
         ale_flask_isolate_count_list = get_ale_flask_isolate_count_list(reseq_queryset)
         ale_sum = len(ale_flask_isolate_count_list)
         flask_sum = 0
@@ -61,7 +61,7 @@ def stats(request):
         # rebuilds it first if anything has marked it stale, so the first view after an
         # import, a sample renumber or a filter change pays for the recomputation and every
         # view after it does not. See aledb_common/rebuild_registry.py.
-        summary = get_experiment_summary(experiment.ale_id)
+        summary = get_experiment_summary(experiment.id)
         mutation_type_count_dict = summary.mutation_type_counts
         observed_mutation_type_count_dict = summary.observed_mutation_type_counts
         protein_change_type_count_dict = summary.protein_change_counts

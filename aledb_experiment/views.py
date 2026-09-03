@@ -71,7 +71,7 @@ def project_detail(request, pk):
 def experiment_detail(request, pk):
     # experiment = get_object_or_404(AleExperiment, pk=pk)
     # context = {
-    #     "ale_experiment_id": experiment.ale_id,
+    #     "ale_experiment_id": experiment.id,
     #     "ale_experiment_name": experiment.name,
     # }
     url = "/stats?ale_experiment_id="+pk
@@ -157,7 +157,7 @@ def project_create(request):
     experiment_name = (request.POST.get("experiment") or "").strip()
     if experiment_name:
         experiment = _create_experiment(project, experiment_name, request.user)
-        payload["experiment_id"] = experiment.ale_id
+        payload["experiment_id"] = experiment.id
         payload["experiment"] = experiment.name
     return JsonResponse(payload)
 
@@ -177,7 +177,7 @@ def experiment_create(request):
         return JsonResponse({"error": "You cannot add to this project."}, status=403)
 
     experiment = _create_experiment(project, name, request.user)
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "experiment": experiment.name,
                          "project_id": project.id})
 
@@ -241,7 +241,7 @@ def experiment_ancestor(request, pk):
     from aledb_seq.util import get_ordered_reseq_queryset
 
     # `include_ancestor=True`: the current ancestor has to appear in the list that changes it.
-    samples = list(get_ordered_reseq_queryset(experiment.ale_id, include_ancestor=True))
+    samples = list(get_ordered_reseq_queryset(experiment.id, include_ancestor=True))
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
@@ -289,7 +289,7 @@ def experiment_ancestor_apply(request, pk):
         # belongs to one experiment's reference genome -- subtracting a foreign sample's
         # mutations would be meaningless where it was not simply a no-op.
         reseq = get_ordered_reseq_queryset(
-            experiment.ale_id, include_ancestor=True).filter(pk=reseq_id).first()
+            experiment.id, include_ancestor=True).filter(pk=reseq_id).first()
         if reseq is None:
             return JsonResponse(
                 {"error": "That sample is not in this experiment."}, status=404)
@@ -301,12 +301,12 @@ def experiment_ancestor_apply(request, pk):
     # are discarded before anyone reads one; site scope left marked for the dashboard's own
     # `ensure_fresh`.
     from aledb_common.rebuild_registry import EXPERIMENT_SCOPE, request_rebuild, run_rebuilds
-    request_rebuild(experiment.ale_id, reason="ancestor designated")
-    run_rebuilds(experiment.ale_id, scope=EXPERIMENT_SCOPE)
+    request_rebuild(experiment.id, reason="ancestor designated")
+    run_rebuilds(experiment.id, scope=EXPERIMENT_SCOPE)
 
     logger.info("ancestor designated", extra=user_extra(request))
     return JsonResponse({
-        "experiment_id": experiment.ale_id,
+        "experiment_id": experiment.id,
         "ancestor_id": experiment.ancestor_id,
         "ancestor_set_by": (experiment.ancestor_set_by.get_username()
                             if experiment.ancestor_set_by_id else None),
@@ -337,7 +337,7 @@ def experiment_lock(request, pk):
     elif not wants_locked and experiment.is_locked:
         experiment.unlock()
 
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "locked": experiment.is_locked,
                          "locked_at": experiment.locked_at,
                          "locked_by": (experiment.locked_by.get_username()
@@ -354,7 +354,7 @@ def experiment_delete(request, pk):
     if experiment.deleted_at is None:
         experiment.soft_delete(request.user)
         _mark_totals_stale('experiment deleted')
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "deleted_at": experiment.deleted_at})
 
 
@@ -482,6 +482,6 @@ def experiment_update(request, pk):
     experiment.doi = (request.POST.get("doi") or "").strip()
     experiment.project = project
     experiment.save(update_fields=["name", "notes", "doi", "project"])
-    return JsonResponse({"experiment_id": experiment.ale_id,
+    return JsonResponse({"experiment_id": experiment.id,
                          "experiment": experiment.name,
                          "project_id": project.id if project else None})
