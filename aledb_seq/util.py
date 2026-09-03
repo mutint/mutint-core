@@ -123,10 +123,14 @@ def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, req
                                                 include_ancestor=include_ancestor)
     if request and request.GET.get('tag_select'):
         tag = request.GET.get('tag_select').split(':')
+        # icontains, not contains: LIKE folds ASCII case on SQLite and does not on PostgreSQL,
+        # and this value arrives from the query string rather than from the TAGS vocabulary. A
+        # case-sensitive Hide Tag would stop hiding -- showing more rows than asked for, with
+        # nothing to say it had failed.
         if tag[0] == 'Hide Tag':
-            reseq_queryset = reseq_queryset.exclude(tech_rep__tags__contains=tag[1].replace(' ', ''))
+            reseq_queryset = reseq_queryset.exclude(tech_rep__tags__icontains=tag[1].replace(' ', ''))
         elif tag[0] == 'Show Tag':
-            reseq_queryset = reseq_queryset.filter(tech_rep__tags__contains=tag[1].replace(' ', ''))
+            reseq_queryset = reseq_queryset.filter(tech_rep__tags__icontains=tag[1].replace(' ', ''))
     reseq_ordered_dict = collections.OrderedDict((reseq.id, reseq) for reseq in reseq_queryset)
     return reseq_ordered_dict
 

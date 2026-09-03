@@ -159,7 +159,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)[0]
+        observed = sorted(get_all_observed_mutations_filtered(self.experiment.ale_id),
+                          key=lambda o: o.id)[0]
         reseq_dict[observed.sequencing_experiment_id].bam_stored = True
 
         cell = _get_table_mutation_entry(observed, reseq_dict)
@@ -175,7 +176,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.ale_id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.ale_id)[0]
+        observed = sorted(get_all_observed_mutations_filtered(self.experiment.ale_id),
+                          key=lambda o: o.id)[0]
         reseq_dict[observed.sequencing_experiment_id].bam_stored = False
 
         cell = _get_table_mutation_entry(observed, reseq_dict)

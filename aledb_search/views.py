@@ -142,6 +142,17 @@ def _get_search_params(request, user_projects):
 
 
 def _add_genes_to_query(request, include_argument_list, exclude_argument_list):
+    """Turn the gene box into Q objects: `thrA`, `thr*`, `*A`, and `-` to exclude.
+
+    Every lookup here is the case-insensitive variant deliberately. SQLite folds ASCII case in
+    LIKE and PostgreSQL does not, so a plain `__contains` would answer differently on the two --
+    and gene names are case-significant biology that people type freely, so `thra` finding `thrA`
+    is the behaviour this box has always had.
+
+    The exclude branches are the sharp end, because they invert the harm: a case-sensitive
+    negative search stops excluding and quietly returns *more* rows than asked for, which reads
+    as the filter having been ignored rather than as a search returning nothing.
+    """
     has_gene = False
     if 'gene' in request.GET:
         gene_list = request.GET['gene'].replace(" ", "").split(',')
@@ -150,21 +161,21 @@ def _add_genes_to_query(request, include_argument_list, exclude_argument_list):
                 continue
             if str(mutated_gene).startswith("-"):
                 if str(mutated_gene).endswith("*"):
-                    exclude_argument_list.append(Q(**{'mutation__gene__startswith': str(mutated_gene)[1:-1]}))
+                    exclude_argument_list.append(Q(**{'mutation__gene__istartswith': str(mutated_gene)[1:-1]}))
 
                 elif str(mutated_gene)[1:].startswith("*"):
-                    exclude_argument_list.append(Q(**{'mutation__gene__endswith': str(mutated_gene)[2:]}))
+                    exclude_argument_list.append(Q(**{'mutation__gene__iendswith': str(mutated_gene)[2:]}))
 
                 else:
-                    exclude_argument_list.append(Q(**{'mutation__gene__contains': str(mutated_gene)[1:]}))
+                    exclude_argument_list.append(Q(**{'mutation__gene__icontains': str(mutated_gene)[1:]}))
             else:
                 if str(mutated_gene).endswith("*"):
-                    include_argument_list.append(Q(**{'mutation__gene__startswith': str(mutated_gene)[:-1]}))
+                    include_argument_list.append(Q(**{'mutation__gene__istartswith': str(mutated_gene)[:-1]}))
 
                 elif str(mutated_gene).startswith("*"):
-                    include_argument_list.append(Q(**{'mutation__gene__endswith': str(mutated_gene)[1:]}))
+                    include_argument_list.append(Q(**{'mutation__gene__iendswith': str(mutated_gene)[1:]}))
                 else:
-                    include_argument_list.append(Q(**{'mutation__gene__contains': str(mutated_gene)}))
+                    include_argument_list.append(Q(**{'mutation__gene__icontains': str(mutated_gene)}))
                 has_gene = True
     return has_gene
 

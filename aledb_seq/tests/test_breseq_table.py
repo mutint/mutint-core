@@ -209,7 +209,7 @@ class BreseqTablePageTestCase(TestCase):
         isolate = self.reseq.tech_rep.isolate
         isolate.is_population = True
         isolate.save()
-        observed = ObservedMutation.objects.first()
+        observed = ObservedMutation.objects.order_by("id").first()
         observed.frequency = 0.42
         observed.save()
 
@@ -222,7 +222,7 @@ class BreseqTablePageTestCase(TestCase):
     def test_evidence_links_to_the_alignment_when_there_is_one(self):
         self.reseq.bam_stored = True
         self.reseq.save()
-        observed = ObservedMutation.objects.first()
+        observed = ObservedMutation.objects.order_by("id").first()
         self.assertIn("observed_mut_id=%s" % observed.id, self.content())
 
     def test_evidence_is_plain_text_without_an_alignment(self):

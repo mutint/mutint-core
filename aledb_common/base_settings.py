@@ -110,10 +110,11 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'django.contrib.sites',
             'django.contrib.messages',
             'django.contrib.staticfiles',
-            'django_tables2',
-            'django_filters',
-            'bootstrap3',
-            'bootstrap4',
+            # django_tables2, django_filters, bootstrap3 and bootstrap4 were all here and are
+            # gone. Not one of them was used: no template loaded a bootstrap tag library, the
+            # single `{% load render_table %}` never called the tag, and django_filters' two
+            # FilterSet classes were imported by nothing. Four installed apps that had to be
+            # re-verified against every framework upgrade in exchange for nothing.
             'debug_toolbar',
             # Order is load-bearing: sidebar entries render in INSTALLED_APPS
             # order (see aledb_common/nav_registry.py). To move a nav entry,

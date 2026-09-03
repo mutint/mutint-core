@@ -27,6 +27,8 @@ from two plugin pages. Keyword-only turns a call site nobody updated into a `Typ
 of a `ViewFilter` quietly landing in `filter_type`.
 """
 
+from decimal import Decimal
+
 from django.db.models import Q
 
 from aledb_common.util import get_gene_list
@@ -67,11 +69,17 @@ def filtered_observed_mutation_queryset(observed_mutation_queryset, *, view_filt
     # no row can be -- so setting a maximum silently turned the minimum off as well.
     #
     # The cutoffs are percentages and `frequency` is a fraction, which is what the /100 is.
+    #
+    # Decimal, not float. `frequency` is a DecimalField(max_digits=5, decimal_places=4), and
+    # `int / 100` is a binary float that cannot represent 0.2 exactly -- so a call stored as
+    # exactly 0.2000 sits on the wrong side of a 20% cutoff depending on how the backend
+    # coerces the two types to compare them. Building the bound as a Decimal makes the
+    # comparison exact, and makes "20% means 0.2000" true rather than nearly true.
     exclusion = Q()
     if view_filter.min_freq is not None:
-        exclusion.add(Q(frequency__lt=view_filter.min_freq / 100), Q.OR)
+        exclusion.add(Q(frequency__lt=Decimal(view_filter.min_freq) / 100), Q.OR)
     if view_filter.max_freq is not None:
-        exclusion.add(Q(frequency__gt=view_filter.max_freq / 100), Q.OR)
+        exclusion.add(Q(frequency__gt=Decimal(view_filter.max_freq) / 100), Q.OR)
     return observed_mutation_queryset.exclude(exclusion), view_filter.genes_set
 
 

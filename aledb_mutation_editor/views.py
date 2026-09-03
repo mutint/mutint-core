@@ -24,7 +24,7 @@ import json
 import logging
 from decimal import Decimal, InvalidOperation
 
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -180,7 +180,11 @@ def _grid_mutations(experiment, reseq_dict, query):
         if query.isdigit():
             terms = terms | Q(position=int(query))
         mutations = mutations.filter(terms)
-    return mutations.order_by("reseq_reference", "position", "pk")
+    # nulls_first, because reseq_reference is nullable and the two backends disagree about
+    # where a NULL goes -- SQLite first, PostgreSQL last. This listing reaches the page, so
+    # inheriting the backend's opinion means the editor's rows reorder on deployment with
+    # nothing to say why. Same rule as aledb_experiment.ordering.sample_order().
+    return mutations.order_by(F("reseq_reference").asc(nulls_first=True), "position", "pk")
 
 
 def _grid_for(experiment, reseq_dict, query=None):

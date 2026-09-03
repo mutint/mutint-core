@@ -17,14 +17,15 @@ deleting a mutation while keeping it, per experiment and unattributed, and it is
 `aledb_mutation_editor`'s job now -- per sample, recorded, and restorable.
 
 `@ajax` puts the real status in the JSON body and always sends HTTP 200 (see
-`django_ajax.shortcuts.render_to_json`), so a refusal returns HttpResponseForbidden and the
-caller reads `content` for the reason -- which the existing `swal()` handler already does.
+`aledb_common.ajax`), so a refusal returns HttpResponseForbidden and the caller reads
+`content` for the reason -- which the existing `swal()` handler already does.
 """
 
 import logging
 
 from django.http import HttpResponseForbidden
-from django_ajax.decorators import ajax
+
+from aledb_common.ajax import ajax
 
 from aledb_experiment import models, permissions
 from aledb_seq.models import Mutation

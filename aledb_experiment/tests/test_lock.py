@@ -192,7 +192,7 @@ class EveryWritePathTestCase(LockTestCase):
     def _status(response):
         """The real status.
 
-        `@ajax` from django_ajax always sends HTTP 200 and puts the status in the body, so
+        `@ajax` (aledb_common.ajax) always sends HTTP 200 and puts the status in the body, so
         the two tag endpoints have to be read differently from the rest -- which is exactly
         the sort of thing a sweep across mixed endpoints has to know.
         """
