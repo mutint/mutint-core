@@ -574,6 +574,34 @@ a:hover {
     color: #777;
 }
 
+/* Logout posts rather than links, because LogoutView is POST-only from Django 5.0. The
+   control still has to read as the two links either side of it, so the button borrows
+   `.nav > li > a`'s box (10px 15px) and its hover rather than looking like a button --
+   the same thing .aledb-watermark does, and for the same reason. font-family only, so
+   `.small` on the element still decides the size. */
+.sidebar .aledb-logout {
+    margin: 0;
+}
+
+.sidebar .aledb-logout button {
+    display: block;
+    width: 100%;
+    padding: 10px 15px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.sidebar .aledb-logout button:focus,
+.sidebar .aledb-logout button:hover {
+    text-decoration: none;
+    background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
+}
+
 /* aledb-core's attribution, closing the sidebar menu. Muted and small: it is a
    watermark, not a nav entry, and must not compete with the links above it. */
 .aledb-watermark {

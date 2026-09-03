@@ -3,7 +3,7 @@
 SQLite permits exactly one writer. Two imports running together therefore do not go faster --
 they interleave their per-sample transactions and each one that cannot get the write lock
 inside ``busy_timeout`` fails and loses its sample. `BEGIN IMMEDIATE`
-(``aledb_common.db.sqlite_immediate``) stops a transaction being *refused outright*, and
+(``OPTIONS={'transaction_mode': 'IMMEDIATE'}``) stops a transaction being *refused outright*, and
 retrying (``aledb_import.retry``) absorbs a lost race, but neither is a guarantee: measured
 with three importers and transactions longer than the timeout, ``IMMEDIATE`` alone landed 19
 of 30 samples and ``IMMEDIATE`` plus five retries still lost one. Not running two at once

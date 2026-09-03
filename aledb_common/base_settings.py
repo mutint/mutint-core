@@ -139,19 +139,20 @@ def get_base_settings(base_dir, aledb_core_dir=None):
 
         'DATABASES': {
             'default': {
-                # Not django.db.backends.sqlite3: the same backend, starting its
-                # transactions with BEGIN IMMEDIATE. Deferred transactions are refused
-                # outright when a read has to become a write and somebody else wrote
-                # first, which lost two thirds of a concurrent import. See
-                # aledb_common.db.sqlite_immediate -- and delete it at Django 5.1, which
-                # has a setting for this.
-                'ENGINE': 'aledb_common.db.sqlite_immediate',
+                'ENGINE': 'django.db.backends.sqlite3',
                 'NAME': os.path.join(base_dir, 'aledb_local.sqlite3'),
-                # Handed to sqlite3.connect. The Add page polls while an import writes, so
-                # two connections genuinely contend now; 5s (the default) is not long when
-                # the other one is copying an alignment. WAL and the rest are set per
-                # connection in aledb_common.sqlite_tuning, which explains the whole of it.
-                'OPTIONS': {'timeout': 30},
+                # transaction_mode is the setting aledb_common.db.sqlite_immediate existed
+                # to substitute for, and that subclass is now deleted: it overrode a private
+                # method of a vendored backend because 4.2 had no such setting, and its own
+                # docstring said to delete it at 5.1. Deferred transactions are refused
+                # outright when a read has to become a write and somebody else wrote first,
+                # which lost two thirds of a concurrent import.
+                #
+                # timeout is handed to sqlite3.connect. The Add page polls while an import
+                # writes, so two connections genuinely contend; 5s (the default) is not long
+                # when the other one is copying an alignment. WAL and the rest are set per
+                # connection in aledb_common.sqlite_tuning.
+                'OPTIONS': {'timeout': 30, 'transaction_mode': 'IMMEDIATE'},
             },
         },
 
@@ -192,7 +193,6 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         'LANGUAGE_CODE': 'en-us',
         'SITE_ID': 1,
         'USE_I18N': True,
-        'USE_L10N': True,
         'USE_TZ': True,
 
         'MEDIA_ROOT': '',
@@ -298,9 +298,9 @@ def get_base_settings(base_dir, aledb_core_dir=None):
     if ('test' in sys.argv or 'test_coverage' in sys.argv or
             os.environ.get('FORCE_SQLITE') == '1'):
         settings['DATABASES']['default'] = {
-            'ENGINE': 'aledb_common.db.sqlite_immediate',
+            'ENGINE': 'django.db.backends.sqlite3',
             'NAME': os.path.join(base_dir, 'dev.sqlite3'),
-            'OPTIONS': {'timeout': 30},
+            'OPTIONS': {'timeout': 30, 'transaction_mode': 'IMMEDIATE'},
         }
 
     return settings

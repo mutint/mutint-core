@@ -8,7 +8,7 @@ another connection has written in between.
 Three things answer it, and the point of this module is that **none of them is sufficient
 alone**:
 
-    aledb_common.db.sqlite_immediate   BEGIN IMMEDIATE, so a contender waits instead of failing
+    OPTIONS transaction_mode=IMMEDIATE BEGIN IMMEDIATE, so a contender waits instead of failing
     aledb_import.import_lock           one import at a time, so imports do not contend at all
     aledb_import.retry                 a sample that loses to some *other* writer tries again
 
@@ -141,60 +141,47 @@ class ImportLockTestCase(TestCase):
 
 
 class BackendTestCase(TestCase):
-    """The backend overrides a private method of a vendored Django class -- exactly what an
-    upgrade breaks quietly. These two make that loud instead."""
+    """Transactions must begin IMMEDIATE, and the project actually running must be the one
+    configured to.
 
-    def test_transactions_begin_immediate(self):
-        """Asserted against a stub rather than the live connection, which is already inside
-        `TestCase`'s own transaction and answers `cannot start a transaction within a
-        transaction`. The statement is the whole of what this module does, so the statement
-        is what to pin."""
-        from aledb_common.db.sqlite_immediate.base import DatabaseWrapper
+    This used to be a subclass of Django's SQLite backend overriding the private
+    `_start_transaction_under_autocommit`, because 4.2 had no setting for it. Django 5.1 added
+    `OPTIONS={'transaction_mode': 'IMMEDIATE'}` and the subclass is deleted. What has to
+    survive the deletion is the *assertion*: that the setting is in force in the project
+    being run, which is a different claim from it being written down in base_settings.
+    """
 
-        issued = []
+    def test_the_running_connection_begins_immediate(self):
+        """Asserted on the live connection, not on what base_settings says.
 
-        class FakeCursor:
-            def execute(self, sql):
-                issued.append(sql)
-
-        wrapper = object.__new__(DatabaseWrapper)   # no connection wanted or needed
-        wrapper.cursor = FakeCursor
-
-        DatabaseWrapper._start_transaction_under_autocommit(wrapper)
-
-        self.assertEqual(issued, ["BEGIN IMMEDIATE"],
-                         "a deferred BEGIN is what lost samples to `database is locked`")
-
-    def test_django_still_has_the_hook_this_overrides(self):
-        """The tripwire. If a Django upgrade renames or drops
-        `_start_transaction_under_autocommit`, the override silently stops applying and every
-        transaction quietly goes back to deferred -- with no error anywhere. Delete this
-        module at Django 5.1 and use `OPTIONS={'transaction_mode': 'IMMEDIATE'}` instead."""
-        from django.db.backends.sqlite3 import base as sqlite_base
-
-        self.assertTrue(
-            hasattr(sqlite_base.DatabaseWrapper, "_start_transaction_under_autocommit"),
-            "Django moved the hook; aledb_common.db.sqlite_immediate no longer applies")
-
-    def test_the_running_connection_is_the_immediate_backend(self):
-        """Asserted on the live wrapper, not on the ENGINE string, because what matters is
-        the class actually in use.
-
-        **This test earned its place immediately.** MutInt's `config/settings_local.py`
-        replaced the whole `DATABASES` dict with a hardcoded
+        **This test earned its place immediately**, in the form it had before. MutInt's
+        `config/settings_local.py` replaced the whole `DATABASES` dict with a hardcoded
         `django.db.backends.sqlite3` and no OPTIONS -- so the assembled project, the one
-        people import into and the one that lost the five samples, ran on the stock backend
-        with a 5s timeout while aledb-core had moved on. `./mutint check` passed throughout;
-        only running this in the assembled project found it.
+        people import into and the one that lost the five samples, ran deferred transactions
+        while aledb-core had moved on. `./mutint check` passed throughout; only running this
+        in the assembled project found it. An assembled project can still do that, and the
+        symptom would still be silent.
         """
-        from aledb_common.db.sqlite_immediate.base import DatabaseWrapper
-
         wrapper = connections["default"]
         if wrapper.vendor != "sqlite":
             self.skipTest("not running on SQLite")
-        self.assertIsInstance(
-            wrapper, DatabaseWrapper,
-            "this project overrode ENGINE and is running deferred transactions")
+        options = wrapper.settings_dict.get("OPTIONS") or {}
+        self.assertEqual(
+            "IMMEDIATE", str(options.get("transaction_mode", "")).upper(),
+            "this project overrode DATABASES and is running deferred transactions")
+
+    def test_django_still_honours_the_setting(self):
+        """The tripwire. If a Django upgrade drops `transaction_mode`, every transaction
+        quietly goes back to deferred with no error anywhere -- which is exactly the failure
+        the subclass this replaced was written to prevent. Django validates the value, so
+        offering it a bad one is a behavioural way to ask whether it is still listening."""
+        from django.core.exceptions import ImproperlyConfigured
+        from django.db.backends.sqlite3.base import DatabaseWrapper
+
+        settings_dict = dict(connections["default"].settings_dict)
+        settings_dict["OPTIONS"] = {"transaction_mode": "NOT_A_MODE"}
+        with self.assertRaises(ImproperlyConfigured):
+            DatabaseWrapper(settings_dict).get_connection_params()
 
 
 class SqliteContentionTestCase(TestCase):

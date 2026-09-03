@@ -548,7 +548,7 @@ class ProjectAccess(models.Model):
         verbose_name_plural = "project access"
         constraints = [
             models.CheckConstraint(
-                check=(Q(user__isnull=False, group__isnull=True)
+                condition=(Q(user__isnull=False, group__isnull=True)
                        | Q(user__isnull=True, group__isnull=False)),
                 name="projectaccess_exactly_one_subject"),
             models.UniqueConstraint(fields=["project", "user"],
@@ -558,7 +558,7 @@ class ProjectAccess(models.Model):
                                     condition=Q(group__isnull=False),
                                     name="projectaccess_one_row_per_group"),
             models.CheckConstraint(
-                check=~Q(group__isnull=False, role=ROLE_OWNER),
+                condition=~Q(group__isnull=False, role=ROLE_OWNER),
                 name="projectaccess_groups_cannot_own"),
         ]
 

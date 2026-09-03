@@ -6,6 +6,7 @@ SQLite's rollback journal locks readers out of a database being written, so it i
 matter of waiting a little longer.
 """
 
+import weakref
 from unittest import mock
 
 from django.db import connection
@@ -26,9 +27,16 @@ class SqliteTuningTestCase(TestCase):
             self.assertEqual(cursor.fetchone()[0], sqlite_tuning.BUSY_TIMEOUT_MS)
 
     def test_the_receiver_is_connected(self):
-        receivers = [
-            r() for _key, r in connection_created.receivers
-            if r() is not None]
+        # Indexed rather than unpacked: a receiver entry is (key, ref, ...) and the tuple
+        # grew a member in Django 6, which turned an unpack into a ValueError. The reference
+        # is weak unless the receiver was connected with weak=False, and calling a strong one
+        # would invoke the receiver rather than dereference it.
+        receivers = []
+        for entry in connection_created.receivers:
+            ref = entry[1]
+            receiver = ref() if isinstance(ref, weakref.ReferenceType) else ref
+            if receiver is not None:
+                receivers.append(receiver)
         self.assertIn(sqlite_tuning.tune_sqlite_connection, receivers,
                       "nothing would set WAL if AppConfig.ready stopped importing it")
 

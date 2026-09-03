@@ -106,10 +106,15 @@
                        and a stray </li> closed it two entries later. {% endcomment %}
                     <li><a href="#"><b>{{ user.username }}</b></a></li>
                     <li>
-                        {% comment %} A GET link, which Django 4.2 still accepts and Django 5.0
-                           removes -- LogoutView is POST-only there. Whoever does that upgrade
-                           has to turn this into a posting form. {% endcomment %}
-                        <a href="{% url 'accounts:logout' %}" class="small">&nbsp;&nbsp;&nbsp;Logout</a>
+                        {% comment %} A posting form, not a link: LogoutView has been POST-only
+                           since Django 5.0 and answers a GET with 405. It is styled to read as
+                           the entries either side of it -- see .aledb-logout in common.css --
+                           because a sign-out control that looks like a button in a list of
+                           links reads as something else entirely. {% endcomment %}
+                        <form method="post" action="{% url 'accounts:logout' %}" class="aledb-logout">
+                            {% csrf_token %}
+                            <button type="submit" class="small">&nbsp;&nbsp;&nbsp;Logout</button>
+                        </form>
                     </li>
                     <li>
                         {% comment %} Local, and it did not used to be: this linked

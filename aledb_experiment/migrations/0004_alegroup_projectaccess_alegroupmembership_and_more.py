@@ -58,7 +58,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='projectaccess',
-            constraint=models.CheckConstraint(check=models.Q(models.Q(('group__isnull', True), ('user__isnull', False)), models.Q(('group__isnull', False), ('user__isnull', True)), _connector='OR'), name='projectaccess_exactly_one_subject'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('group__isnull', True), ('user__isnull', False)), models.Q(('group__isnull', False), ('user__isnull', True)), _connector='OR'), name='projectaccess_exactly_one_subject'),
         ),
         migrations.AddConstraint(
             model_name='projectaccess',
@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='projectaccess',
-            constraint=models.CheckConstraint(check=models.Q(('group__isnull', False), ('role', 'owner'), _negated=True), name='projectaccess_groups_cannot_own'),
+            constraint=models.CheckConstraint(condition=models.Q(('group__isnull', False), ('role', 'owner'), _negated=True), name='projectaccess_groups_cannot_own'),
         ),
         migrations.AddConstraint(
             model_name='alegroupmembership',

@@ -254,6 +254,43 @@ class AuthAppParityTestCase(TestCase):
         self.assertEqual("accounts", production.app_name)
 
 
+class LogoutTestCase(TestCase):
+    """Signing out posts, and the sidebar control has to be the thing that posts.
+
+    `LogoutView` has been POST-only since Django 5.0, where a GET gets 405. The sidebar
+    carried a plain `<a href>` for that entire period on 4.2, which worked -- so the upgrade
+    turned a working control into a dead one, and nothing here would have noticed: no test
+    signed out through the page, only through `self.client.logout()`, which calls the test
+    client rather than the product.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user("someone", password="a-long-enough-one")
+        self.client.force_login(self.user)
+
+    def test_posting_signs_you_out(self):
+        response = self.client.post("/accounts/logout/")
+        self.assertEqual(302, response.status_code)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_a_get_is_refused(self):
+        """Pinned because it is the reason the markup changed. If some future Django accepts
+        a GET again, the form is still right and this test is what says the constraint moved."""
+        self.assertEqual(405, self.client.get("/accounts/logout/").status_code)
+
+    def test_the_sidebar_posts_rather_than_linking(self):
+        """The markup, because a form that renders as an anchor again would 405 on click and
+        the page would look entirely correct until somebody tried to leave."""
+        body = self.client.get("/ale/projects/").content.decode()
+
+        form = re.search(r'<form[^>]*action="/accounts/logout/"[^>]*>(.*?)</form>',
+                         body, re.S)
+        self.assertIsNotNone(form, "the sidebar's Logout is not a posting form")
+        self.assertIn('method="post"', form.group(0))
+        self.assertIn("csrfmiddlewaretoken", form.group(1))
+        self.assertNotIn('<a href="/accounts/logout/"', body)
+
+
 class SidebarAccountBlockTestCase(TestCase):
     """Who is offered which door.
 

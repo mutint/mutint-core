@@ -1,7 +1,7 @@
-Django>=4.2,<5.0
+Django>=6.1,<6.2
 beautifulsoup4>=4.12.3
 coverage>=7.6
-django-debug-toolbar>=4.4,<5
+django-debug-toolbar>=8,<9
 # GenomeDiff (.gd) parser/writer used by the drag-and-drop mutation import.
 # Pinned to a git SHA, not a PyPI version: only 0.4.1 was ever published there, and
 # what this depends on landed after it -- the INT mutation type, the ordered
