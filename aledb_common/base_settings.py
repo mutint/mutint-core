@@ -21,6 +21,7 @@ import os
 import sys
 
 from django.contrib import messages
+from django.core.exceptions import ImproperlyConfigured
 
 
 def get_base_settings(base_dir, aledb_core_dir=None):
@@ -116,6 +117,10 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             # FilterSet classes were imported by nothing. Four installed apps that had to be
             # re-verified against every framework upgrade in exchange for nothing.
             'debug_toolbar',
+            # The queue behind django.tasks. Django ships the API and no runner --
+            # its own backends run tasks inline or not at all, and DEP 0014 keeps a
+            # worker process out of core deliberately. See aledb_import/tasks.py.
+            'django_tasks_db',
             # Order is load-bearing: sidebar entries render in INSTALLED_APPS
             # order (see aledb_common/nav_registry.py). To move a nav entry,
             # move its app here. Apps contributing no nav follow.
@@ -137,23 +142,37 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_interop_query',
         ],
 
+        # PostgreSQL, and only PostgreSQL. The SQLite backend, its BEGIN IMMEDIATE
+        # setting and its WAL pragmas are all gone: two supported backends means two
+        # configurations, and with no CI only one of them was ever being run.
+        #
+        # Every value comes from the environment, exported by the entry script before it
+        # re-execs -- settings cannot work any of it out, because an assembled project
+        # reaches get_base_settings() through aledb-core's config/defaults.py, which passes
+        # the *aledb-core* directory as base_dir. Same trap templates/ and staticfiles/ work
+        # around, and the reason ALEDB_TOOLS_DIR is exported too.
+        #
+        # An unset ALEDB_DB_HOST means the entry script manages a local cluster under env/;
+        # setting it yourself means it manages nothing and connects where you say. That one
+        # variable is the whole of the deployment escape hatch. See aledb_common/pg.py.
         'DATABASES': {
             'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': os.path.join(base_dir, 'aledb_local.sqlite3'),
-                # transaction_mode is the setting aledb_common.db.sqlite_immediate existed
-                # to substitute for, and that subclass is now deleted: it overrode a private
-                # method of a vendored backend because 4.2 had no such setting, and its own
-                # docstring said to delete it at 5.1. Deferred transactions are refused
-                # outright when a read has to become a write and somebody else wrote first,
-                # which lost two thirds of a concurrent import.
-                #
-                # timeout is handed to sqlite3.connect. The Add page polls while an import
-                # writes, so two connections genuinely contend; 5s (the default) is not long
-                # when the other one is copying an alignment. WAL and the rest are set per
-                # connection in aledb_common.sqlite_tuning.
-                'OPTIONS': {'timeout': 30, 'transaction_mode': 'IMMEDIATE'},
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': os.environ.get('ALEDB_DB_NAME', 'aledb'),
+                'USER': os.environ.get('ALEDB_DB_USER', 'aledb'),
+                'PASSWORD': os.environ.get('ALEDB_DB_PASSWORD', ''),
+                # libpq reads a HOST beginning with "/" as a directory holding a unix socket,
+                # which is the only thing the managed cluster listens on.
+                'HOST': os.environ.get('ALEDB_DB_HOST', ''),
+                'PORT': os.environ.get('ALEDB_DB_PORT', ''),
             },
+        },
+
+        # Where enqueued work goes. The call sites use django.tasks' own @task/.enqueue(),
+        # so swapping this for Redis, RQ or Celery later is a settings change and touches no
+        # code. Overridden to Django's ImmediateBackend for the test suite, in test_runner.
+        'TASKS': {
+            'default': {'BACKEND': 'django_tasks_db.DatabaseBackend'},
         },
 
         'CACHES': {
@@ -214,7 +233,12 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         ),
 
         'GUARDIAN_RAISE_403': True,
-        'DEFAULT_AUTO_FIELD': 'django.db.models.AutoField',
+        # BigAutoField, taken at the one moment it is free: every table is being created
+        # from scratch, so there is no ALTER on every table and every foreign key to pay
+        # for. Mutation ids are stored as bare integers in exported CSVs and in
+        # aledb-phylogeny's branch_mutations, and widening the column changes none of
+        # those values -- only how many of them there can eventually be.
+        'DEFAULT_AUTO_FIELD': 'django.db.models.BigAutoField',
 
         'SECRET_KEY': os.environ.get(
             'DJANGO_SECRET_KEY',
@@ -294,13 +318,22 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         'MESSAGE_TAGS': {messages.ERROR: 'danger'},
     }
 
-    # Switch to SQLite for tests
-    if ('test' in sys.argv or 'test_coverage' in sys.argv or
-            os.environ.get('FORCE_SQLITE') == '1'):
-        settings['DATABASES']['default'] = {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': os.path.join(base_dir, 'dev.sqlite3'),
-            'OPTIONS': {'timeout': 30, 'transaction_mode': 'IMMEDIATE'},
-        }
+    # Tests create and drop `test_<NAME>` on whatever server is configured. That used to be
+    # harmless: the branch here swapped in SQLite, and Django substitutes an in-memory
+    # database whatever NAME says. On PostgreSQL it is a real server, possibly a deployment's,
+    # and the old branch cannot protect anything because there is nothing to swap to.
+    #
+    # So the guard is stated instead of implied. ALEDB_DB_MANAGED is set only by the entry
+    # script, and only for a cluster it manages under env/ -- so running the suite against
+    # somebody else's server has to be asked for in as many words.
+    if 'test' in sys.argv or 'test_coverage' in sys.argv:
+        if (os.environ.get('ALEDB_DB_MANAGED') != '1'
+                and os.environ.get('ALEDB_ALLOW_REMOTE_TESTS') != '1'):
+            raise ImproperlyConfigured(
+                "Refusing to run tests against a database this checkout does not manage: "
+                "they create and drop test_%s on it. Run them through ./aledb (or ./mutint, "
+                "or ./aledb-deploy), which starts a local cluster under env/. Set "
+                "ALEDB_ALLOW_REMOTE_TESTS=1 if you really mean this server."
+                % settings['DATABASES']['default']['NAME'])
 
     return settings

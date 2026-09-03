@@ -1,4 +1,9 @@
 Django>=6.1,<6.2
+# The PostgreSQL driver. psycopg 3 rather than psycopg2: Django 4.2 was the release that
+# made it first-class, there is no legacy driver code here to keep working, and [binary]
+# bundles libpq so no compiler or system library is needed on the host -- which is the
+# same posture as an installer that downloads its own micromamba.
+psycopg[binary]>=3.2
 beautifulsoup4>=4.12.3
 coverage>=7.6
 django-debug-toolbar>=8,<9
@@ -25,7 +30,6 @@ genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.
 biopython>=1.84
-jsonfield>=3.1
 jsonschema>=4.23
 # BeautifulSoup's parser, named explicitly at aledb_import/annotate/display.py:421 and in
 # its tests. Nothing imports lxml, so it reads like dead weight and is not: bs4 falls back

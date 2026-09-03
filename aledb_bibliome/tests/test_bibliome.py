@@ -22,11 +22,15 @@ class TestBibliome(TestCase):
             status="In progress", is_public=False)
         # A publication only needs an experiment to hang off; this used to run a
         # whole breseq import to get one.
-        AleExperiment.objects.create(
+        experiment = AleExperiment.objects.create(
             name="test", person="Patrick", project=project,
             instrument=Instrument.objects.create(name="test_instrument"))
         expected_publication_count = 1
-        create_publication("test_publication_journal", "aledb.org", 1)
+        # The experiment's own pk, not the literal 1 this used to pass. PostgreSQL does not
+        # rewind a sequence when a TestCase rolls back, so ids climb across the suite and
+        # "the first row is id 1" stops being true after the first test that makes one.
+        create_publication("test_publication_journal", "aledb.org", experiment.pk)
         self.assertEqual(expected_publication_count, Publication.objects.all().count())
-        self.assertEqual("test_publication_journal", Publication.objects.get(id=1).title)
-        self.assertEqual("aledb.org", Publication.objects.get(id=1).url)
+        publication = Publication.objects.get()
+        self.assertEqual("test_publication_journal", publication.title)
+        self.assertEqual("aledb.org", publication.url)

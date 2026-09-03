@@ -14,8 +14,17 @@ attempt that got part-way leaves nothing for the next one to trip over.
 
 What must *not* be retried is a real error. A malformed file, a reference mismatch or a locked
 experiment will fail identically every time, and retrying them five times would turn a clear
-message into a slow one. ``is_lock_error`` is deliberately narrow: it matches SQLite's and
-MySQL's wording for lock contention and nothing else.
+message into a slow one. ``is_lock_error`` is deliberately narrow: it recognises contention and
+nothing else.
+
+**It matches SQLSTATE, not the message text, and that is the whole reason this module needed
+attention when the backend changed.** It used to match SQLite's and MySQL's wording -- so on
+PostgreSQL it recognised nothing at all, and every retry in the suite quietly stopped
+retrying while still reading like live protection. Matching PostgreSQL's *wording* instead
+would have been the same bug one step further on: the server translates error messages
+according to ``lc_messages``, so a phrase match passes on the developer's machine and fails
+on a deployment configured in another language. The five-character code is the part that
+does not move.
 
 This is the third of three pieces and the smallest. See ``aledb_import.import_lock`` for why
 none of them is sufficient alone.
@@ -31,22 +40,43 @@ logger = logging.getLogger("aledb_import.retry")
 ATTEMPTS = 5
 BACKOFF_SECONDS = 0.2
 
-# SQLite says "database is locked" / "database table is locked"; MySQL says "Lock wait timeout
-# exceeded" and "Deadlock found". Matched on the message because the driver reports all of them
-# as OperationalError, which also covers errors that must not be retried.
-LOCK_PHRASES = (
-    "database is locked",
-    "database table is locked",
-    "lock wait timeout",
-    "deadlock found",
-)
+#: PostgreSQL class 40 (transaction rollback) plus lock_not_available. These are exactly the
+#: failures where the same work, tried again, can succeed:
+#:
+#:   40001  serialization_failure  -- concurrent update; the classic "just try again"
+#:   40P01  deadlock_detected      -- the server picked us as the victim
+#:   55P03  lock_not_available     -- NOWAIT or lock_timeout gave up waiting
+#:
+#: Contention is *more* likely to be worth retrying here than it was on SQLite, not less:
+#: MVCC produces serialization failures that a single-writer database structurally could not.
+LOCK_SQLSTATES = frozenset(["40001", "40P01", "55P03"])
+
+
+def sqlstate(exc):
+    """The five-character SQLSTATE behind a Django database error, or None.
+
+    Django wraps the driver's exception, so the code is on ``__cause__`` -- psycopg puts it on
+    the exception itself as ``sqlstate``. Walked rather than assumed, because a caller may
+    have re-raised.
+    """
+    seen = 0
+    while exc is not None and seen < 5:
+        code = getattr(exc, "sqlstate", None) or getattr(getattr(exc, "pgcode", None), "real", None)
+        if isinstance(code, str) and code:
+            return code
+        code = getattr(exc, "pgcode", None)
+        if isinstance(code, str) and code:
+            return code
+        exc = getattr(exc, "__cause__", None)
+        seen += 1
+    return None
 
 
 def is_lock_error(exc):
     """Whether `exc` is contention -- worth another go -- rather than a real failure."""
     if not isinstance(exc, OperationalError):
         return False
-    return any(phrase in str(exc).lower() for phrase in LOCK_PHRASES)
+    return sqlstate(exc) in LOCK_SQLSTATES
 
 
 def with_retry(work, describe="", attempts=ATTEMPTS, sleep=time.sleep):

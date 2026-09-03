@@ -17,11 +17,17 @@ cd aledb-core
 ```
 
 `./aledb start` will:
-1. Create a Python virtual environment at `env/main/` and install dependencies (run once
-   on first invocation; use `./aledb install` to (re)install deps without starting)
-2. Run database migrations (SQLite, no external database needed)
-3. Create a default admin user (`admin` / `admin`)
-4. Open your browser to `http://127.0.0.1:8000`
+1. Install everything it needs into `env/`, on the first invocation only: a pinned Python, a
+   virtual environment built from it, the external tools components declare in their
+   `tools.txt`, and PostgreSQL (use `./aledb install` to do this without starting)
+2. Start a private PostgreSQL server and create the database
+3. Run database migrations
+4. Create a default admin user (`admin` / `admin`)
+5. Open your browser to `http://127.0.0.1:8000`
+
+**Nothing has to be installed first, and nothing is installed outside this directory** --
+not Python, not PostgreSQL. The database listens on a unix socket inside `env/`, not on the
+network, so several checkouts never collide.
 
 The admin interface is at `http://127.0.0.1:8000/admin/`. Log in with `admin` / `admin` and change the password immediately.
 
@@ -175,14 +181,19 @@ All configuration is via environment variables. The defaults are suitable for lo
 | `DJANGO_SERVER_HOST` | `localhost` | Hostname added to `ALLOWED_HOSTS`. Set to your server's hostname or IP for non-local deployments. |
 | `PUBLIC` | `0` | Set to `1` to enable read-only public access mode. |
 | `GOOGLE_ANALYTICS_TAG` | _(empty)_ | Google Analytics measurement ID (e.g. `G-XXXXXXXX`). |
-| `FORCE_SQLITE` | `0` | Set to `1` to force SQLite even when other database settings are present. |
+| `ALEDB_DB_HOST` | _(unset)_ | **Unset means the entry script manages a PostgreSQL server under `env/`.** Set it to a hostname (or a socket directory) to use a server you run yourself, in which case nothing is provisioned, started or stopped for you. |
+| `ALEDB_DB_NAME` | the checkout's directory name | Database name, e.g. `aledb_core`. |
+| `ALEDB_DB_USER` | `aledb` | Database role. |
+| `ALEDB_DB_PASSWORD` | _(empty)_ | Not needed for the managed server, which is socket-only and trusts the local user. |
+| `ALEDB_DB_PORT` | `5432` | Ignored by the managed server, which listens on no port at all. |
+| `ALEDB_ALLOW_REMOTE_TESTS` | `0` | Set to `1` to let `./aledb test` run against a server this checkout does not manage. Tests create and drop `test_<name>` on it, so this is deliberately awkward. |
 | `DJANGO_SETTINGS_MODULE` | `config.settings_local` | Django settings module. Use `config.settings_private` for production with auth enforcement. |
 
 ### Settings files
 
 | File | Purpose |
 |------|---------|
-| `config/settings_local.py` | Local development (SQLite, DEBUG=True). Default when using `./aledb`. |
+| `config/settings_local.py` | Local development (`DEBUG=True`). Default when using `./aledb`. |
 | `config/settings_private.py` | Production with login enforcement (`LoginRequiredMiddleware`). |
 | `config/settings_public.py` | Public read-only deployment. |
 
@@ -194,6 +205,11 @@ All configuration is via environment variables. The defaults are suitable for lo
 ./aledb upload path1 path2    # upload ALE experiments from breseq output dirs
 ./aledb delete 4 20 19        # delete experiments by ID
 ./aledb shell                 # open Django shell
+./aledb db status             # where the database is, and whether it is running
+./aledb db start              # start it and leave it up across several commands
+./aledb db stop               # stop it
+./aledb db reset --yes        # throw the database away and start again, empty
+./aledb db_worker             # run queued background work (coverage derivation)
 ./aledb test                  # run test suite
 ./aledb makemigrations        # generate new migrations after model changes
 ./aledb migrate               # apply migrations

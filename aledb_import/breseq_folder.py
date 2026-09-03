@@ -34,7 +34,7 @@ from django.db import transaction
 
 from aledb_common import import_progress, store
 from aledb_import.retry import with_retry
-from aledb_import import coverage
+from aledb_import import tasks
 from aledb_import import reference as reference_io
 from aledb_import.breseq_summary import read_breseq_summary
 from aledb_import import reference_store
@@ -179,11 +179,20 @@ def _import_samples(context, root, person, report_loose_gd):
             # re-import is idempotent. See aledb_import.retry.
             count, seq_experiment, warnings, replaced = with_retry(
                 import_one, describe=sample_name)
-            # Outside the transaction on purpose: this walks the whole alignment, and holding
-            # a database transaction open for it would be paid by every other writer. It is
-            # also best-effort -- a sample keeps its reads whether or not the coverage
-            # derives, and `./aledb coverage` fills in what did not.
-            coverage.build_quietly(seq_experiment)
+            # Enqueued rather than run here: it walks the whole alignment and shells out
+            # to bedGraphToBigWig under a 900-second timeout, per sample, and this is a POST
+            # somebody is waiting on. See aledb_import/tasks.py.
+            #
+            # Still outside the transaction, and the reason has changed rather than gone: the
+            # sample's rows are committed by the time this runs, so the task can never
+            # reference something uncommitted. Do not "improve" it by moving the enqueue
+            # inside import_one to gain transactional enqueueing -- it already has the
+            # property that would buy.
+            #
+            # With no worker running the BigWig is simply not built, which is a state the
+            # product already handles: the browser falls back to igv's own coverage row and
+            # `./aledb coverage` backfills.
+            tasks.build_coverage.enqueue(seq_experiment.id)
             entry = {"file": sample_name, "mutations": count, "error": None,
                      "warnings": warnings, "replaced": replaced}
             total_mutations += count

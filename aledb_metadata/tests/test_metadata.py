@@ -15,12 +15,18 @@ import os
 from aledb_metadata.xpmdvalidator.validate import is_valid
 import csv
 
-ALE_EXP_PRIMARY_EXP = 1  # I'm assuming will always be 1 due to rebuild of DB with the unit testing.
-
 __author__ = 'Patrick Phaneuf'
 
 
 class TestParser(TestCase):
+
+    # There was a module constant here -- `ALE_EXP_PRIMARY_EXP = 1`, with the comment "I'm
+    # assuming will always be 1 due to rebuild of DB with the unit testing." It was true on
+    # SQLite and is false on PostgreSQL, whose sequences are not rewound by a TestCase's
+    # rollback: ids keep climbing across tests, so experiment 1 stops existing after the
+    # first one. The parser then targeted an experiment that was not there and changed
+    # nothing, and every assertion about media counts failed. Each test uses the experiment
+    # it created.
 
     def setUp(self):
         self.user = User.objects.create(username="Troy", password="test123",
@@ -46,7 +52,7 @@ class TestParser(TestCase):
                                           tech_rep_number=1)
 
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
-        parse_metadata_post_experiment_upload(path + "test1/", ALE_EXP_PRIMARY_EXP)
+        parse_metadata_post_experiment_upload(path + "test1/", self.ale_exp.pk)
         self.assertEqual(2, Media.objects.all().count())
         tech_rep_queryset = TechnicalReplicate.objects.all()
         self.assertEqual(1, tech_rep_queryset.count())
@@ -54,7 +60,7 @@ class TestParser(TestCase):
         self.assertEqual(test1_media, "Glucose(4)")
 
         # Tries to change the media of the same tech_rep.isolate.flask.
-        parse_metadata_post_experiment_upload(path + "test2/", ALE_EXP_PRIMARY_EXP)
+        parse_metadata_post_experiment_upload(path + "test2/", self.ale_exp.pk)
         self.assertEqual(3, Media.objects.all().count())
         tech_rep_queryset = TechnicalReplicate.objects.all()
         self.assertEqual(1, len(tech_rep_queryset))
@@ -95,7 +101,7 @@ class TestParser(TestCase):
                                           tech_rep_number=2)
         # The metadata uploading should be creating 2 different types of media.
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
-        parse_metadata_post_experiment_upload(path + "test3/", ALE_EXP_PRIMARY_EXP)
+        parse_metadata_post_experiment_upload(path + "test3/", self.ale_exp.pk)
         media_queryset = Media.objects.all()
         print("here")
         print(media_queryset[0].description)
@@ -121,7 +127,7 @@ class TestParser(TestCase):
         TechnicalReplicate.objects.create(isolate=isolate,
                                           tech_rep_number=2)
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
-        parse_metadata_post_experiment_upload(path + "test_reuse_media_with_metadata_upload/", ALE_EXP_PRIMARY_EXP)
+        parse_metadata_post_experiment_upload(path + "test_reuse_media_with_metadata_upload/", self.ale_exp.pk)
         media_queryset = Media.objects.all()
         media_present_dict = {"nothing": 0, "Glucose(4)": 0}
         for media in media_queryset:
@@ -154,13 +160,13 @@ class TestParser(TestCase):
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
 
         # Will populate all tech_reps to have Glucose(4) carbon source, even though 7-90-0-1 only being set.
-        parse_metadata_post_experiment_upload(path + "test1/", ALE_EXP_PRIMARY_EXP)
+        parse_metadata_post_experiment_upload(path + "test1/", self.ale_exp.pk)
         tech_rep_queryset = TechnicalReplicate.objects.all()
         self.assertEqual(2, tech_rep_queryset.count())
         for tech_rep in tech_rep_queryset:
             self.assertEqual("Glucose(4)", tech_rep.isolate.flask.media.carbon_source)
 
-        parse_metadata_post_experiment_upload(path + "7-90-0-2_acetate/", ALE_EXP_PRIMARY_EXP)
+        parse_metadata_post_experiment_upload(path + "7-90-0-2_acetate/", self.ale_exp.pk)
         tech_rep_queryset = TechnicalReplicate.objects.all()
         self.assertEqual(2, tech_rep_queryset.count())
         for tech_rep in tech_rep_queryset:

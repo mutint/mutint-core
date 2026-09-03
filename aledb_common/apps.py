@@ -14,8 +14,3 @@ class CommonConfig(AppConfig):
 
         register_about_section(self, name='aledb-core', version=__version__,
                                template='about/sections/aledb_core.html')
-
-        # Connects a `connection_created` receiver that puts SQLite into WAL. Imported for
-        # its side effect and nothing else: without it a page that polls while an import
-        # writes raises `database is locked`, which is what it was added for.
-        from aledb_common import sqlite_tuning  # noqa: F401

@@ -184,7 +184,15 @@ def find_user(user):
             for each in name_parts:
                 potential_user_list=potential_user_list+list(User.objects.filter(first_name__icontains=each))
                 potential_user_list=potential_user_list+list(User.objects.filter(last_name__icontains=each))
-            potential_user_list = (list(set(potential_user_list)))
+            # Deduplicated *and ordered*. This was `list(set(...))`, and a set of model
+            # instances iterates in hash order -- which for a Django model is its primary
+            # key's -- so the numbered menu below came out in an order nobody chose and that
+            # moved as soon as the primary keys did. This prompt decides which person an
+            # experiment is attributed to; "type 0" meaning somebody different between two
+            # runs is the last thing it should do. Ordered by primary key, so the menu reads
+            # oldest account first -- an arbitrary rule, but a fixed one, which is the whole
+            # requirement.
+            potential_user_list = sorted(set(potential_user_list), key=lambda found: found.pk)
             if len(potential_user_list) == 1:
                 return potential_user_list[0]
             if len(potential_user_list) == 0:

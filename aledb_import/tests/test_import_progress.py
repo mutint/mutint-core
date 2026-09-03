@@ -458,21 +458,30 @@ class ProgressEndpointTestCase(TestCase):
 
     def test_progress_is_visible_while_the_import_is_still_running(self):
         """The point of the whole exercise: the snapshot is committed as it goes, not at
-        the end. Coverage runs outside the per-sample transaction, so reading the row from
-        inside it sees the first sample done and the second not yet begun."""
-        seen = {}
-        original = breseq_folder.coverage.build_quietly
+        the end.
 
-        def peek(reseq):
-            if "snapshot" not in seen:
-                seen["snapshot"] = UploadSession.objects.get(
-                    pk=self.upload_id).progress
-            return original(reseq)
+        Hooked on the coverage *enqueue*, which is what runs between one sample's
+        transaction committing and the next one beginning -- it used to be the coverage
+        build itself, before that moved to a worker. Any per-sample call outside the
+        transaction would do; this is the one that is there.
+        """
+        seen = {}
+        real = breseq_folder.tasks.build_coverage
+
+        class Peeking:
+            """Stands in for the Task object, not for its method: django.tasks' Task is a
+            frozen dataclass, so `enqueue` cannot be reassigned on it."""
+
+            def enqueue(inner, reseq_id):
+                if "snapshot" not in seen:
+                    seen["snapshot"] = UploadSession.objects.get(
+                        pk=self.upload_id).progress
+                return real.enqueue(reseq_id)
 
         upload_id = self._upload("s1", "s2")
         self.upload_id = upload_id
-        breseq_folder.coverage.build_quietly = peek
-        self.addCleanup(setattr, breseq_folder.coverage, "build_quietly", original)
+        breseq_folder.tasks.build_coverage = Peeking()
+        self.addCleanup(setattr, breseq_folder.tasks, "build_coverage", real)
 
         self.client.post("/import/uploads/%s/finalize" % upload_id, {})
 

@@ -55,8 +55,17 @@ class AledbTestRunner(DiscoverRunner):
 
     # --- store isolation ----------------------------------------------------------------
 
+    #: Tasks run inline under test. This is not the `task_always_eager` posture WORKERS.md
+    #: argues against -- that is about *development* hiding the difference between queued and
+    #: immediate. A test asserting what an import produced should not also have to run a
+    #: worker, and the one test that must exercise the real DatabaseBackend overrides this
+    #: back (aledb_import/tests/test_tasks.py).
+    TASKS = {'default': {'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend'}}
+
     def setup_test_environment(self, **kwargs):
         super().setup_test_environment(**kwargs)
+        self._tasks_override = override_settings(TASKS=self.TASKS)
+        self._tasks_override.enable()
         # Held on the runner rather than module state: `teardown_test_environment` is the
         # only thing that needs it back, and it is the same instance.
         self._store_dir = tempfile.mkdtemp(prefix="aledb-test-store-")
@@ -75,4 +84,8 @@ class AledbTestRunner(DiscoverRunner):
         if store_dir is not None:
             shutil.rmtree(store_dir, ignore_errors=True)
             self._store_dir = None
+        tasks = getattr(self, "_tasks_override", None)
+        if tasks is not None:
+            tasks.disable()
+            self._tasks_override = None
         super().teardown_test_environment(**kwargs)

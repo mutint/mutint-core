@@ -1,20 +1,26 @@
 """Every sample must land, even while somebody else is uploading.
 
-An LTEE drop lost five samples to `database is locked`, and the cause was not slowness: Django
-4.2's `atomic()` issues a deferred `BEGIN`, `get_or_create` reads before it writes, and SQLite
-refuses that read-to-write upgrade outright -- without consulting `busy_timeout` -- as soon as
-another connection has written in between.
+An LTEE drop lost five samples to `database is locked`, and the cause was not slowness:
+`atomic()` issued a deferred `BEGIN`, `get_or_create` read before it wrote, and SQLite
+refused that read-to-write upgrade outright -- without consulting `busy_timeout` -- as soon
+as another connection had written in between.
 
-Three things answer it, and the point of this module is that **none of them is sufficient
-alone**:
+**That particular failure is gone with SQLite**, and the two mechanisms built around it are
+not, because what they protect against is not backend-specific:
 
-    OPTIONS transaction_mode=IMMEDIATE BEGIN IMMEDIATE, so a contender waits instead of failing
-    aledb_import.import_lock           one import at a time, so imports do not contend at all
-    aledb_import.retry                 a sample that loses to some *other* writer tries again
+    aledb_import.import_lock   one import at a time, so imports never contend at all
+    aledb_import.retry         a sample that loses to some *other* writer tries again
 
-`ConcurrentWriterTestCase` is a `TransactionTestCase` on purpose and cannot be anything else: a
-plain `TestCase` wraps every test in one transaction on one connection, so it can no more
-exhibit lock contention than it can exhibit a commit.
+`import_lock` earns its place more clearly on PostgreSQL than it did on SQLite, and the
+reason is worth keeping in view: it is the only thing making the suite's unconstrained
+`get_or_create` calls -- Instrument, AleExperiment, Media, FreezerBox, Isolate -- and
+`_next_isolate_number`'s unlocked read-then-write unreachable by two importers at once.
+SQLite's single-writer lock used to hide that; MVCC does not. Do not remove it on the
+grounds that its original SQLite justification has expired.
+
+`ImportLockVisibilityTestCase` is a `TransactionTestCase` on purpose and cannot be anything
+else: a plain `TestCase` wraps every test in one transaction on one connection, so it can no
+more exhibit a committed row another connection can see than it can exhibit a commit.
 """
 
 import os
@@ -28,28 +34,60 @@ from aledb_import import import_lock, retry
 from aledb_import.models import ImportLock
 
 
+def pg_error(sqlstate, message="server said so"):
+    """A Django OperationalError shaped the way psycopg's arrives.
+
+    Django wraps the driver's exception, so the SQLSTATE is on `__cause__` rather than on the
+    error the caller catches.
+    """
+    class DriverError(Exception):
+        pass
+
+    cause = DriverError(message)
+    cause.sqlstate = sqlstate
+    error = OperationalError(message)
+    error.__cause__ = cause
+    return error
+
+
 class LockErrorRecognitionTestCase(TestCase):
     """What counts as contention. Deliberately narrow: a malformed file fails the same way
     every time, and retrying it five times turns a clear message into a slow one."""
 
-    def test_lock_messages_are_recognised(self):
-        for message in ("database is locked",
-                        "database table is locked: aledb_seq_mutation",
-                        "Lock wait timeout exceeded; try restarting transaction",
-                        "Deadlock found when trying to get lock"):
-            self.assertTrue(retry.is_lock_error(OperationalError(message)), message)
+    def test_contention_sqlstates_are_recognised(self):
+        for code in ("40001",     # serialization_failure
+                     "40P01",     # deadlock_detected
+                     "55P03"):    # lock_not_available
+            self.assertTrue(retry.is_lock_error(pg_error(code)), code)
 
     def test_other_failures_are_not_retried(self):
-        self.assertFalse(retry.is_lock_error(OperationalError("no such table: nope")))
-        self.assertFalse(retry.is_lock_error(ValueError("database is locked")),
+        self.assertFalse(retry.is_lock_error(pg_error("23505")),   # unique_violation
+                         "a duplicate key fails identically every time")
+        self.assertFalse(retry.is_lock_error(pg_error("42703")),   # undefined_column
+                         "a real error must not be retried")
+        self.assertFalse(retry.is_lock_error(OperationalError("no sqlstate at all")))
+        self.assertFalse(retry.is_lock_error(ValueError("40001")),
                          "only OperationalError is contention, whatever the text says")
+
+    def test_the_message_is_not_what_is_matched(self):
+        """The trap this module walked into once and must not again.
+
+        Matching wording worked on SQLite and recognised *nothing* on PostgreSQL, so the
+        retry read as live protection while doing nothing. Matching PostgreSQL's wording
+        instead would be the same bug one step on: the server translates messages according
+        to `lc_messages`, so a phrase match passes here and fails on a deployment running in
+        another language. An error that merely says the word is not one.
+        """
+        self.assertFalse(
+            retry.is_lock_error(OperationalError("deadlock detected")),
+            "recognised on the strength of its text, which does not survive lc_messages")
 
     def test_a_real_error_is_raised_at_once(self):
         attempts = []
 
         def work():
             attempts.append(1)
-            raise OperationalError("no such column: banana")
+            raise pg_error("42703", "column banana does not exist")
 
         with self.assertRaises(OperationalError):
             retry.with_retry(work, sleep=lambda _s: None)
@@ -63,7 +101,7 @@ class RetryTestCase(TestCase):
         def work():
             attempts.append(1)
             if len(attempts) < 3:
-                raise OperationalError("database is locked")
+                raise pg_error("40001")
             return "imported"
 
         result = retry.with_retry(work, describe="s1", sleep=lambda _s: None)
@@ -75,7 +113,7 @@ class RetryTestCase(TestCase):
         """The honest ceiling: what cannot be written is surfaced, not silently skipped.
         That is how the five lost samples were found in the first place."""
         def work():
-            raise OperationalError("database is locked")
+            raise pg_error("40001")
 
         with self.assertRaises(OperationalError):
             retry.with_retry(work, attempts=3, sleep=lambda _s: None)
@@ -84,7 +122,7 @@ class RetryTestCase(TestCase):
         delays = []
 
         def work():
-            raise OperationalError("database is locked")
+            raise pg_error("40001")
 
         with self.assertRaises(OperationalError):
             retry.with_retry(work, attempts=4, sleep=delays.append)
@@ -141,142 +179,29 @@ class ImportLockTestCase(TestCase):
 
 
 class BackendTestCase(TestCase):
-    """Transactions must begin IMMEDIATE, and the project actually running must be the one
-    configured to.
+    """The project actually running must be on the database it was configured for.
 
-    This used to be a subclass of Django's SQLite backend overriding the private
-    `_start_transaction_under_autocommit`, because 4.2 had no setting for it. Django 5.1 added
-    `OPTIONS={'transaction_mode': 'IMMEDIATE'}` and the subclass is deleted. What has to
-    survive the deletion is the *assertion*: that the setting is in force in the project
-    being run, which is a different claim from it being written down in base_settings.
+    **The earlier form of this test earned its place immediately**, and the failure it caught
+    is still reachable. MutInt's `config/settings_local.py` replaced the whole `DATABASES`
+    dict, so the assembled project -- the one people import into, and the one that lost the
+    five samples -- ran on a different backend configuration from the one aledb-core had
+    moved to. `./mutint check` passed throughout; only asserting on the live connection in
+    the assembled project found it. An assembled project can still override `DATABASES`, and
+    the symptom would still be silent.
     """
 
-    def test_the_running_connection_begins_immediate(self):
-        """Asserted on the live connection, not on what base_settings says.
+    def test_the_running_connection_is_postgresql(self):
+        self.assertEqual("postgresql", connections["default"].vendor,
+                         "this project overrode DATABASES and is not on PostgreSQL")
 
-        **This test earned its place immediately**, in the form it had before. MutInt's
-        `config/settings_local.py` replaced the whole `DATABASES` dict with a hardcoded
-        `django.db.backends.sqlite3` and no OPTIONS -- so the assembled project, the one
-        people import into and the one that lost the five samples, ran deferred transactions
-        while aledb-core had moved on. `./mutint check` passed throughout; only running this
-        in the assembled project found it. An assembled project can still do that, and the
-        symptom would still be silent.
-        """
-        wrapper = connections["default"]
-        if wrapper.vendor != "sqlite":
-            self.skipTest("not running on SQLite")
-        options = wrapper.settings_dict.get("OPTIONS") or {}
-        self.assertEqual(
-            "IMMEDIATE", str(options.get("transaction_mode", "")).upper(),
-            "this project overrode DATABASES and is running deferred transactions")
-
-    def test_django_still_honours_the_setting(self):
-        """The tripwire. If a Django upgrade drops `transaction_mode`, every transaction
-        quietly goes back to deferred with no error anywhere -- which is exactly the failure
-        the subclass this replaced was written to prevent. Django validates the value, so
-        offering it a bad one is a behavioural way to ask whether it is still listening."""
-        from django.core.exceptions import ImproperlyConfigured
-        from django.db.backends.sqlite3.base import DatabaseWrapper
-
-        settings_dict = dict(connections["default"].settings_dict)
-        settings_dict["OPTIONS"] = {"transaction_mode": "NOT_A_MODE"}
-        with self.assertRaises(ImproperlyConfigured):
-            DatabaseWrapper(settings_dict).get_connection_params()
-
-
-class SqliteContentionTestCase(TestCase):
-    """Why the backend exists, demonstrated against a real file database.
-
-    **This cannot be done through the Django test database.** The suite runs on
-    `file:memorydb_default?mode=memory&cache=shared`, and shared-cache SQLite locks whole
-    tables under different rules than a file does -- so the deferred-transaction failure this
-    guards against does not reproduce there. A test that ran two ORM writers against the test
-    database would pass whether or not the fix were present, which is worse than no test.
-
-    So this drives sqlite3 directly, over a temp file, in the two transaction modes. It pins
-    the premise: deferred loses writes under contention and IMMEDIATE does not. `BackendTestCase`
-    pins the other half -- that this application actually asks for IMMEDIATE.
-    """
-
-    # Four writers, not two, and they are released together by a barrier. The race this
-    # measures used to be produced incidentally -- by whatever the machine happened to be
-    # doing when the test ran -- and that is not a property to rest a guarantee on: it
-    # reproduced for years and then stopped when an unrelated change upstream in this same
-    # app removed a `bedtools` subprocess from the import path, which was enough to alter the
-    # scheduling two threads needed to collide. `lost` staying empty made this test fail while
-    # asserting nothing about the code under test.
-    #
-    # The barrier makes the overlap deliberate: every writer blocks until all of them are
-    # ready, so their first upgrade attempts land at the same moment rather than by luck.
-    # `test_immediate_transactions_lose_nothing` runs through the same path and is the control
-    # -- if this only manufactured noise, IMMEDIATE would start losing writes too.
-    def _run(self, begin, rounds=60, workers=4):
-        import os
-        import shutil
-        import sqlite3
-        import tempfile
-
-        directory = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, directory, True)
-        path = os.path.join(directory, "contended.sqlite3")
-
-        setup = sqlite3.connect(path)
-        setup.execute("PRAGMA journal_mode=WAL;")
-        setup.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, k TEXT UNIQUE)")
-        setup.commit()
-        setup.close()
-
-        lost = []
-        # timeout so a writer that dies before reaching it cannot hang the suite; a broken
-        # barrier just means the threads start unsynchronised, which is where this began.
-        ready = threading.Barrier(workers, timeout=30)
-
-        def writer(tag):
-            handle = sqlite3.connect(path, timeout=5, isolation_level=None)
-            try:
-                ready.wait()
-            except threading.BrokenBarrierError:
-                pass
-            for i in range(rounds):
-                try:
-                    handle.execute(begin)
-                    handle.execute("SELECT COUNT(*) FROM sample").fetchone()
-                    handle.execute("INSERT INTO sample (k) VALUES (?)", ("%s-%d" % (tag, i),))
-                    handle.execute("COMMIT")
-                except sqlite3.OperationalError as exc:
-                    lost.append(str(exc))
-                    try:
-                        handle.execute("ROLLBACK")
-                    except sqlite3.Error:
-                        pass
-            handle.close()
-
-        threads = [threading.Thread(target=writer, args=("w%d" % n,))
-                   for n in range(workers)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-
-        check = sqlite3.connect(path)
-        landed = check.execute("SELECT COUNT(*) FROM sample").fetchone()[0]
-        check.close()
-        return landed, lost, rounds * workers
-
-    def test_deferred_transactions_lose_writes(self):
-        """The bug, reproduced. Not an assertion that it always fails -- it is a race -- but
-        that it *can*, which a guarantee cannot tolerate."""
-        landed, lost, offered = self._run("BEGIN")
-
-        self.assertTrue(lost, "expected contention to refuse at least one deferred upgrade")
-        self.assertLess(landed, offered)
-        self.assertTrue(any("locked" in message for message in lost), lost[:3])
-
-    def test_immediate_transactions_lose_nothing(self):
-        landed, lost, offered = self._run("BEGIN IMMEDIATE")
-
-        self.assertEqual(lost, [])
-        self.assertEqual(landed, offered, "every write must land")
+    def test_it_is_the_database_this_checkout_manages(self):
+        """Skipped against somebody else's server, which is a legitimate way to run."""
+        managed = os.environ.get("ALEDB_DB_MANAGED") == "1"
+        if not managed:
+            self.skipTest("running against an external server")
+        self.assertEqual(os.environ["ALEDB_DB_HOST"],
+                         connections["default"].settings_dict["HOST"],
+                         "settings are not pointing at the cluster the entry script started")
 
 
 class FinalizeUnderLockTestCase(TestCase):

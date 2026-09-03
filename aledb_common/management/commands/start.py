@@ -41,6 +41,14 @@ class Command(BaseCommand):
             )).start()
 
             self.stdout.write(f'\nStarting ALEdb at {url}')
-            self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)\n')
+            self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)')
+            # Said here rather than left to be discovered, because the symptom of not knowing
+            # is a sample that imports perfectly and quietly has no coverage track. No worker
+            # is spawned: runserver re-executes this whole command line on every code change,
+            # so a spawned one becomes an orphan-management problem, and a background worker
+            # that dies silently is worse than one you can see.
+            self.stdout.write(
+                '  Coverage is derived in the background. Run `./aledb db_worker` in another\n'
+                '  terminal, or `./aledb coverage` afterwards.\n')
 
         call_command('runserver')
