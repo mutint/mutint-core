@@ -15,7 +15,7 @@ Imported mutations are attached to the normal experiment hierarchy
 (``AleExperiment -> AleId -> Flask -> Isolate -> TechnicalReplicate ->
 ResequencingExperiment -> ObservedMutation``) so they appear in the existing
 mutation tables, stats, and dashboards with no extra plumbing. The chain is
-synthesized the same way the CLI does it: default Instrument/Media/FreezerBox
+synthesized the same way the CLI does it: a default Media
 placeholders, and the A-F-I-R identity parsed from each filename.
 """
 
@@ -30,8 +30,6 @@ from aledb_experiment.models import (
     AleExperiment,
     AleId,
     Flask,
-    FreezerBox,
-    Instrument,
     Isolate,
     Media,
     Project,
@@ -121,8 +119,13 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
 
 
 def _prepare_experiment(project_name, experiment_name, person, is_public):
-    """Get/create the target project, experiment, and the shared placeholder
-    Media / FreezerBox / Instrument, mirroring ``ale_experiment.create_ale_experiment``."""
+    """Get/create the target project, experiment and the shared placeholder Media.
+
+    There used to be a placeholder Instrument and FreezerBox here too. Both were required
+    foreign keys to singleton rows nothing ever read or displayed -- the instrument's name
+    was the empty string -- so they are gone, and with them the only thing `instrument` ever
+    contributed to this get_or_create key.
+    """
     from aledb_import.ale_experiment import try_creating_project
 
     try:
@@ -130,28 +133,20 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
     except Project.DoesNotExist:
         project = try_creating_project(project_name, person, is_public)
 
-    instrument, _ = Instrument.objects.get_or_create(
-        name=metadata_defaults.DEFAULT_INSTRUMENT_NAME)
     experiment, _ = AleExperiment.objects.get_or_create(
-        name=experiment_name, instrument=instrument, person=person, project=project)
+        name=experiment_name, person=person, project=project)
     media, _ = Media.objects.get_or_create(
         description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
-        substrate=metadata_defaults.DEFAULT_MEDIA_SUBSTRATE,
-        temperature=metadata_defaults.DEFAULT_TEMPERATURE,
-        volume=metadata_defaults.DEFAULT_VOLUME,
-        stirring_speed=metadata_defaults.DEFAULT_STIRRING_SPEED)
-    freezer_box, _ = FreezerBox.objects.get_or_create(
-        name=metadata_defaults.DEFAULT_FREEZER_BOX_NAME,
-        number=metadata_defaults.DEFAULT_FREEZER_BOX_NUMBER)
+        temperature=metadata_defaults.DEFAULT_TEMPERATURE)
 
-    return {"experiment": experiment, "media": media, "freezer_box": freezer_box}
+    return {"experiment": experiment, "media": media}
 
 
 def prepare_experiment_by_id(ale_experiment_id):
     """Context for adding to an *existing* experiment, identified by primary key.
 
     The web paths use this rather than `_prepare_experiment`, whose name-based
-    get_or_create keys on (name, instrument, person, project) -- so the same experiment name
+    get_or_create keys on (name, person, project) -- so the same experiment name
     with a different person silently forks into a second experiment. Keying on the pk means
     two people can add to one experiment, and two experiments may share a name.
 
@@ -161,14 +156,8 @@ def prepare_experiment_by_id(ale_experiment_id):
     experiment = AleExperiment.objects.get(pk=ale_experiment_id)
     media, _ = Media.objects.get_or_create(
         description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
-        substrate=metadata_defaults.DEFAULT_MEDIA_SUBSTRATE,
-        temperature=metadata_defaults.DEFAULT_TEMPERATURE,
-        volume=metadata_defaults.DEFAULT_VOLUME,
-        stirring_speed=metadata_defaults.DEFAULT_STIRRING_SPEED)
-    freezer_box, _ = FreezerBox.objects.get_or_create(
-        name=metadata_defaults.DEFAULT_FREEZER_BOX_NAME,
-        number=metadata_defaults.DEFAULT_FREEZER_BOX_NUMBER)
-    return {"experiment": experiment, "media": media, "freezer_box": freezer_box}
+        temperature=metadata_defaults.DEFAULT_TEMPERATURE)
+    return {"experiment": experiment, "media": media}
 
 
 def _is_storable(record):
@@ -315,8 +304,6 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
         is_population=is_population,
         reseq_reference=reseq_reference[:200],
         reseq_date=reseq_date[:200],
-        freezer_box=context["freezer_box"],
-        person=person,
         # A label to read the sample by, on creation only: `ale_flask_isolate_str` prefers
         # it, so `Ara-2_500gen_763A` shows as itself rather than as `AAra-2 F500 I763A R1`.
         # In `defaults` because it is not part of the identity -- an isolate found by its
@@ -356,9 +343,7 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         description=sample_name[:300],
         is_population=" -p" in (metadata.get("COMMAND", "") or ""),
         reseq_reference=(metadata.get("REFSEQ", "") or "")[:200],
-        reseq_date=(metadata.get("CREATED", "") or "")[:200],
-        freezer_box=context["freezer_box"],
-        person=person)
+        reseq_date=(metadata.get("CREATED", "") or "")[:200])
     tech_rep = TechnicalReplicate.objects.create(tech_rep_number=1, isolate=isolate)
     return ResequencingExperiment.objects.create(
         tech_rep=tech_rep, sample_name=sample_name, person=person)

@@ -2,7 +2,7 @@ import os
 from django.test import TestCase
 
 from django.contrib.auth.models import User
-from aledb_experiment.models import AleExperiment, Instrument, Project
+from aledb_experiment.models import AleExperiment, Project
 from datetime import datetime
 from aledb_bibliome.models import Publication
 from aledb_bibliome.publication import create_publication
@@ -23,8 +23,7 @@ class TestBibliome(TestCase):
         # A publication only needs an experiment to hang off; this used to run a
         # whole breseq import to get one.
         experiment = AleExperiment.objects.create(
-            name="test", person="Patrick", project=project,
-            instrument=Instrument.objects.create(name="test_instrument"))
+            name="test", person="Patrick", project=project)
         expected_publication_count = 1
         # The experiment's own pk, not the literal 1 this used to pass. PostgreSQL does not
         # rewind a sequence when a TestCase rolls back, so ids climb across the suite and

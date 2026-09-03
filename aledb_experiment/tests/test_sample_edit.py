@@ -37,7 +37,6 @@ class SampleEditTestCase(TestCase):
         # prompts on stdin and raises EOFError under the test runner.
         context = prepare_experiment_by_id(self.experiment.ale_id)
         self.media = context["media"]
-        self.freezer_box = context["freezer_box"]
 
     def make_sample(self, ale, flask, isolate, rep, name="", experiment=None,
                     media=None, is_population=False):
@@ -48,8 +47,7 @@ class SampleEditTestCase(TestCase):
             ale_id=ale_row, flask_number=flask,
             defaults={"media": media or self.media})
         isolate_row = Isolate.objects.create(
-            flask=flask_row, isolate_number=isolate, is_population=is_population,
-            freezer_box=self.freezer_box)
+            flask=flask_row, isolate_number=isolate, is_population=is_population)
         tech_rep = TechnicalReplicate.objects.create(
             isolate=isolate_row, tech_rep_number=rep)
         return ResequencingExperiment.objects.create(
@@ -294,24 +292,23 @@ class RenumberTestCase(SampleEditTestCase):
         self.assertFalse(Isolate.objects.filter(
             flask__ale_id__ale_id=1, isolate_number=1).exists())
 
-    def test_the_new_rows_inherit_media_and_freezer_box_from_the_source(self):
+    def test_the_new_rows_inherit_media_from_the_source(self):
         """A renumber re-labels a sample; it does not move it to different growth
-        conditions or a different freezer."""
-        from aledb_experiment.models import FreezerBox, Media
-        other_media = Media.objects.create(description="LB", volume=10)
-        other_box = FreezerBox.objects.create(name="Box 9", number=9)
+        conditions.
+
+        This asserted the freezer box as well, until that model was deleted: every column on
+        it was either dead or a write-only placeholder, so it was a required foreign key to a
+        singleton row nothing ever displayed."""
+        from aledb_experiment.models import Media
+        other_media = Media.objects.create(description="LB")
         flask = self.first.tech_rep.isolate.flask
         flask.media = other_media
         flask.save()
-        isolate = self.first.tech_rep.isolate
-        isolate.freezer_box = other_box
-        isolate.save()
 
         self.single(self.first, ale=4)
 
         self.first.refresh_from_db()
         self.assertEqual(other_media, self.first.tech_rep.isolate.flask.media)
-        self.assertEqual(other_box, self.first.tech_rep.isolate.freezer_box)
 
     def test_moving_onto_a_flask_with_different_media_succeeds(self):
         """gd_import passes media= as a *lookup* kwarg to Flask.objects.get_or_create
@@ -320,7 +317,7 @@ class RenumberTestCase(SampleEditTestCase):
         what makes this work."""
         from aledb_experiment.models import Media
         self.make_sample(3, 3, 1, 1, name="third",
-                         media=Media.objects.create(description="LB", volume=10))
+                         media=Media.objects.create(description="LB"))
 
         response = self.single(self.first, ale=3, flask=3, isolate=9)
 
@@ -333,7 +330,7 @@ class RenumberTestCase(SampleEditTestCase):
         get_or_create would raise MultipleObjectsReturned on them."""
         flask = self.second.tech_rep.isolate.flask
         Isolate.objects.create(flask=flask, isolate_number=2, is_population=True,
-                               freezer_box=self.freezer_box, reseq_date="2020-01-01")
+                               reseq_date="2020-01-01")
 
         response = self.single(self.first, isolate=2, rep=4)
 
@@ -425,26 +422,11 @@ class OrphanPruningTestCase(SampleEditTestCase):
         self.assertTrue(AleId.objects.filter(
             ale_experiment=self.experiment, ale_id=1).exists())
 
-    def test_an_isolate_referenced_as_a_parent_is_kept(self):
-        """parent_isolate is on_delete=DO_NOTHING, so the database would reject the
-        delete. Nothing in the product writes that column, so an error about it would be
-        unexplainable -- keep the row instead."""
-        isolate = self.only.tech_rep.isolate
-        child = self.make_sample(9, 9, 9, 9, name="child").tech_rep.isolate
-        child.parent_isolate = isolate
-        child.save()
-
-        response = self.single(self.only, ale=2)
-
-        self.assertEqual(200, response.status_code, response.content)
-        self.assertTrue(Isolate.objects.filter(pk=isolate.pk).exists())
-
-    # `test_an_isolate_referenced_as_a_starting_strain_is_kept` stood here. It pinned the
-    # orphan guard against `AleId.starting_strain`, a FK to Isolate that no code path in the
-    # suite ever wrote -- so the case it protected could not arise. The column is gone
-    # (`aledb_experiment.0010`) along with the guard clause; `AleExperiment.ancestor` is the
-    # one designation now, and it points at a sample rather than an isolate. The neighbouring
-    # `parent_isolate` half of that guard is still live and still tested above.
+    # Two tests stood here, and both pinned orphan guards against columns nothing wrote.
+    # `AleId.starting_strain` went first: a FK to Isolate no code path ever set, replaced by
+    # `AleExperiment.ancestor`, which points at a sample. `Isolate.parent_isolate` has now
+    # gone the same way -- also never written, so the state its guard protected against could
+    # not arise. Neither the columns nor the guards remain.
 
 
 class BulkSampleEditTestCase(SampleEditTestCase):

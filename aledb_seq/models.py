@@ -16,8 +16,6 @@ class ResequencingExperiment(models.Model):
                                 default=0)
     average_read_length = models.FloatField(blank=True,
                                             default=0)
-    mutations = models.ManyToManyField("Mutation",
-                                       through="ObservedMutation")
     sample_name = models.CharField(max_length=200,
                                 blank=True,
                                 null=True)
@@ -100,9 +98,6 @@ class Mutation(models.Model):
                                       default="")
     gene = models.CharField(max_length=19000, blank=True, null=True)  # TODO: use TextField for this.
     product = models.TextField(default="", null=True)
-    function = models.CharField(max_length=500, default="", null=True)
-    go_process = models.CharField(max_length=300, default="", null=True)
-    go_component = models.CharField(max_length=300, default="", null=True)
     reseq_reference = models.CharField(max_length=200, **blank_field)
     tags = models.CharField(max_length=500, **blank_field)
 
@@ -137,13 +132,6 @@ class Mutation(models.Model):
     # onto the line it emits for gdtools APPLY, and display markup has no place
     # there.
     annotation = models.JSONField(**blank_field)
-
-    # "reference_error" was created to indicate mutations that are generated only because
-    # the reference isn't realistic and not because the organism is actually
-    # different from the original strain. This is why setting this value to
-    # true ignores enables further analysis to ignore these mutations.
-
-    reference_error = models.BooleanField(default=False)
 
     # Verbatim parsed GenomeDiff mutation record (type, id, parent_ids and all
     # type-specific + optional key=value fields), stored losslessly so a mutation
@@ -270,7 +258,6 @@ class ExperimentReference(models.Model):
     # reference is re-established or renamed.
     seq_ids = models.JSONField(default=list)
     total_length = models.BigIntegerField(default=0)
-    created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return "Reference for %s" % (self.ale_experiment_id,)

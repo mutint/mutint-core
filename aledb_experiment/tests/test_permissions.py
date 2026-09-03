@@ -460,7 +460,7 @@ class ExperimentFilterTestCase(TestCase):
     """`can_add_experiment_filter` moved from the view permission to write."""
 
     def setUp(self):
-        from aledb_experiment.models import AleExperiment, Instrument
+        from aledb_experiment.models import AleExperiment
         self.owner = make_user("owner")
         self.reader = make_user("reader")
         self.writer = make_user("writer")
@@ -468,9 +468,8 @@ class ExperimentFilterTestCase(TestCase):
         set_primary_owner(self.project, self.owner)
         grant_project_access(self.project, self.reader, ROLE_READ)
         grant_project_access(self.project, self.writer, ROLE_WRITE)
-        instrument, _ = Instrument.objects.get_or_create(name="i")
         self.experiment = AleExperiment.objects.create(
-            name="E", project=self.project, instrument=instrument, person="owner")
+            name="E", project=self.project, person="owner")
 
     def test_a_reader_may_not_curate(self):
         """Tagging and filtering write shared state that four mutation tables read back."""

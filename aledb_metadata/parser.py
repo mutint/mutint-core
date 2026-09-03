@@ -9,14 +9,8 @@ from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 
 __author__ = 'Denny Gosting, Patrick Phaneuf, Muyao'
 
-DEFAULT_INSTRUMENT_NAME = ""
 DEFAULT_MEDIA_DESCRIPTION = "M9"
-DEFAULT_MEDIA_SUBSTRATE = "glucose"
 DEFAULT_TEMPERATURE = 37
-DEFAULT_VOLUME = 15
-DEFAULT_STIRRING_SPEED = 1100
-DEFAULT_FREEZER_BOX_NAME = "ALE box"
-DEFAULT_FREEZER_BOX_NUMBER = 1
 
 PROJECT = "project"
 OWNER = "owner"
@@ -216,8 +210,6 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
 
             media, created = Media.objects.get_or_create(description=media_description,
                                                          temperature=media_temperature,
-                                                         volume=DEFAULT_VOLUME,
-                                                         stirring_speed=DEFAULT_STIRRING_SPEED,
                                                          carbon_source=carbon_source,
                                                          nitrogen_source=nitrogen_source,
                                                          phosphorus_source=phosphorus_source,

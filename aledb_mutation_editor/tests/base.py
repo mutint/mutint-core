@@ -53,7 +53,7 @@ class EditorTestCase(TestCase):
                                      media=self.context["media"])
         isolate = Isolate.objects.create(flask=flask, isolate_number=isolate_number,
                                          is_population=is_population,
-                                         freezer_box=self.context["freezer_box"])
+)
         replicate = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
         return ResequencingExperiment.objects.create(
             tech_rep=replicate, sample_name="A1 F%d I%d R1" % (flask_number, isolate_number))

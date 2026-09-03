@@ -92,7 +92,7 @@ class SummaryTestCase(TestCase):
             defaults={"media": self.context["media"]})
         isolate_row = Isolate.objects.create(
             flask=flask_row, isolate_number=isolate, is_population=False,
-            freezer_box=self.context["freezer_box"])
+)
         tech_rep = TechnicalReplicate.objects.create(isolate=isolate_row, tech_rep_number=1)
         return ResequencingExperiment.objects.create(
             tech_rep=tech_rep, sample_name="%d-%d-%d-1" % (ale, flask, isolate))

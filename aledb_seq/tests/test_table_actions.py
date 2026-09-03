@@ -42,7 +42,7 @@ class TableActionsTestCase(TestCase):
         ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=context["media"])
         isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,
-                                         freezer_box=context["freezer_box"])
+)
         self.replicate = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
 
     # @ajax(mandatory=True) answers a plain POST with a bare 400 -- it requires the header

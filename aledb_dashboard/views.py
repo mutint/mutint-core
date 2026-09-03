@@ -7,7 +7,6 @@ from aledb_common.util import get_user_context
 from aledb_experiment.models import AleExperiment, Project, live
 from aledb_common.rebuild_registry import ensure_fresh
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
-from aledb_dashboard.timeline_util import get_timeline
 from aledb_common.logger import user_extra, join_extras
 import logging
 
@@ -42,8 +41,7 @@ def dashboard(request):
         context = get_user_context(request.user)
         context.update({"count_dict": general_count_dict,
                         "unique_mutation_counts": unique_mutation_counts,
-                        "observed_mutation_counts": observed_mutation_counts,
-                        "timeline": get_timeline()})
+                        "observed_mutation_counts": observed_mutation_counts})
         logger.info("dashboard performance", extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))
 
         return render(request, DASHBOARD_TEMPLATE, context, content_type="text/html")

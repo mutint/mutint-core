@@ -32,7 +32,7 @@ class OverviewTableTestCase(TestCase):
                                      media=context["media"])
         isolate = Isolate.objects.create(flask=flask, isolate_number=1,
                                          is_population=False,
-                                         freezer_box=context["freezer_box"])
+)
         tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
         self.sample = ResequencingExperiment.objects.create(
             tech_rep=tech_rep, sample_name="1-30000-1-1",

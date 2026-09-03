@@ -59,10 +59,7 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
             mutation.mutation_type,
             mutation.sequence_change,
             mutation.gene,
-            "" if mutation.function is None else mutation.function,
             "" if mutation.product is None else mutation.product,
-            "" if mutation.go_process is None else mutation.go_process,
-            "" if mutation.go_component is None else mutation.go_component,
             mutation.id,
             strip_tags(mutation.protein_change)] + _strip_tags_from_list(
         table_entry_list[mutation_index_dict[mutation.id]])

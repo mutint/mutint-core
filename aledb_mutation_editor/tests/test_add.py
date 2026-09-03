@@ -227,7 +227,7 @@ class AddTestCase(EditorTestCase):
         ale = AleId.objects.create(ale_experiment=other, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=self.context["media"])
         isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,
-                                         freezer_box=self.context["freezer_box"])
+)
         replicate = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
         stranger = ResequencingExperiment.objects.create(tech_rep=replicate)
 

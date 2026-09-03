@@ -95,7 +95,7 @@ def coordinate_str(coordinate):
     return "A%s F%s I%s R%s" % coordinate
 
 
-def resolve_tech_rep(experiment, coordinate, *, media, freezer_box,
+def resolve_tech_rep(experiment, coordinate, *, media,
                      is_population, species="", strain="", description=""):
     """The TechnicalReplicate at `coordinate` within `experiment`, creating what is missing.
 
@@ -131,8 +131,7 @@ def resolve_tech_rep(experiment, coordinate, *, media, freezer_box,
     if isolate_row is None:
         isolate_row = Isolate.objects.create(
             flask=flask_row, isolate_number=isolate_number,
-            is_population=is_population, freezer_box=freezer_box,
-            description=description)
+            is_population=is_population, description=description)
 
     tech_rep, created = TechnicalReplicate.objects.get_or_create(
         isolate=isolate_row, tech_rep_number=rep_number)
@@ -153,10 +152,8 @@ def prune_orphans(tech_reps):
     had just been filled again -- taking its samples with it, since every downward FK
     cascades.
 
-    `Isolate` gets one extra guard. `Isolate.parent_isolate` is `on_delete=DO_NOTHING`,
-    which means Django issues the DELETE and lets the database reject it. Nothing in the
-    suite ever writes that column, so an error about it would be unexplainable to whoever
-    hit it: keep the row and log instead.
+    `Isolate.parent_isolate` was guarded here, and both are gone: nothing in the suite ever
+    wrote that column, so the guard protected a state no import or edit could produce.
 
     `AleId.starting_strain` was guarded here too. It is gone -- it was a second, never
     written spelling of the ancestor, which is now one designation on the experiment; see
@@ -172,10 +169,6 @@ def prune_orphans(tech_reps):
         tech_rep.delete()
 
         if isolate.technicalreplicate_set.exists():
-            continue
-        if Isolate.objects.filter(parent_isolate=isolate).exists():
-            logger.info("keeping empty isolate %s: still referenced as a parent",
-                        isolate.pk)
             continue
         isolate.delete()
 
@@ -449,7 +442,7 @@ def _write(instance, mapping, descriptive, always):
 
 
 @transaction.atomic
-def apply_rows(experiment, parsed, *, media, freezer_box):
+def apply_rows(experiment, parsed, *, media):
     """Phase three: write everything, or nothing.
 
     All-or-nothing because a bulk renumber is usually a permutation, and half a swap is a
@@ -471,19 +464,19 @@ def apply_rows(experiment, parsed, *, media, freezer_box):
             source_ale = source_flask.ale_id if source_flask else None
 
             # A renumber re-labels a sample; it does not move it to different growth
-            # conditions or a different freezer. Inheriting these is the only answer that
-            # does not silently reset real data -- the placeholders are the fallback for a
-            # sample with nothing to inherit from.
+            # conditions. Inheriting these is the only answer that does not silently reset
+            # real data -- the placeholder is the fallback for a sample with nothing to
+            # inherit from. (There was a freezer box here too; it was a required FK to a
+            # singleton row nothing displayed, and it is gone.)
             tech_rep, created = resolve_tech_rep(
                 experiment, coordinate,
                 media=source_flask.media if source_flask else media,
-                freezer_box=source_isolate.freezer_box if source_isolate else freezer_box,
                 is_population=descriptive["is_population"],
                 species=source_ale.species if source_ale else "",
                 strain=source_ale.strain if source_ale else "",
                 description=source_isolate.description if source_isolate else "")
             if created and source_tech_rep is not None:
-                # Same rule as media and the freezer box: a renumber re-labels a sample,
+                # Same rule as media: a renumber re-labels a sample,
                 # so what was written about this run travels with it onto a row that did
                 # not exist a moment ago. An existing target keeps its own text -- it
                 # describes other samples too.

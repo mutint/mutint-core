@@ -51,17 +51,6 @@ def live(queryset):
     return queryset.filter(deleted_at__isnull=True)
 
 
-class Instrument(models.Model):
-
-    name = models.CharField(max_length=200)
-
-    def __unicode__(self):
-        return self.name
-
-    def __str__(self):
-        return self.name
-
-
 class Project(SoftDeleteMixin):
     name = models.CharField(max_length=50)
     # PROTECT, not DO_NOTHING: this column is NOT NULL and carries a real FK, so deleting a
@@ -100,7 +89,6 @@ class AleExperiment(SoftDeleteMixin):
     name = models.CharField(max_length=200)
     person = models.CharField(max_length=200)
     date = models.DateTimeField(auto_now_add=True)
-    instrument = models.ForeignKey(Instrument, on_delete=models.CASCADE)
     notes = models.TextField(**blank_field)
     project = models.ForeignKey(Project, default=None, **blank_field, on_delete=models.DO_NOTHING)
     doi = models.TextField(**blank_field)
@@ -290,14 +278,7 @@ class AleId(models.Model):
 class Media(models.Model):
     temperature = models.CharField(max_length=200,default='37',
                                     help_text="Temperature in Celcius")
-    volume = models.FloatField(default=25,
-                               help_text="Volume of culture in each flask (mL)")
-    stirring_speed = models.FloatField(default=1123,
-                                       help_text="RPM")
     description = models.CharField(max_length=200)
-    substrate = models.CharField(max_length=200,
-                                 default=None,
-                                 **blank_field)
     carbon_source = models.CharField(max_length=200,
                                  default=None,
                                  **blank_field)
@@ -316,17 +297,9 @@ class Media(models.Model):
     supplement = models.CharField(max_length=200,
                                      default=None,
                                      **blank_field)
-    other = models.TextField(**blank_field)
 
     # TODO: figure out components
     # maybe carbon source, etc.? or track individual chemicals
-    def __unicode__(self):
-        return "%s (%.1f C, %.1f mL, %.1f RPM)" % \
-               (self.description,
-                self.temperature,
-                self.volume,
-                self.stirring_speed)
-
     def experiments(self):
         return Flask.objects.filter(project=self).values("ale_id").values("ale_experiment").distinct()
 
@@ -336,36 +309,10 @@ class Media(models.Model):
         verbose_name_plural = "Media"
 
 
-class FreezerBox(models.Model):
-
-    name = models.CharField(max_length=500,
-                            help_text="A unique name that identifies the box from other boxes")
-
-    number = models.IntegerField(default=1,
-                                 help_text="Start with 1. If another box with the same name is needed label it with 2, 3 etc... Make sure this box number appears on the label")
-
-    location = models.CharField(max_length=500,
-                                null=True,
-                                default="None",
-                                help_text="Where is the box located")
-
-    location_last_updated = models.DateField(auto_now=True,
-                                             null=True,
-                                             help_text="Date when location was last updated")
-
-    def __unicode__(self):
-        return "Box #%i - %s" % (self.number,
-                                 self.name)
-
-    class Meta:
-        verbose_name_plural = "Freezer Boxes"
-
-
 class Flask(models.Model):
     ale_id = models.ForeignKey(AleId, on_delete=models.CASCADE)
     flask_number = models.IntegerField(**blank_field)
     media = models.ForeignKey(Media, on_delete=models.DO_NOTHING)
-    comments = models.CharField(max_length=200, **blank_field)
 
     def __unicode__(self):
         if self.ale_id.description is not None:
@@ -393,34 +340,14 @@ class Isolate(models.Model):
     #: Text, not a number -- see `AleId`. A clone is named `763A` as often as `763`, and two
     #: clones from one flask differ only in that trailer. Unique within its flask.
     isolate_number = models.CharField(max_length=100)
-    parent_isolate = models.ForeignKey("Isolate", on_delete=models.DO_NOTHING, **blank_field)
     flask = models.ForeignKey(Flask, on_delete=models.CASCADE)
     is_population = models.BooleanField()
-    freezer_box = models.ForeignKey(FreezerBox, on_delete=models.DO_NOTHING)
     description = models.CharField(max_length=300, **blank_field)
-    person = models.CharField(max_length=200, **blank_field)
     reseq_reference = models.CharField(max_length=200, **blank_field)
     reseq_date = models.CharField(max_length=200, **blank_field)
     breseq_version = models.CharField(max_length=200, **blank_field)
     library_prep = models.CharField(max_length=200, **blank_field)
 
-
-    def __unicode__(self):
-        if self.flask.ale_id.description is not None:
-            if self.flask.ale_id.description.lower() == ('Not from ALE').lower():
-                return self.description
-            else:
-                population_or_clonal = "POP" if self.is_population else "COL"
-                parent = self.parent_isolate if self.parent_isolate else self.flask
-                return "#%s %s < %s" % (self.isolate_number,
-                                        population_or_clonal,
-                                        parent)
-        else:
-            population_or_clonal = "POP" if self.is_population else "COL"
-            parent = self.parent_isolate if self.parent_isolate else self.flask
-            return "#%s %s < %s" % (self.isolate_number,
-                                    population_or_clonal,
-                                    parent)
 
 
 class TechnicalReplicate(models.Model):
@@ -428,15 +355,6 @@ class TechnicalReplicate(models.Model):
     isolate = models.ForeignKey(Isolate, on_delete=models.CASCADE)
     tags = models.CharField(max_length=500, **blank_field)
     description = models.CharField(max_length=500, **blank_field)
-
-
-# TODO: what are these integers referring to. If ALE Experiment, model should be moved to ale.models and use foreign keys.
-class RecentExperiments(models.Model):
-    first = models.IntegerField(null=True)
-    second = models.IntegerField(null=True)
-    third = models.IntegerField(null=True)
-    fourth = models.IntegerField(null=True)
-    fifth = models.IntegerField(null=True)
 
 
 # --- sharing: groups and project access ---------------------------------------------------

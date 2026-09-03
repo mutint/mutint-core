@@ -184,13 +184,8 @@ def experiment_create(request):
 
 def _create_experiment(project, name, user):
     """Experiments are identified by primary key, so a duplicate name is allowed."""
-    import aledb_metadata.parser as metadata_defaults
-    from aledb_experiment.models import Instrument
-
-    instrument, _ = Instrument.objects.get_or_create(
-        name=metadata_defaults.DEFAULT_INSTRUMENT_NAME)
     return AleExperiment.objects.create(
-        name=name, project=project, instrument=instrument, person=user.get_username())
+        name=name, project=project, person=user.get_username())
 
 
 #: The dashboard's installation-wide totals, which a soft delete changes and nothing else

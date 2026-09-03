@@ -96,10 +96,7 @@ def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, expe
             table_row.append(mutation.mutation_type)
             table_row.append(mutation.sequence_change)
             table_row.append(get_gene_table_entry(mutation))
-            table_row.append("" if mutation.function is None else mutation.function)
             table_row.append("" if mutation.product is None else mutation.product)
-            table_row.append("" if mutation.go_process is None else mutation.go_process)
-            table_row.append("" if mutation.go_component is None else mutation.go_component)
             table_row.append(mutation.id)
             if is_gene_table:
                 if evidence.search(mutation.protein_change):

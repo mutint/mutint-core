@@ -13,7 +13,7 @@ not, because what they protect against is not backend-specific:
 
 `import_lock` earns its place more clearly on PostgreSQL than it did on SQLite, and the
 reason is worth keeping in view: it is the only thing making the suite's unconstrained
-`get_or_create` calls -- Instrument, AleExperiment, Media, FreezerBox, Isolate -- and
+`get_or_create` calls -- AleExperiment, Media, Isolate -- and
 `_next_isolate_number`'s unlocked read-then-write unreachable by two importers at once.
 SQLite's single-writer lock used to hide that; MVCC does not. Do not remove it on the
 grounds that its original SQLite justification has expired.

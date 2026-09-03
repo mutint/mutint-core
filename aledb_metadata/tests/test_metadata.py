@@ -1,13 +1,11 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from aledb_experiment.models import AleExperiment,\
-    Instrument,\
     Isolate,\
     TechnicalReplicate,\
     Media,\
     Flask,\
     AleId,\
-    FreezerBox,\
     Project
 from aledb_metadata.parser import parse_metadata_post_experiment_upload, _get_media_supplement_description
 from datetime import datetime
@@ -33,9 +31,7 @@ class TestParser(TestCase):
                                         first_name="Troy", last_name="Sandberg", email="email@email.com",
                                         is_active=True, is_staff=True, date_joined=datetime.now())
         self.project = Project.objects.create(name="SSW Glu Ac", user = self.user)
-        self.instrument = Instrument.objects.create()
-        self.freezerbox = FreezerBox.objects.create()
-        self.ale_exp = AleExperiment.objects.create(instrument=self.instrument)
+        self.ale_exp = AleExperiment.objects.create()
 
     def test_metadata_change(self):
         media = Media.objects.create(carbon_source="nothing")
@@ -46,8 +42,7 @@ class TestParser(TestCase):
                                      flask_number=90)
         isolate = Isolate.objects.create(flask=flask,
                                          isolate_number=0,
-                                         is_population=False,
-                                         freezer_box=self.freezerbox)
+                                         is_population=False)
         TechnicalReplicate.objects.create(isolate=isolate,
                                           tech_rep_number=1)
 
@@ -93,8 +88,7 @@ class TestParser(TestCase):
                                      flask_number=90)
         isolate = Isolate.objects.create(flask=flask,
                                          isolate_number=0,
-                                         is_population=False,
-                                         freezer_box=self.freezerbox)
+                                         is_population=False)
         TechnicalReplicate.objects.create(isolate=isolate,
                                           tech_rep_number=1)
         TechnicalReplicate.objects.create(isolate=isolate,
@@ -120,8 +114,7 @@ class TestParser(TestCase):
                                      flask_number=90)
         isolate = Isolate.objects.create(flask=flask,
                                          isolate_number=0,
-                                         is_population=False,
-                                         freezer_box=self.freezerbox)
+                                         is_population=False)
         TechnicalReplicate.objects.create(isolate=isolate,
                                           tech_rep_number=1)
         TechnicalReplicate.objects.create(isolate=isolate,
@@ -150,8 +143,7 @@ class TestParser(TestCase):
                                      flask_number=90)
         isolate = Isolate.objects.create(flask=flask,
                                          isolate_number=0,
-                                         is_population=False,
-                                         freezer_box=self.freezerbox)
+                                         is_population=False)
         TechnicalReplicate.objects.create(isolate=isolate,
                                           tech_rep_number=1)
         TechnicalReplicate.objects.create(isolate=isolate,

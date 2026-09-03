@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User, Group
-from aledb_experiment.models import Project, AleExperiment, RecentExperiments, AleId, live
+from aledb_experiment.models import Project, AleExperiment, AleId, live
 from django.core.exceptions import ObjectDoesNotExist
 from aledb_experiment.permissions import accessible_projects
 

@@ -7,7 +7,6 @@ import aledb_seq.views.common
 from aledb_import.gdparse.gdparse import gdparse
 from aledb_common.util import _find_between
 import aledb_metadata.parser
-from aledb_dashboard.timeline_util import create_event
 from aledb_dashboard.util import rebuild_dashboard_data
 import logging
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
@@ -27,17 +26,6 @@ METADATA_RELATIVE_PATH = 'metadata/'
 REF_RELATIVE_PATH = 'ref/'
 
 logger = logging.getLogger(__name__)
-
-
-def integrate_metadata(ale_exp_path, ref_file_name, ale_exp_primary_key):
-    """
-    Executed from Django ipython shell
-    """
-    metadata_path = ale_exp_path + METADATA_RELATIVE_PATH
-    aledb_metadata.parser.parse_metadata_post_experiment_upload(metadata_path, ale_exp_primary_key)
-
-    ref_file_path = ale_exp_path + REF_RELATIVE_PATH + ref_file_name
-    create_functional_annotations(ref_file_path, ale_exp_primary_key)
 
 
 def remove_flask(flask_primary_key):
@@ -70,10 +58,6 @@ def delete_ale_experiments(ale_experiment_primary_key_list):
         # experiment's -- so a cascade could not reach it, and `get()` raised on an experiment
         # that had never been post-processed, leaving the delete half-finished. Nothing
         # derived from this experiment outlives it now, because nothing derived is stored.
-        create_event(title="Experiment Deleted",
-                     message=message,
-                     icon='<i class="fa fa-times" aria-hidden="true"></i>',
-                     color="danger")
         print(message)
     _delete_all_orphaned_mutations()
     print("deleted orphaned mutations")
@@ -222,117 +206,4 @@ def try_creating_project(project, owner_name, is_pub=False):
                            status="In progress", is_public=is_pub)
     set_primary_owner(new_project, owner)
     return new_project
-
-
-def create_functional_annotations(genbank_path, ale_experiment_id):
-    gene_dict = _parse_genbank(genbank_path)
-
-    observed_mutations = aledb_seq.models.ObservedMutation.objects.filter(
-        sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment=ale_experiment_id)
-
-    for observed_mutation in observed_mutations:
-
-        mutation = observed_mutation.mutation
-        mutation_genes = ""
-        if mutation.gene is not None:
-            mutation_genes = mutation.gene.replace("[", "").replace("]", "").replace(u"\u2013", "/").replace("-",
-                                                                                                             "/").split(
-                "/")
-
-        gene_info_start = {"product": "", "function": "", "go_process": "", "go_component": ""}
-
-        gene_info = gene_info_start
-
-        for gene in mutation_genes:
-
-            gene_info = gene_info_start
-
-            try:
-                gene_info['function'] += "(" + gene_dict[gene]['function'] + ")"
-
-                gene_info['product'] += "(" + gene_dict[gene]['product'] + ")"
-
-                gene_info['go_component'] += "(" + gene_dict[gene]['go_component'] + ")"
-
-                gene_info['go_process'] += "(" + gene_dict[gene]['go_process'] + ")"
-
-            except Exception as e:
-                # print(e, " Does not exits in ", os.path.basename(genbank_path))
-                pass
-
-        mutation.function = gene_info['function']
-
-        mutation.product = gene_info['product']
-
-        mutation.go_component = gene_info['go_component']
-
-        mutation.go_process = gene_info['go_process']
-
-        mutation.save()
-
-    return
-
-
-def _parse_genbank(genbank_path):
-    gene_info_start = {"product": "", "function": "", "go_process": "", "go_component": ""}
-
-    gene_dict = {}
-
-    current_gene = ""
-
-    with open(genbank_path, "rt") as genbank:
-
-        record = False
-
-        gene_info = gene_info_start
-
-        for line in genbank:
-
-            line = line.strip()
-
-            if line.startswith("CDS ") or line.startswith("tRNA ") or line.startswith("rRNA"):
-
-                record = True
-
-            elif line.startswith("gene ") and current_gene != "":
-
-                gene_dict[current_gene] = dict(gene_info)
-
-                record = False
-
-                gene_info = gene_info_start
-
-            elif line.startswith("ORIGIN"):
-
-                if record is True:
-                    gene_dict[current_gene] = gene_info
-
-                break
-
-            else:
-
-                if record is not False:
-
-                    if line.startswith("/gene="):
-
-                        current_gene = _find_between(line, "\"", "\"")
-
-                    elif line.startswith("/product="):
-
-                        gene_info['product'] = _find_between(line, "\"", "\"")
-
-                    elif line.startswith("/function="):
-
-                        gene_info['function'] = _find_between(line, "\"", "\"")
-
-                    elif line.startswith("/GO_process="):
-
-                        gene_info['go_process'] = _find_between(line, "\"", "\"")
-
-                    elif line.startswith("/GO_component="):
-
-                        gene_info['go_component'] = _find_between(line, "\"", "\"")
-
-    return gene_dict
-
 

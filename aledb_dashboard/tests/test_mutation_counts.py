@@ -25,7 +25,7 @@ from django.test import TestCase
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts
 from aledb_dashboard.util import rebuild_mutation_counts
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, FreezerBox, Instrument, Isolate, Media,
+    AleExperiment, AleId, Flask, Isolate, Media,
     TechnicalReplicate,
 )
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
@@ -35,9 +35,8 @@ class MutationCountsTestCase(TestCase):
 
     def setUp(self):
         self.experiment = AleExperiment.objects.create(
-            instrument=Instrument.objects.create())
+)
         self.media = Media.objects.create()
-        self.freezer_box = FreezerBox.objects.create()
         self.sample = self._sample(ale=1)
         self.other_sample = self._sample(ale=2)
 
@@ -45,7 +44,7 @@ class MutationCountsTestCase(TestCase):
         ale_row = AleId.objects.create(ale_experiment=self.experiment, ale_id=ale)
         flask = Flask.objects.create(ale_id=ale_row, flask_number=100, media=self.media)
         isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,
-                                         freezer_box=self.freezer_box)
+)
         tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
         return ResequencingExperiment.objects.create(tech_rep=tech_rep)
 

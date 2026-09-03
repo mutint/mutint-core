@@ -147,14 +147,12 @@ def _save(experiment, rows):
     structural = rows_are_structural(parsed)
 
     from aledb_import.gd_import import prepare_experiment_by_id
-    # Once per request, not once per row: it get_or_creates the placeholder Media and
-    # FreezerBox, and it is only ever a fallback for a sample with nothing to inherit.
+    # Once per request, not once per row: it get_or_creates the placeholder Media, and it
+    # is only ever a fallback for a sample with nothing to inherit.
     placeholders = prepare_experiment_by_id(experiment.ale_id)
 
     try:
-        touched = apply_rows(experiment, parsed,
-                             media=placeholders["media"],
-                             freezer_box=placeholders["freezer_box"])
+        touched = apply_rows(experiment, parsed, media=placeholders["media"])
     except IntegrityError:
         logger.warning("concurrent edit on experiment %s", experiment.ale_id)
         raise SampleEditError(
