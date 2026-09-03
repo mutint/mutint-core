@@ -1,14 +1,7 @@
 Django>=4.2,<5.0
-asgiref==3.7.2
-beautifulsoup4==4.12.2
-coverage==4.5.3
-cryptography==41.0.4
-django-bootstrap3==23.4
-django-bootstrap4==23.2
-django-debug-toolbar==4.2.0
-django-filter==23.2
-django-tables2==2.6.0
-djangoajax==3.3
+beautifulsoup4>=4.12.3
+coverage>=7.6
+django-debug-toolbar>=4.4,<5
 # GenomeDiff (.gd) parser/writer used by the drag-and-drop mutation import.
 # Pinned to a git SHA, not a PyPI version: only 0.4.1 was ever published there, and
 # what this depends on landed after it -- the INT mutation type, the ordered
@@ -31,14 +24,15 @@ genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72
 # GenBank/FASTA parsing for uploaded reference genomes (aledb_import/reference.py).
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.
-biopython>=1.81
-jsonfield==3.1.0
-jsonschema==4.19.1
-lxml==4.9.3
-numpy==1.25.2
-oauthlib==3.2.2
-packaging==23.2
-pandas==2.1.0
+biopython>=1.84
+jsonfield>=3.1
+jsonschema>=4.23
+# BeautifulSoup's parser, named explicitly at aledb_import/annotate/display.py:421 and in
+# its tests. Nothing imports lxml, so it reads like dead weight and is not: bs4 falls back
+# to html.parser when it is absent, which parses breseq's generated cells differently.
+lxml>=5.3
+numpy>=1.26
+pandas>=2.2
 # Reads the stored BAM in aledb_import/coverage.py, to weight each alignment by 1/X1 --
 # breseq's redundancy tag, the number of places a read mapped equally well. Without that
 # weighting a read matching ten IS copies is counted once at each and repeats dominate the
@@ -52,11 +46,11 @@ pandas==2.1.0
 #
 # It also writes BAMs, which is what makes the tagged test fixtures possible: there is no
 # samtools in env/tools, so before this there was no way to produce one.
-pysam==0.24.0
-python-dateutil==2.8.2
-requests==2.31.0
-six==1.11.0
-sqlparse==0.4.4
-urllib3==2.0.6
-xlrd==1.1.0
-zipstream-ng==1.8.0
+pysam>=0.24
+requests>=2.32
+# pandas reads .xls through xlrd; `./aledb load_projects` is the one caller
+# (aledb_experiment/management/commands/load_projects.py:19, pd.read_excel). Another
+# import with no import statement behind it.
+xlrd>=2.0.1
+openpyxl>=3.1
+zipstream-ng>=1.8
