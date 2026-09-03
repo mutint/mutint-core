@@ -1,4 +1,5 @@
 import re
+from aledb_common.constants import SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED
 from aledb_seq.models import UnassignedMissingCoverageEvidence
 from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
@@ -84,9 +85,8 @@ def get_reseq_experiment_info_list(reseq_experiments):
         species = reseq.tech_rep.isolate.flask.ale_id.species
         strain = reseq.tech_rep.isolate.flask.ale_id.strain
         knockouts = reseq.tech_rep.isolate.flask.ale_id.description
-        clonal_or_population = "clonal"
-        if reseq.tech_rep.isolate.is_population:
-            clonal_or_population = "population"
+        clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.tech_rep.isolate.is_population
+                                else SAMPLE_TYPE_CLONAL)
         media_temperature = reseq.tech_rep.isolate.flask.media.temperature
         media_description = reseq.tech_rep.isolate.flask.media.description
         # carbon_source, not substrate: the metadata parser stopped writing `substrate`

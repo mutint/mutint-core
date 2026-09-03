@@ -1,7 +1,10 @@
 import aledb_experiment.models
 from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_view_project
-from aledb_common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID, REQUEST_SAMPLE_TYPE
+from aledb_common.constants import (REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID,
+                                    REQUEST_ALL, REQUEST_SAMPLE_TYPE, SAMPLE_TYPES)
+import logging
+
 from aledb_common.logger import user_extra
 from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseBadRequest
 from django.template import loader
@@ -22,6 +25,7 @@ __author__ = 'Patrick Phaneuf'
 from aledb_seq.functional_change import (  # noqa: F401  (re-export)
     FUNCTIONAL_CHANGE_TYPE_LIST, UNANNOTATED, functional_change_bucket,
 )
+from aledb_experiment import paths
 
 MUTATION_TYPE_LIST = ['SNP', 'SUB', 'DEL', 'INS', 'MOB', 'AMP', 'CON', 'INV', UNANNOTATED]
 
@@ -61,7 +65,7 @@ def get_aleid_ale_id_list(experiment_id):
     # database's own order puts ALE 10 above ALE 2 -- and this dropdown had no `order_by` at
     # all, so it was whatever the join happened to produce.
     return (aledb_experiment.models.AleId.objects
-            .filter(flask__isolate__technicalreplicate__resequencingexperiment__in=visible)
+            .filter(**{paths.down_chain("ale") + "__in": visible})
             .distinct()
             .order_by(natural("ale_id"))
             .values_list("ale_id", flat=True))
@@ -79,10 +83,27 @@ def get_ale_id(request):
         return None
     return ale_id
 
+logger = logging.getLogger(__name__)
+
+
 def get_sample_type(request):
+    """The `?sample_type=` filter, or None for "all".
+
+    **An unrecognised value answers None rather than passing through**, and that is a fix
+    rather than politeness. `get_ordered_reseq_queryset` used to read anything that was not
+    the population token as clonal, so `?sample_type=anything` quietly showed half the
+    samples with the picker still reading "All sample types" -- a page that is subset and
+    says it is not. Answering None makes the rows and the control agree.
+
+    It matters more than it did: the accepted values are about to change, so every existing
+    link carrying the old one arrives here.
+    """
     sample_type = request.GET.get(REQUEST_SAMPLE_TYPE)
-    if sample_type == "all":
-        sample_type = None
+    if sample_type in (None, "", REQUEST_ALL):
+        return None
+    if sample_type not in SAMPLE_TYPES:
+        logger.warning("ignoring unrecognised sample_type %r", sample_type)
+        return None
     return sample_type
 
 def get_ale_experiment(request):

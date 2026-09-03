@@ -141,9 +141,9 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
             try:
                 tech_rep = TechnicalReplicate.objects.get(
                     tech_rep_number=metadata_dict[TECH_REP_NUMBER],
-                    isolate__isolate_number=metadata_dict[ISOLATE_NUMBER],
-                    isolate__flask__flask_number=metadata_dict[FLASK_NUMBER],
-                    **{paths.to_ale_label(root="tech_rep"): metadata_dict[ALE_NUMBER],
+                    **{paths.to_isolate_label(root="tech_rep"): metadata_dict[ISOLATE_NUMBER],
+                       paths.to_flask_ordinal(root="tech_rep"): metadata_dict[FLASK_NUMBER],
+                       paths.to_ale_label(root="tech_rep"): metadata_dict[ALE_NUMBER],
                        paths.to_experiment_id(root="tech_rep"): ale_experiment_primary_key})
             except Exception as e:
                 print("Error for " + metadata_dict[ALE_NUMBER] + "-" + metadata_dict[FLASK_NUMBER] + "-" + metadata_dict[ISOLATE_NUMBER] + '-' + metadata_dict[TECH_REP_NUMBER] + ": ", e)

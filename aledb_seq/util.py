@@ -3,6 +3,7 @@ import aledb_seq.models
 from aledb_common.util import is_int
 from aledb_experiment.ordering import sample_order, sample_sort_key
 from aledb_filter.util import filter_observed_mutations
+from aledb_common.constants import SAMPLE_TYPE_MIXED
 from aledb_experiment import paths
 
 HTML_ECOCYC = """<a href = "https://ecocyc.org/ECOLI/substring-search?type=GENE&object={gene}">{gene}</a>"""
@@ -93,10 +94,12 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
     if ale_id is not None and ale_id != "":
         reseq_qryset = reseq_qryset.filter(**{paths.to_ale_label(): ale_id})
     if sample_type:
-        flag = 0
-        if sample_type == 'population':
-            flag = 1
-        reseq_qryset = reseq_qryset.filter(tech_rep__isolate__is_population=flag)
+        # Compared against the constant, not the literal: `get_sample_type` has already
+        # refused anything that is not one of them, so this is a two-way choice rather than
+        # "population, or else clonal" -- which is what silently subset the page before.
+        wanted = sample_type == SAMPLE_TYPE_MIXED
+        reseq_qryset = reseq_qryset.filter(
+            **{paths.to_isolate(field="is_population"): wanted})
     if not include_ancestor:
         from aledb_experiment.ancestor import exclude_ancestor_samples
         reseq_qryset = exclude_ancestor_samples(reseq_qryset, ale_experiment_id)
@@ -129,9 +132,11 @@ def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, req
         # case-sensitive Hide Tag would stop hiding -- showing more rows than asked for, with
         # nothing to say it had failed.
         if tag[0] == 'Hide Tag':
-            reseq_queryset = reseq_queryset.exclude(tech_rep__tags__icontains=tag[1].replace(' ', ''))
+            reseq_queryset = reseq_queryset.exclude(
+                **{paths.to_replicate(field="tags__icontains"): tag[1].replace(" ", "")})
         elif tag[0] == 'Show Tag':
-            reseq_queryset = reseq_queryset.filter(tech_rep__tags__icontains=tag[1].replace(' ', ''))
+            reseq_queryset = reseq_queryset.filter(
+                **{paths.to_replicate(field="tags__icontains"): tag[1].replace(" ", "")})
     reseq_ordered_dict = collections.OrderedDict((reseq.id, reseq) for reseq in reseq_queryset)
     return reseq_ordered_dict
 

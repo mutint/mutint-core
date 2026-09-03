@@ -59,8 +59,8 @@ def sample_order(prefix=""):
         F(paths.to_experiment(prefix, "name")),
         natural(paths.to_ale_label(prefix)),
         F(paths.to_flask_ordinal(prefix)).asc(nulls_first=True),
-        natural(paths.join(prefix, "tech_rep__isolate__isolate_number")),
-        F(paths.join(prefix, "tech_rep__tech_rep_number")),
+        natural(paths.to_isolate_label(prefix)),
+        F(paths.to_replicate_ordinal(prefix)),
     )
 
 

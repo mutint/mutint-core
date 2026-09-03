@@ -5,6 +5,14 @@ REQUEST_MUTATION_ID = "mutation_id"
 REQUEST_ALE_EXPERIMENT_ID = "ale_experiment_id"
 REQUEST_ALE_ID = "ale_no"
 REQUEST_SAMPLE_TYPE = "sample_type"
+
+#: What `?sample_type=` accepts. Routed through constants because one of these *values* is
+#: about to become a *parameter name*: `population` currently means "a mixed sample" here and
+#: is also what `?ale_no=` becomes. The value below changes to "mixed" in one edit, and
+#: nothing else has to know.
+SAMPLE_TYPE_CLONAL = "clonal"
+SAMPLE_TYPE_MIXED = "population"
+SAMPLE_TYPES = (SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED)
 # Was 3. The table's first column used to hold a close icon that removed the row from the
 # client-side DataTable and nothing else -- it came back on the next reload, which is the same
 # confusion `aledb_mutation_editor` exists to end. Dropping it shifts every column left by one.

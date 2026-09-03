@@ -18,6 +18,7 @@ from aledb_common import example_registry
 from aledb_common.example_registry import (
     get_example_dataset, get_example_datasets, register_example_dataset,
 )
+from aledb_experiment import paths
 
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
                         "aledb_import", "annotate", "tests", "fixtures")
@@ -173,7 +174,8 @@ class LoadExampleCommandTestCase(TestCase):
         experiment = AleExperiment.objects.get(name="test-example")
         self.assertEqual(
             {100, 200},
-            {f.flask_number for f in Flask.objects.filter(ale_id__ale_experiment=experiment)})
+            {f.flask_number for f in Flask.objects.filter(
+                **{paths.to_experiment(root="flask"): experiment})})
         self.assertTrue(Mutation.objects.filter(ale_experiment=experiment).exists())
 
     def test_prose_beside_the_data_is_not_treated_as_a_failed_import(self):

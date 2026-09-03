@@ -77,6 +77,28 @@ ALE_LABEL = "ale_id"
 #: `Flask`'s ordinal. Labelled "Time point" everywhere a person can see it.
 FLASK_ORDINAL = "flask_number"
 
+#: `Isolate`'s label within its flask.
+ISOLATE_LABEL = "isolate_number"
+
+#: `TechnicalReplicate`'s ordinal.
+REPLICATE_ORDINAL = "tech_rep_number"
+
+
+#: The same chain read **downward**. Django spells a reverse relation with the lowercased
+#: model name, because none of these declares a `related_name` -- so it is not simply
+#: `SEGMENTS` reversed, and that is exactly why three files hand-wrote it independently
+#: (`aledb_dashboard/util.py`, `aledb_seq/views/common.py`, `aledb-phylogeny/selection.py`)
+#: while every upward traversal in the suite came from here.
+DOWN_SEGMENTS = ("aleid", "flask", "isolate", "technicalreplicate", "resequencingexperiment")
+
+#: Where a downward traversal starts, as a position in DOWN_SEGMENTS.
+DOWN_ROOTS = {"experiment": 0, "ale": 1, "flask": 2, "isolate": 3, "replicate": 4}
+
+
+def down_chain(root="ale", upto="resequencingexperiment"):
+    """The reverse lookup path from `root` down to and including `upto`."""
+    return "__".join(DOWN_SEGMENTS[DOWN_ROOTS[root]:DOWN_SEGMENTS.index(upto) + 1])
+
 
 def join(*steps):
     """Lookup path from `steps`, skipping empty ones so a prefix may be omitted.
@@ -88,6 +110,18 @@ def join(*steps):
     and removes a failure that says nothing about its cause.
     """
     return "__".join(step.strip("_") for step in steps if step and step.strip("_"))
+
+
+def to_replicate(prefix="", field="", root="sample"):
+    """The technical replicate. Disappears entirely when the layer is collapsed into the
+    sample -- routing its two live callers through here is what makes that one edit."""
+    return join(prefix, chain(root, "tech_rep"), field)
+
+
+def to_isolate(prefix="", field="", root="sample"):
+    """The isolate. Becomes `to_sample()` when `Isolate` is renamed -- today "sample" already
+    means a `ResequencingExperiment`, which is why it cannot be called that yet."""
+    return join(prefix, chain(root, "isolate"), field)
 
 
 def to_flask(prefix="", field="", root="sample"):
@@ -114,3 +148,11 @@ def to_ale_label(prefix="", root="sample"):
 
 def to_flask_ordinal(prefix="", root="sample"):
     return join(prefix, chain(root, "flask"), FLASK_ORDINAL)
+
+
+def to_isolate_label(prefix="", root="sample"):
+    return join(prefix, chain(root, "isolate"), ISOLATE_LABEL)
+
+
+def to_replicate_ordinal(prefix="", root="sample"):
+    return join(prefix, chain(root, "tech_rep"), REPLICATE_ORDINAL)

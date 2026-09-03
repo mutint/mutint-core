@@ -40,3 +40,26 @@ def nav_items(request):
         'nav_main_items': get_nav_items(MAIN_SECTION),
         'nav_experiment_items': get_nav_items(EXPERIMENT_SECTION),
     }
+
+
+def request_vocabulary(request):
+    """The query-string names and values templates have to spell out.
+
+    A template writes `name="ale_no"` and `value="population"` as literals, which is fine
+    until one of those words changes meaning. Both are about to: `population` is what
+    `?ale_no=` gets renamed to *and* what today's mixed-sample token is called, so for one
+    commit the same word means two different things. A literal in a template is the kind of
+    site a Python grep does not see and a rename tool cannot reach.
+
+    So the names live in `constants.py` and arrive here. Views need not pass them, and the
+    rename is an edit of one module rather than an audit of every form.
+    """
+    from aledb_common import constants
+    return {
+        'PARAM_EXPERIMENT': constants.REQUEST_ALE_EXPERIMENT_ID,
+        'PARAM_ALE': constants.REQUEST_ALE_ID,
+        'PARAM_SAMPLE_TYPE': constants.REQUEST_SAMPLE_TYPE,
+        'PARAM_ALL': constants.REQUEST_ALL,
+        'SAMPLE_TYPE_CLONAL': constants.SAMPLE_TYPE_CLONAL,
+        'SAMPLE_TYPE_MIXED': constants.SAMPLE_TYPE_MIXED,
+    }

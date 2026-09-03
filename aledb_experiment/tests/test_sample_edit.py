@@ -17,6 +17,7 @@ from aledb_experiment.models import (
     AleExperiment, AleId, Flask, Isolate, Project, TechnicalReplicate,
 )
 from aledb_seq.models import ResequencingExperiment
+from aledb_experiment import paths
 
 
 class SampleEditTestCase(TestCase):
@@ -288,9 +289,9 @@ class RenumberTestCase(SampleEditTestCase):
         self.assertEqual(before[2], isolates)
         self.assertEqual(before[3], reps)
         self.assertTrue(Isolate.objects.filter(
-            flask__ale_id__ale_id=5, isolate_number=5).exists())
+            **{paths.to_ale_label(root="isolate"): 5, "isolate_number": 5}).exists())
         self.assertFalse(Isolate.objects.filter(
-            flask__ale_id__ale_id=1, isolate_number=1).exists())
+            **{paths.to_ale_label(root="isolate"): 1, "isolate_number": 1}).exists())
 
     def test_the_new_rows_inherit_media_from_the_source(self):
         """A renumber re-labels a sample; it does not move it to different growth
@@ -418,7 +419,8 @@ class OrphanPruningTestCase(SampleEditTestCase):
         self.single(self.only, isolate=5)
 
         self.assertTrue(Flask.objects.filter(
-            ale_id__ale_experiment=self.experiment, flask_number=1).exists())
+            **{paths.to_experiment(root="flask"): self.experiment,
+               "flask_number": 1}).exists())
         self.assertTrue(AleId.objects.filter(
             ale_experiment=self.experiment, ale_id=1).exists())
 

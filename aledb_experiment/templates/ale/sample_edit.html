@@ -115,7 +115,11 @@
             rep_description: document.getElementById("se-rep-description").value,
             rep_tags: document.getElementById("se-rep-tags").value
         };
-        if (document.getElementById("se-population").checked) { data.is_population = "1"; }
+        // Sent both ways, always. It used to be set only when checked, so an unchecked box
+        // omitted the key and the server fell back to False -- which happens to mean "clonal",
+        // so the bug was invisible. It stops being invisible the moment the flag's polarity
+        // changes. The bulk edit page has always sent both values; this is the page that did not.
+        data.is_population = document.getElementById("se-population").checked ? "1" : "0";
         window.aledbPost("/ale/sample/{{ sample.id }}/update/", data).then(function () {
             window.location.reload();
         }).catch(function (err) {

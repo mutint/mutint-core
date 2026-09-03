@@ -56,9 +56,9 @@ def _purely_ancestral(model, sample_path):
 
 
 #: Where a sample sits, seen from each of the three rows counted below.
-_SAMPLE_FROM_ALE = "flask__isolate__technicalreplicate__resequencingexperiment"
-_SAMPLE_FROM_FLASK = "isolate__technicalreplicate__resequencingexperiment"
-_SAMPLE_FROM_ISOLATE = "technicalreplicate__resequencingexperiment"
+_SAMPLE_FROM_ALE = paths.down_chain("ale")
+_SAMPLE_FROM_FLASK = paths.down_chain("flask")
+_SAMPLE_FROM_ISOLATE = paths.down_chain("isolate")
 
 
 def rebuild_sample_counts():
@@ -72,7 +72,7 @@ def rebuild_sample_counts():
         pk__in=_purely_ancestral(AleId, _SAMPLE_FROM_ALE)).distinct().count()
     flask_count = Flask.objects.filter(ale_id__in=live_ales).exclude(
         pk__in=_purely_ancestral(Flask, _SAMPLE_FROM_FLASK)).distinct().count()
-    isolate_count = Isolate.objects.filter(flask__ale_id__in=live_ales).exclude(
+    isolate_count = Isolate.objects.filter(**{paths.to_ale(root="isolate") + "__in": live_ales}).exclude(
         pk__in=_purely_ancestral(Isolate, _SAMPLE_FROM_ISOLATE)).distinct().count()
 
     SampleCounts.objects.all().update(ale_count=ale_count, flask_count=flask_count,

@@ -4,6 +4,7 @@ from django.db.models.functions import Lower
 from django.contrib.auth.models import User
 from django.urls import reverse
 
+from aledb_experiment import paths
 from aledb_experiment.roles import ROLE_CHOICES, ROLE_OWNER
 
 blank_field = {"blank": True, "null": True}
@@ -313,7 +314,15 @@ class Media(models.Model):
     # TODO: figure out components
     # maybe carbon source, etc.? or track individual chemicals
     def experiments(self):
-        return Flask.objects.filter(project=self).values("ale_id").values("ale_experiment").distinct()
+        """The experiments that have a flask grown in this medium.
+
+        It read `Flask.objects.filter(project=self)` and `Flask` has no `project`, so this
+        raised FieldError every time it ran -- and `MediaAdmin.list_display` calls it, which
+        makes /admin/aledb_experiment/media/ a 500 rather than a page.
+        """
+        return live(AleExperiment.objects.filter(
+            **{paths.down_chain("experiment", upto="flask") + "__media": self}
+        )).distinct()
 
     experiments.short_description = 'Experiment'
 

@@ -57,19 +57,19 @@
                 <b>Columns: </b>
                 <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id  }}"/>
                 <input type="hidden" id="hidden_columns" name="hidden_columns" value="{{ hidden_columns }}"/>
-                <select name="ale_no" class="selectpicker">
-                    <option value="all">All ales</option>
+                <select name="{{ PARAM_ALE }}" class="selectpicker">
+                    <option value="{{ PARAM_ALL }}">All ales</option>
                     {% for ale in ales %}
                         <option {% if ale == ale_no %}selected="selected" {% endif %}
                                 value="{{ ale }}">{{ ale }}</option>
                     {% endfor %}
                 </select>
-                <select name="sample_type" class="selectpicker">
-                    <option value="all">All sample types</option>
-                    <option {% if sample_type == "clonal" %}selected="selected" {% endif %}
-                            value="clonal">Clonal samples</option>
-                    <option {% if sample_type == "population" %}selected="selected" {% endif %}
-                            value="population">Population samples</option>
+                <select name="{{ PARAM_SAMPLE_TYPE }}" class="selectpicker">
+                    <option value="{{ PARAM_ALL }}">All sample types</option>
+                    <option {% if sample_type == SAMPLE_TYPE_CLONAL %}selected="selected" {% endif %}
+                            value="{{ SAMPLE_TYPE_CLONAL }}">Clonal samples</option>
+                    <option {% if sample_type == SAMPLE_TYPE_MIXED %}selected="selected" {% endif %}
+                            value="{{ SAMPLE_TYPE_MIXED }}">Population samples</option>
                 </select>
                 <select name="tag_select" class="selectpicker">
                     <option value="All Tags">All Tags</option>
@@ -131,9 +131,9 @@
         <form action="" method="get">
             <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id  }}"/>
             {% if ale_no %}
-                <input type="hidden" name="ale_no" value="{{ ale_no }}"/>
+                <input type="hidden" name="{{ PARAM_ALE }}" value="{{ ale_no }}"/>
             {% else %}
-                <input type="hidden" name="ale_no" value="all"/>
+                <input type="hidden" name="{{ PARAM_ALE }}" value="{{ PARAM_ALL }}"/>
             {% endif %}
             <table id="data" class="table" cellspacing="0px">
                 <br>

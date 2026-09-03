@@ -20,6 +20,7 @@ from aledb_experiment.models import (
 )
 from aledb_import.gd_import import prepare_experiment_by_id
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_experiment import paths
 
 
 class EditorTestCase(TestCase):
@@ -91,5 +92,4 @@ class EditorTestCase(TestCase):
 
     def observation_count(self):
         return ObservedMutation.objects.filter(
-            sequencing_experiment__tech_rep__isolate__flask__ale_id__ale_experiment=(
-                self.experiment)).count()
+            **{paths.to_experiment(paths.FROM_OBSERVATION): self.experiment}).count()

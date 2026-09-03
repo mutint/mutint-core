@@ -10,7 +10,8 @@ from aledb_seq.views import common
 from aledb_common.util import get_user_context
 from aledb_seq.util import get_ordered_reseq_queryset
 
-from aledb_common.constants import REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID
+from aledb_common.constants import (REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID,
+                                    SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED)
 from aledb_common.logger import user_extra, join_extras
 import logging
 
@@ -92,7 +93,8 @@ def get_reseq_info_list(reseq_queryset):
 
         rows.append({
             "sample": reseq,
-            "clonal_or_population": "population" if isolate.is_population else "clonal",
+            "clonal_or_population": (SAMPLE_TYPE_MIXED if isolate.is_population
+                                     else SAMPLE_TYPE_CLONAL),
             "tech_rep_description": tech_rep.description,
             "media_description": media.description,
             "carbon_source": media.carbon_source,

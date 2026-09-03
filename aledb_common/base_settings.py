@@ -264,6 +264,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
                         'aledb_common.context_processors.plugin_exports',
                         'aledb_common.context_processors.nav_items',
                         'aledb_common.context_processors.branding',
+                        'aledb_common.context_processors.request_vocabulary',
                     ],
                     'debug': debug,
                 },

@@ -17,6 +17,7 @@ from aledb_experiment.models import (AleExperiment, AleId, Flask,
 from aledb_experiment.ordering import sample_sort_key
 from aledb_seq.models import ResequencingExperiment
 from aledb_seq.util import get_ordered_reseq_queryset
+from aledb_experiment import paths
 
 
 class OrderingTestCase(TestCase):
@@ -106,7 +107,7 @@ class TestThePythonFormAgrees(OrderingTestCase):
         self.build()
         in_memory = sorted(
             ResequencingExperiment.objects.filter(
-                tech_rep__isolate__flask__ale_id__ale_experiment=self.experiment),
+                **{paths.to_experiment(): self.experiment}),
             key=sample_sort_key)
         self.assertEqual([r.sample_name for r in in_memory], self.order())
 
@@ -115,6 +116,6 @@ class TestThePythonFormAgrees(OrderingTestCase):
         self.build()
         by_label = sorted(
             ResequencingExperiment.objects.filter(
-                tech_rep__isolate__flask__ale_id__ale_experiment=self.experiment),
+                **{paths.to_experiment(): self.experiment}),
             key=lambda r: r.ale_flask_isolate_str)
         self.assertNotEqual([r.sample_name for r in by_label], self.order())
