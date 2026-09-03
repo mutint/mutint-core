@@ -4,6 +4,12 @@ Django>=6.1,<6.2
 # bundles libpq so no compiler or system library is needed on the host -- which is the
 # same posture as an installer that downloads its own micromamba.
 psycopg[binary]>=3.2
+# The queue behind django.tasks. Django 6 ships the API -- @task, .enqueue() -- and ships no
+# backend that runs anything in the background and no worker: DEP 0014 keeps a task runner out
+# of core deliberately, so this is not something a later Django supplies. This is the reference
+# implementation, by the author of Django's own feature, and it is named in exactly one setting
+# (TASKS) that no call site knows about -- swapping it for Redis or Celery later touches no code.
+django-tasks-db>=0.13
 beautifulsoup4>=4.12.3
 coverage>=7.6
 django-debug-toolbar>=8,<9
