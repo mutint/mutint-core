@@ -48,6 +48,9 @@ env/
 # .gd files and alignments straight into the checkout. Anchored: only the one at the repo
 # root is the default's, and it is real instance data rather than build output.
 /aledb_store/
+# ...and one moved aside, which is what a migration reset asks for: primary keys restart
+# at 1 while store paths are derived from them, so the old files have to leave the way.
+/aledb_store.*/
 
 # Operator-local audit working docs. Contain live credential values + detailed
 # operational notes from the pre-publish security audit. The publish-safe

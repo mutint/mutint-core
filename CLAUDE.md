@@ -4,10 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ALEdb is a Django 4.2 web application for managing Adaptive Laboratory Evolution (ALE)
-experiments. (This said "Django 5" for a long time and was wrong: `requirements.txt` pins
-`Django>=4.2,<5.0` and 4.2.30 is what installs. It matters in at least one place -- the
-sidebar's Logout is a GET link, which 4.2 still accepts and 5.0 removes.) It stores experimental data, parses genomic sequencing output (breseq `.gd` files), and provides analysis tools for mutations, convergence, and enrichment.
+ALEdb is a Django 6.1 web application for managing Adaptive Laboratory Evolution (ALE)
+experiments. (This said "Django 5" for a long time while 4.2 was what installed, and then said 4.2 while
+the pin moved under it. `requirements.txt` pins `Django>=6.1,<6.2`; check it rather than this
+sentence. The upgrade's whole user-visible surface was four things: `USE_L10N` gone,
+`CheckConstraint(check=)` renamed to `condition=`, the SQLite backend subclass replaced by
+`OPTIONS={'transaction_mode': 'IMMEDIATE'}` and then deleted with SQLite itself, and the
+sidebar's Logout -- which really was a GET link that 5.0 turned into a 405, exactly as the
+comment above it had predicted for two years.)
+
+It stores experimental data, parses genomic sequencing output (breseq `.gd` files), and
+provides analysis tools for mutations, convergence, and enrichment.
+
+**Python is 3.13 and PostgreSQL is the only backend**, both provisioned by the entry script
+rather than taken from the host: Django 6.1 requires Python 3.12+ and a current macOS ships
+3.9. See **The database** in the suite `CLAUDE.md` for the whole design, including why running
+anything outside `./aledb` will not find the database.
 
 ### Role of this repo
 
@@ -51,14 +63,23 @@ coverage run ./aledb test && coverage report
 
 ### Testing notes
 
-**The suite takes about 2½ minutes.** Measured repeatedly: 140s standalone, 142-148s
-assembled. Per-app it runs from 1.9s (`aledb_stats`, 32 tests) to 96s (`aledb_experiment`,
+**The suite takes about two minutes.** Measured on PostgreSQL 18 under Python 3.13: 118s
+standalone, 121s assembled. It was 140s standalone on Python 3.9 and *57s* on 3.12 with
+Django 4.2 -- the interpreter made it two and a half times faster and Django 6.1 gave most of
+that back, which is what a framework raising its default password-hasher iterations looks like
+in a suite where two modules call `set_password` per user in `setUp`. Per-app it runs from 1.9s (`aledb_stats`, 32 tests) to 96s (`aledb_experiment`,
 416) -- and that one app is two thirds of the whole run. Inside it `test_access_views` is 57s
 and `test_groups` 34s, 90 of its 96 between them: both call `User.set_password` per user in
 setUp, and Django 4.2's default PBKDF2 hasher costs a few tenths of a second every time.
 Nothing else in the suite pays that, and a test-only `PASSWORD_HASHERS` override is the usual
-answer if it ever becomes worth fixing. The test database is in-memory SQLite, so runs do not
-contend for a file and can be repeated freely.
+answer if it ever becomes worth fixing. The test database is `test_<name>` on the cluster the
+entry script starts under `env/`, created and dropped per run.
+
+**Tests refuse to run against a database this checkout does not manage.** `base_settings`
+raises `ImproperlyConfigured` unless `ALEDB_DB_MANAGED=1` (which only the entry script sets)
+or `ALEDB_ALLOW_REMOTE_TESTS=1`. The old guard swapped in SQLite, which is not a thing that
+can protect anything now: the suite creates and drops a real database on whatever server is
+configured, and that server could be a deployment's.
 
 **This said "~13 seconds" for a long time, and was wrong by an order of magnitude** -- the
 same drift the test *count* above warns about, in the figure right beside it. What made it
@@ -82,8 +103,10 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1644 run, 0 failures** standalone; **1825** in an assembled project, where the
-plugins' own tests join them. They were 1620 and 1801 before the account pages -- the login
+**Baseline: 1617 run, 0 failures** standalone; **1798** in an assembled project, where the
+plugins' own tests join them. They were 1646 and 1827 before the platform move, which deleted
+six test modules that drove named migrations through the real executor and added the lifecycle,
+task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
 page's normalisation, the local change-password page and the sidebar's admin link -- which
 added 24 tests to a corner that had none at all.
 **The standalone figure went down and the assembled one up** at the entry before that,
@@ -1741,11 +1764,16 @@ introspection guard**, not `apps.get_model("guardian", ...)`: the ORM version on
 guardian is still in `INSTALLED_APPS`, which would have forced migrate-then-uninstall across
 two releases.
 
-**`0003_backfill_view_project_grants.py` is inert but must stay, under that name.** It
-declared a dependency on `("guardian", "0001_initial")`, and a dependency on an uninstalled
-app makes `migrate` fail with `NodeNotFoundError` on a *fresh* database — which every test run
-builds. Four other apps (`aledb_seq.0005`, `aledb_stats.0003`, `aledb_filter.0002`,
-`aledb_common.0001`) name the file as a dependency, so it cannot be renamed away.
+**That rule about `0003_backfill_view_project_grants.py` is retired**, along with the whole
+migration history. It is worth one paragraph, because the shape of what it got wrong outlives
+it. The file was inert and had to stay under its name, because a dependency on an uninstalled
+app makes `migrate` fail with `NodeNotFoundError` on a fresh database — and this note listed
+the four apps that named it: `aledb_seq.0005`, `aledb_stats.0003`, `aledb_filter.0002`,
+`aledb_common.0001`. **There were five.** The fifth was
+`aledb-phylogeny/…/0001_initial.py`, invisible to a note written from inside this repo, and it
+is why the migration reset had to span four repositories at once. `./mutint check` passes
+with a broken migration graph, so the two checks the suite's rules prescribe after a bump are
+both blind to exactly that failure; only `migrate` or `test` finds it.
 
 ### Groups
 
@@ -2110,7 +2138,28 @@ Progress writes are swallowed on failure, and a failed poll is a skipped tick ra
 error. Commentary must not be able to fail an import, and the finalize response stays the
 authority on what happened.
 
-### Every sample lands, and it takes three things
+### Every sample lands, and it took three things
+
+**Two of the three are left, and the reason to keep them changed rather than expired.** This
+section is the history of a SQLite failure, and the suite is on PostgreSQL now; read it for why
+`import_lock` and `retry` exist, not for what they defend against today.
+
+- **The backend piece is gone.** `aledb_common.db.sqlite_immediate`, then
+  `OPTIONS={'transaction_mode': 'IMMEDIATE'}`, then nothing: PostgreSQL has no deferred-`BEGIN`
+  refusal to work around.
+- **`retry` matches SQLSTATE now** (`40001`, `40P01`, `55P03`), not message text. It matched
+  SQLite's and MySQL's wording, so on PostgreSQL it recognised *nothing* while still reading
+  like live protection. Matching PostgreSQL's wording would be the same bug one step on --
+  the server translates messages under `lc_messages`. Its premise is stronger here than it was:
+  MVCC produces serialisation failures a single-writer database structurally cannot.
+- **`import_lock` stays, and its stated reason is now the wrong one.** It was justified by
+  "SQLite permits exactly one writer". What it actually buys, and buys more dearly now, is that
+  it makes the suite's unconstrained `get_or_create` calls -- `Instrument`, `AleExperiment`,
+  `Media`, `FreezerBox`, `Isolate` -- and `_next_isolate_number`'s unlocked read-then-write
+  **unreachable by two importers at once**. SQLite's whole-database lock hid that; MVCC does
+  not. Do not remove it on the grounds that its original justification expired.
+
+The original account follows, because the measurements are the argument.
 
 An LTEE drop lost five `.gd` samples to `database is locked`, reported per unit and genuinely
 absent afterwards. The cause is not slowness. **Django 4.2's `atomic()` issues a deferred
@@ -2189,7 +2238,10 @@ same contention it made failures *more* frequent, 50% to 66%. The risk is per at
 second held, so more and shorter transactions means more attempts. Batching is not a lock fix
 and must not be counted as one.
 
-**Polling a database that is being written is what forced `aledb_common/sqlite_tuning.py`.**
+**Polling a database that is being written is what forced `aledb_common/sqlite_tuning.py`,
+which is deleted with SQLite.** PostgreSQL's readers are never blocked by a writer, so there is
+nothing here to configure and no deployment ruled out — the paragraph is kept because it is the
+measurement that explains why the progress endpoint is careful, not because the pragmas exist.
 SQLite ships in rollback-journal mode, where a writer locks the whole file against *readers* --
 so the first sample whose transaction outlives the 5s busy timeout made every poll fail, and the
 contention pushed `database is locked` back onto the import itself. Reported against a real
@@ -3113,10 +3165,21 @@ from middleware, so there is nothing an auth app needs to say in its URLconf.
 
 ### Infrastructure (production)
 
+- Database: **PostgreSQL**, and only PostgreSQL. Either the cluster the entry script manages
+  under `env/`, or one you run yourself by exporting `ALEDB_DB_HOST`. See **The database** in
+  the suite `CLAUDE.md`.
 - File storage: `ALEDB_STORE_DIR`, keyed by database id (`aledb_common/store.py`)
+- Background work: **a worker, and it has to be run.** `TASKS` names
+  `django_tasks_db.DatabaseBackend`, and `./aledb db_worker` is what executes what has been
+  enqueued. Nothing spawns one for you. Today exactly one thing is enqueued -- coverage
+  derivation -- and its degraded state is benign, so an installation with no worker running
+  imports correctly and simply has no coverage tracks until `./aledb coverage` is run.
 
-This section used to also claim Daphne, Django Channels, nginx and Redis. **Nothing in
-`requirements.txt` supports any of it** and no compose file in this tree references it -- it
-was inherited from the pre-refactor deployment. Everything is synchronous in-request; there is
-no worker, no broker and no scheduler. `WORKERS.md` in the suite root is the design note for
-adding one, and is not implemented.
+There is still **no broker and no scheduler**; `./aledb reap_uploads` is still cron's job.
+
+This section used to claim Daphne, Django Channels, nginx and Redis. **Nothing in
+`requirements.txt` supported any of it** and no compose file in this tree referenced it -- it
+was inherited from the pre-refactor deployment. It then said everything was synchronous
+in-request with no worker at all, which was true until the queue landed. `WORKERS.md` in the
+suite root is the design note this half-discharges: the seam and the first task exist; the
+enqueue-instead-of-call for the *rest* of `run_post_experiment_hooks` does not.
