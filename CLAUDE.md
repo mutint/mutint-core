@@ -103,7 +103,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1626 run, 0 failures** standalone; **1807** in an assembled project, where the
+**Baseline: 1633 run, 0 failures** standalone; **1814** in an assembled project, where the
 plugins' own tests join them. They were 1646 and 1827 before the platform move, which deleted
 six test modules that drove named migrations through the real executor and added the lifecycle,
 task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login

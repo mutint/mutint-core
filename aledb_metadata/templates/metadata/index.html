@@ -45,32 +45,36 @@
                 <th>Temperature (Celsius)</th>
                 <th>Strain</th>
                 <th>Additional Strain Details</th>
-                <th>Taxonomy ID</th>
+                <th>Library Prep</th>
                 <th>Reference Genome</th>
 
 
             </tr>
         </thead>
         <tbody>
-        {% for reseq_info_tuple in reseq_info_list %}
+        {% comment %} Read by name. These were positional -- `reseq_info_tuple.13` -- and
+           two of them had drifted onto the wrong column: this row rendered the isolate's
+           library prep under a heading that said Taxonomy ID. See
+           `aledb_metadata.views.get_reseq_info_list`. {% endcomment %}
+        {% for row in reseq_info_list %}
             <tr class="experiment_stats">
                 <td class="sample_name">
-                    {{ reseq_info_tuple.0.ale_flask_isolate_str }}
+                    {{ row.sample.ale_flask_isolate_str }}
                 </td>
-                <td class="clonal_or_population">{{ reseq_info_tuple.1 }}</td>
-                <td class="tech_rep_description">{{ reseq_info_tuple.2 }}</td>
-                <td class="media_description">{{ reseq_info_tuple.3 }}</td>
-                <td class="carbon_source">{{ reseq_info_tuple.4 }}</td>
-                <td class="nitrogen_source">{{ reseq_info_tuple.5 }}</td>
-                <td class="phosphorous_source">{{ reseq_info_tuple.6 }}</td>
-                <td class="sulfur_source">{{ reseq_info_tuple.7 }}</td>
-                <td class="calcium_source">{{ reseq_info_tuple.8 }}</td>
-                <td class="supplement">{{ reseq_info_tuple.9 }}</td>
-                <td class="temperature">{{ reseq_info_tuple.10 }}</td>
-                <td class="strain">{{ reseq_info_tuple.11 }}</td>
-                <td class="knockouts">{{ reseq_info_tuple.12 }}</td>
-                <td class="taxonomy_id">{{ reseq_info_tuple.13 }}</td>
-                <td class="reseq_reference">{{ reseq_info_tuple.14 }}</td>
+                <td class="clonal_or_population">{{ row.clonal_or_population }}</td>
+                <td class="tech_rep_description">{{ row.tech_rep_description }}</td>
+                <td class="media_description">{{ row.media_description }}</td>
+                <td class="carbon_source">{{ row.carbon_source }}</td>
+                <td class="nitrogen_source">{{ row.nitrogen_source }}</td>
+                <td class="phosphorus_source">{{ row.phosphorus_source }}</td>
+                <td class="sulfur_source">{{ row.sulfur_source }}</td>
+                <td class="calcium_source">{{ row.calcium_source }}</td>
+                <td class="supplement">{{ row.supplement }}</td>
+                <td class="temperature">{{ row.temperature }}</td>
+                <td class="strain">{{ row.strain }}</td>
+                <td class="ale_description">{{ row.ale_description }}</td>
+                <td class="library_prep">{{ row.library_prep }}</td>
+                <td class="reseq_reference">{{ row.reseq_reference }}</td>
             </tr>
 
         {% endfor %}

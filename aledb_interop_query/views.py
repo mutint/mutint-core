@@ -319,25 +319,36 @@ def _serialize_metadata(metadata_list):
             'multiple':            m['multiple'],
         }
 
+        # Read by name from `get_reseq_info_list`, which used to hand back a positional
+        # tuple this unpacked by index. Three keys change with that, and all three were
+        # wrong rather than merely differently spelled:
+        #
+        #   knockouts          -> ale_description   it was always AleId.description
+        #   taxonomy_id        -> library_prep      it was always Isolate.library_prep
+        #   phosphorous_source -> phosphorus_source the column has never had that o
+        #
+        # and three values the builder produced were dropped here and are published now.
         flat = []
-        for tup in m.get('reseq_info_list', []):
-            exp = tup[0]
+        for row in m.get('reseq_info_list', []):
             flat.append({
-                'ale_flask_isolate_str':   exp.ale_flask_isolate_str,
-                'clonal_or_population':    tup[1],
-                'tech_rep_description':    tup[2],
-                'media_description':       tup[3],
-                'carbon_source':           tup[4],
-                'nitrogen_source':         tup[5],
-                'phosphorous_source':      tup[6],
-                'sulfur_source':           tup[7],
-                'calcium_source':          tup[8],
-                'supplement':              tup[9],
-                'temperature':             tup[10],
-                'strain':                  tup[11],
-                'knockouts':               tup[12],
-                'taxonomy_id':             tup[13],
-                'reseq_reference':         tup[14],
+                'ale_flask_isolate_str': row['sample'].ale_flask_isolate_str,
+                'clonal_or_population':  row['clonal_or_population'],
+                'tech_rep_description':  row['tech_rep_description'],
+                'media_description':     row['media_description'],
+                'carbon_source':         row['carbon_source'],
+                'nitrogen_source':       row['nitrogen_source'],
+                'phosphorus_source':     row['phosphorus_source'],
+                'sulfur_source':         row['sulfur_source'],
+                'calcium_source':        row['calcium_source'],
+                'supplement':            row['supplement'],
+                'temperature':           row['temperature'],
+                'strain':                row['strain'],
+                'ale_description':       row['ale_description'],
+                'library_prep':          row['library_prep'],
+                'reseq_reference':       row['reseq_reference'],
+                'breseq_version':        row['breseq_version'],
+                'reseq_date':            row['reseq_date'],
+                'experiment_name':       row['experiment_name'],
             })
         item['reseq_info_list'] = flat
         out.append(item)

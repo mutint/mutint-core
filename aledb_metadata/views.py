@@ -61,35 +61,54 @@ def metadata(request):
 
 
 def get_reseq_info_list(reseq_queryset):
+    """One row of sample metadata per sample, keyed by name.
 
-    reseq_info_list = []
+    **This was a positional tuple of eighteen values, and the bug that caused is the whole
+    reason it is not.** It was built here and unpacked *by index* in
+    `aledb_interop_query.views._serialize_metadata`, in another app, against a hand-written
+    list of key names. The two agreed only by position, so they had drifted:
+
+    - index 12 is the ALE's description and was published as ``knockouts``
+    - index 13 is the isolate's library prep and was published as ``taxonomy_id`` -- and
+      rendered on this page under a column headed *Taxonomy ID*
+    - indices 15, 16 and 17 (breseq version, resequencing date, experiment name) were built
+      on every request and read by nobody
+
+    Nothing raised. Inserting a field anywhere in the chain above would silently relabel
+    everything after it, which is presumably how it happened in the first place.
+
+    Named keys make that class of error impossible rather than unlikely: a consumer that asks
+    for the wrong name gets a `KeyError` or an empty template variable, not somebody else's
+    column.
+    """
+    rows = []
 
     for reseq in reseq_queryset:
+        tech_rep = reseq.tech_rep
+        isolate = tech_rep.isolate
+        flask = isolate.flask
+        media = flask.media
+        ale = flask.ale_id
 
-        clonal_or_population = "clonal"
-        if reseq.tech_rep.isolate.is_population:
-            clonal_or_population = "population"
+        rows.append({
+            "sample": reseq,
+            "clonal_or_population": "population" if isolate.is_population else "clonal",
+            "tech_rep_description": tech_rep.description,
+            "media_description": media.description,
+            "carbon_source": media.carbon_source,
+            "nitrogen_source": media.nitrogen_source,
+            "phosphorus_source": media.phosphorus_source,
+            "sulfur_source": media.sulfur_source,
+            "calcium_source": media.calcium_source,
+            "supplement": media.supplement,
+            "temperature": media.temperature,
+            "strain": ale.strain,
+            "ale_description": ale.description,
+            "library_prep": isolate.library_prep,
+            "reseq_reference": isolate.reseq_reference,
+            "breseq_version": isolate.breseq_version,
+            "reseq_date": isolate.reseq_date,
+            "experiment_name": ale.ale_experiment.name,
+        })
 
-        experiment_info_tuple = (reseq,
-                                 clonal_or_population,
-                                 reseq.tech_rep.description,
-                                 reseq.tech_rep.isolate.flask.media.description,
-                                 reseq.tech_rep.isolate.flask.media.carbon_source,
-                                 reseq.tech_rep.isolate.flask.media.nitrogen_source,
-                                 reseq.tech_rep.isolate.flask.media.phosphorus_source,
-                                 reseq.tech_rep.isolate.flask.media.sulfur_source,
-                                 reseq.tech_rep.isolate.flask.media.calcium_source,
-                                 reseq.tech_rep.isolate.flask.media.supplement,
-                                 reseq.tech_rep.isolate.flask.media.temperature,
-                                 reseq.tech_rep.isolate.flask.ale_id.strain,
-                                 reseq.tech_rep.isolate.flask.ale_id.description,
-                                 reseq.tech_rep.isolate.library_prep,
-                                 reseq.tech_rep.isolate.reseq_reference,
-                                 reseq.tech_rep.isolate.breseq_version,
-                                 reseq.tech_rep.isolate.reseq_date,
-                                 reseq.tech_rep.isolate.flask.ale_id.ale_experiment.name,
-                                 )
-
-        reseq_info_list.append(experiment_info_tuple)
-
-    return reseq_info_list
+    return rows
