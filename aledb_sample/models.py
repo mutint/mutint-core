@@ -283,18 +283,20 @@ class Mutation(models.Model):
     # row, to render a mutation. Keeping them here means a new annotation field
     # needs no migration.
     #
-    # Deliberately NOT folded into `extended_fields`: this is derived display markup, it is
+    # Deliberately NOT folded into `supplemental_data`: this is derived display markup, it is
     # rewritten on every re-annotation, and it has a different lifecycle from a record that
     # arrives once with an import and never moves again.
     annotation = models.JSONField(**blank_field)
 
     #: The records this mutation was imported from, namespaced by the component that owns
-    #: each one::
+    #: each one -- the supplemental material that came with it, in the sense a paper means
+    #: it: not the finding, but everything shipped alongside so somebody can check it::
     #:
     #:     {"aledb_core": {"genome_diff": { ...the verbatim breseq record... }}}
     #:
     #: **Two levels, and the outer one is a component rather than a Django app label** --
-    #: core is fifteen apps, so `aledb_core` names the checkout. A plugin writes under its
+    #: core is fifteen apps, so `aledb_core` names the checkout, the same unit
+    #: `about_registry` keys its entries by and for the same reason. A plugin writes under its
     #: own name, so two of them cannot collide and neither can collide with core.
     #:
     #: **The nesting is what enforces the verbatim rule.** This was `gd_data`, holding the
@@ -315,7 +317,7 @@ class Mutation(models.Model):
     #: written" is a real state, and for a container several writers merge into the empty
     #: dict is the right zero. A mutation with no stored record is one whose `genome_diff`
     #: key is absent, which is what the accessor answers.
-    extended_fields = models.JSONField(default=dict)
+    supplemental_data = models.JSONField(default=dict)
 
     #: The component key core writes under, and the kind of record it writes.
     COMPONENT = "aledb_core"
@@ -329,11 +331,11 @@ class Mutation(models.Model):
         None because every guard on the old flat column was a truthiness check, and the two
         were already interchangeable everywhere.
         """
-        return (self.extended_fields or {}).get(self.COMPONENT, {}).get(self.GENOME_DIFF) or {}
+        return (self.supplemental_data or {}).get(self.COMPONENT, {}).get(self.GENOME_DIFF) or {}
 
     @classmethod
     def genome_diff_container(cls, record):
-        """`extended_fields` holding one GenomeDiff record and nothing else.
+        """`supplemental_data` holding one GenomeDiff record and nothing else.
 
         For a caller building a Mutation from scratch -- the importer, the editor's record
         builder, a fixture. Spelling the two levels out at each of those is how the nesting
@@ -348,13 +350,13 @@ class Mutation(models.Model):
         writers that each read, modify and write can silently drop one another's keys. This
         merges into the container as it stands and saves only this field.
         """
-        container = dict(self.extended_fields or {})
+        container = dict(self.supplemental_data or {})
         owned = dict(container.get(component) or {})
         owned[kind] = value
         container[component] = owned
-        self.extended_fields = container
+        self.supplemental_data = container
         if save:
-            self.save(update_fields=["extended_fields"])
+            self.save(update_fields=["supplemental_data"])
 
     def __unicode__(self):
         return u"%d %s" % (self.start_position,
@@ -368,7 +370,7 @@ class Mutation(models.Model):
         APPLY-complete — the discrete alleles were not captured for those rows).
 
         **It splats every key it is given, and that is why it reads one key rather than the
-        column.** `extended_fields` is shared — a plugin may keep its own import records
+        column.** `supplemental_data` is shared — a plugin may keep its own import records
         beside this one — and every remaining key of whatever this reads lands on the emitted
         line. Reading `genome_diff` is what makes "nothing but the raw record" a property of
         the code instead of a comment three files repeat.
@@ -446,10 +448,10 @@ class MutationCall(models.Model):
     # The same argument as `Mutation.annotation`, one level down: nothing queries these, they
     # are read whole and per row to render a cell, and a caller with a field we have no
     # column for should not need a migration. What differs is the *scope* -- `annotation` and
-    # `extended_fields` describe the mutation, which every sample carrying it shares, while this
+    # `supplemental_data` describe the mutation, which every sample carrying it shares, while this
     # describes one sample's evidence for it and is exactly what cannot live up there.
     #
-    # Deliberately not folded into `extended_fields`: that column is per-mutation and this
+    # Deliberately not folded into `supplemental_data`: that column is per-mutation and this
     # is per-call -- one sample's read counts attached to a row every sample shares.
     evidence = models.JSONField(**blank_field)
 

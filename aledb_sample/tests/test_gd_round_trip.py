@@ -56,7 +56,7 @@ class GdRoundTripTestCase(TestCase):
             mutation_type=record.type,
             start_position=record.attributes.get("position", 1),
             seq_id=record.attributes.get("seq_id", ""),
-            sequence_change="", extended_fields=Mutation.genome_diff_container(data))
+            sequence_change="", supplemental_data=Mutation.genome_diff_container(data))
         # Refetched, so what is asserted is what the database gave back rather than the dict
         # still in memory -- which is the whole point on a backend that reorders keys.
         return Mutation.objects.get(pk=mutation.pk)
@@ -78,7 +78,7 @@ class GdRoundTripTestCase(TestCase):
         `to_gd_line` splats every key of what it is handed, with no allow-list -- so while
         the record sat flat in the column, "nothing but the raw record may go in that field"
         was a rule three files restated and nothing enforced. The record has a key of its own
-        now, `extended_fields` is shared, and this asserts the consequence: a component
+        now, `supplemental_data` is shared, and this asserts the consequence: a component
         writing beside core cannot corrupt a file `gdtools APPLY` reads.
         """
         mutation = self._stored(parse_one(LINES[0]))

@@ -415,7 +415,7 @@ class RecordBuilderTestCase(EditorTestCase):
         identity = record_builder.build_identity("DEL", gd_data, record)
 
         expected = set(history.MUTATION_KEY_FIELDS) | {
-            "extended_fields", "annotation", "product", "protein_change"}
+            "supplemental_data", "annotation", "product", "protein_change"}
         self.assertEqual(expected, set(identity))
 
     def test_size_becomes_feature_length(self):

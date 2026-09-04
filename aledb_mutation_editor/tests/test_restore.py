@@ -196,7 +196,7 @@ class SweptMutationTestCase(EditorTestCase):
         self.assertEqual(before, history.call_snapshot(restored))
 
     def test_a_foreign_components_record_survives_the_sweep_and_the_restore(self):
-        """The premise of `extended_fields` being shared, and nothing else covers it.
+        """The premise of `supplemental_data` being shared, and nothing else covers it.
 
         A plugin may keep its own import record beside core's. The sweep hard-deletes the
         Mutation and a restore mints a *new* row, so the only thing that can carry that
@@ -216,7 +216,7 @@ class SweptMutationTestCase(EditorTestCase):
 
         recreated = Mutation.objects.get(experiment=self.experiment, start_position=200)
         self.assertEqual({"qual": 40, "filter": "PASS"},
-                         recreated.extended_fields["some_plugin"]["vcf"])
+                         recreated.supplemental_data["some_plugin"]["vcf"])
         self.assertEqual(mutation.genome_diff, recreated.genome_diff,
                          "core's own record came back too")
 

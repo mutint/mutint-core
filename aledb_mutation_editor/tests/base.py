@@ -64,7 +64,7 @@ class EditorTestCase(TestCase):
             sequence_change=sequence_change,
             gene=gene,
             product="a product",
-            extended_fields=Mutation.genome_diff_container({"type": "SNP", "id": position, "parent_ids": None,
+            supplemental_data=Mutation.genome_diff_container({"type": "SNP", "id": position, "parent_ids": None,
                      "seq_id": "NC_000913", "position": position}),
             annotation={"gene_name": gene})
 

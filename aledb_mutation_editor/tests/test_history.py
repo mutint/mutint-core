@@ -114,7 +114,7 @@ class SnapshotTestCase(EditorTestCase):
         self.assertEqual("NC_000913", identity["seq_id"])
         # The whole container, so a recreated row renders and round-trips to a .gd line as
         # before -- and so a key core knows nothing about comes back with it.
-        self.assertEqual(self.mut_1.extended_fields, identity["extended_fields"])
+        self.assertEqual(self.mut_1.supplemental_data, identity["supplemental_data"])
         self.assertEqual(self.mut_1.annotation, identity["annotation"])
 
     def test_a_key_from_a_row_and_from_its_logged_identity_agree(self):

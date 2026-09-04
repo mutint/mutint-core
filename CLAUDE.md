@@ -694,7 +694,7 @@ snapshot** of the row (`call`) and of its mutation's identity (`mutation_identit
   `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
   no MutationCall, and runs after an experiment delete and after `delete_sample` -- so
   removing a mutation's last call makes it eligible for a sweep triggered by something
-  else entirely. The snapshot is the exact `get_or_create` key plus `extended_fields` and
+  else entirely. The snapshot is the exact `get_or_create` key plus `supplemental_data` and
   `annotation`,
   which is enough to put it back indistinguishable from an imported row. `aledb_import` needed
   no edit for this, and `test_restore.SweptMutationTestCase` is what pins it.
@@ -2924,13 +2924,13 @@ All apps use the `aledb_*` namespace. Key apps:
   CLI upload and a web drop produce identical rows:
   - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
     the one place mutations are stored. Each record is kept verbatim in
-    `Mutation.extended_fields["aledb_core"]["genome_diff"]` and round-tripped back out by
+    `Mutation.supplemental_data["aledb_core"]["genome_diff"]` and round-tripped back out by
     `Mutation.to_gd_line()` (`aledb_sample/models.py`) for `gdtools APPLY`. **That rule is
     structural now rather than a convention**: `to_gd_line` splats every key of what it
     reads, so while the record sat flat in the column anything a second writer put there
     landed in an emitted `.gd` file. It reads the one key, the column is namespaced by
     component, and a plugin may keep its own import records beside core's -- see
-    `Mutation.extended_fields` for what belongs there and what does not.
+    `Mutation.supplemental_data` for what belongs there and what does not.
   - CLI upload — `./aledb upload <path>` walks for `<exp>/breseq/` + `<exp>/metadata/`,
     hands the folders to `breseq_folder`, then parses the metadata. It used to be a second
     importer that read the .gd plus the breseq HTML report and shared no code with

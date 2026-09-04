@@ -334,7 +334,7 @@ def rewrite_value(value, mapping):
 def rewrite_genome_diff(genome_diff, mapping):
     """Every string value of a verbatim GenomeDiff record, rewritten by value.
 
-    Takes the **record**, not the `extended_fields` container it now sits inside: the caller
+    Takes the **record**, not the `supplemental_data` container it now sits inside: the caller
     unwraps and re-nests, so another component's import record passes through a rename
     untouched rather than being walked by a rule written for breseq's keys.
 
@@ -365,7 +365,7 @@ def _rename_mutations(Mutation, experiment, mapping):
     constraint, so the result would be silent duplicates rather than an IntegrityError.
     """
     queryset = Mutation.objects.filter(experiment=experiment).only(
-        "id", "seq_id", "extended_fields", "sequence_change")
+        "id", "seq_id", "supplemental_data", "sequence_change")
     batch, total = [], 0
     for mutation in queryset.iterator(chunk_size=BATCH):
         new_reference = mapping.get(mutation.seq_id, mutation.seq_id)
@@ -384,11 +384,11 @@ def _rename_mutations(Mutation, experiment, mapping):
         batch.append(mutation)
         if len(batch) >= BATCH:
             Mutation.objects.bulk_update(
-                batch, ["seq_id", "extended_fields", "sequence_change"])
+                batch, ["seq_id", "supplemental_data", "sequence_change"])
             total += len(batch)
             batch = []
     if batch:
-        Mutation.objects.bulk_update(batch, ["seq_id", "extended_fields", "sequence_change"])
+        Mutation.objects.bulk_update(batch, ["seq_id", "supplemental_data", "sequence_change"])
         total += len(batch)
     return total
 

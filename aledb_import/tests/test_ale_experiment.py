@@ -85,7 +85,7 @@ class ImportCommandTestCase(TestCase):
         experiment = Experiment.objects.get()
         self.assertEqual(2, Mutation.objects.filter(experiment=experiment).count())
         self.assertEqual(2, MutationCall.objects.filter(source="breseq").count())
-        self.assertFalse(Mutation.objects.filter(extended_fields__isnull=True).exists())
+        self.assertFalse(Mutation.objects.filter(supplemental_data__isnull=True).exists())
 
     def test_the_reference_is_established_from_the_sample(self):
         self.upload()

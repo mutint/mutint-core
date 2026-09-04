@@ -29,7 +29,7 @@ MANUAL_SOURCE = "manual"
 
 
 def build_genome_diff(mutation_type, attributes):
-    """The verbatim GenomeDiff record, as `extended_fields["aledb_core"]["genome_diff"]`
+    """The verbatim GenomeDiff record, as `supplemental_data["aledb_core"]["genome_diff"]`
     stores it.
 
     Two omissions are deliberate.
@@ -104,7 +104,7 @@ def build_identity(mutation_type, genome_diff, annotated_record):
         "gene": ", ".join(gene_list),
         # The whole container, not just core's record: a plugin's key has to survive
         # a delete and a restore, and this snapshot is the only thing that carries it.
-        "extended_fields": Mutation.genome_diff_container(genome_diff),
+        "supplemental_data": Mutation.genome_diff_container(genome_diff),
         "annotation": annotated.get("annotation"),
         "product": annotated.get("product") or "",
         "protein_change": annotated.get("protein_change") or "",

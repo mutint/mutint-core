@@ -21,12 +21,12 @@ Ordinary Django models in your app, with ordinary migrations. Two conventions wo
   editor deletes `MutationCall` rows and never `Mutation` rows, so an id keeps meaning what
   it meant.
 - **A record that arrives with an import can go on the mutation instead.**
-  `Mutation.extended_fields` is namespaced by component, so you may keep your own import
+  `Mutation.supplemental_data` is namespaced by component, so you may keep your own import
   record beside core's without a table:
 
   ```python
   mutation.set_record("my_plugin", "vcf", {"qual": 40, "filter": "PASS"})
-  record = mutation.extended_fields.get("my_plugin", {}).get("vcf") or {}
+  record = mutation.supplemental_data.get("my_plugin", {}).get("vcf") or {}
   ```
 
   `set_record` merges rather than assigns, so you cannot drop core's key or another

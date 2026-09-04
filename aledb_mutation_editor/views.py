@@ -998,7 +998,7 @@ def _refuse_unchanged(mutation, identity):
     record can move without them -- a MOB's `strand`, say -- which is a real change to what
     `to_gd_line()` writes even though the identity is the same.
 
-    It compares the **record**, not the whole `extended_fields` container. The question is
+    It compares the **record**, not the whole `supplemental_data` container. The question is
     whether this mutation changed; another component's key moving is not that, and reading
     the container would make an unrelated write look like an edit.
     """

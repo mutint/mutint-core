@@ -101,7 +101,7 @@ class BrowseMutationTestCase(TestCase):
         mutation.set_record(
             Mutation.COMPONENT, Mutation.GENOME_DIFF,
             {"type": "DEL", "seq_id": "ref", "position": 5000, "size": 20001}, save=False)
-        mutation.save(update_fields=["start_position", "end_position", "extended_fields"])
+        mutation.save(update_fields=["start_position", "end_position", "supplemental_data"])
 
         self.assertEqual(_extent(mutation), (5000, 25000))
 

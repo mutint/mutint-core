@@ -8,7 +8,7 @@ the CLI upload path reads a full breseq output directory (``.gd`` + ``index.html
 UI and reads everything it needs from the GenomeDiff itself.
 
 Parsing uses the ``genomediff`` package. Each mutation's full parsed record is
-stored verbatim in ``Mutation.extended_fields["aledb_core"]["genome_diff"]`` so it can be
+stored verbatim in ``Mutation.supplemental_data["aledb_core"]["genome_diff"]`` so it can be
 round-tripped back to a ``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
 
 Imported mutations are attached to the normal experiment hierarchy
@@ -449,7 +449,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             sequence_change=sequence_change,
             gene=gene_str,
             defaults={
-                "extended_fields": Mutation.genome_diff_container(genome_diff),
+                "supplemental_data": Mutation.genome_diff_container(genome_diff),
                 "product": attributes.get("gene_product") or "",
                 "protein_change": "",
             })

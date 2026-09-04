@@ -269,7 +269,7 @@ class RenameApplicationTestCase(TestCase):
         first.seq_id = "other"
         first.set_record(Mutation.COMPONENT, Mutation.GENOME_DIFF,
                          dict(first.genome_diff, seq_id="other"), save=False)
-        first.save(update_fields=["seq_id", "extended_fields"])
+        first.save(update_fields=["seq_id", "supplemental_data"])
 
         reference_rename._rename_mutations(
             Mutation, self.experiment, {"test_ref": "other", "other": "test_ref"})
