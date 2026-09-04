@@ -389,7 +389,7 @@ class MutationCall(models.Model):
 
 
 
-class ReferenceSequence(models.Model):
+class ReferenceSequences(models.Model):
     """The single reference genome shared by every sample in an experiment.
 
     breseq writes `data/reference.gff3` and `data/reference.fasta` alongside each run, so the
@@ -401,12 +401,16 @@ class ReferenceSequence(models.Model):
     `experiment_id` -- see aledb_common.store, whose `experiment_reference_dir` keeps that
     name: it is a directory on disk, not this table.
 
-    **One row holds many sequences.** `seq_ids` is the contig list, so this is a reference
-    *genome* rather than a single sequence, and it is one-to-one with the experiment. Worth
-    knowing beside `aledb_import.annotate.model.ReferenceSequences`, which is one letter
-    away and is a different thing entirely: the parsed genome held in memory for the
-    annotator and the mutation editor's validator, built from the stored files rather than
-    stored itself. `aledb_mutation_editor.validation` handles both.
+    **Plural because one row holds many sequences**: `seq_ids` is the contig list, so this
+    is a reference *genome* and not a single contig, while still being one row per
+    experiment. It was `ExperimentReference`, which named the relation rather than the
+    thing.
+
+    `aledb_import.annotate.model.LoadedReferenceSequences` is the same genome *parsed*, held
+    in memory for the annotator and the mutation editor's validator and built from the files
+    this row points at. It briefly wore this exact name, which is why it now says `Loaded`:
+    `aledb_mutation_editor.validation` handles both, and two classes a letter apart in one
+    module is the shape of confusion this suite keeps having to undo.
     """
 
     experiment = models.OneToOneField("aledb_experiment.Experiment",
@@ -500,7 +504,7 @@ class NcbiSequence(models.Model):
     ]
 
     #: aledb_import.reference.sequence_digest() of this contig -- sha256 of its uppercased
-    #: bases alone. Equal to the `sha256` of an ReferenceSequence.seq_ids entry, which is
+    #: bases alone. Equal to the `sha256` of an ReferenceSequences.seq_ids entry, which is
     #: how a contig finds its row.
     sha256 = models.CharField(max_length=64, unique=True)
     length = models.BigIntegerField()

@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import (ReferenceSequence, Mutation, NcbiSequence, MutationCall,
+from aledb_sample.models import (ReferenceSequences, Mutation, NcbiSequence, MutationCall,
                               Sample)
 
 SVIEWER_SCRIPT = "sviewer/js/sviewer.js"
@@ -48,7 +48,7 @@ class _Fixture(TestCase):
             sample=self.reseq).first()
         self.mutation = self.call.mutation
         self.experiment = self.reseq.experiment
-        self.reference = ReferenceSequence.objects.get(experiment=self.experiment)
+        self.reference = ReferenceSequences.objects.get(experiment=self.experiment)
         self.entry = self.reference.seq_ids[0]
 
     def _verify_contig(self, accession="NC_000913.3"):

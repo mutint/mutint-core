@@ -37,7 +37,7 @@ def mutation_extent(mutation):
 def buffered_extent(mutation, contig_length=None, buffer_bases=LOCUS_BUFFER_BASES):
     """`mutation_extent` widened by `buffer_bases`, clamped to the contig.
 
-    `contig_length` comes from `ReferenceSequence.seq_ids`, which carries a length per
+    `contig_length` comes from `ReferenceSequences.seq_ids`, which carries a length per
     contig -- so clamping the right-hand end costs no file read. Passing None leaves that end
     unclamped, which is what the genome browser does: igv resolves an over-long end against
     the FASTA index it is already loading, and NCBI's viewer does not.

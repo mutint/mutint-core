@@ -50,7 +50,7 @@ def detect_format(path, original_name=None):
 
 
 def load_reference(*paths, **kwargs):
-    """Parse reference files into a ReferenceSequences for the annotator."""
+    """Parse reference files into a LoadedReferenceSequences for the annotator."""
     original_name = kwargs.pop('original_name', None)
     if kwargs:
         raise TypeError('unexpected keyword arguments: %s' % ', '.join(sorted(kwargs)))

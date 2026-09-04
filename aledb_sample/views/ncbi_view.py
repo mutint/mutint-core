@@ -29,7 +29,7 @@ from aledb_sample import ncbi
 from aledb_sample.breseq_report import build_rows, is_mixed
 from aledb_sample.locus import buffered_extent, mutation_extent
 from aledb_sample.views.common import get_experiment, no_experiment_selected
-from aledb_sample.models import ReferenceSequence, Mutation, MutationCall, NcbiSequence
+from aledb_sample.models import ReferenceSequences, Mutation, MutationCall, NcbiSequence
 
 logger = logging.getLogger(__name__)
 

@@ -336,7 +336,7 @@ def sequence_set_digest(sequences):
 
 
 def sequence_entries(sequences):
-    """The `ReferenceSequence.seq_ids` value for `sequences`.
+    """The `ReferenceSequences.seq_ids` value for `sequences`.
 
     One place, because it is written from two paths in `reference_store` and a rename
     rewrites it a third way -- and the per-sequence hash it carries is what a rename maps

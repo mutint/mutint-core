@@ -22,7 +22,7 @@ from django.db import transaction
 from aledb_experiment.models import Experiment
 from aledb_import import annotation, reference as reference_io, reference_store
 from aledb_import.gd_import import run_post_processing
-from aledb_sample.models import ReferenceSequence, Mutation
+from aledb_sample.models import ReferenceSequences, Mutation
 
 
 class Command(BaseCommand):
@@ -115,7 +115,7 @@ class Command(BaseCommand):
         except reference_io.ReferenceFormatError as error:
             raise CommandError(str(error))
 
-        before = ReferenceSequence.objects.filter(
+        before = ReferenceSequences.objects.filter(
             experiment=experiment).values_list("gff3_sha256", flat=True).first()
 
         if dry_run:
@@ -134,7 +134,7 @@ class Command(BaseCommand):
                 "%s\nThis is a different genome, not a re-annotation of the same one. "
                 "Pass --replace if that is really what you mean." % error)
 
-        after = ReferenceSequence.objects.get(experiment=experiment).gff3_sha256
+        after = ReferenceSequences.objects.get(experiment=experiment).gff3_sha256
         if before is None:
             self.stdout.write("Established %s as the reference for %r."
                               % (os.path.basename(reference_path), experiment.name))

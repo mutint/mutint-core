@@ -26,7 +26,7 @@ from aledb_experiment.permissions import can_edit_project
 from aledb_filter.util import filter_mutation_calls
 from aledb_filter.view_filter import get_view_filter
 from aledb_sample.breseq_report import build_rows, is_mixed
-from aledb_sample.models import ReferenceSequence, MutationCall
+from aledb_sample.models import ReferenceSequences, MutationCall
 from aledb_experiment.ancestor import ancestral_mutation_ids, describe_ancestor
 from aledb_sample.util import get_reseq_ordered_dict
 
@@ -197,4 +197,4 @@ def _refseq_url():
 
 
 def _reference(experiment):
-    return ReferenceSequence.objects.filter(experiment=experiment).first()
+    return ReferenceSequences.objects.filter(experiment=experiment).first()

@@ -27,7 +27,7 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 
-from aledb_sample.models import ReferenceSequence, NcbiSequence
+from aledb_sample.models import ReferenceSequences, NcbiSequence
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +266,7 @@ def verified_contig_names(experiment):
         return frozenset()
     try:
         reference = experiment.reference
-    except (ReferenceSequence.DoesNotExist, AttributeError):
+    except (ReferenceSequences.DoesNotExist, AttributeError):
         return frozenset()
 
     by_digest = {entry["sha256"]: entry["id"]
@@ -294,7 +294,7 @@ def contig_entry(experiment, seq_id):
         return None
     try:
         reference = experiment.reference
-    except (ReferenceSequence.DoesNotExist, AttributeError):
+    except (ReferenceSequences.DoesNotExist, AttributeError):
         return None
 
     for entry in reference.seq_ids or []:
@@ -321,7 +321,7 @@ def contig_states(experiment):
         return []
     try:
         reference = experiment.reference
-    except (ReferenceSequence.DoesNotExist, AttributeError):
+    except (ReferenceSequences.DoesNotExist, AttributeError):
         return []
 
     entries = list(reference.seq_ids or [])

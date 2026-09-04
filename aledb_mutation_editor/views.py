@@ -422,7 +422,7 @@ def mutation_add(request):
             "schema": validation.form_schema(),
             # The contigs a position can be on. Offered as a dropdown when they are known,
             # because a mistyped contig name is refused by an exact match with no near-miss
-            # handling -- `ReferenceSequences.add` matches names exactly, on purpose.
+            # handling -- `LoadedReferenceSequences.add` matches names exactly, on purpose.
             "seq_ids": sorted(validation.contig_lengths(reference_row)),
             "has_reference": reference_row is not None,
             "title": "Add a mutation to %s" % experiment.name,
@@ -525,10 +525,10 @@ def _initial_fields(mutation):
 
 
 def _reference_row(experiment):
-    """The experiment's `ReferenceSequence`, or None. Reads no files."""
-    from aledb_sample.models import ReferenceSequence
+    """The experiment's `ReferenceSequences`, or None. Reads no files."""
+    from aledb_sample.models import ReferenceSequences
 
-    return ReferenceSequence.objects.filter(experiment=experiment).first()
+    return ReferenceSequences.objects.filter(experiment=experiment).first()
 
 
 @ensure_csrf_cookie

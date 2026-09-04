@@ -1319,12 +1319,12 @@ validation names the problem instead of silently discarding what was typed.
 
 **Validation is four stages and the order is load-bearing** (`validation.py`): shape, then the
 no-ops that need no sequence (an AMP to one copy — refused even with no reference stored, since
-nothing about it depends on one), then contig and bounds from `ReferenceSequence.seq_ids`
+nothing about it depends on one), then contig and bounds from `ReferenceSequences.seq_ids`
 (which carries a `length` per contig, so no file is opened), then the sequence no-ops. Only
 that last stage loads the reference, which is why `load_references` is a *callable* and why
 `SEQUENCE_CHECKED_TYPES` exists: a DEL's validity never depends on which bases it removes, and
 loading parses the whole genome. Stage 4 must never run before stage 3 —
-`ReferenceSequences.get_sequence_1` slices a plain string, so an over-long end returns a short
+`LoadedReferenceSequences.get_sequence_1` slices a plain string, so an over-long end returns a short
 one and a start of 0 returns the wrong bases, both without raising.
 
 The no-ops worth knowing: a SNP to the base already there, a SUB matching its span, **an
@@ -2296,7 +2296,7 @@ on the sequence check, which named the wrong reason.
 `annotate/genbank.py` takes each record's `seq_id` from **LOCUS** (`record.name`,
 `NC_000913`), not from **VERSION** (`record.id`, `NC_000913.3`). breseq does the same
 (`reference_sequence.cpp` `LoadGenBankFileHeader`), so every seq_id in a `.gd` it writes is
-the unversioned one — and `ReferenceSequences.add` matches names **exactly**, on purpose, so
+the unversioned one — and `LoadedReferenceSequences.add` matches names **exactly**, on purpose, so
 a reference that called the contig `NC_000913.3` would reject every one of those `.gd` files.
 Taking VERSION here made a GenBank and breseq's own GFF3 of the same genome disagree about
 what its contigs are called, which is the one disagreement the whole normalization design
@@ -2941,7 +2941,7 @@ All apps use the `aledb_*` namespace. Key apps:
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}` --
     everything from the sample's `data/` folder, `output/` is not consulted;
     stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
-    records the shared reference as `ReferenceSequence`. Samples whose reference does not
+    records the shared reference as `ReferenceSequences`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
     range support by `aledb_sample/views/alignments.py`, which resolves every path from a
     primary key rather than from anything the client sends.
@@ -2949,9 +2949,9 @@ All apps use the `aledb_*` namespace. Key apps:
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
     storing them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`).
-    The shared reference is recorded as `ReferenceSequence`; a sample whose reference
+    The shared reference is recorded as `ReferenceSequences`; a sample whose reference
     *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the
-    sole invariant (`ReferenceSequence.matches_sequence`) — differing annotation never
+    sole invariant (`ReferenceSequences.matches_sequence`) — differing annotation never
     rejects, and a folder import leaves the stored annotation alone so import order cannot
     redefine it; only the explicit `replace_annotation` import type refreshes it. A bare `.gd` is *skipped* here —
     it has no reference for that check to apply to.

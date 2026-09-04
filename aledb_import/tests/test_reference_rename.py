@@ -16,7 +16,7 @@ from aledb_common import plugin_registry
 from aledb_import import breseq_folder, reference as reference_io, reference_rename
 from aledb_import import reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import ReferenceSequence, Mutation
+from aledb_sample.models import ReferenceSequences, Mutation
 
 
 class SequenceIdentityTestCase(TestCase):
@@ -120,7 +120,7 @@ class Gff3RenameTestCase(TestCase):
 class RenamePlanningTestCase(TestCase):
 
     def _reference(self, entries):
-        reference = ReferenceSequence(seq_ids=entries)
+        reference = ReferenceSequences(seq_ids=entries)
         reference.experiment_id = 1
         return reference
 
@@ -218,7 +218,7 @@ class RenameApplicationTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name="e", person="tester")
-        self.reference = ReferenceSequence.objects.get()
+        self.reference = ReferenceSequences.objects.get()
         self.experiment = self.reference.experiment
         self.sequences = [("NC_TEST.1", breseq_fixture.SEQUENCE_A)]
 
@@ -324,7 +324,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name="e", person="tester")
-        self.experiment = ReferenceSequence.objects.get().experiment
+        self.experiment = ReferenceSequences.objects.get().experiment
         self.renamed = [("NC_TEST.1", breseq_fixture.SEQUENCE_A)]
         self.gff3 = breseq_fixture.gff3_text(self.renamed)
 
@@ -395,7 +395,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
     def test_seq_ids_are_refreshed_on_the_same_sequence_path(self):
         """The latent bug this feature makes live: `seq_ids` used to be written only on the
         create/replace branch, so a same-sequence re-upload left it stale."""
-        reference = ReferenceSequence.objects.get()
+        reference = ReferenceSequences.objects.get()
         reference.seq_ids = [{"id": "test_ref", "length": 1}]
         reference.sequence_sha256 = ""
         reference.save(update_fields=["seq_ids", "sequence_sha256"])

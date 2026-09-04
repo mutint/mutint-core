@@ -17,7 +17,7 @@ import os
 from aledb_common import store
 from aledb_import import reference as reference_io
 from aledb_import import reference_rename
-from aledb_sample.models import ReferenceSequence
+from aledb_sample.models import ReferenceSequences
 
 
 class ReferenceMismatch(Exception):
@@ -59,7 +59,7 @@ def known_seq_ids(experiment):
     those as one reference would attribute a mutation to the wrong genome, which is
     a quieter and worse failure than refusing the import.
     """
-    reference = ReferenceSequence.objects.filter(experiment=experiment).first()
+    reference = ReferenceSequences.objects.filter(experiment=experiment).first()
     if reference is None:
         return None
     return {entry["id"] for entry in (reference.seq_ids or []) if entry.get("id")}
@@ -70,7 +70,7 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
     """Create the experiment's reference, or verify a later one is the same reference.
 
     Sameness is decided on the **sequence** alone -- the bases, independent of the names
-    they carry and the order they are in; see ``ReferenceSequence.matches_sequence``.
+    they carry and the order they are in; see ``ReferenceSequences.matches_sequence``.
     Everything else is negotiable:
 
     * different annotation -- ``update_annotation`` decides. An explicit reference or
@@ -81,7 +81,7 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
       rewrites every mutation in the experiment and is not something to do as a side effect
       of an upload. Nothing that imports data passes it.
 
-    Returns ``(ReferenceSequence, created)``. Raises ReferenceMismatch when the sequence
+    Returns ``(ReferenceSequences, created)``. Raises ReferenceMismatch when the sequence
     differs and ``replace`` is not set.
     """
     fasta_text = normalized_fasta_text(sequences)
@@ -89,7 +89,7 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
     fasta_sha = digest(fasta_text)
     sequence_sha = reference_io.sequence_set_digest(sequences)
 
-    existing = ReferenceSequence.objects.filter(experiment=experiment).first()
+    existing = ReferenceSequences.objects.filter(experiment=experiment).first()
     if existing is not None and not replace:
         _ensure_sequence_identity(existing)
         if not existing.matches_sequence(sequence_sha, fasta_sha):
@@ -139,7 +139,7 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
 
     defaults = dict(_sequence_fields(sequences, fasta_sha, sequence_sha),
                     gff3_sha256=gff3_sha)
-    reference, created = ReferenceSequence.objects.update_or_create(
+    reference, created = ReferenceSequences.objects.update_or_create(
         experiment=experiment, defaults=defaults)
     return reference, created
 
@@ -232,4 +232,4 @@ def annotation_reference_path(experiment_id):
 
 
 def has_reference(experiment):
-    return ReferenceSequence.objects.filter(experiment=experiment).exists()
+    return ReferenceSequences.objects.filter(experiment=experiment).exists()

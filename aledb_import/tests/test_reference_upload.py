@@ -9,7 +9,7 @@ from aledb_common import store
 from aledb_import import reference as reference_io
 from aledb_import import reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import ReferenceSequence
+from aledb_sample.models import ReferenceSequences
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 
@@ -97,7 +97,7 @@ class NormalizationTestCase(TestCase):
     def test_genbank_seq_ids_come_from_the_locus_line(self):
         """breseq names contigs from LOCUS, so a .gd it writes says `test_ref`. Taking
         the VERSION here would name the same contig `test_ref.3` and the two would not
-        resolve to each other -- `ReferenceSequences.add` matches names exactly."""
+        resolve to each other -- `LoadedReferenceSequences.add` matches names exactly."""
         gff3_text, sequences = reference_io.normalize_reference(self._versioned_genbank())
 
         self.assertEqual([seq_id for seq_id, _ in sequences], ["test_ref"])
@@ -299,14 +299,14 @@ class ReferenceStoreTestCase(TestCase):
         reference, created = self._establish(
             experiment, "other.fasta", other, replace=True)
         self.assertFalse(created)
-        self.assertEqual(ReferenceSequence.objects.count(), 1)
+        self.assertEqual(ReferenceSequences.objects.count(), 1)
         self.assertEqual(reference.total_length, len(breseq_fixture.SEQUENCE_B))
 
     def test_reuploading_the_same_reference_is_accepted(self):
         experiment = self._experiment()
         self._establish(experiment, "REL606.gbk", self._genbank_bytes())
         self._establish(experiment, "REL606.gbk", self._genbank_bytes())
-        self.assertEqual(ReferenceSequence.objects.count(), 1)
+        self.assertEqual(ReferenceSequences.objects.count(), 1)
 
     def test_same_sequence_with_new_annotation_refreshes_it(self):
         """Sequence is the invariant, so this is the same reference -- but an explicit

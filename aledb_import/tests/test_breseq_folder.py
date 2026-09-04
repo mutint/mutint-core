@@ -9,7 +9,7 @@ from aledb_common import store
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
 from aledb_sample.models import (
-    ReferenceSequence,
+    ReferenceSequences,
     Mutation,
     MutationCall,
     Sample,
@@ -54,7 +54,7 @@ class BreseqFolderImportTestCase(TestCase):
             self.assertTrue(os.path.isfile(store.sample_path(reseq.id, artifact)),
                             "%s was not stored" % artifact)
 
-        reference = ReferenceSequence.objects.get()
+        reference = ReferenceSequences.objects.get()
         self.assertEqual(reference.total_length, len(breseq_fixture.SEQUENCE_A))
         self.assertEqual([s["id"] for s in reference.seq_ids], ["test_ref"])
         for artifact in (store.REFERENCE_GFF3, store.REFERENCE_FASTA, store.REFERENCE_FAI):
@@ -80,7 +80,7 @@ class BreseqFolderImportTestCase(TestCase):
 
         self.assertEqual([f["error"] for f in summary["files"]], [None, None])
         self.assertEqual(Sample.objects.count(), 2)
-        self.assertEqual(ReferenceSequence.objects.count(), 1)
+        self.assertEqual(ReferenceSequences.objects.count(), 1)
 
     def test_nested_collection_folder_is_walked(self):
         """A drop may be one sample or a folder of them, at any depth."""
@@ -105,13 +105,13 @@ class BreseqFolderImportTestCase(TestCase):
         summary = self._import()
         self.assertEqual([f["error"] for f in summary["files"]], [None, None])
         self.assertEqual(Sample.objects.count(), 2)
-        self.assertEqual(ReferenceSequence.objects.count(), 1)
+        self.assertEqual(ReferenceSequences.objects.count(), 1)
 
     def test_annotation_is_not_rewritten_by_import_order(self):
         """A folder import must not silently redefine the experiment's annotation."""
         breseq_fixture.write_sample(self.drop, "s1")
         self._import()
-        original_gff3 = ReferenceSequence.objects.get().gff3_sha256
+        original_gff3 = ReferenceSequences.objects.get().gff3_sha256
 
         richer = breseq_fixture.gff3_text(
             [("test_ref", breseq_fixture.SEQUENCE_A)]).replace(
@@ -120,7 +120,7 @@ class BreseqFolderImportTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s2", gff3_override=richer)
         self._import()
 
-        self.assertEqual(ReferenceSequence.objects.get().gff3_sha256, original_gff3)
+        self.assertEqual(ReferenceSequences.objects.get().gff3_sha256, original_gff3)
 
     def test_mismatched_reference_rejects_only_that_sample(self):
         breseq_fixture.write_sample(self.drop, "s1")
@@ -138,7 +138,7 @@ class BreseqFolderImportTestCase(TestCase):
 
         # The batch continued, and the experiment kept exactly one reference.
         self.assertGreater(summary["total_mutations"], 0)
-        self.assertEqual(ReferenceSequence.objects.count(), 1)
+        self.assertEqual(ReferenceSequences.objects.count(), 1)
         self.assertEqual(Sample.objects.count(), 1)
 
     def test_gff3_and_fasta_disagreement_is_an_error(self):
@@ -148,7 +148,7 @@ class BreseqFolderImportTestCase(TestCase):
         summary = self._import()
 
         self.assertIn("disagree", summary["files"][0]["error"])
-        self.assertEqual(ReferenceSequence.objects.count(), 0)
+        self.assertEqual(ReferenceSequences.objects.count(), 0)
         self.assertEqual(Sample.objects.count(), 0)
 
     def test_missing_bai_is_a_per_sample_error(self):
@@ -300,7 +300,7 @@ class BreseqFolderImportTestCase(TestCase):
         self._import()
 
         self.assertEqual(Sample.objects.count(), 1)
-        self.assertEqual(ReferenceSequence.objects.count(), 1)
+        self.assertEqual(ReferenceSequences.objects.count(), 1)
         self.assertEqual(Mutation.objects.count(), mutations)
 
 

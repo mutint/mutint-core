@@ -19,7 +19,7 @@ from django.core.management.base import BaseCommand, CommandError
 from aledb_experiment.models import Experiment
 from aledb_import import reference as reference_io
 from aledb_import import reference_rename, reference_store
-from aledb_sample.models import ReferenceSequence, Mutation
+from aledb_sample.models import ReferenceSequences, Mutation
 
 
 class Command(BaseCommand):
@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         experiment = self._experiment(options["experiment_id"])
-        reference = ReferenceSequence.objects.filter(experiment=experiment).first()
+        reference = ReferenceSequences.objects.filter(experiment=experiment).first()
         if reference is None:
             raise CommandError("Experiment %s has no reference genome."
                                % experiment.id)

@@ -21,7 +21,7 @@ from aledb_import.annotate.model import (
     AnnotatedSequence,
     Feature,
     FeatureLocation,
-    ReferenceSequences,
+    LoadedReferenceSequences,
     make_safe,
     trim_repeat_name,
 )
@@ -161,7 +161,7 @@ def _record_seq_id(record):
     ``LoadGenBankFileHeader``), and every seq_id in a .gd it writes is therefore the
     unversioned one. Taking the VERSION here made a GenBank and breseq's own GFF3 of
     the same genome disagree about what its contigs are called, which is exactly the
-    disagreement ``ReferenceSequences.add`` refuses to paper over.
+    disagreement ``LoadedReferenceSequences.add`` refuses to paper over.
 
     The VERSION is kept as an alias in ``load_genbank`` so a lookup by either name
     still resolves; only the canonical name changes.
@@ -174,8 +174,8 @@ def _record_seq_id(record):
 
 
 def load_genbank(*paths):
-    """Load one or more GenBank files into a ReferenceSequences."""
-    references = ReferenceSequences()
+    """Load one or more GenBank files into a LoadedReferenceSequences."""
+    references = LoadedReferenceSequences()
 
     for path in paths:
         for record in parse_records(path):

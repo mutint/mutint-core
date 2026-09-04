@@ -15,7 +15,7 @@ from aledb_mutation_editor import validation
 
 
 class FakeReference:
-    """The two calls `validation` makes of a real `ReferenceSequences`."""
+    """The two calls `validation` makes of a real `LoadedReferenceSequences`."""
 
     def __init__(self, sequences, repeats=()):
         self.sequences = {seq_id: bases.upper() for seq_id, bases in sequences.items()}
@@ -34,7 +34,7 @@ class FakeReference:
 
 
 class FakeReferenceRow:
-    """Stands in for `ReferenceSequence`; only `seq_ids` is read."""
+    """Stands in for `ReferenceSequences`; only `seq_ids` is read."""
 
     def __init__(self, seq_ids):
         self.seq_ids = seq_ids

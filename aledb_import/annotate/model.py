@@ -225,8 +225,14 @@ class AnnotatedSequence(object):
         self.repeat_locations.sort(key=FeatureLocation.sort_key)
 
 
-class ReferenceSequences(object):
-    """All contigs of a reference, keyed by seq id."""
+class LoadedReferenceSequences(object):
+    """All contigs of a reference, parsed and keyed by seq id.
+
+    **`Loaded` distinguishes it from `aledb_sample.models.ReferenceSequences`**, the row
+    recording that an experiment has a reference and where its files are. This is what you
+    get by *reading* those files: sequence and features in memory, for the annotator and for
+    the mutation editor's validator. Nothing here is stored, and one is built from the other.
+    """
 
     def __init__(self):
         self.sequences = {}

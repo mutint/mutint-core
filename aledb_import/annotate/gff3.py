@@ -22,7 +22,7 @@ from aledb_import.annotate.model import (
     AnnotatedSequence,
     Feature,
     FeatureLocation,
-    ReferenceSequences,
+    LoadedReferenceSequences,
     make_safe,
     trim_repeat_name,
 )
@@ -223,13 +223,13 @@ def _location_for(row, feature):
 
 def load_gff3(*paths):
     """
-    Load one or more breseq GFF3 files into a ReferenceSequences.
+    Load one or more breseq GFF3 files into a LoadedReferenceSequences.
 
     A spliced gene is written as several rows sharing one `ID` and `type`; those
     are merged into a single feature whose sublocations follow file order, which
     breseq writes 5'->3' along the gene. reference_sequence.cpp:1625-1652
     """
-    references = ReferenceSequences()
+    references = LoadedReferenceSequences()
 
     for path in paths:
         rows, fasta_lines = _read_rows(path)

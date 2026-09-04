@@ -19,7 +19,7 @@ from django.test import TestCase, override_settings
 
 from aledb_common import store
 from aledb_import import annotation, gd_import, reference, reference_store
-from aledb_sample.models import ReferenceSequence, Mutation
+from aledb_sample.models import ReferenceSequences, Mutation
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "..", "annotate", "tests", "fixtures")
 SYNTHETIC_GFF3 = os.path.join(FIXTURES, "synthetic.gff3")
@@ -111,10 +111,10 @@ class ReannotateTestCase(TestCase):
         self.assertEqual("TAC", mutation.annotation["codon_ref_seq"])
 
     def test_the_new_reference_is_stored(self):
-        before = ReferenceSequence.objects.get().gff3_sha256
+        before = ReferenceSequences.objects.get().gff3_sha256
         self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
 
-        stored = ReferenceSequence.objects.get()
+        stored = ReferenceSequences.objects.get()
         self.assertNotEqual(before, stored.gff3_sha256)
         expected, _sequences = reference.normalize_reference(SYNTHETIC_GFF3)
         self.assertEqual(reference_store.digest(expected), stored.gff3_sha256)
@@ -141,12 +141,12 @@ class ReannotateTestCase(TestCase):
         self.assertIn("Already up to date", output)
 
     def test_dry_run_reports_but_writes_nothing(self):
-        before = ReferenceSequence.objects.get().gff3_sha256
+        before = ReferenceSequences.objects.get().gff3_sha256
         output = self.run_command(reference_path=SYNTHETIC_GFF3, dry_run=True)
 
         self.assertIn("36 (36 changed)", output)
         self.assertIn("Dry run", output)
-        self.assertEqual(before, ReferenceSequence.objects.get().gff3_sha256)
+        self.assertEqual(before, ReferenceSequences.objects.get().gff3_sha256)
         self.assertLessEqual(self.gene_names(), {None, "", "–/–"})
 
     def test_gd_data_is_left_verbatim(self):
@@ -173,7 +173,7 @@ class ReannotateTestCase(TestCase):
         self.run_command(reference_path=other, replace=True, skip_rebuilds=True)
         self.assertEqual(reference_store.digest(reference.render_fasta(
             [("SYN001", "ACGTACGTACGT")])),
-            ReferenceSequence.objects.get().fasta_sha256)
+            ReferenceSequences.objects.get().fasta_sha256)
 
     def test_unknown_experiment(self):
         with self.assertRaises(CommandError):

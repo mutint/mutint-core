@@ -12,7 +12,7 @@ from django.test import TestCase, override_settings
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import ReferenceSequence, MutationCall, Sample
+from aledb_sample.models import ReferenceSequences, MutationCall, Sample
 from aledb_sample.views.browse import _sample_tracks
 
 
@@ -119,7 +119,7 @@ class BrowseMutationTestCase(TestCase):
         self.assertNotIn("js/igv.min.js", html)
 
     def test_an_experiment_without_a_reference_explains_itself(self):
-        ReferenceSequence.objects.all().delete()
+        ReferenceSequences.objects.all().delete()
 
         response = self._get()
         self.assertEqual(response.status_code, 200)
@@ -139,7 +139,7 @@ class BrowseMutationTestCase(TestCase):
         self.assertNotIn('"aliasURL"', response.content.decode("utf-8"))
 
     def test_a_renamed_sequence_publishes_its_alias_url(self):
-        reference = ReferenceSequence.objects.get()
+        reference = ReferenceSequences.objects.get()
         reference.seq_ids = [dict(reference.seq_ids[0], aliases=["old_name"])]
         reference.save(update_fields=["seq_ids"])
 
@@ -151,7 +151,7 @@ class BrowseMutationTestCase(TestCase):
     def test_the_page_does_not_publish_per_sequence_hashes(self):
         """seq_ids also carries the sequence hashes that establish reference identity;
         this dict is rendered into the page for anyone who can see it."""
-        reference = ReferenceSequence.objects.get()
+        reference = ReferenceSequences.objects.get()
         reference.seq_ids = [dict(reference.seq_ids[0], sha256="deadbeef" * 8)]
         reference.save(update_fields=["seq_ids"])
 

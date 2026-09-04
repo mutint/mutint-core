@@ -54,15 +54,15 @@ def uncalled_bases_per_sample(sample_ids):
 def _reference_length(experiment_id):
     """Total bases in the experiment's reference, or 0 if there is no usable figure.
 
-    `ReferenceSequence.total_length` defaults to 0, and an experiment can have no
+    `ReferenceSequences.total_length` defaults to 0, and an experiment can have no
     reference row at all -- so this is "unknown" as often as it is a number, which is why
     `_percent_of` answers None rather than dividing.
     """
     if experiment_id is None:
         return 0
-    from aledb_sample.models import ReferenceSequence
+    from aledb_sample.models import ReferenceSequences
 
-    return (ReferenceSequence.objects
+    return (ReferenceSequences.objects
             .filter(experiment_id=experiment_id)
             .values_list("total_length", flat=True).first() or 0)
 
