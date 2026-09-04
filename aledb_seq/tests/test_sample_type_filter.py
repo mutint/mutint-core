@@ -32,17 +32,24 @@ class SampleTypeParsingTestCase(TestCase):
 
     def test_recognised_values_pass_through(self):
         self.assertEqual(self.parse("?sample_type=clonal"), SAMPLE_TYPE_CLONAL)
-        self.assertEqual(self.parse("?sample_type=population"), SAMPLE_TYPE_MIXED)
+        self.assertEqual(self.parse("?sample_type=mixed"), SAMPLE_TYPE_MIXED)
 
     def test_absent_empty_and_all_mean_no_filter(self):
         self.assertIsNone(self.parse(""))
         self.assertIsNone(self.parse("?sample_type="))
         self.assertIsNone(self.parse("?sample_type=" + REQUEST_ALL))
 
-    def test_unrecognised_value_means_no_filter(self):
-        """Not "clonal", which is what it used to mean."""
+    def test_the_retired_token_means_no_filter(self):
+        """`population` was the mixed token until this rename, so this is the stale
+        bookmark -- the reason `get_sample_type` refuses what it does not recognise instead
+        of passing it through. Passing it through would have shown half the samples with
+        the picker still reading "All sample types"."""
         with self.assertLogs("aledb_seq.views.common", level="WARNING"):
-            self.assertIsNone(self.parse("?sample_type=mixed"))
+            self.assertIsNone(self.parse("?sample_type=population"))
+
+    def test_any_other_unrecognised_value_means_no_filter_too(self):
+        with self.assertLogs("aledb_seq.views.common", level="WARNING"):
+            self.assertIsNone(self.parse("?sample_type=nonsense"))
 
 
 class SampleTypeFilterTestCase(TestCase):
@@ -54,12 +61,12 @@ class SampleTypeFilterTestCase(TestCase):
         media = Media.objects.create(description="M9")
         ale = Population.objects.create(experiment=self.experiment, name="1")
         flask = TimePoint.objects.create(population=ale, value=1000, media=media)
-        self.clonal = self.make_sample(flask, 1, is_population=False)
-        self.mixed = self.make_sample(flask, 2, is_population=True)
+        self.clonal = self.make_sample(flask, 1, is_mixed=False)
+        self.mixed = self.make_sample(flask, 2, is_mixed=True)
 
-    def make_sample(self, flask, number, *, is_population):
+    def make_sample(self, flask, number, *, is_mixed):
         return Sample.objects.create(
-            time_point=flask, name=number, is_population=is_population,
+            time_point=flask, name=number, is_clonal=not is_mixed,
             source_name="s%d" % number)
 
     def selected(self, sample_type):

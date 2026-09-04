@@ -42,7 +42,7 @@ class TestParser(TestCase):
         # `7-90-0-1` is one sample now, labelled `0-1`: the file's I and R keys and their
         # values are unchanged, and `sample_label` is what joins them.
         Sample.objects.create(time_point=flask, name="0-1",
-                                              is_population=False)
+                                              is_clonal=True)
 
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
         parse_metadata_post_experiment_upload(path + "test1/", self.ale_exp.pk)
@@ -87,9 +87,9 @@ class TestParser(TestCase):
         # Two replicates of one isolate are two samples in one flask -- `0-1` and `0-2`.
         # The file's I and R keys and their values are unchanged; `sample_label` joins them.
         Sample.objects.create(time_point=flask, name="0-1",
-                                              is_population=False)
+                                              is_clonal=True)
         Sample.objects.create(time_point=flask, name="0-2",
-                                              is_population=False)
+                                              is_clonal=True)
         # The metadata uploading should be creating 2 different types of media.
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
         parse_metadata_post_experiment_upload(path + "test3/", self.ale_exp.pk)
@@ -112,9 +112,9 @@ class TestParser(TestCase):
         # Two replicates of one isolate are two samples in one flask -- `0-1` and `0-2`.
         # The file's I and R keys and their values are unchanged; `sample_label` joins them.
         Sample.objects.create(time_point=flask, name="0-1",
-                                              is_population=False)
+                                              is_clonal=True)
         Sample.objects.create(time_point=flask, name="0-2",
-                                              is_population=False)
+                                              is_clonal=True)
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
         parse_metadata_post_experiment_upload(path + "test_reuse_media_with_metadata_upload/", self.ale_exp.pk)
         media_queryset = Media.objects.all()
@@ -140,9 +140,9 @@ class TestParser(TestCase):
         # Two replicates of one isolate are two samples in one flask -- `0-1` and `0-2`.
         # The file's I and R keys and their values are unchanged; `sample_label` joins them.
         Sample.objects.create(time_point=flask, name="0-1",
-                                              is_population=False)
+                                              is_clonal=True)
         Sample.objects.create(time_point=flask, name="0-2",
-                                              is_population=False)
+                                              is_clonal=True)
 
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
 

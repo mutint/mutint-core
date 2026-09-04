@@ -87,6 +87,9 @@ TIME_POINT_VALUE = "value"
 #: The sample's label within its time point: `1`, `763A`, `1-2`.
 SAMPLE_LABEL = "name"
 
+#: Whether the sample is one genotype. It was `is_population`, with the opposite meaning.
+SAMPLE_CLONAL = "is_clonal"
+
 
 #: The same chain read **downward**. Django spells a reverse relation with the lowercased
 #: model name, because none of these declares a `related_name` -- so it is not simply
@@ -128,6 +131,23 @@ def to_sample(prefix="", field=""):
 
 def to_sample_label(prefix=""):
     return join(prefix, SAMPLE_LABEL)
+
+
+def clonal_filter(prefix=""):
+    """Filter kwargs selecting the clonal samples.
+
+    A pair with `mixed_filter` rather than one helper taking a boolean, and neither takes a
+    `not`. The column this replaced was `is_population`, so every one of these call sites had
+    its polarity inverted at once -- and a filter written `is_clonal=False` reviews as
+    arithmetic, where `mixed_filter()` reviews as a word you can check against the sentence
+    around it. That is the only kind of review that reliably catches a flipped flag.
+    """
+    return {to_sample(prefix, SAMPLE_CLONAL): True}
+
+
+def mixed_filter(prefix=""):
+    """Filter kwargs selecting the mixed (population) samples. See `clonal_filter`."""
+    return {to_sample(prefix, SAMPLE_CLONAL): False}
 
 
 def to_time_point(prefix="", field="", root="sample"):

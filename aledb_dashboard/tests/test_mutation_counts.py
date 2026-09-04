@@ -43,7 +43,7 @@ class MutationCountsTestCase(TestCase):
         ale_row = Population.objects.create(experiment=self.experiment, name=ale)
         flask = TimePoint.objects.create(population=ale_row, value=100, media=self.media)
         return Sample.objects.create(
-            time_point=flask, name=1, is_population=False)
+            time_point=flask, name=1, is_clonal=True)
 
     def _mutation(self, mutation_type="SNP", position=100, snp_type="", gene="thrA",
                   protein_change=""):

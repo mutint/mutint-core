@@ -44,7 +44,7 @@ DESCRIPTIVE_FIELDS = ("sample_name", "person", "isolate_description",
                       "rep_description", "rep_tags")
 # The form's field names, which are the query-string vocabulary and change with it rather
 # than with the columns behind them.
-STRUCTURAL_FIELDS = ("ale", "flask", "isolate", "is_population")
+STRUCTURAL_FIELDS = ("ale", "flask", "isolate", "is_mixed")
 
 MAX_ROWS = 2000
 
@@ -299,7 +299,9 @@ def parse_rows(rows, samples_by_id):
         # even show.
         descriptive = {field: (row.get(field) or "").strip()
                        for field in DESCRIPTIVE_FIELDS if field in row}
-        descriptive["is_population"] = _truthy(row.get("is_population"))
+        # The form asks the mixed question, because that is the box a person ticks. The
+        # column stores the clonal one. The negation happens once, in `apply_rows`.
+        descriptive["is_mixed"] = _truthy(row.get("is_mixed"))
         try:
             _check_lengths(descriptive, row_label)
         except SampleEditError as error:
@@ -421,7 +423,7 @@ def rows_are_structural(parsed):
     for reseq, coordinate, descriptive in parsed:
         if sample_coordinate(reseq) != coordinate:
             return True
-        if bool(reseq.is_population) != descriptive["is_population"]:
+        if bool(reseq.is_mixed) != descriptive["is_mixed"]:
             return True
     return False
 
@@ -457,7 +459,7 @@ def apply_rows(experiment, parsed, *, media):
     for reseq, coordinate, descriptive in parsed:
         current = sample_coordinate(reseq)
         source_time_point = reseq.time_point
-        always = ["is_population"]
+        always = ["is_clonal"]
 
         if current != coordinate:
             source_population = (source_time_point.population
@@ -484,7 +486,7 @@ def apply_rows(experiment, parsed, *, media):
         # answer ("travel, but only onto a row that did not exist a moment ago") was three
         # paragraphs of comment. They are the sample's own columns now, so they simply move
         # with it and there is nothing left to decide.
-        reseq.is_population = descriptive["is_population"]
+        reseq.is_clonal = not descriptive["is_mixed"]
         _write(reseq, {"source_name": "sample_name", "person": "person",
                        "description": "isolate_description",
                        "rep_description": "rep_description", "tags": "rep_tags"},

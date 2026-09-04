@@ -37,7 +37,7 @@ class ExportViewTestCase(TestCase):
         flask = TimePoint.objects.create(population=ale, value=500,
                                      media=Media.objects.create(description="M9"))
         sample = Sample.objects.create(
-            time_point=flask, name="1-1", is_population=False, source_name="1-500-1-1")
+            time_point=flask, name="1-1", is_clonal=True, source_name="1-500-1-1")
         mutation = Mutation.objects.create(
             experiment=self.experiment, mutation_type="SNP", position=150,
             sequence_change="T", gene="thrA", reseq_reference="SYN001")

@@ -38,6 +38,23 @@ def _uploaded_as(path, name):
         return SimpleUploadedFile(name, handle.read())
 
 
+def ensure_reference(experiment="gd exp", project="gd project"):
+    """A bare .gd carries no reference, so the experiment must already have one.
+
+    This is what dropping a GenBank, GFF3 or FASTA on the Add page does for a real user.
+
+    Module level rather than a method, so a test case that wants the scaffolding does not
+    have to subclass `GdImportTestCase` and re-run every one of its tests to get it.
+    """
+    context = gd_import._prepare_experiment(project, experiment, "tester", False)
+    # Named for the contig the fixture .gd calls: a .gd may only be imported into
+    # an experiment whose reference has the same seq_ids, matched exactly.
+    sequences = [("REL606", breseq_fixture.SEQUENCE_A)]
+    gff3_text = breseq_fixture.gff3_text(sequences)
+    reference_store.establish_or_check(context["experiment"], gff3_text, sequences)
+    return context["experiment"]
+
+
 class GdImportTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create(
@@ -51,17 +68,7 @@ class GdImportTestCase(TestCase):
         self.addCleanup(patcher.disable)
 
     def _ensure_reference(self, experiment="gd exp", project="gd project"):
-        """A bare .gd carries no reference, so the experiment must already have one.
-
-        This is what dropping a GenBank, GFF3 or FASTA on the Add page does for a real user.
-        """
-        context = gd_import._prepare_experiment(project, experiment, "tester", False)
-        # Named for the contig the fixture .gd calls: a .gd may only be imported into
-        # an experiment whose reference has the same seq_ids, matched exactly.
-        sequences = [("REL606", breseq_fixture.SEQUENCE_A)]
-        gff3_text = breseq_fixture.gff3_text(sequences)
-        reference_store.establish_or_check(context["experiment"], gff3_text, sequences)
-        return context["experiment"]
+        return ensure_reference(experiment, project)
 
     def _import(self, path, experiment="gd exp"):
         self._ensure_reference(experiment)
@@ -365,6 +372,67 @@ class GdImportTestCase(TestCase):
         metadata = self.client.get("/metadata/", {"ale_experiment_id": experiment_id})
         self.assertEqual(metadata.status_code, 200)
 
+
+
+class PolymorphismModeTestCase(TestCase):
+    """breseq's `-p` is the only thing that makes an imported sample mixed.
+
+    `#=COMMAND` is where a GenomeDiff records the command line that produced it, and `-p`
+    (polymorphism mode) is what says the reads came from a whole population rather than a
+    clone. This is the single place in the suite that turns a file into a polarity, so it is
+    asserted in both directions -- the column it writes was `is_population` and is now its
+    negation, and a test that only checked one side would pass under a re-inversion.
+    """
+
+    def setUp(self):
+        User.objects.create(username="tester", first_name="Test", last_name="User",
+                            email="t@e.com", is_active=True, is_staff=True,
+                            date_joined=datetime.now())
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+    def _import_with_command(self, command, name="1-500-1-1.gd"):
+        with open(CLEAN_GD, "rb") as handle:
+            raw = handle.read().decode()
+        lines = raw.splitlines()
+        # After #=GENOME_DIFF, which must stay first.
+        lines.insert(1, "#=COMMAND\t%s" % command)
+        ensure_reference("polymorphism exp")
+        gd_import.import_gd_files(
+            [SimpleUploadedFile(name, "\n".join(lines).encode())],
+            project_name="gd project", experiment_name="polymorphism exp",
+            person="tester")
+        return Sample.objects.get(source_name=name[:-3])
+
+    def test_a_polymorphism_run_imports_as_mixed(self):
+        sample = self._import_with_command("breseq -p -r synthetic.gbk -o s r.fastq")
+        self.assertTrue(sample.is_mixed)
+        self.assertFalse(sample.is_clonal)
+
+    def test_a_consensus_run_imports_as_clonal(self):
+        sample = self._import_with_command("breseq -r synthetic.gbk -o s r.fastq")
+        self.assertTrue(sample.is_clonal)
+        self.assertFalse(sample.is_mixed)
+
+    def test_a_file_with_no_command_line_at_all_is_clonal(self):
+        """The fixtures have no `#=COMMAND`, and neither do plenty of real files. A sample
+        is a clone unless something says otherwise."""
+        ensure_reference("polymorphism exp")
+        gd_import.import_gd_files(
+            [_uploaded_as(CLEAN_GD, "1-500-1-1.gd")], project_name="gd project",
+            experiment_name="polymorphism exp", person="tester")
+        self.assertTrue(Sample.objects.get().is_clonal)
+
+    def test_the_flag_is_matched_as_a_word_not_a_substring(self):
+        """` -p` with the leading space, so `--polymorphism-frequency-cutoff` and an output
+        directory called `-prefix` do not read as polymorphism mode. This is the existing
+        rule, pinned because the line that implements it was inverted in this commit."""
+        sample = self._import_with_command(
+            "breseq -r synthetic.gbk -o sample-p r.fastq")
+        self.assertTrue(sample.is_clonal)
 
 
 class SeqIdMustMatchTheReferenceTestCase(TestCase):

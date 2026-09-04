@@ -57,9 +57,12 @@
         </div>
 
         <div class="checkbox">
-            <label><input type="checkbox" id="se-population"
-                          {% if sample.is_population %}checked{% endif %}> Population</label>
-            <small class="help-block">Unchecked means a clonal sample.</small>
+            <label><input type="checkbox" id="se-mixed"
+                          {% if sample.is_mixed %}checked{% endif %}> Mixed</label>
+            <small class="help-block">
+                A whole evolving population sequenced together, so its mutations carry
+                frequencies. Unchecked means a clone -- one genotype.
+            </small>
         </div>
 
         <div class="form-group">
@@ -117,10 +120,10 @@
             rep_tags: document.getElementById("se-rep-tags").value
         };
         // Sent both ways, always. It used to be set only when checked, so an unchecked box
-        // omitted the key and the server fell back to False -- which happens to mean "clonal",
-        // so the bug was invisible. It stops being invisible the moment the flag's polarity
-        // changes. The bulk edit page has always sent both values; this is the page that did not.
-        data.is_population = document.getElementById("se-population").checked ? "1" : "0";
+        // omitted the key and the server fell back to False. That happened to mean "clonal",
+        // so the bug was invisible -- and this is the commit whose polarity change would have
+        // made it visible, in one page and not the other. The bulk page always sent both.
+        data.is_mixed = document.getElementById("se-mixed").checked ? "1" : "0";
         window.aledbPost("/ale/sample/{{ sample.id }}/update/", data).then(function () {
             window.location.reload();
         }).catch(function (err) {

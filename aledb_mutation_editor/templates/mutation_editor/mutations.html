@@ -107,7 +107,7 @@
                         <th class="breseq-seq-id">Reference</th>
                         <th class="breseq-position">Position</th>
                         <th class="breseq-mutation">Mutation</th>
-                        {% if is_population %}<th class="breseq-freq">Freq</th>{% endif %}
+                        {% if is_mixed %}<th class="breseq-freq">Freq</th>{% endif %}
                         <th class="breseq-annotation">Annotation</th>
                         <th class="breseq-gene">Gene</th>
                         <th class="breseq-description">Description</th>
@@ -130,7 +130,7 @@
                         <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
                         <td class="breseq-position">{{ row.position|safe }}</td>
                         <td class="breseq-mutation">{{ row.mutation|safe }}</td>
-                        {% if is_population %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}
+                        {% if is_mixed %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}
                         <td class="breseq-annotation">{{ row.annotation|safe }}</td>
                         <td class="breseq-gene">{{ row.gene|safe }}</td>
                         <td class="breseq-description">{{ row.description|safe }}</td>
@@ -140,7 +140,7 @@
                         {% comment %} Nine columns plus the mode's own, plus Freq for a
                            population sample. Both modes add exactly one column, so the count
                            is the same either way. {% endcomment %}
-                        <td colspan="{% if is_population %}10{% else %}9{% endif %}">
+                        <td colspan="{% if is_mixed %}10{% else %}9{% endif %}">
                             This sample has no mutations stored.</td>
                     </tr>
                 {% endfor %}

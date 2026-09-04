@@ -26,7 +26,7 @@ from aledb_common.util import get_user_context
 from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_experiment, can_view_project
 from aledb_seq import ncbi
-from aledb_seq.breseq_report import build_rows, is_population
+from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.locus import buffered_extent, mutation_extent
 from aledb_seq.views.common import get_ale_experiment, no_experiment_selected
 from aledb_seq.models import ExperimentReference, Mutation, ObservedMutation, NcbiSequence
@@ -74,7 +74,7 @@ def ncbi_view(request):
         # breseq's own row, as browse does, so the page states which mutation it is showing
         # in the same words every other table uses.
         "rows": build_rows([_any_observation(mutation)]) if _any_observation(mutation) else [],
-        "is_population": False,
+        "is_mixed": False,
         # Every state the template renders is decided here rather than in the template, so
         # the reasons stay beside the data that determines them.
         "has_reference": contig is not None,

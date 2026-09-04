@@ -296,8 +296,9 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
 
     reseq_reference = metadata.get("REFSEQ", "") or ""
     reseq_date = metadata.get("CREATED", "") or ""
-    # breseq marks population (polymorphism) runs with -p in the command line.
-    is_population = " -p" in (metadata.get("COMMAND", "") or "")
+    # breseq marks a polymorphism run with -p. That is the *mixed* case, so the stored
+    # flag is its negation -- the one place in the suite that turns the .gd into polarity.
+    is_clonal = " -p" not in (metadata.get("COMMAND", "") or "")
 
     ale_id, _ = Population.objects.get_or_create(experiment=experiment, name=ale_number)
     flask, _ = TimePoint.objects.get_or_create(
@@ -309,7 +310,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
         defaults={
             "source_name": sample_name,
             "person": person,
-            "is_population": is_population,
+            "is_clonal": is_clonal,
             "reference_genome": reseq_reference[:200],
             "reseq_date": reseq_date[:200],
             # A label to read the sample by, on creation only: `ale_flask_isolate_str`
@@ -347,7 +348,7 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         # ale_flask_isolate_str() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
-        is_population=" -p" in (metadata.get("COMMAND", "") or ""),
+        is_clonal=" -p" not in (metadata.get("COMMAND", "") or ""),
         reference_genome=(metadata.get("REFSEQ", "") or "")[:200],
         reseq_date=(metadata.get("CREATED", "") or "")[:200],
         source_name=sample_name, person=person)

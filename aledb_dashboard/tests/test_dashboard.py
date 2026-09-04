@@ -36,7 +36,7 @@ class DashboardCountTestCase(TestCase):
         flask, _ = TimePoint.objects.get_or_create(population=ale, value=flask_number,
                                                defaults={"media": Media.objects.create()})
         return Sample.objects.create(
-            time_point=flask, is_population=False, name=str(isolate_number))
+            time_point=flask, is_clonal=True, name=str(isolate_number))
 
     def counts(self):
         rebuild_sample_counts()

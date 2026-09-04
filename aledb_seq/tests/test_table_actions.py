@@ -45,7 +45,7 @@ class TableActionsTestCase(TestCase):
         # replicate row they used to live on.
         from aledb_seq.models import Sample
         self.replicate = Sample.objects.create(
-            time_point=flask, name=1, is_population=False)
+            time_point=flask, name=1, is_clonal=True)
 
     # @ajax(mandatory=True) answers a plain POST with a bare 400 -- it requires the header
     # jQuery's $.ajax sets. Every call below goes through here so that is not re-learned.

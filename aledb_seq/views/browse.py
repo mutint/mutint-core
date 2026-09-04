@@ -23,7 +23,7 @@ from django.utils.http import urlencode
 
 from aledb_common.util import get_user_context
 from aledb_experiment.permissions import can_view_project
-from aledb_seq.breseq_report import build_rows, is_population
+from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.locus import LOCUS_BUFFER_BASES, mutation_extent
 from aledb_seq.tracks import MUTATION_TRACK_ID, database_tracks
 from aledb_seq.models import (ExperimentReference, Mutation, ObservedMutation,
@@ -153,7 +153,7 @@ def browse_mutation(request):
         # Which samples call it, for the menu's `*` -- and read back by the switch endpoint,
         # so the flags mean the same thing after a click as they did on load.
         "calling": sorted(_samples_calling(mutation)),
-        "is_population": is_population(reseq),
+        "is_mixed": is_mixed(reseq),
         "locus": _locus(mutation),
         # Each state the template renders is decided here rather than in the template, so the
         # reasons stay next to the data that determines them.
@@ -195,7 +195,7 @@ def browse_at(request):
 
     rows = build_rows([_row_observation(reseq, mutation, observed)], refseq_url=_ncbi_url())
     table_html = loader.get_template("breseq_table/_mutation_table.html").render(
-        {"rows": rows, "is_population": is_population(reseq), "empty_message": ""}, request)
+        {"rows": rows, "is_mixed": is_mixed(reseq), "empty_message": ""}, request)
 
     return JsonResponse({
         "mutation_id": mutation.pk,

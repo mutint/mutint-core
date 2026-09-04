@@ -85,7 +85,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
         species = reseq.time_point.population.species
         strain = reseq.time_point.population.strain
         knockouts = reseq.time_point.population.description
-        clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.is_population
+        clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.is_mixed
                                 else SAMPLE_TYPE_CLONAL)
         media_temperature = reseq.time_point.media.temperature
         media_description = reseq.time_point.media.description

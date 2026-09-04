@@ -94,12 +94,12 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
     if ale_id is not None and ale_id != "":
         reseq_qryset = reseq_qryset.filter(**{paths.to_population_label(): ale_id})
     if sample_type:
-        # Compared against the constant, not the literal: `get_sample_type` has already
-        # refused anything that is not one of them, so this is a two-way choice rather than
-        # "population, or else clonal" -- which is what silently subset the page before.
-        wanted = sample_type == SAMPLE_TYPE_MIXED
+        # Two named filters rather than a computed boolean. `get_sample_type` has already
+        # refused anything that is not one of the two, so this is a genuine two-way choice
+        # -- it used to be "population, or else clonal", which silently subset the page.
         reseq_qryset = reseq_qryset.filter(
-            **{paths.to_sample(field="is_population"): wanted})
+            **(paths.mixed_filter() if sample_type == SAMPLE_TYPE_MIXED
+               else paths.clonal_filter()))
     if not include_ancestor:
         from aledb_experiment.ancestor import exclude_ancestor_samples
         reseq_qryset = exclude_ancestor_samples(reseq_qryset, ale_experiment_id)

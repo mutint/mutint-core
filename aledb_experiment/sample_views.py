@@ -85,7 +85,7 @@ def _row_context(reseq):
         "ale": coordinate[0],
         "flask": coordinate[1],
         "isolate": coordinate[2],
-        "is_population": reseq.is_population,
+        "is_mixed": reseq.is_mixed,
         "isolate_description": reseq.description or "",
         "rep_description": reseq.rep_description or "",
         "rep_tags": reseq.tags or "",
@@ -184,7 +184,7 @@ def sample_update(request, pk):
         "rep": request.POST.get("rep"),
         # Passed through raw: samples._truthy decides, because an unchecked box posts
         # the string "0", which bool() reads as True.
-        "is_population": request.POST.get("is_population"),
+        "is_mixed": request.POST.get("is_mixed"),
         "isolate_description": request.POST.get("isolate_description"),
         "rep_description": request.POST.get("rep_description"),
         "rep_tags": request.POST.get("rep_tags"),

@@ -32,7 +32,7 @@ class OrderingTestCase(TestCase):
         flask_row, _ = TimePoint.objects.get_or_create(population=ale_row, value=flask,
                                                    defaults={"media": self.media})
         return Sample.objects.create(
-            time_point=flask_row, name=str(isolate), is_population=False,
+            time_point=flask_row, name=str(isolate), is_clonal=True,
             source_name="A%s F%s I%s" % (ale, flask, isolate))
 
     def order(self):

@@ -91,7 +91,7 @@ class SummaryTestCase(TestCase):
             population=ale_row, value=flask,
             defaults={"media": self.context["media"]})
         return Sample.objects.create(
-            time_point=flask_row, name="%d-1" % isolate, is_population=False,
+            time_point=flask_row, name="%d-1" % isolate, is_clonal=True,
             source_name="%d-%d-%d-1" % (ale, flask, isolate))
 
     def _mutation(self, mutation_type, snp_type, gene, protein_change=""):

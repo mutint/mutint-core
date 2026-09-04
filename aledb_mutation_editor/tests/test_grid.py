@@ -169,7 +169,7 @@ class GridPageTestCase(EditorTestCase):
         ale = Population.objects.create(experiment=other, name=1)
         flask = TimePoint.objects.create(population=ale, value=1, media=context["media"])
         sample = Sample.objects.create(
-            time_point=flask, name=1, is_population=False, source_name="x")
+            time_point=flask, name=1, is_clonal=True, source_name="x")
         outside = ObservedMutation.objects.create(
             sample=sample,
             mutation=self.make_mutation(position=999, sequence_change="T>A",

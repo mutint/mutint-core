@@ -49,11 +49,11 @@ class EditorTestCase(TestCase):
 
     # --- fixture builders -----------------------------------------------------------------
 
-    def make_sample(self, flask_number, isolate_number=1, is_population=False):
+    def make_sample(self, flask_number, isolate_number=1, is_mixed=False):
         flask = TimePoint.objects.create(population=self.ale, value=flask_number,
                                      media=self.context["media"])
         return Sample.objects.create(
-            time_point=flask, name=isolate_number, is_population=is_population,
+            time_point=flask, name=isolate_number, is_clonal=not is_mixed,
             source_name="A1 F%d I%d" % (flask_number, isolate_number))
 
     def make_mutation(self, position, sequence_change, gene="thrA", experiment=None):

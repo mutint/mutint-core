@@ -155,7 +155,7 @@ class BreseqTablePageTestCase(TestCase):
     # --- frequency column -----------------------------------------------------
 
     def _make_population(self):
-        self.reseq.is_population = True
+        self.reseq.is_clonal = False
         self.reseq.save()
 
     def test_a_clonal_sample_has_no_frequency_column(self):
@@ -195,7 +195,7 @@ class BreseqTablePageTestCase(TestCase):
         """
         for population in (False, True):
             with self.subTest(population=population):
-                self.reseq.is_population = population
+                self.reseq.is_clonal = not population
                 self.reseq.save()
                 content = self.content(**self._empty_filter_params())
 
@@ -204,7 +204,7 @@ class BreseqTablePageTestCase(TestCase):
                 self.assertIn('colspan="%d"' % headers, content)
 
     def test_a_polymorphic_call_is_shaded(self):
-        self.reseq.is_population = True
+        self.reseq.is_clonal = False
         self.reseq.save()
         observed = ObservedMutation.objects.order_by("id").first()
         observed.frequency = 0.42

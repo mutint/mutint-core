@@ -43,7 +43,7 @@ from aledb_mutation_editor import history, record_builder, validation
 from aledb_mutation_editor.models import (
     KIND_ADD, KIND_COPY, KIND_DELETE, KIND_EDIT, MutationChangeSet,
 )
-from aledb_seq.breseq_report import build_rows, is_population
+from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.models import Mutation, ObservedMutation
 # `include_ancestor=True` on every call below: the editor curates rather than reads, so
 # it must show the designated ancestor, which every reading page hides. It is also why
@@ -377,7 +377,7 @@ def _listing(request, mode):
             "all_samples_value": ALL_SAMPLES,
             "selected_reseq": reseq,
             "selected_reseq_id": reseq.id if reseq is not None else None,
-            "is_population": is_population(reseq),
+            "is_mixed": is_mixed(reseq),
             "rows": _rows_for(reseq) if reseq is not None else [],
             "recent_changes": _recent_changes(experiment),
             "mode": mode,

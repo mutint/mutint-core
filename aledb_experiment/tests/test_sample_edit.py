@@ -44,7 +44,7 @@ class SampleEditTestCase(TestCase):
         self.media = context["media"]
 
     def make_sample(self, ale, flask, isolate, name="", experiment=None,
-                    media=None, is_population=False):
+                    media=None, is_mixed=False):
         experiment = experiment or self.experiment
         ale_row, _ = Population.objects.get_or_create(
             experiment=experiment, name=ale)
@@ -52,7 +52,7 @@ class SampleEditTestCase(TestCase):
             population=ale_row, value=flask,
             defaults={"media": media or self.media})
         return Sample.objects.create(
-            time_point=flask_row, name=isolate, is_population=is_population,
+            time_point=flask_row, name=isolate, is_clonal=not is_mixed,
             source_name=name)
 
     def row(self, reseq, **overrides):
@@ -60,7 +60,7 @@ class SampleEditTestCase(TestCase):
         ale, flask, isolate = sample_coordinate(reseq)
         row = {"id": str(reseq.pk), "sample_name": reseq.source_name or "",
                "ale": ale, "flask": flask, "isolate": isolate,
-               "is_population": 1 if reseq.is_population else 0,
+               "is_mixed": 1 if reseq.is_mixed else 0,
                "isolate_description": reseq.description or ""}
         row.update(overrides)
         return row
@@ -341,9 +341,9 @@ class RenumberTestCase(SampleEditTestCase):
         self.assertEqual(("1", 1, "2-4"), self.coordinate(self.first))
 
     def test_the_population_flag_toggles(self):
-        self.single(self.first, is_population=1)
+        self.single(self.first, is_mixed=1)
         self.first.refresh_from_db()
-        self.assertTrue(self.first.is_population)
+        self.assertTrue(self.first.is_mixed)
 
     def test_a_named_ale_is_accepted(self):
         """The whole point of the text columns: `Ara-1` and `Ara+1` are two populations."""
@@ -571,7 +571,7 @@ class RebuildHooksTestCase(SampleEditTestCase):
     def test_toggling_the_population_flag_counts_as_structural(self):
         run, request = self._patched()
         with run as run_rebuilds, request as request_rebuild:
-            self.single(self.first, is_population=1)
+            self.single(self.first, is_mixed=1)
             self.assertEqual(1, run_rebuilds.call_count)
             self.assertEqual(1, request_rebuild.call_count)
 

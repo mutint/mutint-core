@@ -1,6 +1,6 @@
 """The filter form's parameter names reach the template.
 
-`base_table_template.html` used to write `name="ale_no"` and `value="population"` as
+`base_table_template.html` used to write `name="ale_no"` and its sample-type values as
 literals. They are context variables now, so that the query-string vocabulary can be renamed
 in `constants.py` alone -- but a context variable that does not arrive renders as the empty
 string, and Django says nothing. The form would then post `?=1` instead of `?ale_no=1`, every

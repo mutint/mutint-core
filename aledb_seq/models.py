@@ -41,8 +41,14 @@ class Sample(models.Model):
     #: coordinate.
     name = models.CharField(max_length=100, default="1")
 
-    #: breseq marks a polymorphism run with `-p`, which is what an import reads this from.
-    is_population = models.BooleanField(default=False)
+    #: **Clonal, not mixed** -- the flag was `is_population` and its meaning is inverted.
+    #: A clone is one genotype; a mixed sample is a whole evolving population sequenced
+    #: together, which is why its mutations carry frequencies and a clone's do not.
+    #:
+    #: `True` by default because a sample is clonal unless something says otherwise, and
+    #: what says otherwise is breseq: an import reads `-p` (polymorphism mode) out of the
+    #: `#=COMMAND` line, and that is the only thing that sets this False on the way in.
+    is_clonal = models.BooleanField(default=True)
 
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
     #: sample is labelled -- see `ale_flask_isolate_str`.
@@ -92,6 +98,17 @@ class Sample(models.Model):
     # because each answers a *value* and the row of that name is one hop away
     # (`sample.time_point.population`). A property called `population` that handed back a
     # string would reintroduce, one level down, exactly the ambiguity this rename removed.
+
+    @property
+    def is_mixed(self):
+        """The other half of `is_clonal`, spelled out.
+
+        Every read site says either `is_clonal` or `is_mixed` and never `not is_clonal`, so
+        reviewing the inversion that introduced them is a question about *words* -- does
+        this line say the same one it used to mean? -- rather than about counting negations.
+        `paths.clonal_filter()` and `paths.mixed_filter()` are the same idea for querysets.
+        """
+        return not self.is_clonal
 
     @property
     def experiment(self):

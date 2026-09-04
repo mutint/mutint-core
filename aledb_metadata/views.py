@@ -95,7 +95,9 @@ def get_reseq_info_list(reseq_queryset):
 
         rows.append({
             "sample": reseq,
-            "clonal_or_population": (SAMPLE_TYPE_MIXED if isolate.is_population
+            # The key still reads `clonal_or_population`; its *values* are `clonal` and
+            # `mixed` now. Renaming the key is an interop change and waits for that commit.
+            "clonal_or_population": (SAMPLE_TYPE_MIXED if isolate.is_mixed
                                      else SAMPLE_TYPE_CLONAL),
             "tech_rep_description": tech_rep.rep_description,
             "media_description": media.description,

@@ -51,7 +51,7 @@ class MetadataKeyTestCase(TestCase):
                                      supplement=VALUES["supplement"])
         flask = TimePoint.objects.create(population=ale, value=1, media=media)
         self.sample = Sample.objects.create(
-            time_point=flask, name="1", is_population=False,
+            time_point=flask, name="1", is_clonal=True,
             library_prep=VALUES["library_prep"],
             reference_genome=VALUES["reseq_reference"],
             breseq_version=VALUES["breseq_version"],
@@ -85,11 +85,13 @@ class MetadataKeyTestCase(TestCase):
     def test_the_sample_itself_is_reachable(self):
         self.assertEqual(self.sample, self.rows()[0]["sample"])
 
-    def test_a_population_says_so(self):
-        self.sample.is_population = True
+    def test_a_mixed_sample_says_so(self):
+        self.sample.is_clonal = False
         self.sample.save()
 
-        self.assertEqual("population", self.rows()[0]["clonal_or_population"])
+        # The *key* is still `clonal_or_population` -- renaming it is an interop change
+        # and waits for that commit. Its values are `clonal` and `mixed` now.
+        self.assertEqual("mixed", self.rows()[0]["clonal_or_population"])
 
     # --- what the API publishes ----------------------------------------------------
 

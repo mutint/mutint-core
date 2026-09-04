@@ -14,16 +14,19 @@ same information, without breseq's markup.
 from aledb_import.annotate.display import add_html_fields, commify
 
 
-def is_population(reseq):
+def is_mixed(reseq):
     """Whether to show breseq's Freq column for this sample.
 
     Here rather than on either view because both render the table and the answer must be the
     same in both -- a clonal sample has no frequency column on the Samples page and must not
     grow one on the browser page.
+
+    It was `is_population` over a column of that name; both were inverted, and the question
+    it answers did not change -- a *mixed* sample is the one with frequencies.
     """
     if reseq is None:
         return False
-    return bool(reseq.is_population)
+    return bool(reseq.is_mixed)
 
 
 def gd_entry(mutation):

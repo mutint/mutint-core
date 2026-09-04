@@ -29,7 +29,7 @@
                    point" -- the two agree now. Fixation orders samples by it. {% endcomment %}
                 <th width="90">Time point</th>
                 <th width="70">Sample</th>
-                <th width="50">Pop.</th>
+                <th width="50">Mixed</th>
                 <th>Description</th>
                 <th width="50"></th>
             </tr>
@@ -55,8 +55,8 @@
                     <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-isolate-{{ sample.id }}" value="{{ sample.isolate }}"></td>
                     <td style="text-align: center;">
-                        <input type="checkbox" id="sb-population-{{ sample.id }}"
-                               {% if sample.is_population %}checked{% endif %}></td>
+                        <input type="checkbox" id="sb-mixed-{{ sample.id }}"
+                               {% if sample.is_mixed %}checked{% endif %}></td>
                     <td><input type="text" class="form-control input-sm" maxlength="300"
                                id="sb-isolate-description-{{ sample.id }}"
                                value="{{ sample.isolate_description }}"></td>
@@ -106,7 +106,7 @@
                     ale: value("ale", id),
                     flask: value("flask", id),
                     isolate: value("isolate", id),
-                    is_population: document.getElementById("sb-population-" + id).checked ? 1 : 0,
+                    is_mixed: document.getElementById("sb-mixed-" + id).checked ? 1 : 0,
                     isolate_description: value("isolate-description", id)
                 });
             });

@@ -49,7 +49,7 @@ class OverviewQueryCountTestCase(TestCase):
             flask = TimePoint.objects.create(population=ale, value=100 + number,
                                          media=context["media"])
             sample = Sample.objects.create(
-                time_point=flask, name="1-1", is_population=False,
+                time_point=flask, name="1-1", is_clonal=True,
                 source_name="1-%d-1-1" % (100 + number))
             mutation = Mutation.objects.create(
                 experiment=experiment, mutation_type="SNP", position=number,

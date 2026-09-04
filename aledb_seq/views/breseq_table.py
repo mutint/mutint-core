@@ -25,7 +25,7 @@ from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_project
 from aledb_filter.util import filter_observed_mutations
 from aledb_filter.view_filter import get_view_filter
-from aledb_seq.breseq_report import build_rows, is_population
+from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.models import ExperimentReference, ObservedMutation
 from aledb_experiment.ancestor import ancestral_mutation_ids, describe_ancestor
 from aledb_seq.util import get_reseq_ordered_dict
@@ -70,7 +70,7 @@ def breseq_table(request):
             "reseq_list": list(reseq_dict.values()),
             "selected_reseq": reseq,
             "selected_reseq_id": reseq.id if reseq is not None else None,
-            "is_population": is_population(reseq),
+            "is_mixed": is_mixed(reseq),
             "is_ancestor": reseq is not None and reseq.id == experiment.ancestor_id,
             "ancestral_count": sum(1 for row in rows if row["ancestral"]),
             # The name and pk, so the legend can link the tinted rows to the sample they

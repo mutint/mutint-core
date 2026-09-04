@@ -45,11 +45,12 @@ def nav_items(request):
 def request_vocabulary(request):
     """The query-string names and values templates have to spell out.
 
-    A template writes `name="ale_no"` and `value="population"` as literals, which is fine
-    until one of those words changes meaning. Both are about to: `population` is what
-    `?ale_no=` gets renamed to *and* what today's mixed-sample token is called, so for one
-    commit the same word means two different things. A literal in a template is the kind of
-    site a Python grep does not see and a rename tool cannot reach.
+    A template writes `name="ale_no"` and `value="mixed"` as literals, which is fine until
+    one of those words changes meaning. One already has: the mixed-sample token was
+    `population`, which is now the model one level up and is what `?ale_no=` becomes, so for
+    one commit the same word meant two different things. Routing it through here is what let
+    it change in one place -- a literal in a template is the kind of site a Python grep does
+    not see and a rename tool cannot reach.
 
     So the names live in `constants.py` and arrive here. Views need not pass them, and the
     rename is an edit of one module rather than an audit of every form.

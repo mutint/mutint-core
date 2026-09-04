@@ -225,7 +225,7 @@ class AddTestCase(EditorTestCase):
         ale = Population.objects.create(experiment=other, name=1)
         flask = TimePoint.objects.create(population=ale, value=1, media=self.context["media"])
         stranger = Sample.objects.create(
-            time_point=flask, name=1, is_population=False)
+            time_point=flask, name=1, is_clonal=True)
 
         response = self.add(seq_id="NC_000913", position=5000, new_seq="T",
                             targets=[stranger])
