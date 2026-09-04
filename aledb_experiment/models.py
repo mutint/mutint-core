@@ -258,11 +258,10 @@ class Experiment(SoftDeleteMixin):
         }
 
 
-# TODO: this model should be called "Ale".
 class Population(models.Model):
     """One evolving lineage within an experiment.
 
-    **This was `Population`, and its own docstring already called these populations.** The model
+    **This was `AleId`, and its own docstring already called these populations.** The model
     carried `# TODO: this model should be called "Ale"` while describing `Ara-1` and `Ara+1`
     as "two different LTEE populations" -- the biology had the word all along and the schema
     did not.

@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Fields a user may change that do not affect identity. Editing one of these must not
 # create a row, delete a row, or trigger a rebuild -- see `rows_are_structural`.
 DESCRIPTIVE_FIELDS = ("sample_name", "person", "isolate_description",
-                      "rep_description", "rep_tags")
+                      "medium_description", "rep_tags")
 # The form's field names, which are the query-string vocabulary and change with it rather
 # than with the columns behind them.
 STRUCTURAL_FIELDS = ("ale", "flask", "isolate", "is_mixed")
@@ -118,7 +118,7 @@ def resolve_time_point(experiment, coordinate, *, media, species="", strain=""):
     `reseq.time_point` at it and writes the label straight onto the sample.
 
     **That deleted the subtlest paragraph in this module.** Isolate had no unique_together
-    and gd_import get_or_created it on six fields including `reseq_date`, so real databases
+    and gd_import get_or_created it on six fields including `sequencing_date`, so real databases
     held two Isolate rows at one (time point, label) and `get_or_create` raised
     MultipleObjectsReturned on them. This resolved it with `filter().order_by("pk").first()`
     -- lowest pk wins, deterministic if arbitrary. There is no such row to be ambiguous
@@ -240,10 +240,10 @@ def _label(raw, label, row_label):
 # write (which is what gd_import does with its [:200] slices) or rejected by MySQL with a
 # message nobody can act on. SQLite would accept any of these, so the check has to be ours.
 _MAX_LENGTHS = {"sample_name": 200, "person": 200, "isolate_description": 300,
-                "rep_description": 500, "rep_tags": 500}
+                "medium_description": 500, "rep_tags": 500}
 _FIELD_LABELS = {"sample_name": "sample name", "person": "person",
                  "isolate_description": "description",
-                 "rep_description": "medium description", "rep_tags": "tags"}
+                 "medium_description": "medium description", "rep_tags": "tags"}
 
 
 def _check_lengths(descriptive, row_label):
@@ -495,7 +495,7 @@ def apply_rows(experiment, parsed, *, media):
         reseq.is_clonal = not descriptive["is_mixed"]
         _write(reseq, {"source_name": "sample_name", "person": "person",
                        "description": "isolate_description",
-                       "rep_description": "rep_description", "tags": "rep_tags"},
+                       "medium_description": "medium_description", "tags": "rep_tags"},
                descriptive, always)
 
         touched.append(reseq.pk)

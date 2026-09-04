@@ -142,7 +142,7 @@ def get_experiment_name(request):
 
     experiment_id = request.GET.get(REQUEST_EXPERIMENT_ID)
 
-    experiment_name = "All ALE Experiments"
+    experiment_name = "All experiments"
 
     if experiment_id is not None and experiment_id != "all":
 

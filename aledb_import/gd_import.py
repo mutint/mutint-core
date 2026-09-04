@@ -295,7 +295,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     metadata = document.metadata
 
     reseq_reference = metadata.get("REFSEQ", "") or ""
-    reseq_date = metadata.get("CREATED", "") or ""
+    sequencing_date = metadata.get("CREATED", "") or ""
     # breseq marks a polymorphism run with -p. That is the *mixed* case, so the stored
     # flag is its negation -- the one place in the suite that turns the .gd into polarity.
     is_clonal = " -p" not in (metadata.get("COMMAND", "") or "")
@@ -312,7 +312,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
             "person": person,
             "is_clonal": is_clonal,
             "reference_genome": reseq_reference[:200],
-            "reseq_date": reseq_date[:200],
+            "sequencing_date": sequencing_date[:200],
             # A label to read the sample by, on creation only: `label`
             # prefers it, so `Ara-2_500gen_763A` shows as itself rather than as
             # `AAra-2 F500 I763A`. Not part of the identity -- a sample found by its
@@ -350,7 +350,7 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         description=sample_name[:300],
         is_clonal=" -p" not in (metadata.get("COMMAND", "") or ""),
         reference_genome=(metadata.get("REFSEQ", "") or "")[:200],
-        reseq_date=(metadata.get("CREATED", "") or "")[:200],
+        sequencing_date=(metadata.get("CREATED", "") or "")[:200],
         source_name=sample_name, person=person)
 
 

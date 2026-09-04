@@ -32,7 +32,7 @@
                 {% comment %} Text, not type="number": an ALE is named, not counted --
                    `Ara-1` and `Ara+1` are two LTEE populations and neither is a number.
                    Same for the isolate below. {% endcomment %}
-                <label for="se-ale">ALE</label>
+                <label for="se-ale">Population</label>
                 <input type="text" class="form-control" id="se-ale" maxlength="100"
                        value="{{ sample.ale }}">
             </div>
@@ -84,7 +84,7 @@
         <div class="form-group">
             <label for="se-rep-description">Medium description</label>
             <input type="text" class="form-control" id="se-rep-description"
-                   maxlength="500" value="{{ sample.rep_description }}">
+                   maxlength="500" value="{{ sample.medium_description }}">
             <small class="help-block">
                 What the metadata file calls "medium description". Published by /metadata
                 and by the interop API.
@@ -116,7 +116,7 @@
             flask: document.getElementById("se-flask").value,
             isolate: document.getElementById("se-isolate").value,
             isolate_description: document.getElementById("se-isolate-description").value,
-            rep_description: document.getElementById("se-rep-description").value,
+            medium_description: document.getElementById("se-rep-description").value,
             rep_tags: document.getElementById("se-rep-tags").value
         };
         // Sent both ways, always. It used to be set only when checked, so an unchecked box

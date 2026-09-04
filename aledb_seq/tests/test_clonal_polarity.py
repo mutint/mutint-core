@@ -106,10 +106,10 @@ class ClonalPolarityTestCase(TestCase):
     # --- the word a person reads ----------------------------------------------------------
 
     def test_metadata_says_the_right_word_for_each(self):
-        from aledb_metadata.views import get_reseq_info_list
+        from aledb_metadata.views import get_sample_info_list
 
-        words = {row["sample"].pk: row["clonal_or_population"]
-                 for row in get_reseq_info_list(Sample.objects.all())}
+        words = {row["sample"].pk: row["sample_type"]
+                 for row in get_sample_info_list(Sample.objects.all())}
         self.assertEqual(SAMPLE_TYPE_CLONAL, words[self.clone.pk])
         self.assertEqual(SAMPLE_TYPE_MIXED, words[self.mixed.pk])
 
@@ -129,7 +129,7 @@ class ClonalPolarityTestCase(TestCase):
         response = self.client.post(
             "/sample/%d/update/" % self.clone.pk,
             {"sample_name": "clone", "ale": "1", "flask": 500, "isolate": "1",
-             "isolate_description": "", "rep_description": "", "rep_tags": "",
+             "isolate_description": "", "medium_description": "", "rep_tags": "",
              "is_mixed": "1"})
 
         self.assertEqual(200, response.status_code, response.content)
@@ -142,7 +142,7 @@ class ClonalPolarityTestCase(TestCase):
         response = self.client.post(
             "/sample/%d/update/" % self.mixed.pk,
             {"sample_name": "mixed", "ale": "1", "flask": 500, "isolate": "2",
-             "isolate_description": "", "rep_description": "", "rep_tags": "",
+             "isolate_description": "", "medium_description": "", "rep_tags": "",
              "is_mixed": "0"})
 
         self.assertEqual(200, response.status_code, response.content)

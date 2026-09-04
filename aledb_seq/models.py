@@ -59,19 +59,22 @@ class Sample(models.Model):
     #: `reseq_reference`, which read like a contig and is not one -- `Mutation.reseq_reference`
     #: beside it genuinely is a seq_id, and the two sharing a spelling is what this separates.
     reference_genome = models.CharField(max_length=200, **blank_field)
-    reseq_date = models.CharField(max_length=200, **blank_field)
+    sequencing_date = models.CharField(max_length=200, **blank_field)
     breseq_version = models.CharField(max_length=200, **blank_field)
     library_prep = models.CharField(max_length=200, **blank_field)
 
     #: Both came from `TechnicalReplicate`.
     tags = models.CharField(max_length=500, **blank_field)
-    #: **Not a duplicate of `description` above.** The metadata importer writes the CSV's
-    #: "medium description" here, and `/metadata` and the interop API both publish it -- as
-    #: `tech_rep_description`, which is why the column keeps that spelling for now. The plan
-    #: for the merge had this dropped as "a second description on a row nobody looked at";
-    #: two pages look at it, and dropping it would have changed a payload an external
-    #: consumer reads while the commit claimed to be moving columns between tables.
-    rep_description = models.CharField(max_length=500, **blank_field)
+    #: **Not a duplicate of `description` above, and not `Media.description` either.** The
+    #: metadata importer writes the CSV's *"medium description"* column here, per sample;
+    #: `Media.description` holds that file's *"medium derived from"*, which is a property of
+    #: the medium rather than of the sample grown in it. Both reach `/metadata` and the
+    #: interop API, which is why the payload spells this one `sample_medium_description` --
+    #: two keys a letter apart would be worse than a long one.
+    #:
+    #: It was `rep_description`, on a `TechnicalReplicate`. The merge kept the column rather
+    #: than dropping it as planned, precisely because two pages publish it.
+    medium_description = models.CharField(max_length=500, **blank_field)
 
     person = models.CharField(max_length=200, blank=True)
     #: What the file or folder this was imported from was called. `source_name`, because

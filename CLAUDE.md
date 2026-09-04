@@ -1627,7 +1627,7 @@ Three lookups there deliberately differ from `gd_import`, and each is a correcti
   `media=` as a *lookup* kwarg while `TimePoint` is unique on that pair, so it raises
   `IntegrityError` against an existing flask carrying different media.
 - `Isolate` is `filter().order_by("pk").first()`, not `get_or_create`. `Isolate` has no
-  `unique_together` and `gd_import` get_or_creates it on six fields including `reseq_date`, so
+  `unique_together` and `gd_import` get_or_creates it on six fields including `sequencing_date`, so
   real databases already hold two rows at one `(flask, isolate_number)` and `get_or_create`
   raises `MultipleObjectsReturned` on them. Adding the constraint needs a data-repair
   migration and is a separate change.

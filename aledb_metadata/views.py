@@ -38,10 +38,10 @@ def metadata(request):
 
         reseq_queryset = get_ordered_reseq_queryset(experiment_id, ale_id)
 
-        reseq_info_list = get_reseq_info_list(reseq_queryset)
+        sample_info_list = get_sample_info_list(reseq_queryset)
 
         context = get_user_context(request.user)
-        context.update({"reseq_info_list": reseq_info_list,
+        context.update({"sample_info_list": sample_info_list,
                         "experiment_name": experiment.name,
                         "ale_project_name": experiment.project.name,
                         "ale_project_id": experiment.project.id,
@@ -61,7 +61,7 @@ def metadata(request):
         return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def get_reseq_info_list(reseq_queryset):
+def get_sample_info_list(reseq_queryset):
     """One row of sample metadata per sample, keyed by name.
 
     **This was a positional tuple of eighteen values, and the bug that caused is the whole
@@ -69,11 +69,15 @@ def get_reseq_info_list(reseq_queryset):
     `aledb_interop_query.views._serialize_metadata`, in another app, against a hand-written
     list of key names. The two agreed only by position, so they had drifted:
 
-    - index 12 is the ALE's description and was published as ``knockouts``
-    - index 13 is the isolate's library prep and was published as ``taxonomy_id`` -- and
+    - index 12 is the population's description and was published as ``knockouts``
+    - index 13 is the sample's library prep and was published as ``taxonomy_id`` -- and
       rendered on this page under a column headed *Taxonomy ID*
-    - indices 15, 16 and 17 (breseq version, resequencing date, experiment name) were built
+    - indices 15, 16 and 17 (breseq version, sequencing date, experiment name) were built
       on every request and read by nobody
+
+    Two more keys were wrong in the same way and are fixed with the vocabulary: the payload
+    called a *formatted frequency* ``genotype``, and called the sample's own medium note
+    ``tech_rep_description`` after a model that no longer exists.
 
     Nothing raised. Inserting a field anywhere in the chain above would silently relabel
     everything after it, which is presumably how it happened in the first place.
@@ -85,21 +89,20 @@ def get_reseq_info_list(reseq_queryset):
     rows = []
 
     for reseq in reseq_queryset:
-        # Three rows became one, so the sample *is* the isolate and the replicate. The
-        # local names stay for now; the keys below are what /metadata and the interop API
-        # publish, and renaming those is its own commit.
-        tech_rep = isolate = reseq
-        flask = isolate.time_point
-        media = flask.media
-        ale = flask.population
+        time_point = reseq.time_point
+        media = time_point.media
+        population = time_point.population
 
         rows.append({
             "sample": reseq,
-            # The key still reads `clonal_or_population`; its *values* are `clonal` and
-            # `mixed` now. Renaming the key is an interop change and waits for that commit.
-            "clonal_or_population": (SAMPLE_TYPE_MIXED if isolate.is_mixed
-                                     else SAMPLE_TYPE_CLONAL),
-            "tech_rep_description": tech_rep.rep_description,
+            # `clonal` or `mixed` -- the same two words `?sample_type=` accepts, which is
+            # why the key is that and not `clonal_or_population`. That name listed the
+            # possible answers, and one of them is no longer one of them.
+            "sample_type": (SAMPLE_TYPE_MIXED if reseq.is_mixed else SAMPLE_TYPE_CLONAL),
+            # Two different columns, a letter apart if both were called "medium": this one
+            # is the sample's own note (the CSV's "medium description"), the next is the
+            # medium's own (`Media.description`, from "medium derived from").
+            "sample_medium_description": reseq.medium_description,
             "media_description": media.description,
             "carbon_source": media.carbon_source,
             "nitrogen_source": media.nitrogen_source,
@@ -108,15 +111,13 @@ def get_reseq_info_list(reseq_queryset):
             "calcium_source": media.calcium_source,
             "supplement": media.supplement,
             "temperature": media.temperature,
-            "strain": ale.strain,
-            "ale_description": ale.description,
-            "library_prep": isolate.library_prep,
-            # The key is what /metadata and the interop API publish; the column behind it
-            # is `reference_genome` now.
-            "reseq_reference": isolate.reference_genome,
-            "breseq_version": isolate.breseq_version,
-            "reseq_date": isolate.reseq_date,
-            "experiment_name": ale.experiment.name,
+            "strain": population.strain,
+            "population_description": population.description,
+            "library_prep": reseq.library_prep,
+            "reference_genome": reseq.reference_genome,
+            "breseq_version": reseq.breseq_version,
+            "sequencing_date": reseq.sequencing_date,
+            "experiment_name": population.experiment.name,
         })
 
     return rows

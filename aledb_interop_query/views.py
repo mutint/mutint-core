@@ -13,7 +13,7 @@ from aledb_experiment.ancestor import exclude_all_ancestry
 from aledb_filter.util import filter_observed_mutations, filtered_observed_mutation_queryset
 from aledb_filter.view_filter import PARAMS as FILTER_PARAMS, ViewFilter
 from aledb_common.logger import user_extra
-from aledb_metadata.views import get_reseq_info_list
+from aledb_metadata.views import get_sample_info_list
 # From `aledb_seq.util`, where it is defined. This used to come via `aledb_metadata.views`,
 # which merely imports it -- an accidental re-export, and the call site any signature change
 # would miss.
@@ -314,27 +314,38 @@ def _serialize_metadata(metadata_list):
         item = {
             'experiment_id':   m['experiment_id'],
             'experiment_name': m['experiment_name'],
-            'ale_project_id':      m['ale_project_id'],
-            'ale_project_name':    m['ale_project_name'],
+            'project_id':      m['project_id'],
+            'project_name':    m['project_name'],
             'multiple':            m['multiple'],
         }
 
-        # Read by name from `get_reseq_info_list`, which used to hand back a positional
-        # tuple this unpacked by index. Three keys change with that, and all three were
-        # wrong rather than merely differently spelled:
+        # Read by name from `get_sample_info_list`, which used to hand back a positional
+        # tuple this unpacked by index. Every key that named the wrong thing has now been
+        # corrected, in two rounds. The first was the tuple's fault:
         #
-        #   knockouts          -> ale_description   it was always Population.description
-        #   taxonomy_id        -> library_prep      it was always the isolate's library_prep
-        #   phosphorous_source -> phosphorus_source the column has never had that o
+        #   knockouts          -> population_description  always Population.description
+        #   taxonomy_id        -> library_prep            always the sample's library_prep
+        #   phosphorous_source -> phosphorus_source       the column never had that o
         #
         # and three values the builder produced were dropped here and are published now.
+        # The second round is the vocabulary, where a key named a model the schema no longer
+        # has, or a thing the value never was:
+        #
+        #   clonal_or_population -> sample_type      one of its two answers is retired
+        #   tech_rep_description -> sample_medium_description
+        #   reseq_reference      -> reference_genome it is a genome, not a contig
+        #   reseq_date           -> sequencing_date
+        #
+        # **No key is emitted under both names.** A consumer reading an old one gets a
+        # KeyError rather than a value that quietly means something else -- which is exactly
+        # the failure this list already has a history of.
         flat = []
-        for row in m.get('reseq_info_list', []):
+        for row in m.get('sample_info_list', []):
             flat.append({
                 'label': row['sample'].label,
-                'clonal_or_population':  row['clonal_or_population'],
-                'tech_rep_description':  row['tech_rep_description'],
-                'media_description':     row['media_description'],
+                'sample_type':               row['sample_type'],
+                'sample_medium_description': row['sample_medium_description'],
+                'media_description':         row['media_description'],
                 'carbon_source':         row['carbon_source'],
                 'nitrogen_source':       row['nitrogen_source'],
                 'phosphorus_source':     row['phosphorus_source'],
@@ -343,14 +354,14 @@ def _serialize_metadata(metadata_list):
                 'supplement':            row['supplement'],
                 'temperature':           row['temperature'],
                 'strain':                row['strain'],
-                'ale_description':       row['ale_description'],
-                'library_prep':          row['library_prep'],
-                'reseq_reference':       row['reseq_reference'],
-                'breseq_version':        row['breseq_version'],
-                'reseq_date':            row['reseq_date'],
-                'experiment_name':       row['experiment_name'],
+                'population_description':    row['population_description'],
+                'library_prep':              row['library_prep'],
+                'reference_genome':          row['reference_genome'],
+                'breseq_version':            row['breseq_version'],
+                'sequencing_date':           row['sequencing_date'],
+                'experiment_name':           row['experiment_name'],
             })
-        item['reseq_info_list'] = flat
+        item['sample_info_list'] = flat
         out.append(item)
     return out
 
@@ -401,8 +412,16 @@ def _serialize_mutations(mutations, search_gene=None):
             item['experiment'] = {
                 'experiment_id': exp.get('experiment_id', m.sample.experiment.id),
                 'sample_id': exp.get('sample_id', m.sample.id),
-                'sample_name': exp.get('name'),
-                'genotype': exp.get('type'),
+                # The sample's label with its experiment in front, which is what a caller
+                # showing rows from several experiments needs. It was `sample_name` -- also
+                # the name of a column, which held something else entirely.
+                'sample_label': exp.get('label'),
+                # **`genotype` held a formatted frequency.** Not a genotype, and not a
+                # sample type despite the local name that used to build it: the string is
+                # `"%2f"` of `ObservedMutation.frequency`, empty when the mutation is not
+                # present in that sample. The same class of error as `knockouts` and
+                # `taxonomy_id` above, found the same way -- by reading what the value is.
+                'frequency': exp.get('frequency'),
             }
         else:
             pass
@@ -469,15 +488,15 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
             # Initialised here, and not only inside the branch below: it used to be assigned
             # nowhere else, so a row that failed the test either raised NameError or silently
             # reported the *previous* row's frequency.
-            sample_type = ""
+            frequency = ""
             if observed_mutation.present:
-                sample_type = ("%2f" % float(observed_mutation.frequency)
-                               if observed_mutation.frequency is not None else "")
+                frequency = ("%2f" % float(observed_mutation.frequency)
+                             if observed_mutation.frequency is not None else "")
             observed_mutation.experiment = {
                 'experiment_id': observed_mutation.sample.experiment.id,
                 'sample_id': observed_mutation.sample.id,
-                'name': sample_name,
-                'type': sample_type
+                'label': sample_name,
+                'frequency': frequency,
             }
 
     metadata = []
@@ -487,12 +506,12 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         experiment = Experiment.objects.get(pk=experiment_id)
         if experiment:
             reseq_queryset = get_ordered_reseq_queryset(experiment_id, None)
-            reseq_info_list = get_reseq_info_list(reseq_queryset)
+            sample_info_list = get_sample_info_list(reseq_queryset)
             experiment_info = {
-                "reseq_info_list": reseq_info_list,
+                "sample_info_list": sample_info_list,
                 "experiment_name": experiment.name,
-                "ale_project_name": experiment.project.name,
-                "ale_project_id": experiment.project.id,
+                "project_name": experiment.project.name,
+                "project_id": experiment.project.id,
                 "multiple": False,
                 "experiment_id": experiment_id
             }

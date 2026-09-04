@@ -87,7 +87,7 @@ def _row_context(reseq):
         "isolate": coordinate[2],
         "is_mixed": reseq.is_mixed,
         "isolate_description": reseq.description or "",
-        "rep_description": reseq.rep_description or "",
+        "medium_description": reseq.medium_description or "",
         "rep_tags": reseq.tags or "",
     }
 
@@ -186,7 +186,7 @@ def sample_update(request, pk):
         # the string "0", which bool() reads as True.
         "is_mixed": request.POST.get("is_mixed"),
         "isolate_description": request.POST.get("isolate_description"),
-        "rep_description": request.POST.get("rep_description"),
+        "medium_description": request.POST.get("medium_description"),
         "rep_tags": request.POST.get("rep_tags"),
     }
     try:

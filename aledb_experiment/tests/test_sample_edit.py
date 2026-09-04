@@ -220,14 +220,14 @@ class DescriptiveEditTestCase(SampleEditTestCase):
     def test_the_bulk_table_does_not_blank_fields_it_has_no_column_for(self):
         """It shows no medium description and no tags; a missing key must leave the
         stored value alone."""
-        self.sample.rep_description = "second run"
+        self.sample.medium_description = "second run"
         self.sample.tags = "resequenced"
         self.sample.save()
 
         self.assertEqual(200, self.bulk([self.row(self.sample, ale=2)]).status_code)
 
         self.sample.refresh_from_db()
-        self.assertEqual("second run", self.sample.rep_description)
+        self.assertEqual("second run", self.sample.medium_description)
         self.assertEqual("resequenced", self.sample.tags)
 
     def test_a_duplicate_sample_name_is_refused(self):

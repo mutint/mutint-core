@@ -1,7 +1,7 @@
 """Each metadata key holds the column it names.
 
 **This app had no tests at all, and that is how the bug it now pins survived.**
-`aledb_metadata.views.get_reseq_info_list` built an eighteen-value positional tuple; this
+`aledb_metadata.views.get_sample_info_list` built an eighteen-value positional tuple; this
 app unpacked it *by index* against a hand-written list of names, in a different app. The two
 agreed only by position and had drifted: the API published `Population.description` as
 ``knockouts`` and the sample's ``library_prep`` as ``taxonomy_id``, and the Metadata page rendered
@@ -13,6 +13,13 @@ that a named key holds the value from the column it is named after, which is thi
 
 Each fixture value below is distinct and says where it comes from, so a mix-up shows up as
 the wrong sentence rather than as a subtly wrong value.
+
+**Three more keys were wrong in the same way**, and the vocabulary rename is what made them
+visible: `clonal_or_population` listed two possible answers of which one is retired,
+`tech_rep_description` named a model the schema no longer has, and -- in the *mutation*
+payload rather than this one -- `genotype` held a formatted frequency. None of the old names
+is emitted alongside the new one, so a consumer reading one gets a `KeyError` rather than a
+value that quietly means something else. `test_no_retired_key_is_still_emitted` is the guard.
 """
 
 from django.contrib.auth.models import User
@@ -20,20 +27,21 @@ from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
 from aledb_interop_query.views import _serialize_metadata
-from aledb_metadata.views import get_reseq_info_list
+from aledb_metadata.views import get_sample_info_list
 from aledb_seq.models import Sample
 
 #: What each column is set to, and what the key naming it must therefore hold.
 VALUES = {
     "strain": "from Population.strain",
-    "ale_description": "from Population.description",
+    "population_description": "from Population.description",
     "library_prep": "from the sample's library_prep",
-    "reseq_reference": "from the sample's reseq_reference",
+    "reference_genome": "from the sample's reference_genome",
     "breseq_version": "from the sample's breseq_version",
-    "reseq_date": "from the sample's reseq_date",
+    "sequencing_date": "from the sample's sequencing_date",
     "carbon_source": "from Media.carbon_source",
     "supplement": "from Media.supplement",
-    "tech_rep_description": "from the sample's rep_description",
+    "sample_medium_description": "from the sample's medium_description",
+    "media_description": "from Media.description",
 }
 
 
@@ -45,33 +53,33 @@ class MetadataKeyTestCase(TestCase):
         self.experiment = Experiment.objects.create(name="E", project=project)
         ale = Population.objects.create(experiment=self.experiment, name="1",
                                    strain=VALUES["strain"],
-                                   description=VALUES["ale_description"])
-        media = Media.objects.create(description="M9",
+                                   description=VALUES["population_description"])
+        media = Media.objects.create(description=VALUES["media_description"],
                                      carbon_source=VALUES["carbon_source"],
                                      supplement=VALUES["supplement"])
         flask = TimePoint.objects.create(population=ale, value=1, media=media)
         self.sample = Sample.objects.create(
             time_point=flask, name="1", is_clonal=True,
             library_prep=VALUES["library_prep"],
-            reference_genome=VALUES["reseq_reference"],
+            reference_genome=VALUES["reference_genome"],
             breseq_version=VALUES["breseq_version"],
-            reseq_date=VALUES["reseq_date"],
-            rep_description=VALUES["tech_rep_description"],
+            sequencing_date=VALUES["sequencing_date"],
+            medium_description=VALUES["sample_medium_description"],
             source_name="s1")
 
     def rows(self):
-        return get_reseq_info_list(Sample.objects.filter(pk=self.sample.pk))
+        return get_sample_info_list(Sample.objects.filter(pk=self.sample.pk))
 
     def serialized(self):
         payload = _serialize_metadata([{
-            "reseq_info_list": self.rows(),
+            "sample_info_list": self.rows(),
             "experiment_id": self.experiment.id,
             "experiment_name": self.experiment.name,
-            "ale_project_id": self.experiment.project.id,
-            "ale_project_name": self.experiment.project.name,
+            "project_id": self.experiment.project.id,
+            "project_name": self.experiment.project.name,
             "multiple": False,
         }])
-        return payload[0]["reseq_info_list"][0]
+        return payload[0]["sample_info_list"][0]
 
     # --- the builder ---------------------------------------------------------------
 
@@ -89,9 +97,13 @@ class MetadataKeyTestCase(TestCase):
         self.sample.is_clonal = False
         self.sample.save()
 
-        # The *key* is still `clonal_or_population` -- renaming it is an interop change
-        # and waits for that commit. Its values are `clonal` and `mixed` now.
-        self.assertEqual("mixed", self.rows()[0]["clonal_or_population"])
+        # `sample_type`, holding one of the two words `?sample_type=` accepts. It was
+        # `clonal_or_population`, which named its two possible answers -- and one of them
+        # stopped being one of them.
+        self.assertEqual("mixed", self.rows()[0]["sample_type"])
+        self.sample.is_clonal = True
+        self.sample.save()
+        self.assertEqual("clonal", self.rows()[0]["sample_type"])
 
     # --- what the API publishes ----------------------------------------------------
 
@@ -103,12 +115,36 @@ class MetadataKeyTestCase(TestCase):
                 self.assertEqual(expected, entry[key])
 
     def test_the_two_mislabelled_keys_are_gone(self):
-        """`knockouts` was the ALE's description and `taxonomy_id` was the library prep.
-        Anyone reading either was reading another column's value."""
+        """`knockouts` was the population's description and `taxonomy_id` was the library
+        prep. Anyone reading either was reading another column's value."""
         entry = self.serialized()
 
         self.assertNotIn("knockouts", entry)
         self.assertNotIn("taxonomy_id", entry)
+
+    def test_no_retired_key_is_still_emitted(self):
+        """No key is published under both its old and its new name.
+
+        Emitting both would have let a consumer keep reading a name that no longer describes
+        what it holds -- which is the exact failure `knockouts` and `taxonomy_id` were. A
+        `KeyError` on the next request is the honest answer.
+        """
+        entry = self.serialized()
+
+        for retired in ("clonal_or_population", "tech_rep_description", "reseq_reference",
+                        "ale_description", "reseq_date"):
+            with self.subTest(key=retired):
+                self.assertNotIn(retired, entry)
+
+    def test_the_two_medium_columns_stay_apart(self):
+        """The sample's own note and the medium's description are different columns and
+        were a letter apart in the payload if both were called "medium"."""
+        entry = self.serialized()
+
+        self.assertEqual(VALUES["sample_medium_description"],
+                         entry["sample_medium_description"])
+        self.assertEqual(VALUES["media_description"], entry["media_description"])
+        self.assertNotEqual(entry["sample_medium_description"], entry["media_description"])
 
     def test_the_misspelled_key_is_gone(self):
         """The column is `phosphorus_source`; the API said `phosphorous_source`."""
@@ -123,5 +159,5 @@ class MetadataKeyTestCase(TestCase):
         entry = self.serialized()
 
         self.assertEqual(VALUES["breseq_version"], entry["breseq_version"])
-        self.assertEqual(VALUES["reseq_date"], entry["reseq_date"])
+        self.assertEqual(VALUES["sequencing_date"], entry["sequencing_date"])
         self.assertEqual(self.experiment.name, entry["experiment_name"])

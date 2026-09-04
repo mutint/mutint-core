@@ -33,9 +33,9 @@
         <thead>
             <tr>
                 <th>Population, Time point, Sample</th>
-                <th>Clonal or Population</th>
-                <th>ALE Sample Details</th>
-                <th>Base Media</th>
+                <th>Sample type</th>
+                <th>Medium description</th>
+                <th>Medium derived from</th>
                 <th>Carbon Source(g/L)</th>
                 <th>Nitrogen Source(g/L)</th>
                 <th>Phosphorus Source(g/L)</th>
@@ -44,7 +44,7 @@
                 <th>Supplement(g/L)</th>
                 <th>Temperature (Celsius)</th>
                 <th>Strain</th>
-                <th>Additional Strain Details</th>
+                <th>Population description</th>
                 <th>Library Prep</th>
                 <th>Reference Genome</th>
 
@@ -53,16 +53,21 @@
         </thead>
         <tbody>
         {% comment %} Read by name. These were positional -- `reseq_info_tuple.13` -- and
-           two of them had drifted onto the wrong column: this row rendered the isolate's
+           two of them had drifted onto the wrong column: this row rendered the sample's
            library prep under a heading that said Taxonomy ID. See
-           `aledb_metadata.views.get_reseq_info_list`. {% endcomment %}
-        {% for row in reseq_info_list %}
+           `aledb_metadata.views.get_sample_info_list`.
+
+           Two headings above were wrong in the same way and are corrected here: "Base
+           Media" is the CSV's *medium derived from*, and the column beside it -- headed
+           "ALE Sample Details" -- is the CSV's *medium description*. Neither said what it
+           held. {% endcomment %}
+        {% for row in sample_info_list %}
             <tr class="experiment_stats">
                 <td class="sample_name">
                     {{ row.sample.label }}
                 </td>
-                <td class="clonal_or_population">{{ row.clonal_or_population }}</td>
-                <td class="tech_rep_description">{{ row.tech_rep_description }}</td>
+                <td class="sample_type">{{ row.sample_type }}</td>
+                <td class="sample_medium_description">{{ row.sample_medium_description }}</td>
                 <td class="media_description">{{ row.media_description }}</td>
                 <td class="carbon_source">{{ row.carbon_source }}</td>
                 <td class="nitrogen_source">{{ row.nitrogen_source }}</td>
@@ -72,9 +77,9 @@
                 <td class="supplement">{{ row.supplement }}</td>
                 <td class="temperature">{{ row.temperature }}</td>
                 <td class="strain">{{ row.strain }}</td>
-                <td class="ale_description">{{ row.ale_description }}</td>
+                <td class="population_description">{{ row.population_description }}</td>
                 <td class="library_prep">{{ row.library_prep }}</td>
-                <td class="reseq_reference">{{ row.reseq_reference }}</td>
+                <td class="reference_genome">{{ row.reference_genome }}</td>
             </tr>
 
         {% endfor %}

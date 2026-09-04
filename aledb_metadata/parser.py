@@ -236,8 +236,8 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
             flask.save()
 
             tech_rep.library_prep = library_prep
-            tech_rep.rep_description = experiment_details
-            tech_rep.save(update_fields=["library_prep", "rep_description"])
+            tech_rep.medium_description = experiment_details
+            tech_rep.save(update_fields=["library_prep", "medium_description"])
 
             # There was a `Project.objects.get_or_create(name=metadata_dict[PROJECT])` here
             # whose result was never used. Its only effect was a side effect: creating a
