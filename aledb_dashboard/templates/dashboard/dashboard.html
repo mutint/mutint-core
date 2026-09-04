@@ -63,7 +63,7 @@
                         <td>{{ unique_mutation_counts.total }}</td>
                     </tr>
                     <tr>
-                        <td>Observed Mutations</td>
+                        <td>All Mutations</td>
                         <td>{{ mutation_call_counts.total }}</td>
                     </tr>
                     </tbody>
@@ -78,7 +78,7 @@
                     <thead>
                     <tr>
                         <th>Mutation Type</th>
-                        <th>Observed Mutations</th>
+                        <th>All Mutations</th>
                         <th>Unique Mutations</th>
                     </tr>
                     </thead>
@@ -136,7 +136,7 @@
                 were rendered nowhere, so the numbers were written and never read -- which is
                 how `synonymous` and `nonsynonymous` sat at zero without anyone noticing.
 
-                Column order is Observed then Unique, matching the table above it. The Overview
+                Column order is All then Unique, matching the table above it. The Overview
                 puts them the other way round; match the neighbour, not the other page.
 
                 Rows are in severity order, matching FUNCTIONAL_CHANGE_TYPE_LIST, because that
@@ -146,7 +146,7 @@
                     <thead>
                     <tr>
                         <th>Functional Change</th>
-                        <th>Observed Mutations</th>
+                        <th>All Mutations</th>
                         <th>Unique Mutations</th>
                     </tr>
                     </thead>
