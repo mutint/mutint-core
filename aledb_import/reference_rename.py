@@ -11,7 +11,7 @@ Two things make it more than a column update.
 the visible one, but `to_gd_line()` reads the name out of the verbatim `gd_data` instead, and
 `gd_data` embeds names in more keys than `seq_id`: `region` on CON/INT and `mob_region` on an
 annotated MOB are both `seq:start-end`. `Mutation.sequence_change` duplicates the region
-string, and `UnassignedMissingCoverageEvidence` has its own `seq_id`. Rewriting by *value*
+string, and `UncalledRegions` has its own `seq_id`. Rewriting by *value*
 rather than by a list of keys is what covers all of them, including the ones breseq has not
 invented yet.
 
@@ -112,7 +112,7 @@ def apply_rename(experiment, reference, plan, actor=""):
     (`reference_store`) afterwards, deliberately: a rollback cannot unwrite a file, so files
     must never lead the rows.
     """
-    from aledb_seq.models import Mutation, UnassignedMissingCoverageEvidence
+    from aledb_seq.models import Mutation, UncalledRegions
 
     mapping = plan.mapping
     if not mapping:
@@ -122,7 +122,7 @@ def apply_rename(experiment, reference, plan, actor=""):
     with transaction.atomic():
         counts["mutations"] = _rename_mutations(Mutation, experiment, mapping)
         counts["evidence"] = _rename_evidence(
-            UnassignedMissingCoverageEvidence, experiment, mapping)
+            UncalledRegions, experiment, mapping)
         _record_aliases(reference, plan)
 
     # Everything below is after the commit, and in this order on purpose.

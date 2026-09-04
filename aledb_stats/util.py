@@ -1,6 +1,6 @@
 import re
 from aledb_common.constants import SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED
-from aledb_seq.models import UnassignedMissingCoverageEvidence
+from aledb_seq.models import UncalledRegions
 from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
@@ -62,7 +62,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
                      if reseq_experiments else None)
 
     missing_coverage_counts = dict(
-        UnassignedMissingCoverageEvidence.objects
+        UncalledRegions.objects
         .filter(sample_id__in=sample_ids)
         .values_list('sample_id')
         .annotate(total=Count('id')))

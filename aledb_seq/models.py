@@ -152,19 +152,39 @@ class Sample(models.Model):
         return self.experiment.name + " " + self.label
 
 
-class UnassignedMissingCoverageEvidence(models.Model):
-    """An MC evidence record from the GenomeDiff.
+class UncalledRegions(models.Model):
+    """A stretch of a sample's genome no call could be made over.
+
+    Written from a GenomeDiff's `MC` (missing coverage) evidence records, which is why it
+    was called `UncalledRegions` -- a name that described the file it came
+    out of rather than the thing it stores, and led with "Unassigned", which stopped meaning
+    anything when the columns it referred to went. What it holds is a region nothing is known
+    about, however that came to be known.
+
+    **It is not only a statistic.** aledb-phylogeny reads these to decide which cells of its
+    character matrix are *ambiguous*: a mutation inside one of these regions is unknown for
+    that sample, not absent. Without them `_encode` falls through to its next branch and
+    scores the site ancestral -- a claim where there was an absence, which moves branches and
+    changes the parsimony score with nothing raised. `aledb_stats` counts them per sample and
+    `aledb_import.reference_rename` rewrites `seq_id` with everything else that stores one.
+
+    `start` and `end` are **integers**. They were `CharField`s, so every reader had to cast
+    before comparing -- and a reader that forgot compared as text, where `"1000"` sorts
+    before `"9"` and a region silently covers the wrong positions. genomediff already parses
+    them as ints; the column was the only thing making them strings.
 
     Eight further columns -- reads_left_url, reads_right_url, coverage, size, reads_left,
     reads_right, gene, description -- were scraped out of breseq's index.html and attached
-    here. Nothing ever read any of them, and they went with the HTML report support. These
-    three come from the GenomeDiff itself, so the count on the stats page still works.
+    here. Nothing ever read any of them, and they went with the HTML report support.
     """
 
     seq_id = models.CharField(max_length=100)
-    start = models.CharField(max_length=100)
-    end = models.CharField(max_length=100)
+    start = models.IntegerField()
+    end = models.IntegerField()
     sample = models.ForeignKey(Sample, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name_plural = "uncalled regions"
 
 
 class Mutation(models.Model):

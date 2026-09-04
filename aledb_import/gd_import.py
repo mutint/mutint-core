@@ -41,7 +41,7 @@ from aledb_seq.models import (
     Mutation,
     ObservedMutation,
     Sample,
-    UnassignedMissingCoverageEvidence,
+    UncalledRegions,
 )
 
 from genomediff import GenomeDiff
@@ -480,16 +480,27 @@ def _database_missing_coverage(seq_experiment, document):
     breseq-directory CLI path used to write them, so a web-imported sample had
     none; both paths go through here now.
     """
-    UnassignedMissingCoverageEvidence.objects.filter(
-        sample=seq_experiment).delete()
+    UncalledRegions.objects.filter(sample=seq_experiment).delete()
     for record in document.evidence:
         if record.type != "MC":
             continue
         attributes = record.attributes
-        UnassignedMissingCoverageEvidence.objects.get_or_create(
+        # `start`/`end` are integer columns, and genomediff already parses an MC record's
+        # as ints -- but it leaves anything it cannot read as the raw string, and a file
+        # that hands us one of those must not fail the whole import. The sample keeps its
+        # mutations and loses one region, which is the same bargain coverage derivation
+        # makes; a region nobody can place is not one worth storing.
+        try:
+            start, end = int(attributes.get("start")), int(attributes.get("end"))
+        except (TypeError, ValueError):
+            logger.warning("skipping an MC record with unreadable bounds (%r..%r) in %s",
+                           attributes.get("start"), attributes.get("end"),
+                           seq_experiment.source_name)
+            continue
+        UncalledRegions.objects.get_or_create(
             seq_id=attributes.get("seq_id"),
-            start=attributes.get("start"),
-            end=attributes.get("end"),
+            start=start,
+            end=end,
             sample=seq_experiment)
 
 

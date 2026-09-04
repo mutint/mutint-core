@@ -12,7 +12,9 @@ from aledb_experiment.models import (
 )
 from aledb_import import gd_import, reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import (
+    Mutation, ObservedMutation, Sample, UncalledRegions,
+)
 
 from genomediff import GenomeDiff
 
@@ -433,6 +435,71 @@ class PolymorphismModeTestCase(TestCase):
         sample = self._import_with_command(
             "breseq -r synthetic.gbk -o sample-p r.fastq")
         self.assertTrue(sample.is_clonal)
+
+
+class UncalledRegionTestCase(TestCase):
+    """An MC evidence record becomes an `UncalledRegions` row, with integer bounds.
+
+    `start` and `end` were `CharField`s, so nothing here was ever exercised against a real
+    integer column -- and none of the four example datasets carries an MC record, so loading
+    them proves nothing about this path either. The rows matter beyond the count on /stats:
+    aledb-phylogeny reads them to mark a site *ambiguous* rather than ancestral.
+    """
+
+    def setUp(self):
+        User.objects.create(username="tester", first_name="Test", last_name="User",
+                            email="t@e.com", is_active=True, is_staff=True,
+                            date_joined=datetime.now())
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+    def _import_with_evidence(self, *lines):
+        with open(CLEAN_GD, "rb") as handle:
+            raw = handle.read().decode()
+        ensure_reference("uncalled exp")
+        gd_import.import_gd_files(
+            [SimpleUploadedFile("1-500-1-1.gd",
+                                "\n".join(raw.splitlines() + list(lines)).encode())],
+            project_name="gd project", experiment_name="uncalled exp", person="tester")
+        return Sample.objects.get()
+
+    def test_an_mc_record_is_stored_with_integer_bounds(self):
+        sample = self._import_with_evidence("MC\t900\t.\tREL606\t100\t200\t0\t0")
+
+        region = UncalledRegions.objects.get(sample=sample)
+        self.assertEqual("REL606", region.seq_id)
+        self.assertEqual((100, 200), (region.start, region.end))
+        self.assertIsInstance(region.start, int)
+        self.assertIsInstance(region.end, int)
+
+    def test_the_bounds_compare_as_numbers(self):
+        """The reason the columns are integers. As text `"1000"` sorts before `"9"`, so a
+        region 9..1000 would have looked like it covered nothing between them."""
+        self._import_with_evidence("MC\t900\t.\tREL606\t9\t1000\t0\t0")
+
+        self.assertTrue(
+            UncalledRegions.objects.filter(start__lte=500, end__gte=500).exists())
+
+    def test_a_reimport_replaces_the_regions_rather_than_adding(self):
+        self._import_with_evidence("MC\t900\t.\tREL606\t100\t200\t0\t0")
+        self._import_with_evidence("MC\t900\t.\tREL606\t300\t400\t0\t0")
+
+        self.assertEqual([(300, 400)],
+                         list(UncalledRegions.objects.values_list("start", "end")))
+
+    def test_an_unreadable_bound_is_skipped_and_the_import_survives(self):
+        """genomediff leaves a field it cannot parse as the raw string, and an integer
+        column would raise on it. Losing one region is the same bargain the coverage
+        derivation makes; losing the sample's mutations would not be."""
+        with self.assertLogs("aledb_import.gd_import", level="WARNING"):
+            sample = self._import_with_evidence("MC\t900\t.\tREL606\tnot-a-number\t200\t0\t0")
+
+        self.assertEqual(0, UncalledRegions.objects.count())
+        self.assertTrue(ObservedMutation.objects.filter(sample=sample).exists(),
+                        "the sample still has its mutations")
 
 
 class SeqIdMustMatchTheReferenceTestCase(TestCase):
