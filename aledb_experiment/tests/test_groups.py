@@ -11,7 +11,7 @@ from django.test import TestCase
 from aledb_experiment.group_permissions import (
     is_group_manager, is_group_member, is_group_owner, manageable_groups, visible_groups,
 )
-from aledb_experiment.models import AleGroup, AleGroupMembership, Project, ProjectAccess
+from aledb_experiment.models import UserGroup, UserGroupMembership, Project, ProjectAccess
 from aledb_experiment.permissions import (
     effective_role, grant_project_access, set_primary_owner,
 )
@@ -33,19 +33,19 @@ class GroupTestCase(TestCase):
         self.member = make_user("member")
         self.stranger = make_user("stranger")
 
-        self.group = AleGroup.objects.create(name="Lab", description="a lab",
+        self.group = UserGroup.objects.create(name="Lab", description="a lab",
                                              owner=self.owner)
-        AleGroupMembership.objects.create(group=self.group, user=self.owner,
+        UserGroupMembership.objects.create(group=self.group, user=self.owner,
                                           is_manager=True)
-        self.manager_row = AleGroupMembership.objects.create(
+        self.manager_row = UserGroupMembership.objects.create(
             group=self.group, user=self.manager, is_manager=True)
-        self.member_row = AleGroupMembership.objects.create(
+        self.member_row = UserGroupMembership.objects.create(
             group=self.group, user=self.member)
 
         self.base = "/ale/group/%s/" % self.group.id
 
     def owner_row(self):
-        return AleGroupMembership.objects.get(group=self.group, user=self.owner)
+        return UserGroupMembership.objects.get(group=self.group, user=self.owner)
 
 
 class ModelTestCase(GroupTestCase):
@@ -53,12 +53,12 @@ class ModelTestCase(GroupTestCase):
         """Because a group is added to a project by typing its name into a plain box."""
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                AleGroup.objects.create(name="lab", owner=self.stranger)
+                UserGroup.objects.create(name="lab", owner=self.stranger)
 
     def test_a_person_holds_at_most_one_membership_row(self):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                AleGroupMembership.objects.create(group=self.group, user=self.member)
+                UserGroupMembership.objects.create(group=self.group, user=self.member)
 
     def test_member_count(self):
         self.assertEqual(self.group.member_count(), 3)
@@ -119,9 +119,9 @@ class ListAndCreateTestCase(GroupTestCase):
         response = self.client.post("/ale/groups/create/",
                                     {"name": "New Lab", "description": "d"})
         self.assertEqual(response.status_code, 200)
-        group = AleGroup.objects.get(pk=response.json()["group_id"])
+        group = UserGroup.objects.get(pk=response.json()["group_id"])
         self.assertEqual(group.owner_id, self.stranger.id)
-        membership = AleGroupMembership.objects.get(group=group, user=self.stranger)
+        membership = UserGroupMembership.objects.get(group=group, user=self.stranger)
         self.assertTrue(membership.is_manager)
 
     def test_a_duplicate_name_is_a_message_not_an_integrityerror(self):
@@ -234,11 +234,11 @@ class MembershipTestCase(GroupTestCase):
         self.client.force_login(self.manager)
         self.assertEqual(self.remove(self.member_row).status_code, 200)
         self.assertFalse(
-            AleGroupMembership.objects.filter(pk=self.member_row.pk).exists())
+            UserGroupMembership.objects.filter(pk=self.member_row.pk).exists())
 
     def test_a_manager_cannot_remove_another_manager(self):
         second = make_user("second")
-        row = AleGroupMembership.objects.create(group=self.group, user=second,
+        row = UserGroupMembership.objects.create(group=self.group, user=second,
                                                 is_manager=True)
         self.client.force_login(self.manager)
         self.assertEqual(self.remove(row).status_code, 403)
@@ -274,8 +274,8 @@ class MembershipTestCase(GroupTestCase):
         self.assertTrue(self.owner_row().is_manager)
 
     def test_a_membership_in_another_group_is_404_here(self):
-        other = AleGroup.objects.create(name="Other", owner=self.stranger)
-        foreign = AleGroupMembership.objects.create(group=other, user=self.stranger,
+        other = UserGroup.objects.create(name="Other", owner=self.stranger)
+        foreign = UserGroupMembership.objects.create(group=other, user=self.stranger,
                                                     is_manager=True)
         self.client.force_login(self.owner)
         self.assertEqual(self.remove(foreign).status_code, 404)
@@ -320,7 +320,7 @@ class UpdateTransferAndDeleteTestCase(GroupTestCase):
             self.client.post(self.base + "update/", {"name": "Renamed"}).status_code, 403)
 
     def test_renaming_onto_another_groups_name_is_400(self):
-        AleGroup.objects.create(name="Taken", owner=self.stranger)
+        UserGroup.objects.create(name="Taken", owner=self.stranger)
         self.client.force_login(self.owner)
         self.assertEqual(
             self.client.post(self.base + "update/", {"name": "taken"}).status_code, 400)
@@ -374,7 +374,7 @@ class UpdateTransferAndDeleteTestCase(GroupTestCase):
         response = self.client.post(self.base + "delete/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["projects_affected"], 1)
-        self.assertFalse(AleGroup.objects.filter(pk=self.group.pk).exists())
+        self.assertFalse(UserGroup.objects.filter(pk=self.group.pk).exists())
         self.assertFalse(ProjectAccess.objects.filter(project=project,
                                                       group__isnull=False).exists())
         self.assertIsNone(effective_role(self.member, project))

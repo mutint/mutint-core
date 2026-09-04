@@ -8,7 +8,7 @@ even a rebuild would have produced the same numbers.
 """
 
 from aledb_common.rebuild_registry import is_stale, run_rebuilds
-from aledb_dashboard.models import ObservedMutationCounts, SampleCounts
+from aledb_dashboard.models import InventoryCounts, ObservedMutationCounts
 from aledb_dashboard.util import rebuild_mutation_counts, rebuild_sample_counts
 from aledb_mutation_editor.tests.base import EditorTestCase
 
@@ -19,7 +19,7 @@ class DeletedExperimentTestCase(EditorTestCase):
         rebuild_mutation_counts()
         rebuild_sample_counts()
         return (ObservedMutationCounts.objects.first().total,
-                SampleCounts.objects.first().ale_count)
+                InventoryCounts.objects.first().population_count)
 
     def test_a_deleted_experiments_mutations_leave_the_totals(self):
         observed_before, _ = self._totals()

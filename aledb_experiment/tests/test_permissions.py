@@ -7,7 +7,7 @@ or change anything, so these are the tests that matter most if any of it is touc
 from django.contrib.auth.models import AnonymousUser, User
 from django.test import TestCase
 
-from aledb_experiment.models import AleGroup, AleGroupMembership, Project, ProjectAccess
+from aledb_experiment.models import UserGroup, UserGroupMembership, Project, ProjectAccess
 from aledb_experiment.permissions import (
     AccessError, accessible_projects, can_add_experiment_filter, can_admin_project,
     can_delete_project, can_edit_project, can_manage_project_access, can_own_project,
@@ -121,9 +121,9 @@ class GroupGrantTestCase(TestCase):
         self.project = Project.objects.create(name="P", user=self.owner, is_public=False)
         set_primary_owner(self.project, self.owner)
 
-        self.group = AleGroup.objects.create(name="Lab", owner=self.lead)
-        AleGroupMembership.objects.create(group=self.group, user=self.lead, is_manager=True)
-        AleGroupMembership.objects.create(group=self.group, user=self.member)
+        self.group = UserGroup.objects.create(name="Lab", owner=self.lead)
+        UserGroupMembership.objects.create(group=self.group, user=self.lead, is_manager=True)
+        UserGroupMembership.objects.create(group=self.group, user=self.member)
 
     def test_a_group_grant_reaches_every_member(self):
         grant_project_access(self.project, self.group, ROLE_WRITE)
@@ -154,7 +154,7 @@ class GroupGrantTestCase(TestCase):
 
     def test_leaving_the_group_takes_the_access_away(self):
         grant_project_access(self.project, self.group, ROLE_WRITE)
-        AleGroupMembership.objects.filter(group=self.group, user=self.member).delete()
+        UserGroupMembership.objects.filter(group=self.group, user=self.member).delete()
         clear_role_cache()
         self.assertIsNone(effective_role(self.member, self.project))
 
@@ -247,9 +247,9 @@ class AccessibleProjectsTestCase(TestCase):
 
     def test_a_group_grant_does_not_duplicate_rows(self):
         """`.distinct()` is load-bearing: the membership join fans out one row per member."""
-        group = AleGroup.objects.create(name="Lab", owner=self.owner)
-        AleGroupMembership.objects.create(group=group, user=self.member, is_manager=True)
-        AleGroupMembership.objects.create(group=group, user=make_user("other"))
+        group = UserGroup.objects.create(name="Lab", owner=self.owner)
+        UserGroupMembership.objects.create(group=group, user=self.member, is_manager=True)
+        UserGroupMembership.objects.create(group=group, user=make_user("other"))
         grant_project_access(self.owned, group, ROLE_READ)
         visible = list(accessible_projects(self.member))
         self.assertEqual(len(visible), len(set(visible)))
@@ -437,8 +437,8 @@ class ResolveTestCase(TestCase):
             resolve_username("   ")
 
     def test_a_group_you_belong_to_resolves(self):
-        group = AleGroup.objects.create(name="Lab", owner=self.actor)
-        AleGroupMembership.objects.create(group=group, user=self.actor, is_manager=True)
+        group = UserGroup.objects.create(name="Lab", owner=self.actor)
+        UserGroupMembership.objects.create(group=group, user=self.actor, is_manager=True)
         self.assertEqual(resolve_group_name("lab", self.actor), group)
 
     def test_a_group_you_do_not_belong_to_is_indistinguishable_from_one_that_is_absent(self):
@@ -447,7 +447,7 @@ class ResolveTestCase(TestCase):
         A box that resolved any name would let anyone list every group on the installation by
         typing names until one was accepted.
         """
-        AleGroup.objects.create(name="Secret Lab", owner=self.alice)
+        UserGroup.objects.create(name="Secret Lab", owner=self.alice)
         with self.assertRaises(AccessError) as present:
             resolve_group_name("Secret Lab", self.actor)
         with self.assertRaises(AccessError) as absent:

@@ -7,7 +7,7 @@ The end-to-end test at the bottom is the one that proves the feature: a stranger
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import AleGroup, AleGroupMembership, Project, ProjectAccess
+from aledb_experiment.models import UserGroup, UserGroupMembership, Project, ProjectAccess
 from aledb_experiment.permissions import (
     effective_role, grant_project_access, set_primary_owner,
 )
@@ -127,8 +127,8 @@ class PageTestCase(AccessTestCase):
         return html.split('<tr data-access-id="%s">' % entry.id)[1].split("</tr>")[0]
 
     def test_the_groups_you_can_add_are_named_and_managing_them_is_a_button(self):
-        group = AleGroup.objects.create(name="lab", owner=self.owner)
-        AleGroupMembership.objects.create(group=group, user=self.owner, is_manager=True)
+        group = UserGroup.objects.create(name="lab", owner=self.owner)
+        UserGroupMembership.objects.create(group=group, user=self.owner, is_manager=True)
         self.client.force_login(self.owner)
         html = self.client.get(self.page).content.decode("utf-8")
         self.assertIn("You can add these groups:", html)
@@ -226,10 +226,10 @@ class GrantTestCase(AccessTestCase):
 class GroupGrantTestCase(AccessTestCase):
     def setUp(self):
         super().setUp()
-        self.group = AleGroup.objects.create(name="Lab", owner=self.admin)
-        AleGroupMembership.objects.create(group=self.group, user=self.admin,
+        self.group = UserGroup.objects.create(name="Lab", owner=self.admin)
+        UserGroupMembership.objects.create(group=self.group, user=self.admin,
                                           is_manager=True)
-        AleGroupMembership.objects.create(group=self.group, user=self.stranger)
+        UserGroupMembership.objects.create(group=self.group, user=self.stranger)
 
     def test_an_admin_can_grant_a_group_they_belong_to(self):
         self.client.force_login(self.admin)
@@ -245,7 +245,7 @@ class GroupGrantTestCase(AccessTestCase):
 
     def test_a_group_you_do_not_belong_to_reads_as_absent(self):
         """Anti-enumeration: the same message either way, so the box is not an oracle."""
-        AleGroup.objects.create(name="Secret", owner=self.reader)
+        UserGroup.objects.create(name="Secret", owner=self.reader)
         self.client.force_login(self.owner)
         present = self.grant(group="Secret", role=ROLE_READ)
         absent = self.grant(group="No Such Group", role=ROLE_READ)
@@ -256,7 +256,7 @@ class GroupGrantTestCase(AccessTestCase):
 
     def test_a_group_cannot_be_granted_owner(self):
         self.client.force_login(self.owner)
-        AleGroupMembership.objects.create(group=self.group, user=self.owner)
+        UserGroupMembership.objects.create(group=self.group, user=self.owner)
         response = self.grant(group="Lab", role=ROLE_OWNER)
         self.assertEqual(response.status_code, 400)
 

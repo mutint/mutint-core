@@ -11,7 +11,7 @@ escalation someone will look for.
 
 Three standings, and the owner holds all of them:
 
-- **owner**  -- one person, `AleGroup.owner`. Appoints managers, transfers, deletes.
+- **owner**  -- one person, `UserGroup.owner`. Appoints managers, transfers, deletes.
 - **manager** -- a membership row with `is_manager`. Renames the group and manages plain
   members, but cannot touch another manager or the owner.
 - **member** -- a membership row. Sees the group page; that is all.
@@ -19,7 +19,7 @@ Three standings, and the owner holds all of them:
 
 from django.db.models import Q
 
-from aledb_experiment.models import AleGroup, AleGroupMembership
+from aledb_experiment.models import UserGroup, UserGroupMembership
 
 
 def _real(user):
@@ -29,7 +29,7 @@ def _real(user):
 def group_membership(user, group):
     if not _real(user):
         return None
-    return AleGroupMembership.objects.filter(group=group, user=user).first()
+    return UserGroupMembership.objects.filter(group=group, user=user).first()
 
 
 def is_group_owner(user, group):
@@ -54,19 +54,19 @@ def is_group_member(user, group):
 def visible_groups(user):
     """Groups `user` owns or belongs to. What the add-a-group box resolves against."""
     if not _real(user):
-        return AleGroup.objects.none()
+        return UserGroup.objects.none()
     if user.is_superuser:
-        return AleGroup.objects.all()
+        return UserGroup.objects.all()
     # `owner` as well as the membership row: the owner always has one, but a group that
     # somehow lost it must not become invisible to the only person who can repair it.
-    return AleGroup.objects.filter(Q(memberships__user=user) | Q(owner=user)).distinct()
+    return UserGroup.objects.filter(Q(memberships__user=user) | Q(owner=user)).distinct()
 
 
 def manageable_groups(user):
     """Groups `user` owns or manages."""
     if not _real(user):
-        return AleGroup.objects.none()
+        return UserGroup.objects.none()
     if user.is_superuser:
-        return AleGroup.objects.all()
-    return AleGroup.objects.filter(
+        return UserGroup.objects.all()
+    return UserGroup.objects.filter(
         Q(memberships__user=user, memberships__is_manager=True) | Q(owner=user)).distinct()

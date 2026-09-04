@@ -16,7 +16,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from aledb_experiment.models import (
-    Experiment, AleGroup, Population, TimePoint, Media, Project, ProjectAccess,
+    Experiment, UserGroup, Population, TimePoint, Media, Project, ProjectAccess,
 )
 from aledb_experiment.roles import ROLE_OWNER
 
@@ -42,7 +42,7 @@ class AdminChangelistTestCase(TestCase):
         media = Media.objects.create(description="M9")
         ale = Population.objects.create(experiment=experiment, name="1")
         TimePoint.objects.create(population=ale, value=1000, media=media)
-        AleGroup.objects.create(name="G", owner=self.superuser)
+        UserGroup.objects.create(name="G", owner=self.superuser)
 
     def test_fixture_covers_every_registered_model(self):
         """Guards the fixture itself: a model registered later gets no row from setUp, and

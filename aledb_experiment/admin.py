@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django import forms
 from aledb_experiment.models import (
-    Experiment, AleGroup, AleGroupMembership, Media, Project, ProjectAccess,
+    Experiment, UserGroup, UserGroupMembership, Media, Project, ProjectAccess,
 )
 from aledb_experiment.permissions import (
     AccessError, grant_project_access, revoke_project_access, set_primary_owner,
@@ -51,13 +51,13 @@ class MediaAdmin(admin.ModelAdmin):
 
 
 class MembershipInline(admin.TabularInline):
-    model = AleGroupMembership
+    model = UserGroupMembership
     extra = 0
     fields = ('user', 'is_manager')
 
 
-@admin.register(AleGroup)
-class AleGroupAdmin(admin.ModelAdmin):
+@admin.register(UserGroup)
+class UserGroupAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'owner', 'created')
     search_fields = ('name',)
     inlines = [MembershipInline]

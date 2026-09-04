@@ -15,7 +15,7 @@ specific person back without reaching into the database.
 
 from django.core.management.base import BaseCommand, CommandError
 
-from aledb_experiment.models import AleGroup, Project, ProjectAccess
+from aledb_experiment.models import UserGroup, Project, ProjectAccess
 from aledb_experiment.permissions import (
     AccessError, grant_project_access, revoke_project_access,
 )
@@ -55,7 +55,7 @@ class Command(BaseCommand):
 
         entry = ProjectAccess.objects.filter(
             project=project,
-            **({"user": subject} if not isinstance(subject, AleGroup) else {"group": subject})
+            **({"user": subject} if not isinstance(subject, UserGroup) else {"group": subject})
         ).first()
         if entry is None:
             raise CommandError("No such grant on %s." % project.name)
@@ -88,7 +88,7 @@ class Command(BaseCommand):
             if user is None:
                 raise CommandError('There is no user named "%s".' % username)
             return user
-        group = AleGroup.objects.filter(name__iexact=group_name).first()
+        group = UserGroup.objects.filter(name__iexact=group_name).first()
         if group is None:
             raise CommandError('There is no group named "%s".' % group_name)
         return group

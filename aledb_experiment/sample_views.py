@@ -108,7 +108,7 @@ def sample_edit(request, pk):
         "experiment": experiment,
         "sample": _row_context(reseq),
     })
-    return render(request, "ale/sample_edit.html", context)
+    return render(request, "sample/edit.html", context)
 
 
 @ensure_csrf_cookie
@@ -124,7 +124,7 @@ def experiment_samples(request, pk):
         "experiment": experiment,
         "samples": [_row_context(reseq) for reseq in _experiment_samples(experiment)],
     })
-    return render(request, "ale/experiment_samples.html", context)
+    return render(request, "sample/list.html", context)
 
 
 # --- endpoints -----------------------------------------------------------------------------

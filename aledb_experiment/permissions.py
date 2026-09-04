@@ -27,7 +27,7 @@ import logging
 
 from django.db.models import Q
 
-from aledb_experiment.models import AleGroup, Project, ProjectAccess, live
+from aledb_experiment.models import UserGroup, Project, ProjectAccess, live
 from aledb_experiment.roles import (
     ROLE_ADMIN, ROLE_OWNER, ROLE_READ, ROLE_WRITE,
     at_least, best_role, is_role, rank, roles_at_least,
@@ -341,7 +341,7 @@ def resolve_username(name):
 
 
 def resolve_group_name(name, user):
-    """A group name typed into a text box -> an AleGroup the actor can actually see.
+    """A group name typed into a text box -> an UserGroup the actor can actually see.
 
     Resolved against the groups `user` belongs to, never against all of them. A box that
     resolved any name would be a group-name oracle: type names until one is accepted and you
@@ -398,7 +398,7 @@ def _successor_owner(project, excluding_pk=None):
 
 
 def grant_project_access(project, subject, role, granted_by=None):
-    """Give `subject` (a User or an AleGroup) `role` on `project`. Upserts.
+    """Give `subject` (a User or an UserGroup) `role` on `project`. Upserts.
 
     The guardrails live here rather than only in the view, so the management command and the
     import paths cannot route around them.
@@ -406,7 +406,7 @@ def grant_project_access(project, subject, role, granted_by=None):
     if not is_role(role):
         raise AccessError("Unknown role.")
 
-    if isinstance(subject, AleGroup):
+    if isinstance(subject, UserGroup):
         if role == ROLE_OWNER:
             raise AccessError("A group cannot own a project; ownership is held by a person.")
         lookup = {"project": project, "group": subject}
@@ -418,7 +418,7 @@ def grant_project_access(project, subject, role, granted_by=None):
     # Whether this grant takes ownership away from someone who currently holds it -- through
     # their row, or through `Project.user`, which confers owner on its own. Asked before the
     # write, because the write is what makes the answer stop being true.
-    was_primary = (not isinstance(subject, AleGroup)
+    was_primary = (not isinstance(subject, UserGroup)
                    and project.user_id is not None
                    and project.user_id == getattr(subject, "id", None))
     holds_ownership = was_primary or (existing is not None and existing.role == ROLE_OWNER)

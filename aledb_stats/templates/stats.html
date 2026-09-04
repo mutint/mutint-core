@@ -180,11 +180,11 @@
                     </tr>
                     </thead>
                     <tbody>
-                    {% for ale_flask_isolate_count_tuple in ale_flask_isolate_count_list %}
+                    {% for row in population_counts %}
                         <tr>
-                            <td>{{ ale_flask_isolate_count_tuple.0 }}</td>
-                            <td>{{ ale_flask_isolate_count_tuple.1 }}</td>
-                            <td>{{ ale_flask_isolate_count_tuple.2 }}</td>
+                            <td>{{ row.0 }}</td>
+                            <td>{{ row.1 }}</td>
+                            <td>{{ row.2 }}</td>
                         </tr>
                     {% endfor %}
                     <tr>

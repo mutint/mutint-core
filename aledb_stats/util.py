@@ -12,27 +12,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_ale_flask_isolate_count_list(reseq_queryset):
-    ale_flask_isolate_count_dict = {}
+def count_per_population(reseq_queryset):
+    """`[(population name, time points, samples), ...]` for the Overview's table.
+
+    It was `get_ale_flask_isolate_count_list`, and it counted samples per flask per ALE --
+    which is what it still does, under the names those three things have now. The third
+    number was called an isolate count and was always a count of samples.
+    """
+    per_population = {}
     for reseq in reseq_queryset:
-        if reseq.population_name not in ale_flask_isolate_count_dict.keys():
-            ale_flask_isolate_count_dict[reseq.population_name] = {reseq.time_point_value: 1}
-        else:
-            if reseq.time_point_value not in ale_flask_isolate_count_dict[reseq.population_name].keys():
-                ale_flask_isolate_count_dict[reseq.population_name][reseq.time_point_value] = 1
-            else:
-                ale_flask_isolate_count_dict[reseq.population_name][reseq.time_point_value] += 1
+        time_points = per_population.setdefault(reseq.population_name, {})
+        time_points[reseq.time_point_value] = time_points.get(reseq.time_point_value, 0) + 1
 
-    ale_flask_isolate_count_list = []
-    for ale_id, flask_isolate_count_dict in ale_flask_isolate_count_dict.items():
-        ale_flask_count = 0
-        ale_isolate_count = 0
-        for flask_isolate_count in flask_isolate_count_dict.values():
-            ale_flask_count += 1
-            ale_isolate_count += flask_isolate_count
-        ale_flask_isolate_count_list.append((ale_id, ale_flask_count, ale_isolate_count))
-
-    return ale_flask_isolate_count_list
+    return [(name, len(time_points), sum(time_points.values()))
+            for name, time_points in per_population.items()]
 
 
 def get_reseq_experiment_info_list(reseq_experiments):

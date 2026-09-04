@@ -16,7 +16,7 @@ So they pin the replacement instead, and the two halves worth keeping apart:
 
 from django.test import TestCase
 
-from aledb_dashboard.models import SampleCounts
+from aledb_dashboard.models import InventoryCounts
 from aledb_dashboard.util import rebuild_sample_counts
 from aledb_experiment.models import (Experiment, Population, TimePoint,
                                      Media)
@@ -40,8 +40,8 @@ class DashboardCountTestCase(TestCase):
 
     def counts(self):
         rebuild_sample_counts()
-        row = SampleCounts.objects.all()[0]
-        return row.ale_count, row.flask_count, row.isolate_count
+        row = InventoryCounts.objects.all()[0]
+        return row.population_count, row.time_point_count, row.sample_count
 
 
 class TestEmptyRowsStillCount(DashboardCountTestCase):
@@ -56,8 +56,8 @@ class TestEmptyRowsStillCount(DashboardCountTestCase):
         for label in ("0", "9"):
             ale = Population.objects.create(experiment=self.experiment, name=label)
             TimePoint.objects.create(media=Media.objects.create(), population=ale)
-        ale_count, flask_count, _ = self.counts()
-        self.assertEqual((ale_count, flask_count), (2, 2))
+        population_count, time_point_count, _ = self.counts()
+        self.assertEqual((population_count, time_point_count), (2, 2))
 
 
 class TestAncestorIsNotCounted(DashboardCountTestCase):
@@ -76,10 +76,10 @@ class TestAncestorIsNotCounted(DashboardCountTestCase):
         self.make_sample("0", flask_number=1, isolate_number=2)
         self.experiment.set_ancestor(ancestor)
 
-        ale_count, flask_count, isolate_count = self.counts()
-        self.assertEqual((ale_count, flask_count), (1, 1))
+        population_count, time_point_count, sample_count = self.counts()
+        self.assertEqual((population_count, time_point_count), (1, 1))
         # The ancestor's own isolate is purely ancestral and goes; its sibling stays.
-        self.assertEqual(isolate_count, 1)
+        self.assertEqual(sample_count, 1)
 
     def test_nothing_is_dropped_when_no_ancestor_is_designated(self):
         self.make_sample("0")

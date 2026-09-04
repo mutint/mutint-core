@@ -5,7 +5,7 @@
 {% block scripts_and_style %}
     <script type="text/javascript">
         var project_id = {{ project.id }};
-        {% include "./experiment_datatables.js" %}
+        {% include "experiment/_datatables.js" %}
     </script>
 
     <script type="text/javascript" src="{% static "vendor/pdfmake-0.1.36/pdfmake.min.js" %}"></script>

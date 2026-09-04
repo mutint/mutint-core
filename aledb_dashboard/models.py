@@ -45,7 +45,15 @@ class UniqueMutationCounts(models.Model):
     # `nonsense` since the port landed, so these SNPs were being counted as something else.
     nonsense = models.IntegerField(default=0)
     unannotated = models.IntegerField(default=0)
-class SampleCounts(models.Model):
-    ale_count = models.IntegerField(default=0)
-    isolate_count = models.IntegerField(default=0)
-    flask_count = models.IntegerField(default=0)
+class InventoryCounts(models.Model):
+    """How much of each thing the installation holds.
+
+    It was `SampleCounts`, which named one of the three numbers it stores. What the
+    dashboard shows is an *inventory* -- and that is also why these are storable at all
+    while nothing else derived is: the dashboard applies no filter, so the answer is the
+    same for every reader. See `aledb_dashboard.util` for the rest of that argument.
+    """
+
+    population_count = models.IntegerField(default=0)
+    time_point_count = models.IntegerField(default=0)
+    sample_count = models.IntegerField(default=0)

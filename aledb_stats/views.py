@@ -5,7 +5,7 @@ from django.utils.safestring import mark_safe
 from django.conf import settings
 from aledb_seq.util import get_ordered_reseq_queryset
 from aledb_seq.views import common
-from aledb_stats.util import get_ale_flask_isolate_count_list,\
+from aledb_stats.util import count_per_population,\
     get_experiment_summary,\
     get_reseq_experiment_info_list
 from aledb_common.util import get_user_context
@@ -47,11 +47,11 @@ def stats(request):
 
         ale_id = ale_number
         reseq_queryset = get_ordered_reseq_queryset(experiment.id, ale_id)
-        ale_flask_isolate_count_list = get_ale_flask_isolate_count_list(reseq_queryset)
-        ale_sum = len(ale_flask_isolate_count_list)
+        population_counts = count_per_population(reseq_queryset)
+        ale_sum = len(population_counts)
         flask_sum = 0
         isolate_sum = 0
-        for l in ale_flask_isolate_count_list:
+        for l in population_counts:
             flask_sum += l[1]
             isolate_sum += l[2]
 
@@ -92,7 +92,7 @@ def stats(request):
                         # colour machinery in aledb_seq.views.common: a palette and a vocabulary
                         # for a chart that was never built, and which no template has ever read.
                         # The functional-change counts below are rendered as a table instead.
-                        "ale_flask_isolate_count_list": ale_flask_isolate_count_list,
+                        "population_counts": population_counts,
                         "ale_sum": ale_sum,
                         "flask_sum": flask_sum,
                         "isolate_sum": isolate_sum,

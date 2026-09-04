@@ -380,8 +380,12 @@ class TimePoint(models.Model):
 # between roles is `aledb_experiment/roles.py`. Nothing here decides who may do what.
 
 
-class AleGroup(models.Model):
+class UserGroup(models.Model):
     """A named set of people, so a whole lab can be given access in one grant.
+
+    It was `AleGroup`, which was the only thing in the schema called ALE that had nothing to
+    do with one -- a group is people, and the same group is used across projects that are
+    not ALE experiments at all.
 
     Deliberately not `django.contrib.auth.Group`: that one is administered from /admin/, has
     no notion of who owns it, and carries a `permissions` m2m that would sit unused and
@@ -396,7 +400,7 @@ class AleGroup(models.Model):
     name = models.CharField(max_length=80)
     description = models.CharField(max_length=300, blank=True, default="")
     owner = models.ForeignKey(User, on_delete=models.PROTECT,
-                              related_name="owned_ale_groups")
+                              related_name="owned_user_groups")
     created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -404,7 +408,7 @@ class AleGroup(models.Model):
         # plain text box. Two groups differing only in case would be unresolvable, and the
         # person typing would have no way to say which they meant.
         constraints = [
-            models.UniqueConstraint(Lower("name"), name="alegroup_name_ci_unique"),
+            models.UniqueConstraint(Lower("name"), name="usergroup_name_ci_unique"),
         ]
         ordering = ["name"]
 
@@ -418,7 +422,7 @@ class AleGroup(models.Model):
         return self.memberships.count()
 
 
-class AleGroupMembership(models.Model):
+class UserGroupMembership(models.Model):
     """One person's place in one group.
 
     `is_manager` is a flag rather than a separate `managers` m2m so that "every manager is a
@@ -431,9 +435,9 @@ class AleGroupMembership(models.Model):
     needing a `Q(group__owner=user)` special case in the hot path.
     """
 
-    group = models.ForeignKey(AleGroup, on_delete=models.CASCADE, related_name="memberships")
+    group = models.ForeignKey(UserGroup, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(User, on_delete=models.CASCADE,
-                             related_name="ale_group_memberships")
+                             related_name="user_group_memberships")
     is_manager = models.BooleanField(default=False)
     added_at = models.DateTimeField(auto_now_add=True)
     added_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="+",
@@ -442,7 +446,7 @@ class AleGroupMembership(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["group", "user"],
-                                    name="alegroup_one_row_per_member"),
+                                    name="usergroup_one_row_per_member"),
         ]
         ordering = ["-is_manager", "user__username"]
 
@@ -468,7 +472,7 @@ class ProjectAccess(models.Model):
                                 related_name="access_entries")
     user = models.ForeignKey(User, on_delete=models.CASCADE,
                              related_name="project_access", **blank_field)
-    group = models.ForeignKey(AleGroup, on_delete=models.CASCADE,
+    group = models.ForeignKey(UserGroup, on_delete=models.CASCADE,
                               related_name="project_access", **blank_field)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
     granted_at = models.DateTimeField(auto_now_add=True)

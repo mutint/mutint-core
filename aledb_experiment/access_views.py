@@ -105,7 +105,7 @@ def project_access(request, pk):
         "can_grant_owner": can_own_project(request.user, project),
         "my_groups": manageable_groups(request.user),
     })
-    return render(request, "ale/project_access.html", context)
+    return render(request, "project/access.html", context)
 
 
 @require_POST

@@ -1777,7 +1777,7 @@ both blind to exactly that failure; only `migrate` or `test` finds it.
 
 ### Groups
 
-`AleGroup` + `AleGroupMembership`, in `aledb_experiment`. Deliberately not
+`UserGroup` + `UserGroupMembership`, in `aledb_experiment`. Deliberately not
 `django.contrib.auth.Group`: that one is administered from `/admin/`, has no owner, and
 carries a `permissions` m2m that would sit unused inviting someone to wire model permissions
 into a per-object scheme.

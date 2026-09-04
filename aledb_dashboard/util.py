@@ -1,4 +1,6 @@
-from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
+from aledb_dashboard.models import (
+    InventoryCounts, ObservedMutationCounts, UniqueMutationCounts,
+)
 from aledb_seq.models import ObservedMutation
 from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
@@ -58,32 +60,33 @@ def _purely_ancestral(model, sample_path):
 #: Where a sample sits, seen from each of the rows counted below. The third row *is* the
 #: sample now -- `Isolate` was folded into it -- so its path down to a sample is empty, and
 #: the count below asks its question directly rather than through `_purely_ancestral`.
-_SAMPLE_FROM_ALE = paths.down_chain("population")
-_SAMPLE_FROM_FLASK = paths.down_chain("time_point")
+_SAMPLE_FROM_POPULATION = paths.down_chain("population")
+_SAMPLE_FROM_TIME_POINT = paths.down_chain("time_point")
 
 
 def rebuild_sample_counts():
-    if SampleCounts.objects.all().count() == 0:
-        SampleCounts.objects.create()
-    live_ales = Population.objects.filter(
+    if InventoryCounts.objects.all().count() == 0:
+        InventoryCounts.objects.create()
+    live_populations = Population.objects.filter(
         Q(experiment__deleted_at__isnull=True)
         & Q(experiment__project__deleted_at__isnull=True))
 
-    ale_count = live_ales.exclude(
-        pk__in=_purely_ancestral(Population, _SAMPLE_FROM_ALE)).distinct().count()
-    flask_count = TimePoint.objects.filter(population__in=live_ales).exclude(
-        pk__in=_purely_ancestral(TimePoint, _SAMPLE_FROM_FLASK)).distinct().count()
+    population_count = live_populations.exclude(
+        pk__in=_purely_ancestral(Population, _SAMPLE_FROM_POPULATION)).distinct().count()
+    time_point_count = TimePoint.objects.filter(population__in=live_populations).exclude(
+        pk__in=_purely_ancestral(TimePoint, _SAMPLE_FROM_TIME_POINT)).distinct().count()
     # The third number counted `Isolate` rows and counts samples now, which is the same
     # number: a sample was one run under one replicate under one isolate, and only the
     # import created any of them. What changes is that "a row whose every sample is
     # ancestral" is simply "an ancestral sample", so this drops out of `_purely_ancestral`
     # and excludes the designated ancestors directly.
-    isolate_count = (_evolved_samples()
-                     .filter(**{paths.to_population() + "__in": live_ales})
-                     .distinct().count())
+    sample_count = (_evolved_samples()
+                    .filter(**{paths.to_population() + "__in": live_populations})
+                    .distinct().count())
 
-    SampleCounts.objects.all().update(ale_count=ale_count, flask_count=flask_count,
-                                      isolate_count=isolate_count)
+    InventoryCounts.objects.all().update(population_count=population_count,
+                                         time_point_count=time_point_count,
+                                         sample_count=sample_count)
 
 
 def _live_observation_rows():

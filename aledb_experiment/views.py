@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def projects(request):
     project_list = get_user_projects(request.user)
-    template_name = "ale/projects.html"
+    template_name = "project/list.html"
     project_dic = {}
     for project in project_list:
         project_experiments = live(project.experiment_set.all())
@@ -45,7 +45,7 @@ def _editable_projects(user):
 
 def experiments(request):
     experiment_list = get_all_user_exps(request.user)
-    template_name = "ale/experiments.html"
+    template_name = "experiment/list.html"
     return render(request, template_name, {
         'experiments': experiment_list,
         'editable_projects': _editable_projects(request.user),
@@ -56,7 +56,7 @@ def project_detail(request, pk):
     project = get_object_or_404(Project, pk=pk)
     if can_view_project(request.user, project):
         experiments = live(project.experiment_set.all())
-        return render(request, "ale/project_detail.html", {
+        return render(request, "project/detail.html", {
             "project": project,
             "experiments": experiments,
             "can_edit": can_edit_project(request.user, project),
@@ -107,7 +107,7 @@ def project_new(request):
     """
     if not request.user.is_authenticated:
         return render(request, "403.html", get_user_context(request.user), status=403)
-    return render(request, "ale/project_new.html", get_user_context(request.user))
+    return render(request, "project/new.html", get_user_context(request.user))
 
 
 def experiment_new(request):
@@ -131,7 +131,7 @@ def experiment_new(request):
         return redirect("/ale/projects/new/")
 
     context.update({"project": project, "editable_projects": editable})
-    return render(request, "ale/experiment_new.html", context)
+    return render(request, "experiment/new.html", context)
 
 
 @require_POST
@@ -387,7 +387,7 @@ def project_edit(request, pk):
         return render(request, "403.html", context, status=403)
 
     context.update({"project": project, "statuses": Project.PROJECT_STATUS})
-    return render(request, "ale/project_edit.html", context)
+    return render(request, "project/edit.html", context)
 
 
 def experiment_edit(request, pk):
@@ -409,7 +409,7 @@ def experiment_edit(request, pk):
         "experiment": experiment,
         "editable_projects": _editable_projects(request.user),
     })
-    return render(request, "ale/experiment_edit.html", context)
+    return render(request, "experiment/edit.html", context)
 
 
 @require_POST
