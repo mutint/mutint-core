@@ -29,6 +29,24 @@ from aledb_experiment import paths
 
 MUTATION_TYPE_LIST = ['SNP', 'SUB', 'DEL', 'INS', 'MOB', 'AMP', 'CON', 'INV', UNANNOTATED]
 
+#: What each type is called on a page. A real mapping between two vocabularies -- breseq's
+#: three-letter codes and English -- so unlike the functional-change tokens it cannot be
+#: derived, and it lives here because beside the list is the one place it cannot drift from
+#: it. It was written out twice in templates (`dashboard.html` and `stats.html`) and the
+#: dashboard's copy was a *column name* per row, which is what made adding `unannotated` to
+#: the vocabulary a migration rather than a line.
+MUTATION_TYPE_LABELS = {
+    'SNP': 'Single Base Substitutions',
+    'SUB': 'Multiple Base Substitutions',
+    'DEL': 'Deletions',
+    'INS': 'Insertions',
+    'MOB': 'Mobile Element Insertions',
+    'AMP': 'Amplifications',
+    'CON': 'Gene Conversions',
+    'INV': 'Inversions',
+    UNANNOTATED: 'Unannotated',
+}
+
 # `GENE_COLORS`, `SEQ_COLORS`, `COLORS`, `DEFAULT_COLOR` and `_set_colors` stood here and are gone.
 # They were read by exactly two context keys, `seq_color_set` and `protein_types`, which reached no
 # template in core or in any plugin -- palettes for a chart that was never built. Their one

@@ -1,6 +1,4 @@
-from aledb_dashboard.models import (
-    InventoryCounts, MutationCallCounts, UniqueMutationCounts,
-)
+from aledb_dashboard.models import InstallationCounts
 from aledb_sample.models import MutationCall
 from aledb_sample.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
@@ -13,19 +11,20 @@ from django.db.models import Q
 from aledb_experiment import paths
 
 
-def rebuild_dashboard_data():
-    rebuild_sample_counts()
-    rebuild_mutation_counts()
+def counts(name):
+    """One row's payload, or `{}` if it has never been built.
+
+    Every reader goes through this. It answers a plain dict so no caller has to hold a model
+    instance or guard on one -- the two views each carried their own
+    `if unique_mutation_counts and mutation_call_counts:` dance around exactly that.
+    """
+    return (InstallationCounts.objects
+            .filter(name=name).values_list("data", flat=True).first()) or {}
 
 
 #: The join from a MutationCall up to its experiment, as `aledb_sample.util`,
 #: `aledb_filter.util` and `aledb_mutation_editor.history` all spell it.
 _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
-
-#: Deletion here is soft: it sets `deleted_at` and leaves everything below the experiment in
-#: place, and this app's managers are deliberately unfiltered -- so these totals counted every
-#: project and experiment anybody had ever removed. Both halves are needed: deleting a project
-#: does not stamp its experiments.
 
 
 def _evolved_samples():
@@ -65,8 +64,14 @@ _SAMPLE_FROM_POPULATION = paths.down_chain("population")
 
 
 def rebuild_sample_counts():
-    if InventoryCounts.objects.all().count() == 0:
-        InventoryCounts.objects.create()
+    """The `inventory` row: how many populations, time points and samples are live.
+
+    Soft deletion is why `live_populations` filters both `deleted_at` columns. Removing an
+    experiment sets its own flag and leaves everything below it in place, and this app's
+    managers are deliberately unfiltered -- so these totals used to count every project and
+    experiment anybody had ever removed. Both halves are needed: deleting a *project* does
+    not stamp its experiments.
+    """
     live_populations = Population.objects.filter(
         Q(experiment__deleted_at__isnull=True)
         & Q(experiment__project__deleted_at__isnull=True))
@@ -95,9 +100,13 @@ def rebuild_sample_counts():
                     .filter(**{paths.to_population() + "__in": live_populations})
                     .distinct().count())
 
-    InventoryCounts.objects.all().update(population_count=population_count,
-                                         time_point_count=time_point_count,
-                                         sample_count=sample_count)
+    # One upsert where this was a create-if-empty followed by a blind `.all().update()` --
+    # which wrote every row, the table having had no way to say it held only one.
+    InstallationCounts.objects.update_or_create(
+        name=InstallationCounts.INVENTORY,
+        defaults={"data": {"population": population_count,
+                           "time_point": time_point_count,
+                           "sample": sample_count}})
 
 
 def _live_call_rows():
@@ -158,62 +167,29 @@ def rebuild_mutation_counts():
             mut_count_dict[bucket] += 1
             mut_func_change_type_dict[change] += 1
 
-    if MutationCallCounts.objects.all().count() == 0:
-        MutationCallCounts.objects.create()
-    call_count_qryset = MutationCallCounts.objects.all()
-    if UniqueMutationCounts.objects.all().count() == 0:
-        UniqueMutationCounts.objects.create()
-    mut_count_qryset = UniqueMutationCounts.objects.all()
-
-    call_count_qryset.update(total=call_total)
-    mut_count_qryset.update(total=len(seen))
-
-    for mutation_type in MUTATION_TYPE_LIST:
-        call_type_count = call_count_dict[mutation_type]
-        unique_mutation_type_count = mut_count_dict[mutation_type]
-        if mutation_type == 'SNP':
-            call_count_qryset.update(single_base_substitution=call_type_count)
-            mut_count_qryset.update(single_base_substitution=unique_mutation_type_count)
-        elif mutation_type == 'SUB':
-            call_count_qryset.update(multiple_base_substitution=call_type_count)
-            mut_count_qryset.update(multiple_base_substitution=unique_mutation_type_count)
-        elif mutation_type == 'DEL':
-            call_count_qryset.update(deletion=call_type_count)
-            mut_count_qryset.update(deletion=unique_mutation_type_count)
-        elif mutation_type == 'INS':
-            call_count_qryset.update(insertion=call_type_count)
-            mut_count_qryset.update(insertion=unique_mutation_type_count)
-        elif mutation_type == 'MOB':
-            call_count_qryset.update(mobile_element_insertion=call_type_count)
-            mut_count_qryset.update(mobile_element_insertion=unique_mutation_type_count)
-        elif mutation_type == 'AMP':
-            call_count_qryset.update(amplification=call_type_count)
-            mut_count_qryset.update(amplification=unique_mutation_type_count)
-        elif mutation_type == 'CON':
-            call_count_qryset.update(gene_conversion=call_type_count)
-            mut_count_qryset.update(gene_conversion=unique_mutation_type_count)
-        elif mutation_type == 'INV':
-            call_count_qryset.update(inversion=call_type_count)
-            mut_count_qryset.update(inversion=unique_mutation_type_count)
-
-    # The two totals above deliberately do not equal the sum of these columns: a mutation
-    # whose type is not in MUTATION_TYPE_LIST is bucketed UNANNOTATED, which has no column
-    # here. That difference used to be reported by a `print` on every rebuild, including
-    # every test run.
-
-    # Every token in FUNCTIONAL_CHANGE_TYPE_LIST is spelled identically to its column on both
-    # count models, so the twenty-two-line if/elif chain that stood here is a dict comprehension
-    # and adding `nonsense` needed no code at all. That equality is the invariant: a token added
-    # to the vocabulary without its migration raises FieldError on the next rebuild rather than
-    # being silently dropped, which is the behaviour to want -- a bucket counted into nothing is
-    # exactly how `synonymous` and `nonsynonymous` sat at zero for years.
+    # Two upserts, storing the dicts exactly as they were just built.
     #
-    # The mutation-type chain above is left alone: 'SNP' -> single_base_substitution is a real
-    # mapping between two different vocabularies, not an identity.
-    call_count_qryset.update(**{change: call_func_change_type_dict[change]
-                                   for change in FUNCTIONAL_CHANGE_TYPE_LIST})
-    mut_count_qryset.update(**{change: mut_func_change_type_dict[change]
-                               for change in FUNCTIONAL_CHANGE_TYPE_LIST})
+    # **An eighteen-branch `if/elif` chain stood here**, plus roughly thirty-four one-column
+    # `UPDATE` statements, translating `'SNP'` into `single_base_substitution` and so on for
+    # each of two models. All of it existed to spread these four dicts across columns. Keying
+    # the payload by the vocabulary token deletes the translation from the write path -- and
+    # deletes a bug with it: the chain had eight branches for a nine-entry list, so the
+    # `unannotated` type bucket was counted here and then dropped on the floor, which is why
+    # the displayed types did not add up to the total. They do now.
+    #
+    # `type` and `functional_change` are nested rather than merged because both vocabularies
+    # contain a token spelled `unannotated`, meaning "no type we know" and "no SNP class we
+    # know" respectively. Flattened, one would silently overwrite the other.
+    for name, totals, types, changes in (
+            (InstallationCounts.MUTATION_CALLS, call_total,
+             call_count_dict, call_func_change_type_dict),
+            (InstallationCounts.UNIQUE_MUTATIONS, len(seen),
+             mut_count_dict, mut_func_change_type_dict)):
+        InstallationCounts.objects.update_or_create(
+            name=name,
+            defaults={"data": {"total": totals,
+                               "type": types,
+                               "functional_change": changes}})
 
 
 def _mutation_type_bucket(mutation_type):

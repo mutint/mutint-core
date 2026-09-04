@@ -5,8 +5,9 @@ from aledb_common.util import get_user_context
 from django.template import TemplateDoesNotExist, loader
 from aledb_common.logger import user_extra
 from aledb_common.rebuild_registry import ensure_fresh
-from aledb_dashboard.models import MutationCallCounts, UniqueMutationCounts
-from aledb_dashboard.views import get_general_count_dict
+from aledb_dashboard.models import InstallationCounts
+from aledb_dashboard.util import counts
+from aledb_dashboard.views import get_general_count_dict, type_rows
 # from aledb_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, STRAINS, REF_SEQS
 from aledb_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, load_strains, load_ref_sequences
 from aledb_experiment.utils import get_user_projects
@@ -45,17 +46,21 @@ def home(request):
     ensure_fresh('mutation_counts')
 
     general_count_dict = get_general_count_dict()
-    mutation_call_counts = MutationCallCounts.objects.first()
-    unique_mutation_counts = UniqueMutationCounts.objects.first()
+    calls = counts(InstallationCounts.MUTATION_CALLS)
+    unique = counts(InstallationCounts.UNIQUE_MUTATIONS)
 
-    if unique_mutation_counts and mutation_call_counts:
-        general_count_dict['observed'] = mutation_call_counts.total
-        general_count_dict['unique'] = unique_mutation_counts.total
+    general_count_dict['observed'] = calls.get('total', 0)
+    general_count_dict['unique'] = unique.get('total', 0)
 
     context = get_user_context(request.user)
+    # A deployment's splash renders the mutation types the same way the dashboard does, so it
+    # gets the same rows rather than a second set of bindings to keep in step. It was the
+    # divergence between these two that left nine cells blank on the live page: this view's
+    # context key was renamed and only the dashboard's template followed.
     context.update({"count_dict": general_count_dict,
-                    "unique_mutation_counts": unique_mutation_counts,
-                    "mutation_call_counts": mutation_call_counts})
+                    "call_total": calls.get('total', 0),
+                    "unique_total": unique.get('total', 0),
+                    "type_rows": type_rows(calls, unique)})
     user_projects = get_user_projects(request.user)
     context.update({"mut_types": MUT_TYPES,
                     "strains": load_strains(),

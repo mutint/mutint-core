@@ -24,7 +24,8 @@ from django.test import TestCase, override_settings
 from aledb_common.rebuild_registry import (
     SITE_SCOPE, is_stale, request_rebuild, run_rebuilds,
 )
-from aledb_dashboard.models import InventoryCounts, MutationCallCounts
+from aledb_dashboard.models import InstallationCounts
+from aledb_dashboard.util import counts
 from aledb_experiment.models import Experiment, Project
 from aledb_import import annotation
 from aledb_import.ale_experiment import (
@@ -197,12 +198,12 @@ class DeleteExperimentsTestCase(TestCase):
         arriving at a stale dashboard is the common case rather than the corner.
         """
         request_rebuild(reason='test setup')
-        self.assertEqual(1, InventoryCounts.objects.get().sample_count)
+        self.assertEqual(1, counts(InstallationCounts.INVENTORY)["sample"])
 
         delete_experiments([Experiment.objects.get().id])
 
-        self.assertEqual(0, InventoryCounts.objects.get().sample_count)
-        self.assertEqual(0, MutationCallCounts.objects.get().total)
+        self.assertEqual(0, counts(InstallationCounts.INVENTORY)["sample"])
+        self.assertEqual(0, counts(InstallationCounts.MUTATION_CALLS)["total"])
         for name in ("sample_counts", "mutation_counts"):
             self.assertFalse(is_stale(name), "%s was left marked stale" % name)
 

@@ -22,12 +22,45 @@ writes.
 
 from django.test import TestCase
 
-from aledb_dashboard.models import MutationCallCounts, UniqueMutationCounts
+from aledb_dashboard.models import InstallationCounts
+from aledb_dashboard.util import counts
 from aledb_dashboard.util import rebuild_mutation_counts
 from aledb_experiment.models import (
     Experiment, Population,
 )
 from aledb_sample.models import Mutation, MutationCall, Sample
+
+
+#: Column spelling -> where that number now lives. Only the type half needs a map: the
+#: functional-change tokens were always spelled identically to their columns, which is the
+#: equality `aledb_dashboard.util` used to rely on.
+_TYPE_COLUMNS = {
+    "single_base_substitution": "SNP",
+    "multiple_base_substitution": "SUB",
+    "deletion": "DEL",
+    "insertion": "INS",
+    "mobile_element_insertion": "MOB",
+    "amplification": "AMP",
+    "gene_conversion": "CON",
+    "inversion": "INV",
+}
+
+
+class _Counts:
+    """Attribute access over one stored payload, so the assertions did not have to move."""
+
+    def __init__(self, data):
+        self._data = data
+
+    @property
+    def total(self):
+        return self._data.get("total", 0)
+
+    def __getattr__(self, name):
+        token = _TYPE_COLUMNS.get(name)
+        if token is not None:
+            return (self._data.get("type") or {}).get(token, 0)
+        return (self._data.get("functional_change") or {}).get(name, 0)
 
 
 class MutationCountsTestCase(TestCase):
@@ -71,8 +104,17 @@ class MutationCountsTestCase(TestCase):
                                 genes=fields.get("ignored_genes"))
 
     def _counts(self):
+        """The two payloads, wrapped so the assertions below read as they did against columns.
+
+        `_Counts` is what keeps this module's ~90 assertions unchanged through the collapse:
+        the numbers and their names are the same, only their home moved. It resolves a token
+        against both sub-dicts because a caller here asks for `single_base_substitution` or
+        `nonsense` without caring which vocabulary it came from -- the two are kept apart in
+        storage, where the collision would matter, not in a test helper.
+        """
         rebuild_mutation_counts()
-        return MutationCallCounts.objects.all()[0], UniqueMutationCounts.objects.all()[0]
+        return (_Counts(counts(InstallationCounts.MUTATION_CALLS)),
+                _Counts(counts(InstallationCounts.UNIQUE_MUTATIONS)))
 
     # ---- observed vs unique ----------------------------------------------------------
     def test_observed_counts_every_call_and_unique_counts_the_mutation_once(self):
@@ -247,6 +289,69 @@ class MutationCountsTestCase(TestCase):
         self.assertIn("Functional Change Counts", html)
         self.assertIn("Nonsense", html)
         self.assertIn("Nonsynonymous", html)
+
+    def test_every_bucket_in_both_vocabularies_reaches_the_page(self):
+        """The guard the previous test was reaching for, generalised.
+
+        That one names two labels, so fifteen of the seventeen buckets could stop rendering
+        without it noticing -- and they render through a `{% for %}` over a vocabulary now, so
+        a token the view cannot resolve produces a row with an empty cell rather than an
+        error. Django swallows both. Driving the assertion off the same two lists the page is
+        built from is what makes adding a token safe: it is counted, shown, and checked here,
+        with no migration and no third place to remember.
+        """
+        from django.contrib.auth.models import User
+
+        from aledb_sample.functional_change import (
+            FUNCTIONAL_CHANGE_LABELS, FUNCTIONAL_CHANGE_TYPE_LIST,
+        )
+        from aledb_sample.views.common import MUTATION_TYPE_LABELS, MUTATION_TYPE_LIST
+
+        import re
+
+        rebuild_mutation_counts()
+        user = User.objects.create(username="every", email="e@e.com", is_active=True)
+        self.client.force_login(user)
+        response = self.client.get("/dashboard", follow=True)
+        html = response.content.decode()
+
+        # Both halves, because either alone passes while the page is wrong. The context check
+        # catches a bucket the *view* drops; the row count catches a template that stops
+        # looping. And `assertIn(label, html)` on its own catches neither of them for
+        # `unannotated`, which is a token in **both** vocabularies -- so the functional-change
+        # table goes on rendering "Unannotated" after the type table has stopped. That is the
+        # exact bucket the retired `if/elif` chain discarded, so the obvious spelling of this
+        # test is blind to the one bug it exists for.
+        for key, vocabulary, labels in (
+                ("type_rows", MUTATION_TYPE_LIST, MUTATION_TYPE_LABELS),
+                ("change_rows", FUNCTIONAL_CHANGE_TYPE_LIST, FUNCTIONAL_CHANGE_LABELS)):
+            with self.subTest(table=key):
+                self.assertEqual([labels[token] for token in vocabulary],
+                                 [label for label, _total, _unique in response.context[key]])
+
+        bodies = re.findall(r"<tbody>(.*?)</tbody>", html, re.S)
+        self.assertEqual(3, len(bodies), "the dashboard's three tables")
+        self.assertEqual(len(MUTATION_TYPE_LIST), bodies[1].count("<tr>"))
+        self.assertEqual(len(FUNCTIONAL_CHANGE_TYPE_LIST), bodies[2].count("<tr>"))
+
+    def test_the_type_counts_add_up_to_the_total(self):
+        """Newly true, and the point of storing the buckets by vocabulary token.
+
+        `MUTATION_TYPE_LIST` has nine entries and the `if/elif` chain that wrote these columns
+        had eight branches, so the `unannotated` bucket was counted and dropped -- a comment
+        in `util.py` recorded that the displayed types therefore did not sum to the total.
+        Nothing rendered the difference, so nothing could notice it.
+        """
+        self._observe(self.sample, self._mutation(snp_type="nonsense"))
+        self._observe(self.sample, self._mutation(position=200, mutation_type="XYZ"))
+        calls, unique = self._counts()
+
+        for row in (calls, unique):
+            with self.subTest(row=row):
+                buckets = row._data["type"]
+                self.assertEqual(row.total, sum(buckets.values()))
+                self.assertTrue(buckets["unannotated"],
+                                "the unannotated bucket is what used to be discarded")
 
     def test_an_unannotated_mutation_counts_as_unannotated(self):
         """Empty, the bare separator (a non-SNP in two overlapping genes: the join is

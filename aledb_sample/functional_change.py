@@ -72,6 +72,19 @@ FUNCTIONAL_CHANGE_TYPE_LIST = [
     UNANNOTATED,
 ]
 
+#: What each bucket is called on a page -- title case, spelled out rather than computed. The
+#: tokens happen to `.title()` correctly today, and a vocabulary that is displayed should not
+#: depend on that continuing to be true of whatever is added next.
+FUNCTIONAL_CHANGE_LABELS = {
+    'nonsense': 'Nonsense',
+    'nonsynonymous': 'Nonsynonymous',
+    'synonymous': 'Synonymous',
+    'noncoding': 'Noncoding',
+    'pseudogene': 'Pseudogene',
+    'intergenic': 'Intergenic',
+    UNANNOTATED: 'Unannotated',
+}
+
 
 def functional_change_bucket(snp_type):
     """The single bucket a `snp_type` value counts under.

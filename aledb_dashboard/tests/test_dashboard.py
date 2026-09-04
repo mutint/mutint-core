@@ -16,7 +16,8 @@ So they pin the replacement instead, and the two halves worth keeping apart:
 
 from django.test import TestCase
 
-from aledb_dashboard.models import InventoryCounts
+from aledb_dashboard.models import InstallationCounts
+from aledb_dashboard.util import counts
 from aledb_dashboard.util import rebuild_sample_counts
 from aledb_experiment.models import (Experiment, Population)
 from aledb_sample.models import Sample
@@ -37,8 +38,8 @@ class DashboardCountTestCase(TestCase):
 
     def counts(self):
         rebuild_sample_counts()
-        row = InventoryCounts.objects.all()[0]
-        return row.population_count, row.time_point_count, row.sample_count
+        row = counts(InstallationCounts.INVENTORY)
+        return row["population"], row["time_point"], row["sample"]
 
 
 class TestEmptyRowsStillCount(DashboardCountTestCase):

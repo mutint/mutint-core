@@ -60,11 +60,11 @@
                     </tr>
                     <tr>
                         <td>Unique Mutations</td>
-                        <td>{{ unique_mutation_counts.total }}</td>
+                        <td>{{ unique_total }}</td>
                     </tr>
                     <tr>
                         <td>Total Mutations</td>
-                        <td>{{ mutation_call_counts.total }}</td>
+                        <td>{{ call_total }}</td>
                     </tr>
                     </tbody>
                 </table>
@@ -83,46 +83,13 @@
                     </tr>
                     </thead>
                     <tbody>
+                    {% for label, total, unique in type_rows %}
                     <tr>
-                        <td>Single Base Substitutions</td>
-                        <td>{{ mutation_call_counts.single_base_substitution }}</td>
-                        <td>{{ unique_mutation_counts.single_base_substitution }}</td>
+                        <td>{{ label }}</td>
+                        <td>{{ total }}</td>
+                        <td>{{ unique }}</td>
                     </tr>
-                    <tr>
-                        <td>Multiple Base Substitutions</td>
-                        <td>{{ mutation_call_counts.multiple_base_substitution }}</td>
-                        <td>{{ unique_mutation_counts.multiple_base_substitution }}</td>
-                    </tr>
-                    <tr>
-                        <td>Deletions</td>
-                        <td>{{ mutation_call_counts.deletion }}</td>
-                        <td>{{ unique_mutation_counts.deletion }}</td>
-                    </tr>
-                    <tr>
-                        <td>Insertions</td>
-                        <td>{{ mutation_call_counts.insertion }}</td>
-                        <td>{{ unique_mutation_counts.insertion }}</td>
-                    </tr>
-                    <tr>
-                        <td>Mobile Element Insertions</td>
-                        <td>{{ mutation_call_counts.mobile_element_insertion }}</td>
-                        <td>{{ unique_mutation_counts.mobile_element_insertion }}</td>
-                    </tr>
-                    <tr>
-                        <td>Amplifications</td>
-                        <td>{{ mutation_call_counts.amplification }}</td>
-                        <td>{{ unique_mutation_counts.amplification }}</td>
-                    </tr>
-                    <tr>
-                        <td>Gene Conversions</td>
-                        <td>{{ mutation_call_counts.gene_conversion }}</td>
-                        <td>{{ unique_mutation_counts.gene_conversion }}</td>
-                    </tr>
-                    <tr>
-                        <td>Inversions</td>
-                        <td>{{ mutation_call_counts.inversion }}</td>
-                        <td>{{ unique_mutation_counts.inversion }}</td>
-                    </tr>
+                    {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -151,41 +118,13 @@
                     </tr>
                     </thead>
                     <tbody>
+                    {% for label, total, unique in change_rows %}
                     <tr>
-                        <td>Nonsense</td>
-                        <td>{{ mutation_call_counts.nonsense }}</td>
-                        <td>{{ unique_mutation_counts.nonsense }}</td>
+                        <td>{{ label }}</td>
+                        <td>{{ total }}</td>
+                        <td>{{ unique }}</td>
                     </tr>
-                    <tr>
-                        <td>Nonsynonymous</td>
-                        <td>{{ mutation_call_counts.nonsynonymous }}</td>
-                        <td>{{ unique_mutation_counts.nonsynonymous }}</td>
-                    </tr>
-                    <tr>
-                        <td>Synonymous</td>
-                        <td>{{ mutation_call_counts.synonymous }}</td>
-                        <td>{{ unique_mutation_counts.synonymous }}</td>
-                    </tr>
-                    <tr>
-                        <td>Noncoding</td>
-                        <td>{{ mutation_call_counts.noncoding }}</td>
-                        <td>{{ unique_mutation_counts.noncoding }}</td>
-                    </tr>
-                    <tr>
-                        <td>Pseudogene</td>
-                        <td>{{ mutation_call_counts.pseudogene }}</td>
-                        <td>{{ unique_mutation_counts.pseudogene }}</td>
-                    </tr>
-                    <tr>
-                        <td>Intergenic</td>
-                        <td>{{ mutation_call_counts.intergenic }}</td>
-                        <td>{{ unique_mutation_counts.intergenic }}</td>
-                    </tr>
-                    <tr>
-                        <td>Unannotated</td>
-                        <td>{{ mutation_call_counts.unannotated }}</td>
-                        <td>{{ unique_mutation_counts.unannotated }}</td>
-                    </tr>
+                    {% endfor %}
                     </tbody>
                 </table>
                 <div style="padding: 0 15px 10px 15px">
