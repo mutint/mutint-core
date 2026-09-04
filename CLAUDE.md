@@ -637,7 +637,7 @@ whose columns the live model no longer has.
 
 **Old change-log snapshots needed no migration.** `history._call_kwargs` builds its
 kwargs by walking `CALL_FIELDS` and calling `snapshot.get(field)`, so the two keys left
-behind in stored `MutationChange.call` blobs are simply never read again.
+behind in stored `MutationEdit.call` blobs are simply never read again.
 `aledb_mutation_editor.migrations.0002` writes those blobs and had its own copy of the field
 list; it now skips a column the model does not have, because which side of the drop it runs on
 depends on where it falls in a given database's graph.
@@ -646,7 +646,7 @@ depends on where it falls in a given database's graph.
 
 `aledb_mutation_editor` owns four operations -- **edit** a mutation, **delete** a call
 from a sample, **add** one nothing carries yet and **batch-copy** one from a sibling sample --
-and an append-only change log that makes all of them reversible. The toolbar is
+and an append-only edit log that makes all of them reversible. The toolbar is
 `/mutation-editor/` (Edit), `/mutation-editor/delete`, `/mutation-editor/add`,
 `/mutation-editor/copy` and `/mutation-editor/history`, and `/mutation-editor/edit` is the one
 mutation's form the Edit tab links to.
@@ -683,8 +683,8 @@ repo's default managers are deliberately unfiltered. A soft-delete flag would ha
 eight taught to filter, and the one that was missed would have gone on showing deleted
 mutations in an export or a fixation table. Nothing was added to any query.
 
-The log is two tables in `models.py`. A `MutationChangeSet` is one user action against one
-experiment; a `MutationChange` is one call it added or removed, carrying a **full
+The log is two tables in `models.py`. A `MutationEditSet` is one user action against one
+experiment; a `MutationEdit` is one call it added or removed, carrying a **full
 snapshot** of the row (`call`) and of its mutation's identity (`mutation_identity`).
 
 - The call snapshot is every column, so a restore is exact rather than approximate.
@@ -698,14 +698,14 @@ snapshot** of the row (`call`) and of its mutation's identity (`mutation_identit
   which is enough to put it back indistinguishable from an imported row. `aledb_import` needed
   no edit for this, and `test_restore.SweptMutationTestCase` is what pins it.
 
-**Restoring is a new changeset, not a rewind.** `history.state_after` derives the state at a
-version by taking the live rows and undoing every changeset newer than it, newest first;
+**Restoring is a new edit set, not a rewind.** `history.state_after` derives the state at a
+version by taking the live rows and undoing every edit set newer than it, newest first;
 `plan_restore` diffs that against the present and `restore` applies the difference with
 `kind=RESTORE`. So the log is never rewritten, a restore can itself be restored past, and
 restoring twice to the same point is a no-op the second time rather than a second identical
 entry. Identity throughout is `(sample_id, mutation_key, source)` and **not** a primary key: a
 restored row is a new row, and its Mutation may have been recreated. "Newer than" is decided on
-`pk`, not `created_at`, because two changesets written in the same microsecond need a total
+`pk`, not `created_at`, because two edit sets written in the same microsecond need a total
 order; the timestamp is what a person picks a version by.
 
 **The editor's listings are unfiltered.** `breseq_table` runs its rows through
@@ -1037,7 +1037,7 @@ The Edit page has two modes in one sample picker -- a sample, or **All samples**
 the experiment out as a grid with mutations down and samples across and lets a selection span
 any number of both. It exists because `mutation_delete` has always taken a list of
 calls scoped to the experiment rather than to a sample, so removing the same bad call
-from twelve samples was already one changeset' worth of work and twelve page loads' worth of
+from twelve samples was already one edit set' worth of work and twelve page loads' worth of
 clicking. Per-sample stays the default: the grid is the more useful view of a large experiment
 and also much the more expensive one.
 
@@ -1109,7 +1109,7 @@ chosen set of those samples**, which it did not use to be: the page refused a su
 and said so, on the grounds that changing a mutation for some samples splits one mutation into
 two. It does split one into two. That is a thing worth being able to do -- a call right in eight
 samples and wrong in three should not mean deleting it from three and retyping it by hand -- and
-`apply_changes` could already do it.
+`apply_edits` could already do it.
 
 **Which of two paths runs is decided by two independent questions**: does the whole set move,
 and do the new values already name a mutation this experiment has?
@@ -1128,10 +1128,10 @@ every exported CSV, and nothing refreshes them.
 **The last three paths are one call, and it is the one that was already there.**
 `history.mutation_for_identity` `get_or_create`s on the six `MUTATION_KEY_FIELDS` -- which *is*
 "the existing row if these values name one, a new row otherwise", asked once rather than
-branched on -- and `apply_changes(removals=..., additions=...)` moves the calls. It was
+branched on -- and `apply_edits(removals=..., additions=...)` moves the calls. It was
 extracted from `_resolve_mutation`, which needed the same thing to put a swept mutation back, so
 there is still one definition of how a `Mutation` is minted from an identity. Nothing else in
-`history.py` changed: `KIND_EDIT` labels the changeset and its rows are `OP_ADD`/`OP_REMOVE`
+`history.py` changed: `KIND_EDIT` labels the edit set and its rows are `OP_ADD`/`OP_REMOVE`
 either way, so `state_after`, `plan_restore` and `restore` needed nothing.
 
 **A restore across a subset change reuses the original row**, which is the opposite of what a
@@ -1160,13 +1160,13 @@ the annotation belongs to the row the calls landed on, and only when that row wa
 by this request -- one that was already there keeps what it has.
 
 **The calls are logged as removed and re-added, and that is not bookkeeping.** The
-change log is keyed on `(sample_id, mutation_key, source)` and `mutation_key` is derived from
+edit log is keyed on `(sample_id, mutation_key, source)` and `mutation_key` is derived from
 the six `MUTATION_KEY_FIELDS`. Move a Mutation without saying so and `live_state` starts
-computing a different key than every earlier entry recorded, with no changeset for
+computing a different key than every earlier entry recorded, with no edit set for
 `state_after` to undo -- so "restore to before the edit" would silently leave the edit in
-place. `KIND_EDIT` labels the *changeset*; its rows stay `OP_ADD` and `OP_REMOVE`, which is why
+place. `KIND_EDIT` labels the *edit set*; its rows stay `OP_ADD` and `OP_REMOVE`, which is why
 `state_after`, `plan_restore` and `restore` needed no change at all -- and why the subset paths,
-which are `apply_changes` with removals and additions, needed nothing either.
+which are `apply_edits` with removals and additions, needed nothing either.
 
 **What the whole-set path does not re-create is the Mutation row.** `_resolve_mutation` returns
 the row it is handed, so the additions point back at the one the removals came off and the
@@ -1178,7 +1178,7 @@ a new row would leave all of that pointing at a mutation with no calls; reusing 
 leaves them resolving, to the corrected call.
 
 **The order inside `apply_mutation_edit` is the whole of that path.** The removal snapshots are
-taken *before* the row moves. Taken after, both sides of the changeset would record the new identity
+taken *before* the row moves. Taken after, both sides of the edit set would record the new identity
 and `state_after` would read the edit as having changed nothing.
 
 Two refusals, before anything is written:
@@ -1347,7 +1347,7 @@ that:
 - `gd_data` carries **no `id`** — `to_gd_line()` falls back to the row's own pk, and a record
   built before its row exists has no id to give — and **no `frequency`**, which is
   per-call while `gd_data` lives on the `Mutation` every observing sample shares.
-- `annotation.apply_to` runs *after* `apply_changes`, because `history._resolve_mutation` sets
+- `annotation.apply_to` runs *after* `apply_edits`, because `history._resolve_mutation` sets
   only what the identity carries and the promoted columns (`snp_type`, `gene_name`, …) are not
   in it. Without that call the new row renders through the unannotated fallback.
 
@@ -1374,9 +1374,9 @@ the row from the client-side DataTable until the next reload.
 All of it is gone, along with `add_to_exp_filter`, its `mutation_to_exp_filter` route, its
 dropdown entry, and `save_to_experiment_filter`/`deleteRow` in `table_template.js`.
 `aledb_mutation_editor.migrations.0002` converts whatever those columns held into delete
-changesets before `aledb_filter.0003` drops them, so what was hidden stays hidden and becomes
+edit sets before `aledb_filter.0003` drops them, so what was hidden stays hidden and becomes
 inspectable and restorable; `aledb_filter.0003` depends on it, which is what stops the drop
-running first. Those changesets have `created_by` null and render as "system".
+running first. Those edit sets have `created_by` null and render as "system".
 
 ### There is one filter, and it belongs to the reader
 
@@ -1457,7 +1457,7 @@ never did. `STARTING_STRAIN_ALE_ID = "0"`, which kept ALE 0 out of four pickers 
 dashboard counts while its samples went on landing in every analysis the moment no ALE was
 picked, *which is the bug that convention actually had*. And
 `AleExperimentFilter.starting_strain_mutations`, a hand-curated id list already migrated into
-delete changesets. All four are gone; `aledb_experiment.0010` drops the columns and backfills
+delete edit sets. All four are gone; `aledb_experiment.0010` drops the columns and backfills
 the designation.
 
 **That migration is the load-bearing part of retiring the label.** Nothing reads `"0"`
@@ -1870,7 +1870,7 @@ Three places it would have silently not held, all now tested:
 - **`project_delete`** refuses while the project holds a locked experiment, naming them.
   Otherwise the lock is sidestepped by the most obvious adjacent button.
 
-`aledb_mutation_editor.history.apply_changes` raises `ExperimentLocked` too, trusting no
+`aledb_mutation_editor.history.apply_edits` raises `ExperimentLocked` too, trusting no
 caller: it is the lowest layer that still knows which experiment it is writing to, and a write
 path added later is exactly what forgets.
 
@@ -2990,7 +2990,7 @@ All apps use the `aledb_*` namespace. Key apps:
   ignored genes. The three mutation-id hide lists it used to carry are gone — see
   **The old way of deleting a mutation** above.
 - **`aledb_mutation_editor/`** — Adding, deleting and copying a sample's mutations, with an
-  append-only change log you can restore from. See **Editing a sample's mutations** and
+  append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
 - **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
 - **`aledb_export/`** — Data export in various formats.

@@ -1,6 +1,6 @@
 """Applying a change, and what the log records about it.
 
-The snapshot is what these mostly assert. A change log that recorded *that* a mutation was
+The snapshot is what these mostly assert. An edit log that recorded *that* a mutation was
 deleted but not what its frequency or the caller's evidence were would let you see the history and not
 undo it, which is most of the value gone.
 """
@@ -10,18 +10,18 @@ from decimal import Decimal
 from aledb_common.models import DerivedDataState
 from aledb_mutation_editor import history
 from aledb_mutation_editor.models import (
-    KIND_DELETE, OP_ADD, OP_REMOVE, MutationChange, MutationChangeSet,
+    KIND_DELETE, OP_ADD, OP_REMOVE, MutationEdit, MutationEditSet,
 )
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import MutationCall
 
 
-class ApplyChangesTestCase(EditorTestCase):
+class ApplyEditsTestCase(EditorTestCase):
 
     def _delete(self, sample, mutation):
         call = MutationCall.objects.get(sample=sample,
                                                 mutation=mutation)
-        return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
+        return history.apply_edits(self.experiment, self.owner, KIND_DELETE,
                                      removals=[call], note="test delete")
 
     def test_a_delete_removes_the_row(self):
@@ -46,37 +46,37 @@ class ApplyChangesTestCase(EditorTestCase):
         self._delete(self.sample_a, self.mut_1)
         self.assertEqual({self.mut_1.id}, self.call_ids(self.sample_b))
 
-    def test_one_changeset_per_call_however_many_rows(self):
+    def test_one_edit_set_per_call_however_many_rows(self):
         calls = list(MutationCall.objects.filter(sample=self.sample_a))
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=calls,
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=calls,
                               note="all three")
 
-        self.assertEqual(1, MutationChangeSet.objects.count())
-        self.assertEqual(3, MutationChange.objects.count())
+        self.assertEqual(1, MutationEditSet.objects.count())
+        self.assertEqual(3, MutationEdit.objects.count())
 
-    def test_nothing_to_do_writes_no_changeset(self):
-        """An empty changeset would be a history entry saying nothing happened."""
+    def test_nothing_to_do_writes_no_edit_set(self):
+        """An empty edit set would be a history entry saying nothing happened."""
         self.assertIsNone(
-            history.apply_changes(self.experiment, self.owner, KIND_DELETE))
-        self.assertEqual(0, MutationChangeSet.objects.count())
+            history.apply_edits(self.experiment, self.owner, KIND_DELETE))
+        self.assertEqual(0, MutationEditSet.objects.count())
 
-    def test_the_changeset_records_who_and_what(self):
-        change_set = self._delete(self.sample_a, self.mut_2)
+    def test_the_edit_set_records_who_and_what(self):
+        edit_set = self._delete(self.sample_a, self.mut_2)
 
-        self.assertEqual(self.owner, change_set.created_by)
-        self.assertEqual(KIND_DELETE, change_set.kind)
-        self.assertEqual("test delete", change_set.note)
-        self.assertIsNotNone(change_set.created_at)
-        self.assertFalse(change_set.is_system)
+        self.assertEqual(self.owner, edit_set.created_by)
+        self.assertEqual(KIND_DELETE, edit_set.kind)
+        self.assertEqual("test delete", edit_set.note)
+        self.assertIsNotNone(edit_set.created_at)
+        self.assertFalse(edit_set.is_system)
 
     def test_the_change_names_the_sample_and_the_mutation(self):
-        change_set = self._delete(self.sample_a, self.mut_2)
-        change = change_set.changes.get()
+        edit_set = self._delete(self.sample_a, self.mut_2)
+        edit = edit_set.edits.get()
 
-        self.assertEqual(OP_REMOVE, change.operation)
-        self.assertEqual(self.sample_a.id, change.sample_id)
-        self.assertEqual(self.mut_2.id, change.mutation_id)
-        self.assertIsNone(change.source_sample_id)
+        self.assertEqual(OP_REMOVE, edit.operation)
+        self.assertEqual(self.sample_a.id, edit.sample_id)
+        self.assertEqual(self.mut_2.id, edit.mutation_id)
+        self.assertIsNone(edit.source_sample_id)
 
 
 class SnapshotTestCase(EditorTestCase):

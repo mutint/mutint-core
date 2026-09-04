@@ -33,7 +33,7 @@ Usage::
 
 `prefix` is what the queryset starts from: nothing when it starts at a sample, and
 `FROM_CALL` when it starts at a call. Anything else -- the mutation editor's
-change log reaches a sample as ``sample`` and ``changes__sample`` -- passes its own.
+edit log reaches a sample as ``sample`` and ``edits__sample`` -- passes its own.
 """
 
 #: `MutationCall` reaches a sample through this FK. It was `sample`, on a
@@ -42,8 +42,8 @@ change log reaches a sample as ``sample`` and ``changes__sample`` -- passes its 
 #: prefix is still what a caller starting at a call has to pass.
 FROM_CALL = "sample"
 
-#: `MutationChange` called it this before anything else did.
-FROM_CHANGE = "sample"
+#: `MutationEdit` called it this before anything else did.
+FROM_EDIT = "sample"
 
 #: The chain, segment by segment, from a sample up to the experiment. Everything below is
 #: composed from this, so a queryset that starts **part-way along** it gets the same

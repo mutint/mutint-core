@@ -15,7 +15,7 @@ widens the filter.
 
 **The write endpoints take a list, not one id.** `/experiment/`'s bulk delete fires one
 request per row, which is fine for the dozen experiments on that page and wrong for the several
-hundred mutations on this one. One POST is also what makes a batch a single changeset, which is
+hundred mutations on this one. One POST is also what makes a batch a single edit set, which is
 the whole point: "I removed these eleven calls" is one decision and reads as one line of
 history.
 """
@@ -41,7 +41,7 @@ from aledb_experiment.permissions import (
 from aledb_import import annotation
 from aledb_mutation_editor import history, record_builder, validation
 from aledb_mutation_editor.models import (
-    KIND_ADD, KIND_COPY, KIND_DELETE, KIND_EDIT, MutationChangeSet,
+    KIND_ADD, KIND_COPY, KIND_DELETE, KIND_EDIT, MutationEditSet,
 )
 from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.models import Mutation, MutationCall
@@ -379,7 +379,7 @@ def _listing(request, mode):
             "selected_sample_id": reseq.id if reseq is not None else None,
             "is_mixed": is_mixed(reseq),
             "rows": _rows_for(reseq) if reseq is not None else [],
-            "recent_changes": _recent_changes(experiment),
+            "recent_edits": _recent_edits(experiment),
             "mode": mode,
             "is_delete_mode": mode == MODE_DELETE,
             "title": ("Delete %s mutations" if mode == MODE_DELETE
@@ -563,7 +563,7 @@ def mutation_history(request):
         experiment = _experiment_for_page(request, context)
         context = _page_context(request, experiment)
         context.update({
-            "changesets": _changesets(experiment),
+            "edit_sets": _edit_sets(experiment),
             "title": "Mutation history for %s" % experiment.name,
             "template_header": "Mutation History",
         })
@@ -572,45 +572,45 @@ def mutation_history(request):
         return refusal.response
 
 
-def _changesets(experiment, limit=None):
-    queryset = (MutationChangeSet.objects
+def _edit_sets(experiment, limit=None):
+    queryset = (MutationEditSet.objects
                 .filter(experiment=experiment)
                 .select_related("created_by")
-                .prefetch_related(paths.to_population("changes__" + paths.FROM_CHANGE)))
+                .prefetch_related(paths.to_population("edits__" + paths.FROM_EDIT)))
     if limit is not None:
         queryset = queryset[:limit]
-    return [_changeset_context(change_set) for change_set in queryset]
+    return [_edit_set_context(edit_set) for edit_set in queryset]
 
 
-def _recent_changes(experiment):
-    return _changesets(experiment, limit=5)
+def _recent_edits(experiment):
+    return _edit_sets(experiment, limit=5)
 
 
-def _changeset_context(change_set):
+def _edit_set_context(edit_set):
     """One history row: who, when, and a per-sample tally rather than every row.
 
-    A batch copy across twenty samples is hundreds of MutationChange rows, and a page that
+    A batch copy across twenty samples is hundreds of MutationEdit rows, and a page that
     listed each of them would bury the one thing a person is looking for -- which samples moved
     and by how much. The rows themselves are still there to expand into.
     """
     added = removed = 0
     samples = {}
-    for change in change_set.changes.select_related(
-            paths.to_population(paths.FROM_CHANGE)).all():
+    for edit in edit_set.edits.select_related(
+            paths.to_population(paths.FROM_EDIT)).all():
         # A deleted sample sorts last: it has no coordinate, and keeping the rows nobody can
         # act on together at the end beats interleaving them.
-        order = (0, sample_sort_key(change.sample)) if change.sample_id else (1, ())
-        label = change.sample.label if change.sample_id else "(deleted sample)"
+        order = (0, sample_sort_key(edit.sample)) if edit.sample_id else (1, ())
+        label = edit.sample.label if edit.sample_id else "(deleted sample)"
         tally = samples.setdefault(
             label, {"label": label, "added": 0, "removed": 0, "order": order})
-        if change.operation == "add":
+        if edit.operation == "add":
             added += 1
             tally["added"] += 1
         else:
             removed += 1
             tally["removed"] += 1
     return {
-        "change_set": change_set,
+        "edit_set": edit_set,
         "added": added,
         "removed": removed,
         # By coordinate, not by label. Sorting on `label` is a lexicographic
@@ -641,7 +641,7 @@ def mutation_delete_apply(request):
         if not removals:
             raise EditorError("Those mutations are not in this experiment.", status=404)
 
-        change_set = history.apply_changes(
+        edit_set = history.apply_edits(
             experiment, request.user, KIND_DELETE, removals=removals,
             note="Deleted %d mutation(s)." % len(removals))
     except EditorError as error:
@@ -651,7 +651,7 @@ def mutation_delete_apply(request):
     logger.info("mutations deleted", extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
                          "removed": len(removals),
-                         "change_set_id": change_set.pk if change_set else None})
+                         "edit_set_id": edit_set.pk if edit_set else None})
 
 
 @require_POST
@@ -685,19 +685,19 @@ def mutation_copy_apply(request):
             raise EditorError("Those samples are not in this experiment.", status=404)
 
         additions, already = _plan_copy(experiment, sources, targets)
-        change_set = history.apply_changes(
+        edit_set = history.apply_edits(
             experiment, request.user, KIND_COPY, additions=additions,
             note="Copied %d mutation(s) to %d sample(s)." % (len(sources), len(targets)))
     except EditorError as error:
         return _error_response(error)
 
-    if change_set is not None:
+    if edit_set is not None:
         history.rebuild_after_edit(experiment)
     logger.info("mutations copied", extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
                          "added": len(additions),
                          "already": already,
-                         "change_set_id": change_set.pk if change_set else None})
+                         "edit_set_id": edit_set.pk if edit_set else None})
 
 
 def _plan_copy(experiment, sources, targets):
@@ -737,7 +737,7 @@ def _plan_copy(experiment, sources, targets):
 def mutation_add_apply(request):
     """Create one mutation and observe it in every selected sample.
 
-    The mutation itself is minted by `history.apply_changes` through `_resolve_mutation`, which
+    The mutation itself is minted by `history.apply_edits` through `_resolve_mutation`, which
     `get_or_create`s on the same seven fields the importer keys on -- so adding a call another
     sample already carries links the existing row instead of forking it.
     """
@@ -772,7 +772,7 @@ def mutation_add_apply(request):
         call = record_builder.build_call(frequency)
 
         additions, already = _plan_add(experiment, identity, call, targets)
-        change_set = history.apply_changes(
+        edit_set = history.apply_edits(
             experiment, request.user, KIND_ADD, additions=additions,
             note="Added %s at %s:%s to %d sample(s)." % (
                 mutation_type, attributes.get("seq_id"), attributes.get("position"),
@@ -780,18 +780,18 @@ def mutation_add_apply(request):
     except EditorError as error:
         return _error_response(error)
 
-    if change_set is not None:
-        # The promoted annotation columns are not part of the identity, so the row `apply_changes`
+    if edit_set is not None:
+        # The promoted annotation columns are not part of the identity, so the row `apply_edits`
         # minted has them null until this runs -- and would render through the unannotated
         # fallback. Same call `gd_import` makes after its own get_or_create.
-        record_builder.apply_annotation(change_set.changes.first().mutation, annotated_record)
+        record_builder.apply_annotation(edit_set.edits.first().mutation, annotated_record)
         history.rebuild_after_edit(experiment)
 
     logger.info("mutation added", extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
                          "added": len(additions),
                          "already": already,
-                         "change_set_id": change_set.pk if change_set else None})
+                         "edit_set_id": edit_set.pk if edit_set else None})
 
 
 def _frequency(request):
@@ -888,7 +888,7 @@ def mutation_edit_apply(request):
 
         if len(chosen) == len(carrying) and _existing_mutation(
                 experiment, mutation, identity) is None:
-            change_set = history.apply_mutation_edit(
+            edit_set = history.apply_mutation_edit(
                 experiment, request.user, mutation, identity, note=note)
             # The promoted annotation columns are not part of the identity, so
             # `apply_mutation_edit` left them describing the mutation as it was. Same call the
@@ -897,7 +897,7 @@ def mutation_edit_apply(request):
             landed_on, already = mutation, []
         else:
             landed_on, created = history.mutation_for_identity(experiment, identity)
-            change_set, already = _move_calls(
+            edit_set, already = _move_calls(
                 experiment, request.user, landed_on, identity, chosen, note)
             if created:
                 record_builder.apply_annotation(landed_on, annotated_record)
@@ -906,14 +906,14 @@ def mutation_edit_apply(request):
     except EditorError as error:
         return _error_response(error)
 
-    if change_set is not None:
+    if edit_set is not None:
         history.rebuild_after_edit(experiment)
     logger.info("mutation changed", extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
                          "mutation_id": landed_on.pk,
                          "samples": len(chosen),
                          "already": already,
-                         "change_set_id": change_set.pk if change_set else None})
+                         "edit_set_id": edit_set.pk if edit_set else None})
 
 
 def _chosen_calls(request, carrying):
@@ -938,9 +938,9 @@ def _chosen_calls(request, carrying):
 
 
 def _move_calls(experiment, user, target, identity, chosen, note):
-    """Move `chosen` off the mutation they observe and onto `target`, as one changeset.
+    """Move `chosen` off the mutation they observe and onto `target`, as one edit set.
 
-    Returns `(change_set, already)` -- the samples that already carried `target`, by name.
+    Returns `(edit_set, already)` -- the samples that already carried `target`, by name.
 
     Such a sample gets the removal and no addition: afterwards it observes the mutation once
     rather than twice, keeping the frequency and read counts it already had rather than the
@@ -973,12 +973,12 @@ def _move_calls(experiment, user, target, identity, chosen, note):
             "source_sample_id": None,
         })
 
-    change_set = history.apply_changes(experiment, user, KIND_EDIT,
+    edit_set = history.apply_edits(experiment, user, KIND_EDIT,
                                        removals=chosen, additions=additions, note=note)
     # Named in sample order, which is the order `names` is in, rather than in whatever order
     # the calls came back in.
     already = set(already)
-    return change_set, [name for sample_id, name in names.items() if sample_id in already]
+    return edit_set, [name for sample_id, name in names.items() if sample_id in already]
 
 
 def _mutation_for_write(request, experiment):
@@ -1020,21 +1020,21 @@ def mutation_restore(request):
     try:
         experiment = _experiment_for_write(request)
 
-        raw = (request.POST.get("change_set_id") or "").strip()
-        change_set = None
+        raw = (request.POST.get("edit_set_id") or "").strip()
+        edit_set = None
         if raw:
-            change_set = MutationChangeSet.objects.filter(
+            edit_set = MutationEditSet.objects.filter(
                 pk=raw, experiment=experiment).first()
-            if change_set is None:
+            if edit_set is None:
                 raise EditorError("That point is not in this experiment's history.",
                                   status=404)
 
         sample_ids = _int_list(request, "sample_ids") or None
-        change = history.restore(experiment, request.user, change_set, sample_ids)
+        edit = history.restore(experiment, request.user, edit_set, sample_ids)
     except EditorError as error:
         return _error_response(error)
 
     logger.info("mutations restored", extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
-                         "change_set_id": change.pk if change else None,
-                         "changed": change is not None})
+                         "edit_set_id": edit.pk if edit else None,
+                         "changed": edit is not None})

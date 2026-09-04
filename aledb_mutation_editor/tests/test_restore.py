@@ -1,7 +1,7 @@
 """Reconstructing an earlier mutation set, and putting it back.
 
-The scheme these exercise: a version is a changeset, the state at a version is derived by
-undoing everything newer, and restoring is a *new* changeset rather than a rewind. The last
+The scheme these exercise: a version is an edit set, the state at a version is derived by
+undoing everything newer, and restoring is a *new* edit set rather than a rewind. The last
 case in `SweptMutationTestCase` is the one that justifies storing `mutation_identity` at all.
 """
 
@@ -10,7 +10,7 @@ from decimal import Decimal
 from aledb_import.ale_experiment import _delete_all_orphaned_mutations
 from aledb_mutation_editor import history
 from aledb_mutation_editor.models import (
-    KIND_DELETE, MutationChange, MutationChangeSet,
+    KIND_DELETE, MutationEdit, MutationEditSet,
 )
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import Mutation, MutationCall
@@ -21,7 +21,7 @@ class RestoreTestCase(EditorTestCase):
     def _delete(self, sample, mutation, note="deleted"):
         call = MutationCall.objects.get(sample=sample,
                                                 mutation=mutation)
-        return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
+        return history.apply_edits(self.experiment, self.owner, KIND_DELETE,
                                      removals=[call], note=note)
 
     def test_a_deleted_call_comes_back_field_for_field(self):
@@ -37,12 +37,12 @@ class RestoreTestCase(EditorTestCase):
         self.assertEqual(before, history.call_snapshot(restored))
         self.assertEqual(Decimal("0.7500"), restored.frequency)
         # `evidence` is the first snapshotted field that is not a scalar, so it rides through
-        # the log as JSON inside JSON -- `MutationChange.snapshot` is itself a JSONField. A
+        # the log as JSON inside JSON -- `MutationEdit.snapshot` is itself a JSONField. A
         # restore that put back the key holding a string of a dict would satisfy the
         # whole-snapshot comparison above and still be wrong on the way out.
         self.assertEqual({"wt_reads": 10, "mutated_reads": 30}, restored.evidence)
 
-    def test_the_restore_is_itself_a_changeset(self):
+    def test_the_restore_is_itself_a_edit_set(self):
         deletion = self._delete(self.sample_a, self.mut_2)
         restore = history.restore(self.experiment, self.owner, deletion)
 
@@ -52,7 +52,7 @@ class RestoreTestCase(EditorTestCase):
         self.assertIsNotNone(restore)
         self.assertEqual("restore", restore.kind)
         self.assertIsNone(restore.restored_to, "None means the pre-edit state")
-        self.assertEqual(2, MutationChangeSet.objects.count(),
+        self.assertEqual(2, MutationEditSet.objects.count(),
                          "the delete and the restore; the delete is not rewritten")
 
     def test_restoring_to_a_named_point_records_which(self):
@@ -93,7 +93,7 @@ class RestoreTestCase(EditorTestCase):
         self.assertIsNone(history.restore(self.experiment, self.owner, None))
 
     def test_a_restore_can_itself_be_restored_past(self):
-        """By the time you look back at it, a restore is just another changeset with rows."""
+        """By the time you look back at it, a restore is just another edit set with rows."""
         deletion = self._delete(self.sample_a, self.mut_2)
         history.restore(self.experiment, self.owner, None)
         self.assertEqual({self.mut_1.id, self.mut_2.id, self.mut_3.id},
@@ -104,13 +104,13 @@ class RestoreTestCase(EditorTestCase):
 
     def test_the_log_is_never_rewritten(self):
         deletion = self._delete(self.sample_a, self.mut_2)
-        changes_before = MutationChange.objects.filter(change_set=deletion).count()
+        edits_before = MutationEdit.objects.filter(edit_set=deletion).count()
 
         history.restore(self.experiment, self.owner, None)
 
-        self.assertTrue(MutationChangeSet.objects.filter(pk=deletion.pk).exists())
-        self.assertEqual(changes_before,
-                         MutationChange.objects.filter(change_set=deletion).count())
+        self.assertTrue(MutationEditSet.objects.filter(pk=deletion.pk).exists())
+        self.assertEqual(edits_before,
+                         MutationEdit.objects.filter(edit_set=deletion).count())
 
 
 class PerSampleRestoreTestCase(EditorTestCase):
@@ -118,7 +118,7 @@ class PerSampleRestoreTestCase(EditorTestCase):
     def test_restoring_one_sample_leaves_the_others_alone(self):
         calls = list(MutationCall.objects.filter(sample=self.sample_a))
         calls += list(MutationCall.objects.filter(sample=self.sample_b))
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=calls,
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=calls,
                               note="cleared both")
         self.assertEqual(0, self.call_count())
 
@@ -137,7 +137,7 @@ class PerSampleRestoreTestCase(EditorTestCase):
 
     def _clear(self, sample):
         calls = list(MutationCall.objects.filter(sample=sample))
-        return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
+        return history.apply_edits(self.experiment, self.owner, KIND_DELETE,
                                      removals=calls, note="cleared")
 
 
@@ -148,14 +148,14 @@ class SweptMutationTestCase(EditorTestCase):
     with no MutationCall, and it runs after an experiment delete and after `delete_sample`
     -- neither of which this app is involved in. So removing a mutation's last call can
     leave a Mutation that some later, unrelated operation destroys. This is the whole reason
-    `MutationChange.mutation_identity` exists rather than the log just holding a foreign key.
+    `MutationEdit.mutation_identity` exists rather than the log just holding a foreign key.
     """
 
     def test_the_sweep_takes_a_mutation_whose_last_call_was_deleted(self):
         """Establishes the precondition; if this stops being true the rest is moot."""
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call])
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=[call])
 
         _delete_all_orphaned_mutations()
 
@@ -164,20 +164,20 @@ class SweptMutationTestCase(EditorTestCase):
     def test_the_log_survives_the_sweep_with_its_foreign_key_nulled(self):
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        change_set = history.apply_changes(self.experiment, self.owner, KIND_DELETE,
+        edit_set = history.apply_edits(self.experiment, self.owner, KIND_DELETE,
                                            removals=[call])
         _delete_all_orphaned_mutations()
 
-        change = change_set.changes.get()
-        change.refresh_from_db()
-        self.assertIsNone(change.mutation_id)
-        self.assertEqual(200, change.mutation_identity["position"])
+        edit = edit_set.edits.get()
+        edit.refresh_from_db()
+        self.assertIsNone(edit.mutation_id)
+        self.assertEqual(200, edit.mutation_identity["position"])
 
     def test_restore_recreates_the_mutation_and_the_call(self):
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         before = history.call_snapshot(call)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call])
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=[call])
         _delete_all_orphaned_mutations()
 
         history.restore(self.experiment, self.owner, None)
@@ -199,7 +199,7 @@ class SweptMutationTestCase(EditorTestCase):
         """mut_1 is observed in both samples, so deleting one call does not orphan it."""
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_1)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call])
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=[call])
         _delete_all_orphaned_mutations()
 
         history.restore(self.experiment, self.owner, None)

@@ -2,20 +2,20 @@
 
 Three ideas, in order of how much they depend on each other.
 
-**A change is a call appearing or disappearing.** `apply_changes` is the only writer
+**A change is a call appearing or disappearing.** `apply_edits` is the only writer
 of `MutationCall` in this app, and it writes the log in the same transaction as the rows,
 so there is no state in which a row moved and the log did not.
 
-**A version is a changeset.** The rows in a changeset are what that version did. There is no
+**A version is an edit set.** The rows in an edit set are what that version did. There is no
 snapshot table -- the state at a version is *derived*, by taking the live state and undoing
-every changeset newer than it, newest first. That is `state_after`. Snapshots would have to be
+every edit set newer than it, newest first. That is `state_after`. Snapshots would have to be
 written on every edit and kept consistent with a log that already says the same thing.
 
 **Restoring is a new change, not a rewind.** `restore` diffs the live state against
-`state_after(...)` and applies the difference as a fresh changeset with `kind=RESTORE`. The log
+`state_after(...)` and applies the difference as a fresh edit set with `kind=RESTORE`. The log
 is never rewritten, restoring twice to the same point is a no-op the second time, and a restore
 can itself be restored past -- because by the time you look back at it, it is just another
-changeset with rows in it.
+edit set with rows in it.
 
 The identity of a call, throughout, is `(sample_id, mutation_key, source)` and
 deliberately **not** its primary key. A restored row is a new row with a new pk, and the
@@ -23,9 +23,9 @@ Mutation it points at may itself have been recreated -- see `mutation_key`. Two 
 can legitimately share that key (nothing in the schema forbids it), so the state maps a key to
 a *list* and the diff compares lengths.
 
-Changesets are ordered by **primary key, not by `created_at`**, wherever "newer than" is being
+Edit sets are ordered by **primary key, not by `created_at`**, wherever "newer than" is being
 decided. The timestamp is what a person picks a version by and is what the history page shows;
-the pk is what guarantees a total order, which two changesets written in the same microsecond
+the pk is what guarantees a total order, which two edit sets written in the same microsecond
 would otherwise not have.
 """
 
@@ -37,7 +37,7 @@ from django.db import transaction
 from aledb_experiment.permissions import ExperimentLocked
 from aledb_mutation_editor.models import (
     KIND_EDIT, KIND_RESTORE, OP_ADD, OP_REMOVE,
-    MutationChange, MutationChangeSet,
+    MutationEdit, MutationEditSet,
 )
 from aledb_seq.models import Mutation, MutationCall
 from aledb_experiment import paths
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 #: `evidence` is one entry here where four used to be, and the list is what keeps that from
 #: mattering to stored blobs: `_call_kwargs` builds its kwargs by walking this tuple and
 #: calling `snapshot.get(field)`, so the retired keys left behind in older
-#: `MutationChange.snapshot` blobs are simply never read again, and a blob written before
+#: `MutationEdit.snapshot` blobs are simply never read again, and a blob written before
 #: `evidence` existed restores with it null. No migration either way.
 CALL_FIELDS = (
     "present", "evidence", "frequency", "source",
@@ -209,15 +209,15 @@ def _resolve_mutation(experiment, mutation, identity):
 
 
 @transaction.atomic
-def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
+def apply_edits(experiment, user, kind, removals=(), additions=(), note="",
                   restored_to=None):
-    """Write a changeset and make it true. The only writer of MutationCall here.
+    """Write an edit set and make it true. The only writer of MutationCall here.
 
     removals   MutationCall instances to delete.
     additions  entry dicts (see `_entry`): the target sample id, the mutation identity, the
                call snapshot, and optionally the live Mutation and a source sample.
 
-    Returns the changeset, or None if there was nothing to do. An empty changeset would be a
+    Returns the edit set, or None if there was nothing to do. An empty edit set would be a
     history entry recording that nothing happened -- noise on the page, and a step
     `state_after` would walk for no reason.
 
@@ -238,18 +238,18 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
     if not removals and not additions:
         return None
 
-    change_set = MutationChangeSet.objects.create(
+    edit_set = MutationEditSet.objects.create(
         experiment=experiment,
         created_by=user if getattr(user, "is_authenticated", False) else None,
         kind=kind,
         note=note,
         restored_to=restored_to)
 
-    changes = []
+    edits = []
 
     for call in removals:
-        changes.append(MutationChange(
-            change_set=change_set,
+        edits.append(MutationEdit(
+            edit_set=edit_set,
             operation=OP_REMOVE,
             sample_id=call.sample_id,
             mutation=call.mutation,
@@ -263,8 +263,8 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
             sample_id=entry["sample_id"],
             mutation=resolved,
             **_call_kwargs(entry["snapshot"]))
-        changes.append(MutationChange(
-            change_set=change_set,
+        edits.append(MutationEdit(
+            edit_set=edit_set,
             operation=OP_ADD,
             sample_id=entry["sample_id"],
             mutation=resolved,
@@ -276,18 +276,18 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
         MutationCall.objects.filter(
             pk__in=[call.pk for call in removals]).delete()
 
-    MutationChange.objects.bulk_create(changes)
-    return change_set
+    MutationEdit.objects.bulk_create(edits)
+    return edit_set
 
 
 @transaction.atomic
 def apply_mutation_edit(experiment, user, mutation, identity, note=""):
-    """Change a mutation's own fields, everywhere it is observed. One changeset.
+    """Change a mutation's own fields, everywhere it is observed. One edit set.
 
     The calls are logged as **removed and re-added**, which is not bookkeeping: the log
     is keyed on `(sample_id, mutation_key, source)`, and `mutation_key` is derived from the six
     identity fields. Move a Mutation without saying so and `live_state` starts computing a
-    different key than every earlier entry recorded, with no changeset for `state_after` to
+    different key than every earlier entry recorded, with no edit set for `state_after` to
     undo -- so "restore to before the edit" would silently leave the edit in place.
 
     What is *not* re-created is the Mutation row. `_resolve_mutation` returns the row it is
@@ -300,7 +300,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
     mutation with no calls; reusing it leaves them resolving, to the corrected call.
 
     The order below is the whole of this function. The removal snapshots have to be taken
-    **before** the row moves, or both sides of the changeset would record the new identity and
+    **before** the row moves, or both sides of the edit set would record the new identity and
     `state_after` would read the edit as having changed nothing.
     """
     if experiment is not None and experiment.is_locked:
@@ -313,15 +313,15 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
         return None
 
     before = mutation_identity(mutation)
-    change_set = MutationChangeSet.objects.create(
+    edit_set = MutationEditSet.objects.create(
         experiment=experiment,
         created_by=user if getattr(user, "is_authenticated", False) else None,
         kind=KIND_EDIT,
         note=note)
 
-    changes = [
-        MutationChange(
-            change_set=change_set,
+    edits = [
+        MutationEdit(
+            edit_set=edit_set,
             operation=OP_REMOVE,
             sample_id=call.sample_id,
             mutation=mutation,
@@ -343,8 +343,8 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
             sample_id=call.sample_id,
             mutation=mutation,
             **_call_kwargs(call_snapshot(call)))
-        changes.append(MutationChange(
-            change_set=change_set,
+        edits.append(MutationEdit(
+            edit_set=edit_set,
             operation=OP_ADD,
             sample_id=call.sample_id,
             mutation=mutation,
@@ -353,8 +353,8 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
 
     MutationCall.objects.filter(
         pk__in=[call.pk for call in calls]).delete()
-    MutationChange.objects.bulk_create(changes)
-    return change_set
+    MutationEdit.objects.bulk_create(edits)
+    return edit_set
 
 
 def rebuild_after_edit(experiment):
@@ -423,36 +423,36 @@ def live_state(experiment, sample_ids=None):
     return state
 
 
-def state_after(experiment, change_set=None, sample_ids=None):
-    """The calls as they stood immediately after `change_set` was applied.
+def state_after(experiment, edit_set=None, sample_ids=None):
+    """The calls as they stood immediately after `edit_set` was applied.
 
-    `change_set=None` means before any recorded change -- what the import produced.
+    `edit_set=None` means before any recorded change -- what the import produced.
 
-    Derived from the live state by undoing every later changeset, newest first: an ADD is
+    Derived from the live state by undoing every later edit set, newest first: an ADD is
     undone by dropping an entry with that key, a REMOVE by putting its snapshot back. Walking
     backwards rather than replaying forwards from the import is what makes this cheap in the
     common case, where the point being restored to is recent and the history behind it is long.
     """
     state = live_state(experiment, sample_ids)
 
-    changes = (MutationChange.objects
-               .filter(change_set__experiment=experiment)
+    edits = (MutationEdit.objects
+               .filter(edit_set__experiment=experiment)
                .select_related("mutation"))
-    if change_set is not None:
-        changes = changes.filter(change_set__pk__gt=change_set.pk)
-    # Newest first, and within a changeset in reverse application order, so each undo sees the
+    if edit_set is not None:
+        edits = edits.filter(edit_set__pk__gt=edit_set.pk)
+    # Newest first, and within an edit set in reverse application order, so each undo sees the
     # state the change it is undoing produced.
-    changes = changes.order_by("-change_set__pk", "-pk")
+    edits = edits.order_by("-edit_set__pk", "-pk")
 
     wanted = None if sample_ids is None else set(sample_ids)
 
-    for change in changes:
-        if wanted is not None and change.sample_id not in wanted:
+    for edit in edits:
+        if wanted is not None and edit.sample_id not in wanted:
             continue
-        entry = _entry(change.sample_id, change.mutation_identity, change.snapshot,
-                       mutation=change.mutation)
+        entry = _entry(edit.sample_id, edit.mutation_identity, edit.snapshot,
+                       mutation=edit.mutation)
         key = _entry_key(entry)
-        if change.operation == OP_ADD:
+        if edit.operation == OP_ADD:
             bucket = state.get(key)
             if bucket:
                 bucket.pop()
@@ -462,21 +462,21 @@ def state_after(experiment, change_set=None, sample_ids=None):
                 logger.warning(
                     "undoing add of %s on sample %s found nothing to remove; the log and the "
                     "rows disagree, most likely because the sample was re-imported",
-                    key, change.sample_id)
+                    key, edit.sample_id)
         else:
             state.setdefault(key, []).append(entry)
 
     return state
 
 
-def plan_restore(experiment, change_set=None, sample_ids=None):
-    """(removals, additions) that would turn the live state into `state_after(change_set)`.
+def plan_restore(experiment, edit_set=None, sample_ids=None):
+    """(removals, additions) that would turn the live state into `state_after(edit_set)`.
 
     Compared per key and by count, so a mutation deleted and later re-copied cancels out and
     produces no change at all -- which is what stops a restore across a long history from
     churning rows that already hold the right value.
     """
-    target = state_after(experiment, change_set, sample_ids)
+    target = state_after(experiment, edit_set, sample_ids)
     current = live_state(experiment, sample_ids)
 
     removals = []
@@ -495,27 +495,27 @@ def plan_restore(experiment, change_set=None, sample_ids=None):
     return removals, additions
 
 
-def restore(experiment, user, change_set=None, sample_ids=None, note=""):
-    """Put the experiment back to how it stood after `change_set`, as a *new* changeset.
+def restore(experiment, user, edit_set=None, sample_ids=None, note=""):
+    """Put the experiment back to how it stood after `edit_set`, as a *new* edit set.
 
-    Returns the new changeset, or None if the live state already matches -- restoring twice to
+    Returns the new edit set, or None if the live state already matches -- restoring twice to
     the same point is a no-op the second time rather than a second identical history entry.
     """
-    removals, additions = plan_restore(experiment, change_set, sample_ids)
+    removals, additions = plan_restore(experiment, edit_set, sample_ids)
     if not note:
-        note = _restore_note(change_set, sample_ids)
-    change = apply_changes(experiment, user, KIND_RESTORE,
+        note = _restore_note(edit_set, sample_ids)
+    edit = apply_edits(experiment, user, KIND_RESTORE,
                            removals=removals, additions=additions,
-                           note=note, restored_to=change_set)
-    if change is not None:
+                           note=note, restored_to=edit_set)
+    if edit is not None:
         rebuild_after_edit(experiment)
-    return change
+    return edit
 
 
-def _restore_note(change_set, sample_ids):
+def _restore_note(edit_set, sample_ids):
     where = "the whole experiment"
     if sample_ids:
         where = "%d sample(s)" % len(list(sample_ids))
-    if change_set is None:
+    if edit_set is None:
         return "Restored %s to the originally imported mutations." % where
-    return "Restored %s to the state after change #%d." % (where, change_set.pk)
+    return "Restored %s to the state after change #%d." % (where, edit_set.pk)

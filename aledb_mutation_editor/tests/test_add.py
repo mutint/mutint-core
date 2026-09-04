@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from aledb_import.gd_import import synthesize_sequence_change
 from aledb_mutation_editor import history, record_builder
-from aledb_mutation_editor.models import KIND_ADD, MutationChange, MutationChangeSet
+from aledb_mutation_editor.models import KIND_ADD, MutationEdit, MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import Mutation, MutationCall
 from genomediff.records import Record
@@ -59,15 +59,15 @@ class AddTestCase(EditorTestCase):
         self.snp()
         self.assertEqual(self.experiment, Mutation.objects.get(position=5000).experiment)
 
-    def test_adding_to_three_samples_is_one_changeset(self):
+    def test_adding_to_three_samples_is_one_edit_set(self):
         third = self.make_sample(flask_number=3)
         response = self.add(seq_id="NC_000913", position=5000, new_seq="T",
                             targets=[self.sample_a, self.sample_b, third])
 
         self.assertEqual(3, response.json()["added"])
-        self.assertEqual(1, MutationChangeSet.objects.count())
-        self.assertEqual(KIND_ADD, MutationChangeSet.objects.get().kind)
-        self.assertEqual(3, MutationChange.objects.count())
+        self.assertEqual(1, MutationEditSet.objects.count())
+        self.assertEqual(KIND_ADD, MutationEditSet.objects.get().kind)
+        self.assertEqual(3, MutationEdit.objects.count())
 
     def test_one_mutation_row_serves_every_sample(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T",
@@ -95,8 +95,8 @@ class AddTestCase(EditorTestCase):
         self.assertEqual(Decimal("1.0000"),
                          MutationCall.objects.get(mutation__position=5000).frequency)
 
-    def test_the_changeset_says_what_was_added(self):
-        note = MutationChangeSet.objects.get().note if self.snp() else None
+    def test_the_edit_set_says_what_was_added(self):
+        note = MutationEditSet.objects.get().note if self.snp() else None
         self.assertIn("SNP", note)
         self.assertIn("5000", note)
 
@@ -148,11 +148,11 @@ class AddTestCase(EditorTestCase):
                          response.json()["already"])
         self.assertEqual(1, MutationCall.objects.filter(mutation__position=5000).count())
 
-    def test_skipping_everything_writes_no_changeset(self):
+    def test_skipping_everything_writes_no_edit_set(self):
         self.snp()
-        MutationChangeSet.objects.all().delete()
+        MutationEditSet.objects.all().delete()
         self.snp()
-        self.assertEqual(0, MutationChangeSet.objects.count())
+        self.assertEqual(0, MutationEditSet.objects.count())
 
     # --- the gd record --------------------------------------------------------------------
 

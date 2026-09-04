@@ -1,7 +1,7 @@
 """The mutation edit log: what changed, to which sample, by whom, and when.
 
-Two tables, and the whole versioning scheme rests on them being **append-only**. A changeset
-is never amended and never deleted; undoing one is a *new* changeset that happens to put
+Two tables, and the whole versioning scheme rests on them being **append-only**. An edit set
+is never amended and never deleted; undoing one is a *new* edit set that happens to put
 things back. That is what makes "the mutation set as of last Tuesday" a question with an
 answer, and it is why restoring is not a rewind.
 
@@ -28,7 +28,7 @@ KIND_DELETE = "delete"
 KIND_COPY = "copy"
 KIND_ADD = "add"
 KIND_RESTORE = "restore"
-#: A mutation's own fields changed, everywhere it was observed. The *changeset* is labelled
+#: A mutation's own fields changed, everywhere it was observed. The *edit set* is labelled
 #: this; its rows are still OP_REMOVE and OP_ADD, because that is what happened to every
 #: call -- each one moved from the old identity to the new. Nothing in `state_after`,
 #: `plan_restore` or `restore` needed to learn about it.
@@ -51,7 +51,7 @@ OPERATION_CHOICES = [
 ]
 
 
-class MutationChangeSet(models.Model):
+class MutationEditSet(models.Model):
     """One user action against one experiment. `created_at` is the version identifier.
 
     Scoped to an experiment rather than to a sample because that is the unit everything else
@@ -59,14 +59,14 @@ class MutationChangeSet(models.Model):
     experiment. One action may still touch many samples -- a batch copy does -- and a restore
     may be narrowed to a few of them.
 
-    `created_by` is null for a changeset the system wrote. Migration 0002 is the only thing
+    `created_by` is null for an edit set the system wrote. Migration 0002 is the only thing
     that does so today, and the history page renders those as "system" rather than as an
     unattributed user action.
     """
 
     experiment = models.ForeignKey("aledb_experiment.Experiment",
                                        on_delete=models.CASCADE,
-                                       related_name="mutation_changesets",
+                                       related_name="mutation_edit_sets",
                                        db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
@@ -74,7 +74,7 @@ class MutationChangeSet(models.Model):
     kind = models.CharField(max_length=20, choices=KIND_CHOICES)
     note = models.TextField(blank=True, default="")
 
-    # Set only when kind == KIND_RESTORE: the changeset whose resulting state this restored
+    # Set only when kind == KIND_RESTORE: the edit set whose resulting state this restored
     # to. Null on a restore means "back to before any recorded change" -- i.e. what the import
     # produced. `kind` is what disambiguates that null, so no separate flag is needed.
     restored_to = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True,
@@ -92,8 +92,8 @@ class MutationChangeSet(models.Model):
         return self.created_by_id is None
 
 
-class MutationChange(models.Model):
-    """One MutationCall this changeset added or removed.
+class MutationEdit(models.Model):
+    """One MutationCall this edit set added or removed.
 
     `snapshot` is every column of the row, so a removal can be undone exactly rather than
     approximately -- `present`, `frequency`, `source` and the caller's `evidence` all come
@@ -111,8 +111,8 @@ class MutationChange(models.Model):
     exactly what the copy path needs, so one helper serves both.
     """
 
-    change_set = models.ForeignKey(MutationChangeSet, on_delete=models.CASCADE,
-                                   related_name="changes")
+    edit_set = models.ForeignKey(MutationEditSet, on_delete=models.CASCADE,
+                                 related_name="edits")
     operation = models.CharField(max_length=10, choices=OPERATION_CHOICES)
     sample = models.ForeignKey("aledb_seq.Sample", on_delete=models.CASCADE,
                                related_name="+")

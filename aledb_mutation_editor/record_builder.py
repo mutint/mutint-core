@@ -56,7 +56,7 @@ def annotate(gd_data, experiment):
 
 
 def build_identity(mutation_type, gd_data, annotated_record):
-    """The ten-key identity `history.apply_changes` mints a `Mutation` from.
+    """The ten-key identity `history.apply_edits` mints a `Mutation` from.
 
     The six `MUTATION_KEY_FIELDS` are the `get_or_create` key, so each has to be derived the
     way `gd_import` derives it. `feature_length` is `size`, which most types do not have;
@@ -84,7 +84,7 @@ def build_identity(mutation_type, gd_data, annotated_record):
 
     # The four non-key defaults, built by the same functions `apply_to` would use. Carrying
     # them in the identity rather than leaving them to the post-create `apply_to` is what lets
-    # a restore from the change log recreate an annotated row rather than a bare one.
+    # a restore from the edit log recreate an annotated row rather than a bare one.
     annotated = {}
     annotated.update(annotation.annotation_values(annotated_record))
     annotated.update(annotation.display_values(annotated_record))
@@ -122,7 +122,7 @@ def build_call(frequency):
 
 
 def apply_annotation(mutation, annotated_record):
-    """Fill the promoted annotation columns on the row `apply_changes` just minted.
+    """Fill the promoted annotation columns on the row `apply_edits` just minted.
 
     `history._resolve_mutation` sets only what the identity carries, so `snp_type`,
     `mutation_category`, `gene_name`, `locus_tag`, `start_position` and `end_position` would

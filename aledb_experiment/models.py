@@ -178,7 +178,7 @@ class Experiment(SoftDeleteMixin):
 
         So the columns record who last *locked* it, not who unlocked it. Who unlocked it
         is a question for an audit log rather than two columns, and there is no such log
-        for experiments -- `aledb_mutation_editor`'s changesets cover the mutations only.
+        for experiments -- `aledb_mutation_editor`'s edit sets cover the mutations only.
         """
         self.locked_at = None
         self.locked_by = None

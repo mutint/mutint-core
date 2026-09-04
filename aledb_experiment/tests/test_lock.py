@@ -221,7 +221,7 @@ class EveryWritePathTestCase(LockTestCase):
                 "mutation_ids": json.dumps([self.mut_2.id]),
                 "target_sample_ids": json.dumps([self.sample_b.id])})),
             ("mutation restore", lambda: self.client.post("/mutation-editor/restore", {
-                "experiment_id": experiment_id, "change_set_id": "", "sample_ids": "[]"})),
+                "experiment_id": experiment_id, "edit_set_id": "", "sample_ids": "[]"})),
             ("mutation tag", lambda: self.client.post(
                 "/mutation-table/toggle-mut-tag/",
                 {"mut_id": self.mut_1.id, "tag_name": "contaminated"},
@@ -285,12 +285,12 @@ class EveryWritePathTestCase(LockTestCase):
                 self.assertEqual(403, self.client.get(url).status_code)
 
     def test_the_engine_refuses_even_called_directly(self):
-        """Defence in depth: `apply_changes` trusts no caller."""
+        """Defence in depth: `apply_edits` trusts no caller."""
         from aledb_mutation_editor import history
         from aledb_mutation_editor.models import KIND_DELETE
 
         with self.assertRaises(ExperimentLocked):
-            history.apply_changes(self.experiment, self.owner, KIND_DELETE,
+            history.apply_edits(self.experiment, self.owner, KIND_DELETE,
                                   removals=[self.call])
 
     def test_an_import_is_refused_at_the_registry(self):

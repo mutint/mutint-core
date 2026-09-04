@@ -181,7 +181,7 @@ class SummaryTestCase(TestCase):
 
         removals = list(MutationCall.objects.filter(mutation=self.deletion))
         self.assertTrue(removals, "the fixture's DEL is observed somewhere")
-        history.apply_changes(self.experiment, None, KIND_DELETE, removals=removals)
+        history.apply_edits(self.experiment, None, KIND_DELETE, removals=removals)
 
         types, _, _, _ = self._counts()
         self.assertEqual(0, types["DEL"])

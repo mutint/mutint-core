@@ -15,7 +15,7 @@ import json
 
 from django.contrib.auth.models import User
 
-from aledb_mutation_editor.models import MutationChangeSet
+from aledb_mutation_editor.models import MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import MutationCall
 
@@ -57,7 +57,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
     def _restore(self):
         return self.client.post(RESTORE, {
             "experiment_id": self.experiment.id,
-            "change_set_id": "",
+            "edit_set_id": "",
             "sample_ids": "[]"})
 
     def _every_endpoint(self):
@@ -67,7 +67,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
     def _assert_nothing_was_written(self):
         self.assertEqual(4, self.call_count(),
                          "the fixture's four calls are untouched")
-        self.assertEqual(0, MutationChangeSet.objects.count())
+        self.assertEqual(0, MutationEditSet.objects.count())
 
     # --- who may -------------------------------------------------------------------------
 

@@ -21,7 +21,7 @@
         <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
     </div>
 
-    {% if not changesets %}
+    {% if not edit_sets %}
         <p>No mutation edits have been recorded for this experiment. Its mutations are exactly
            what was imported.</p>
     {% else %}
@@ -37,23 +37,23 @@
                 </tr>
             </thead>
             <tbody>
-            {% for entry in changesets %}
-                <tr data-change-set-id="{{ entry.change_set.pk }}">
-                    <td style="white-space: nowrap;">{{ entry.change_set.created_at }}</td>
+            {% for entry in edit_sets %}
+                <tr data-change-set-id="{{ entry.edit_set.pk }}">
+                    <td style="white-space: nowrap;">{{ entry.edit_set.created_at }}</td>
                     <td>
-                        {% comment %} A changeset with no user is one the system wrote -- today
+                        {% comment %} An edit set with no user is one the system wrote -- today
                            that is only the migration that brought the old experiment-filter
                            hide-list into this history. Saying "system" is honest; leaving it
                            blank would read as a bug. {% endcomment %}
-                        {% if entry.change_set.is_system %}<em>system</em>
-                        {% else %}{{ entry.change_set.created_by }}{% endif %}
+                        {% if entry.edit_set.is_system %}<em>system</em>
+                        {% else %}{{ entry.edit_set.created_by }}{% endif %}
                     </td>
                     <td>
-                        <span class="label label-default">{{ entry.change_set.get_kind_display }}</span>
-                        {{ entry.change_set.note }}
-                        {% if entry.change_set.restored_to_id %}
+                        <span class="label label-default">{{ entry.edit_set.get_kind_display }}</span>
+                        {{ entry.edit_set.note }}
+                        {% if entry.edit_set.restored_to_id %}
                             <br><small style="color: #666;">back to change
-                                #{{ entry.change_set.restored_to_id }}</small>
+                                #{{ entry.edit_set.restored_to_id }}</small>
                         {% endif %}
                     </td>
                     <td>
@@ -68,8 +68,8 @@
                     <td>
                         {% if can_edit %}
                         <button type="button" class="btn btn-default btn-xs me-restore"
-                                data-change-set-id="{{ entry.change_set.pk }}"
-                                data-when="{{ entry.change_set.created_at }}">
+                                data-change-set-id="{{ entry.edit_set.pk }}"
+                                data-when="{{ entry.edit_set.created_at }}">
                             Restore to here</button>
                         {% endif %}
                     </td>
@@ -114,7 +114,7 @@
                         document.getElementById("me-error").textContent = "";
                         window.aledbPost("/mutation-editor/restore", {
                             experiment_id: "{{ experiment_id }}",
-                            change_set_id: id,
+                            edit_set_id: id,
                             // Empty list means the whole experiment. Per-sample restore uses
                             // the same endpoint with ids in here.
                             sample_ids: "[]"

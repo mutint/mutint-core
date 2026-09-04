@@ -7,7 +7,7 @@ given a second call of it, which would silently double that sample's count.
 
 import json
 
-from aledb_mutation_editor.models import KIND_COPY, MutationChange, MutationChangeSet
+from aledb_mutation_editor.models import KIND_COPY, MutationEdit, MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import MutationCall
 
@@ -41,20 +41,20 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual(source.evidence, copied.evidence)
         self.assertEqual(source.source, copied.source)
 
-    def test_a_batch_is_one_changeset(self):
+    def test_a_batch_is_one_edit_set(self):
         third = self.make_sample(flask_number=3)
         self._copy([self.mut_2, self.mut_3], [self.sample_b, third])
 
-        self.assertEqual(1, MutationChangeSet.objects.count())
-        self.assertEqual(KIND_COPY, MutationChangeSet.objects.get().kind)
-        self.assertEqual(4, MutationChange.objects.count())
+        self.assertEqual(1, MutationEditSet.objects.count())
+        self.assertEqual(KIND_COPY, MutationEditSet.objects.get().kind)
+        self.assertEqual(4, MutationEdit.objects.count())
 
     def test_it_records_where_the_copy_came_from(self):
         self._copy([self.mut_2], [self.sample_b])
 
-        change = MutationChange.objects.get()
-        self.assertEqual(self.sample_a.id, change.source_sample_id)
-        self.assertEqual(self.sample_b.id, change.sample_id)
+        edit = MutationEdit.objects.get()
+        self.assertEqual(self.sample_a.id, edit.source_sample_id)
+        self.assertEqual(self.sample_b.id, edit.sample_id)
 
     def test_a_target_that_already_has_it_is_skipped(self):
         response = self._copy([self.mut_1], [self.sample_b])
@@ -65,9 +65,9 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual(1, MutationCall.objects.filter(
             sample=self.sample_b, mutation=self.mut_1).count())
 
-    def test_skipping_everything_writes_no_changeset(self):
+    def test_skipping_everything_writes_no_edit_set(self):
         self._copy([self.mut_1], [self.sample_b])
-        self.assertEqual(0, MutationChangeSet.objects.count())
+        self.assertEqual(0, MutationEditSet.objects.count())
 
     def test_a_copy_can_be_restored_away(self):
         from aledb_mutation_editor import history

@@ -12,7 +12,7 @@ line up on a fixture where every sample carried everything.
 
 import json
 
-from aledb_mutation_editor.models import MutationChangeSet
+from aledb_mutation_editor.models import MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import MutationCall
 
@@ -107,7 +107,7 @@ class GridPageTestCase(EditorTestCase):
 
     # --- deleting across samples ----------------------------------------------------------
 
-    def test_one_post_across_two_samples_is_one_changeset(self):
+    def test_one_post_across_two_samples_is_one_edit_set(self):
         """The whole reason for the mode. It was one page load per sample before, and one
         history entry per sample with it."""
         ids = [call.id for call in
@@ -120,7 +120,7 @@ class GridPageTestCase(EditorTestCase):
 
         self.assertEqual(200, response.status_code)
         self.assertEqual(2, response.json()["removed"])
-        self.assertEqual(1, MutationChangeSet.objects.count())
+        self.assertEqual(1, MutationEditSet.objects.count())
         self.assertFalse(MutationCall.objects.filter(mutation=self.mut_1).exists())
 
     def test_the_mutation_row_itself_survives_the_delete(self):

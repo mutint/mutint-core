@@ -184,7 +184,7 @@ class PageTestCase(EditorTestCase):
     def test_a_change_appears_on_the_history_page(self):
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call],
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=[call],
                               note="a note worth reading")
 
         response = self.get(HISTORY)
@@ -195,7 +195,7 @@ class PageTestCase(EditorTestCase):
     def test_a_system_change_is_labelled_system_not_left_blank(self):
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, None, KIND_DELETE, removals=[call],
+        history.apply_edits(self.experiment, None, KIND_DELETE, removals=[call],
                               note="migrated")
 
         self.assertContains(self.get(HISTORY), "<em>system</em>")
@@ -208,7 +208,7 @@ class PageTestCase(EditorTestCase):
 
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call])
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=[call])
 
         self.assertContains(self.get(HISTORY), 'data-change-set-id=""')
 

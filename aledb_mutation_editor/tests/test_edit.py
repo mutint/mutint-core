@@ -16,7 +16,7 @@ from decimal import Decimal
 
 from aledb_mutation_editor import history
 from aledb_mutation_editor.models import (
-    KIND_EDIT, MutationChange, MutationChangeSet,
+    KIND_EDIT, MutationEdit, MutationEditSet,
 )
 from aledb_mutation_editor.tests.base import EditorTestCase
 from aledb_seq.models import Mutation, MutationCall
@@ -27,7 +27,7 @@ APPLY = "/mutation-editor/edit/apply"
 
 class ChangeMutationTestCase(EditorTestCase):
 
-    def change(self, mutation=None, target_sample_ids=None, **fields):
+    def edit(self, mutation=None, target_sample_ids=None, **fields):
         """POST the change form. `target_sample_ids` left out is the endpoint's older contract,
         "every sample carrying it", and is what most of this file exercises."""
         payload = {
@@ -127,7 +127,7 @@ class ChangeMutationTestCase(EditorTestCase):
     # --- what it does ---------------------------------------------------------------------
 
     def test_every_sample_carrying_it_follows(self):
-        response = self.change(position=150)
+        response = self.edit(position=150)
 
         self.assertEqual(200, response.status_code, response.content)
         self.mut_1.refresh_from_db()
@@ -141,7 +141,7 @@ class ChangeMutationTestCase(EditorTestCase):
         exported CSV cannot be reached at all."""
         before = self.mut_1.pk
 
-        self.change(position=150)
+        self.edit(position=150)
 
         self.mut_1.refresh_from_db()
         self.assertEqual(before, self.mut_1.pk)
@@ -152,7 +152,7 @@ class ChangeMutationTestCase(EditorTestCase):
         MutationCall.objects.filter(sample=self.sample_b,
                                         mutation=self.mut_1).update(frequency=Decimal("0.25"))
 
-        self.change(position=150)
+        self.edit(position=150)
 
         frequencies = {call.sample_id: call.frequency
                        for call in
@@ -161,14 +161,14 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(Decimal("0.2500"), frequencies[self.sample_b.id])
 
     def test_a_mutation_in_one_sample_behaves_the_same(self):
-        self.change(mutation=self.mut_2, position=250, new_seq="G")
+        self.edit(mutation=self.mut_2, position=250, new_seq="G")
 
         self.mut_2.refresh_from_db()
         self.assertEqual(250, self.mut_2.position)
         self.assertEqual(1, MutationCall.objects.filter(mutation=self.mut_2).count())
 
     def test_the_type_can_change_too(self):
-        self.change(mutation=self.mut_2, mutation_type="SUB", position=200, size=3,
+        self.edit(mutation=self.mut_2, mutation_type="SUB", position=200, size=3,
                     new_seq="GGG")
 
         self.mut_2.refresh_from_db()
@@ -178,46 +178,46 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_the_stored_record_is_rewritten_too(self):
         """`gd_data` is what `to_gd_line()` round-trips for gdtools APPLY. A mutation whose
         columns moved and whose record did not would export as its old self."""
-        self.change(position=150)
+        self.edit(position=150)
 
         self.mut_1.refresh_from_db()
         self.assertEqual(150, self.mut_1.gd_data["position"])
 
     # --- the log --------------------------------------------------------------------------
 
-    def test_it_is_one_changeset_marked_as_an_edit(self):
-        self.change(position=150)
+    def test_it_is_one_edit_set_marked_as_an_edit(self):
+        self.edit(position=150)
 
-        change_set = MutationChangeSet.objects.get()
-        self.assertEqual(KIND_EDIT, change_set.kind)
-        self.assertEqual(self.owner, change_set.created_by)
+        edit_set = MutationEditSet.objects.get()
+        self.assertEqual(KIND_EDIT, edit_set.kind)
+        self.assertEqual(self.owner, edit_set.created_by)
 
     def test_the_calls_are_logged_as_moving_between_identities(self):
         """Not bookkeeping. The log is keyed on (sample, mutation_key, source), so an edit
         that logged nothing would leave `state_after` computing a key no earlier entry
         recorded -- and a restore to before it would silently leave the edit in place."""
-        self.change(position=150)
+        self.edit(position=150)
 
-        removed = MutationChange.objects.filter(operation="remove")
-        added = MutationChange.objects.filter(operation="add")
+        removed = MutationEdit.objects.filter(operation="remove")
+        added = MutationEdit.objects.filter(operation="add")
         self.assertEqual(2, removed.count())
         self.assertEqual(2, added.count())
         self.assertEqual({100}, {c.mutation_identity["position"] for c in removed})
         self.assertEqual({150}, {c.mutation_identity["position"] for c in added})
 
     def test_restoring_to_before_the_edit_undoes_it(self):
-        self.change(position=150)
+        self.edit(position=150)
 
-        history.restore(self.experiment, self.owner, change_set=None)
+        history.restore(self.experiment, self.owner, edit_set=None)
 
         positions = {call.mutation.position
                      for call in MutationCall.objects.all()}
         self.assertIn(100, positions)
 
     def test_a_restore_puts_it_back_in_every_sample(self):
-        self.change(position=150)
+        self.edit(position=150)
 
-        history.restore(self.experiment, self.owner, change_set=None)
+        history.restore(self.experiment, self.owner, edit_set=None)
 
         at_100 = MutationCall.objects.filter(mutation__position=100)
         self.assertEqual(2, at_100.count())
@@ -233,9 +233,9 @@ class ChangeMutationTestCase(EditorTestCase):
         accept any row whose pk still existed, so the restored calls went back onto
         the *edited* mutation and the restore reported success having undone nothing."""
         original = self.mut_1.pk
-        self.change(position=150)
+        self.edit(position=150)
 
-        history.restore(self.experiment, self.owner, change_set=None)
+        history.restore(self.experiment, self.owner, edit_set=None)
 
         restored = MutationCall.objects.filter(mutation__position=100).first().mutation
         self.assertNotEqual(original, restored.pk)
@@ -248,7 +248,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_only_the_chosen_samples_move(self):
         """The point of the whole thing: a call right in one sample and wrong in another is
         one correction to make, not a delete and a retype."""
-        response = self.change(position=150, target_sample_ids=[self.sample_b.id])
+        response = self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
         moved = MutationCall.objects.get(sample=self.sample_b,
@@ -261,14 +261,14 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_the_row_they_came_off_is_left_alone(self):
         """It has not changed. Its remaining samples still observe the call it always was --
         and its primary key still means that to every exported CSV holding it."""
-        self.change(position=150, target_sample_ids=[self.sample_b.id])
+        self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
         self.mut_1.refresh_from_db()
         self.assertEqual(100, self.mut_1.position)
         self.assertEqual(1, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     def test_a_subset_mints_a_row_when_the_values_are_new(self):
-        self.change(position=150, target_sample_ids=[self.sample_b.id])
+        self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
         minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.assertNotEqual(self.mut_1.pk, minted.pk)
@@ -279,10 +279,10 @@ class ChangeMutationTestCase(EditorTestCase):
         """`mutation_for_identity` get_or_creates on the six fields `gd_import` keys on, so
         "the existing row if these values name one, a new row otherwise" is one question with
         one answer rather than two code paths."""
-        self.change(mutation=self.mut_2, position=150)
+        self.edit(mutation=self.mut_2, position=150)
         self.mut_2.refresh_from_db()
 
-        response = self.change(mutation=self.mut_1, position=150,
+        response = self.edit(mutation=self.mut_1, position=150,
                                target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
@@ -294,7 +294,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """`gd_data` is what `to_gd_line()` round-trips for gdtools APPLY, so the two rows
         have to disagree about it -- the mutation the unchosen samples were left on has not
         changed, and re-annotating it as though it had is the bug this pins."""
-        self.change(position=150, target_sample_ids=[self.sample_b.id])
+        self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
         minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.mut_1.refresh_from_db()
@@ -309,9 +309,9 @@ class ChangeMutationTestCase(EditorTestCase):
         # mut_2 goes through the form first so its stored identity is the shape the form
         # produces: the fixture writes `sequence_change` by hand as "C>G", which
         # `synthesize_sequence_change` never emits, so the two could not otherwise meet.
-        self.change(mutation=self.mut_2, position=200, new_seq="G")
+        self.edit(mutation=self.mut_2, position=200, new_seq="G")
 
-        response = self.change(mutation=self.mut_1, position=200, new_seq="G",
+        response = self.edit(mutation=self.mut_1, position=200, new_seq="G",
                                target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
@@ -323,21 +323,21 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertFalse(MutationCall.objects.filter(
             sample=self.sample_b, mutation=self.mut_1).exists())
 
-    def test_a_subset_is_one_changeset_of_removals_and_additions(self):
-        self.change(position=150, target_sample_ids=[self.sample_b.id])
+    def test_a_subset_is_one_edit_set_of_removals_and_additions(self):
+        self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
-        change_set = MutationChangeSet.objects.get()
-        self.assertEqual(KIND_EDIT, change_set.kind)
-        self.assertEqual(1, change_set.changes.filter(operation="remove").count())
-        self.assertEqual(1, change_set.changes.filter(operation="add").count())
+        edit_set = MutationEditSet.objects.get()
+        self.assertEqual(KIND_EDIT, edit_set.kind)
+        self.assertEqual(1, edit_set.edits.filter(operation="remove").count())
+        self.assertEqual(1, edit_set.edits.filter(operation="add").count())
 
     def test_restoring_across_a_subset_change_reuses_the_original_row(self):
         """The opposite of the whole-set path, and it falls out rather than being arranged:
         the row never moved, so `_resolve_mutation` finds it still holding the old identity
         and hands the call straight back to the same primary key."""
-        self.change(position=150, target_sample_ids=[self.sample_b.id])
+        self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
-        history.restore(self.experiment, self.owner, change_set=None)
+        history.restore(self.experiment, self.owner, edit_set=None)
 
         self.assertEqual(
             {self.mut_1.pk},
@@ -349,7 +349,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """The two paths are decided on the *set*, not on whether the request named it."""
         before = self.mut_1.pk
 
-        self.change(position=150,
+        self.edit(position=150,
                     target_sample_ids=[self.sample_a.id, self.sample_b.id])
 
         self.mut_1.refresh_from_db()
@@ -361,7 +361,7 @@ class ChangeMutationTestCase(EditorTestCase):
         care about samples still post."""
         before = self.mut_1.pk
 
-        response = self.change(position=150)
+        response = self.edit(position=150)
 
         self.assertEqual(200, response.status_code, response.content)
         self.mut_1.refresh_from_db()
@@ -373,7 +373,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_a_sample_that_does_not_carry_it_is_refused(self):
         """Scoped to the samples carrying it for the reason the mutation is scoped to the
         experiment: a hand-typed id must not reach past what the page offered."""
-        response = self.change(mutation=self.mut_2, position=250,
+        response = self.edit(mutation=self.mut_2, position=250,
                                target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(404, response.status_code)
@@ -385,13 +385,13 @@ class ChangeMutationTestCase(EditorTestCase):
         """Applied twice: the first is a real change, the second asks for what it already
         has. The fixture's own `gd_data` is deliberately sparse, so the round trip has to go
         through one real edit before "unchanged" is even expressible."""
-        self.change(position=150)
+        self.edit(position=150)
 
-        response = self.change(position=150)
+        response = self.edit(position=150)
 
         self.assertEqual(400, response.status_code)
         self.assertIn("already has", response.json()["error"])
-        self.assertEqual(1, MutationChangeSet.objects.count())
+        self.assertEqual(1, MutationEditSet.objects.count())
 
     def test_a_change_onto_values_another_mutation_holds_joins_it(self):
         """Two rows sharing the six-field get_or_create key is a state the importer cannot
@@ -403,10 +403,10 @@ class ChangeMutationTestCase(EditorTestCase):
         The emptied row is left in place rather than deleted, which is what delete does with a
         Mutation as well -- and is what lets a restore hand the calls back to the same
         primary key."""
-        self.change(mutation=self.mut_2, position=150)
+        self.edit(mutation=self.mut_2, position=150)
         self.mut_2.refresh_from_db()
 
-        response = self.change(mutation=self.mut_1, position=150)
+        response = self.edit(mutation=self.mut_1, position=150)
 
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
@@ -424,7 +424,7 @@ class ChangeMutationTestCase(EditorTestCase):
                          "the emptied row is left as it was, not moved as well")
 
     def test_a_value_breseq_would_reject_is_refused_per_field(self):
-        response = self.change(position=0)
+        response = self.edit(position=0)
 
         self.assertEqual(400, response.status_code)
         self.assertIn("position", response.json()["errors"])
@@ -437,7 +437,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.experiment.locked_at = timezone.now()
         self.experiment.save()
 
-        response = self.change(position=150)
+        response = self.edit(position=150)
 
         self.assertEqual(403, response.status_code)
         self.mut_1.refresh_from_db()
@@ -449,7 +449,7 @@ class ChangeMutationTestCase(EditorTestCase):
         reader = User.objects.create(username="reader", email="r@e.com", is_active=True)
         self.client.force_login(reader)
 
-        response = self.change(position=150)
+        response = self.edit(position=150)
 
         self.assertEqual(403, response.status_code)
         self.mut_1.refresh_from_db()

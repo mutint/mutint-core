@@ -20,7 +20,7 @@ class Sample(models.Model):
     every query and bought nothing.
 
     Collapsing them onto *this* row rather than onto `Isolate` is what made the merge
-    cheap. `MutationCall.sample` and `MutationChange.sample` point here, the managed
+    cheap. `MutationCall.sample` and `MutationEdit.sample` point here, the managed
     store is `<store>/samples/<pk>/` keyed by this pk, and every variable in the suite
     called `reseq` or `sample` already meant this row. Merging the other way would have
     moved all of it -- and the name this model now has was the argument.
@@ -300,7 +300,7 @@ class MutationCall(models.Model):
 
     Written by `gd_import` for every record in a sample's `.gd`, and by
     `aledb_mutation_editor` for a mutation somebody adds or copies by hand. It is the row the
-    change log works at, the row every cross-sample table has a cell for, and the row an edit
+    edit log works at, the row every cross-sample table has a cell for, and the row an edit
     hard-deletes -- never the `Mutation`, whose primary key is stored as a bare integer in
     aledb-phylogeny's `branch_mutations` and in every exported CSV.
     """

@@ -12,7 +12,7 @@ anything: `Population.starting_strain` (a FK no code path ever wrote), `filter_o
 `get_wt_reseq_id` (helpers with no callers), `STARTING_STRAIN_ALE_ID = "0"` (which hid ALE 0
 from the ALE *picker* while its samples went on landing in every analysis), and
 `AleExperimentFilter.starting_strain_mutations` (a hand-curated list of mutation ids, since
-migrated into delete changesets).
+migrated into delete edit sets).
 
 ## Why this is not in `aledb_filter`
 

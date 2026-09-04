@@ -150,16 +150,16 @@
 
     {% endif %}
 
-        {% if recent_changes %}
+        {% if recent_edits %}
         <div class="row" style="margin-top: 20px;">
             <h4>Recent changes</h4>
             <ul style="list-style: none; padding-left: 0;">
-                {% for entry in recent_changes %}
+                {% for entry in recent_edits %}
                     <li style="margin-bottom: 4px;">
-                        <code>{{ entry.change_set.created_at }}</code>
-                        &mdash; {{ entry.change_set.note }}
+                        <code>{{ entry.edit_set.created_at }}</code>
+                        &mdash; {{ entry.edit_set.note }}
                         <span style="color: #666;">
-                            ({% if entry.change_set.is_system %}system{% else %}{{ entry.change_set.created_by }}{% endif %})
+                            ({% if entry.edit_set.is_system %}system{% else %}{{ entry.edit_set.created_by }}{% endif %})
                         </span>
                     </li>
                 {% endfor %}
