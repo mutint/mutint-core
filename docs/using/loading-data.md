@@ -11,7 +11,7 @@ rows.
 
 ```bash
 ./aledb import /path/to/experiment1 /path/to/experiment2 \
-    --project "My project" --experiment "My experiment" --person alice
+    --project "My project" --experiment "My experiment" --owner alice
 ./aledb delete 4 20 19
 ```
 

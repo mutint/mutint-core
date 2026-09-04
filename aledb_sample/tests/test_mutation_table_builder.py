@@ -45,7 +45,7 @@ class AmplificationsRemovedTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "1-1-1-1", gd_text=GD_WITH_AMP)
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="P", experiment_name="e", person="tester")
+            self.drop, project_name="P", experiment_name="e", owner_name="tester")
         from aledb_experiment.models import Experiment
         self.experiment = Experiment.objects.get()
 
@@ -281,7 +281,7 @@ class ManuallyAddedMutationTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "1-1-1-1", gd_text=GD_WITH_AMP)
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="P", experiment_name="e", person="tester")
+            self.drop, project_name="P", experiment_name="e", owner_name="tester")
         from aledb_experiment.models import Experiment
         self.experiment = Experiment.objects.get()
 

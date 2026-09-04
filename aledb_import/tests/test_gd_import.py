@@ -76,7 +76,7 @@ class GdImportTestCase(TestCase):
         self._ensure_reference(experiment)
         return gd_import.import_gd_files(
             [_uploaded(path)], project_name="gd project",
-            experiment_name=experiment, person="tester")
+            experiment_name=experiment, owner_name="tester")
 
     def _expected_mutations(self, path):
         with open(path, encoding="utf-8") as handle:
@@ -195,7 +195,7 @@ class GdImportTestCase(TestCase):
         experiment = self._ensure_reference("export exp", project="export project")
         gd_import.import_gd_files(
             [_uploaded(CLEAN_GD)], project_name="export project",
-            experiment_name="export exp", person="tester")
+            experiment_name="export exp", owner_name="tester")
 
         reseq = Sample.objects.get()
         export = self.client.get("/import/gd/%d/export" % reseq.id)
@@ -222,7 +222,7 @@ class GdImportTestCase(TestCase):
         self._ensure_reference(experiment)
         return gd_import.import_gd_files(
             [_uploaded_as(CLEAN_GD, name) for name in names],
-            project_name="gd project", experiment_name=experiment, person="tester")
+            project_name="gd project", experiment_name=experiment, owner_name="tester")
 
     def test_underscore_triple_names_are_read_as_a_time_series(self):
         summary = self._import_named(self.TRIPLE_NAMES)
@@ -404,7 +404,7 @@ class PolymorphismModeTestCase(TestCase):
         gd_import.import_gd_files(
             [SimpleUploadedFile(name, "\n".join(lines).encode())],
             project_name="gd project", experiment_name="polymorphism exp",
-            person="tester")
+            owner_name="tester")
         return Sample.objects.get(source_name=name[:-3])
 
     def test_a_polymorphism_run_imports_as_mixed(self):
@@ -423,7 +423,7 @@ class PolymorphismModeTestCase(TestCase):
         ensure_reference("polymorphism exp")
         gd_import.import_gd_files(
             [_uploaded_as(CLEAN_GD, "1-500-1-1.gd")], project_name="gd project",
-            experiment_name="polymorphism exp", person="tester")
+            experiment_name="polymorphism exp", owner_name="tester")
         self.assertTrue(Sample.objects.get().is_clonal)
 
     def test_the_flag_is_matched_as_a_word_not_a_substring(self):
@@ -461,7 +461,7 @@ class UncalledRegionTestCase(TestCase):
         gd_import.import_gd_files(
             [SimpleUploadedFile("1-500-1-1.gd",
                                 "\n".join(raw.splitlines() + list(lines)).encode())],
-            project_name="gd project", experiment_name="uncalled exp", person="tester")
+            project_name="gd project", experiment_name="uncalled exp", owner_name="tester")
         return Sample.objects.get()
 
     def test_an_mc_record_is_stored_with_integer_bounds(self):
@@ -533,7 +533,7 @@ class SeqIdMustMatchTheReferenceTestCase(TestCase):
 
     def _import(self):
         return gd_import.import_gd_files(
-            [_uploaded(CLEAN_GD)], project_name="p", experiment_name="e", person="tester")
+            [_uploaded(CLEAN_GD)], project_name="p", experiment_name="e", owner_name="tester")
 
     def test_matching_seq_ids_import(self):
         self._experiment_with_reference("REL606")
@@ -574,7 +574,7 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         self._ensure_reference(experiment)
         return gd_import.import_gd_files(
             [self._upload(body)], project_name="gd project",
-            experiment_name=experiment, person="tester")
+            experiment_name=experiment, owner_name="tester")
 
     # --- a bad line no longer costs the file ------------------------------------------------
 
@@ -603,7 +603,7 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         """The summary shape is one contract; a consumer should not have to test for it."""
         summary = gd_import.import_gd_files(
             [SimpleUploadedFile("bad.gd", b"not a genome diff at all")],
-            project_name="gd project", experiment_name="gd exp", person="tester",
+            project_name="gd project", experiment_name="gd exp", owner_name="tester",
             require_reference=False)
         self.assertIn("warnings", summary["files"][0])
 

@@ -31,7 +31,7 @@ class AlignmentServingTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "s1", bam_bytes=PAYLOAD)
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="p", experiment_name="e", person="tester")
+            self.drop, project_name="p", experiment_name="e", owner_name="tester")
         self.reseq = Sample.objects.get()
         self.experiment = self.reseq.experiment
         self.bam_url = "/mutations/alignments/%d/bam" % self.reseq.id

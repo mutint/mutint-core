@@ -11,15 +11,15 @@ from aledb_experiment.permissions import (
 class ExperimentInline(admin.TabularInline):
     model = Experiment
     extra = 0
-    fields = ('name', 'person')
+    fields = ('name',)
 
 
 @admin.register(Experiment)
 class ExperimentAdmin(admin.ModelAdmin):
     # fetch project
     list_select_related = ('project',)
-    list_display = ('id', 'name', 'project', 'person', 'date')
-    search_fields = ('name', 'person', 'project')
+    list_display = ('id', 'name', 'project', 'date')
+    search_fields = ('name', 'project')
 
 
 @admin.register(Project)

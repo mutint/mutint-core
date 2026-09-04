@@ -79,9 +79,9 @@ class UploadSession(models.Model):
     updated = models.DateTimeField(auto_now=True)
     state = models.CharField(max_length=16, choices=STATE_CHOICES, default=STATE_OPEN)
 
-    # The target is the experiment itself, by primary key. Earlier versions carried
-    # project/experiment/person as free text and resolved by name, which forked an experiment
-    # whenever the person differed -- see gd_import.prepare_experiment_by_id.
+    # The target is the experiment itself, by primary key. Earlier versions carried the
+    # project and experiment as free text and resolved by name, which cannot reach the second
+    # of two experiments sharing a name -- see gd_import.prepare_experiment_by_id.
     experiment = models.ForeignKey("aledb_experiment.Experiment", null=True, blank=True,
                                        on_delete=models.CASCADE)
     # Empty means auto-detect; otherwise the name of a registered import handler.

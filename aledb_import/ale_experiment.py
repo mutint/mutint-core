@@ -162,8 +162,8 @@ def import_paths(paths, experiment, user):
 
 
 def resolve_experiment(*, experiment_id=None, project_name=None, experiment_name=None,
-                       person=None, is_public=False):
-    """The experiment an upload targets, and the user it is attributed to.
+                       owner=None, is_public=False):
+    """The experiment an upload targets, and the user who owns it.
 
     Two ways in, and they are the two the product already had:
 
@@ -171,30 +171,30 @@ def resolve_experiment(*, experiment_id=None, project_name=None, experiment_name
       primary key precisely so two experiments may share a name and two people may add to
       one, and a shell upload should not be weaker than that.
     - `project_name` + `experiment_name` get-or-create, which is what the metadata file used
-      to supply. It keys on (name, person, project) through `_prepare_experiment`, so it
-      carries that function's known sharp edge: the same experiment name with a *different*
-      person forks into a second experiment. Pass `--experiment-id` to add to one that
-      exists.
+      to supply. It reaches one experiment per name per project, so `--experiment-id` is
+      still the way to add to the second of two that share a name.
 
-    `person` is a username or a real name, resolved the way the CLI has always resolved
-    one. It is required when creating, because a new project needs an owner; with
-    `experiment_id` it defaults to the project's owner, so the common case needs no flag.
+    `owner` is a username or a real name, resolved the way the CLI has always resolved one.
+    It is required when creating, because a new project needs an owner; with `experiment_id`
+    it defaults to the project's owner, so the common case needs no flag. **It names a real
+    `User`** -- it is not the free-text attribution `Experiment.person` used to hold, which
+    is gone.
     """
     from aledb_import.gd_import import _prepare_experiment
 
     if experiment_id is not None:
         experiment = Experiment.objects.get(pk=experiment_id)
-        user = find_user(person) if person else experiment.project.user
+        user = find_user(owner) if owner else experiment.project.user
         return experiment, user
 
     if not (project_name and experiment_name):
         raise ValueError(
             "give --experiment-id, or both --project and --experiment")
-    if not person:
-        raise ValueError("--person is required when naming a project and experiment")
+    if not owner:
+        raise ValueError("--owner is required when naming a project and experiment")
 
-    user = find_user(person)
-    context = _prepare_experiment(project_name, experiment_name, person, is_public)
+    user = find_user(owner)
+    context = _prepare_experiment(project_name, experiment_name, owner, is_public)
     return context["experiment"], user
 
 

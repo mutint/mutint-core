@@ -50,7 +50,7 @@ class BreseqTablePageTestCase(TestCase):
         reference_store.establish_or_check(self.experiment, gff3_text, sequences)
         gd_import.import_gd_files(
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
-            project_name="syn project", experiment_name="syn exp", person="tester")
+            project_name="syn project", experiment_name="syn exp", owner_name="tester")
 
         self.reseq = Sample.objects.get()
         self.client.force_login(self.user)

@@ -34,7 +34,7 @@ class BrowseMutationTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="P", experiment_name="e", person="tester")
+            self.drop, project_name="P", experiment_name="e", owner_name="tester")
 
         self.reseq = Sample.objects.get()
         self.call = MutationCall.objects.filter(
@@ -192,7 +192,7 @@ class BrowseMutationTestCase(TestCase):
         self.addCleanup(shutil.rmtree, second, True)
         breseq_fixture.write_sample(second, "s2")
         breseq_folder.import_breseq_folders(
-            second, project_name="P", experiment_name="e", person="tester")
+            second, project_name="P", experiment_name="e", owner_name="tester")
         other = Sample.objects.exclude(id=self.reseq.id).first()
         self.assertIsNotNone(other)
         return other
@@ -280,7 +280,7 @@ class SwitchingMutationTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="P", experiment_name="e", person="tester")
+            self.drop, project_name="P", experiment_name="e", owner_name="tester")
 
         self.reseq = Sample.objects.get()
         self.call = MutationCall.objects.filter(
@@ -311,7 +311,7 @@ class SwitchingMutationTestCase(TestCase):
         """
         breseq_fixture.write_sample(self.drop, "s2")
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="P", experiment_name="e", person="tester")
+            self.drop, project_name="P", experiment_name="e", owner_name="tester")
         return Sample.objects.exclude(pk=self.reseq.pk).get()
 
     def test_a_mutation_this_sample_does_not_call_still_renders(self):
@@ -335,7 +335,7 @@ class SwitchingMutationTestCase(TestCase):
         self.addCleanup(shutil.rmtree, other, True)
         breseq_fixture.write_sample(other, "s2")
         breseq_folder.import_breseq_folders(
-            other, project_name="P2", experiment_name="e2", person="tester")
+            other, project_name="P2", experiment_name="e2", owner_name="tester")
         stranger = MutationCall.objects.exclude(
             sample=self.reseq).first()
 

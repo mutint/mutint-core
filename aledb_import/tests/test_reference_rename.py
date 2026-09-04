@@ -217,7 +217,7 @@ class RenameApplicationTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="p", experiment_name="e", person="tester")
+            self.drop, project_name="p", experiment_name="e", owner_name="tester")
         self.reference = ReferenceSequences.objects.get()
         self.experiment = self.reference.experiment
         self.sequences = [("NC_TEST.1", breseq_fixture.SEQUENCE_A)]
@@ -324,7 +324,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="p", experiment_name="e", person="tester")
+            self.drop, project_name="p", experiment_name="e", owner_name="tester")
         self.experiment = ReferenceSequences.objects.get().experiment
         self.renamed = [("NC_TEST.1", breseq_fixture.SEQUENCE_A)]
         self.gff3 = breseq_fixture.gff3_text(self.renamed)

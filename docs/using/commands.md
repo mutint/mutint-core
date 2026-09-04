@@ -16,7 +16,7 @@ its plugins ship.
 ## Data
 
 ```bash
-./aledb import <path> ... --project P --experiment E --person U
+./aledb import <path> ... --project P --experiment E --owner U
                              # import breseq folders, .gd files and reference genomes
 ./aledb import <path> --experiment-id 4    # ...into an experiment that exists
 ./aledb delete 4 20 19       # soft-delete experiments by id

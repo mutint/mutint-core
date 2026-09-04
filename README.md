@@ -42,7 +42,7 @@ ALEdb imports experiments from [breseq](https://github.com/barricklab/breseq) ou
 ### Upload experiments
 
 ```bash
-./aledb import /path/to/data --project P --experiment E --person alice
+./aledb import /path/to/data --project P --experiment E --owner alice
 ```
 
 Each path should be the root of a breseq output directory (the one containing `output/` and `data/` subdirectories). The upload command parses the `.gd` files, creates all mutation and metadata records, and recomputes fixation and convergence statistics.

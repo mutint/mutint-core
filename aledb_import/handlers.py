@@ -120,7 +120,7 @@ def list_breseq_units(_staged_root, claimed):
 def handle_breseq_folders(experiment, staged_root, paths, user):
     from aledb_import.breseq_folder import import_samples_into
 
-    return import_samples_into(experiment, staged_root, person=_person(user))
+    return import_samples_into(experiment, staged_root)
 
 
 # --- reference genomes --------------------------------------------------------------------
@@ -266,7 +266,6 @@ def handle_genomediff(experiment, staged_root, paths, user):
     from aledb_import.gd_import import prepare_experiment_by_id
     from aledb_import.reference_store import has_reference
 
-    person = _person(user)
     context = prepare_experiment_by_id(experiment.id)
 
     if not has_reference(experiment):
@@ -293,7 +292,7 @@ def handle_genomediff(experiment, staged_root, paths, user):
                 with open(os.path.join(staged_root, relative), "rb") as handle:
                     document = _parse_document(handle)
                 return import_document_as_sample(
-                    document, sample_name, context, person)
+                    document, sample_name, context)
 
         try:
             # Retried only for lock contention, and safe to retry because the transaction
@@ -328,10 +327,6 @@ def handle_genomediff(experiment, staged_root, paths, user):
         run_post_processing(experiment)
 
     return {"files": results, "total_mutations": total}
-
-
-def _person(user):
-    return user.get_username() if user and user.is_authenticated else ""
 
 
 def register_core_import_handlers():

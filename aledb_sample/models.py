@@ -157,12 +157,16 @@ class Sample(SupplementalDataMixin):
 
     #: The three groups core keeps in `supplemental_data`, and what each holds.
     #:
-    #: **Ten columns stood here** -- `reference_genome`, `sequencing_date`, `breseq_version`,
-    #: `library_prep`, `reads`, `average_read_length`, `mean_coverage`, `percentage_mapped`,
-    #: `medium_description`, `person`. None of them was ever filtered, ordered, aggregated or
-    #: joined on anywhere in the suite; they are read whole to render a row and to build the
-    #: interop payload, which is the argument `Mutation.annotation` and `MutationCall.
-    #: evidence` are already stored on.
+    #: **Nine columns stood here** -- `reference_genome`, `sequencing_date`,
+    #: `breseq_version`, `library_prep`, `reads`, `average_read_length`, `mean_coverage`,
+    #: `percentage_mapped`, `medium_description`. None of them was ever filtered, ordered,
+    #: aggregated or joined on anywhere in the suite; they are read whole to render a row and
+    #: to build the interop payload, which is the argument `Mutation.annotation` and
+    #: `MutationCall.evidence` are already stored on.
+    #:
+    #: A tenth, `person`, was **deleted rather than moved**. A free-text name is not a user,
+    #: and what somebody wants to record about who handled a sample belongs in
+    #: `medium_description` or `description` beside everything else descriptive.
     #:
     #: **`source_name` deliberately stayed a column**, though it looks like one of these.
     #: `gd_import._get_or_create_autonumbered_chain` *filters* on it to decide whether a

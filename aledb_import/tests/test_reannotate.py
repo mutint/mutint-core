@@ -59,7 +59,7 @@ class ReannotateTestCase(TestCase):
 
         gd_import.import_gd_files(
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
-            project_name="syn project", experiment_name="syn exp", person="tester")
+            project_name="syn project", experiment_name="syn exp", owner_name="tester")
 
     def _establish(self, path):
         gff3_text, sequences = reference.normalize_reference(path)
@@ -232,7 +232,7 @@ class ReannotateOtherExperimentsTestCase(TestCase):
         reference_store.establish_or_check(context["experiment"], gff3_text, sequences)
         gd_import.import_gd_files(
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
-            project_name="syn project", experiment_name=name, person="tester")
+            project_name="syn project", experiment_name=name, owner_name="tester")
         return context["experiment"]
 
     def test_the_other_experiment_is_untouched(self):

@@ -23,7 +23,7 @@ class TestBibliome(TestCase):
         # A publication only needs an experiment to hang off; this used to run a
         # whole breseq import to get one.
         experiment = Experiment.objects.create(
-            name="test", person="Patrick", project=project)
+            name="test", project=project)
         expected_publication_count = 1
         # The experiment's own pk, not the literal 1 this used to pass. PostgreSQL does not
         # rewind a sequence when a TestCase rolls back, so ids climb across the suite and

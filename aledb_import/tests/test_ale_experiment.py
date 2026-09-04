@@ -6,7 +6,7 @@ Data page posts into -- so what is worth asserting here is that a shell import r
 produce what a web drop produces: annotated mutations owned by the experiment, the .gd
 record kept, the reference established and the alignment stored. Not the importer again.
 
-It was `./aledb upload`, and it read the project, experiment and person out of
+It was `./aledb upload`, and it read the project, experiment and owner out of
 `<exp>/metadata/*.csv`. That directory and the app that parsed it are gone; identity is
 options now, which is what the web always did.
 """
@@ -68,7 +68,7 @@ class ImportCommandTestCase(TestCase):
 
     def upload(self):
         experiment, user = resolve_experiment(
-            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", person="pphaneuf")
+            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", owner="pphaneuf")
         import_paths([self.root], experiment, user)
 
     def test_it_creates_the_experiment_and_imports_it(self):
@@ -131,25 +131,25 @@ class ImportCommandTestCase(TestCase):
 
     def test_importing_twice_adds_to_the_same_experiment(self):
         """`--experiment-id` is the web's form and the one to prefer, because the name-based
-        path keys on (name, person, project) and forks on a different person."""
+        path reaches only one experiment of a given name in a given project."""
         self.upload()
         experiment = Experiment.objects.get()
 
         again, user = resolve_experiment(experiment_id=experiment.id)
 
         self.assertEqual(experiment, again)
-        # No `--person`: with an experiment named by pk it comes from the project.
+        # No `--owner`: with an experiment named by pk it comes from the project.
         self.assertEqual(self.user, user)
 
-    def test_naming_a_project_without_a_person_is_refused(self):
+    def test_naming_a_project_without_an_owner_is_refused(self):
         """A new project needs an owner, and `Project.user` is NOT NULL. The old path took
-        the person out of the metadata file; there is nowhere else to get one."""
+        one out of the metadata file; there is nowhere else to get it."""
         with self.assertRaises(ValueError):
             resolve_experiment(project_name="P", experiment_name="E")
 
     def test_neither_form_of_target_is_refused(self):
         with self.assertRaises(ValueError):
-            resolve_experiment(person="pphaneuf")
+            resolve_experiment(owner="pphaneuf")
 
 
 class DeleteExperimentsTestCase(TestCase):
@@ -171,7 +171,7 @@ class DeleteExperimentsTestCase(TestCase):
         self.addCleanup(shutil.rmtree, self.root, True)
         breseq_fixture.write_sample(self.root, "1-10000-1-1")
         experiment, user = resolve_experiment(
-            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", person="pphaneuf")
+            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", owner="pphaneuf")
         import_paths([self.root], experiment, user)
 
     def test_deleting_an_experiment_takes_its_mutations_with_it(self):
@@ -217,7 +217,7 @@ class DeleteSampleTestCase(TestCase):
     def setUp(self):
         annotation.clear_cache()
         self.addCleanup(annotation.clear_cache)
-        # The metadata fixture names this person, and `find_user` *prompts on stdin* for one
+        # The metadata fixture names this user, and `find_user` *prompts on stdin* for one
         # it cannot resolve -- which under the runner hangs rather than failing.
         User.objects.create(
             username="pphaneuf", password="test123", first_name="Patrick",
@@ -234,7 +234,7 @@ class DeleteSampleTestCase(TestCase):
         breseq_fixture.write_sample(self.root, "1-10000-1-1")
         breseq_fixture.write_sample(self.root, "1-20000-1-1")
         experiment, user = resolve_experiment(
-            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", person="pphaneuf")
+            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", owner="pphaneuf")
         import_paths([self.root], experiment, user)
         self.experiment = Experiment.objects.get()
         # Deliberately after the upload, which marks everything stale itself: what these tests

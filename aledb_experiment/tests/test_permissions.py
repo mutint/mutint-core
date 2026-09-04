@@ -469,7 +469,7 @@ class ExperimentFilterTestCase(TestCase):
         grant_project_access(self.project, self.reader, ROLE_READ)
         grant_project_access(self.project, self.writer, ROLE_WRITE)
         self.experiment = Experiment.objects.create(
-            name="E", project=self.project, person="owner")
+            name="E", project=self.project,)
 
     def test_a_reader_may_not_curate(self):
         """Tagging and filtering write shared state that four mutation tables read back."""

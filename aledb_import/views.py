@@ -2,9 +2,8 @@
 
 `gd_import_view` (`/import/`) and `reference_views.reference_upload_view`
 (`/import/reference/`) lived here until they were retired. Both were unlinked, both went
-through the name-based `_prepare_experiment`, whose (name, instrument, person, project)
-get_or_create forks a second experiment whenever the person differs, and neither had any
-authorization. The Add page (`add_views.py`) plus the chunked session endpoints replaced
+through the name-based `_prepare_experiment`, which cannot reach the second of two
+experiments sharing a name, and neither had any authorization. The Add page (`add_views.py`) plus the chunked session endpoints replaced
 them; reference *annotation* replacement, the one capability only the reference page had,
 is now the `replace_annotation` import type in `handlers.py`.
 """

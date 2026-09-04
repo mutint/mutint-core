@@ -1662,10 +1662,20 @@ of the coordinate that is** -- the ALE and the isolate became text (`aledb_exper
 and this one deliberately did not, because it is the ordinal fixation reads. A fractional
 time point is therefore still refused.
 
-**No edit page touches `person`.** The field is absent from every form *and* from what the
-endpoints assemble, so it is not merely ignored -- there is nowhere for a posted value to go.
-Changing who owns or ran something is its own workflow: folding it into a details form means
-every save rewrites it, and a form that dropped the field would silently blank it.
+**`person` is gone from `Sample` and from `Experiment`**, deleted rather than moved when the
+other nine descriptive columns became `supplemental_data`. It was free text set from
+`user.get_username()` on create, editable by no form, and it looked like ownership without
+being it -- ownership is `ProjectAccess`, and the logged-in user is recorded everywhere it
+matters. Somebody who wants to note who handled a sample writes it in a description field.
+
+Two things went with it beyond the columns. `_prepare_experiment`'s `get_or_create` keyed on
+`(name, person, project)`, so **the same experiment name under a different person forked into
+a second experiment** -- a sharp edge `prepare_experiment_by_id`'s docstring existed to warn
+about, and now simply absent. And `person` had been threaded as an argument through six import
+functions whose only remaining use of it was writing `Sample.person`; that thread is dead code
+now and went too. What survives is `--owner` on `./aledb import`, which resolves a real `User`
+through `find_user` because a newly created project needs one -- it was never the free-text
+field, and is renamed from `--person` to stop reading like it.
 
 **The trap to know about:** a renumber often changes no visible label.
 `label` returns `Isolate.description` verbatim whenever it is set, and the
@@ -3081,8 +3091,8 @@ Creation and deletion are nested under the objects they act on:
   feature: it is one of eight breseq/GenomeDiff types, first-class throughout the pipeline.
 - `/import/add/?experiment_id=<pk>` is the one place data goes in. It is scoped to an
   experiment **by primary key**, so two experiments may share a name and two people may add to
-  the same one — unlike `_prepare_experiment`, whose name+person lookup forks an experiment per
-  person. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
+  the same one — unlike `_prepare_experiment`, whose name lookup can only ever reach one of
+  them. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
   There is **no unscoped form of this page and no sidebar entry for it** — `aledb_import`
   registers no nav item. Both existed briefly and could only ever land on a page with no
   experiment to add to; without a usable `experiment_id` the route is now a plain 404.

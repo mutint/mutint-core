@@ -122,17 +122,18 @@ def find_loose_gd_files(root, sample_dirs):
     return sorted(found)
 
 
-def import_breseq_folders(root, project_name, experiment_name, person, is_public=False):
+def import_breseq_folders(root, project_name, experiment_name, owner_name,
+                          is_public=False):
     """Name-addressed entry point, kept for the CLI and existing callers.
 
     Web callers use :func:`import_samples_into` instead, which takes the experiment itself --
     see ``gd_import.prepare_experiment_by_id`` for why identity by primary key matters.
     """
-    context = _prepare_experiment(project_name, experiment_name, person, is_public)
-    return _import_samples(context, root, person, report_loose_gd=True)
+    context = _prepare_experiment(project_name, experiment_name, owner_name, is_public)
+    return _import_samples(context, root, report_loose_gd=True)
 
 
-def import_samples_into(experiment, root, person):
+def import_samples_into(experiment, root):
     """Import every breseq sample under ``root`` into an existing experiment.
 
     Loose ``.gd`` files are left alone here: the import registry routes those to the
@@ -141,10 +142,10 @@ def import_samples_into(experiment, root, person):
     from aledb_import.gd_import import prepare_experiment_by_id
 
     context = prepare_experiment_by_id(experiment.id)
-    return _import_samples(context, root, person, report_loose_gd=False)
+    return _import_samples(context, root, report_loose_gd=False)
 
 
-def _import_samples(context, root, person, report_loose_gd):
+def _import_samples(context, root, report_loose_gd):
     experiment = context["experiment"]
 
     sample_dirs = find_sample_dirs(root)
@@ -173,7 +174,7 @@ def _import_samples(context, root, person, report_loose_gd):
 
         def import_one(sample_dir=sample_dir, sample_name=sample_name):
             with transaction.atomic():
-                return _import_one_sample(sample_dir, sample_name, context, person)
+                return _import_one_sample(sample_dir, sample_name, context)
 
         try:
             # Retried only for lock contention; the transaction rolls back whole and
@@ -255,7 +256,7 @@ def _duplicate_error(root, kept, skipped):
                os.path.basename(skipped.rstrip(os.sep))))
 
 
-def _import_one_sample(sample_dir, sample_name, context, person):
+def _import_one_sample(sample_dir, sample_name, context):
     experiment = context["experiment"]
 
     gd_path = find_gd_file(sample_dir)
@@ -274,7 +275,7 @@ def _import_one_sample(sample_dir, sample_name, context, person):
         document = _parse_document(handle)
 
     seq_experiment, count, replaced = import_document_as_sample(
-        document, sample_name, context, person)
+        document, sample_name, context)
     warnings = parse_warnings(document)
 
     sample_store = store.ensure_dir(store.sample_dir(seq_experiment.id))

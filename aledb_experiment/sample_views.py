@@ -170,9 +170,6 @@ def sample_update(request, pk):
     row = {
         "id": str(reseq.pk),
         "sample_name": request.POST.get("sample_name"),
-        # No "person": samples.apply_rows only writes the keys it is handed, so leaving it
-        # out means no edit page can touch it. Changing who owns or ran something is its
-        # own workflow, not a side effect of correcting a sample's numbering.
         "ale": request.POST.get("ale"),
         "flask": request.POST.get("flask"),
         "isolate": request.POST.get("isolate"),

@@ -65,7 +65,8 @@ class NotAGenomeDiff(Exception):
     """A file imported as a .gd declares itself to be some other format."""
 
 
-def import_gd_files(uploaded_files, project_name, experiment_name, person, is_public=False,
+def import_gd_files(uploaded_files, project_name, experiment_name, owner_name,
+                    is_public=False,
                     require_reference=True):
     """Import a batch of dropped ``.gd`` files into a single Experiment.
 
@@ -80,7 +81,7 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
     """
     from aledb_import.reference_store import has_reference
 
-    context = _prepare_experiment(project_name, experiment_name, person, is_public)
+    context = _prepare_experiment(project_name, experiment_name, owner_name, is_public)
     if require_reference and not has_reference(context["experiment"]):
         raise ReferenceRequired(
             "Experiment %r has no reference genome. A .gd carries none, so add one "
@@ -93,7 +94,7 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
         filename = os.path.basename(getattr(uploaded, "name", "") or "unnamed.gd")
         try:
             with transaction.atomic():
-                count, warnings = _import_one_file(uploaded, filename, context, person)
+                count, warnings = _import_one_file(uploaded, filename, context)
             file_results.append({"file": filename, "mutations": count, "error": None,
                                  "warnings": warnings})
             total_mutations += count
@@ -114,7 +115,7 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
     }
 
 
-def _prepare_experiment(project_name, experiment_name, person, is_public):
+def _prepare_experiment(project_name, experiment_name, owner_name, is_public):
     """Get/create the target project and experiment.
 
     There used to be placeholder `Media`, `Instrument` and `FreezerBox` rows here as well.
@@ -127,10 +128,10 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
     try:
         project = Project.objects.get(name=project_name)
     except Project.DoesNotExist:
-        project = try_creating_project(project_name, person, is_public)
+        project = try_creating_project(project_name, owner_name, is_public)
 
     experiment, _ = Experiment.objects.get_or_create(
-        name=experiment_name, person=person, project=project)
+        name=experiment_name, project=project)
     return {"experiment": experiment}
 
 
@@ -138,9 +139,9 @@ def prepare_experiment_by_id(experiment_id):
     """Context for adding to an *existing* experiment, identified by primary key.
 
     The web paths use this rather than `_prepare_experiment`, whose name-based
-    get_or_create keys on (name, person, project) -- so the same experiment name
-    with a different person silently forks into a second experiment. Keying on the pk means
-    two people can add to one experiment, and two experiments may share a name.
+    get_or_create can only ever reach one experiment of a given name in a given project --
+    and two experiments may legitimately share a name. Keying on the pk is what reaches the
+    second one.
 
     It also avoids `try_creating_project` -> `find_user`, which prompts on stdin and therefore
     cannot run inside a web request.
@@ -175,15 +176,15 @@ def parse_warnings(document):
     return [str(error) for error in getattr(document, "parse_errors", ())]
 
 
-def _import_one_file(uploaded, filename, context, person):
+def _import_one_file(uploaded, filename, context):
     document = _parse_document(uploaded)
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
     _, count, _replaced = import_document_as_sample(
-        document, sample_name, context, person)
+        document, sample_name, context)
     return count, parse_warnings(document)
 
 
-def import_document_as_sample(document, sample_name, context, person):
+def import_document_as_sample(document, sample_name, context):
     """Build the experiment chain for ``sample_name`` and write the document's mutations.
 
     Shared by the bare-.gd upload, where the sample name comes from the filename, and the
@@ -210,11 +211,11 @@ def import_document_as_sample(document, sample_name, context, person):
         # The name says nothing about where the sample belongs. Give it its own isolate
         # rather than letting every such name collapse onto 1-1-1-1.
         seq_experiment = _get_or_create_autonumbered_chain(
-            context, document, person, sample_name)
+            context, document, sample_name)
     else:
         seq_experiment = _get_or_create_chain(
             context, document, identity.ale, identity.flask, identity.isolate,
-            identity.replicate, person, sample_name,
+            identity.replicate, sample_name,
             # A label only where the name carries one. `3-30000-1-1` says exactly what the
             # coordinate says, and `label` prefers the description over the
             # computed `A3 F30000 I1-1` -- so filling it for an A-F-I-R sample would
@@ -268,7 +269,7 @@ def _parse_document(uploaded):
 
 
 def _get_or_create_chain(context, document, ale_number, flask_number,
-                         isolate_number, tech_rep_number, person, sample_name,
+                         isolate_number, tech_rep_number, sample_name,
                          isolate_description=""):
     """Synthesize the experiment chain down to a Sample, reading
     reference/date/type hints from the GenomeDiff header (no breseq HTML).
@@ -320,7 +321,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     return seq_experiment
 
 
-def _get_or_create_autonumbered_chain(context, document, person, sample_name):
+def _get_or_create_autonumbered_chain(context, document, sample_name):
     """Chain for a sample whose filename carries no identity at all.
 
     Everything hangs off ALE 1 / time point 1, but each distinct sample gets its own label so

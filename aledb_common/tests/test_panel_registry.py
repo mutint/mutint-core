@@ -72,7 +72,7 @@ class RenderedPanelTestCase(TestCase):
 
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
-            self.drop, project_name="P", experiment_name="e", person="panel")
+            self.drop, project_name="P", experiment_name="e", owner_name="panel")
         self.experiment = Sample.objects.get().experiment
         self.experiment.project.user = self.user
         self.experiment.project.save()

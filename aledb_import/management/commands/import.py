@@ -28,10 +28,10 @@ class Command(BaseCommand):
         parser.add_argument('--experiment', type=str,
                             help='Experiment name within that project, created if it does '
                                  'not exist.')
-        parser.add_argument('--person', type=str,
-                            help='Username or full name to attribute the import to, and to '
-                                 'own a newly created project. Required with --project; '
-                                 'defaults to the project owner with --experiment-id.')
+        parser.add_argument('--owner', type=str,
+                            help='Username or full name of the user who owns a newly '
+                                 'created project. Required with --project; defaults to '
+                                 'the project owner with --experiment-id.')
         parser.add_argument('--public', action='store_true',
                             help='Make a newly created project public.')
 
@@ -41,7 +41,7 @@ class Command(BaseCommand):
                 experiment_id=options.get('experiment_id'),
                 project_name=options.get('project'),
                 experiment_name=options.get('experiment'),
-                person=options.get('person'),
+                owner=options.get('owner'),
                 is_public=options.get('public', False))
         except ValueError as error:
             raise CommandError(str(error))

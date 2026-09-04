@@ -110,9 +110,9 @@ def export_experiment_index(request):
                 response = HttpResponse(content_type='text/csv')
                 response['Content-Disposition'] = 'attachment; filename="experiment_index.csv"'
                 writer = csv.writer(response)
-                writer.writerow(['ale_id', 'experiment_name', 'project_id', 'project_name', 'person', 'is_public', 'date'])
+                writer.writerow(['ale_id', 'experiment_name', 'project_id', 'project_name', 'is_public', 'date'])
                 for e in sorted(exp_list, key=lambda x: x.id):
-                    writer.writerow([e.id, e.name, e.project_id, e.project.name, e.person, e.project.is_public, e.date_str()])
+                    writer.writerow([e.id, e.name, e.project_id, e.project.name, e.project.is_public, e.date_str()])
                 return response
         return HttpResponse("Invalid export request.", status=400)
     except Exception:

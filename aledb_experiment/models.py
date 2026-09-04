@@ -100,7 +100,6 @@ class Experiment(SoftDeleteMixin):
     #
     # The query parameter has always been `experiment_id`, so the URLs did not move.
     name = models.CharField(max_length=200)
-    person = models.CharField(max_length=200)
     date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(**blank_field)
     project = models.ForeignKey(Project, default=None, **blank_field, on_delete=models.DO_NOTHING)

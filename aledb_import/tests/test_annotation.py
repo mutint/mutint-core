@@ -53,7 +53,7 @@ class AnnotatedImportTestCase(TestCase):
         self.experiment = self._establish_reference()
         gd_import.import_gd_files(
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
-            project_name="syn project", experiment_name="syn exp", person="tester")
+            project_name="syn project", experiment_name="syn exp", owner_name="tester")
 
     def _establish_reference(self):
         context = gd_import._prepare_experiment(
@@ -198,7 +198,7 @@ class UnannotatedImportTestCase(TestCase):
     def _import(self):
         gd_import.import_gd_files(
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
-            project_name="syn project", experiment_name="syn exp", person="tester")
+            project_name="syn project", experiment_name="syn exp", owner_name="tester")
 
     def _categories(self):
         return set(Mutation.objects.values_list("mutation_category", flat=True))

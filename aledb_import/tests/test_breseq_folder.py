@@ -35,7 +35,7 @@ class BreseqFolderImportTestCase(TestCase):
     def _import(self, experiment="folder exp"):
         return breseq_folder.import_breseq_folders(
             self.drop, project_name="folder project",
-            experiment_name=experiment, person="tester")
+            experiment_name=experiment, owner_name="tester")
 
     # --- happy path -------------------------------------------------------------------
 
@@ -328,7 +328,7 @@ class BreseqGdFilenameTestCase(TestCase):
 
     def _import(self, name="exp"):
         return breseq_folder.import_breseq_folders(
-            self.drop, project_name="p", experiment_name=name, person="tester")
+            self.drop, project_name="p", experiment_name=name, owner_name="tester")
 
     def test_the_gd_is_read_from_data(self):
         breseq_fixture.write_sample(self.drop, "1-1-1-1")

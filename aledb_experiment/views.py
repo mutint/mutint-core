@@ -184,8 +184,7 @@ def experiment_create(request):
 
 def _create_experiment(project, name, user):
     """Experiments are identified by primary key, so a duplicate name is allowed."""
-    return Experiment.objects.create(
-        name=name, project=project, person=user.get_username())
+    return Experiment.objects.create(name=name, project=project)
 
 
 #: The dashboard's installation-wide totals, which a soft delete changes and nothing else
@@ -317,10 +316,10 @@ def experiment_ancestor_apply(request, pk):
 def experiment_lock(request, pk):
     """Lock or unlock an experiment. Admin on its project.
 
-    Its own endpoint rather than a field on the edit form, for the reason `experiment_update`
-    gives about `person`: a details form rewrites every field it carries on every save. Here
-    that argument is doubled, because a locked experiment refuses `experiment_update`
-    outright -- a lock checkbox on that form could only ever be used to lock, never to unlock.
+    Its own endpoint rather than a field on the edit form: a details form rewrites every
+    field it carries on every save, and a locked experiment refuses `experiment_update`
+    outright -- so a lock checkbox on that form could only ever be used to lock, never to
+    unlock.
 
     Idempotent, like `project_delete`: locking a locked experiment is not an error, it just
     does not move the timestamp.
@@ -474,9 +473,6 @@ def experiment_update(request, pk):
             return JsonResponse({"error": "You cannot move it into that project."},
                                 status=403)
 
-    # `person` is deliberately absent, here and from the form. Who owns or created a
-    # thing is its own workflow; folding it into a details form means every save rewrites
-    # it, and a form that omitted the field would silently blank it.
     experiment.name = name
     experiment.notes = (request.POST.get("notes") or "").strip()
     experiment.doi = (request.POST.get("doi") or "").strip()
