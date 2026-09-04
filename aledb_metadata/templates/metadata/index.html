@@ -66,20 +66,20 @@
                 <td class="sample_name">
                     {{ row.sample.label }}
                 </td>
-                <td class="sample_type">{{ row.sample_type }}</td>
-                <td class="sample_medium_description">{{ row.sample_medium_description }}</td>
-                <td class="media_description">{{ row.media_description }}</td>
-                <td class="carbon_source">{{ row.carbon_source }}</td>
-                <td class="nitrogen_source">{{ row.nitrogen_source }}</td>
-                <td class="phosphorus_source">{{ row.phosphorus_source }}</td>
-                <td class="sulfur_source">{{ row.sulfur_source }}</td>
-                <td class="calcium_source">{{ row.calcium_source }}</td>
-                <td class="supplement">{{ row.supplement }}</td>
-                <td class="temperature">{{ row.temperature }}</td>
-                <td class="strain">{{ row.strain }}</td>
-                <td class="population_description">{{ row.population_description }}</td>
-                <td class="library_prep">{{ row.library_prep }}</td>
-                <td class="reference_genome">{{ row.reference_genome }}</td>
+                <td class="sample_type">{{ row.sample_type|default_if_none:"" }}</td>
+                <td class="sample_medium_description">{{ row.sample_medium_description|default_if_none:"" }}</td>
+                <td class="media_description">{{ row.media_description|default_if_none:"" }}</td>
+                <td class="carbon_source">{{ row.carbon_source|default_if_none:"" }}</td>
+                <td class="nitrogen_source">{{ row.nitrogen_source|default_if_none:"" }}</td>
+                <td class="phosphorus_source">{{ row.phosphorus_source|default_if_none:"" }}</td>
+                <td class="sulfur_source">{{ row.sulfur_source|default_if_none:"" }}</td>
+                <td class="calcium_source">{{ row.calcium_source|default_if_none:"" }}</td>
+                <td class="supplement">{{ row.supplement|default_if_none:"" }}</td>
+                <td class="temperature">{{ row.temperature|default_if_none:"" }}</td>
+                <td class="strain">{{ row.strain|default_if_none:"" }}</td>
+                <td class="population_description">{{ row.population_description|default_if_none:"" }}</td>
+                <td class="library_prep">{{ row.library_prep|default_if_none:"" }}</td>
+                <td class="reference_genome">{{ row.reference_genome|default_if_none:"" }}</td>
             </tr>
 
         {% endfor %}
