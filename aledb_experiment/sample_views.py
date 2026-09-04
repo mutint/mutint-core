@@ -87,7 +87,7 @@ def _row_context(reseq):
         "isolate": coordinate[2],
         "is_mixed": reseq.is_mixed,
         "isolate_description": reseq.description or "",
-        "medium_description": reseq.medium_description or "",
+        "medium_description": reseq.curation.get("medium_description") or "",
         "rep_tags": reseq.tags or "",
     }
 

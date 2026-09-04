@@ -9,7 +9,66 @@ blank_field = {"blank": True, "null": True}
 
 
 # TODO: Refactor: figure out how to get a Sample to return its list of mutation calls and remove functionality from aledb_sample.views.common
-class Sample(models.Model):
+class SupplementalDataMixin(models.Model):
+    """A JSON column for the records a row arrived with, namespaced by who owns each.
+
+    The supplemental material that came with the thing, in the sense a paper means it: not
+    the finding, but everything shipped alongside so somebody can check it::
+
+        {"aledb_core": {"genome_diff": { ...the verbatim breseq record... }}}
+        {"aledb_core": {"breseq": {...}, "sequencing": {...}, "curation": {...}}}
+
+    **Two levels, and the outer one is a component rather than a Django app label** -- core
+    is fifteen apps, so `aledb_core` names the checkout, the same unit `about_registry` keys
+    its entries by and for the same reason. A plugin writes under its own name, so two of
+    them cannot collide and neither can collide with core.
+
+    **What belongs here**: something that arrives with an import, shares the row's lifetime,
+    and is read whole rather than queried. **What does not**: anything with its own
+    lifecycle, anything you want to filter or aggregate on, and anything large -- this column
+    is loaded on every read of the row. A plugin storing real state should own a table with a
+    plain foreign key; `docs/plugin/derived-data.md` says so and says why.
+
+    `default=dict` rather than nullable: for a container several writers merge into, the
+    empty dict is the right zero, and "never written" is the absence of a key rather than a
+    null column. The accessors answer `{}` either way, so a caller cannot tell and does not
+    need to.
+
+    Shaped like `SoftDeleteMixin` in `aledb_experiment.models` -- an abstract model carrying
+    the field and the helpers that belong with it, rather than the same code on two models
+    waiting to drift.
+    """
+
+    #: The component key core writes under. A plugin passes its own to `set_record`.
+    COMPONENT = "aledb_core"
+
+    supplemental_data = models.JSONField(default=dict)
+
+    class Meta:
+        abstract = True
+
+    def record(self, kind, component=None):
+        """One group, or `{}` -- so a caller never has to guard on an absent key."""
+        component = component or self.COMPONENT
+        return (self.supplemental_data or {}).get(component, {}).get(kind) or {}
+
+    def set_record(self, component, kind, value, save=True):
+        """Merge one record in, leaving every other component's keys alone.
+
+        A shared column's hazard is the lost update: `save()` writes the whole thing, so two
+        writers that each read, modify and write can silently drop one another's keys. This
+        merges into the container as it stands and saves only this field.
+        """
+        container = dict(self.supplemental_data or {})
+        owned = dict(container.get(component) or {})
+        owned[kind] = value
+        container[component] = owned
+        self.supplemental_data = container
+        if save:
+            self.save(update_fields=["supplemental_data"])
+
+
+class Sample(SupplementalDataMixin):
     """One sample: what was sequenced, where it sits in the experiment, and what came back.
 
     **Three models used to be here** -- `Isolate` held where the sample sat and what it was
@@ -71,49 +130,12 @@ class Sample(models.Model):
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
     #: sample is labelled -- see `label`.
     description = models.CharField(max_length=300, **blank_field)
-    #: The reference genome this sample was called against, by name -- the `.gd`'s
-    #: `#=REFSEQ` header.
-    #:
-    #: **This and `Mutation.seq_id` were both called `reseq_reference`**, which is what the
-    #: two renames between them fixed. They are different things: this names the whole
-    #: genome, that names one contig within it, and a sample's calls all share this while
-    #: each carries its own of that.
-    reference_genome = models.CharField(max_length=200, **blank_field)
-    sequencing_date = models.CharField(max_length=200, **blank_field)
-    breseq_version = models.CharField(max_length=200, **blank_field)
-    #: **Nothing writes this any more.** The XPMD metadata parser was its only writer and
-    #: went with `aledb_metadata`; no import path and no edit page sets it. It is kept for
-    #: now because the interop API publishes it, so dropping the column means dropping a
-    #: published key -- a decision worth taking on its own rather than as a side effect of
-    #: removing the app. Until then it reads as an empty string on every sample.
-    library_prep = models.CharField(max_length=200, **blank_field)
-
     #: Both came from `TechnicalReplicate`.
     tags = models.CharField(max_length=500, **blank_field)
-    #: A note about what this sample was grown in, edited on the sample page and published
-    #: by the interop API as `sample_medium_description`.
-    #:
-    #: **The long key name is a fossil and is kept deliberately.** It stood against
-    #: `media_description`, from the `Media` table, which held the *medium's* own
-    #: description while this held the *sample's* -- two keys a letter apart. `Media` and the
-    #: metadata app that filled it are gone, so this is the only one left; renaming it would
-    #: break a published payload to win back a distinction nothing is drawing any more.
-    #:
-    #: It was `rep_description`, on a `TechnicalReplicate`. The merge kept the column rather
-    #: than dropping it as planned, precisely because it is published -- and it survived the
-    #: metadata removal for the same reason, plus a second one: the sample edit page writes
-    #: it, so unlike `library_prep` it still has a writer.
-    medium_description = models.CharField(max_length=500, **blank_field)
-
-    person = models.CharField(max_length=200, blank=True)
     #: What the file or folder this was imported from was called. `source_name`, because
     #: `sample_name` on a model called `Sample` says nothing about which of its several
     #: names it is -- this is the one the import read, not the one the product displays.
     source_name = models.CharField(max_length=200, blank=True, null=True)
-    reads = models.IntegerField(blank=True, default=0)
-    average_read_length = models.FloatField(blank=True, default=0)
-    mean_coverage = models.FloatField(blank=True, default=0)
-    percentage_mapped = models.FloatField(blank=True, default=0)
     # Whether this sample's alignment lives in the managed store. Deliberately a flag and
     # not a path: the location is derived from this row's pk by aledb_common.store. Three
     # per-row path columns used to live here -- location, experiment_location,
@@ -132,6 +154,53 @@ class Sample(models.Model):
     # of that name is now a column on this model. `time_point` was the third of these
     # and is gone: the time point **is** a column here, so a property returning it would be
     # a second spelling of one field.
+
+    #: The three groups core keeps in `supplemental_data`, and what each holds.
+    #:
+    #: **Ten columns stood here** -- `reference_genome`, `sequencing_date`, `breseq_version`,
+    #: `library_prep`, `reads`, `average_read_length`, `mean_coverage`, `percentage_mapped`,
+    #: `medium_description`, `person`. None of them was ever filtered, ordered, aggregated or
+    #: joined on anywhere in the suite; they are read whole to render a row and to build the
+    #: interop payload, which is the argument `Mutation.annotation` and `MutationCall.
+    #: evidence` are already stored on.
+    #:
+    #: **`source_name` deliberately stayed a column**, though it looks like one of these.
+    #: `gd_import._get_or_create_autonumbered_chain` *filters* on it to decide whether a
+    #: re-import reuses a sample or allocates a new one, so it is identity rather than
+    #: information -- in JSON that becomes an unindexed path lookup, or a duplicate sample on
+    #: every re-import of a non-A-F-I-R filename.
+    #:
+    #: Names shorten inside their group: `breseq_version` is `breseq["version"]`,
+    #: `sequencing_date` is `sequencing["date"]`. The interop payload's keys do **not** move
+    #: with them -- it has an external consumer -- so `_sample_info_list` translates.
+    BRESEQ = "breseq"
+    SEQUENCING = "sequencing"
+    CURATION = "curation"
+
+    @property
+    def breseq(self):
+        """What the breseq run reported: `version`, `reads`, `average_read_length`,
+        `mean_coverage`, `percentage_mapped`.
+
+        `breseq_summary.read_breseq_summary` builds four of these as a dict already, so the
+        group is stored as it is built rather than fanned out a key at a time.
+        """
+        return self.record(self.BRESEQ)
+
+    @property
+    def sequencing(self):
+        """How it was sequenced: `date`, `library_prep`, `reference_genome`."""
+        return self.record(self.SEQUENCING)
+
+    @property
+    def curation(self):
+        """What a person recorded: `medium_description`, `person`.
+
+        The only group with a writer that is not an importer -- the sample edit page -- which
+        is why `aledb_experiment.samples._MAX_LENGTHS` still refuses an over-long value. The
+        column widths that used to back that check are gone; the check is now all there is.
+        """
+        return self.record(self.CURATION)
 
     @property
     def is_mixed(self):
@@ -212,7 +281,7 @@ class UncalledRegion(models.Model):
         verbose_name_plural = "uncalled regions"
 
 
-class Mutation(models.Model):
+class Mutation(SupplementalDataMixin):
     mutation_type = models.CharField(max_length=3,
                                      null=True,
                                      help_text="""Use breseq mutation codes, see the genome diff site
@@ -288,39 +357,15 @@ class Mutation(models.Model):
     # arrives once with an import and never moves again.
     annotation = models.JSONField(**blank_field)
 
-    #: The records this mutation was imported from, namespaced by the component that owns
-    #: each one -- the supplemental material that came with it, in the sense a paper means
-    #: it: not the finding, but everything shipped alongside so somebody can check it::
-    #:
-    #:     {"aledb_core": {"genome_diff": { ...the verbatim breseq record... }}}
-    #:
-    #: **Two levels, and the outer one is a component rather than a Django app label** --
-    #: core is fifteen apps, so `aledb_core` names the checkout, the same unit
-    #: `about_registry` keys its entries by and for the same reason. A plugin writes under its
-    #: own name, so two of them cannot collide and neither can collide with core.
+    #: The kind of record core writes here: the verbatim GenomeDiff the mutation was
+    #: imported from.
     #:
     #: **The nesting is what enforces the verbatim rule.** This was `gd_data`, holding the
     #: record flat, and `to_gd_line()` splats every key it finds onto the line it emits for
     #: `gdtools APPLY` -- so anything a second writer put here landed in a `.gd` file. The
     #: rule was a comment, restated on `annotation`, on `MutationCall.evidence` and in
-    #: `gd_import`, because a comment is all there was. `to_gd_line` reads one key now, and
-    #: a foreign key in this column cannot reach an emitted line however it got here.
-    #:
-    #: **What belongs here**: a record that arrives with an import, shares this mutation's
-    #: lifetime, and is read whole rather than queried -- another caller's output, a VCF
-    #: record. **What does not**: anything with its own lifecycle, and anything large. This
-    #: column is loaded on every read of a row the suite works hard not to instantiate, so a
-    #: plugin storing real state should own a table with a plain foreign key instead -- see
-    #: `docs/plugin/derived-data.md`, which says so already.
-    #:
-    #: `default=dict` where the two JSON columns above it are nullable: for them "never
-    #: written" is a real state, and for a container several writers merge into the empty
-    #: dict is the right zero. A mutation with no stored record is one whose `genome_diff`
-    #: key is absent, which is what the accessor answers.
-    supplemental_data = models.JSONField(default=dict)
-
-    #: The component key core writes under, and the kind of record it writes.
-    COMPONENT = "aledb_core"
+    #: `gd_import`, because a comment is all there was. `to_gd_line` reads one key now, and a
+    #: foreign key in this column cannot reach an emitted line unless it targets this one.
     GENOME_DIFF = "genome_diff"
 
     @property
@@ -331,7 +376,7 @@ class Mutation(models.Model):
         None because every guard on the old flat column was a truthiness check, and the two
         were already interchangeable everywhere.
         """
-        return (self.supplemental_data or {}).get(self.COMPONENT, {}).get(self.GENOME_DIFF) or {}
+        return self.record(self.GENOME_DIFF)
 
     @classmethod
     def genome_diff_container(cls, record):
@@ -342,21 +387,6 @@ class Mutation(models.Model):
         would drift.
         """
         return {cls.COMPONENT: {cls.GENOME_DIFF: record}}
-
-    def set_record(self, component, kind, value, save=True):
-        """Merge one record in, leaving every other component's keys alone.
-
-        A shared column's hazard is the lost update: `save()` writes the whole thing, so two
-        writers that each read, modify and write can silently drop one another's keys. This
-        merges into the container as it stands and saves only this field.
-        """
-        container = dict(self.supplemental_data or {})
-        owned = dict(container.get(component) or {})
-        owned[kind] = value
-        container[component] = owned
-        self.supplemental_data = container
-        if save:
-            self.save(update_fields=["supplemental_data"])
 
     def __unicode__(self):
         return u"%d %s" % (self.start_position,

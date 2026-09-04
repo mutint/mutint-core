@@ -121,7 +121,7 @@ class AlignmentServingTestCase(TestCase):
         """A bare-.gd import has no alignment; the route must 404, not 500."""
         reseq = Sample.objects.create(
             population=self.reseq.population, time_point=self.reseq.time_point,
-            source_name="no-bam", person="tester")
+            source_name="no-bam")
         response = self.client.get("/mutations/alignments/%d/bam" % reseq.id)
         self.assertEqual(response.status_code, 404)
 

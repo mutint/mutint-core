@@ -180,29 +180,20 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.sample.refresh_from_db()
         self.assertEqual("renamed", self.sample.source_name)
 
-    def test_no_edit_page_can_change_who_the_sample_belongs_to(self):
-        """Changing an owner is its own workflow. The endpoint builds the row itself, so
-        a `person` in the POST is not merely ignored -- there is nowhere for it to go."""
-        self.sample.person = "original"
-        self.sample.save()
+    def test_a_bulk_save_leaves_the_other_groups_alone(self):
+        """The hazard of a shared JSON column: this form owns the `curation` group, and the
+        import owns `breseq` and `sequencing` in the same column. `update_fields` can name
+        `supplemental_data` but cannot say which part of it, so a save that rebuilt the value
+        would silently throw away what breseq measured."""
+        self.sample.set_record(Sample.COMPONENT, Sample.BRESEQ, {"mean_coverage": 68.0})
+        self.sample.set_record(Sample.COMPONENT, Sample.CURATION, {"medium_description": "M9"})
 
-        payload = self.row(self.sample, sample_name="renamed", person="impostor")
-        payload.pop("id")
-        response = self.client.post("/sample/%d/update/" % self.sample.pk, payload)
-
-        self.assertEqual(200, response.status_code, response.content)
-        self.sample.refresh_from_db()
-        self.assertEqual("renamed", self.sample.source_name)
-        self.assertEqual("original", self.sample.person)
-
-    def test_a_bulk_save_leaves_person_alone(self):
-        self.sample.person = "original"
-        self.sample.save()
-
-        self.assertEqual(200, self.bulk([self.row(self.sample, ale=3)]).status_code)
+        self.assertEqual(200, self.bulk(
+            [self.row(self.sample, ale=3, medium_description="LB")]).status_code)
 
         self.sample.refresh_from_db()
-        self.assertEqual("original", self.sample.person)
+        self.assertEqual("LB", self.sample.curation["medium_description"])
+        self.assertEqual(68.0, self.sample.breseq["mean_coverage"])
 
     def test_the_isolate_description_saves(self):
         self.single(self.sample, isolate_description="colony from day 30")

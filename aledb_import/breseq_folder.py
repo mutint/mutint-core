@@ -37,6 +37,7 @@ from aledb_import.retry import with_retry
 from aledb_import import tasks
 from aledb_import import reference as reference_io
 from aledb_import.breseq_summary import read_breseq_summary
+from aledb_sample.models import Sample
 from aledb_import import reference_store
 from aledb_import.gd_import import (
     _parse_document,
@@ -288,9 +289,10 @@ def _import_one_sample(sample_dir, sample_name, context, person):
     # statistics, which is what every web upload had before it was collected at all.
     statistics = read_breseq_summary(sample_dir)
     if statistics:
-        for field, value in statistics.items():
-            setattr(seq_experiment, field, value)
-        updated.extend(statistics)
+        # Stored as `read_breseq_summary` already builds it. This was a `setattr` per key
+        # onto four columns, which is the fan-out the columns existed for.
+        seq_experiment.set_record(Sample.COMPONENT, Sample.BRESEQ, statistics, save=False)
+        updated.append("supplemental_data")
 
     seq_experiment.save(update_fields=updated)
 

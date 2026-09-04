@@ -376,10 +376,10 @@
                        summary.json and rendered raw they run to a dozen decimals, which is
                        false precision and makes the column unreadable. The class names keep
                        the fuller meaning the headings used to carry. {% endcomment %}
-                    <td class="mean_coverage">{{ row.sample.mean_coverage|floatformat:1 }}</td>
-                    <td class="total_reads">{{ row.sample.reads }}</td>
-                    <td class="percent_reads_mapped">{{ row.sample.percentage_mapped|floatformat:1 }}%</td>
-                    <td class="average_read_length">{{ row.sample.average_read_length|floatformat:1 }}</td>
+                    <td class="mean_coverage">{{ row.sample.breseq.mean_coverage|floatformat:1 }}</td>
+                    <td class="total_reads">{{ row.sample.breseq.reads }}</td>
+                    <td class="percent_reads_mapped">{{ row.sample.breseq.percentage_mapped|floatformat:1 }}%</td>
+                    <td class="average_read_length">{{ row.sample.breseq.average_read_length|floatformat:1 }}</td>
                     {% comment %} This is the table where you notice a sample is
                        mislabelled, so it is the main way into the per-sample page. {% endcomment %}
                     {% if can_edit %}

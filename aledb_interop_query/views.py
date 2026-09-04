@@ -343,13 +343,16 @@ def _sample_info_list(reseq_queryset):
         rows.append({
             'label': reseq.label,
             'sample_type': (SAMPLE_TYPE_MIXED if reseq.is_mixed else SAMPLE_TYPE_CLONAL),
-            'sample_medium_description': reseq.medium_description,
+            'sample_medium_description': reseq.curation.get("medium_description", ""),
             'strain': population.strain,
             'population_description': population.description,
-            'library_prep': reseq.library_prep,
-            'reference_genome': reseq.reference_genome,
-            'breseq_version': reseq.breseq_version,
-            'sequencing_date': reseq.sequencing_date,
+            # **These four keys do not move**, though the fields behind them did and two
+            # of them shortened inside their group. This payload has an external consumer,
+            # so the translation lives here rather than in the key names.
+            'library_prep': reseq.sequencing.get("library_prep", ""),
+            'reference_genome': reseq.sequencing.get("reference_genome", ""),
+            'breseq_version': reseq.breseq.get("version", ""),
+            'sequencing_date': reseq.sequencing.get("date", ""),
             'experiment_name': population.experiment.name,
         })
     return rows

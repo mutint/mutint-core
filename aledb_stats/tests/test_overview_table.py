@@ -31,10 +31,11 @@ class OverviewTableTestCase(TestCase):
         self.sample = Sample.objects.create(
             population=ale, time_point=30000, name="1-1", is_clonal=True,
             source_name="1-30000-1-1",
-            mean_coverage=68.0388108058057,
-            percentage_mapped=95.5735575027531,
-            average_read_length=139.540777568556,
-            reads=1234567)
+            supplemental_data={Sample.COMPONENT: {Sample.BRESEQ: {
+                "mean_coverage": 68.0388108058057,
+                "percentage_mapped": 95.5735575027531,
+                "average_read_length": 139.540777568556,
+                "reads": 1234567}}})
 
     def _html(self):
         return self.client.get(
@@ -70,6 +71,6 @@ class OverviewTableTestCase(TestCase):
     def test_a_whole_number_still_shows_its_decimal(self):
         """floatformat:1 rather than -1, so the column stays aligned when a value
         happens to land on a whole number -- which every un-imported sample does."""
-        self.sample.mean_coverage = 42
-        self.sample.save()
+        self.sample.set_record(Sample.COMPONENT, Sample.BRESEQ,
+                               dict(self.sample.breseq, mean_coverage=42))
         self.assertIn(">42.0<", self._html())

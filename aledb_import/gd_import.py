@@ -285,7 +285,8 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     experiment = context["experiment"]
     metadata = document.metadata
 
-    # The `.gd`'s REFSEQ header names the *genome*, and lands on `Sample.reference_genome`.
+    # The `.gd`'s REFSEQ header names the *genome*, and lands on the sample's
+    # `sequencing` group.
     # It shares no spelling with `Mutation.seq_id`, which is a contig within that genome --
     # both were called `seq_id` until the column was renamed.
     reference_genome = metadata.get("REFSEQ", "") or ""
@@ -302,10 +303,13 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
         name=label,
         defaults={
             "source_name": sample_name,
-            "person": person,
             "is_clonal": is_clonal,
-            "reference_genome": reference_genome[:200],
-            "sequencing_date": sequencing_date[:200],
+            # The `[:200]` slices that stood on the next two are gone with the columns they
+            # were cut to fit; the values are stored as the header gave them.
+            "supplemental_data": {Sample.COMPONENT: {
+                Sample.SEQUENCING: {"date": sequencing_date,
+                                    "reference_genome": reference_genome},
+            }},
             # A label to read the sample by, on creation only: `label`
             # prefers it, so `Ara-2_500gen_763A` shows as itself rather than as
             # `AAra-2 F500 I763A`. Not part of the identity -- a sample found by its
@@ -341,9 +345,11 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
         is_clonal=" -p" not in (metadata.get("COMMAND", "") or ""),
-        reference_genome=(metadata.get("REFSEQ", "") or "")[:200],
-        sequencing_date=(metadata.get("CREATED", "") or "")[:200],
-        source_name=sample_name, person=person)
+        source_name=sample_name,
+        supplemental_data={Sample.COMPONENT: {
+            Sample.SEQUENCING: {"date": metadata.get("CREATED", "") or "",
+                                "reference_genome": metadata.get("REFSEQ", "") or ""},
+        }})
 
 
 def _next_sample_number(population, time_point):
@@ -513,7 +519,7 @@ def export_gd_text(seq_experiment):
     ``repeat_name`` / CON/INT ``region`` still requires the reference genbank named
     in ``#=REFSEQ``)."""
     lines = ["#=GENOME_DIFF\t1.0"]
-    reference_genome = seq_experiment.reference_genome or ""
+    reference_genome = seq_experiment.sequencing.get("reference_genome") or ""
     if reference_genome:
         lines.append("#=REFSEQ\t%s" % reference_genome)
 

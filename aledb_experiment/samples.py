@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 # Fields a user may change that do not affect identity. Editing one of these must not
 # create a row, delete a row, or trigger a rebuild -- see `rows_are_structural`.
-DESCRIPTIVE_FIELDS = ("sample_name", "person", "isolate_description",
+DESCRIPTIVE_FIELDS = ("sample_name", "isolate_description",
                       "medium_description", "rep_tags")
 # The form's field names, which are the query-string vocabulary and change with it rather
 # than with the columns behind them.
@@ -225,11 +225,16 @@ def _label(raw, label, row_label):
 
 
 # Column widths, so an over-long value is refused here rather than truncated silently on
-# write (which is what gd_import does with its [:200] slices) or rejected by MySQL with a
-# message nobody can act on. SQLite would accept any of these, so the check has to be ours.
-_MAX_LENGTHS = {"sample_name": 200, "person": 200, "isolate_description": 300,
+# write or rejected by the database with a message nobody can act on.
+#
+# **One of these no longer has a column behind it.** `medium_description` moved into
+# `supplemental_data`, where JSON imposes no width at all, so for that one this check is not
+# a mirror of the schema -- it is the only limit there is. The number is kept because a note
+# somebody types into a form still wants a bound, and because the sample edit page's
+# `maxlength` attribute mirrors it client-side.
+_MAX_LENGTHS = {"sample_name": 200, "isolate_description": 300,
                 "medium_description": 500, "rep_tags": 500}
-_FIELD_LABELS = {"sample_name": "sample name", "person": "person",
+_FIELD_LABELS = {"sample_name": "sample name",
                  "isolate_description": "description",
                  "medium_description": "medium description", "rep_tags": "tags"}
 
@@ -422,17 +427,35 @@ def rows_are_structural(parsed):
     return False
 
 
-def _write(instance, mapping, descriptive, always):
+def _write(instance, mapping, descriptive, always, curation=None):
     """Save only the columns this form sent, plus `always`.
 
     `update_fields` is built from what arrived rather than from the full column list, so a
     form with no input for a field cannot overwrite it -- see the note in `parse_rows`.
+
+    `curation` is the same idea for the fields that moved into `supplemental_data`, and it
+    needs its own argument rather than another entry in `mapping` because the destination is
+    not a column: `update_fields` can name `supplemental_data`, but it cannot say *which part
+    of it*. `set_record` is what draws that line, merging into the stored value so a curation
+    write leaves the `breseq` and `sequencing` groups beside it alone -- which is the whole
+    hazard of a shared JSON column, and what
+    `test_a_bulk_save_leaves_the_other_groups_alone` is the test for.
     """
+    from aledb_sample.models import Sample
+
     fields = list(always)
     for column, key in mapping.items():
         if key in descriptive:
             setattr(instance, column, descriptive[key])
             fields.append(column)
+
+    sent = {name: descriptive[key] for name, key in (curation or {}).items()
+            if key in descriptive}
+    if sent:
+        instance.set_record(Sample.COMPONENT, Sample.CURATION,
+                            dict(instance.curation, **sent), save=False)
+        fields.append("supplemental_data")
+
     if fields:
         instance.save(update_fields=fields)
 
@@ -477,10 +500,10 @@ def apply_rows(experiment, parsed):
         # paragraphs of comment. They are the sample's own columns now, so they simply move
         # with it and there is nothing left to decide.
         reseq.is_clonal = not descriptive["is_mixed"]
-        _write(reseq, {"source_name": "sample_name", "person": "person",
-                       "description": "isolate_description",
-                       "medium_description": "medium_description", "tags": "rep_tags"},
-               descriptive, always)
+        _write(reseq, {"source_name": "sample_name",
+                       "description": "isolate_description", "tags": "rep_tags"},
+               descriptive, always,
+               curation={"medium_description": "medium_description"})
 
         touched.append(reseq.pk)
 

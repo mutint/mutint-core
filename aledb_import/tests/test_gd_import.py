@@ -100,9 +100,9 @@ class GdImportTestCase(TestCase):
         # beside a `1-2`.
         self.assertEqual(Sample.objects.get().name, "1-1")
 
-        # gd_data captured on every row; REFSEQ propagated to the sample.
+        # The GenomeDiff record captured on every row; REFSEQ propagated to the sample.
         self.assertFalse(Mutation.objects.filter(supplemental_data__isnull=True).exists())
-        self.assertTrue(Sample.objects.get().reference_genome)
+        self.assertTrue(Sample.objects.get().sequencing.get("reference_genome"))
 
     def test_round_trip_is_apply_compatible(self):
         """Import -> export .gd -> re-parse yields the original mutations."""
