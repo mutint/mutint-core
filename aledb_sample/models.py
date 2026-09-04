@@ -584,8 +584,8 @@ class ReferenceSequences(models.Model):
         return fasta_sha256 is not None and self.fasta_sha256 == fasta_sha256
 
 
-class NcbiSequence(models.Model):
-    """One reference contig, matched -- or not -- to an NCBI nucleotide record.
+class DatabaseSequenceLink(models.Model):
+    """One reference contig, matched -- or not -- to a sequence database's record.
 
     The NCBI Sequence Viewer draws a locus from NCBI's own annotation, and it is addressed by
     accession rather than by a file. Nothing in this repo stores an accession: the importer
@@ -606,9 +606,28 @@ class NcbiSequence(models.Model):
 
     `accession` is only ever a proposal until `status` is VERIFIED. Anyone with write access
     to any experiment carrying this sequence may propose one, which is a cross-experiment
-    write and is deliberate: what decides the status is NCBI's sequence, not the proposer, so
-    a wrong proposal can become a rejected verdict but never a wrong one.
+    write and is deliberate: what decides the status is the database's sequence, not the
+    proposer, so a wrong proposal can become a rejected verdict but never a wrong one.
+
+    **`database` is why this is not called `NcbiSequence`, which it was.** Nothing above is
+    NCBI's: a contig could be confirmed against ENA, DDBJ or an institutional archive and the
+    digest key, the four failure states and "a name is never the evidence" would all read the
+    same. What is NCBI's is the *protocol* -- eutils -- and the viewer, and those live in
+    `aledb_sample.ncbi` and its templates rather than here.
+
+    **It is a discriminator, not a plugin seam.** There is exactly one value and exactly one
+    module that can speak to a database, and a second database means a sibling of `ncbi.py`
+    rather than a branch inside it. What the column buys today is only that the *table* stops
+    presuming -- adding the second one is then a row, not a migration that has to unpick a
+    unique constraint on `sha256`.
     """
+
+    #: The database this row's `accession` is an identifier in.
+    NCBI_NUCLEOTIDE = "NCBI-nucleotide"
+
+    DATABASE_CHOICES = [
+        (NCBI_NUCLEOTIDE, "NCBI Nucleotide"),
+    ]
 
     #: Nobody has said what this contig is. A missing row means this, so no backfill is ever
     #: needed -- the same convention `DerivedDataState` uses for staleness.
@@ -626,16 +645,25 @@ class NcbiSequence(models.Model):
 
     STATUS_CHOICES = [
         (UNCHECKED, "Not checked"),
-        (VERIFIED, "Verified against NCBI"),
+        (VERIFIED, "Verified against the database"),
         (MISMATCH, "Sequence does not match"),
-        (NOT_FOUND, "No such NCBI record"),
+        (NOT_FOUND, "No such record"),
         (ERROR, "Check failed"),
     ]
 
+    #: Which database `accession` names. **Capitalised, where `status` above is not**, and
+    #: that is a choice rather than an oversight: `status` is an internal vocabulary that only
+    #: this code reads, while this names a thing in the world and is how people spell it.
+    database = models.CharField(max_length=32, choices=DATABASE_CHOICES,
+                                default=NCBI_NUCLEOTIDE)
     #: aledb_import.reference.sequence_digest() of this contig -- sha256 of its uppercased
     #: bases alone. Equal to the `sha256` of an ReferenceSequences.seq_ids entry, which is
     #: how a contig finds its row.
-    sha256 = models.CharField(max_length=64, unique=True)
+    #:
+    #: **Unique with `database`, not on its own**, which it was. One digest may be recorded in
+    #: several databases -- that is the whole point of the column beside it -- and a bare
+    #: unique here would have let exactly one of them ever hold a row per sequence.
+    sha256 = models.CharField(max_length=64)
     length = models.BigIntegerField()
     #: Versioned once verified: NCBI's own `accessionversion`, not whatever was typed. An
     #: unversioned proposal that verifies is stored as the version that actually matched.
@@ -649,11 +677,16 @@ class NcbiSequence(models.Model):
     proposed_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, **blank_field)
 
     class Meta:
-        verbose_name = "NCBI sequence"
-        verbose_name_plural = "NCBI sequences"
+        constraints = [
+            models.UniqueConstraint(fields=["database", "sha256"],
+                                    name="unique_sequence_per_database"),
+        ]
+        verbose_name = "database sequence link"
+        verbose_name_plural = "database sequence links"
 
     def __str__(self):
-        return "%s (%s)" % (self.accession or self.sha256[:12], self.status)
+        return "%s %s (%s)" % (self.database,
+                               self.accession or self.sha256[:12], self.status)
 
     @property
     def is_verified(self):

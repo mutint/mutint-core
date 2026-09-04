@@ -2813,14 +2813,30 @@ is a test rather than an assumption.
 
 #### The verdict is keyed on the bases
 
-`NcbiSequence.sha256` is unique and is the whole key -- not the contig name, not the
-experiment. **The verdict therefore cannot outlive the sequence it was about**: there is no
-path by which a stored accession survives onto different bases. It also means the same genome
-in ten experiments is verified once, and that a contig **rename needs no hook**, because a
-rename does not change the bases. (Extra keys on `seq_ids[]` would have worked too, but would
-need `_update_sequence_fields` taught to carry the accession across a rewrite the way it
-already carries `aliases` -- an invariant maintained by hand, in the function whose job is to
-rewrite that list.)
+`DatabaseSequenceLink.sha256` is the key -- not the contig name, not the experiment.
+**The verdict therefore cannot outlive the sequence it was about**: there is no path by which
+a stored accession survives onto different bases. It also means the same genome in ten
+experiments is verified once, and that a contig **rename needs no hook**, because a rename
+does not change the bases. (Extra keys on `seq_ids[]` would have worked too, but would need
+`_update_sequence_fields` taught to carry the accession across a rewrite the way it already
+carries `aliases` -- an invariant maintained by hand, in the function whose job is to rewrite
+that list.)
+
+**The key is `(database, sha256)`, and `sha256` alone was unique until it wasn't.** The model
+was `NcbiSequence`; nothing above is NCBI's, though -- a contig could be confirmed against
+ENA, DDBJ or an institutional archive and the digest key, the four failure states and "a name
+is never the evidence" would all read the same. What *is* NCBI's is the protocol and the
+viewer, so **the model is named for the concept and the module for the protocol**:
+`DatabaseSequenceLink` beside `aledb_sample/ncbi.py`.
+
+`database` is a discriminator, **not a plugin seam**. There is one value,
+`"NCBI-nucleotide"`, and one module that can speak to a database; a second database is a
+sibling of `ncbi.py`, never a branch inside it. The lookups (`record_for`, `records_for`,
+`check_and_store`, `verified_contig_names`, `contig_states`) all take `database=` and default
+it, and `records_for` still keys its answer by digest alone -- unambiguous *because* the query
+is scoped. `verify()` deliberately takes no such argument: it is eutils and could not honour
+one. What the column buys today is only that the table stopped presuming, so adding the second
+database is a row rather than a migration unpicking a unique constraint.
 
 Stating an accession is a **cross-experiment write**: someone with write access to experiment
 A supplies a candidate experiment B then reads. That is safe because the candidate is not the

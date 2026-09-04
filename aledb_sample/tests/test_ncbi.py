@@ -8,11 +8,12 @@ produce on demand anyway.
 
 from unittest import mock
 
+from django.db.utils import IntegrityError
 from django.test import TestCase, override_settings
 
 from aledb_import.reference import render_fasta, sequence_digest
 from aledb_sample import ncbi
-from aledb_sample.models import NcbiSequence
+from aledb_sample.models import DatabaseSequenceLink
 
 BASES = "ACGTAAGGTTCCATGCATGCATGCAAATTTCCCGGGTACGTACGTACGTAGCTAGCTAGCTA" * 4
 DIGEST = sequence_digest(BASES)
@@ -83,7 +84,7 @@ class VerifyTestCase(TestCase):
             _Response(payload=_summary()),
             _Response(text=render_fasta([("NC_000913", BASES)])),
         ])
-        self.assertEqual(status, NcbiSequence.VERIFIED)
+        self.assertEqual(status, DatabaseSequenceLink.VERIFIED)
         self.assertIn("matches this contig exactly", detail)
         self.assertEqual(get.call_count, 2)
 
@@ -108,7 +109,7 @@ class VerifyTestCase(TestCase):
         (status, _accession, detail), get = self._verify([
             _Response(payload=_summary(slen=LENGTH + 1000)),
         ])
-        self.assertEqual(status, NcbiSequence.MISMATCH)
+        self.assertEqual(status, DatabaseSequenceLink.MISMATCH)
         self.assertEqual(get.call_count, 1)
         self.assertIn("different sequences", detail)
 
@@ -120,7 +121,7 @@ class VerifyTestCase(TestCase):
             _Response(payload=_summary()),
             _Response(text=render_fasta([("NC_000913", other)])),
         ])
-        self.assertEqual(status, NcbiSequence.MISMATCH)
+        self.assertEqual(status, DatabaseSequenceLink.MISMATCH)
         self.assertEqual(get.call_count, 2)
         self.assertIn("not the same sequence", detail)
 
@@ -128,7 +129,7 @@ class VerifyTestCase(TestCase):
         (status, _accession, detail), _get = self._verify([
             _Response(payload={"result": {"uids": []}}),
         ])
-        self.assertEqual(status, NcbiSequence.NOT_FOUND)
+        self.assertEqual(status, DatabaseSequenceLink.NOT_FOUND)
         self.assertIn("no nucleotide record", detail)
 
     def test_a_truncated_download_is_an_error_not_a_mismatch(self):
@@ -137,7 +138,7 @@ class VerifyTestCase(TestCase):
             _Response(payload=_summary()),
             _Response(text=render_fasta([("NC_000913", BASES[:100])])),
         ])
-        self.assertEqual(status, NcbiSequence.ERROR)
+        self.assertEqual(status, DatabaseSequenceLink.ERROR)
         self.assertIn("but sent", detail)
 
     def test_a_network_failure_is_an_error(self):
@@ -145,23 +146,23 @@ class VerifyTestCase(TestCase):
         with mock.patch("aledb_sample.ncbi.requests.get",
                         side_effect=requests.ConnectionError("no route to host")):
             status, _accession, detail = ncbi.verify(DIGEST, LENGTH, "NC_000913")
-        self.assertEqual(status, NcbiSequence.ERROR)
+        self.assertEqual(status, DatabaseSequenceLink.ERROR)
         self.assertIn("Could not reach NCBI", detail)
 
     def test_a_non_json_answer_is_an_error(self):
         (status, _accession, detail), _get = self._verify([_Response(payload=None)])
-        self.assertEqual(status, NcbiSequence.ERROR)
+        self.assertEqual(status, DatabaseSequenceLink.ERROR)
         self.assertIn("not JSON", detail)
 
     def test_an_http_error_is_an_error(self):
         (status, _accession, _detail), _get = self._verify([_Response(status_code=500)])
-        self.assertEqual(status, NcbiSequence.ERROR)
+        self.assertEqual(status, DatabaseSequenceLink.ERROR)
 
     def test_an_empty_accession_asks_nobody_anything(self):
         """Nothing is inferred, so a contig nobody has named makes no request at all."""
         with mock.patch("aledb_sample.ncbi.requests.get") as get:
             status, accession, detail = ncbi.verify(DIGEST, LENGTH, "")
-        self.assertEqual(status, NcbiSequence.UNCHECKED)
+        self.assertEqual(status, DatabaseSequenceLink.UNCHECKED)
         self.assertEqual(accession, "")
         self.assertEqual(detail, "")
         get.assert_not_called()
@@ -171,7 +172,7 @@ class VerifyTestCase(TestCase):
         (status, _accession, detail), get = self._verify([
             _Response(payload=_summary()),
         ])
-        self.assertEqual(status, NcbiSequence.ERROR)
+        self.assertEqual(status, DatabaseSequenceLink.ERROR)
         self.assertEqual(get.call_count, 1)
         self.assertIn("ceiling", detail)
 
@@ -183,10 +184,10 @@ class CheckAndStoreTestCase(TestCase):
         with mock.patch("aledb_sample.ncbi.requests.get",
                         side_effect=[_Response(payload=_summary(slen=1))]):
             record = ncbi.check_and_store(DIGEST, LENGTH, "NC_000913")
-        self.assertEqual(record.status, NcbiSequence.MISMATCH)
+        self.assertEqual(record.status, DatabaseSequenceLink.MISMATCH)
         self.assertTrue(record.detail)
         self.assertIsNotNone(record.checked_at)
-        self.assertEqual(NcbiSequence.objects.count(), 1)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 1)
 
     def test_rechecking_updates_the_same_row(self):
         with mock.patch("aledb_sample.ncbi.requests.get",
@@ -197,6 +198,51 @@ class CheckAndStoreTestCase(TestCase):
                 _Response(text=render_fasta([("NC_000913", BASES)]))]):
             record = ncbi.check_and_store(DIGEST, LENGTH, "NC_000913")
 
-        self.assertEqual(NcbiSequence.objects.count(), 1)
-        self.assertEqual(record.status, NcbiSequence.VERIFIED)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 1)
+        self.assertEqual(record.status, DatabaseSequenceLink.VERIFIED)
         self.assertTrue(record.is_verified)
+
+
+class DatabaseScopeTestCase(TestCase):
+    """What the `database` column bought, which is only a schema property today.
+
+    There is one database and one module that can speak to one, so nothing in the product
+    exercises a second value. These two assert the *table* no longer presumes -- which is the
+    whole deliverable, and which no other test can see.
+    """
+
+    OTHER = "ENA"
+
+    def test_one_digest_can_be_linked_in_two_databases(self):
+        """`sha256` was `unique=True`, so this was a schema error rather than a design
+        choice. The key is `(database, sha256)` now: the same bases may be a record in
+        several databases, and each is its own verdict."""
+        DatabaseSequenceLink.objects.create(
+            sha256=DIGEST, length=LENGTH, accession="NC_000913.3",
+            status=DatabaseSequenceLink.VERIFIED)
+        DatabaseSequenceLink.objects.create(
+            database=self.OTHER, sha256=DIGEST, length=LENGTH, accession="U00096.3",
+            status=DatabaseSequenceLink.VERIFIED)
+
+        self.assertEqual(2, DatabaseSequenceLink.objects.filter(sha256=DIGEST).count())
+
+    def test_the_same_digest_twice_in_one_database_is_still_refused(self):
+        """The other half. Loosening the key must not have loosened it to nothing -- a
+        second verdict for one sequence in one database is still a contradiction."""
+        DatabaseSequenceLink.objects.create(sha256=DIGEST, length=LENGTH)
+
+        with self.assertRaises(IntegrityError):
+            DatabaseSequenceLink.objects.create(sha256=DIGEST, length=LENGTH)
+
+    def test_a_lookup_does_not_see_another_databases_verdict(self):
+        """The reason every lookup grew a `database` argument. Unscoped, a row somebody
+        recorded in another database would answer here -- so a contig would read as verified
+        against NCBI on the strength of an ENA accession, and the page would draw NCBI's
+        viewer for it."""
+        DatabaseSequenceLink.objects.create(
+            database=self.OTHER, sha256=DIGEST, length=LENGTH, accession="U00096.3",
+            status=DatabaseSequenceLink.VERIFIED)
+
+        self.assertIsNone(ncbi.record_for(DIGEST))
+        self.assertEqual({}, ncbi.records_for([DIGEST]))
+        self.assertIsNotNone(ncbi.record_for(DIGEST, database=self.OTHER))

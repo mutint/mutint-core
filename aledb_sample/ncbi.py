@@ -1,7 +1,7 @@
 """Confirming that a reference contig really is the NCBI record somebody said it was.
 
 The NCBI Sequence Viewer draws a locus from NCBI's own annotation, addressed by accession.
-Nothing in this repo stores an accession -- see `NcbiSequence`'s docstring for why -- so one
+Nothing in this repo stores an accession -- see `DatabaseSequenceLink`'s docstring for why -- so one
 has to be supplied by a person, and the whole value of this module is that a supplied name is
 *not* taken at its word.
 
@@ -18,6 +18,13 @@ consequences worth knowing before extending it:
 The comparison is exact: sha256 of the uppercased bases, against the digest
 `aledb_import.reference.sequence_entries` already stored per contig. No local file is opened
 and no alignment is performed -- the record either is our sequence or it is not.
+
+**This module is one database's implementation, and the model is not.**
+`DatabaseSequenceLink` carries a `database` column because the *idea* -- a verdict keyed on
+the bases -- is not NCBI's; everything below is eutils and nothing else. So the lookups here
+take a `database` and default it to NCBI's nucleotide database, while `verify` does not take
+one at all: it could not honour it. A second database is a sibling of this file, not a branch
+inside it.
 """
 
 import hashlib
@@ -27,7 +34,7 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 
-from aledb_sample.models import ReferenceSequences, NcbiSequence
+from aledb_sample.models import DatabaseSequenceLink, ReferenceSequences
 
 logger = logging.getLogger(__name__)
 
@@ -173,72 +180,85 @@ def verify(sha256, length, accession):
     """
     accession = (accession or "").strip()
     if not accession:
-        return NcbiSequence.UNCHECKED, "", ""
+        return DatabaseSequenceLink.UNCHECKED, "", ""
 
     try:
         summary = _summary(accession)
     except _Unreachable as error:
-        return NcbiSequence.ERROR, accession, "Could not reach NCBI: %s" % error
+        return DatabaseSequenceLink.ERROR, accession, "Could not reach NCBI: %s" % error
 
     if summary is None:
-        return (NcbiSequence.NOT_FOUND, accession,
+        return (DatabaseSequenceLink.NOT_FOUND, accession,
                 "NCBI has no nucleotide record under %s." % accession)
 
     versioned, ncbi_length = summary
     if ncbi_length != length:
-        return (NcbiSequence.MISMATCH, versioned,
+        return (DatabaseSequenceLink.MISMATCH, versioned,
                 "%s is %s bases; this contig is %s. They are different sequences."
                 % (versioned, format(ncbi_length, ",d"), format(length, ",d")))
 
     try:
         digest, counted = _fetch_digest(versioned, ncbi_length)
     except _Unreachable as error:
-        return NcbiSequence.ERROR, versioned, "Could not reach NCBI: %s" % error
+        return DatabaseSequenceLink.ERROR, versioned, "Could not reach NCBI: %s" % error
 
     if counted != length:
         # The summary and the FASTA disagreed, so we cannot say what we compared.
-        return (NcbiSequence.ERROR, versioned,
+        return (DatabaseSequenceLink.ERROR, versioned,
                 "NCBI reported %s bases for %s but sent %s."
                 % (format(ncbi_length, ",d"), versioned, format(counted, ",d")))
 
     if digest != sha256:
-        return (NcbiSequence.MISMATCH, versioned,
+        return (DatabaseSequenceLink.MISMATCH, versioned,
                 "%s is the same length as this contig but not the same sequence -- most "
                 "likely a different strain or assembly." % versioned)
 
-    return (NcbiSequence.VERIFIED, versioned,
+    return (DatabaseSequenceLink.VERIFIED, versioned,
             "%s matches this contig exactly (%s bases)." % (versioned, format(length, ",d")))
 
 
-def record_for(sha256):
+def record_for(sha256, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
     """The stored verdict for a contig digest, or None when nobody has checked it."""
     if not sha256:
         return None
-    return NcbiSequence.objects.filter(sha256=sha256).first()
+    return DatabaseSequenceLink.objects.filter(database=database, sha256=sha256).first()
 
 
-def records_for(digests):
-    """`{sha256: NcbiSequence}` for many contigs at once.
+def records_for(digests, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
+    """`{sha256: DatabaseSequenceLink}` for many contigs at once.
 
     One query, because the mutation table asks per row and an experiment's table can run to
     hundreds of them.
+
+    **Keyed by digest alone, which is only unambiguous because the query is scoped.** A digest
+    may hold a row per database; `database` is what makes at most one of them reachable here,
+    so a caller cannot be handed some other database's verdict under a key that does not say
+    so.
     """
     wanted = [digest for digest in digests if digest]
     if not wanted:
         return {}
     return {record.sha256: record
-            for record in NcbiSequence.objects.filter(sha256__in=wanted)}
+            for record in DatabaseSequenceLink.objects.filter(
+                database=database, sha256__in=wanted)}
 
 
-def check_and_store(sha256, length, accession, user=None):
-    """Run `verify` and persist the verdict, returning the `NcbiSequence` row.
+def check_and_store(sha256, length, accession, user=None,
+                    database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
+    """Run `verify` and persist the verdict, returning the `DatabaseSequenceLink` row.
 
     The row is written whatever the outcome, including the failures: a MISMATCH somebody has
     already paid for should not be re-fetched by the next reader, and an ERROR is worth
     keeping so `--list` can show what went wrong without anybody watching a page at the time.
+
+    `database` reaches the row's key and *not* `verify`, which speaks eutils and could not
+    honour another one. Passing something else here would store an NCBI verdict under another
+    database's name -- so the parameter exists for the day this file has a sibling, and until
+    then only the default is correct.
     """
     status, resolved, detail = verify(sha256, length, accession)
-    record, _created = NcbiSequence.objects.update_or_create(
+    record, _created = DatabaseSequenceLink.objects.update_or_create(
+        database=database,
         sha256=sha256,
         defaults={
             "length": length,
@@ -248,13 +268,13 @@ def check_and_store(sha256, length, accession, user=None):
             "checked_at": timezone.now(),
             "proposed_by": user if (user is not None and user.is_authenticated) else None,
         })
-    if status != NcbiSequence.VERIFIED:
+    if status != DatabaseSequenceLink.VERIFIED:
         logger.info("NCBI check for %s (%s): %s -- %s", accession, sha256[:12], status, detail)
     return record
 
 
-def verified_contig_names(experiment):
-    """The contig names of `experiment` confirmed to be an NCBI record, as a set.
+def verified_contig_names(experiment, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
+    """The contig names of `experiment` confirmed to be a record in `database`, as a set.
 
     Empty when the experiment has no reference, when nothing has been checked, or when a
     check failed -- all of which mean the same thing to a caller: do not offer a link to
@@ -276,7 +296,7 @@ def verified_contig_names(experiment):
         return frozenset()
 
     return frozenset(by_digest[digest]
-                     for digest, record in records_for(by_digest).items()
+                     for digest, record in records_for(by_digest, database).items()
                      if record.is_verified)
 
 
@@ -307,8 +327,8 @@ def contig_entry(experiment, seq_id):
     return None
 
 
-def contig_states(experiment):
-    """Every contig of `experiment`'s reference with its NCBI verdict, for the Reference page.
+def contig_states(experiment, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
+    """Every contig of `experiment`'s reference with its verdict, for the Reference page.
 
     One query for the verdicts however many contigs there are. `sha256` is deliberately not
     in what comes back: this feeds a template, and the digest is identity material.
@@ -325,7 +345,7 @@ def contig_states(experiment):
         return []
 
     entries = list(reference.seq_ids or [])
-    verdicts = records_for([entry.get("sha256") for entry in entries])
+    verdicts = records_for([entry.get("sha256") for entry in entries], database)
 
     states = []
     for entry in entries:
@@ -340,7 +360,7 @@ def contig_states(experiment):
             "aliases": list(entry.get("aliases") or []),
             "checkable": bool(entry.get("sha256") and entry.get("length")),
             "record": record,
-            "status": record.status if record else NcbiSequence.UNCHECKED,
+            "status": record.status if record else DatabaseSequenceLink.UNCHECKED,
             "accession": record.accession if record else "",
             "detail": record.detail if record else "",
             "is_verified": bool(record and record.is_verified),

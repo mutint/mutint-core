@@ -20,7 +20,7 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 
 from aledb_sample import ncbi
-from aledb_sample.models import ReferenceSequences, NcbiSequence
+from aledb_sample.models import DatabaseSequenceLink, ReferenceSequences
 
 #: Seconds between requests. NCBI allows 3/second unauthenticated and 10 with a key; this is
 #: comfortably under the slower limit and this command is never in a hurry.
@@ -134,7 +134,7 @@ class Command(BaseCommand):
                 continue
             seen.add((name, sha256))
             record = records.get(sha256)
-            status = record.status if record else NcbiSequence.UNCHECKED
+            status = record.status if record else DatabaseSequenceLink.UNCHECKED
             accession = (record.accession if record else "") or "-"
             line = "%-24s %-14s %-22s %s" % (name[:24], str(experiment.id)[:14],
                                              accession[:22], status)

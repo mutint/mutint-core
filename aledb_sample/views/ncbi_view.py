@@ -29,7 +29,8 @@ from aledb_sample import ncbi
 from aledb_sample.breseq_report import build_rows, is_mixed
 from aledb_sample.locus import buffered_extent, mutation_extent
 from aledb_sample.views.common import get_experiment, no_experiment_selected
-from aledb_sample.models import ReferenceSequences, Mutation, MutationCall, NcbiSequence
+from aledb_sample.models import (DatabaseSequenceLink, ReferenceSequences, Mutation,
+                                 MutationCall)
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ def ncbi_view(request):
         # the reasons stay beside the data that determines them.
         "has_reference": contig is not None,
         "record": record,
-        "status": record.status if record else NcbiSequence.UNCHECKED,
+        "status": record.status if record else DatabaseSequenceLink.UNCHECKED,
         "detail": record.detail if record else "",
         "accession": record.accession if record else "",
         "is_verified": bool(record and record.is_verified),

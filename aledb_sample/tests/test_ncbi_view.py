@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import (ReferenceSequences, Mutation, NcbiSequence, MutationCall,
+from aledb_sample.models import (ReferenceSequences, Mutation, DatabaseSequenceLink, MutationCall,
                               Sample)
 
 SVIEWER_SCRIPT = "sviewer/js/sviewer.js"
@@ -53,9 +53,9 @@ class _Fixture(TestCase):
 
     def _verify_contig(self, accession="NC_000913.3"):
         """Mark this experiment's contig verified, as a successful check would."""
-        return NcbiSequence.objects.create(
+        return DatabaseSequenceLink.objects.create(
             sha256=self.entry["sha256"], length=self.entry["length"],
-            accession=accession, status=NcbiSequence.VERIFIED,
+            accession=accession, status=DatabaseSequenceLink.VERIFIED,
             detail="matches", checked_at=timezone.now())
 
     def _get(self, mutation_id=None, **extra):
@@ -73,7 +73,7 @@ class UnverifiedTestCase(_Fixture):
 
     def test_nothing_is_guessed_from_the_contig_name(self):
         """The name may look like an accession; that is not evidence and must not prefill."""
-        self.assertEqual(NcbiSequence.objects.count(), 0)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
         html = self._get().content.decode("utf-8")
         # The contig is named in the page, but the box that would carry an accession is
         # empty -- matched on the input itself rather than on a bare value="" anywhere.
@@ -83,9 +83,9 @@ class UnverifiedTestCase(_Fixture):
         self.assertNotIn(self.entry["id"], match.group(0))
 
     def test_a_mismatch_says_so_and_draws_nothing(self):
-        NcbiSequence.objects.create(
+        DatabaseSequenceLink.objects.create(
             sha256=self.entry["sha256"], length=self.entry["length"],
-            accession="NC_000913.3", status=NcbiSequence.MISMATCH,
+            accession="NC_000913.3", status=DatabaseSequenceLink.MISMATCH,
             detail="NC_000913.3 is 4,641,652 bases; this contig is 200.",
             checked_at=timezone.now())
         html = self._get().content.decode("utf-8")
@@ -93,9 +93,9 @@ class UnverifiedTestCase(_Fixture):
         self.assertIn("this contig is 200", html)
 
     def test_an_error_draws_nothing(self):
-        NcbiSequence.objects.create(
+        DatabaseSequenceLink.objects.create(
             sha256=self.entry["sha256"], length=self.entry["length"],
-            accession="NC_000913.3", status=NcbiSequence.ERROR,
+            accession="NC_000913.3", status=DatabaseSequenceLink.ERROR,
             detail="Could not reach NCBI: timed out", checked_at=timezone.now())
         html = self._get().content.decode("utf-8")
         self.assertNotIn(SVIEWER_SCRIPT, html)
@@ -202,7 +202,7 @@ class AccessTestCase(_Fixture):
             "experiment_id": self.experiment.id,
             "seq_id": self.entry["id"], "accession": "NC_000913.3"})
         self.assertIn(response.status_code, (403, 404))
-        self.assertEqual(NcbiSequence.objects.count(), 0)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
 
     def test_a_locked_experiment_refuses_the_check(self):
         """The case `can_edit_project` would have missed: a predicate handed the project
@@ -214,14 +214,14 @@ class AccessTestCase(_Fixture):
             "experiment_id": self.experiment.id,
             "seq_id": self.entry["id"], "accession": "NC_000913.3"})
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(NcbiSequence.objects.count(), 0)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
 
     def test_an_empty_accession_is_refused_without_asking_ncbi(self):
         response = self.client.post("/mutations/ncbi/check", {
             "experiment_id": self.experiment.id,
             "seq_id": self.entry["id"], "accession": "  "})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(NcbiSequence.objects.count(), 0)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
 
 
 class RenameTestCase(_Fixture):
