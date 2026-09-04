@@ -264,7 +264,7 @@ def can_curate(user, experiment):
 def can_add_experiment_filter(user, experiment):
     """Curating -- tagging a mutation, editing an experiment filter -- is a write.
 
-    `TechnicalReplicate.tags` and the experiment filter are read by four different mutation
+    The sample's `tags` and the experiment filter are read by four different mutation
     tables, so a change here is a change to what everyone else sees. It used to be granted by
     the plain view permission, which let a read-only visitor rewrite shared state.
 

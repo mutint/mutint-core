@@ -19,7 +19,7 @@ from django.test import TestCase
 from aledb_dashboard.models import SampleCounts
 from aledb_dashboard.util import rebuild_sample_counts
 from aledb_experiment.models import (AleExperiment, AleId, Flask,
-                                     Isolate, Media, TechnicalReplicate)
+                                     Media)
 from aledb_seq.models import ResequencingExperiment
 
 
@@ -30,16 +30,13 @@ class DashboardCountTestCase(TestCase):
 )
 
     def make_sample(self, ale_label, flask_number=1, isolate_number=1):
-        """The full A/F/I/R chain, built by hand -- `gd_import` needs a reference and a store."""
+        """The full A/F/I chain, built by hand -- `gd_import` needs a reference and a store."""
         ale, _ = AleId.objects.get_or_create(ale_experiment=self.experiment,
                                              ale_id=str(ale_label))
         flask, _ = Flask.objects.get_or_create(ale_id=ale, flask_number=flask_number,
                                                defaults={"media": Media.objects.create()})
-        isolate = Isolate.objects.create(flask=flask,
-                                         is_population=False,
-                                         isolate_number=str(isolate_number))
-        tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
-        return ResequencingExperiment.objects.create(tech_rep=tech_rep)
+        return ResequencingExperiment.objects.create(
+            flask=flask, is_population=False, isolate_number=str(isolate_number))
 
     def counts(self):
         rebuild_sample_counts()

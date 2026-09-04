@@ -155,9 +155,8 @@ class BreseqTablePageTestCase(TestCase):
     # --- frequency column -----------------------------------------------------
 
     def _make_population(self):
-        isolate = self.reseq.tech_rep.isolate
-        isolate.is_population = True
-        isolate.save()
+        self.reseq.is_population = True
+        self.reseq.save()
 
     def test_a_clonal_sample_has_no_frequency_column(self):
         """Asserted by header count, not by matching markup.
@@ -196,9 +195,8 @@ class BreseqTablePageTestCase(TestCase):
         """
         for population in (False, True):
             with self.subTest(population=population):
-                isolate = self.reseq.tech_rep.isolate
-                isolate.is_population = population
-                isolate.save()
+                self.reseq.is_population = population
+                self.reseq.save()
                 content = self.content(**self._empty_filter_params())
 
                 self.assertIn("No mutations passed the current filters", content)
@@ -206,9 +204,8 @@ class BreseqTablePageTestCase(TestCase):
                 self.assertIn('colspan="%d"' % headers, content)
 
     def test_a_polymorphic_call_is_shaded(self):
-        isolate = self.reseq.tech_rep.isolate
-        isolate.is_population = True
-        isolate.save()
+        self.reseq.is_population = True
+        self.reseq.save()
         observed = ObservedMutation.objects.order_by("id").first()
         observed.frequency = 0.42
         observed.save()

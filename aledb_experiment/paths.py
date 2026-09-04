@@ -2,8 +2,7 @@
 
 Every table in the suite hangs off one chain::
 
-    ObservedMutation -> ResequencingExperiment -> TechnicalReplicate
-                     -> Isolate -> Flask -> AleId -> AleExperiment
+    ObservedMutation -> ResequencingExperiment -> Flask -> AleId -> AleExperiment
 
 so almost every query has to spell some part of it as a lookup string. Before this module
 there were **39 hand-written copies** of that spelling across eight core files and three
@@ -17,6 +16,13 @@ both called ``ale_id`` -- `AleExperiment`'s *primary key* and `AleId`'s *text la
 Naming them apart here (`EXPERIMENT_PK`, `ALE_LABEL`) is what turns that rename from an
 audit of 39 strings into an edit of one constant, and it is why the two are separate names
 even though they are the same word today.
+
+**The chain used to be two segments longer.** `Isolate` and `TechnicalReplicate` sat between
+the sample and its flask, so this read
+``tech_rep__isolate__flask__ale_id__ale_experiment``; both are folded into the sample now.
+That is why `to_isolate()` and `to_replicate()` are gone rather than renamed -- what they
+reached is on the sample itself, so `to_sample()` is the whole of it and usually resolves to
+nothing at all.
 
 Usage::
 
@@ -40,15 +46,13 @@ FROM_CHANGE = "sample"
 
 #: The chain, segment by segment, from a sample up to the experiment. Everything below is
 #: composed from this, so a queryset that starts **part-way along** it gets the same
-#: definition rather than a second hand-written one. That gap was real: the metadata parser
-#: is rooted at a `TechnicalReplicate` and spelled `isolate__flask__ale_id__ale_experiment`
-#: by hand, so it survived a sweep that searched for the chain's first segment.
-SEGMENTS = ("tech_rep", "isolate", "flask", "ale_id", "ale_experiment")
+#: definition rather than a second hand-written one.
+SEGMENTS = ("flask", "ale_id", "ale_experiment")
 
 #: Where a queryset starts, as a position in SEGMENTS. `prefix` is for roots that sit
 #: *before* a sample -- an observation, a change-log row -- and `root` for roots along the
 #: chain itself.
-ROOTS = {"sample": 0, "tech_rep": 1, "isolate": 2, "flask": 3, "ale": 4}
+ROOTS = {"sample": 0, "flask": 1, "ale": 2}
 
 
 def chain(root="sample", upto="ale_experiment"):
@@ -77,11 +81,9 @@ ALE_LABEL = "ale_id"
 #: `Flask`'s ordinal. Labelled "Time point" everywhere a person can see it.
 FLASK_ORDINAL = "flask_number"
 
-#: `Isolate`'s label within its flask.
-ISOLATE_LABEL = "isolate_number"
-
-#: `TechnicalReplicate`'s ordinal.
-REPLICATE_ORDINAL = "tech_rep_number"
+#: The sample's label within its flask: `1`, `763A`, `1-2`. Still spelled `isolate_number`,
+#: which is the column `Isolate` brought with it into the merge.
+SAMPLE_LABEL = "isolate_number"
 
 
 #: The same chain read **downward**. Django spells a reverse relation with the lowercased
@@ -89,10 +91,10 @@ REPLICATE_ORDINAL = "tech_rep_number"
 #: `SEGMENTS` reversed, and that is exactly why three files hand-wrote it independently
 #: (`aledb_dashboard/util.py`, `aledb_seq/views/common.py`, `aledb-phylogeny/selection.py`)
 #: while every upward traversal in the suite came from here.
-DOWN_SEGMENTS = ("aleid", "flask", "isolate", "technicalreplicate", "resequencingexperiment")
+DOWN_SEGMENTS = ("aleid", "flask", "resequencingexperiment")
 
 #: Where a downward traversal starts, as a position in DOWN_SEGMENTS.
-DOWN_ROOTS = {"experiment": 0, "ale": 1, "flask": 2, "isolate": 3, "replicate": 4}
+DOWN_ROOTS = {"experiment": 0, "ale": 1, "flask": 2}
 
 
 def down_chain(root="ale", upto="resequencingexperiment"):
@@ -112,16 +114,18 @@ def join(*steps):
     return "__".join(step.strip("_") for step in steps if step and step.strip("_"))
 
 
-def to_replicate(prefix="", field="", root="sample"):
-    """The technical replicate. Disappears entirely when the layer is collapsed into the
-    sample -- routing its two live callers through here is what makes that one edit."""
-    return join(prefix, chain(root, "tech_rep"), field)
+def to_sample(prefix="", field=""):
+    """A field on the sample row itself.
+
+    From a sample-rooted queryset this is just the field name, so the call looks like it is
+    doing nothing -- and that is the point. It used to be `to_isolate()`, a real two-segment
+    hop; the merge made those columns local without making the call sites wrong.
+    """
+    return join(prefix, field)
 
 
-def to_isolate(prefix="", field="", root="sample"):
-    """The isolate. Becomes `to_sample()` when `Isolate` is renamed -- today "sample" already
-    means a `ResequencingExperiment`, which is why it cannot be called that yet."""
-    return join(prefix, chain(root, "isolate"), field)
+def to_sample_label(prefix=""):
+    return join(prefix, SAMPLE_LABEL)
 
 
 def to_flask(prefix="", field="", root="sample"):
@@ -148,11 +152,3 @@ def to_ale_label(prefix="", root="sample"):
 
 def to_flask_ordinal(prefix="", root="sample"):
     return join(prefix, chain(root, "flask"), FLASK_ORDINAL)
-
-
-def to_isolate_label(prefix="", root="sample"):
-    return join(prefix, chain(root, "isolate"), ISOLATE_LABEL)
-
-
-def to_replicate_ordinal(prefix="", root="sample"):
-    return join(prefix, chain(root, "tech_rep"), REPLICATE_ORDINAL)

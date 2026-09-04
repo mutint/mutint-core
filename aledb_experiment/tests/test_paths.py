@@ -99,24 +99,25 @@ class JoinTestCase(TestCase):
 class RootTestCase(TestCase):
     """A queryset that starts part-way along the chain gets the same definition.
 
-    This is not hypothetical tidiness. `aledb_metadata.parser` is rooted at a
-    `TechnicalReplicate` and spelled `isolate__flask__ale_id__ale_experiment__ale_id` by
-    hand -- so it survived a sweep that searched for the chain's *first* segment, and was
-    still filtering on a column that no longer existed. It failed loudly, but only because
-    a test happened to cover that parser.
+    This is not hypothetical tidiness. `aledb_metadata.parser` was rooted part-way along
+    and spelled its half of the chain by hand -- so it survived a sweep that searched for
+    the chain's *first* segment, and was still filtering on a column that no longer
+    existed. It failed loudly, but only because a test happened to cover that parser.
+
+    There are two roots above the sample now rather than four: `Isolate` and
+    `TechnicalReplicate` are folded into it, so the chain is three segments and a "root" of
+    `sample` reaches the whole of it.
     """
 
     def test_each_root_drops_the_segments_before_it(self):
-        self.assertEqual("tech_rep__isolate__flask__ale_id__ale_experiment",
-                         paths.chain("sample"))
-        self.assertEqual("isolate__flask__ale_id__ale_experiment", paths.chain("tech_rep"))
-        self.assertEqual("flask__ale_id__ale_experiment", paths.chain("isolate"))
+        self.assertEqual("flask__ale_id__ale_experiment", paths.chain("sample"))
         self.assertEqual("ale_id__ale_experiment", paths.chain("flask"))
+        self.assertEqual("ale_experiment", paths.chain("ale"))
 
     def test_a_rooted_path_resolves(self):
-        from aledb_experiment.models import Isolate, TechnicalReplicate
+        from aledb_experiment.models import AleId, Flask
 
-        for model, root in ((TechnicalReplicate, "tech_rep"), (Isolate, "isolate")):
+        for model, root in ((Flask, "flask"), (AleId, "ale")):
             for path in (paths.to_experiment_id(root=root), paths.to_ale_label(root=root)):
                 with self.subTest(model=model.__name__, path=path):
                     try:

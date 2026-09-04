@@ -216,9 +216,7 @@ class AddTestCase(EditorTestCase):
     def test_a_sample_from_another_experiment_is_refused(self):
         """Targets are resolved through this experiment's own sample list, so an id from
         elsewhere matches nothing and a hand-built POST cannot reach across projects."""
-        from aledb_experiment.models import (
-            AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
-        )
+        from aledb_experiment.models import AleExperiment, AleId, Flask
         from aledb_seq.models import ResequencingExperiment
 
         created = self.client.post(
@@ -226,10 +224,8 @@ class AddTestCase(EditorTestCase):
         other = AleExperiment.objects.get(pk=created["experiment_id"])
         ale = AleId.objects.create(ale_experiment=other, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=self.context["media"])
-        isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,
-)
-        replicate = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
-        stranger = ResequencingExperiment.objects.create(tech_rep=replicate)
+        stranger = ResequencingExperiment.objects.create(
+            flask=flask, isolate_number=1, is_population=False)
 
         response = self.add(seq_id="NC_000913", position=5000, new_seq="T",
                             targets=[stranger])

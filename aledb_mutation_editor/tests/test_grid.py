@@ -158,8 +158,7 @@ class GridPageTestCase(EditorTestCase):
     def test_an_observation_from_another_experiment_is_refused(self):
         """The endpoint scopes ids through the experiment, so a hand-built POST cannot reach
         across projects even with the grid handing it a longer list."""
-        from aledb_experiment.models import AleExperiment, AleId, Flask, Isolate, \
-            TechnicalReplicate
+        from aledb_experiment.models import AleExperiment, AleId, Flask
         from aledb_import.gd_import import prepare_experiment_by_id
         from aledb_seq.models import ResequencingExperiment
 
@@ -169,10 +168,8 @@ class GridPageTestCase(EditorTestCase):
         context = prepare_experiment_by_id(other.id)
         ale = AleId.objects.create(ale_experiment=other, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=context["media"])
-        isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,
-)
-        replicate = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
-        sample = ResequencingExperiment.objects.create(tech_rep=replicate, sample_name="x")
+        sample = ResequencingExperiment.objects.create(
+            flask=flask, isolate_number=1, is_population=False, sample_name="x")
         outside = ObservedMutation.objects.create(
             sequencing_experiment=sample,
             mutation=self.make_mutation(position=999, sequence_change="T>A",

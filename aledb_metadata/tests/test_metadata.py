@@ -1,12 +1,11 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from aledb_experiment.models import AleExperiment,\
-    Isolate,\
-    TechnicalReplicate,\
     Media,\
     Flask,\
     AleId,\
     Project
+from aledb_seq.models import ResequencingExperiment
 from aledb_metadata.parser import parse_metadata_post_experiment_upload, _get_media_supplement_description
 from datetime import datetime
 import os
@@ -40,26 +39,25 @@ class TestParser(TestCase):
         flask = Flask.objects.create(media=media,
                                      ale_id=ale_id,
                                      flask_number=90)
-        isolate = Isolate.objects.create(flask=flask,
-                                         isolate_number=0,
-                                         is_population=False)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=1)
+        # `7-90-0-1` is one sample now, labelled `0-1`: the file's I and R keys and their
+        # values are unchanged, and `sample_label` is what joins them.
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-1",
+                                              is_population=False)
 
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
         parse_metadata_post_experiment_upload(path + "test1/", self.ale_exp.pk)
         self.assertEqual(2, Media.objects.all().count())
-        tech_rep_queryset = TechnicalReplicate.objects.all()
+        tech_rep_queryset = ResequencingExperiment.objects.all()
         self.assertEqual(1, tech_rep_queryset.count())
-        test1_media = tech_rep_queryset[0].isolate.flask.media.carbon_source
+        test1_media = tech_rep_queryset[0].flask.media.carbon_source
         self.assertEqual(test1_media, "Glucose(4)")
 
-        # Tries to change the media of the same tech_rep.isolate.flask.
+        # Tries to change the media of the same sample's flask.
         parse_metadata_post_experiment_upload(path + "test2/", self.ale_exp.pk)
         self.assertEqual(3, Media.objects.all().count())
-        tech_rep_queryset = TechnicalReplicate.objects.all()
+        tech_rep_queryset = ResequencingExperiment.objects.all()
         self.assertEqual(1, len(tech_rep_queryset))
-        test2_media = tech_rep_queryset[0].isolate.flask.media.carbon_source
+        test2_media = tech_rep_queryset[0].flask.media.carbon_source
         self.assertEqual(test2_media, "Acetate(4)")
 
     def test_get_media_supplement_description(self):
@@ -86,13 +84,12 @@ class TestParser(TestCase):
         flask = Flask.objects.create(media=media,
                                      ale_id=ale_id,
                                      flask_number=90)
-        isolate = Isolate.objects.create(flask=flask,
-                                         isolate_number=0,
-                                         is_population=False)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=1)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=2)
+        # Two replicates of one isolate are two samples in one flask -- `0-1` and `0-2`.
+        # The file's I and R keys and their values are unchanged; `sample_label` joins them.
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-1",
+                                              is_population=False)
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-2",
+                                              is_population=False)
         # The metadata uploading should be creating 2 different types of media.
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
         parse_metadata_post_experiment_upload(path + "test3/", self.ale_exp.pk)
@@ -112,13 +109,12 @@ class TestParser(TestCase):
         flask = Flask.objects.create(media=media,
                                      ale_id=ale_id,
                                      flask_number=90)
-        isolate = Isolate.objects.create(flask=flask,
-                                         isolate_number=0,
-                                         is_population=False)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=1)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=2)
+        # Two replicates of one isolate are two samples in one flask -- `0-1` and `0-2`.
+        # The file's I and R keys and their values are unchanged; `sample_label` joins them.
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-1",
+                                              is_population=False)
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-2",
+                                              is_population=False)
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
         parse_metadata_post_experiment_upload(path + "test_reuse_media_with_metadata_upload/", self.ale_exp.pk)
         media_queryset = Media.objects.all()
@@ -141,28 +137,27 @@ class TestParser(TestCase):
         flask = Flask.objects.create(media=media,
                                      ale_id=ale_id,
                                      flask_number=90)
-        isolate = Isolate.objects.create(flask=flask,
-                                         isolate_number=0,
-                                         is_population=False)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=1)
-        TechnicalReplicate.objects.create(isolate=isolate,
-                                          tech_rep_number=2)
+        # Two replicates of one isolate are two samples in one flask -- `0-1` and `0-2`.
+        # The file's I and R keys and their values are unchanged; `sample_label` joins them.
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-1",
+                                              is_population=False)
+        ResequencingExperiment.objects.create(flask=flask, isolate_number="0-2",
+                                              is_population=False)
 
         path = os.path.dirname(os.path.realpath(__file__)) + "/"
 
         # Will populate all tech_reps to have Glucose(4) carbon source, even though 7-90-0-1 only being set.
         parse_metadata_post_experiment_upload(path + "test1/", self.ale_exp.pk)
-        tech_rep_queryset = TechnicalReplicate.objects.all()
+        tech_rep_queryset = ResequencingExperiment.objects.all()
         self.assertEqual(2, tech_rep_queryset.count())
         for tech_rep in tech_rep_queryset:
-            self.assertEqual("Glucose(4)", tech_rep.isolate.flask.media.carbon_source)
+            self.assertEqual("Glucose(4)", tech_rep.flask.media.carbon_source)
 
         parse_metadata_post_experiment_upload(path + "7-90-0-2_acetate/", self.ale_exp.pk)
-        tech_rep_queryset = TechnicalReplicate.objects.all()
+        tech_rep_queryset = ResequencingExperiment.objects.all()
         self.assertEqual(2, tech_rep_queryset.count())
         for tech_rep in tech_rep_queryset:
-            self.assertEqual("Acetate(4)", tech_rep.isolate.flask.media.carbon_source)
+            self.assertEqual("Acetate(4)", tech_rep.flask.media.carbon_source)
 
     def test_xpmd_validator(self):
         path = os.path.dirname(os.path.realpath(__file__)) + "/"

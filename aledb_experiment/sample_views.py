@@ -40,7 +40,7 @@ def _experiment_samples(experiment):
 
     Imported here rather than at module scope: aledb_experiment must not import aledb_seq
     at load time -- the dependency runs the other way, which is why
-    `ResequencingExperiment.tech_rep` names its target by string.
+    `ResequencingExperiment.flask` names its target by string.
     """
     from aledb_seq.util import get_ordered_reseq_queryset
     # `include_ancestor=True`: this is the page that edits and deletes samples, so it has to
@@ -51,7 +51,7 @@ def _experiment_samples(experiment):
 def _get_sample(pk):
     """The sample and its experiment, or a 404.
 
-    A sample with no `tech_rep` has no project and therefore nothing to check permission
+    A sample with no `flask` has no project and therefore nothing to check permission
     against. Rather than let this page become the one route into the database that skips
     the check, those 404: they are filtered out of every list already, and repairing them
     belongs in a management command.
@@ -70,15 +70,13 @@ def _row_context(reseq):
     """What both templates need per sample.
 
     `label` is deliberately alongside `coordinate`. `ale_flask_isolate_str` returns
-    `Isolate.description` verbatim whenever it is set, and the import path sets it to the
+    the sample's `description` verbatim whenever it is set, and the import path sets it to the
     filename for every sample whose name is not already an A-F-I-R string -- so on a
     typical experiment the coordinate can change and every label on every page stays
     byte-identical. Showing both, next to an editable description, is what stops a
     successful save looking like it did nothing.
     """
     coordinate = sample_coordinate(reseq)
-    tech_rep = reseq.tech_rep
-    isolate = tech_rep.isolate
     return {
         "reseq": reseq,
         "id": reseq.pk,
@@ -87,11 +85,10 @@ def _row_context(reseq):
         "ale": coordinate[0],
         "flask": coordinate[1],
         "isolate": coordinate[2],
-        "rep": coordinate[3],
-        "is_population": isolate.is_population,
-        "isolate_description": isolate.description or "",
-        "rep_description": tech_rep.description or "",
-        "rep_tags": tech_rep.tags or "",
+        "is_population": reseq.is_population,
+        "isolate_description": reseq.description or "",
+        "rep_description": reseq.rep_description or "",
+        "rep_tags": reseq.tags or "",
     }
 
 

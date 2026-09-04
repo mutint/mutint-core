@@ -6,7 +6,7 @@ from aledb_seq.util import get_ecocyc_gene_list
 from aledb_filter.util import filter_observed_mutations
 from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
-from aledb_experiment.models import TechnicalReplicate, AleExperiment
+from aledb_experiment.models import AleExperiment
 from aledb_experiment.permissions import can_curate
 from aledb_seq.ncbi import verified_contig_names
 
@@ -65,9 +65,9 @@ def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
         # report page that no longer exists.
         sample_header_html = sample_name
         if can_curate(user, experiment):
-            dropdown_html = _get_replicate_tag_dropdown_entries(reseq.tech_rep)
+            dropdown_html = _get_sample_tag_dropdown_entries(reseq)
             sample_header_html += (REP_DROPDOWN % dropdown_html)
-        current_tags = _get_rep_tags(reseq.tech_rep)
+        current_tags = _get_sample_tags(reseq)
         sample_header_html += (REP_TAG % current_tags)
         table_header_list.append(sample_header_html)
     return base_table_header + table_header_list
@@ -277,17 +277,17 @@ def _get_tag_filter_dropdown_entries(mutation_id):
     return html
 
 
-def _get_replicate_tag_dropdown_entries(replicate: TechnicalReplicate):
+def _get_sample_tag_dropdown_entries(sample):
     dropdown_html = ''
     for tag in COLUMN_TAGS:
         image = TAGS[tag]
         dropdown_html += '<li><a onclick="add_tag_to_replicate(\'%s\', %d, this)">Toggle Tag: %s %s</a></li>' % (
-        tag, replicate.id, tag, image)
+        tag, sample.id, tag, image)
     return dropdown_html
 
 
-def _get_rep_tags(replicate: TechnicalReplicate):
-    tags = replicate.tags;
+def _get_sample_tags(sample):
+    tags = sample.tags;
     current_tags = ''
     for tag in COLUMN_TAGS:
         image = TAGS[tag]

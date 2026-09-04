@@ -3,7 +3,6 @@ import os
 import re
 import subprocess
 
-from aledb_experiment.models import TechnicalReplicate
 
 __author__ = 'Patrick Phaneuf, Denny Gosting'
 

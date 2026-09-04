@@ -3,7 +3,7 @@
 These are **not** Compare's, which is why they stayed in core when Compare moved out to
 `aledb-compare`. Every page that renders `base_table_template.html` or includes
 `table_template.js` posts here -- Compare, Fixed Mutations, Converged Mutations and Search --
-and the state they write is shared: `TechnicalReplicate.tags` is what the Show/Hide Tag
+and the state they write is shared: the sample's `tags` is what the Show/Hide Tag
 control filters sample columns on in `aledb_seq.util.get_reseq_ordered_dict`, so tagging a
 replicate from one table changes what the other three show.
 
@@ -27,8 +27,8 @@ from django.http import HttpResponseForbidden
 
 from aledb_common.ajax import ajax
 
-from aledb_experiment import models, permissions
-from aledb_seq.models import Mutation
+from aledb_experiment import permissions
+from aledb_seq.models import Mutation, ResequencingExperiment
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +95,8 @@ def save_mut_tag(request):
 def save_rep_tag(request):
     rep_id = request.POST.get('rep_id')
     selected_tag = request.POST.get('tag_name')
-    replicate = models.TechnicalReplicate.objects.get(id=rep_id)
-    experiment = replicate.isolate.flask.ale_id.ale_experiment
+    replicate = ResequencingExperiment.objects.get(id=rep_id)
+    experiment = replicate.ale_experiment
     if not _may_curate(request.user, experiment):
         return HttpResponseForbidden(_REFUSED)
     replicate.tags = _toggle(replicate.tags, selected_tag)

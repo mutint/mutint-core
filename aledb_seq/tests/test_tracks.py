@@ -123,7 +123,7 @@ class MutationTrackTestCase(_Fixture):
 
 class SampleTrackTestCase(_Fixture):
     def test_rows_are_named_by_the_shared_sample_label(self):
-        """Not `isolate__description`, which is null for most samples -- pulling that through
+        """Not the sample's bare `description`, which is null for most samples -- pulling that through
         values_list collapsed every sample onto one row called "sample"."""
         features = tracks.sample_features(self.experiment.id)
         self.assertTrue(features)

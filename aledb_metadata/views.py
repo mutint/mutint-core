@@ -85,8 +85,10 @@ def get_reseq_info_list(reseq_queryset):
     rows = []
 
     for reseq in reseq_queryset:
-        tech_rep = reseq.tech_rep
-        isolate = tech_rep.isolate
+        # Three rows became one, so the sample *is* the isolate and the replicate. The
+        # local names stay for now; the keys below are what /metadata and the interop API
+        # publish, and renaming those is its own commit.
+        tech_rep = isolate = reseq
         flask = isolate.flask
         media = flask.media
         ale = flask.ale_id
@@ -95,7 +97,7 @@ def get_reseq_info_list(reseq_queryset):
             "sample": reseq,
             "clonal_or_population": (SAMPLE_TYPE_MIXED if isolate.is_population
                                      else SAMPLE_TYPE_CLONAL),
-            "tech_rep_description": tech_rep.description,
+            "tech_rep_description": tech_rep.rep_description,
             "media_description": media.description,
             "carbon_source": media.carbon_source,
             "nitrogen_source": media.nitrogen_source,

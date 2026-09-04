@@ -35,7 +35,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
+    AleExperiment, AleId, Flask,
 )
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 from aledb_stats.util import compute_experiment_counts
@@ -90,12 +90,9 @@ class SummaryTestCase(TestCase):
         flask_row, _ = Flask.objects.get_or_create(
             ale_id=ale_row, flask_number=flask,
             defaults={"media": self.context["media"]})
-        isolate_row = Isolate.objects.create(
-            flask=flask_row, isolate_number=isolate, is_population=False,
-)
-        tech_rep = TechnicalReplicate.objects.create(isolate=isolate_row, tech_rep_number=1)
         return ResequencingExperiment.objects.create(
-            tech_rep=tech_rep, sample_name="%d-%d-%d-1" % (ale, flask, isolate))
+            flask=flask_row, isolate_number="%d-1" % isolate, is_population=False,
+            sample_name="%d-%d-%d-1" % (ale, flask, isolate))
 
     def _mutation(self, mutation_type, snp_type, gene, protein_change=""):
         return Mutation.objects.create(

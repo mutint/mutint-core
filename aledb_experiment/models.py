@@ -135,7 +135,7 @@ class AleExperiment(SoftDeleteMixin):
     # prior flag left to clear and no way to end up with two.
     #
     # Named by string because `aledb_experiment` must not import `aledb_seq` at load time;
-    # the dependency runs the other way, which is why `ResequencingExperiment.tech_rep`
+    # the dependency runs the other way, which is why `ResequencingExperiment.flask`
     # names its own target the same way.
     #
     # SET_NULL: deleting the sample leaves the experiment simply without an ancestor.
@@ -262,7 +262,7 @@ class AleExperiment(SoftDeleteMixin):
 class AleId(models.Model):
     """Parallel ALE's run within an ALE experiment.
 
-    `ale_id` is **text**, not a number (`0008`), and so is `Isolate.isolate_number`. Real
+    `ale_id` is **text**, not a number (`0008`), and so is the sample's `isolate_number`. Real
     lineage names are labels -- `Ara-1` and `Ara+1` are two different LTEE populations that
     both end in 1, so any rule that reduced them to an integer merged them. `Flask` is the
     one member of the chain that stays an `IntegerField`, because a time point is a genuine
@@ -357,25 +357,10 @@ class Flask(models.Model):
 
 #TODO: Change 'reseq_reference' field to 'reseq_ref_name'
 #TODO: Change 'library_prep' field to 'wgs_kit'
-class Isolate(models.Model):
-    #: Text, not a number -- see `AleId`. A clone is named `763A` as often as `763`, and two
-    #: clones from one flask differ only in that trailer. Unique within its flask.
-    isolate_number = models.CharField(max_length=100)
-    flask = models.ForeignKey(Flask, on_delete=models.CASCADE)
-    is_population = models.BooleanField()
-    description = models.CharField(max_length=300, **blank_field)
-    reseq_reference = models.CharField(max_length=200, **blank_field)
-    reseq_date = models.CharField(max_length=200, **blank_field)
-    breseq_version = models.CharField(max_length=200, **blank_field)
-    library_prep = models.CharField(max_length=200, **blank_field)
-
-
-
-class TechnicalReplicate(models.Model):
-    tech_rep_number = models.IntegerField(default=1)
-    isolate = models.ForeignKey(Isolate, on_delete=models.CASCADE)
-    tags = models.CharField(max_length=500, **blank_field)
-    description = models.CharField(max_length=500, **blank_field)
+# `Isolate` and `TechnicalReplicate` stood here. Both are gone, folded into
+# `aledb_seq.ResequencingExperiment` -- the sample row itself -- along with everything they
+# held. See that model's docstring for why the merge went that way round rather than the
+# other. The chain is `AleExperiment -> AleId -> Flask -> ResequencingExperiment` now.
 
 
 # --- sharing: groups and project access ---------------------------------------------------

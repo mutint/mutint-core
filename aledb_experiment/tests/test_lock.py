@@ -228,7 +228,7 @@ class EveryWritePathTestCase(LockTestCase):
                 HTTP_X_REQUESTED_WITH="XMLHttpRequest")),
             ("replicate tag", lambda: self.client.post(
                 "/mutation-table/toggle-rep-tag",
-                {"rep_id": self.sample_a.tech_rep_id, "tag_name": "contaminated"},
+                {"rep_id": self.sample_a.pk, "tag_name": "contaminated"},
                 HTTP_X_REQUESTED_WITH="XMLHttpRequest")),
             ("sample update", lambda: self.client.post(
                 "/ale/sample/%d/update/" % self.sample_a.id, {"sample_name": "x"})),

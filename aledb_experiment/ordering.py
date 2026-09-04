@@ -1,6 +1,7 @@
 """How a list of samples is ordered, now that two thirds of a coordinate are text.
 
-`AleId.ale_id` and `Isolate.isolate_number` are `CharField`s (`aledb_experiment.0008`), so
+`AleId.ale_id` and the sample's `isolate_number` are `CharField`s
+(`aledb_experiment.0008`), so
 the database orders them the way it orders any string: `10` before `2`, and `A1 F1 I10`
 above `A1 F1 I2` in every mutation table. That is not a cosmetic difference on real data --
 an auto-numbered import gives one flask an isolate per sample, and the dev database's
@@ -42,7 +43,7 @@ def natural(field_path):
 
 
 def sample_order(prefix=""):
-    """The five keys a sample list is ordered by: experiment, ALE, flask, isolate, replicate.
+    """The four keys a sample list is ordered by: experiment, ALE, flask, sample label.
 
     Pass `prefix="sequencing_experiment__"` from a queryset of `ObservedMutation`. Returns
     a tuple for `order_by(*sample_order())` -- expressions rather than field names, because
@@ -59,13 +60,12 @@ def sample_order(prefix=""):
         F(paths.to_experiment(prefix, "name")),
         natural(paths.to_ale_label(prefix)),
         F(paths.to_flask_ordinal(prefix)).asc(nulls_first=True),
-        natural(paths.to_isolate_label(prefix)),
-        F(paths.to_replicate_ordinal(prefix)),
+        natural(paths.to_sample_label(prefix)),
     )
 
 
 def sample_sort_key(reseq):
-    """A sample's A/F/I/R coordinate as a sortable tuple, for a list already in memory.
+    """A sample's A/F/I coordinate as a sortable tuple, for a list already in memory.
 
     `sample_order()` above is the database form and is what every listing uses. This is for
     the two places that cannot re-query: the CSV export, which has collapsed observations
@@ -80,10 +80,8 @@ def sample_sort_key(reseq):
 
     A null flask sorts first, as it does in the SQL form.
     """
-    isolate = reseq.tech_rep.isolate
-    flask = isolate.flask
+    flask = reseq.flask
     return (flask.ale_id.ale_experiment.name,
             str(flask.ale_id.ale_id).rjust(PAD, "0"),
             flask.flask_number if flask.flask_number is not None else -1,
-            str(isolate.isolate_number).rjust(PAD, "0"),
-            reseq.tech_rep.tech_rep_number)
+            str(reseq.isolate_number).rjust(PAD, "0"))

@@ -82,17 +82,17 @@ def get_reseq_experiment_info_list(reseq_experiments):
 
     reseq_experiments_info_list = []
     for reseq in reseq_experiments:
-        species = reseq.tech_rep.isolate.flask.ale_id.species
-        strain = reseq.tech_rep.isolate.flask.ale_id.strain
-        knockouts = reseq.tech_rep.isolate.flask.ale_id.description
-        clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.tech_rep.isolate.is_population
+        species = reseq.flask.ale_id.species
+        strain = reseq.flask.ale_id.strain
+        knockouts = reseq.flask.ale_id.description
+        clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.is_population
                                 else SAMPLE_TYPE_CLONAL)
-        media_temperature = reseq.tech_rep.isolate.flask.media.temperature
-        media_description = reseq.tech_rep.isolate.flask.media.description
+        media_temperature = reseq.flask.media.temperature
+        media_description = reseq.flask.media.description
         # carbon_source, not substrate: the metadata parser stopped writing `substrate`
         # in 2019 when media moved to per-component columns, so it is None for anything
         # imported with metadata.
-        substrate = reseq.tech_rep.isolate.flask.media.carbon_source
+        substrate = reseq.flask.media.carbon_source
 
         # Using tuple because immutable; the counts must remain associated with particular
         # experiment. Position 1 holds the missing-coverage *count* -- it held the queryset

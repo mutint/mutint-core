@@ -12,8 +12,7 @@ against `sample_order` rather than on its own, because the whole point is that t
 
 from django.test import TestCase
 
-from aledb_experiment.models import (AleExperiment, AleId, Flask,
-                                     Isolate, Media, TechnicalReplicate)
+from aledb_experiment.models import AleExperiment, AleId, Flask, Media
 from aledb_experiment.ordering import sample_sort_key
 from aledb_seq.models import ResequencingExperiment
 from aledb_seq.util import get_ordered_reseq_queryset
@@ -27,18 +26,14 @@ class OrderingTestCase(TestCase):
             name="E")
         self.media = Media.objects.create()
 
-    def make(self, ale, flask, isolate="1", rep=1):
+    def make(self, ale, flask, isolate="1"):
         ale_row, _ = AleId.objects.get_or_create(ale_experiment=self.experiment,
                                                  ale_id=str(ale))
         flask_row, _ = Flask.objects.get_or_create(ale_id=ale_row, flask_number=flask,
                                                    defaults={"media": self.media})
-        isolate_row = Isolate.objects.create(flask=flask_row, isolate_number=str(isolate),
-                                             is_population=False,
-)
-        rep_row = TechnicalReplicate.objects.create(isolate=isolate_row,
-                                                    tech_rep_number=rep)
         return ResequencingExperiment.objects.create(
-            tech_rep=rep_row, sample_name="A%s F%s I%s R%s" % (ale, flask, isolate, rep))
+            flask=flask_row, isolate_number=str(isolate), is_population=False,
+            sample_name="A%s F%s I%s" % (ale, flask, isolate))
 
     def order(self):
         return [r.sample_name for r in
@@ -54,28 +49,28 @@ class TestTheRule(OrderingTestCase):
         self.make(1, 1, 2)
         self.make(1, 1, 1)
         self.assertEqual(self.order(),
-                         ["A1 F1 I1 R1", "A1 F1 I2 R1", "A1 F2 I1 R1",
-                          "A2 F1 I1 R1", "A2 F2 I2 R1"])
+                         ["A1 F1 I1", "A1 F1 I2", "A1 F2 I1",
+                          "A2 F1 I1", "A2 F2 I2"])
 
     def test_flask_ten_comes_after_flask_two(self):
         """An integer column, so this one was never in doubt -- it is here as the control for
         the two below, which are the same claim over text."""
         self.make(1, 2)
         self.make(1, 10)
-        self.assertEqual(self.order(), ["A1 F2 I1 R1", "A1 F10 I1 R1"])
+        self.assertEqual(self.order(), ["A1 F2 I1", "A1 F10 I1"])
 
     def test_ale_ten_comes_after_ale_two(self):
         """`AleId.ale_id` is text since 0008. Without `natural()` this is A10 then A2."""
         self.make(2, 1)
         self.make(10, 1)
-        self.assertEqual(self.order(), ["A2 F1 I1 R1", "A10 F1 I1 R1"])
+        self.assertEqual(self.order(), ["A2 F1 I1", "A10 F1 I1"])
 
     def test_isolate_ten_comes_after_isolate_two(self):
-        """`Isolate.isolate_number` is text too, and an auto-numbered import gives one flask
+        """The sample's `isolate_number` is text too, and an auto-numbered import gives one flask
         an isolate per sample -- fifty-one of them in the dev database's largest experiment."""
         self.make(1, 1, 2)
         self.make(1, 1, 10)
-        self.assertEqual(self.order(), ["A1 F1 I2 R1", "A1 F1 I10 R1"])
+        self.assertEqual(self.order(), ["A1 F1 I2", "A1 F1 I10"])
 
     def test_a_lineage_label_sorts_as_text(self):
         """Real ALE labels are names, not numbers: `Ara-1` and `Ara+1` are different LTEE
@@ -83,7 +78,7 @@ class TestTheRule(OrderingTestCase):
         self.make("Ara-1", 1)
         self.make("Ara+1", 1)
         self.make(1, 1)
-        self.assertEqual(self.order()[0], "A1 F1 I1 R1")
+        self.assertEqual(self.order()[0], "A1 F1 I1")
 
     def test_a_null_flask_sorts_first_on_every_backend(self):
         """`flask_number` is nullable and `sample_order` says `nulls_first` rather than
@@ -91,7 +86,7 @@ class TestTheRule(OrderingTestCase):
         production and the test suite would otherwise disagree."""
         self.make(1, 1)
         self.make(1, None)
-        self.assertEqual(self.order(), ["A1 FNone I1 R1", "A1 F1 I1 R1"])
+        self.assertEqual(self.order(), ["A1 FNone I1", "A1 F1 I1"])
 
 
 class TestThePythonFormAgrees(OrderingTestCase):

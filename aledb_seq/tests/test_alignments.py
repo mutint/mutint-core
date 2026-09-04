@@ -120,7 +120,7 @@ class AlignmentServingTestCase(TestCase):
     def test_sample_without_a_stored_bam_is_404(self):
         """A bare-.gd import has no alignment; the route must 404, not 500."""
         reseq = ResequencingExperiment.objects.create(
-            tech_rep=self.reseq.tech_rep, sample_name="no-bam", person="tester")
+            flask=self.reseq.flask, sample_name="no-bam", person="tester")
         response = self.client.get("/mutations/alignments/%d/bam" % reseq.id)
         self.assertEqual(response.status_code, 404)
 

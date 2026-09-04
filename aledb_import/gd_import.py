@@ -12,8 +12,7 @@ stored verbatim in ``Mutation.gd_data`` so it can be round-tripped back to a
 ``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
 
 Imported mutations are attached to the normal experiment hierarchy
-(``AleExperiment -> AleId -> Flask -> Isolate -> TechnicalReplicate ->
-ResequencingExperiment -> ObservedMutation``) so they appear in the existing
+(``AleExperiment -> AleId -> Flask -> ResequencingExperiment -> ObservedMutation``) so they appear in the existing
 mutation tables, stats, and dashboards with no extra plumbing. The chain is
 synthesized the same way the CLI does it: a default Media
 placeholders, and the A-F-I-R identity parsed from each filename.
@@ -30,10 +29,8 @@ from aledb_experiment.models import (
     AleExperiment,
     AleId,
     Flask,
-    Isolate,
     Media,
     Project,
-    TechnicalReplicate,
 )
 from aledb_import import annotation
 from aledb_import import sniff
@@ -229,7 +226,7 @@ def import_document_as_sample(document, sample_name, context, person):
             identity.replicate, person, sample_name,
             # A label only where the name carries one. `3-30000-1-1` says exactly what the
             # coordinate says, and `ale_flask_isolate_str` prefers the description over the
-            # computed `A3 F30000 I1 R1` -- so filling it for an A-F-I-R sample would
+            # computed `A3 F30000 I1-1` -- so filling it for an A-F-I-R sample would
             # relabel every table column with the filename it came from.
             isolate_description=(sample_name
                                  if identity.shape == sample_names.SHAPE_TRIPLE else ""))
@@ -287,6 +284,12 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
 
     `ale_number` and `isolate_number` are text and the other two are integers, which is the
     shape `sample_names.parse_sample_identity` answers in and the shape of the columns.
+
+    **The replicate is part of the label, not a level.** `3-30000-1-1` and `3-30000-1-2` are
+    two samples under one flask called `1-1` and `1-2`; they used to be one isolate with two
+    replicate rows under it. The suffix is kept even when the replicate is 1, so an A-F-I-R
+    name always yields the label the filename spelled -- a conditional would make `1` and
+    `1-2` siblings, which reads as two unrelated samples rather than two replicates of one.
     """
     experiment = context["experiment"]
     metadata = document.metadata
@@ -299,30 +302,32 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id=ale_number)
     flask, _ = Flask.objects.get_or_create(
         flask_number=flask_number, ale_id=ale_id, media=context["media"])
-    isolate, _ = Isolate.objects.get_or_create(
-        flask=flask,
-        isolate_number=isolate_number,
-        is_population=is_population,
-        reseq_reference=reseq_reference[:200],
-        reseq_date=reseq_date[:200],
-        # A label to read the sample by, on creation only: `ale_flask_isolate_str` prefers
-        # it, so `Ara-2_500gen_763A` shows as itself rather than as `AAra-2 F500 I763A R1`.
-        # In `defaults` because it is not part of the identity -- an isolate found by its
-        # coordinate keeps whatever description it was given, including one edited by hand.
-        defaults={"description": isolate_description[:300]})
-    tech_rep, _ = TechnicalReplicate.objects.get_or_create(
-        tech_rep_number=tech_rep_number, isolate=isolate)
+    label = sample_names.sample_label(isolate_number, tech_rep_number)
     seq_experiment, _ = ResequencingExperiment.objects.get_or_create(
-        tech_rep=tech_rep, sample_name=sample_name, person=person)
+        flask=flask,
+        isolate_number=label,
+        defaults={
+            "sample_name": sample_name,
+            "person": person,
+            "is_population": is_population,
+            "reseq_reference": reseq_reference[:200],
+            "reseq_date": reseq_date[:200],
+            # A label to read the sample by, on creation only: `ale_flask_isolate_str`
+            # prefers it, so `Ara-2_500gen_763A` shows as itself rather than as
+            # `AAra-2 F500 I763A`. Not part of the identity -- a sample found by its
+            # coordinate keeps whatever description it was given, including a hand-edited
+            # one.
+            "description": isolate_description[:300],
+        })
     return seq_experiment
 
 
 def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     """Chain for a sample whose filename carries no identity at all.
 
-    Everything hangs off ALE 1 / Flask 1, but each distinct sample gets its own isolate so
+    Everything hangs off ALE 1 / Flask 1, but each distinct sample gets its own label so
     the samples stay individually addressable. Re-importing a sample must not allocate a
-    second isolate, so an existing chain for this sample name is reused."""
+    second one, so an existing sample of this name is reused."""
     experiment = context["experiment"]
 
     existing = ResequencingExperiment.objects.filter(
@@ -336,18 +341,16 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     flask, _ = Flask.objects.get_or_create(
         flask_number=1, ale_id=ale_id, media=context["media"])
 
-    isolate = Isolate.objects.create(
+    return ResequencingExperiment.objects.create(
         flask=flask,
         isolate_number=_next_isolate_number(flask),
         # ale_flask_isolate_str() prefers the description, so this is what makes the
-        # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3 R1".
+        # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
         is_population=" -p" in (metadata.get("COMMAND", "") or ""),
         reseq_reference=(metadata.get("REFSEQ", "") or "")[:200],
-        reseq_date=(metadata.get("CREATED", "") or "")[:200])
-    tech_rep = TechnicalReplicate.objects.create(tech_rep_number=1, isolate=isolate)
-    return ResequencingExperiment.objects.create(
-        tech_rep=tech_rep, sample_name=sample_name, person=person)
+        reseq_date=(metadata.get("CREATED", "") or "")[:200],
+        sample_name=sample_name, person=person)
 
 
 def _next_isolate_number(flask):
@@ -356,11 +359,12 @@ def _next_isolate_number(flask):
     Counted in Python rather than by `Max("isolate_number")`, which stopped meaning
     anything when the column became text (`aledb_experiment.0008`): `MAX` over strings
     answers `"9"` for a flask holding 1..10, and the next sample would collide with 10.
-    Labels that are not numbers are skipped rather than counted -- an isolate called `763A`
-    says nothing about which numbers are free.
+    Labels that are not numbers are skipped rather than counted -- a sample called `763A`,
+    or one called `1-2`, says nothing about which numbers are free.
     """
     numbers = [int(value) for value
-               in Isolate.objects.filter(flask=flask).values_list("isolate_number", flat=True)
+               in ResequencingExperiment.objects.filter(flask=flask)
+                                                .values_list("isolate_number", flat=True)
                if str(value).isdigit()]
     return str(max(numbers, default=0) + 1)
 
@@ -495,8 +499,7 @@ def export_gd_text(seq_experiment):
     ``repeat_name`` / CON/INT ``region`` still requires the reference genbank named
     in ``#=REFSEQ``)."""
     lines = ["#=GENOME_DIFF\t1.0"]
-    isolate = seq_experiment.tech_rep.isolate if seq_experiment.tech_rep else None
-    reseq_reference = getattr(isolate, "reseq_reference", "") or ""
+    reseq_reference = seq_experiment.reseq_reference or ""
     if reseq_reference:
         lines.append("#=REFSEQ\t%s" % reseq_reference)
 

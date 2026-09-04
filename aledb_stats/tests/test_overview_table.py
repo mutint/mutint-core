@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Isolate, Project, TechnicalReplicate,
+    AleExperiment, AleId, Flask, Project,
 )
 from aledb_seq.models import ResequencingExperiment
 
@@ -30,12 +30,9 @@ class OverviewTableTestCase(TestCase):
         ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=30000,
                                      media=context["media"])
-        isolate = Isolate.objects.create(flask=flask, isolate_number=1,
-                                         is_population=False,
-)
-        tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
         self.sample = ResequencingExperiment.objects.create(
-            tech_rep=tech_rep, sample_name="1-30000-1-1",
+            flask=flask, isolate_number="1-1", is_population=False,
+            sample_name="1-30000-1-1",
             mean_coverage=68.0388108058057,
             percentage_mapped=95.5735575027531,
             average_read_length=139.540777568556,

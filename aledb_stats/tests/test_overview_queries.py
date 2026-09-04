@@ -22,7 +22,7 @@ from django.test.utils import CaptureQueriesContext
 from django.db import connection
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Isolate, TechnicalReplicate,
+    AleExperiment, AleId, Flask,
 )
 from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
 
@@ -48,12 +48,9 @@ class OverviewQueryCountTestCase(TestCase):
         for number in range(samples):
             flask = Flask.objects.create(ale_id=ale, flask_number=100 + number,
                                          media=context["media"])
-            isolate = Isolate.objects.create(flask=flask, isolate_number=1,
-                                             is_population=False,
-)
-            tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
             sample = ResequencingExperiment.objects.create(
-                tech_rep=tech_rep, sample_name="1-%d-1-1" % (100 + number))
+                flask=flask, isolate_number="1-1", is_population=False,
+                sample_name="1-%d-1-1" % (100 + number))
             mutation = Mutation.objects.create(
                 ale_experiment=experiment, mutation_type="SNP", position=number,
                 sequence_change="A>T", protein_change="nonsynonymous (A1T)", gene="thrA")

@@ -3,7 +3,8 @@ import re
 import csv
 import json
 
-from aledb_experiment.models import TechnicalReplicate
+from aledb_import.sample_names import sample_label
+from aledb_seq.models import ResequencingExperiment
 from aledb_experiment.models import Media
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment import paths
@@ -139,12 +140,16 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
                 metadata_dict = dict(csv.reader(csvfile, delimiter=','))
             metadata_keys = metadata_dict.keys()
             try:
-                tech_rep = TechnicalReplicate.objects.get(
-                    tech_rep_number=metadata_dict[TECH_REP_NUMBER],
-                    **{paths.to_isolate_label(root="tech_rep"): metadata_dict[ISOLATE_NUMBER],
-                       paths.to_flask_ordinal(root="tech_rep"): metadata_dict[FLASK_NUMBER],
-                       paths.to_ale_label(root="tech_rep"): metadata_dict[ALE_NUMBER],
-                       paths.to_experiment_id(root="tech_rep"): ale_experiment_primary_key})
+                # The file still carries I and R separately -- its keys and their values are
+                # the on-disk format and do not change -- but they name one sample now, so
+                # they are joined the same way an imported filename is. See
+                # `aledb_import.sample_names.sample_label`.
+                tech_rep = ResequencingExperiment.objects.get(
+                    **{paths.to_sample_label(): sample_label(
+                           metadata_dict[ISOLATE_NUMBER], metadata_dict[TECH_REP_NUMBER]),
+                       paths.to_flask_ordinal(): metadata_dict[FLASK_NUMBER],
+                       paths.to_ale_label(): metadata_dict[ALE_NUMBER],
+                       paths.to_experiment_id(): ale_experiment_primary_key})
             except Exception as e:
                 print("Error for " + metadata_dict[ALE_NUMBER] + "-" + metadata_dict[FLASK_NUMBER] + "-" + metadata_dict[ISOLATE_NUMBER] + '-' + metadata_dict[TECH_REP_NUMBER] + ": ", e)
                 continue
@@ -202,7 +207,7 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
                 supplement_values.append(media_components_dict[supplement_key])
             supplement = ",".join(supplement_values)
 
-            ale_id = tech_rep.isolate.flask.ale_id
+            ale_id = tech_rep.flask.ale_id
             ale_id.description = ale_id_description
             ale_id.strain = strain
             if ale_id.species is None:
@@ -226,16 +231,13 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
 
             media.save()
 
-            flask = tech_rep.isolate.flask
+            flask = tech_rep.flask
             flask.media = media
             flask.save()
 
-            isolate = tech_rep.isolate
-            isolate.library_prep = library_prep
-            isolate.save()
-
-            tech_rep.description = experiment_details
-            tech_rep.save()
+            tech_rep.library_prep = library_prep
+            tech_rep.rep_description = experiment_details
+            tech_rep.save(update_fields=["library_prep", "rep_description"])
 
             # There was a `Project.objects.get_or_create(name=metadata_dict[PROJECT])` here
             # whose result was never used. Its only effect was a side effect: creating a

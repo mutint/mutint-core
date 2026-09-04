@@ -15,7 +15,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Isolate, Project, TechnicalReplicate,
+    AleExperiment, AleId, Flask, Project,
 )
 from aledb_seq.models import Mutation
 
@@ -41,9 +41,11 @@ class TableActionsTestCase(TestCase):
         context = prepare_experiment_by_id(self.experiment.id)
         ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=context["media"])
-        isolate = Isolate.objects.create(flask=flask, isolate_number=1, is_population=False,
-)
-        self.replicate = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
+        # The tag endpoint takes a sample id now: the tags moved onto the sample with the
+        # replicate row they used to live on.
+        from aledb_seq.models import ResequencingExperiment
+        self.replicate = ResequencingExperiment.objects.create(
+            flask=flask, isolate_number=1, is_population=False)
 
     # @ajax(mandatory=True) answers a plain POST with a bare 400 -- it requires the header
     # jQuery's $.ajax sets. Every call below goes through here so that is not re-learned.

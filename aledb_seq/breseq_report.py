@@ -23,8 +23,7 @@ def is_population(reseq):
     """
     if reseq is None:
         return False
-    isolate = getattr(getattr(reseq, "tech_rep", None), "isolate", None)
-    return bool(isolate and isolate.is_population)
+    return bool(reseq.is_population)
 
 
 def gd_entry(mutation):

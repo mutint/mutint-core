@@ -7,7 +7,7 @@ No database: this is a pure function over a string, and the import path's own te
 import unittest
 
 from aledb_import.sample_names import (
-    SHAPE_AFIR, SHAPE_TRIPLE, parse_sample_identity,
+    SHAPE_AFIR, SHAPE_TRIPLE, parse_sample_identity, sample_label,
 )
 
 
@@ -42,7 +42,7 @@ class AfirTestCase(unittest.TestCase):
 class UnderscoreTripleTestCase(unittest.TestCase):
 
     def test_the_shape_this_exists_for(self):
-        self.assertEqual(coordinate("Ara-2_500gen_763A"), ("Ara-2", 500, "763A", 1))
+        self.assertEqual(coordinate("Ara-2_500gen_763A"), ("Ara-2", 500, "763A", None))
         self.assertEqual(parse_sample_identity("Ara-2_500gen_763A").shape, SHAPE_TRIPLE)
 
     def test_the_time_point_keeps_only_its_leading_digits(self):
@@ -59,9 +59,12 @@ class UnderscoreTripleTestCase(unittest.TestCase):
         self.assertEqual(identity.ale, "Ara+1")
         self.assertEqual(identity.isolate, "763A")
 
-    def test_the_replicate_is_1(self):
-        """Three fields say nothing about re-sequencing, and every sample needs a replicate."""
-        self.assertEqual(parse_sample_identity("Ara-2_500gen_763A").replicate, 1)
+    def test_there_is_no_replicate(self):
+        """None, not 1. This shape has no such field, and `sample_label` uses the
+        difference to decide whether the label gets a suffix -- `763A` stays `763A` where
+        an A-F-I-R name becomes `1-1`. It answered 1 while a replicate was a row that had
+        to exist."""
+        self.assertIsNone(parse_sample_identity("Ara-2_500gen_763A").replicate)
 
     def test_a_time_point_with_no_leading_digit_is_not_one(self):
         """`t0` is a label, and a flask number is genuinely a number."""
@@ -81,7 +84,7 @@ class UnderscoreTripleTestCase(unittest.TestCase):
 
     def test_surrounding_space_is_trimmed(self):
         """A folder named with a stray space must not become a different ALE."""
-        self.assertEqual(coordinate("Ara-2 _500gen_ 763A"), ("Ara-2", 500, "763A", 1))
+        self.assertEqual(coordinate("Ara-2 _500gen_ 763A"), ("Ara-2", 500, "763A", None))
 
 
 class NeitherShapeTestCase(unittest.TestCase):
@@ -99,4 +102,37 @@ class NeitherShapeTestCase(unittest.TestCase):
 
     def test_and_a_name_only_the_triple_reads_falls_to_it(self):
         """The same name with a non-integer in the fourth dash field."""
-        self.assertEqual(coordinate("1-2-3-x_500gen_y"), ("1-2-3-x", 500, "y", 1))
+        self.assertEqual(coordinate("1-2-3-x_500gen_y"), ("1-2-3-x", 500, "y", None))
+
+
+class SampleLabelTestCase(unittest.TestCase):
+    """What the two parsed halves become in the database.
+
+    The replicate stopped being a row of its own -- `1-1500-1-1` and `1-1500-1-2` are two
+    samples in one flask rather than one isolate with two replicates beneath it -- so the
+    name's last field is a suffix on the label.
+    """
+
+    def test_an_afir_name_keeps_its_replicate(self):
+        self.assertEqual(sample_label("1", 2), "1-2")
+
+    def test_including_when_the_replicate_is_one(self):
+        """Not "appended only when it is not 1". A conditional would make `1` and `1-2`
+        siblings, which reads as two unrelated samples rather than two replicates of one --
+        and it would make the rule depend on a value rather than on the shape of the name.
+        """
+        self.assertEqual(sample_label("1", 1), "1-1")
+
+    def test_a_shape_with_no_replicate_gets_no_suffix(self):
+        """`Ara-2_500gen_763A` says `763A` and nothing more; inventing a `-1` would put a
+        number in a label the person did not write."""
+        self.assertEqual(sample_label("763A", None), "763A")
+
+    def test_the_whole_pipeline_from_a_filename(self):
+        for name, expected in (("3-30000-1-1", "1-1"),
+                               ("3-30000-1-2", "1-2"),
+                               ("Ara-2_500gen_763A", "763A")):
+            with self.subTest(name=name):
+                identity = parse_sample_identity(name)
+                self.assertEqual(sample_label(identity.isolate, identity.replicate),
+                                 expected)

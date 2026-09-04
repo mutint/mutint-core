@@ -103,8 +103,8 @@ class UploadCommandTestCase(TestCase):
 
     def test_metadata_is_applied_after_the_import(self):
         self.upload()
-        isolate = ResequencingExperiment.objects.get().tech_rep.isolate
-        self.assertTrue(isolate.flask.ale_id.ale_experiment.project)
+        sample = ResequencingExperiment.objects.get()
+        self.assertTrue(sample.flask.ale_id.ale_experiment.project)
 
     def test_derived_data_is_available_after_the_import(self):
         """This asserted that `StaticData` had a row. Nothing is stored now, so what the

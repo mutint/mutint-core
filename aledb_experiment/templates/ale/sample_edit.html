@@ -46,44 +46,46 @@
                 <label for="se-flask">Time point</label>
                 <input type="text" class="form-control" id="se-flask" value="{{ sample.flask }}">
             </div>
+            {% comment %} One box where there were two. A replicate was never a level of
+                anything: `3-30000-1-2` is a sample called `1-2` in flask 30000, so the
+                label is one field and holds whatever the filename spelled. {% endcomment %}
             <div class="col-sm-3 form-group">
-                <label for="se-isolate">Isolate</label>
+                <label for="se-isolate">Sample</label>
                 <input type="text" class="form-control" id="se-isolate" maxlength="100"
                        value="{{ sample.isolate }}">
-            </div>
-            <div class="col-sm-3 form-group">
-                <label for="se-rep">Replicate</label>
-                <input type="number" min="0" class="form-control" id="se-rep" value="{{ sample.rep }}">
             </div>
         </div>
 
         <div class="checkbox">
             <label><input type="checkbox" id="se-population"
                           {% if sample.is_population %}checked{% endif %}> Population</label>
-            <small class="help-block">Unchecked means a clonal isolate.</small>
+            <small class="help-block">Unchecked means a clonal sample.</small>
         </div>
 
         <div class="form-group">
-            <label for="se-isolate-description">Isolate description</label>
+            <label for="se-isolate-description">Description</label>
             <input type="text" class="form-control" id="se-isolate-description"
                    maxlength="300" value="{{ sample.isolate_description }}">
             <small class="help-block">
                 When set, this is what the sample is called throughout the site, in place
-                of A#&nbsp;F#&nbsp;I#&nbsp;R#. Clear it to display the numbers instead.
+                of A#&nbsp;F#&nbsp;I#. Clear it to display the numbers instead.
             </small>
         </div>
 
-        <p style="color: #666;">
-            The description and the population flag describe the <b>isolate</b>, so they
-            apply to every technical replicate of it, not to this sample alone.
-        </p>
-
-        <h4 style="margin-top: 2em;">This technical replicate</h4>
+        {% comment %} The sentence that stood here said the description and the population
+           flag described the *isolate*, so they applied to every technical replicate of it
+           rather than to this sample alone. There is one row now, so they apply to this
+           sample and to nothing else -- and a caveat that is no longer true is worse than
+           no caveat. {% endcomment %}
 
         <div class="form-group">
-            <label for="se-rep-description">Replicate description</label>
+            <label for="se-rep-description">Medium description</label>
             <input type="text" class="form-control" id="se-rep-description"
                    maxlength="500" value="{{ sample.rep_description }}">
+            <small class="help-block">
+                What the metadata file calls "medium description". Published by /metadata
+                and by the interop API.
+            </small>
         </div>
 
         <div class="form-group">
@@ -110,7 +112,6 @@
             ale: document.getElementById("se-ale").value,
             flask: document.getElementById("se-flask").value,
             isolate: document.getElementById("se-isolate").value,
-            rep: document.getElementById("se-rep").value,
             isolate_description: document.getElementById("se-isolate-description").value,
             rep_description: document.getElementById("se-rep-description").value,
             rep_tags: document.getElementById("se-rep-tags").value

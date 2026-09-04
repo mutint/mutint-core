@@ -4,7 +4,7 @@
 `aledb_metadata.views.get_reseq_info_list` built an eighteen-value positional tuple; this
 app unpacked it *by index* against a hand-written list of names, in a different app. The two
 agreed only by position and had drifted: the API published `AleId.description` as
-``knockouts`` and `Isolate.library_prep` as ``taxonomy_id``, and the Metadata page rendered
+``knockouts`` and the sample's ``library_prep`` as ``taxonomy_id``, and the Metadata page rendered
 the library prep under a column headed *Taxonomy ID*.
 
 Nothing raised, because nothing was wrong in a way a program can notice -- the values were
@@ -18,8 +18,7 @@ the wrong sentence rather than as a subtly wrong value.
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import (AleExperiment, AleId, Flask, Isolate, Media, Project,
-                                     TechnicalReplicate)
+from aledb_experiment.models import AleExperiment, AleId, Flask, Media, Project
 from aledb_interop_query.views import _serialize_metadata
 from aledb_metadata.views import get_reseq_info_list
 from aledb_seq.models import ResequencingExperiment
@@ -28,13 +27,13 @@ from aledb_seq.models import ResequencingExperiment
 VALUES = {
     "strain": "from AleId.strain",
     "ale_description": "from AleId.description",
-    "library_prep": "from Isolate.library_prep",
-    "reseq_reference": "from Isolate.reseq_reference",
-    "breseq_version": "from Isolate.breseq_version",
-    "reseq_date": "from Isolate.reseq_date",
+    "library_prep": "from the sample's library_prep",
+    "reseq_reference": "from the sample's reseq_reference",
+    "breseq_version": "from the sample's breseq_version",
+    "reseq_date": "from the sample's reseq_date",
     "carbon_source": "from Media.carbon_source",
     "supplement": "from Media.supplement",
-    "tech_rep_description": "from TechnicalReplicate.description",
+    "tech_rep_description": "from the sample's rep_description",
 }
 
 
@@ -51,17 +50,14 @@ class MetadataKeyTestCase(TestCase):
                                      carbon_source=VALUES["carbon_source"],
                                      supplement=VALUES["supplement"])
         flask = Flask.objects.create(ale_id=ale, flask_number=1, media=media)
-        isolate = Isolate.objects.create(flask=flask, isolate_number="1",
-                                         is_population=False,
-                                         library_prep=VALUES["library_prep"],
-                                         reseq_reference=VALUES["reseq_reference"],
-                                         breseq_version=VALUES["breseq_version"],
-                                         reseq_date=VALUES["reseq_date"])
-        tech_rep = TechnicalReplicate.objects.create(
-            isolate=isolate, tech_rep_number=1,
-            description=VALUES["tech_rep_description"])
-        self.sample = ResequencingExperiment.objects.create(tech_rep=tech_rep,
-                                                            sample_name="s1")
+        self.sample = ResequencingExperiment.objects.create(
+            flask=flask, isolate_number="1", is_population=False,
+            library_prep=VALUES["library_prep"],
+            reseq_reference=VALUES["reseq_reference"],
+            breseq_version=VALUES["breseq_version"],
+            reseq_date=VALUES["reseq_date"],
+            rep_description=VALUES["tech_rep_description"],
+            sample_name="s1")
 
     def rows(self):
         return get_reseq_info_list(ResequencingExperiment.objects.filter(pk=self.sample.pk))
@@ -90,9 +86,8 @@ class MetadataKeyTestCase(TestCase):
         self.assertEqual(self.sample, self.rows()[0]["sample"])
 
     def test_a_population_says_so(self):
-        isolate = self.sample.tech_rep.isolate
-        isolate.is_population = True
-        isolate.save()
+        self.sample.is_population = True
+        self.sample.save()
 
         self.assertEqual("population", self.rows()[0]["clonal_or_population"])
 

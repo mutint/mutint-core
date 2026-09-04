@@ -18,7 +18,7 @@ from aledb_common.constants import (
     REQUEST_ALL, SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED,
 )
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Isolate, Media, Project, TechnicalReplicate,
+    AleExperiment, AleId, Flask, Media, Project,
 )
 from aledb_seq.models import ResequencingExperiment
 from aledb_seq.util import get_ordered_reseq_queryset
@@ -58,10 +58,9 @@ class SampleTypeFilterTestCase(TestCase):
         self.mixed = self.make_sample(flask, 2, is_population=True)
 
     def make_sample(self, flask, number, *, is_population):
-        isolate = Isolate.objects.create(
-            flask=flask, isolate_number=number, is_population=is_population)
-        tech_rep = TechnicalReplicate.objects.create(isolate=isolate, tech_rep_number=1)
-        return ResequencingExperiment.objects.create(tech_rep=tech_rep, sample_name="s%d" % number)
+        return ResequencingExperiment.objects.create(
+            flask=flask, isolate_number=number, is_population=is_population,
+            sample_name="s%d" % number)
 
     def selected(self, sample_type):
         return set(get_ordered_reseq_queryset(

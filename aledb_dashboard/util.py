@@ -6,7 +6,7 @@ from aledb_seq.functional_change import (
 from aledb_seq.views.common import MUTATION_TYPE_LIST, UNANNOTATED
 from aledb_experiment.ancestor import (exclude_all_ancestry,
                                        exclude_ancestor_samples)
-from aledb_experiment.models import AleExperiment, AleId, Isolate, Flask
+from aledb_experiment.models import AleExperiment, AleId, Flask
 from django.db.models import Q
 from aledb_experiment import paths
 
@@ -38,13 +38,13 @@ def _purely_ancestral(model, sample_path):
     count the ancestor" from an ALE label. This asks the real question instead, and an ALE
     genuinely labelled "0" is counted like any other.
 
-    **It still counts rows, not samples.** An AleId, Flask or Isolate carrying no samples at
+    **It still counts rows, not samples.** An AleId or Flask carrying no samples at
     all has always been counted here and still is -- dropping those would move the published
     totals for a reason that has nothing to do with ancestors. What is dropped is only a row
     that has samples and whose samples are *all* ancestral, which is the case the ALE-0 rule
     was really reaching for. A flask holding the ancestor alongside other samples still counts.
 
-    Two of the three original clauses were also redundant: the flask and isolate counts
+    Two of the three original clauses were also redundant: the flask and sample counts
     already filtered `ale_id__in=live_ales`, which had excluded ALE 0 once over.
     """
     ancestors = AleExperiment.objects.filter(ancestor__isnull=False).values("ancestor")
@@ -55,10 +55,11 @@ def _purely_ancestral(model, sample_path):
                         _evolved_samples().order_by().values("pk")}))
 
 
-#: Where a sample sits, seen from each of the three rows counted below.
+#: Where a sample sits, seen from each of the rows counted below. The third row *is* the
+#: sample now -- `Isolate` was folded into it -- so its path down to a sample is empty, and
+#: the count below asks its question directly rather than through `_purely_ancestral`.
 _SAMPLE_FROM_ALE = paths.down_chain("ale")
 _SAMPLE_FROM_FLASK = paths.down_chain("flask")
-_SAMPLE_FROM_ISOLATE = paths.down_chain("isolate")
 
 
 def rebuild_sample_counts():
@@ -72,8 +73,14 @@ def rebuild_sample_counts():
         pk__in=_purely_ancestral(AleId, _SAMPLE_FROM_ALE)).distinct().count()
     flask_count = Flask.objects.filter(ale_id__in=live_ales).exclude(
         pk__in=_purely_ancestral(Flask, _SAMPLE_FROM_FLASK)).distinct().count()
-    isolate_count = Isolate.objects.filter(**{paths.to_ale(root="isolate") + "__in": live_ales}).exclude(
-        pk__in=_purely_ancestral(Isolate, _SAMPLE_FROM_ISOLATE)).distinct().count()
+    # The third number counted `Isolate` rows and counts samples now, which is the same
+    # number: a sample was one run under one replicate under one isolate, and only the
+    # import created any of them. What changes is that "a row whose every sample is
+    # ancestral" is simply "an ancestral sample", so this drops out of `_purely_ancestral`
+    # and excludes the designated ancestors directly.
+    isolate_count = (_evolved_samples()
+                     .filter(**{paths.to_ale() + "__in": live_ales})
+                     .distinct().count())
 
     SampleCounts.objects.all().update(ale_count=ale_count, flask_count=flask_count,
                                       isolate_count=isolate_count)

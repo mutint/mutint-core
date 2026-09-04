@@ -8,8 +8,12 @@ directory of the same sample cannot answer differently.
 Two shapes are recognised, and a name matching neither is auto-numbered by the caller.
 
 **A-F-I-R**, four integers separated by dashes -- `3-30000-1-1` is ALE 3, flask 30000,
-isolate 1, replicate 1. Unchanged, and still strict: all four fields must be integers, so
-`Ara-1_500gen_762B` cannot half-match it and land every non-conforming file on 1-1-1-1.
+sample `1-1`. Still strict: all four fields must be integers, so `Ara-1_500gen_762B` cannot
+half-match it and land every non-conforming file on 1-1-1-1.
+
+The last two fields are one thing in the database -- see `sample_label`. They are parsed
+apart because the *name* separates them, and joined because a replicate was never a level
+of anything.
 
 **Three underscore-separated fields**, `Ara-2_500gen_763A` -> ALE `Ara-2`, flask 500,
 isolate `763A`. What makes this expressible at all is that the ALE and the isolate are text
@@ -41,7 +45,9 @@ import re
 SHAPE_AFIR = "afir"
 SHAPE_TRIPLE = "triple"
 
-#: `shape` is what distinguishes the two; the first four fields are the coordinate.
+#: `shape` is what distinguishes the two; the first four fields are what the name said.
+#: `isolate` and `replicate` are still separate here because the *name* separates them --
+#: `sample_label` below is where they become the one thing the database stores.
 SampleIdentity = collections.namedtuple(
     "SampleIdentity", "ale flask isolate replicate shape")
 
@@ -88,4 +94,29 @@ def _parse_underscore_triple(sample_name):
     match = _LEADING_NUMBER.match(time_point)
     if match is None:
         return None
-    return SampleIdentity(ale, int(match.group(1)), isolate, 1, SHAPE_TRIPLE)
+    # `replicate` is None, not 1: this shape has no such field, and `sample_label` uses the
+    # difference to decide whether the name gets a suffix. It was 1 while a replicate was a
+    # row that had to exist.
+    return SampleIdentity(ale, int(match.group(1)), isolate, None, SHAPE_TRIPLE)
+
+
+def sample_label(isolate, replicate):
+    """What the sample is called within its flask: `1-2`, `763A`, `1-1`.
+
+    The replicate used to be a row of its own between the isolate and the sequencing. It is
+    not a level of anything -- only two code paths ever created a run and both made one per
+    replicate -- so it is a suffix on the label instead, and `1-1500-1-1` and `1-1500-1-2`
+    are two samples in one flask rather than one isolate with two rows beneath it.
+
+    **The suffix is kept even when the replicate is 1.** Appending it only when it is not 1
+    would make `1` and `1-2` siblings, which reads as two unrelated samples rather than two
+    replicates of one -- and it would leave the rule depending on a *value* rather than on
+    the shape of the name. So the label is exactly what the filename spelled.
+
+    `replicate` is None for a name that carries no such field: the underscore triple
+    (`Ara-2_500gen_763A`) says `763A` and nothing more, and inventing a `-1` for it would
+    put a number in a label the person did not write.
+    """
+    if replicate is None:
+        return str(isolate)
+    return "%s-%s" % (isolate, replicate)

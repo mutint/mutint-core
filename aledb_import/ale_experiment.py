@@ -75,12 +75,18 @@ def _delete_all_orphaned_mutations():
 
 
 def delete_isolate(ale_experiment_primary_key, ale_number, flask_number, isolate_number):
-    isolate_to_delete = aledb_experiment.models.Isolate.objects.filter(isolate_number=isolate_number)
-    for isolate in isolate_to_delete:
-        if isolate.flask.ale_id.ale_experiment_id == ale_experiment_primary_key and \
-                isolate.flask.ale_id.ale_id == ale_number and \
-                isolate.flask.flask_number == flask_number:
-            isolate.delete()
+    """Delete the sample at a coordinate.
+
+    It deleted an `Isolate` and took its replicates and their runs with it by cascade.
+    There is one row now, so the cascade it relied on is the row itself -- and
+    `isolate_number` is the whole label (`1-2`), not the isolate half of a pair.
+    """
+    for sample in aledb_seq.models.ResequencingExperiment.objects.filter(
+            isolate_number=isolate_number):
+        if sample.flask.ale_id.ale_experiment_id == ale_experiment_primary_key and \
+                sample.flask.ale_id.ale_id == ale_number and \
+                sample.flask.flask_number == flask_number:
+            sample.delete()
             print("Successfully removed: ", ale_number, flask_number, isolate_number)
     _delete_all_orphaned_mutations()
 

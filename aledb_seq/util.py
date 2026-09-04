@@ -99,7 +99,7 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
         # "population, or else clonal" -- which is what silently subset the page before.
         wanted = sample_type == SAMPLE_TYPE_MIXED
         reseq_qryset = reseq_qryset.filter(
-            **{paths.to_isolate(field="is_population"): wanted})
+            **{paths.to_sample(field="is_population"): wanted})
     if not include_ancestor:
         from aledb_experiment.ancestor import exclude_ancestor_samples
         reseq_qryset = exclude_ancestor_samples(reseq_qryset, ale_experiment_id)
@@ -133,10 +133,10 @@ def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, req
         # nothing to say it had failed.
         if tag[0] == 'Hide Tag':
             reseq_queryset = reseq_queryset.exclude(
-                **{paths.to_replicate(field="tags__icontains"): tag[1].replace(" ", "")})
+                **{paths.to_sample(field="tags__icontains"): tag[1].replace(" ", "")})
         elif tag[0] == 'Show Tag':
             reseq_queryset = reseq_queryset.filter(
-                **{paths.to_replicate(field="tags__icontains"): tag[1].replace(" ", "")})
+                **{paths.to_sample(field="tags__icontains"): tag[1].replace(" ", "")})
     reseq_ordered_dict = collections.OrderedDict((reseq.id, reseq) for reseq in reseq_queryset)
     return reseq_ordered_dict
 

@@ -1,10 +1,14 @@
 """Editing a sample's identity and description.
 
 The thing worth testing here is not that a field saves -- it is that saving one sample
-leaves its siblings alone. A sample's A/F/I/R coordinate lives in four rows *above* it,
-every one of them shared, so the naive implementation (write the number onto the row)
-silently renumbers every other sample under the same flask. Half of what follows exists to
-pin that down.
+leaves its siblings alone. Two thirds of a sample's A/F/I coordinate live in rows *above*
+it that it shares with its siblings, so the naive implementation (write the number onto the
+row) silently renumbers every other sample under the same flask. Half of what follows
+exists to pin that down.
+
+**The coordinate is a 3-tuple.** It ended in a replicate number until `Isolate` and
+`TechnicalReplicate` were folded into the sample; the replicate is part of the label now,
+so `make_sample(1, 1, "1-2")` is what `1-1-1-2` used to be.
 """
 
 import json
@@ -14,7 +18,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Isolate, Project, TechnicalReplicate,
+    AleExperiment, AleId, Flask, Project,
 )
 from aledb_seq.models import ResequencingExperiment
 from aledb_experiment import paths
@@ -39,7 +43,7 @@ class SampleEditTestCase(TestCase):
         context = prepare_experiment_by_id(self.experiment.id)
         self.media = context["media"]
 
-    def make_sample(self, ale, flask, isolate, rep, name="", experiment=None,
+    def make_sample(self, ale, flask, isolate, name="", experiment=None,
                     media=None, is_population=False):
         experiment = experiment or self.experiment
         ale_row, _ = AleId.objects.get_or_create(
@@ -47,21 +51,17 @@ class SampleEditTestCase(TestCase):
         flask_row, _ = Flask.objects.get_or_create(
             ale_id=ale_row, flask_number=flask,
             defaults={"media": media or self.media})
-        isolate_row = Isolate.objects.create(
-            flask=flask_row, isolate_number=isolate, is_population=is_population)
-        tech_rep = TechnicalReplicate.objects.create(
-            isolate=isolate_row, tech_rep_number=rep)
         return ResequencingExperiment.objects.create(
-            tech_rep=tech_rep, sample_name=name)
+            flask=flask_row, isolate_number=isolate, is_population=is_population,
+            sample_name=name)
 
     def row(self, reseq, **overrides):
         from aledb_experiment.samples import sample_coordinate
-        ale, flask, isolate, rep = sample_coordinate(reseq)
+        ale, flask, isolate = sample_coordinate(reseq)
         row = {"id": str(reseq.pk), "sample_name": reseq.sample_name or "",
-               "ale": ale, "flask": flask,
-               "isolate": isolate, "rep": rep,
-               "is_population": 1 if reseq.tech_rep.isolate.is_population else 0,
-               "isolate_description": reseq.tech_rep.isolate.description or ""}
+               "ale": ale, "flask": flask, "isolate": isolate,
+               "is_population": 1 if reseq.is_population else 0,
+               "isolate_description": reseq.description or ""}
         row.update(overrides)
         return row
 
@@ -82,20 +82,23 @@ class SampleEditTestCase(TestCase):
         return sample_coordinate(reseq)
 
     def chain_counts(self):
+        """(ALEs, flasks, samples). It was four levels; the last two are one row now."""
         return (AleId.objects.count(), Flask.objects.count(),
-                Isolate.objects.count(), TechnicalReplicate.objects.count())
+                ResequencingExperiment.objects.count())
 
 
 class SampleEditPagesTestCase(SampleEditTestCase):
     def setUp(self):
         super().setUp()
-        self.sample = self.make_sample(1, 1, 1, 1, name="first")
+        self.sample = self.make_sample(1, 1, "1-1", name="first")
 
     def test_the_sample_page_renders(self):
         response = self.client.get("/ale/sample/%d/edit/" % self.sample.pk)
         self.assertEqual(200, response.status_code)
+        # No `se-rep`: the replicate box went with the replicate row, and the label box
+        # holds the whole of it.
         for field in ('id="se-name"', 'id="se-ale"', 'id="se-flask"',
-                      'id="se-isolate"', 'id="se-rep"', 'id="se-save"'):
+                      'id="se-isolate"', 'id="se-save"'):
             self.assertContains(response, field)
 
     def test_the_bulk_page_lists_this_experiment_only(self):
@@ -103,7 +106,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
             pk=self.client.post("/ale/projects/create/",
                                 {"name": "Q", "experiment": "F"}).json()["project_id"])
         other = AleExperiment.objects.filter(project=other_project).first()
-        stranger_sample = self.make_sample(1, 1, 1, 1, name="elsewhere", experiment=other)
+        stranger_sample = self.make_sample(1, 1, "1-1", name="elsewhere", experiment=other)
 
         html = self.client.get(
             "/ale/experiment/%d/samples/" % self.experiment.id).content.decode()
@@ -116,16 +119,15 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         the isolate description whenever it is set, and the import path fills it with the
         filename. Both pages must show the numbers as well, or a successful save looks
         like it did nothing."""
-        isolate = self.sample.tech_rep.isolate
-        isolate.description = "Ara-1_500gen_762B"
-        isolate.save()
+        self.sample.description = "Ara-1_500gen_762B"
+        self.sample.save()
 
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
                     "/ale/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 html = self.client.get(url).content.decode()
                 self.assertIn("Ara-1_500gen_762B", html)
-                self.assertIn("A1 F1 I1 R1", html)
+                self.assertIn("A1 F1 I1-1", html)
 
     def test_signed_out_they_are_forbidden(self):
         self.client.logout()
@@ -161,17 +163,17 @@ class SampleEditPagesTestCase(SampleEditTestCase):
                 self.assertNotContains(response, 'data-toggle="modal"')
                 self.assertContains(response, "Cancel")
 
-    def test_a_sample_with_no_tech_rep_is_a_404(self):
+    def test_a_sample_with_no_flask_is_a_404(self):
         """It has no project, so it cannot be permission-checked. Repairing those belongs
         in a management command, not in a page that would have to skip the check."""
-        orphan = ResequencingExperiment.objects.create(tech_rep=None, sample_name="loose")
+        orphan = ResequencingExperiment.objects.create(flask=None, sample_name="loose")
         self.assertEqual(404, self.client.get("/ale/sample/%d/edit/" % orphan.pk).status_code)
 
 
 class DescriptiveEditTestCase(SampleEditTestCase):
     def setUp(self):
         super().setUp()
-        self.sample = self.make_sample(1, 1, 1, 1, name="first")
+        self.sample = self.make_sample(1, 1, "1-1", name="first")
 
     def test_renaming_a_sample_saves(self):
         response = self.single(self.sample, sample_name="renamed")
@@ -208,7 +210,7 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.single(self.sample, isolate_description="colony from day 30")
 
         self.sample.refresh_from_db()
-        self.assertEqual("colony from day 30", self.sample.tech_rep.isolate.description)
+        self.assertEqual("colony from day 30", self.sample.description)
 
     def test_a_descriptive_save_creates_and_deletes_no_chain_rows(self):
         before = self.chain_counts()
@@ -216,22 +218,22 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.assertEqual(before, self.chain_counts())
 
     def test_the_bulk_table_does_not_blank_fields_it_has_no_column_for(self):
-        """It shows no replicate description; a missing key must leave the value alone."""
-        tech_rep = self.sample.tech_rep
-        tech_rep.description = "second run"
-        tech_rep.tags = "resequenced"
-        tech_rep.save()
+        """It shows no medium description and no tags; a missing key must leave the
+        stored value alone."""
+        self.sample.rep_description = "second run"
+        self.sample.tags = "resequenced"
+        self.sample.save()
 
         self.assertEqual(200, self.bulk([self.row(self.sample, ale=2)]).status_code)
 
         self.sample.refresh_from_db()
-        self.assertEqual("second run", self.sample.tech_rep.description)
-        self.assertEqual("resequenced", self.sample.tech_rep.tags)
+        self.assertEqual("second run", self.sample.rep_description)
+        self.assertEqual("resequenced", self.sample.tags)
 
     def test_a_duplicate_sample_name_is_refused(self):
         """Re-import finds an existing sample by name within the experiment, so two
         sharing one means a later upload can attach to the wrong sample."""
-        self.make_sample(1, 1, 2, 1, name="second")
+        self.make_sample(1, 1, "2-1", name="second")
 
         response = self.single(self.sample, sample_name="second")
 
@@ -250,21 +252,20 @@ class DescriptiveEditTestCase(SampleEditTestCase):
 class RenumberTestCase(SampleEditTestCase):
     def setUp(self):
         super().setUp()
-        self.first = self.make_sample(1, 1, 1, 1, name="first")
-        self.second = self.make_sample(1, 1, 2, 1, name="second")
+        self.first = self.make_sample(1, 1, "1-1", name="first")
+        self.second = self.make_sample(1, 1, "2-1", name="second")
 
     def test_renumbering_one_sample_leaves_its_sibling_alone(self):
-        """The whole reason identity is changed by re-pointing the FK. AleId, Flask,
-        Isolate and TechnicalReplicate rows are shared, so writing a number onto one
-        renumbers every sample beneath it."""
-        sibling_tech_rep = self.second.tech_rep_id
+        """The whole reason identity is changed by re-pointing the FK. AleId and Flask
+        rows are shared, so writing a number onto one renumbers every sample beneath it."""
+        sibling_flask = self.second.flask_id
 
         self.assertEqual(200, self.single(self.first, ale=2).status_code)
 
-        self.assertEqual(("2", 1, "1", 1), self.coordinate(self.first))
-        self.assertEqual(("1", 1, "2", 1), self.coordinate(self.second))
+        self.assertEqual(("2", 1, "1-1"), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "2-1"), self.coordinate(self.second))
         self.second.refresh_from_db()
-        self.assertEqual(sibling_tech_rep, self.second.tech_rep_id)
+        self.assertEqual(sibling_flask, self.second.flask_id)
 
     def test_the_sample_keeps_its_primary_key(self):
         """The store keys BAM and BigWig paths by pk, so a renumber must not move files."""
@@ -272,26 +273,26 @@ class RenumberTestCase(SampleEditTestCase):
 
         self.assertEqual(200, self.single(self.first, ale=7, flask=9).status_code)
 
-        self.assertEqual(("7", 9, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("7", 9, "1-1"), self.coordinate(self.first))
         self.assertEqual(original, self.first.pk)
         self.assertTrue(ResequencingExperiment.objects.filter(pk=original).exists())
 
     def test_a_fresh_coordinate_creates_the_rows_it_needs(self):
-        """One of each is created, and whatever the move emptied is pruned in the same
-        step -- so ALE and flask grow by one (ALE 1 and flask 1 still hold the sibling)
-        while isolate and replicate come out level, having been created and vacated."""
+        """One of each shared row is created and whatever the move emptied is pruned in
+        the same step -- so ALE and flask grow by one (ALE 1 and flask 1 still hold the
+        sibling) while the sample count does not move at all: the label is a column on the
+        row that was already there."""
         before = self.chain_counts()
-        self.single(self.first, ale=5, flask=5, isolate=5, rep=5)
-        ales, flasks, isolates, reps = self.chain_counts()
+        self.single(self.first, ale=5, flask=5, isolate="5-5")
+        ales, flasks, samples = self.chain_counts()
 
         self.assertEqual(before[0] + 1, ales)
         self.assertEqual(before[1] + 1, flasks)
-        self.assertEqual(before[2], isolates)
-        self.assertEqual(before[3], reps)
-        self.assertTrue(Isolate.objects.filter(
-            **{paths.to_ale_label(root="isolate"): 5, "isolate_number": 5}).exists())
-        self.assertFalse(Isolate.objects.filter(
-            **{paths.to_ale_label(root="isolate"): 1, "isolate_number": 1}).exists())
+        self.assertEqual(before[2], samples)
+        self.assertTrue(ResequencingExperiment.objects.filter(
+            **{paths.to_ale_label(): 5, "isolate_number": "5-5"}).exists())
+        self.assertFalse(ResequencingExperiment.objects.filter(
+            **{paths.to_ale_label(): 1, "isolate_number": "1-1"}).exists())
 
     def test_the_new_rows_inherit_media_from_the_source(self):
         """A renumber re-labels a sample; it does not move it to different growth
@@ -302,14 +303,14 @@ class RenumberTestCase(SampleEditTestCase):
         singleton row nothing ever displayed."""
         from aledb_experiment.models import Media
         other_media = Media.objects.create(description="LB")
-        flask = self.first.tech_rep.isolate.flask
+        flask = self.first.flask
         flask.media = other_media
         flask.save()
 
         self.single(self.first, ale=4)
 
         self.first.refresh_from_db()
-        self.assertEqual(other_media, self.first.tech_rep.isolate.flask.media)
+        self.assertEqual(other_media, self.first.flask.media)
 
     def test_moving_onto_a_flask_with_different_media_succeeds(self):
         """gd_import passes media= as a *lookup* kwarg to Flask.objects.get_or_create
@@ -317,52 +318,56 @@ class RenumberTestCase(SampleEditTestCase):
         against an existing flask carrying different media. Keying on the unique tuple is
         what makes this work."""
         from aledb_experiment.models import Media
-        self.make_sample(3, 3, 1, 1, name="third",
+        self.make_sample(3, 3, "1-1", name="third",
                          media=Media.objects.create(description="LB"))
 
-        response = self.single(self.first, ale=3, flask=3, isolate=9)
+        response = self.single(self.first, ale=3, flask=3, isolate="9-1")
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual(("3", 3, "9", 1), self.coordinate(self.first))
+        self.assertEqual(("3", 3, "9-1"), self.coordinate(self.first))
 
-    def test_two_isolate_rows_at_one_number_do_not_break_the_lookup(self):
-        """Isolate has no unique_together and gd_import get_or_creates it on six fields,
-        so duplicates at one (flask, isolate_number) already exist in real data.
-        get_or_create would raise MultipleObjectsReturned on them."""
-        flask = self.second.tech_rep.isolate.flask
-        Isolate.objects.create(flask=flask, isolate_number=2, is_population=True,
-                               reseq_date="2020-01-01")
+    def test_moving_onto_a_free_label_beside_an_occupied_one_works(self):
+        """This was `test_two_isolate_rows_at_one_number_do_not_break_the_lookup`, and the
+        state it guarded cannot arise now.
 
-        response = self.single(self.first, isolate=2, rep=4)
+        `Isolate` had no unique_together and gd_import get_or_created it on six fields, so
+        two rows at one (flask, isolate_number) existed in real data and `get_or_create`
+        raised MultipleObjectsReturned on them. The label is a column on the sample now:
+        two samples sharing one is what `plan_moves` refuses, and there is no row above to
+        be ambiguous. What is left worth asserting is the move itself."""
+        response = self.single(self.first, isolate="2-4")
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual(("1", 1, "2", 4), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "2-4"), self.coordinate(self.first))
 
     def test_the_population_flag_toggles(self):
         self.single(self.first, is_population=1)
         self.first.refresh_from_db()
-        self.assertTrue(self.first.tech_rep.isolate.is_population)
+        self.assertTrue(self.first.is_population)
 
     def test_a_named_ale_is_accepted(self):
         """The whole point of the text columns: `Ara-1` and `Ara+1` are two populations."""
         self.assertEqual(200, self.single(self.first, ale="Ara+1").status_code)
-        self.assertEqual(("Ara+1", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("Ara+1", 1, "1-1"), self.coordinate(self.first))
 
     def test_and_so_is_a_named_isolate(self):
+        """The label is whatever was typed -- no `-1` is appended here. The suffix comes
+        from a *filename* that carried a replicate field; a person editing the box is
+        saying what the sample is called."""
         self.assertEqual(200, self.single(self.first, isolate="763A").status_code)
-        self.assertEqual(("1", 1, "763A", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "763A"), self.coordinate(self.first))
 
     def test_a_non_integer_time_point_is_still_refused(self):
         """The flask is the one member of the coordinate that has to be a number."""
         response = self.single(self.first, flask="five hundred")
         self.assertEqual(400, response.status_code)
         self.assertIn("time point must be a whole number", response.json()["error"])
-        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "1-1"), self.coordinate(self.first))
 
     def test_a_blank_ale_is_refused(self):
         """A sample has to sit somewhere, and `strip()` makes a space blank."""
         self.assertEqual(400, self.single(self.first, ale="  ").status_code)
-        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "1-1"), self.coordinate(self.first))
 
     def test_an_over_long_label_is_refused_rather_than_truncated(self):
         response = self.single(self.first, isolate="x" * 101)
@@ -372,7 +377,7 @@ class RenumberTestCase(SampleEditTestCase):
     def test_surrounding_space_is_trimmed_from_a_label(self):
         """Two coordinates that read identically must not point at different rows."""
         self.assertEqual(200, self.single(self.first, ale=" Ara-1 ").status_code)
-        self.assertEqual(("Ara-1", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("Ara-1", 1, "1-1"), self.coordinate(self.first))
 
     def test_a_negative_number_is_refused(self):
         self.assertEqual(400, self.single(self.first, flask=-1).status_code)
@@ -380,15 +385,15 @@ class RenumberTestCase(SampleEditTestCase):
     def test_ale_zero_is_allowed(self):
         """STARTING_STRAIN_ALE_ID is "0", and the starting strain is a real sample."""
         self.assertEqual(200, self.single(self.first, ale=0).status_code)
-        self.assertEqual(("0", 1, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("0", 1, "1-1"), self.coordinate(self.first))
 
     def test_moving_onto_an_occupied_coordinate_is_refused(self):
-        response = self.single(self.first, isolate=2)
+        response = self.single(self.first, isolate="2-1")
 
         self.assertEqual(400, response.status_code)
         self.assertIn("cannot share one identity", response.json()["error"])
-        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
-        self.assertEqual(("1", 1, "2", 1), self.coordinate(self.second))
+        self.assertEqual(("1", 1, "1-1"), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "2-1"), self.coordinate(self.second))
 
     def test_a_non_owner_cannot_edit(self):
         stranger = User.objects.create(
@@ -400,23 +405,22 @@ class RenumberTestCase(SampleEditTestCase):
 class OrphanPruningTestCase(SampleEditTestCase):
     def setUp(self):
         super().setUp()
-        self.only = self.make_sample(1, 1, 1, 1, name="only")
+        self.only = self.make_sample(1, 1, "1-1", name="only")
 
     def test_moving_the_last_sample_out_removes_the_rows_it_emptied(self):
-        """Empty rows are not neutral: rebuild_sample_counts counts AleId/Flask/Isolate
-        rows, and the ALE picker is built from AleId rows."""
-        self.single(self.only, ale=2, flask=2, isolate=2)
+        """Empty rows are not neutral: rebuild_sample_counts counts AleId/Flask rows,
+        and the ALE picker is built from AleId rows."""
+        self.single(self.only, ale=2, flask=2, isolate="2-1")
 
         self.assertFalse(AleId.objects.filter(
             ale_experiment=self.experiment, ale_id=1).exists())
         self.assertEqual(1, Flask.objects.count())
-        self.assertEqual(1, Isolate.objects.count())
-        self.assertEqual(1, TechnicalReplicate.objects.count())
+        self.assertEqual(1, ResequencingExperiment.objects.count())
 
-    def test_a_flask_that_still_holds_another_isolate_survives(self):
-        self.make_sample(1, 1, 2, 1, name="sibling")
+    def test_a_flask_that_still_holds_another_sample_survives(self):
+        self.make_sample(1, 1, "2-1", name="sibling")
 
-        self.single(self.only, isolate=5)
+        self.single(self.only, isolate="5-1")
 
         self.assertTrue(Flask.objects.filter(
             **{paths.to_experiment(root="flask"): self.experiment,
@@ -425,17 +429,18 @@ class OrphanPruningTestCase(SampleEditTestCase):
             ale_experiment=self.experiment, ale_id=1).exists())
 
     # Two tests stood here, and both pinned orphan guards against columns nothing wrote.
-    # `AleId.starting_strain` went first: a FK to Isolate no code path ever set, replaced by
-    # `AleExperiment.ancestor`, which points at a sample. `Isolate.parent_isolate` has now
-    # gone the same way -- also never written, so the state its guard protected against could
-    # not arise. Neither the columns nor the guards remain.
+    # `AleId.starting_strain` went first: a FK to the isolate no code path ever set,
+    # replaced by `AleExperiment.ancestor`, which points at a sample. `parent_isolate` has
+    # gone the same way -- also never written, so the state its guard protected against
+    # could not arise. Neither the columns nor the guards remain, and neither does the
+    # model they were on.
 
 
 class BulkSampleEditTestCase(SampleEditTestCase):
     def setUp(self):
         super().setUp()
-        self.first = self.make_sample(1, 1, 1, 1, name="first")
-        self.second = self.make_sample(1, 2, 1, 1, name="second")
+        self.first = self.make_sample(1, 1, "1-1", name="first")
+        self.second = self.make_sample(1, 2, "1-1", name="second")
 
     def test_a_swap_succeeds_in_one_save(self):
         """A target held by a sample that is itself moving away in the same batch is not a
@@ -444,10 +449,10 @@ class BulkSampleEditTestCase(SampleEditTestCase):
                               self.row(self.second, flask=1)])
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual(("1", 2, "1", 1), self.coordinate(self.first))
-        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.second))
+        self.assertEqual(("1", 2, "1-1"), self.coordinate(self.first))
+        self.assertEqual(("1", 1, "1-1"), self.coordinate(self.second))
         self.assertEqual(2, Flask.objects.count())
-        self.assertEqual(2, Isolate.objects.count())
+        self.assertEqual(2, ResequencingExperiment.objects.count())
 
     def test_one_bad_row_saves_nothing(self):
         response = self.bulk([self.row(self.first, sample_name="renamed"),
@@ -463,19 +468,19 @@ class BulkSampleEditTestCase(SampleEditTestCase):
                               self.row(self.second, flask=3)])
 
         self.assertEqual(400, response.status_code)
-        self.assertEqual(("1", 1, "1", 1), self.coordinate(self.first))
-        self.assertEqual(("1", 2, "1", 1), self.coordinate(self.second))
+        self.assertEqual(("1", 1, "1-1"), self.coordinate(self.first))
+        self.assertEqual(("1", 2, "1-1"), self.coordinate(self.second))
 
     def test_a_sample_from_another_experiment_is_refused(self):
         created = self.client.post(
             "/ale/projects/create/", {"name": "Q", "experiment": "F"}).json()
         other = AleExperiment.objects.get(pk=created["experiment_id"])
-        foreign = self.make_sample(1, 1, 1, 1, name="foreign", experiment=other)
+        foreign = self.make_sample(1, 1, "1-1", name="foreign", experiment=other)
 
         response = self.bulk([self.row(foreign, flask=8)])
 
         self.assertEqual(400, response.status_code)
-        self.assertEqual(("1", 1, "1", 1), self.coordinate(foreign))
+        self.assertEqual(("1", 1, "1-1"), self.coordinate(foreign))
 
     def test_malformed_rows_is_a_400_not_a_500(self):
         response = self.client.post(
@@ -507,8 +512,8 @@ class RebuildHooksTestCase(SampleEditTestCase):
 
     def setUp(self):
         super().setUp()
-        self.first = self.make_sample(1, 1, 1, 1, name="first")
-        self.second = self.make_sample(1, 1, 2, 1, name="second")
+        self.first = self.make_sample(1, 1, "1-1", name="first")
+        self.second = self.make_sample(1, 1, "2-1", name="second")
 
     def _patched(self):
         """Patch the bus, not the individual rebuilds.
@@ -580,15 +585,15 @@ class ExistingDuplicateNamesTestCase(SampleEditTestCase):
 
     def setUp(self):
         super().setUp()
-        self.first = self.make_sample(1, 1, 1, 1, name="dup")
-        self.second = self.make_sample(1, 1, 2, 1, name="dup")
+        self.first = self.make_sample(1, 1, "1-1", name="dup")
+        self.second = self.make_sample(1, 1, "2-1", name="dup")
 
     def test_an_experiment_with_duplicate_names_can_still_be_saved(self):
         response = self.bulk([self.row(self.first, flask=4),
                               self.row(self.second)])
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual(("1", 4, "1", 1), self.coordinate(self.first))
+        self.assertEqual(("1", 4, "1-1"), self.coordinate(self.first))
 
     def test_one_of_them_can_be_renamed_to_something_free(self):
         response = self.single(self.first, sample_name="distinct")
@@ -608,7 +613,7 @@ class TimePointLabellingTestCase(SampleEditTestCase):
 
     def setUp(self):
         super().setUp()
-        self.sample = self.make_sample(1, 30000, 1, 1, name="first")
+        self.sample = self.make_sample(1, 30000, "1-1", name="first")
 
     def test_both_pages_label_it_time_point(self):
         for url in ("/ale/sample/%d/edit/" % self.sample.pk,
@@ -647,4 +652,4 @@ class TimePointLabellingTestCase(SampleEditTestCase):
 
     def test_a_large_time_point_saves(self):
         self.assertEqual(200, self.single(self.sample, flask=123456).status_code)
-        self.assertEqual(("1", 123456, "1", 1), self.coordinate(self.sample))
+        self.assertEqual(("1", 123456, "1-1"), self.coordinate(self.sample))

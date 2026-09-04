@@ -28,10 +28,9 @@
                 {% comment %} The column behind this is Flask.flask_number and stays so;
                    "Time point" is what it is used for -- fixation orders samples by it. {% endcomment %}
                 <th width="90">Time point</th>
-                <th width="70">Isolate</th>
-                <th width="70">Rep</th>
+                <th width="70">Sample</th>
                 <th width="50">Pop.</th>
-                <th>Isolate description</th>
+                <th>Description</th>
                 <th width="50"></th>
             </tr>
             </thead>
@@ -45,18 +44,16 @@
                     <td><input type="text" class="form-control input-sm" maxlength="200"
                                id="sb-name-{{ sample.id }}"
                                value="{{ sample.reseq.sample_name|default_if_none:'' }}"></td>
-                    {% comment %} ALE and isolate are text: a lineage is called `Ara-1` and a
-                       clone `763A`, and `type="number"` refuses both -- silently, by sending
-                       an empty value. Only the replicate is still a number here; the time
-                       point is text for the reason `sample_edit.html` gives. {% endcomment %}
+                    {% comment %} ALE and sample label are text: a lineage is called `Ara-1`,
+                       a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
+                       three -- silently, by sending an empty value. The time point is text
+                       for the reason `sample_edit.html` gives. {% endcomment %}
                     <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-ale-{{ sample.id }}" value="{{ sample.ale }}"></td>
                     <td><input type="text" class="form-control input-sm"
                                id="sb-flask-{{ sample.id }}" value="{{ sample.flask }}"></td>
                     <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-isolate-{{ sample.id }}" value="{{ sample.isolate }}"></td>
-                    <td><input type="number" min="0" class="form-control input-sm"
-                               id="sb-rep-{{ sample.id }}" value="{{ sample.rep }}"></td>
                     <td style="text-align: center;">
                         <input type="checkbox" id="sb-population-{{ sample.id }}"
                                {% if sample.is_population %}checked{% endif %}></td>
@@ -109,7 +106,6 @@
                     ale: value("ale", id),
                     flask: value("flask", id),
                     isolate: value("isolate", id),
-                    rep: value("rep", id),
                     is_population: document.getElementById("sb-population-" + id).checked ? 1 : 0,
                     isolate_description: value("isolate-description", id)
                 });

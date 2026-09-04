@@ -66,7 +66,7 @@ def _resolve(request):
         return observed.sequencing_experiment, observed.mutation, observed
 
     try:
-        # `ale_experiment` is a property over tech_rep -> isolate -> flask -> ale_id, not a
+        # `ale_experiment` is a property over flask -> ale_id, not a
         # column, so the chain is named the way `aledb_seq.util` names it.
         reseq = (ResequencingExperiment.objects
                  .select_related(paths.to_experiment())
@@ -240,7 +240,7 @@ def _locus(mutation):
     deletion opens showing the deletion rather than 200 bp of its left junction.
 
     `Mutation.reseq_reference` is the GenomeDiff seq_id, i.e. the contig name -- not to be
-    confused with `Isolate.reseq_reference`, which is the reference file's name. It matches
+    confused with the sample's `reseq_reference`, which is the reference file's name. It matches
     the FASTA's sequence names because both take the first whitespace-delimited token of the
     header, the same rule samtools uses.
     """

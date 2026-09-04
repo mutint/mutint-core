@@ -8,21 +8,65 @@ blank_field = {"blank": True, "null": True}
 
 # TODO: Refactor: figure out how to get a ResequencingExperiment to return its list of observed mutations and remove functionality from aledb_seq.views.common
 class ResequencingExperiment(models.Model):
-    tech_rep = models.ForeignKey("aledb_experiment.TechnicalReplicate", on_delete=models.CASCADE,
-                                 null=True)
-    person = models.CharField(max_length=200,
-                              blank=True)
-    reads = models.IntegerField(blank=True,
-                                default=0)
-    average_read_length = models.FloatField(blank=True,
-                                            default=0)
-    sample_name = models.CharField(max_length=200,
-                                blank=True,
-                                null=True)
-    mean_coverage = models.FloatField(blank=True,
-                                      default=0)
-    percentage_mapped = models.FloatField(blank=True,
-                                          default=0)
+    """One sample: what was sequenced, where it sits in the experiment, and what came back.
+
+    **Three models used to be here** -- `Isolate` held where the sample sat and what it was
+    called, `TechnicalReplicate` sat between them holding a number and some tags, and this
+    row held the sequencing. The 1:N between them was structural and never used: only two
+    code paths ever created a run, both one per replicate, and re-importing a sample is
+    replace-in-place rather than a second row. So the layers cost a four-segment join on
+    every query and bought nothing.
+
+    Collapsing them onto *this* row rather than onto `Isolate` is what makes the merge
+    cheap. `ObservedMutation.sequencing_experiment` and `MutationChange.sample` point here,
+    the managed store is `<store>/samples/<pk>/` keyed by this pk, and every variable in
+    the suite called `reseq` or `sample` already means this row. Merging the other way
+    would have moved all of it.
+
+    What a replicate was is now a suffix on the label: `3-30000-1-1` and `3-30000-1-2`
+    import as two samples named `1-1` and `1-2` under one flask, which is what they always
+    were.
+    """
+
+    #: Where the sample sits. Nullable because it always was: a run with no chain above it
+    #: is unreachable from every listing (`get_ordered_reseq_queryset` filters it out) and
+    #: the views 404 on it rather than treating it as ownerless.
+    flask = models.ForeignKey("aledb_experiment.Flask", on_delete=models.CASCADE, null=True)
+
+    #: Text, not a number -- see `AleId`. A clone is named `763A` as often as `763`, and
+    #: two clones from one flask differ only in that trailer. Unique within its flask by
+    #: convention rather than by constraint; `aledb_experiment.samples` enforces it on the
+    #: edit path, and `plan_moves` says why two samples must not share a coordinate.
+    isolate_number = models.CharField(max_length=100, default="1")
+
+    #: breseq marks a polymorphism run with `-p`, which is what an import reads this from.
+    is_population = models.BooleanField(default=False)
+
+    #: What a person calls this sample. Preferred over the computed coordinate wherever a
+    #: sample is labelled -- see `ale_flask_isolate_str`.
+    description = models.CharField(max_length=300, **blank_field)
+    reseq_reference = models.CharField(max_length=200, **blank_field)
+    reseq_date = models.CharField(max_length=200, **blank_field)
+    breseq_version = models.CharField(max_length=200, **blank_field)
+    library_prep = models.CharField(max_length=200, **blank_field)
+
+    #: Both came from `TechnicalReplicate`.
+    tags = models.CharField(max_length=500, **blank_field)
+    #: **Not a duplicate of `description` above.** The metadata importer writes the CSV's
+    #: "medium description" here, and `/metadata` and the interop API both publish it -- as
+    #: `tech_rep_description`, which is why the column keeps that spelling for now. The plan
+    #: for the merge had this dropped as "a second description on a row nobody looked at";
+    #: two pages look at it, and dropping it would have changed a payload an external
+    #: consumer reads while the commit claimed to be moving columns between tables.
+    rep_description = models.CharField(max_length=500, **blank_field)
+
+    person = models.CharField(max_length=200, blank=True)
+    #: What the file or folder this was imported from was called.
+    sample_name = models.CharField(max_length=200, blank=True, null=True)
+    reads = models.IntegerField(blank=True, default=0)
+    average_read_length = models.FloatField(blank=True, default=0)
+    mean_coverage = models.FloatField(blank=True, default=0)
+    percentage_mapped = models.FloatField(blank=True, default=0)
     # Whether this sample's alignment lives in the managed store. Deliberately a flag and
     # not a path: the location is derived from this row's pk by aledb_common.store. Three
     # per-row path columns used to live here -- location, experiment_location,
@@ -36,32 +80,28 @@ class ResequencingExperiment(models.Model):
 
     @property
     def ale_experiment(self):
-        return self.tech_rep.isolate.flask.ale_id.ale_experiment
+        return self.flask.ale_id.ale_experiment
 
     @property
     def ale_id(self):
-        return self.tech_rep.isolate.flask.ale_id.ale_id
+        return self.flask.ale_id.ale_id
 
     @property
     def flask_number(self):
-        return self.tech_rep.isolate.flask.flask_number
+        return self.flask.flask_number
 
     @property
     def ale_flask_isolate_str(self):
-
-        if self.tech_rep.isolate.description is not None:
-
-            if len(self.tech_rep.isolate.description) > 0:
-
-                return self.tech_rep.isolate.description
+        if self.description:
+            return self.description
 
         # `%s` throughout: the ALE and the isolate are text (`aledb_experiment.0008`), and
-        # writing the two that are still numbers as `%d` would only invite the next reader
+        # writing the one that is still a number as `%d` would only invite the next reader
         # to think the difference means something here.
-        return u"A%s F%s I%s R%s" % (self.ale_id,
-                                     self.flask_number,
-                                     self.tech_rep.isolate.isolate_number,
-                                     self.tech_rep.tech_rep_number)
+        #
+        # No `R` any more. The replicate was never a level of anything -- it is part of what
+        # a sample is called, so `3-30000-1-2` reads `I1-2` rather than `I1 R2`.
+        return u"A%s F%s I%s" % (self.ale_id, self.flask_number, self.isolate_number)
 
     @property
     def exp_ale_flask_isolate_str(self):
@@ -222,7 +262,7 @@ class ObservedMutation(models.Model):
     source = models.CharField(max_length=50, db_index=True, blank=True, null=True)
 
     def get_experiment_id(self):
-        return self.sequencing_experiment.tech_rep.isolate.flask.ale_id.ale_experiment_id
+        return self.sequencing_experiment.flask.ale_id.ale_experiment_id
 
 
 

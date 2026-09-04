@@ -324,7 +324,7 @@ def _serialize_metadata(metadata_list):
         # wrong rather than merely differently spelled:
         #
         #   knockouts          -> ale_description   it was always AleId.description
-        #   taxonomy_id        -> library_prep      it was always Isolate.library_prep
+        #   taxonomy_id        -> library_prep      it was always the isolate's library_prep
         #   phosphorous_source -> phosphorus_source the column has never had that o
         #
         # and three values the builder produced were dropped here and are published now.
@@ -379,7 +379,7 @@ def _serialize_mutations(mutations, search_gene=None):
     out = []
     for m in mutations:
         gene = m.mutation.gene
-        strain = m.sequencing_experiment.tech_rep.isolate.flask.ale_id.strain
+        strain = m.sequencing_experiment.flask.ale_id.strain
         url_gene = _extract_url_gene(gene, search_gene)
         item = {
             'observed_mutation_id': m.id,
@@ -392,7 +392,7 @@ def _serialize_mutations(mutations, search_gene=None):
             'frequency': m.frequency,
             'ref_seq': m.mutation.reseq_reference,
             'strain': strain,
-            'project_id': m.sequencing_experiment.tech_rep.isolate.flask.ale_id.ale_experiment.project_id,
+            'project_id': m.sequencing_experiment.flask.ale_id.ale_experiment.project_id,
             'url': f"{_BASE_SEARCH_URL}?hidden_columns=&gene={quote(url_gene)}&min_freq=&max_freq=&ref_seq=&min_pos=&max_pos=&mut_type=&project=&strain={quote(strain or '')}",
         }
 
