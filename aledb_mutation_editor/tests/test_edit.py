@@ -181,7 +181,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.edit(position=150)
 
         self.mut_1.refresh_from_db()
-        self.assertEqual(150, self.mut_1.gd_data["position"])
+        self.assertEqual(150, self.mut_1.genome_diff["position"])
 
     # --- the log --------------------------------------------------------------------------
 
@@ -298,8 +298,8 @@ class ChangeMutationTestCase(EditorTestCase):
 
         minted = Mutation.objects.get(experiment=self.experiment, start_position=150)
         self.mut_1.refresh_from_db()
-        self.assertEqual(150, minted.gd_data["position"])
-        self.assertEqual(100, self.mut_1.gd_data["position"])
+        self.assertEqual(150, minted.genome_diff["position"])
+        self.assertEqual(100, self.mut_1.genome_diff["position"])
 
     def test_a_sample_that_already_carries_the_target_is_not_given_a_second_copy(self):
         """It loses the old call and keeps the call it already had, frequency and read

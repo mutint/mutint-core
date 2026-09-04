@@ -109,17 +109,32 @@ def _call_kwargs(snapshot):
 def mutation_identity(mutation):
     """Enough of a Mutation to recreate it as *the same* mutation.
 
-    The `get_or_create` key plus the columns that carry everything renderable. `gd_data` is
-    what `to_gd_line()` round-trips for `gdtools APPLY` and `annotation` is what the
+    The `get_or_create` key plus the columns that carry everything renderable.
+    `extended_fields` holds the record `to_gd_line()` round-trips for `gdtools APPLY` and `annotation` is what the
     breseq-style tables render from, so a mutation recreated without them would come back
     displayable-but-degraded rather than identical.
     """
     identity = {field: getattr(mutation, field) for field in MUTATION_KEY_FIELDS}
-    identity["gd_data"] = mutation.gd_data
+    # The whole container, not core's record alone. A plugin's import record has to come
+    # back with the row -- `_delete_all_orphaned_mutations` hard-deletes a mutation whose
+    # last call goes, and a restore mints a fresh row from this blob. Carrying only what core
+    # knows about is exactly the "a field missing from it is a field a restore silently
+    # drops" failure `MutationEdit` warns of, one level down.
+    identity["extended_fields"] = mutation.extended_fields
     identity["annotation"] = mutation.annotation
     identity["product"] = mutation.product
     identity["protein_change"] = mutation.protein_change
     return identity
+
+
+def genome_diff_from(identity):
+    """The GenomeDiff record inside a logged identity's container.
+
+    The identity carries `extended_fields` whole so a foreign key survives a restore; a
+    caller asking "did the mutation change" wants core's record out of it.
+    """
+    container = identity.get("extended_fields") or {}
+    return container.get(Mutation.COMPONENT, {}).get(Mutation.GENOME_DIFF) or {}
 
 
 def mutation_key(mutation):
@@ -181,7 +196,7 @@ def mutation_for_identity(experiment, identity):
     return Mutation.objects.get_or_create(
         experiment=experiment,
         defaults={
-            "gd_data": identity.get("gd_data"),
+            "extended_fields": identity.get("extended_fields") or {},
             "annotation": identity.get("annotation"),
             "product": identity.get("product") or "",
             "protein_change": identity.get("protein_change") or "",
@@ -332,7 +347,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
 
     for field in MUTATION_KEY_FIELDS:
         setattr(mutation, field, identity.get(field))
-    mutation.gd_data = identity.get("gd_data")
+    mutation.extended_fields = identity.get("extended_fields") or {}
     mutation.annotation = identity.get("annotation")
     mutation.product = identity.get("product") or ""
     mutation.protein_change = identity.get("protein_change") or ""

@@ -20,6 +20,25 @@ Ordinary Django models in your app, with ordinary migrations. Two conventions wo
   as plain integers, which is only safe because of an invariant core maintains: the mutation
   editor deletes `MutationCall` rows and never `Mutation` rows, so an id keeps meaning what
   it meant.
+- **A record that arrives with an import can go on the mutation instead.**
+  `Mutation.extended_fields` is namespaced by component, so you may keep your own import
+  record beside core's without a table:
+
+  ```python
+  mutation.set_record("my_plugin", "vcf", {"qual": 40, "filter": "PASS"})
+  record = mutation.extended_fields.get("my_plugin", {}).get("vcf") or {}
+  ```
+
+  `set_record` merges rather than assigns, so you cannot drop core's key or another
+  plugin's. Two things earn their place there and nothing else does: the data **arrives with
+  the import** and shares the mutation's lifetime, and it is **read whole** rather than
+  queried. In exchange it survives the orphan sweep and a restore, because
+  `MutationEdit.mutation_identity` snapshots the whole container.
+
+  **What does not belong there**: anything with its own lifecycle, anything you want to
+  filter or aggregate on, and anything large. This column is loaded on every read of a
+  `Mutation`, which is the row this codebase works hardest not to instantiate. That is a
+  table with a plain foreign key — the rest of this page.
 - **Ask whether you need a table at all.** `aledb_converge` had one and dropped it: computing
   convergence on demand came out at 0.17s where keeping the stored answer correct cost a
   rebuilder, a staleness row marked on every edit, an `ensure_fresh` on the read path, and a

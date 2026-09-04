@@ -143,7 +143,7 @@ class AnnotatedImportTestCase(TestCase):
     def test_gd_data_stays_verbatim(self):
         # to_gd_line() splats every gd_data key onto the line it emits for
         # gdtools APPLY, so annotation must not leak in there.
-        gd_data = self.mutation_at(130).gd_data
+        gd_data = self.mutation_at(130).genome_diff
         self.assertEqual("SNP", gd_data["type"])
         self.assertEqual("A", gd_data["new_seq"])
         for key in ("gene_name", "snp_type", "mutation_category", "html_mutation"):

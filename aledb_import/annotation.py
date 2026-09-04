@@ -232,11 +232,11 @@ def reannotate_experiment(experiment, mutations=None, references=None, dry_run=F
             % (experiment.id,))
 
     annotated = changed = failed = 0
-    skipped = sum(1 for mutation in mutations if not mutation.gd_data)
+    skipped = sum(1 for mutation in mutations if not mutation.genome_diff)
 
     for group in sample_groups(experiment, mutations):
-        payloads = [(mutation, dict(mutation.gd_data))
-                    for mutation in group if mutation.gd_data]
+        payloads = [(mutation, dict(mutation.genome_diff))
+                    for mutation in group if mutation.genome_diff]
         if not payloads:
             continue
 

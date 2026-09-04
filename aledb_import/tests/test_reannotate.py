@@ -151,7 +151,7 @@ class ReannotateTestCase(TestCase):
 
     def test_gd_data_is_left_verbatim(self):
         self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
-        gd_data = self.mutation_at(130).gd_data
+        gd_data = self.mutation_at(130).genome_diff
         self.assertEqual("A", gd_data["new_seq"])
         for key in ("gene_name", "snp_type", "html_mutation"):
             self.assertNotIn(key, gd_data)

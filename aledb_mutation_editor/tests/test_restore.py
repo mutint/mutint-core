@@ -188,12 +188,37 @@ class SweptMutationTestCase(EditorTestCase):
         self.assertEqual("C>G", recreated.sequence_change)
         # Recreated through the same get_or_create key the importer uses, carrying the two
         # JSON columns -- so it renders and round-trips to a .gd line exactly as before.
-        self.assertEqual(self.mut_2.gd_data, recreated.gd_data)
+        self.assertEqual(self.mut_2.genome_diff, recreated.genome_diff)
         self.assertEqual(self.mut_2.annotation, recreated.annotation)
 
         restored = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=recreated)
         self.assertEqual(before, history.call_snapshot(restored))
+
+    def test_a_foreign_components_record_survives_the_sweep_and_the_restore(self):
+        """The premise of `extended_fields` being shared, and nothing else covers it.
+
+        A plugin may keep its own import record beside core's. The sweep hard-deletes the
+        Mutation and a restore mints a *new* row, so the only thing that can carry that
+        record across is `mutation_identity` -- which is why the snapshot takes the whole
+        container rather than the `genome_diff` key core knows about. Snapshot core's key
+        alone and this passes for core and silently loses everybody else's data.
+        """
+        mutation = Mutation.objects.get(pk=self.mut_2.pk)
+        mutation.set_record("some_plugin", "vcf", {"qual": 40, "filter": "PASS"})
+
+        call = MutationCall.objects.get(sample=self.sample_a, mutation=mutation)
+        history.apply_edits(self.experiment, self.owner, KIND_DELETE, removals=[call])
+        _delete_all_orphaned_mutations()
+        self.assertFalse(Mutation.objects.filter(pk=mutation.pk).exists())
+
+        history.restore(self.experiment, self.owner, None)
+
+        recreated = Mutation.objects.get(experiment=self.experiment, start_position=200)
+        self.assertEqual({"qual": 40, "filter": "PASS"},
+                         recreated.extended_fields["some_plugin"]["vcf"])
+        self.assertEqual(mutation.genome_diff, recreated.genome_diff,
+                         "core's own record came back too")
 
     def test_it_does_not_mint_a_second_row_for_a_mutation_that_survived(self):
         """mut_1 is observed in both samples, so deleting one call does not orphan it."""

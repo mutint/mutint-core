@@ -1,6 +1,6 @@
 """A stored mutation still writes the GenomeDiff line it was read from.
 
-`Mutation.gd_data` keeps breseq's record verbatim so `to_gd_line()` can hand it back to
+`Mutation.genome_diff` keeps breseq's record verbatim so `to_gd_line()` can hand it back to
 `gdtools APPLY`. On PostgreSQL that column is `jsonb`, **which does not preserve key order**,
 and `Record.__str__` writes the type's own fields in the schema's order and then whatever is
 left in the mapping's order. So the trailing `key=value` fields can come back in a different
@@ -56,7 +56,7 @@ class GdRoundTripTestCase(TestCase):
             mutation_type=record.type,
             start_position=record.attributes.get("position", 1),
             seq_id=record.attributes.get("seq_id", ""),
-            sequence_change="", gd_data=data)
+            sequence_change="", extended_fields=Mutation.genome_diff_container(data))
         # Refetched, so what is asserted is what the database gave back rather than the dict
         # still in memory -- which is the whole point on a backend that reorders keys.
         return Mutation.objects.get(pk=mutation.pk)
@@ -71,6 +71,26 @@ class GdRoundTripTestCase(TestCase):
 
                 self.assertEqual(original.type, again.type)
                 self.assertEqual(original.attributes, again.attributes)
+
+    def test_another_components_record_cannot_reach_the_emitted_line(self):
+        """What the nesting bought, and the reason it exists.
+
+        `to_gd_line` splats every key of what it is handed, with no allow-list -- so while
+        the record sat flat in the column, "nothing but the raw record may go in that field"
+        was a rule three files restated and nothing enforced. The record has a key of its own
+        now, `extended_fields` is shared, and this asserts the consequence: a component
+        writing beside core cannot corrupt a file `gdtools APPLY` reads.
+        """
+        mutation = self._stored(parse_one(LINES[0]))
+        mutation.set_record("some_plugin", "vcf", {"qual": 40, "filter": "PASS"})
+
+        line = Mutation.objects.get(pk=mutation.pk).to_gd_line()
+
+        self.assertNotIn("qual", line)
+        self.assertNotIn("PASS", line)
+        self.assertNotIn("some_plugin", line)
+        # And the record itself still round-trips, so this is not passing by emitting nothing.
+        self.assertEqual(parse_one(LINES[0]).attributes, parse_one(line).attributes)
 
     def test_the_positional_fields_keep_their_order(self):
         """The half that is not a mapping. `TYPE_SPECIFIC_FIELDS` decides these, so they

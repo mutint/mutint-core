@@ -82,7 +82,7 @@ class RewriteValueTestCase(TestCase):
         record = {"type": "MOB", "seq_id": "old", "region": "old:10-20",
                   "mob_region": "old:30-40", "gene_name": "old_gene", "position": 10}
 
-        updated, changed = reference_rename.rewrite_gd_data(record, self.MAPPING)
+        updated, changed = reference_rename.rewrite_genome_diff(record, self.MAPPING)
 
         self.assertTrue(changed)
         self.assertEqual("new", updated["seq_id"])
@@ -233,7 +233,7 @@ class RenameApplicationTestCase(TestCase):
 
         for mutation in Mutation.objects.filter(experiment=self.experiment):
             self.assertEqual("NC_TEST.1", mutation.seq_id)
-            self.assertEqual("NC_TEST.1", mutation.gd_data["seq_id"])
+            self.assertEqual("NC_TEST.1", mutation.genome_diff["seq_id"])
             self.assertIn("NC_TEST.1", mutation.to_gd_line())
             self.assertNotIn("test_ref", mutation.to_gd_line())
 
@@ -267,15 +267,16 @@ class RenameApplicationTestCase(TestCase):
         self.assertTrue(mutations)
         first = mutations[0]
         first.seq_id = "other"
-        first.gd_data = dict(first.gd_data, seq_id="other")
-        first.save(update_fields=["seq_id", "gd_data"])
+        first.set_record(Mutation.COMPONENT, Mutation.GENOME_DIFF,
+                         dict(first.genome_diff, seq_id="other"), save=False)
+        first.save(update_fields=["seq_id", "extended_fields"])
 
         reference_rename._rename_mutations(
             Mutation, self.experiment, {"test_ref": "other", "other": "test_ref"})
 
         first.refresh_from_db()
         self.assertEqual("test_ref", first.seq_id)
-        self.assertEqual("test_ref", first.gd_data["seq_id"])
+        self.assertEqual("test_ref", first.genome_diff["seq_id"])
         for other in Mutation.objects.filter(experiment=self.experiment).exclude(
                 pk=first.pk):
             self.assertEqual("other", other.seq_id)

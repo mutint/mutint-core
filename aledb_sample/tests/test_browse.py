@@ -12,7 +12,7 @@ from django.test import TestCase, override_settings
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import ReferenceSequences, MutationCall, Sample
+from aledb_sample.models import ReferenceSequences, Mutation, MutationCall, Sample
 from aledb_sample.views.browse import _sample_tracks
 
 
@@ -98,8 +98,10 @@ class BrowseMutationTestCase(TestCase):
         mutation = self.call.mutation
         mutation.start_position = 5000
         mutation.end_position = None
-        mutation.gd_data = {"type": "DEL", "seq_id": "ref", "position": 5000, "size": 20001}
-        mutation.save(update_fields=["start_position", "end_position", "gd_data"])
+        mutation.set_record(
+            Mutation.COMPONENT, Mutation.GENOME_DIFF,
+            {"type": "DEL", "seq_id": "ref", "position": 5000, "size": 20001}, save=False)
+        mutation.save(update_fields=["start_position", "end_position", "extended_fields"])
 
         self.assertEqual(_extent(mutation), (5000, 25000))
 

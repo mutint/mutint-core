@@ -8,8 +8,9 @@ it is a rename, and this module plans and applies it.
 Two things make it more than a column update.
 
 **The name is persisted in more places than the obvious one.** `Mutation.seq_id` is
-the visible one, but `to_gd_line()` reads the name out of the verbatim `gd_data` instead, and
-`gd_data` embeds names in more keys than `seq_id`: `region` on CON/INT and `mob_region` on an
+the visible one, but `to_gd_line()` reads the name out of the verbatim GenomeDiff record
+instead, and that record embeds names in more keys than `seq_id`: `region` on CON/INT and
+`mob_region` on an
 annotated MOB are both `seq:start-end`. `Mutation.sequence_change` duplicates the region
 string, and `UncalledRegion` has its own `seq_id`. Rewriting by *value*
 rather than by a list of keys is what covers all of them, including the ones breseq has not
@@ -315,7 +316,7 @@ def _check_bijection(pairs):
 def rewrite_value(value, mapping):
     """`value` with a leading sequence name replaced, or unchanged.
 
-    Covers a bare name (`gd_data["seq_id"]`) and a `seq:start-end` region (`region`,
+    Covers a bare name (the record's `seq_id`) and a `seq:start-end` region (`region`,
     `mob_region`, and the `sequence_change` copy of them) with one rule. Region values are
     split on the *first* colon, which is safe because `_validate_name` refuses a name
     containing one.
@@ -330,18 +331,22 @@ def rewrite_value(value, mapping):
     return value
 
 
-def rewrite_gd_data(gd_data, mapping):
+def rewrite_genome_diff(genome_diff, mapping):
     """Every string value of a verbatim GenomeDiff record, rewritten by value.
 
+    Takes the **record**, not the `extended_fields` container it now sits inside: the caller
+    unwraps and re-nests, so another component's import record passes through a rename
+    untouched rather than being walked by a rule written for breseq's keys.
+
     By value rather than by a list of keys on purpose. `seq_id` is not the only place a name
-    appears: CON and INT carry `region`, an annotated MOB carries `mob_region`, and `gd_data`
-    is contractually verbatim, so whatever breseq writes next is covered too. Rewriting by
-    key would leave those stale and `to_gd_line()` would emit a `.gd` that `gdtools APPLY`
-    resolves against a contig the reference no longer has.
+    appears: CON and INT carry `region`, an annotated MOB carries `mob_region`, and the
+    record is contractually verbatim, so whatever breseq writes next is covered too.
+    Rewriting by key would leave those stale and `to_gd_line()` would emit a `.gd` that
+    `gdtools APPLY` resolves against a contig the reference no longer has.
     """
-    if not gd_data:
-        return gd_data, False
-    updated = dict(gd_data)
+    if not genome_diff:
+        return genome_diff, False
+    updated = dict(genome_diff)
     changed = False
     for key, value in updated.items():
         new_value = rewrite_value(value, mapping)
@@ -360,26 +365,30 @@ def _rename_mutations(Mutation, experiment, mapping):
     constraint, so the result would be silent duplicates rather than an IntegrityError.
     """
     queryset = Mutation.objects.filter(experiment=experiment).only(
-        "id", "seq_id", "gd_data", "sequence_change")
+        "id", "seq_id", "extended_fields", "sequence_change")
     batch, total = [], 0
     for mutation in queryset.iterator(chunk_size=BATCH):
         new_reference = mapping.get(mutation.seq_id, mutation.seq_id)
-        new_gd_data, gd_changed = rewrite_gd_data(mutation.gd_data, mapping)
+        new_record, record_changed = rewrite_genome_diff(mutation.genome_diff, mapping)
         new_change = rewrite_value(mutation.sequence_change, mapping)
-        if (new_reference == mutation.seq_id and not gd_changed
+        if (new_reference == mutation.seq_id and not record_changed
                 and new_change == mutation.sequence_change):
             continue
         mutation.seq_id = new_reference
-        mutation.gd_data = new_gd_data
+        if record_changed:
+            # Merged rather than assigned, so a rename carries every other component's
+            # import records through untouched.
+            mutation.set_record(Mutation.COMPONENT, Mutation.GENOME_DIFF, new_record,
+                                save=False)
         mutation.sequence_change = new_change
         batch.append(mutation)
         if len(batch) >= BATCH:
             Mutation.objects.bulk_update(
-                batch, ["seq_id", "gd_data", "sequence_change"])
+                batch, ["seq_id", "extended_fields", "sequence_change"])
             total += len(batch)
             batch = []
     if batch:
-        Mutation.objects.bulk_update(batch, ["seq_id", "gd_data", "sequence_change"])
+        Mutation.objects.bulk_update(batch, ["seq_id", "extended_fields", "sequence_change"])
         total += len(batch)
     return total
 

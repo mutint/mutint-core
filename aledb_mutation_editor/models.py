@@ -106,7 +106,8 @@ class MutationEdit(models.Model):
     hard-deletes any Mutation with no MutationCall, and it runs after an experiment delete
     and after `delete_sample` -- so removing a mutation's last call makes it eligible
     for a sweep triggered by something else entirely. `mutation_identity` carries the exact
-    seven-field `get_or_create` tuple `gd_import` dedups on, plus `gd_data` and `annotation`,
+    seven-field `get_or_create` tuple `gd_import` dedups on, plus `extended_fields` and
+    `annotation`,
     which is enough to put the row back indistinguishable from an imported one. It is also
     exactly what the copy path needs, so one helper serves both.
     """

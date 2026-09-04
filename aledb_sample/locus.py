@@ -24,13 +24,13 @@ def mutation_extent(mutation):
     `start_position`/`end_position` are what the annotator already wrote from breseq's own
     rule (`mutation_interval`, the port of `cDiffEntry::get_reference_coordinate_start`/
     `_end`), so they are used as-is. A mutation imported before a reference was available has
-    neither, and is measured from its raw `gd_data` by that same function rather than by a
+    neither, and is measured from its raw GenomeDiff record by that same function rather than by a
     second derivation that could disagree with it.
     """
     if mutation.start_position and mutation.end_position:
         return mutation.start_position, mutation.end_position
-    if mutation.gd_data:
-        return mutation_interval(mutation.gd_data)
+    if mutation.genome_diff:
+        return mutation_interval(mutation.genome_diff)
     return mutation.start_position, mutation.start_position
 
 

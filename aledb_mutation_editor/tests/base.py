@@ -64,8 +64,8 @@ class EditorTestCase(TestCase):
             sequence_change=sequence_change,
             gene=gene,
             product="a product",
-            gd_data={"type": "SNP", "id": position, "parent_ids": None,
-                     "seq_id": "NC_000913", "position": position},
+            extended_fields=Mutation.genome_diff_container({"type": "SNP", "id": position, "parent_ids": None,
+                     "seq_id": "NC_000913", "position": position}),
             annotation={"gene_name": gene})
 
     def observe(self, sample, mutation, frequency="0.7500", present=True):

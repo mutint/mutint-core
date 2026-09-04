@@ -101,7 +101,7 @@ class GdImportTestCase(TestCase):
         self.assertEqual(Sample.objects.get().name, "1-1")
 
         # gd_data captured on every row; REFSEQ propagated to the sample.
-        self.assertFalse(Mutation.objects.filter(gd_data__isnull=True).exists())
+        self.assertFalse(Mutation.objects.filter(extended_fields__isnull=True).exists())
         self.assertTrue(Sample.objects.get().reference_genome)
 
     def test_round_trip_is_apply_compatible(self):
@@ -615,7 +615,7 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         summary = self._import_text("SNP\t.\t.\tREL606\t100\tA\n")
 
         self.assertEqual(1, summary["total_mutations"])
-        self.assertIsNone(Mutation.objects.get(start_position=100).gd_data["id"])
+        self.assertIsNone(Mutation.objects.get(start_position=100).genome_diff["id"])
 
     def test_it_writes_the_dot_back_rather_than_the_string_None(self):
         """The old version emitted `None` in the id column, producing a file breseq cannot
@@ -633,7 +633,7 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         but the value must."""
         self._import_text("SNP\t1\t.\tREL606\t100\tA\tfrequency=8.39314286e-01\n")
 
-        stored = Mutation.objects.get(start_position=100).gd_data["frequency"]
+        stored = Mutation.objects.get(start_position=100).genome_diff["frequency"]
         self.assertAlmostEqual(0.839314286, stored)
         self.assertIsInstance(stored, float)
         self.assertEqual(

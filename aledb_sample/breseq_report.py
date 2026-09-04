@@ -32,12 +32,12 @@ def is_mixed(reseq):
 def gd_entry(mutation):
     """The annotated GD record for a Mutation, or None if it has no annotation.
 
-    ``gd_data`` alone is not enough: a SNP's Mutation column is "ref→new", and the
+    The record alone is not enough: a SNP's Mutation column is "ref→new", and the
     reference base is something annotation derives, not something the .gd carries.
     """
-    if not mutation.gd_data or not mutation.annotation:
+    if not mutation.genome_diff or not mutation.annotation:
         return None
-    entry = dict(mutation.gd_data)
+    entry = dict(mutation.genome_diff)
     entry.update(mutation.annotation)
     return entry
 

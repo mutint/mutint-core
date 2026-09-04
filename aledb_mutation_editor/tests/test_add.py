@@ -159,7 +159,7 @@ class AddTestCase(EditorTestCase):
     def test_gd_data_is_the_verbatim_record(self):
         self.add("MOB", seq_id="NC_000913", position=5000,
                  repeat_name="IS150", strand=-1, duplication_size=9)
-        gd_data = Mutation.objects.get(start_position=5000).gd_data
+        gd_data = Mutation.objects.get(start_position=5000).genome_diff
 
         self.assertEqual("MOB", gd_data["type"])
         self.assertEqual(-1, gd_data["strand"], "integers stay integers")
@@ -170,7 +170,7 @@ class AddTestCase(EditorTestCase):
         """`to_gd_line` falls back to the row's own pk, which exists and is unique. A record
         built before its row does not have one to give."""
         self.snp()
-        self.assertNotIn("id", Mutation.objects.get(start_position=5000).gd_data)
+        self.assertNotIn("id", Mutation.objects.get(start_position=5000).genome_diff)
 
     def test_it_round_trips_to_a_gd_line(self):
         self.snp()
@@ -186,7 +186,7 @@ class AddTestCase(EditorTestCase):
         """gd_data lives on the Mutation, which every sample observing it shares; a frequency
         is one sample's."""
         self.add(seq_id="NC_000913", position=5000, new_seq="T", frequency="0.5")
-        self.assertNotIn("frequency", Mutation.objects.get(start_position=5000).gd_data)
+        self.assertNotIn("frequency", Mutation.objects.get(start_position=5000).genome_diff)
 
     # --- refusals --------------------------------------------------------------------------
 
@@ -388,7 +388,7 @@ class RecordBuilderTestCase(EditorTestCase):
     """The pieces, without a request."""
 
     def test_an_unannotated_record_still_produces_a_usable_identity(self):
-        gd_data = record_builder.build_gd_data(
+        gd_data = record_builder.build_genome_diff(
             "SNP", {"seq_id": "NC_000913", "position": 42, "new_seq": "G"})
         record, annotated = record_builder.annotate(gd_data, self.experiment)
 
@@ -409,23 +409,23 @@ class RecordBuilderTestCase(EditorTestCase):
         self.assertEqual("None", identity["gene"])
 
     def test_the_identity_has_exactly_the_keys_history_expects(self):
-        gd_data = record_builder.build_gd_data(
+        gd_data = record_builder.build_genome_diff(
             "DEL", {"seq_id": "NC_000913", "position": 42, "size": 3})
         record, _ = record_builder.annotate(gd_data, self.experiment)
         identity = record_builder.build_identity("DEL", gd_data, record)
 
         expected = set(history.MUTATION_KEY_FIELDS) | {
-            "gd_data", "annotation", "product", "protein_change"}
+            "extended_fields", "annotation", "product", "protein_change"}
         self.assertEqual(expected, set(identity))
 
     def test_size_becomes_feature_length(self):
-        gd_data = record_builder.build_gd_data(
+        gd_data = record_builder.build_genome_diff(
             "DEL", {"seq_id": "NC_000913", "position": 42, "size": 3})
         record, _ = record_builder.annotate(gd_data, self.experiment)
         self.assertEqual(3, record_builder.build_identity("DEL", gd_data, record)["feature_length"])
 
     def test_a_type_without_a_size_has_no_feature_length(self):
-        gd_data = record_builder.build_gd_data(
+        gd_data = record_builder.build_genome_diff(
             "SNP", {"seq_id": "NC_000913", "position": 42, "new_seq": "G"})
         record, _ = record_builder.annotate(gd_data, self.experiment)
         self.assertIsNone(

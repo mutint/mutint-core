@@ -514,11 +514,11 @@ def _mutation_for_page(request, experiment):
 def _initial_fields(mutation):
     """What the form opens with: the mutation's stored record, minus its bookkeeping.
 
-    Straight from `gd_data`, which is the verbatim GenomeDiff record -- so the form is
+    Straight from the stored GenomeDiff record -- so the form is
     populated by the same keys `validation.validate_record` will read back, and a field the
     add form knows nothing about cannot appear.
     """
-    data = dict(mutation.gd_data or {})
+    data = dict(mutation.genome_diff)
     for key in ("type", "id", "parent_ids", "frequency"):
         data.pop(key, None)
     return {name: ("" if value is None else value) for name, value in data.items()}
@@ -766,9 +766,10 @@ def mutation_add_apply(request):
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
 
-        gd_data = record_builder.build_gd_data(mutation_type, attributes)
-        annotated_record, _ = record_builder.annotate(gd_data, experiment)
-        identity = record_builder.build_identity(mutation_type, gd_data, annotated_record)
+        genome_diff = record_builder.build_genome_diff(mutation_type, attributes)
+        annotated_record, _ = record_builder.annotate(genome_diff, experiment)
+        identity = record_builder.build_identity(
+            mutation_type, genome_diff, annotated_record)
         call = record_builder.build_call(frequency)
 
         additions, already = _plan_add(experiment, identity, call, targets)
@@ -870,9 +871,10 @@ def mutation_edit_apply(request):
         if errors:
             raise EditorError("That mutation cannot be changed as entered.", errors=errors)
 
-        gd_data = record_builder.build_gd_data(mutation_type, attributes)
-        annotated_record, _ = record_builder.annotate(gd_data, experiment)
-        identity = record_builder.build_identity(mutation_type, gd_data, annotated_record)
+        genome_diff = record_builder.build_genome_diff(mutation_type, attributes)
+        annotated_record, _ = record_builder.annotate(genome_diff, experiment)
+        identity = record_builder.build_identity(
+            mutation_type, genome_diff, annotated_record)
 
         _refuse_unchanged(mutation, identity)
 
@@ -992,12 +994,17 @@ def _mutation_for_write(request, experiment):
 def _refuse_unchanged(mutation, identity):
     """A change that changes nothing is refused rather than logged.
 
-    Both halves matter: the six key fields decide what the mutation *is*, and `gd_data` can
-    move without them -- a MOB's `strand`, say -- which is a real change to what
+    Both halves matter: the six key fields decide what the mutation *is*, and the stored
+    record can move without them -- a MOB's `strand`, say -- which is a real change to what
     `to_gd_line()` writes even though the identity is the same.
+
+    It compares the **record**, not the whole `extended_fields` container. The question is
+    whether this mutation changed; another component's key moving is not that, and reading
+    the container would make an unrelated write look like an edit.
     """
     if (history.mutation_key(mutation) == history.key_from_identity(identity)
-            and (mutation.gd_data or None) == (identity.get("gd_data") or None)):
+            and (mutation.genome_diff or None)
+                == (history.genome_diff_from(identity) or None)):
         raise EditorError("Those are the values it already has.")
 
 

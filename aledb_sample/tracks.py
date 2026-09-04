@@ -86,7 +86,8 @@ def _interval(start_position, end_position):
 
     It took a third argument, `position`, which was the same number as `start_position` in
     every row: the two columns merged. Deliberately still not a call into `mutation_extent`:
-    that takes a model instance and this reads tuples, and re-deriving from `gd_data` here
+    that takes a model instance and this reads tuples, and re-deriving from the stored
+    record here
     would mean fetching a JSONField for every row to answer what two integer columns say.
     """
     end_1 = end_position or start_position

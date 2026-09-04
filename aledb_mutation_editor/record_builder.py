@@ -1,8 +1,9 @@
 """Turning validated form fields into the same rows an import would have produced.
 
 A mutation added here has to be indistinguishable from one breseq called, because everything
-downstream treats them alike: the mutation tables render from `gd_data` + `annotation`,
-`to_gd_line()` round-trips `gd_data` back out for `gdtools APPLY`, and `Mutation.objects
+downstream treats them alike: the mutation tables render from the stored record +
+`annotation`, `to_gd_line()` round-trips that record back out for `gdtools APPLY`, and
+`Mutation.objects
 .get_or_create` dedups on seven fields. Get any of that subtly different and a hand-entered
 mutation quietly becomes a *second* row the next time the same call is imported.
 
@@ -16,6 +17,7 @@ import logging
 from aledb_import import annotation
 from aledb_import.gd_import import synthesize_sequence_change
 from aledb_import.gene_annotation import get_annotated_gene_list
+from aledb_sample.models import Mutation
 from genomediff.records import Record
 
 logger = logging.getLogger(__name__)
@@ -26,8 +28,9 @@ logger = logging.getLogger(__name__)
 MANUAL_SOURCE = "manual"
 
 
-def build_gd_data(mutation_type, attributes):
-    """The verbatim GenomeDiff record, as `Mutation.gd_data` stores it.
+def build_genome_diff(mutation_type, attributes):
+    """The verbatim GenomeDiff record, as `extended_fields["aledb_core"]["genome_diff"]`
+    stores it.
 
     Two omissions are deliberate.
 
@@ -35,14 +38,14 @@ def build_gd_data(mutation_type, attributes):
     makes an exported line carry the Mutation's own primary key -- which exists, is unique, and
     needs nothing invented. A record built before the row exists has no id to give it.
 
-    **No `frequency`.** It is per-call, and `gd_data` lives on the `Mutation`, which
-    every sample observing it shares. Putting one sample's frequency there would attach it to
-    all of them.
+    **No `frequency`.** It is per-call, and the record lives on the `Mutation`, which every
+    sample observing it shares. Putting one sample's frequency there would attach it to all
+    of them.
     """
     return dict(attributes, type=mutation_type, parent_ids=None)
 
 
-def annotate(gd_data, experiment):
+def annotate(genome_diff, experiment):
     """A copy of the record with breseq's annotation filled in, where that is possible.
 
     Returns `(record, annotated)`. `annotate_records` answers False rather than raising when
@@ -50,19 +53,19 @@ def annotate(gd_data, experiment):
     unannotated and `./aledb reannotate` fills it in once a reference arrives, exactly as for a
     `.gd` imported before one existed.
     """
-    record = dict(gd_data)
+    record = dict(genome_diff)
     annotated = annotation.annotate_records([record], experiment)
     return record, bool(annotated)
 
 
-def build_identity(mutation_type, gd_data, annotated_record):
+def build_identity(mutation_type, genome_diff, annotated_record):
     """The ten-key identity `history.apply_edits` mints a `Mutation` from.
 
     The six `MUTATION_KEY_FIELDS` are the `get_or_create` key, so each has to be derived the
     way `gd_import` derives it. `feature_length` is `size`, which most types do not have;
     `seq_id` is the contig. The remaining four ride along as creation defaults.
     """
-    attributes = {key: value for key, value in gd_data.items()
+    attributes = {key: value for key, value in genome_diff.items()
                   if key not in ("type", "parent_ids")}
 
     # Built field by field through `set()` rather than through the constructor's
@@ -99,7 +102,9 @@ def build_identity(mutation_type, gd_data, annotated_record):
         "feature_length": attributes.get("size"),
         "sequence_change": synthesize_sequence_change(record)[:200],
         "gene": ", ".join(gene_list),
-        "gd_data": gd_data,
+        # The whole container, not just core's record: a plugin's key has to survive
+        # a delete and a restore, and this snapshot is the only thing that carries it.
+        "extended_fields": Mutation.genome_diff_container(genome_diff),
         "annotation": annotated.get("annotation"),
         "product": annotated.get("product") or "",
         "protein_change": annotated.get("protein_change") or "",

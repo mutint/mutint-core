@@ -77,7 +77,8 @@ def register_sequence_rename_hook(fn):
 
     A rename replaces the contig names an experiment's mutations carry -- the same genome,
     relabelled. Core rewrites everything it owns (`Mutation.seq_id`, the verbatim
-    `gd_data`, the missing-coverage evidence, the reference row), but anything an app
+    the stored GenomeDiff record, the missing-coverage evidence, the reference row), but
+    anything an app
     *derived* from those names is core's blind spot, and a plugin's derived data keyed on
     the old name is silently wrong rather than visibly broken.
 

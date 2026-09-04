@@ -10,7 +10,8 @@ stale until this recomputes them.
     ./aledb reannotate 4 --ref REL606.gbk     # attach a new one, then re-annotate
     ./aledb reannotate 4 --ref new.gbk -n     # report what would change
 
-Mutations carry the .gd record they were imported from (``Mutation.gd_data``), so
+Mutations carry the .gd record they were imported from
+(``Mutation.genome_diff``), so
 this needs nothing on disk but the reference itself.
 """
 

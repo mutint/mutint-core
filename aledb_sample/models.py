@@ -283,16 +283,78 @@ class Mutation(models.Model):
     # row, to render a mutation. Keeping them here means a new annotation field
     # needs no migration.
     #
-    # Deliberately NOT folded into gd_data: to_gd_line() splats every gd_data key
-    # onto the line it emits for gdtools APPLY, and display markup has no place
-    # there.
+    # Deliberately NOT folded into `extended_fields`: this is derived display markup, it is
+    # rewritten on every re-annotation, and it has a different lifecycle from a record that
+    # arrives once with an import and never moves again.
     annotation = models.JSONField(**blank_field)
 
-    # Verbatim parsed GenomeDiff mutation record (type, id, parent_ids and all
-    # type-specific + optional key=value fields), stored losslessly so a mutation
-    # can be round-tripped back to a .gd line for gdtools APPLY. Null for mutations
-    # imported before this field existed (e.g. via the breseq-directory CLI path).
-    gd_data = models.JSONField(**blank_field)
+    #: The records this mutation was imported from, namespaced by the component that owns
+    #: each one::
+    #:
+    #:     {"aledb_core": {"genome_diff": { ...the verbatim breseq record... }}}
+    #:
+    #: **Two levels, and the outer one is a component rather than a Django app label** --
+    #: core is fifteen apps, so `aledb_core` names the checkout. A plugin writes under its
+    #: own name, so two of them cannot collide and neither can collide with core.
+    #:
+    #: **The nesting is what enforces the verbatim rule.** This was `gd_data`, holding the
+    #: record flat, and `to_gd_line()` splats every key it finds onto the line it emits for
+    #: `gdtools APPLY` -- so anything a second writer put here landed in a `.gd` file. The
+    #: rule was a comment, restated on `annotation`, on `MutationCall.evidence` and in
+    #: `gd_import`, because a comment is all there was. `to_gd_line` reads one key now, and
+    #: a foreign key in this column cannot reach an emitted line however it got here.
+    #:
+    #: **What belongs here**: a record that arrives with an import, shares this mutation's
+    #: lifetime, and is read whole rather than queried -- another caller's output, a VCF
+    #: record. **What does not**: anything with its own lifecycle, and anything large. This
+    #: column is loaded on every read of a row the suite works hard not to instantiate, so a
+    #: plugin storing real state should own a table with a plain foreign key instead -- see
+    #: `docs/plugin/derived-data.md`, which says so already.
+    #:
+    #: `default=dict` where the two JSON columns above it are nullable: for them "never
+    #: written" is a real state, and for a container several writers merge into the empty
+    #: dict is the right zero. A mutation with no stored record is one whose `genome_diff`
+    #: key is absent, which is what the accessor answers.
+    extended_fields = models.JSONField(default=dict)
+
+    #: The component key core writes under, and the kind of record it writes.
+    COMPONENT = "aledb_core"
+    GENOME_DIFF = "genome_diff"
+
+    @property
+    def genome_diff(self):
+        """The verbatim GenomeDiff record, or `{}` for a row that has none.
+
+        Every reader goes through this rather than spelling two levels. `{}` rather than
+        None because every guard on the old flat column was a truthiness check, and the two
+        were already interchangeable everywhere.
+        """
+        return (self.extended_fields or {}).get(self.COMPONENT, {}).get(self.GENOME_DIFF) or {}
+
+    @classmethod
+    def genome_diff_container(cls, record):
+        """`extended_fields` holding one GenomeDiff record and nothing else.
+
+        For a caller building a Mutation from scratch -- the importer, the editor's record
+        builder, a fixture. Spelling the two levels out at each of those is how the nesting
+        would drift.
+        """
+        return {cls.COMPONENT: {cls.GENOME_DIFF: record}}
+
+    def set_record(self, component, kind, value, save=True):
+        """Merge one record in, leaving every other component's keys alone.
+
+        A shared column's hazard is the lost update: `save()` writes the whole thing, so two
+        writers that each read, modify and write can silently drop one another's keys. This
+        merges into the container as it stands and saves only this field.
+        """
+        container = dict(self.extended_fields or {})
+        owned = dict(container.get(component) or {})
+        owned[kind] = value
+        container[component] = owned
+        self.extended_fields = container
+        if save:
+            self.save(update_fields=["extended_fields"])
 
     def __unicode__(self):
         return u"%d %s" % (self.start_position,
@@ -301,14 +363,21 @@ class Mutation(models.Model):
     def to_gd_line(self) -> str:
         """Reconstruct this mutation's GenomeDiff line (for gdtools APPLY).
 
-        Prefers the verbatim ``gd_data``; falls back to a best-effort line built
-        from the scalar columns for legacy rows where ``gd_data`` is null (that
-        fallback is not guaranteed APPLY-complete — the discrete alleles were not
-        captured for those rows)."""
+        Prefers the verbatim record; falls back to a best-effort line built from the scalar
+        columns for legacy rows that have none (that fallback is not guaranteed
+        APPLY-complete — the discrete alleles were not captured for those rows).
+
+        **It splats every key it is given, and that is why it reads one key rather than the
+        column.** `extended_fields` is shared — a plugin may keep its own import records
+        beside this one — and every remaining key of whatever this reads lands on the emitted
+        line. Reading `genome_diff` is what makes "nothing but the raw record" a property of
+        the code instead of a comment three files repeat.
+        """
         from genomediff.records import Record, TYPE_SPECIFIC_FIELDS
 
-        if self.gd_data:
-            data = dict(self.gd_data)
+        record = self.genome_diff
+        if record:
+            data = dict(record)
             record_type = data.pop('type', self.mutation_type)
             record_id = data.pop('id', self.id)
             parent_ids = data.pop('parent_ids', None)
@@ -377,12 +446,11 @@ class MutationCall(models.Model):
     # The same argument as `Mutation.annotation`, one level down: nothing queries these, they
     # are read whole and per row to render a cell, and a caller with a field we have no
     # column for should not need a migration. What differs is the *scope* -- `annotation` and
-    # `gd_data` describe the mutation, which every sample carrying it shares, while this
+    # `extended_fields` describe the mutation, which every sample carrying it shares, while this
     # describes one sample's evidence for it and is exactly what cannot live up there.
     #
-    # Deliberately not folded into `gd_data`: `Mutation.to_gd_line()` splats every key of
-    # that field onto the line it emits for `gdtools APPLY`, so a per-sample read count would
-    # end up in a file describing the mutation.
+    # Deliberately not folded into `extended_fields`: that column is per-mutation and this
+    # is per-call -- one sample's read counts attached to a row every sample shares.
     evidence = models.JSONField(**blank_field)
 
     # The one frequency. `frequency_gatk` sat beside it, for the GATK half of a gdtools

@@ -8,8 +8,8 @@ the CLI upload path reads a full breseq output directory (``.gd`` + ``index.html
 UI and reads everything it needs from the GenomeDiff itself.
 
 Parsing uses the ``genomediff`` package. Each mutation's full parsed record is
-stored verbatim in ``Mutation.gd_data`` so it can be round-tripped back to a
-``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
+stored verbatim in ``Mutation.extended_fields["aledb_core"]["genome_diff"]`` so it can be
+round-tripped back to a ``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
 
 Imported mutations are attached to the normal experiment hierarchy
 (``Experiment -> Population -> Sample -> MutationCall``) so they appear in the existing
@@ -422,14 +422,14 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
         **dict(record.attributes),
     } for record in records]
 
-    # Annotate copies: gd_data is contractually verbatim, and to_gd_line() splats
+    # Annotate copies: the stored record is contractually verbatim, and to_gd_line() splats
     # every key of it onto the line it emits for gdtools APPLY.
     annotated = [dict(entry) for entry in verbatim]
     if experiment is not None:
         annotation.annotate_records(annotated, experiment)
 
     mutation_calls = []
-    for record, gd_data, annotated_record in zip(records, verbatim, annotated):
+    for record, genome_diff, annotated_record in zip(records, verbatim, annotated):
         attributes = dict(record.attributes)
         gene_list = get_annotated_gene_list(
             annotated_record.get("gene_name") or attributes.get("gene_name"),
@@ -449,14 +449,15 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             sequence_change=sequence_change,
             gene=gene_str,
             defaults={
-                "gd_data": gd_data,
+                "extended_fields": Mutation.genome_diff_container(genome_diff),
                 "product": attributes.get("gene_product") or "",
                 "protein_change": "",
             })
-        if not created and not mutation.gd_data:
+        if not created and not mutation.genome_diff:
             # Backfill a pre-existing (e.g. CLI-imported) row so it becomes APPLY-complete.
-            mutation.gd_data = gd_data
-            mutation.save(update_fields=["gd_data"])
+            # Through `set_record`, which merges: the row may already carry another
+            # component's import record, and a blind assignment would drop it.
+            mutation.set_record(Mutation.COMPONENT, Mutation.GENOME_DIFF, genome_diff)
         annotation.apply_to(mutation, annotated_record)
 
         mutation_calls.append(MutationCall(
@@ -529,7 +530,7 @@ def export_gd_text(seq_experiment):
 
 def synthesize_sequence_change(record):
     """Build a short human-readable allele description used for display and as the
-    dedup discriminator (the discrete alleles themselves live in ``gd_data``).
+    dedup discriminator (the discrete alleles themselves live in the stored record).
 
     Public because `aledb_mutation_editor` builds mutations by hand and has to land on the
     same string this does. `sequence_change` is one of the seven fields
