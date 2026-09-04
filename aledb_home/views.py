@@ -4,6 +4,7 @@ from aledb_common.util import get_user_context
 
 from django.template import TemplateDoesNotExist, loader
 from aledb_common.logger import user_extra
+from aledb_common.rebuild_registry import ensure_fresh
 from aledb_dashboard.models import MutationCallCounts, UniqueMutationCounts
 from aledb_dashboard.views import get_general_count_dict
 # from aledb_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, STRAINS, REF_SEQS
@@ -35,6 +36,13 @@ def home(request):
         # No splash configured -- show the projects, which is what a bare aledb-core
         # has to show. Rendered in place rather than redirected, so `/` stays `/`.
         return projects(request)
+
+    # The same pair the dashboard calls, and for the same reason: marking is cheap and
+    # running is not, so whichever of the two pages is read first pays once. This page had
+    # neither, so a deployment whose splash is the only page anybody opens served whatever
+    # the last rebuild left -- indefinitely, since nothing else here would ever refresh it.
+    ensure_fresh('sample_counts')
+    ensure_fresh('mutation_counts')
 
     general_count_dict = get_general_count_dict()
     mutation_call_counts = MutationCallCounts.objects.first()
