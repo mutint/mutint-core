@@ -1,7 +1,7 @@
 """Import breseq GenomeDiff (.gd) mutation entries directly from uploaded files.
 
 This is the one place mutations are stored. It used to be the HTML-free counterpart
-to a second, breseq-directory-shaped importer; that one is gone and ``./aledb upload``
+to a second, breseq-directory-shaped importer; that one is gone and ``./aledb import``
 comes through here too:
 the CLI upload path reads a full breseq output directory (``.gd`` + ``index.html``
 + ``summary.html``), while this path takes bare ``.gd`` files dropped in the web
@@ -12,10 +12,11 @@ stored verbatim in ``Mutation.gd_data`` so it can be round-tripped back to a
 ``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
 
 Imported mutations are attached to the normal experiment hierarchy
-(``Experiment -> Population -> TimePoint -> Sample -> MutationCall``) so they appear in the existing
-mutation tables, stats, and dashboards with no extra plumbing. The chain is
-synthesized the same way the CLI does it: a default Media
-placeholders, and the A-F-I-R identity parsed from each filename.
+(``Experiment -> Population -> Sample -> MutationCall``) so they appear in the existing
+mutation tables, stats and dashboards with no extra plumbing. The chain is synthesized from
+the A-F-I-R identity parsed from each filename, and nothing else -- there used to be
+placeholder `Media`, `Instrument` and `FreezerBox` rows to satisfy required foreign keys
+that nothing ever read.
 """
 
 import logging
@@ -24,12 +25,9 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
-import aledb_metadata.parser as metadata_defaults
 from aledb_experiment.models import (
     Experiment,
     Population,
-    TimePoint,
-    Media,
     Project,
 )
 from aledb_import import annotation
@@ -117,12 +115,12 @@ def import_gd_files(uploaded_files, project_name, experiment_name, person, is_pu
 
 
 def _prepare_experiment(project_name, experiment_name, person, is_public):
-    """Get/create the target project, experiment and the shared placeholder Media.
+    """Get/create the target project and experiment.
 
-    There used to be a placeholder Instrument and FreezerBox here too. Both were required
-    foreign keys to singleton rows nothing ever read or displayed -- the instrument's name
-    was the empty string -- so they are gone, and with them the only thing `instrument` ever
-    contributed to this get_or_create key.
+    There used to be placeholder `Media`, `Instrument` and `FreezerBox` rows here as well.
+    All three were required foreign keys to singleton rows nothing ever read or displayed --
+    the instrument's name was the empty string -- so all three are gone, `Media` last, with
+    the table.
     """
     from aledb_import.ale_experiment import try_creating_project
 
@@ -133,11 +131,7 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
 
     experiment, _ = Experiment.objects.get_or_create(
         name=experiment_name, person=person, project=project)
-    media, _ = Media.objects.get_or_create(
-        description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
-        temperature=metadata_defaults.DEFAULT_TEMPERATURE)
-
-    return {"experiment": experiment, "media": media}
+    return {"experiment": experiment}
 
 
 def prepare_experiment_by_id(experiment_id):
@@ -152,10 +146,7 @@ def prepare_experiment_by_id(experiment_id):
     cannot run inside a web request.
     """
     experiment = Experiment.objects.get(pk=experiment_id)
-    media, _ = Media.objects.get_or_create(
-        description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
-        temperature=metadata_defaults.DEFAULT_TEMPERATURE)
-    return {"experiment": experiment, "media": media}
+    return {"experiment": experiment}
 
 
 def _is_storable(record):
@@ -301,11 +292,10 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     is_clonal = " -p" not in (metadata.get("COMMAND", "") or "")
 
     ale_id, _ = Population.objects.get_or_create(experiment=experiment, name=ale_number)
-    flask, _ = TimePoint.objects.get_or_create(
-        value=flask_number, population=ale_id, media=context["media"])
     label = sample_names.sample_label(isolate_number, tech_rep_number)
     seq_experiment, _ = Sample.objects.get_or_create(
-        time_point=flask,
+        population=ale_id,
+        time_point=flask_number,
         name=label,
         defaults={
             "source_name": sample_name,
@@ -326,7 +316,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
 def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     """Chain for a sample whose filename carries no identity at all.
 
-    Everything hangs off ALE 1 / TimePoint 1, but each distinct sample gets its own label so
+    Everything hangs off ALE 1 / time point 1, but each distinct sample gets its own label so
     the samples stay individually addressable. Re-importing a sample must not allocate a
     second one, so an existing sample of this name is reused."""
     experiment = context["experiment"]
@@ -339,12 +329,11 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
 
     metadata = document.metadata
     ale_id, _ = Population.objects.get_or_create(experiment=experiment, name="1")
-    flask, _ = TimePoint.objects.get_or_create(
-        value=1, population=ale_id, media=context["media"])
 
     return Sample.objects.create(
-        time_point=flask,
-        name=_next_isolate_number(flask),
+        population=ale_id,
+        time_point=1,
+        name=_next_sample_number(ale_id, 1),
         # label() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
@@ -354,18 +343,21 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
         source_name=sample_name, person=person)
 
 
-def _next_isolate_number(flask):
-    """The next free number in `flask`, as text.
+def _next_sample_number(population, time_point):
+    """The next free number at this coordinate, as text.
 
-    Counted in Python rather than by `Max("name")`, which stopped meaning
-    anything when the column became text (`aledb_experiment.0008`): `MAX` over strings
-    answers `"9"` for a flask holding 1..10, and the next sample would collide with 10.
-    Labels that are not numbers are skipped rather than counted -- a sample called `763A`,
-    or one called `1-2`, says nothing about which numbers are free.
+    Counted in Python rather than by `Max("name")`, which stopped meaning anything when the
+    column became text (`aledb_experiment.0008`): `MAX` over strings answers `"9"` for a
+    coordinate holding 1..10, and the next sample would collide with 10. Labels that are not
+    numbers are skipped rather than counted -- a sample called `763A`, or one called `1-2`,
+    says nothing about which numbers are free.
+
+    It took a `TimePoint` row and takes the pair that replaced it. Same question either way:
+    the coordinate is what a name has to be unique within.
     """
     numbers = [int(value) for value
-               in Sample.objects.filter(time_point=flask)
-                                                .values_list("name", flat=True)
+               in Sample.objects.filter(population=population, time_point=time_point)
+                                .values_list("name", flat=True)
                if str(value).isdigit()]
     return str(max(numbers, default=0) + 1)
 

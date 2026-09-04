@@ -12,7 +12,7 @@ against `sample_order` rather than on its own, because the whole point is that t
 
 from django.test import TestCase
 
-from aledb_experiment.models import Experiment, Population, TimePoint, Media
+from aledb_experiment.models import Experiment, Population
 from aledb_experiment.ordering import sample_sort_key
 from aledb_sample.models import Sample
 from aledb_sample.util import get_ordered_reseq_queryset
@@ -24,15 +24,12 @@ class OrderingTestCase(TestCase):
     def setUp(self):
         self.experiment = Experiment.objects.create(
             name="E")
-        self.media = Media.objects.create()
 
     def make(self, ale, flask, isolate="1"):
         ale_row, _ = Population.objects.get_or_create(experiment=self.experiment,
                                                  name=str(ale))
-        flask_row, _ = TimePoint.objects.get_or_create(population=ale_row, value=flask,
-                                                   defaults={"media": self.media})
         return Sample.objects.create(
-            time_point=flask_row, name=str(isolate), is_clonal=True,
+            population=ale_row, time_point=flask, name=str(isolate), is_clonal=True,
             source_name="A%s F%s I%s" % (ale, flask, isolate))
 
     def order(self):

@@ -25,7 +25,7 @@ from django.test import TestCase
 from aledb_dashboard.models import MutationCallCounts, UniqueMutationCounts
 from aledb_dashboard.util import rebuild_mutation_counts
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint, Media,
+    Experiment, Population,
 )
 from aledb_sample.models import Mutation, MutationCall, Sample
 
@@ -35,15 +35,13 @@ class MutationCountsTestCase(TestCase):
     def setUp(self):
         self.experiment = Experiment.objects.create(
 )
-        self.media = Media.objects.create()
         self.sample = self._sample(ale=1)
         self.other_sample = self._sample(ale=2)
 
     def _sample(self, ale):
         ale_row = Population.objects.create(experiment=self.experiment, name=ale)
-        flask = TimePoint.objects.create(population=ale_row, value=100, media=self.media)
         return Sample.objects.create(
-            time_point=flask, name=1, is_clonal=True)
+            population=ale_row, time_point=100, name=1, is_clonal=True)
 
     def _mutation(self, mutation_type="SNP", position=100, snp_type="", gene="thrA",
                   protein_change=""):

@@ -19,7 +19,7 @@ from django.test import RequestFactory, TestCase
 
 from aledb_common.constants import SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED
 from aledb_experiment import paths
-from aledb_experiment.models import Experiment, Media, Population, Project, TimePoint
+from aledb_experiment.models import Experiment, Population, Project
 from aledb_sample.breseq_report import is_mixed
 from aledb_sample.models import Sample
 from aledb_sample.util import get_ordered_reseq_queryset
@@ -36,13 +36,10 @@ class ClonalPolarityTestCase(TestCase):
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         population = Population.objects.create(experiment=self.experiment, name="1")
-        time_point = TimePoint.objects.create(
-            population=population, value=500,
-            media=Media.objects.create(description="M9"))
         self.clone = Sample.objects.create(
-            time_point=time_point, name="1", is_clonal=True, source_name="clone")
+            population=population, time_point=500, name="1", is_clonal=True, source_name="clone")
         self.mixed = Sample.objects.create(
-            time_point=time_point, name="2", is_clonal=False, source_name="mixed")
+            population=population, time_point=500, name="2", is_clonal=False, source_name="mixed")
 
     # --- the column and its property ------------------------------------------------------
 
@@ -105,13 +102,15 @@ class ClonalPolarityTestCase(TestCase):
 
     # --- the word a person reads ----------------------------------------------------------
 
-    def test_metadata_says_the_right_word_for_each(self):
-        from aledb_metadata.views import get_sample_info_list
+    def test_the_interop_payload_says_the_right_word_for_each(self):
+        """It was `/metadata`'s builder, shared with the interop API. That page and its app
+        are gone; the API is the one consumer left and owns the builder now."""
+        from aledb_interop_query.views import _sample_info_list
 
-        words = {row["sample"].pk: row["sample_type"]
-                 for row in get_sample_info_list(Sample.objects.all())}
-        self.assertEqual(SAMPLE_TYPE_CLONAL, words[self.clone.pk])
-        self.assertEqual(SAMPLE_TYPE_MIXED, words[self.mixed.pk])
+        words = {row["label"]: row["sample_type"]
+                 for row in _sample_info_list(Sample.objects.order_by("name"))}
+        self.assertEqual(SAMPLE_TYPE_CLONAL, words[self.clone.label])
+        self.assertEqual(SAMPLE_TYPE_MIXED, words[self.mixed.label])
 
     # --- the checkbox ---------------------------------------------------------------------
 

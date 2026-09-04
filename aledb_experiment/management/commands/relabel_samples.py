@@ -48,7 +48,7 @@ class Command(BaseCommand):
             self.stdout.write("  %-28s -> %s" % (
                 sample.description,
                 coordinates.format_coordinate(sample.population_name,
-                                              sample.time_point_value, sample.name)))
+                                              sample.time_point, sample.name)))
 
         if options["dry_run"]:
             self.stdout.write("\n%d would be cleared. Re-run without --dry-run to do it."

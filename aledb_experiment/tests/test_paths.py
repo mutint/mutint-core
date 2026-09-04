@@ -15,7 +15,7 @@ from django.core.exceptions import FieldError
 from django.test import TestCase
 
 from aledb_experiment import paths
-from aledb_experiment.models import Experiment, Population, TimePoint
+from aledb_experiment.models import Experiment, Population
 from aledb_sample.models import MutationCall, Sample
 
 
@@ -30,7 +30,7 @@ class ResolutionTestCase(TestCase):
             self.fail("%s cannot follow %r: %s" % (model.__name__, path, error))
 
     def test_from_a_sample(self):
-        for path in (paths.to_time_point(), paths.to_population(), paths.to_experiment(),
+        for path in (paths.to_population(), paths.to_experiment(),
                      paths.to_experiment_id(), paths.to_population_label(),
                      paths.to_time_point_value()):
             with self.subTest(path=path):
@@ -38,7 +38,7 @@ class ResolutionTestCase(TestCase):
 
     def test_from_an_call(self):
         prefix = paths.FROM_CALL
-        for path in (paths.to_time_point(prefix), paths.to_population(prefix),
+        for path in (paths.to_population(prefix),
                      paths.to_experiment(prefix), paths.to_experiment_id(prefix),
                      paths.to_population_label(prefix), paths.to_time_point_value(prefix)):
             with self.subTest(path=path):
@@ -77,9 +77,15 @@ class TwoColumnsOneWordTestCase(TestCase):
         self.assertNotEqual(paths.EXPERIMENT_PK, paths.POPULATION_LABEL)
         self.assertNotEqual(paths.to_experiment_id(), paths.to_population_label())
 
-    def test_the_flask_ordinal_is_the_one_fixation_sorts_by(self):
-        self.assertEqual("IntegerField",
-                         TimePoint._meta.get_field(paths.TIME_POINT_VALUE).get_internal_type())
+    def test_the_time_point_is_a_column_on_the_sample_and_is_numeric(self):
+        """It was `TimePoint.value`, an IntegerField one join away. Two things matter and
+        the second is why this test moved rather than went: it has to be *reachable without
+        a join*, which is what the removal was for, and it has to stay numeric, because
+        aledb-fixation sorts by it to take a population's last two."""
+        field = Sample._meta.get_field(paths.TIME_POINT_VALUE)
+        self.assertEqual("FloatField", field.get_internal_type())
+        self.assertEqual(paths.TIME_POINT_VALUE, paths.to_time_point_value(),
+                         "a sample-rooted path to the time point is the bare column")
 
 
 class JoinTestCase(TestCase):
@@ -99,25 +105,29 @@ class JoinTestCase(TestCase):
 class RootTestCase(TestCase):
     """A queryset that starts part-way along the chain gets the same definition.
 
-    This is not hypothetical tidiness. `aledb_metadata.parser` was rooted part-way along
-    and spelled its half of the chain by hand -- so it survived a sweep that searched for
-    the chain's *first* segment, and was still filtering on a column that no longer
-    existed. It failed loudly, but only because a test happened to cover that parser.
+    This is not hypothetical tidiness. The retired `aledb_metadata.parser` was rooted
+    part-way along and spelled its half of the chain by hand -- so it survived a sweep that
+    searched for the chain's *first* segment, and was still filtering on a column that no
+    longer existed. It failed loudly, but only because a test happened to cover it.
 
-    There are two roots above the sample now rather than four: `Isolate` and
-    `TechnicalReplicate` are folded into it, so the chain is three segments and a "root" of
-    `sample` reaches the whole of it.
+    **There is one root above the sample now, where there were four.** `Isolate` and
+    `TechnicalReplicate` folded into the sample and `TimePoint` became a column on it, so
+    the chain is two segments and a "root" of `sample` reaches the whole of it.
     """
 
     def test_each_root_drops_the_segments_before_it(self):
-        self.assertEqual("time_point__population__experiment", paths.chain("sample"))
-        self.assertEqual("population__experiment", paths.chain("time_point"))
+        self.assertEqual("population__experiment", paths.chain("sample"))
         self.assertEqual("experiment", paths.chain("population"))
 
-    def test_a_rooted_path_resolves(self):
-        from aledb_experiment.models import Population, TimePoint
+    def test_the_time_point_is_no_longer_a_root(self):
+        """It is a column, so there is no queryset that could start at one."""
+        self.assertNotIn("time_point", paths.ROOTS)
+        self.assertNotIn("time_point", paths.DOWN_ROOTS)
 
-        for model, root in ((TimePoint, "time_point"), (Population, "population")):
+    def test_a_rooted_path_resolves(self):
+        from aledb_experiment.models import Population
+
+        for model, root in ((Population, "population"),):
             for path in (paths.to_experiment_id(root=root), paths.to_population_label(root=root)):
                 with self.subTest(model=model.__name__, path=path):
                     try:

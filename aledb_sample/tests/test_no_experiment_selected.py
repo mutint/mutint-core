@@ -20,7 +20,6 @@ from django.test import TestCase
 PAGES = [
     ("/mutations/breseq", "aledb_sample.views.breseq_table", "samples"),
     ("/stats/", "aledb_stats.views", "statistics"),
-    ("/metadata/", "aledb_metadata.views", "metadata"),
 ]
 
 

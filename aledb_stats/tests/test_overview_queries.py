@@ -22,7 +22,7 @@ from django.test.utils import CaptureQueriesContext
 from django.db import connection
 
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint,
+    Experiment, Population,
 )
 from aledb_sample.models import Mutation, MutationCall, Sample
 
@@ -46,10 +46,8 @@ class OverviewQueryCountTestCase(TestCase):
 
         ale = Population.objects.create(experiment=experiment, name=1)
         for number in range(samples):
-            flask = TimePoint.objects.create(population=ale, value=100 + number,
-                                         media=context["media"])
             sample = Sample.objects.create(
-                time_point=flask, name="1-1", is_clonal=True,
+                population=ale, time_point=100 + number, name="1-1", is_clonal=True,
                 source_name="1-%d-1-1" % (100 + number))
             mutation = Mutation.objects.create(
                 experiment=experiment, mutation_type="SNP", position=number,

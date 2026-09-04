@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
 
-from aledb_experiment.models import Experiment, Media, Population, Project, TimePoint
+from aledb_experiment.models import Experiment, Population, Project
 from aledb_sample.models import Sample
 
 
@@ -21,14 +21,11 @@ class RelabelSamplesTestCase(TestCase):
         user = User.objects.create(username="owner", email="o@e.com")
         project = Project.objects.create(name="P", user=user)
         experiment = Experiment.objects.create(name="E", project=project)
-        population = Population.objects.create(experiment=experiment, name="1")
-        self.time_point = TimePoint.objects.create(
-            population=population, value=30000,
-            media=Media.objects.create(description="M9"))
+        self.population = Population.objects.create(experiment=experiment, name="1")
 
     def sample(self, name, description):
-        return Sample.objects.create(time_point=self.time_point, name=name,
-                                     description=description)
+        return Sample.objects.create(population=self.population, time_point=30000,
+                                     name=name, description=description)
 
     def run_command(self, *args):
         out = StringIO()

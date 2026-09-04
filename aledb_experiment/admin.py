@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django import forms
 from aledb_experiment.models import (
-    Experiment, UserGroup, UserGroupMembership, Media, Project, ProjectAccess,
+    Experiment, UserGroup, UserGroupMembership, Project, ProjectAccess,
 )
 from aledb_experiment.permissions import (
     AccessError, grant_project_access, revoke_project_access, set_primary_owner,
@@ -41,13 +41,6 @@ class ProjectAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         if obj.user_id is not None:
             set_primary_owner(obj, obj.user, granted_by=request.user)
-
-
-@admin.register(Media)
-class MediaAdmin(admin.ModelAdmin):
-    list_display = ('id', 'description', 'experiments')
-    search_fields = ('name', 'user')
-    # inlines = [ExperimentInline]
 
 
 class MembershipInline(admin.TabularInline):

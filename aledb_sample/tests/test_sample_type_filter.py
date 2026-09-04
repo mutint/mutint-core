@@ -18,7 +18,7 @@ from aledb_common.constants import (
     REQUEST_ALL, SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED,
 )
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint, Media, Project,
+    Experiment, Population, Project,
 )
 from aledb_sample.models import Sample
 from aledb_sample.util import get_ordered_reseq_queryset
@@ -58,15 +58,13 @@ class SampleTypeFilterTestCase(TestCase):
         user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         project = Project.objects.create(name="P", user=user)
         self.experiment = Experiment.objects.create(name="E", project=project)
-        media = Media.objects.create(description="M9")
-        ale = Population.objects.create(experiment=self.experiment, name="1")
-        flask = TimePoint.objects.create(population=ale, value=1000, media=media)
-        self.clonal = self.make_sample(flask, 1, is_mixed=False)
-        self.mixed = self.make_sample(flask, 2, is_mixed=True)
+        self.ale = Population.objects.create(experiment=self.experiment, name="1")
+        self.clonal = self.make_sample(1, is_mixed=False)
+        self.mixed = self.make_sample(2, is_mixed=True)
 
-    def make_sample(self, flask, number, *, is_mixed):
+    def make_sample(self, number, *, is_mixed):
         return Sample.objects.create(
-            time_point=flask, name=number, is_clonal=not is_mixed,
+            population=self.ale, time_point=1000, name=number, is_clonal=not is_mixed,
             source_name="s%d" % number)
 
     def selected(self, sample_type):

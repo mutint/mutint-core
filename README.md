@@ -42,7 +42,7 @@ ALEdb imports experiments from [breseq](https://github.com/barricklab/breseq) ou
 ### Upload experiments
 
 ```bash
-./aledb upload /path/to/experiment1 /path/to/experiment2 ...
+./aledb import /path/to/data --project P --experiment E --person alice
 ```
 
 Each path should be the root of a breseq output directory (the one containing `output/` and `data/` subdirectories). The upload command parses the `.gd` files, creates all mutation and metadata records, and recomputes fixation and convergence statistics.
@@ -202,7 +202,7 @@ All configuration is via environment variables. The defaults are suitable for lo
 ## Management commands
 
 ```bash
-./aledb upload path1 path2    # upload ALE experiments from breseq output dirs
+./aledb import path1 path2    # import breseq dirs, .gd files and reference genomes
 ./aledb delete 4 20 19        # delete experiments by ID
 ./aledb shell                 # open Django shell
 ./aledb db status             # where the database is, and whether it is running

@@ -18,8 +18,7 @@ from django.test import TestCase
 
 from aledb_dashboard.models import InventoryCounts
 from aledb_dashboard.util import rebuild_sample_counts
-from aledb_experiment.models import (Experiment, Population, TimePoint,
-                                     Media)
+from aledb_experiment.models import (Experiment, Population)
 from aledb_sample.models import Sample
 
 
@@ -33,10 +32,8 @@ class DashboardCountTestCase(TestCase):
         """The full A/F/I chain, built by hand -- `gd_import` needs a reference and a store."""
         ale, _ = Population.objects.get_or_create(experiment=self.experiment,
                                              name=str(ale_label))
-        flask, _ = TimePoint.objects.get_or_create(population=ale, value=flask_number,
-                                               defaults={"media": Media.objects.create()})
         return Sample.objects.create(
-            time_point=flask, is_clonal=True, name=str(isolate_number))
+            population=ale, time_point=flask_number, is_clonal=True, name=str(isolate_number))
 
     def counts(self):
         rebuild_sample_counts()
@@ -52,10 +49,13 @@ class TestEmptyRowsStillCount(DashboardCountTestCase):
             Population.objects.create(experiment=self.experiment, name=label)
         self.assertEqual(self.counts()[0], 4)
 
-    def test_a_flask_under_ale_zero_is_counted(self):
+    def test_a_time_point_under_ale_zero_is_counted(self):
+        """The time point is a column on the sample now, so it is counted as a distinct
+        (population, value) pair rather than as a row -- which means it takes a sample to
+        make one exist at all."""
         for label in ("0", "9"):
             ale = Population.objects.create(experiment=self.experiment, name=label)
-            TimePoint.objects.create(media=Media.objects.create(), population=ale)
+            Sample.objects.create(population=ale, time_point=1, name="1")
         population_count, time_point_count, _ = self.counts()
         self.assertEqual((population_count, time_point_count), (2, 2))
 

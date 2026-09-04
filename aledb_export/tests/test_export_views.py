@@ -18,7 +18,7 @@ import zipfile
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
+from aledb_experiment.models import Experiment, Population, Project
 from aledb_experiment.roles import ROLE_OWNER
 from aledb_sample.models import Mutation, MutationCall, Sample
 
@@ -34,10 +34,8 @@ class ExportViewTestCase(TestCase):
         self.experiment = Experiment.objects.create(name="E", project=self.project)
 
         ale = Population.objects.create(experiment=self.experiment, name="1")
-        flask = TimePoint.objects.create(population=ale, value=500,
-                                     media=Media.objects.create(description="M9"))
         sample = Sample.objects.create(
-            time_point=flask, name="1-1", is_clonal=True, source_name="1-500-1-1")
+            population=ale, time_point=500, name="1-1", is_clonal=True, source_name="1-500-1-1")
         mutation = Mutation.objects.create(
             experiment=self.experiment, mutation_type="SNP", position=150,
             sequence_change="T", gene="thrA", reseq_reference="SYN001")

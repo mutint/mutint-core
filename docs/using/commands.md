@@ -16,7 +16,9 @@ its plugins ship.
 ## Data
 
 ```bash
-./aledb upload <path> ...    # import breseq output directories
+./aledb import <path> ... --project P --experiment E --person U
+                             # import breseq folders, .gd files and reference genomes
+./aledb import <path> --experiment-id 4    # ...into an experiment that exists
 ./aledb delete 4 20 19       # soft-delete experiments by id
 ./aledb purge_deleted --older-than 30
 ./aledb load_example         # list the datasets components ship; name one to load it

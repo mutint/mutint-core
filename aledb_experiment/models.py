@@ -268,9 +268,10 @@ class Population(models.Model):
 
     `name` is **text**, not a number (`0008`), and so is the sample's. Real lineage names are
     labels: `Ara-1` and `Ara+1` both end in 1, so any rule reducing them to an integer merges
-    them. `TimePoint.value` is the one member of the chain that stays an `IntegerField`,
-    because a time point is a genuine ordinal -- aledb-fixation sorts by it and takes a
-    population's last two.
+    them. `Sample.time_point` is the one member of the coordinate that is genuinely numeric,
+    because a time point is a real ordinal -- aledb-fixation sorts by it and takes a
+    population's last two. It used to be a `TimePoint` row between this model and the sample;
+    it is a float column on the sample now.
 
     Ordering is therefore lexicographic unless asked otherwise, which puts `10` before `2`.
     `aledb_experiment.ordering.sample_order()` is what every sample listing orders by
@@ -289,94 +290,6 @@ class Population(models.Model):
         unique_together = (("experiment", "name"),)
 
         verbose_name_plural = "populations"
-
-
-class Media(models.Model):
-    temperature = models.CharField(max_length=200,default='37',
-                                    help_text="Temperature in Celcius")
-    description = models.CharField(max_length=200)
-    carbon_source = models.CharField(max_length=200,
-                                 default=None,
-                                 **blank_field)
-    nitrogen_source = models.CharField(max_length=200,
-                                 default=None,
-                                 **blank_field)
-    phosphorus_source = models.CharField(max_length=200,
-                                 default=None,
-                                 **blank_field)
-    sulfur_source = models.CharField(max_length=200,
-                                 default=None,
-                                 **blank_field)
-    calcium_source = models.CharField(max_length=200,
-                                     default=None,
-                                     **blank_field)
-    supplement = models.CharField(max_length=200,
-                                     default=None,
-                                     **blank_field)
-
-    # TODO: figure out components
-    # maybe carbon source, etc.? or track individual chemicals
-    def experiments(self):
-        """The experiments with a time point grown in this medium.
-
-        It read `TimePoint.objects.filter(project=self)` and that model had no `project`, so this
-        raised FieldError every time it ran -- and `MediaAdmin.list_display` calls it, which
-        makes /admin/aledb_experiment/media/ a 500 rather than a page.
-        """
-        return live(Experiment.objects.filter(
-            **{paths.down_chain("experiment", upto="timepoint") + "__media": self}
-        )).distinct()
-
-    experiments.short_description = 'Experiment'
-
-    class Meta:
-        verbose_name_plural = "Media"
-
-
-class TimePoint(models.Model):
-    """When along a population's history a sample was taken.
-
-    **This was `TimePoint`**, and every label a person could see already said "Time point" --
-    the form field, its validation message, and a test class named for it. A flask is the
-    vessel one kind of experiment happens to use; what the column means is the point in
-    time.
-
-    `value` is the one member of the chain that is genuinely a number: aledb-fixation orders
-    by it and takes a population's last two.
-    """
-    population = models.ForeignKey(Population, on_delete=models.CASCADE)
-    value = models.IntegerField(**blank_field)
-    media = models.ForeignKey(Media, on_delete=models.DO_NOTHING)
-
-    def __unicode__(self):
-        return "Time point %s < %s" % (self.value, self.population)
-
-    def experiment(self):
-        return self.population.experiment.id
-
-    class Meta:
-        unique_together = (("population", "value"),)
-
-        verbose_name_plural = "time points"
-
-
-# The TODO that stood here asked for `reseq_reference` to be called `reseq_ref_name`. It
-# is `Sample.reference_genome` now, which says the same thing without the abbreviation.
-#TODO: Change 'library_prep' field to 'wgs_kit'
-# `Isolate` and `TechnicalReplicate` stood here. Both are gone, folded into
-# `aledb_sample.Sample` -- the sample row itself -- along with everything they held. See that
-# model's docstring for why the merge went that way round rather than the other. The chain
-# is `Experiment -> Population -> TimePoint -> Sample` now.
-
-
-# --- sharing: groups and project access ---------------------------------------------------
-#
-# Access is granted at the project level and nowhere else. An experiment, a sample and a
-# mutation are all reached through `experiment.project`, so there is exactly one place to ask
-# the question and exactly one place to change the answer.
-#
-# The policy that reads these tables is `aledb_experiment/permissions.py`; the ordering
-# between roles is `aledb_experiment/roles.py`. Nothing here decides who may do what.
 
 
 class UserGroup(models.Model):

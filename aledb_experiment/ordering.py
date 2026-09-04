@@ -4,7 +4,7 @@
 (`aledb_experiment.0008`), so
 the database orders them the way it orders any string: `10` before `2`, and `A1 F1 I10`
 above `A1 F1 I2` in every mutation table. That is not a cosmetic difference on real data --
-an auto-numbered import gives one flask an isolate per sample, and the dev database's
+an auto-numbered import gives one time point a sample apiece, and the dev database's
 largest experiment has fifty-one of them.
 
 `sample_order()` is what every sample listing orders by instead. It pads each text field
@@ -31,7 +31,7 @@ from django.db.models.functions import Cast, LPad
 
 from aledb_experiment import paths
 
-#: Wide enough for a flask number in cumulative divisions (five figures) and for the kind of
+#: Wide enough for a time point in cumulative divisions (five figures) and for the kind of
 #: label a lineage carries. Sorting-only, so widening it later changes no stored data.
 PAD = 20
 
@@ -43,16 +43,16 @@ def natural(field_path):
 
 
 def sample_order(prefix=""):
-    """The four keys a sample list is ordered by: experiment, ALE, flask, sample label.
+    """The four keys a sample list is ordered by: experiment, ALE, time point, sample label.
 
     Pass `prefix="sample__"` from a queryset of `MutationCall`. Returns
     a tuple for `order_by(*sample_order())` -- expressions rather than field names, because
     two of the five need the padding above.
 
-    The flask needs no padding -- it is still an `IntegerField` and the database orders it
+    The time point needs no padding -- it is numeric and the database orders it
     correctly -- but it *is* nullable, so it needs `nulls_first`. Without it the answer is
     the backend's: PostgreSQL sorts NULLs last ascending, SQLite and MySQL sort them first,
-    so a flask-less sample would land in a different place in production than in the test
+    so a sample with no time point would land in a different place in production than in the test
     suite. Stated rather than inherited, and first because a sample with no time point is
     one nobody has placed yet.
     """
@@ -80,8 +80,8 @@ def sample_sort_key(reseq):
 
     A null time point sorts first, as it does in the SQL form.
     """
-    time_point = reseq.time_point
-    return (time_point.population.experiment.name,
-            str(time_point.population.name).rjust(PAD, "0"),
-            time_point.value if time_point.value is not None else -1,
+    population = reseq.population
+    return (population.experiment.name,
+            str(population.name).rjust(PAD, "0"),
+            reseq.time_point if reseq.time_point is not None else -1,
             str(reseq.name).rjust(PAD, "0"))

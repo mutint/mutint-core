@@ -131,7 +131,6 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_dashboard',       # nav: Dashboard
             'aledb_search',          # nav: Search
             'aledb_experiment',      # nav: Projects, Experiments
-            'aledb_metadata',        # nav: Metadata
             'aledb_sample',             # nav: Mutations
             'aledb_mutation_editor', # nav: Edit Mutations
             'aledb_filter',          # nav: Filter

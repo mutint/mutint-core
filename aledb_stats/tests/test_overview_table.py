@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint, Project,
+    Experiment, Population, Project,
 )
 from aledb_sample.models import Sample
 
@@ -28,10 +28,8 @@ class OverviewTableTestCase(TestCase):
         context = prepare_experiment_by_id(self.experiment.id)
 
         ale = Population.objects.create(experiment=self.experiment, name=1)
-        flask = TimePoint.objects.create(population=ale, value=30000,
-                                     media=context["media"])
         self.sample = Sample.objects.create(
-            time_point=flask, name="1-1", is_clonal=True,
+            population=ale, time_point=30000, name="1-1", is_clonal=True,
             source_name="1-30000-1-1",
             mean_coverage=68.0388108058057,
             percentage_mapped=95.5735575027531,

@@ -84,7 +84,7 @@ def get_ordered_reseq_queryset(experiment_id, ale_id=None, sample_type=None, *,
     population sample from two plugin pages.
     """
     reseq_qryset = aledb_sample.models.Sample.objects.select_related(
-        paths.to_experiment(), paths.to_time_point(field='media')
+        paths.to_experiment()
     ).order_by(*sample_order())
     if experiment_id:
         reseq_qryset = reseq_qryset.filter(**{paths.to_experiment_id(): experiment_id})

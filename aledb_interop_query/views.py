@@ -13,10 +13,7 @@ from aledb_experiment.ancestor import exclude_all_ancestry
 from aledb_filter.util import filter_mutation_calls, filtered_mutation_call_queryset
 from aledb_filter.view_filter import PARAMS as FILTER_PARAMS, ViewFilter
 from aledb_common.logger import user_extra
-from aledb_metadata.views import get_sample_info_list
-# From `aledb_sample.util`, where it is defined. This used to come via `aledb_metadata.views`,
-# which merely imports it -- an accidental re-export, and the call site any signature change
-# would miss.
+from aledb_common.constants import SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED
 from aledb_sample.util import get_ordered_reseq_dict, get_ordered_reseq_queryset
 from aledb_sample.models import MutationCall
 from aledb_experiment import paths
@@ -319,51 +316,43 @@ def _serialize_metadata(metadata_list):
             'multiple':            m['multiple'],
         }
 
-        # Read by name from `get_sample_info_list`, which used to hand back a positional
-        # tuple this unpacked by index. Every key that named the wrong thing has now been
-        # corrected, in two rounds. The first was the tuple's fault:
-        #
-        #   knockouts          -> population_description  always Population.description
-        #   taxonomy_id        -> library_prep            always the sample's library_prep
-        #   phosphorous_source -> phosphorus_source       the column never had that o
-        #
-        # and three values the builder produced were dropped here and are published now.
-        # The second round is the vocabulary, where a key named a model the schema no longer
-        # has, or a thing the value never was:
-        #
-        #   clonal_or_population -> sample_type      one of its two answers is retired
-        #   tech_rep_description -> sample_medium_description
-        #   reseq_reference      -> reference_genome it is a genome, not a contig
-        #   reseq_date           -> sequencing_date
-        #
-        # **No key is emitted under both names.** A consumer reading an old one gets a
-        # KeyError rather than a value that quietly means something else -- which is exactly
-        # the failure this list already has a history of.
-        flat = []
-        for row in m.get('sample_info_list', []):
-            flat.append({
-                'label': row['sample'].label,
-                'sample_type':               row['sample_type'],
-                'sample_medium_description': row['sample_medium_description'],
-                'media_description':         row['media_description'],
-                'carbon_source':         row['carbon_source'],
-                'nitrogen_source':       row['nitrogen_source'],
-                'phosphorus_source':     row['phosphorus_source'],
-                'sulfur_source':         row['sulfur_source'],
-                'calcium_source':        row['calcium_source'],
-                'supplement':            row['supplement'],
-                'temperature':           row['temperature'],
-                'strain':                row['strain'],
-                'population_description':    row['population_description'],
-                'library_prep':              row['library_prep'],
-                'reference_genome':          row['reference_genome'],
-                'breseq_version':            row['breseq_version'],
-                'sequencing_date':           row['sequencing_date'],
-                'experiment_name':           row['experiment_name'],
-            })
-        item['sample_info_list'] = flat
+        item['sample_info_list'] = m.get('sample_info_list', [])
         out.append(item)
     return out
+
+
+#: One dict per sample, published as `sample_info_list`. It was
+#: `aledb_metadata.views.get_sample_info_list`, shared with the `/metadata` page; that page
+#: and its app are gone and this endpoint is the only consumer left, so the builder lives
+#: beside the payload it exists for.
+#:
+#: **Eight keys went with the `Media` table** -- `media_description`, `carbon_source`,
+#: `nitrogen_source`, `phosphorus_source`, `sulfur_source`, `calcium_source`, `supplement`
+#: and `temperature`. Nothing stores those now, so a consumer asking for one gets a KeyError
+#: rather than an empty string that reads like "this experiment recorded no carbon source".
+#: That is the same posture every earlier correction to this payload took: no key is ever
+#: emitted under two names, or kept as a hollow shell.
+#:
+#: `sample_medium_description` stays, and keeps its long name. It is the sample's own note
+#: rather than the medium's, it is still written -- the sample edit page edits it -- and it
+#: was never the ambiguous half of that pair.
+def _sample_info_list(reseq_queryset):
+    rows = []
+    for reseq in reseq_queryset:
+        population = reseq.population
+        rows.append({
+            'label': reseq.label,
+            'sample_type': (SAMPLE_TYPE_MIXED if reseq.is_mixed else SAMPLE_TYPE_CLONAL),
+            'sample_medium_description': reseq.medium_description,
+            'strain': population.strain,
+            'population_description': population.description,
+            'library_prep': reseq.library_prep,
+            'reference_genome': reseq.reference_genome,
+            'breseq_version': reseq.breseq_version,
+            'sequencing_date': reseq.sequencing_date,
+            'experiment_name': population.experiment.name,
+        })
+    return rows
 
 def _extract_url_gene(raw_gene, search_gene=None):
     """Pick the best gene name for the search URL.
@@ -390,7 +379,7 @@ def _serialize_mutations(mutations, search_gene=None):
     out = []
     for m in mutations:
         gene = m.mutation.gene
-        strain = m.sample.time_point.population.strain
+        strain = m.sample.population.strain
         url_gene = _extract_url_gene(gene, search_gene)
         item = {
             'mutation_call_id': m.id,
@@ -403,7 +392,7 @@ def _serialize_mutations(mutations, search_gene=None):
             'frequency': m.frequency,
             'ref_seq': m.mutation.reseq_reference,
             'strain': strain,
-            'project_id': m.sample.time_point.population.experiment.project_id,
+            'project_id': m.sample.population.experiment.project_id,
             'url': f"{_BASE_SEARCH_URL}?hidden_columns=&gene={quote(url_gene)}&min_freq=&max_freq=&ref_seq=&min_pos=&max_pos=&mut_type=&project=&strain={quote(strain or '')}",
         }
 
@@ -506,7 +495,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         experiment = Experiment.objects.get(pk=experiment_id)
         if experiment:
             reseq_queryset = get_ordered_reseq_queryset(experiment_id, None)
-            sample_info_list = get_sample_info_list(reseq_queryset)
+            sample_info_list = _sample_info_list(reseq_queryset)
             experiment_info = {
                 "sample_info_list": sample_info_list,
                 "experiment_name": experiment.name,

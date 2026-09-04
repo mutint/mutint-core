@@ -30,11 +30,27 @@ class Sample(models.Model):
     were.
     """
 
-    #: Where the sample sits. Nullable because it always was: a sample with no chain above
-    #: it is unreachable from every listing (`get_ordered_reseq_queryset` filters it out)
-    #: and the views 404 on it rather than treating it as ownerless.
-    time_point = models.ForeignKey("aledb_experiment.TimePoint", on_delete=models.CASCADE,
+    #: Which population the sample was drawn from. Nullable because it always was: a sample
+    #: with no chain above it is unreachable from every listing
+    #: (`get_ordered_reseq_queryset` filters it out) and the views 404 on it rather than
+    #: treating it as ownerless.
+    population = models.ForeignKey("aledb_experiment.Population", on_delete=models.CASCADE,
                                    null=True)
+
+    #: When along that population's history it was drawn -- generations, cumulative
+    #: divisions, hours; whatever the experiment counts by.
+    #:
+    #: **This was a `TimePoint` row**, a whole level of the chain whose only columns were
+    #: this number, the population it belonged to and a `Media` foreign key. Every sample at
+    #: one time point shared the row, which bought a join on every query and one thing
+    #: besides: a `unique_together` that made two samples at one time point share a parent
+    #: rather than each carrying the number. Nothing needed that.
+    #:
+    #: A float, where the column was an integer, because the ordinal is whatever the
+    #: experiment counts by and half a generation is a thing somebody records. It is still
+    #: what aledb-fixation orders by to take a population's last two, and filtering on it is
+    #: now `time_point__gte=500` on the sample rather than a join.
+    time_point = models.FloatField(**blank_field)
 
     #: Text, not a number -- see `Population.name`. A clone is named `763A` as often as
     #: `763`, and two clones from one time point differ only in that trailer. Unique within
@@ -61,19 +77,28 @@ class Sample(models.Model):
     reference_genome = models.CharField(max_length=200, **blank_field)
     sequencing_date = models.CharField(max_length=200, **blank_field)
     breseq_version = models.CharField(max_length=200, **blank_field)
+    #: **Nothing writes this any more.** The XPMD metadata parser was its only writer and
+    #: went with `aledb_metadata`; no import path and no edit page sets it. It is kept for
+    #: now because the interop API publishes it, so dropping the column means dropping a
+    #: published key -- a decision worth taking on its own rather than as a side effect of
+    #: removing the app. Until then it reads as an empty string on every sample.
     library_prep = models.CharField(max_length=200, **blank_field)
 
     #: Both came from `TechnicalReplicate`.
     tags = models.CharField(max_length=500, **blank_field)
-    #: **Not a duplicate of `description` above, and not `Media.description` either.** The
-    #: metadata importer writes the CSV's *"medium description"* column here, per sample;
-    #: `Media.description` holds that file's *"medium derived from"*, which is a property of
-    #: the medium rather than of the sample grown in it. Both reach `/metadata` and the
-    #: interop API, which is why the payload spells this one `sample_medium_description` --
-    #: two keys a letter apart would be worse than a long one.
+    #: A note about what this sample was grown in, edited on the sample page and published
+    #: by the interop API as `sample_medium_description`.
+    #:
+    #: **The long key name is a fossil and is kept deliberately.** It stood against
+    #: `media_description`, from the `Media` table, which held the *medium's* own
+    #: description while this held the *sample's* -- two keys a letter apart. `Media` and the
+    #: metadata app that filled it are gone, so this is the only one left; renaming it would
+    #: break a published payload to win back a distinction nothing is drawing any more.
     #:
     #: It was `rep_description`, on a `TechnicalReplicate`. The merge kept the column rather
-    #: than dropping it as planned, precisely because two pages publish it.
+    #: than dropping it as planned, precisely because it is published -- and it survived the
+    #: metadata removal for the same reason, plus a second one: the sample edit page writes
+    #: it, so unlike `library_prep` it still has a writer.
     medium_description = models.CharField(max_length=500, **blank_field)
 
     person = models.CharField(max_length=200, blank=True)
@@ -96,13 +121,13 @@ class Sample(models.Model):
     # is best-effort, so a sample can have its reads and not its coverage.
     coverage_stored = models.BooleanField(default=False)
 
-    # Three shortcuts up the chain, for the many call sites that want one field from it and
-    # not the rows in between. They were `ale_experiment`, `ale_id` and `flask_number`.
+    # Shortcuts up the chain, for the call sites that want one field from it and not the
+    # rows in between. They were `ale_experiment`, `ale_id` and `flask_number`.
     #
-    # `population_name` and `time_point_value` rather than `population` and `time_point`,
-    # because each answers a *value* and the row of that name is one hop away
-    # (`sample.time_point.population`). A property called `population` that handed back a
-    # string would reintroduce, one level down, exactly the ambiguity this rename removed.
+    # `population_name` rather than `population`, because it answers a *value* while the row
+    # of that name is now a column on this model. `time_point` was the third of these
+    # and is gone: the time point **is** a column here, so a property returning it would be
+    # a second spelling of one field.
 
     @property
     def is_mixed(self):
@@ -117,15 +142,11 @@ class Sample(models.Model):
 
     @property
     def experiment(self):
-        return self.time_point.population.experiment
+        return self.population.experiment
 
     @property
     def population_name(self):
-        return self.time_point.population.name
-
-    @property
-    def time_point_value(self):
-        return self.time_point.value
+        return self.population.name
 
     @property
     def label(self):
@@ -143,7 +164,7 @@ class Sample(models.Model):
         if self.description:
             return self.description
         return coordinates.format_coordinate(
-            self.population_name, self.time_point_value, self.name)
+            self.population_name, self.time_point, self.name)
 
     @property
     def qualified_label(self):
@@ -347,7 +368,7 @@ class MutationCall(models.Model):
     source = models.CharField(max_length=50, db_index=True, blank=True, null=True)
 
     def get_experiment_id(self):
-        return self.sample.time_point.population.experiment_id
+        return self.sample.population.experiment_id
 
 
 

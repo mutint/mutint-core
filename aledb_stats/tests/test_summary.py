@@ -35,7 +35,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint,
+    Experiment, Population,
 )
 from aledb_sample.models import Mutation, MutationCall, Sample
 from aledb_stats.util import compute_experiment_counts
@@ -87,11 +87,8 @@ class SummaryTestCase(TestCase):
     def _sample(self, ale, flask, isolate):
         ale_row, _ = Population.objects.get_or_create(
             experiment=self.experiment, name=ale)
-        flask_row, _ = TimePoint.objects.get_or_create(
-            population=ale_row, value=flask,
-            defaults={"media": self.context["media"]})
         return Sample.objects.create(
-            time_point=flask_row, name="%d-1" % isolate, is_clonal=True,
+            population=ale_row, time_point=flask, name="%d-1" % isolate, is_clonal=True,
             source_name="%d-%d-%d-1" % (ale, flask, isolate))
 
     def _mutation(self, mutation_type, snp_type, gene, protein_change=""):

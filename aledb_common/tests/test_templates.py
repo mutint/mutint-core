@@ -224,7 +224,6 @@ class ExperimentSidebarLabelTestCase(TestCase):
             "edit samples": "/experiment/%d/samples/" % self.experiment.id,
             "add data": "/import/add/?experiment_id=%d" % self.experiment.id,
             "overview": "/stats/?experiment_id=%d" % self.experiment.id,
-            "metadata": "/metadata/?experiment_id=%d" % self.experiment.id,
         }
         for name, url in pages.items():
             with self.subTest(page=name):

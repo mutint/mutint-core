@@ -143,13 +143,8 @@ def _save(experiment, rows):
     parsed = plan_moves(parsed, samples_by_id)
     structural = rows_are_structural(parsed)
 
-    from aledb_import.gd_import import prepare_experiment_by_id
-    # Once per request, not once per row: it get_or_creates the placeholder Media, and it
-    # is only ever a fallback for a sample with nothing to inherit.
-    placeholders = prepare_experiment_by_id(experiment.id)
-
     try:
-        touched = apply_rows(experiment, parsed, media=placeholders["media"])
+        touched = apply_rows(experiment, parsed)
     except IntegrityError:
         logger.warning("concurrent edit on experiment %s", experiment.id)
         raise SampleEditError(

@@ -6,7 +6,7 @@ the handler's own loop, and the only thing that wants to know is a view three la
 This module is the side channel between them.
 
 Nothing is installed by default, so every function here is a no-op unless somebody is
-listening. That is what lets ``./aledb upload``, ``./aledb load_example`` and every existing
+listening. That is what lets ``./aledb import``, ``./aledb load_example`` and every existing
 test call ``run_import`` unchanged -- a reporting call in the import path costs them an
 attribute lookup and a ``None`` check.
 

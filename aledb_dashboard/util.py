@@ -8,7 +8,7 @@ from aledb_sample.functional_change import (
 from aledb_sample.views.common import MUTATION_TYPE_LIST, UNANNOTATED
 from aledb_experiment.ancestor import (exclude_all_ancestry,
                                        exclude_ancestor_samples)
-from aledb_experiment.models import Experiment, Population, TimePoint
+from aledb_experiment.models import Experiment, Population
 from django.db.models import Q
 from aledb_experiment import paths
 
@@ -57,11 +57,11 @@ def _purely_ancestral(model, sample_path):
                         _evolved_samples().order_by().values("pk")}))
 
 
-#: Where a sample sits, seen from each of the rows counted below. The third row *is* the
-#: sample now -- `Isolate` was folded into it -- so its path down to a sample is empty, and
-#: the count below asks its question directly rather than through `_purely_ancestral`.
+#: Where a sample sits, seen from the one row still counted below that is not the sample
+#: itself. The other two *are* samples now -- `Isolate` was folded into `Sample`, and
+#: `TimePoint` became a column on it -- so they ask their question directly rather than
+#: through `_purely_ancestral`.
 _SAMPLE_FROM_POPULATION = paths.down_chain("population")
-_SAMPLE_FROM_TIME_POINT = paths.down_chain("time_point")
 
 
 def rebuild_sample_counts():
@@ -73,8 +73,19 @@ def rebuild_sample_counts():
 
     population_count = live_populations.exclude(
         pk__in=_purely_ancestral(Population, _SAMPLE_FROM_POPULATION)).distinct().count()
-    time_point_count = TimePoint.objects.filter(population__in=live_populations).exclude(
-        pk__in=_purely_ancestral(TimePoint, _SAMPLE_FROM_TIME_POINT)).distinct().count()
+    # Distinct (population, time point) pairs, where this counted `TimePoint` rows. It is
+    # the same number for the same reason the sample count is: that row existed once per
+    # pair, and only the import ever made one. What it cannot do any more is count a time
+    # point that no sample sits at -- and such a row was unreachable from every listing
+    # anyway, so it was never a number anybody could act on.
+    #
+    # `_evolved_samples` rather than `_purely_ancestral`: with the row gone, "a time point
+    # whose every sample is ancestral" is just a pair no evolved sample holds.
+    time_point_count = (_evolved_samples()
+                        .filter(**{paths.to_population() + "__in": live_populations})
+                        .exclude(**{paths.to_time_point_value() + "__isnull": True})
+                        .values(paths.to_population(), paths.to_time_point_value())
+                        .distinct().count())
     # The third number counted `Isolate` rows and counts samples now, which is the same
     # number: a sample was one run under one replicate under one isolate, and only the
     # import created any of them. What changes is that "a row whose every sample is

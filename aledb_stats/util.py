@@ -24,7 +24,7 @@ def count_per_population(reseq_queryset):
     per_population = {}
     for reseq in reseq_queryset:
         time_points = per_population.setdefault(reseq.population_name, {})
-        time_points[reseq.time_point_value] = time_points.get(reseq.time_point_value, 0) + 1
+        time_points[reseq.time_point] = time_points.get(reseq.time_point, 0) + 1
 
     return [(name, len(time_points), sum(time_points.values()))
             for name, time_points in per_population.items()]

@@ -6,9 +6,7 @@ import aledb_sample.models
 import aledb_sample.views.common
 from aledb_import.gdparse.gdparse import gdparse
 from aledb_common.util import _find_between
-import aledb_metadata.parser
 import logging
-from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment.models import Experiment, Project
 from django.contrib.auth.models import User
 from datetime import datetime
@@ -27,16 +25,21 @@ REF_RELATIVE_PATH = 'ref/'
 logger = logging.getLogger(__name__)
 
 
-def remove_time_point(time_point_pk):
-    """Delete one time point and every sample at it.
+def remove_time_point(population_pk, time_point):
+    """Delete every sample at one time point of one population.
 
     Executed from Django ipython shell.
+
+    It took a `TimePoint` primary key and deleted the row, taking its samples by cascade.
+    There is no row now, so the coordinate is the argument and the samples are deleted
+    directly -- which is what the operation always meant.
     """
     from aledb_common.rebuild_registry import request_rebuild
 
-    time_point = aledb_experiment.models.TimePoint.objects.get(pk=time_point_pk)
-    experiment_id = time_point.population.experiment_id
-    time_point.delete()
+    population = aledb_experiment.models.Population.objects.get(pk=population_pk)
+    experiment_id = population.experiment_id
+    aledb_sample.models.Sample.objects.filter(
+        population=population, time_point=time_point).delete()
     _delete_all_orphaned_mutations()
     # After the delete, not before: marking data stale that is about to change again would be
     # cleared by any rebuild that ran in between. Marked rather than rebuilt, because this is
@@ -88,7 +91,7 @@ def _delete_all_orphaned_mutations():
         mutation.delete()
 
 
-def delete_sample(experiment_pk, population_name, time_point_value, sample_name):
+def delete_sample(experiment_pk, population_name, time_point, sample_name):
     """Delete the sample at a coordinate.
 
     Executed from Django ipython shell.
@@ -100,11 +103,11 @@ def delete_sample(experiment_pk, population_name, time_point_value, sample_name)
     from aledb_common.rebuild_registry import request_rebuild
 
     for sample in aledb_sample.models.Sample.objects.filter(name=sample_name):
-        if sample.time_point.population.experiment_id == experiment_pk and \
-                sample.time_point.population.name == population_name and \
-                sample.time_point.value == time_point_value:
+        if sample.population.experiment_id == experiment_pk and \
+                sample.population.name == population_name and \
+                sample.time_point == time_point:
             sample.delete()
-            print("Successfully removed: ", population_name, time_point_value, sample_name)
+            print("Successfully removed: ", population_name, time_point, sample_name)
     _delete_all_orphaned_mutations()
     # This marked nothing, where its sibling `remove_time_point` always has. Deleting a
     # sample changes both dashboard counts -- the sample count directly, the mutation counts
@@ -114,69 +117,85 @@ def delete_sample(experiment_pk, population_name, time_point_value, sample_name)
     request_rebuild(experiment_pk, reason='sample removed')
 
 
-def upload_experiment(experiment_path):
-    """Import one experiment directory: ``<path>/breseq/<sample>/`` plus ``<path>/metadata/``.
+def import_paths(paths, experiment, user):
+    """Import each path into `experiment`, exactly the way a web drop is imported.
 
-    The mutations go through ``breseq_folder``, the same importer a folder dropped on
-    the Add page uses, so a CLI upload and a web upload produce identical rows --
-    annotated against the experiment's reference, carrying their .gd record, with the
-    alignment stored. This used to be a second implementation that read
-    the sample's .gd plus the breseq HTML report and shared nothing with it.
+    Named for what it does rather than for how the bytes arrived: nothing is uploaded from a
+    shell. The registry is `import_registry`, the handlers are import handlers and the page
+    is `/import/add/`; `upload` was the one word in that chain saying something else.
+
+    One `run_import` per path with **no import type named**, so auto-detect routes every
+    file the way the Add page does. That is the whole of the unification, and it is worth
+    saying what the CLI gains by it: it used to call `breseq_folder.import_breseq_folders`
+    directly, which is one handler of four, so a `.gd` sitting loose beside the folders was
+    imported only by the flag that told `import_breseq_folders` to report it, a reference
+    genome dropped in was ignored, and an import type registered by a *plugin* was
+    unreachable from the shell entirely. All of that now works here because none of it is
+    known here.
+
+    What went with the old path is the metadata directory. `<exp>/metadata/*.csv` carried
+    the project name, the experiment name and the person, and `find_experiment_paths` would
+    only walk a directory that had one -- so identity came out of a file format nothing else
+    in the suite read. It is options now, which is what the web has always done: the Add
+    page is scoped to an experiment by primary key before a byte is uploaded.
     """
-    parameters = _check_and_extract_parameters_from_metadata(
-        os.path.join(experiment_path, "metadata"))
-    if not parameters:
-        return parameters
+    from aledb_common.import_registry import run_import
 
-    person, experiment_name, project_name = parameters
-    print(experiment_path, person, experiment_name, project_name)
-
-    summary = breseq_folder.import_breseq_folders(
-        os.path.join(experiment_path, "breseq"),
-        project_name=project_name,
-        experiment_name=experiment_name,
-        person=person)
-
-    for result in summary["files"]:
-        if result["error"]:
-            print("  %s: %s" % (result["file"], result["error"]))
-
-    aledb_metadata.parser.parse_metadata_post_experiment_upload(
-        os.path.join(experiment_path, "metadata"), summary["experiment_id"])
-    return summary
-
-
-def upload_collection(root_path):
-    upload_experiments(find_experiment_paths(root_path))
-
-
-def upload_experiments(exp_files_path_list):
-    for each in exp_files_path_list:
-        upload_experiment(each)
-
-
-def find_experiment_paths(root_path):
-    if not os.path.isdir(root_path):
-        logger.info("invalid path:", root_path)
-    paths = [x[0] for x in os.walk(root_path)]
-    paths = set(paths)
-    experiment_paths = []
+    summaries = []
     for path in paths:
-        if path.endswith('/breseq'):
-            root_path = path.replace('/breseq', '')
-            if os.path.isdir(root_path+'/metadata'):
-                experiment_paths.append(root_path)
-    return experiment_paths
+        print("Importing", path, "into", experiment.name)
+        summary = run_import(experiment, path, user)
+        for result in summary["files"]:
+            if result["error"]:
+                print("  %s: %s" % (result["file"], result["error"]))
+            else:
+                count = result.get("mutations")
+                print("  %s: %s" % (result["file"],
+                                    "reference" if count is None
+                                    else "%d mutations" % count))
+            for warning in result.get("warnings") or []:
+                print("    warning: %s" % warning)
+        print("  %d mutations from %d file(s)"
+              % (summary["total_mutations"], len(summary["files"])))
+        summaries.append(summary)
+    return summaries
 
 
-def _check_and_extract_parameters_from_metadata(metadata_path):
-    if not os.path.isdir(metadata_path):
-        logger.info("invalid metadata path")
-        print("invalid path:", metadata_path)
-        return False
-    if not is_valid(metadata_path, SCHEMA_PATH):
-        return False
-    return aledb_metadata.parser.extract_experiment_parameters(metadata_path)
+def resolve_experiment(*, experiment_id=None, project_name=None, experiment_name=None,
+                       person=None, is_public=False):
+    """The experiment an upload targets, and the user it is attributed to.
+
+    Two ways in, and they are the two the product already had:
+
+    - `experiment_id` is the web's form. `/import/add/?experiment_id=<pk>` is scoped by
+      primary key precisely so two experiments may share a name and two people may add to
+      one, and a shell upload should not be weaker than that.
+    - `project_name` + `experiment_name` get-or-create, which is what the metadata file used
+      to supply. It keys on (name, person, project) through `_prepare_experiment`, so it
+      carries that function's known sharp edge: the same experiment name with a *different*
+      person forks into a second experiment. Pass `--experiment-id` to add to one that
+      exists.
+
+    `person` is a username or a real name, resolved the way the CLI has always resolved
+    one. It is required when creating, because a new project needs an owner; with
+    `experiment_id` it defaults to the project's owner, so the common case needs no flag.
+    """
+    from aledb_import.gd_import import _prepare_experiment
+
+    if experiment_id is not None:
+        experiment = Experiment.objects.get(pk=experiment_id)
+        user = find_user(person) if person else experiment.project.user
+        return experiment, user
+
+    if not (project_name and experiment_name):
+        raise ValueError(
+            "give --experiment-id, or both --project and --experiment")
+    if not person:
+        raise ValueError("--person is required when naming a project and experiment")
+
+    user = find_user(person)
+    context = _prepare_experiment(project_name, experiment_name, person, is_public)
+    return context["experiment"], user
 
 
 def find_user(user):

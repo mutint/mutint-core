@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint,
+    Experiment, Population,
 )
 from aledb_import import gd_import, reference_store
 from aledb_import.tests import breseq_fixture
@@ -94,7 +94,7 @@ class GdImportTestCase(TestCase):
         self.assertEqual(Experiment.objects.count(), 1)
         ale_id = Population.objects.get()
         self.assertEqual(ale_id.name, "3")
-        self.assertEqual(TimePoint.objects.get().value, 30000)
+        self.assertEqual({30000}, set(Sample.objects.values_list('time_point', flat=True)))
         # `1-1`, not `1`: the replicate field is part of the label, kept even when it is
         # 1 so that `3-30000-1-1` and `3-30000-1-2` are siblings rather than a bare `1`
         # beside a `1-2`.
@@ -242,7 +242,7 @@ class GdImportTestCase(TestCase):
         self.assertEqual(Population.objects.count(), 1)
         self.assertEqual(Population.objects.get().name, "Ara-1")
         self.assertEqual(
-            sorted(TimePoint.objects.values_list("value", flat=True)),
+            sorted(set(Sample.objects.values_list("time_point", flat=True))),
             [500, 1000, 50000])
         self.assertEqual(
             sorted(Sample.objects.values_list("name", flat=True)),
@@ -253,7 +253,7 @@ class GdImportTestCase(TestCase):
         self._import_named(["Ara+3_500gen_763A.gd"])
 
         self.assertEqual(Population.objects.get().name, "Ara+3")
-        self.assertEqual(TimePoint.objects.get().value, 500)
+        self.assertEqual({500}, set(Sample.objects.values_list('time_point', flat=True)))
         self.assertEqual(Sample.objects.get().name, "763A")
 
     def test_two_lineages_differing_only_in_sign_stay_apart(self):
@@ -262,14 +262,15 @@ class GdImportTestCase(TestCase):
 
         self.assertEqual(
             sorted(Population.objects.values_list("name", flat=True)), ["Ara+1", "Ara-1"])
-        self.assertEqual(TimePoint.objects.count(), 2, "one flask 500 per ALE")
+        self.assertEqual(2, Sample.objects.values("population", "time_point").distinct().count(),
+                         "one time point 500 per ALE")
 
     def test_two_clones_from_one_flask_are_two_samples(self):
         """`763A` and `763B` differ only in the trailer, which is why it is not stripped."""
         self._import_named(["Ara-1_500gen_763A.gd", "Ara-1_500gen_763B.gd"])
 
         self.assertEqual(Population.objects.count(), 1)
-        self.assertEqual(TimePoint.objects.count(), 1)
+        self.assertEqual(1, Sample.objects.values("population", "time_point").distinct().count())
         self.assertEqual(
             sorted(Sample.objects.values_list("name", flat=True)),
             ["763A", "763B"])
@@ -305,8 +306,8 @@ class GdImportTestCase(TestCase):
         self.assertEqual(Sample.objects.count(), len(self.UNPARSEABLE_NAMES))
         self.assertEqual(Population.objects.count(), 1)
         self.assertEqual(Population.objects.get().name, "1")
-        self.assertEqual(TimePoint.objects.count(), 1)
-        self.assertEqual(TimePoint.objects.get().value, 1)
+        self.assertEqual(1, Sample.objects.values("population", "time_point").distinct().count())
+        self.assertEqual({1}, set(Sample.objects.values_list('time_point', flat=True)))
         self.assertEqual(
             sorted(Sample.objects.values_list("name", flat=True)),
             ["1", "2"])
@@ -332,7 +333,7 @@ class GdImportTestCase(TestCase):
         self._import_named(["3-30000-1-1.gd"])
 
         self.assertEqual(Population.objects.get().name, "3")
-        self.assertEqual(TimePoint.objects.get().value, 30000)
+        self.assertEqual({30000}, set(Sample.objects.values_list('time_point', flat=True)))
         self.assertEqual(Sample.objects.get().name, "1-1")
 
     def test_summary_reports_the_real_experiment_pk(self):
@@ -370,9 +371,6 @@ class GdImportTestCase(TestCase):
         mutations_html = mutations.content.decode("utf-8")
         self.assertNotIn("Page not available", mutations_html)
         self.assertNotIn("name 'ale' is not defined", mutations_html)
-
-        metadata = self.client.get("/metadata/", {"experiment_id": experiment_id})
-        self.assertEqual(metadata.status_code, 200)
 
 
 

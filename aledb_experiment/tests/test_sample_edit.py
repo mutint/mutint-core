@@ -18,7 +18,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint, Project,
+    Experiment, Population, Project,
 )
 from aledb_sample.models import Sample
 from aledb_experiment import paths
@@ -37,22 +37,14 @@ class SampleEditTestCase(TestCase):
         self.project = Project.objects.get(pk=created["project_id"])
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
-        from aledb_import.gd_import import prepare_experiment_by_id
-        # Never _prepare_experiment: its name-based lookup reaches find_user, which
-        # prompts on stdin and raises EOFError under the test runner.
-        context = prepare_experiment_by_id(self.experiment.id)
-        self.media = context["media"]
 
     def make_sample(self, ale, flask, isolate, name="", experiment=None,
-                    media=None, is_mixed=False):
+                    is_mixed=False):
         experiment = experiment or self.experiment
         ale_row, _ = Population.objects.get_or_create(
             experiment=experiment, name=ale)
-        flask_row, _ = TimePoint.objects.get_or_create(
-            population=ale_row, value=flask,
-            defaults={"media": media or self.media})
         return Sample.objects.create(
-            time_point=flask_row, name=isolate, is_clonal=not is_mixed,
+            population=ale_row, time_point=flask, name=isolate, is_clonal=not is_mixed,
             source_name=name)
 
     def row(self, reseq, **overrides):
@@ -82,8 +74,14 @@ class SampleEditTestCase(TestCase):
         return sample_coordinate(reseq)
 
     def chain_counts(self):
-        """(ALEs, flasks, samples). It was four levels; the last two are one row now."""
-        return (Population.objects.count(), TimePoint.objects.count(),
+        """(ALEs, time points, samples).
+
+        It was four levels. Three are the sample now -- the isolate and the replicate were
+        merged into it, and the time point became a column -- so only the first is still a
+        row to count, and the middle number is distinct values rather than rows.
+        """
+        return (Population.objects.count(),
+                Sample.objects.values("population", "time_point").distinct().count(),
                 Sample.objects.count())
 
 
@@ -256,16 +254,18 @@ class RenumberTestCase(SampleEditTestCase):
         self.second = self.make_sample(1, 1, "2-1", name="second")
 
     def test_renumbering_one_sample_leaves_its_sibling_alone(self):
-        """The whole reason identity is changed by re-pointing the FK. Population and TimePoint
-        rows are shared, so writing a number onto one renumbers every sample beneath it."""
-        sibling_flask = self.second.time_point_id
+        """The whole reason a move re-points the FK rather than writing onto the row it
+        finds. `Population` is shared by every sample in the lineage, so setting its name
+        would rename all of them. `TimePoint` was shared the same way and is a column now,
+        so that half of the hazard is simply gone."""
+        sibling_population = self.second.population_id
 
         self.assertEqual(200, self.single(self.first, ale=2).status_code)
 
         self.assertEqual(("2", 1, "1-1"), self.coordinate(self.first))
         self.assertEqual(("1", 1, "2-1"), self.coordinate(self.second))
         self.second.refresh_from_db()
-        self.assertEqual(sibling_flask, self.second.time_point_id)
+        self.assertEqual(sibling_population, self.second.population_id)
 
     def test_the_sample_keeps_its_primary_key(self):
         """The store keys BAM and BigWig paths by pk, so a renumber must not move files."""
@@ -278,10 +278,10 @@ class RenumberTestCase(SampleEditTestCase):
         self.assertTrue(Sample.objects.filter(pk=original).exists())
 
     def test_a_fresh_coordinate_creates_the_rows_it_needs(self):
-        """One of each shared row is created and whatever the move emptied is pruned in
-        the same step -- so ALE and flask grow by one (ALE 1 and flask 1 still hold the
-        sibling) while the sample count does not move at all: the label is a column on the
-        row that was already there."""
+        """The shared row is created and whatever the move emptied is pruned in the same
+        step -- so the ALE count grows by one (ALE 1 still holds the sibling) and so does
+        the number of distinct time points, while the sample count does not move at all:
+        the label and the time point are both columns on the row that was already there."""
         before = self.chain_counts()
         self.single(self.first, ale=5, flask=5, isolate="5-5")
         ales, flasks, samples = self.chain_counts()
@@ -294,37 +294,6 @@ class RenumberTestCase(SampleEditTestCase):
         self.assertFalse(Sample.objects.filter(
             **{paths.to_population_label(): 1, "name": "1-1"}).exists())
 
-    def test_the_new_rows_inherit_media_from_the_source(self):
-        """A renumber re-labels a sample; it does not move it to different growth
-        conditions.
-
-        This asserted the freezer box as well, until that model was deleted: every column on
-        it was either dead or a write-only placeholder, so it was a required foreign key to a
-        singleton row nothing ever displayed."""
-        from aledb_experiment.models import Media
-        other_media = Media.objects.create(description="LB")
-        flask = self.first.time_point
-        flask.media = other_media
-        flask.save()
-
-        self.single(self.first, ale=4)
-
-        self.first.refresh_from_db()
-        self.assertEqual(other_media, self.first.time_point.media)
-
-    def test_moving_onto_a_flask_with_different_media_succeeds(self):
-        """gd_import passes media= as a *lookup* kwarg to TimePoint.objects.get_or_create
-        while TimePoint is unique on (ale_id, flask_number), so it raises IntegrityError
-        against an existing flask carrying different media. Keying on the unique tuple is
-        what makes this work."""
-        from aledb_experiment.models import Media
-        self.make_sample(3, 3, "1-1", name="third",
-                         media=Media.objects.create(description="LB"))
-
-        response = self.single(self.first, ale=3, flask=3, isolate="9-1")
-
-        self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual(("3", 3, "9-1"), self.coordinate(self.first))
 
     def test_moving_onto_a_free_label_beside_an_occupied_one_works(self):
         """This was `test_two_isolate_rows_at_one_number_do_not_break_the_lookup`, and the
@@ -408,25 +377,32 @@ class OrphanPruningTestCase(SampleEditTestCase):
         self.only = self.make_sample(1, 1, "1-1", name="only")
 
     def test_moving_the_last_sample_out_removes_the_rows_it_emptied(self):
-        """Empty rows are not neutral: rebuild_sample_counts counts Population/TimePoint rows,
-        and the ALE picker is built from Population rows."""
+        """Empty rows are not neutral: rebuild_sample_counts counts Population rows, and
+        the ALE picker is built from them."""
         self.single(self.only, ale=2, flask=2, isolate="2-1")
 
         self.assertFalse(Population.objects.filter(
             experiment=self.experiment, name=1).exists())
-        self.assertEqual(1, TimePoint.objects.count())
         self.assertEqual(1, Sample.objects.count())
 
-    def test_a_flask_that_still_holds_another_sample_survives(self):
+    def test_a_population_that_still_holds_another_sample_survives(self):
         self.make_sample(1, 1, "2-1", name="sibling")
 
         self.single(self.only, isolate="5-1")
 
-        self.assertTrue(TimePoint.objects.filter(
-            **{paths.to_experiment(root="time_point"): self.experiment,
-               "value": 1}).exists())
         self.assertTrue(Population.objects.filter(
             experiment=self.experiment, name=1).exists())
+
+    def test_an_emptied_time_point_leaves_nothing_to_prune(self):
+        """The clearest thing the `TimePoint` removal bought. Moving the only sample off a
+        time point used to leave a row that `rebuild_sample_counts` went on counting; there
+        is no row now, so the count follows the samples with nothing to sweep."""
+        self.make_sample(1, 9, "1-1", name="alone")
+
+        self.single(self.only, flask=9, isolate="7-1")
+
+        self.assertEqual({9.0}, set(Sample.objects.filter(
+            **{paths.to_experiment(): self.experiment}).values_list("time_point", flat=True)))
 
     # Two tests stood here, and both pinned orphan guards against columns nothing wrote.
     # `Population.starting_strain` went first: a FK to the isolate no code path ever set,
@@ -451,7 +427,9 @@ class BulkSampleEditTestCase(SampleEditTestCase):
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual(("1", 2, "1-1"), self.coordinate(self.first))
         self.assertEqual(("1", 1, "1-1"), self.coordinate(self.second))
-        self.assertEqual(2, TimePoint.objects.count())
+        # Two distinct time points, both reached without a join now.
+        self.assertEqual(2, Sample.objects.values("population", "time_point")
+                                          .distinct().count())
         self.assertEqual(2, Sample.objects.count())
 
     def test_one_bad_row_saves_nothing(self):
@@ -604,11 +582,12 @@ class ExistingDuplicateNamesTestCase(SampleEditTestCase):
 
 
 class TimePointLabellingTestCase(SampleEditTestCase):
-    """`TimePoint.flask_number` is the column; "time point" is what it means.
+    """`Sample.time_point` is the column, and "Time point" is what the pages call it.
 
-    It is the only ordinal in the schema placing a sample along an ALE -- fixation sorts
-    by it and takes the last two to decide what has fixed -- so the edit pages call it
-    what it is. The internal name must not surface, including in a refusal.
+    It is the only ordinal in the schema placing a sample along an ALE -- fixation sorts by
+    it and takes the last two to decide what has fixed. The column has been called
+    `flask_number` and then `TimePoint.value`; the label never changed, which is what
+    eventually made the column follow it.
     """
 
     def setUp(self):

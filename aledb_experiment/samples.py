@@ -7,16 +7,18 @@ is not**. The label is the sample's own column; the population and the time poin
 two rows above it that it shares with its siblings.
 
 That split is what this module is about, and it used to be a four-row chain -- Population,
-TimePoint, Isolate, TechnicalReplicate -- of which the last two are now the sample itself.
+Isolate, TechnicalReplicate -- of which the last two are now the sample itself.
 
-**The shared rows must never be edited in place.** `gd_import._get_or_create_chain` reuses
-one Population and one TimePoint across every sample under them, so `time_point.value = 30;
-time_point.save()` renumbers every sample at that time point, not the one the user was
-looking at.
+**The shared row must never be edited in place.** `gd_import._get_or_create_chain` reuses
+one Population across every sample under it, so `population.name = "Ara-2";
+population.save()` renumbers every sample in that lineage, not the one the user was looking
+at. There used to be a second such row -- `TimePoint`, shared by every sample at one point
+-- and the same hazard: `time_point.value = 30` moved all of them. That one is a column on
+the sample now, so it is simply assigned, and only the population is still shared.
 
-Everything here follows from doing the opposite: resolve (or create) the row for the
-*target* coordinate and re-point `Sample.time_point` at it. That buys, in
-order of how much each one matters:
+Everything here follows from doing the opposite for the row that remains: resolve (or
+create) the Population for the *target* coordinate and re-point `Sample.population` at it.
+That buys, in order of how much each one matters:
 
 - siblings are untouched, which is the whole point;
 - `reseq.pk` never changes, so the store paths (`aledb_store/samples/<pk>/aligned.bam`)
@@ -35,7 +37,7 @@ import logging
 from django.db import transaction
 
 from aledb_experiment import coordinates
-from aledb_experiment.models import Population, TimePoint
+from aledb_experiment.models import Population
 
 logger = logging.getLogger(__name__)
 
@@ -70,35 +72,34 @@ def sample_project(reseq):
 
     A sample knows its project only by traversal, so this is also the permission lookup:
     `can_edit_project(user, sample_project(reseq))`. Returns None for a sample whose
-    `time_point` is null -- those are unreachable everywhere else too
+    `population` is null -- those are unreachable everywhere else too
     (`get_ordered_reseq_queryset` filters them out), and the views 404 rather than treat a
     sample with no project as one nobody needs permission for.
     """
-    if reseq.time_point_id is None:
+    if reseq.population_id is None:
         return None
-    return reseq.time_point.population.experiment.project
+    return reseq.population.experiment.project
 
 
 def sample_experiment(reseq):
-    if reseq.time_point_id is None:
+    if reseq.population_id is None:
         return None
-    return reseq.time_point.population.experiment
+    return reseq.population.experiment
 
 
 def sample_coordinate(reseq):
     """`(population, time_point, label)`, or None for an unrooted sample.
 
-    The population and the label are strings and the time point is an integer -- see
-    `Population`.
+    The population and the label are strings and the time point is a float -- see
+    `Sample.time_point`.
 
     **It was a 4-tuple** ending in the replicate number. The replicate is part of the label
     now (`1-2` rather than `1` with an `R2` beside it), so anything unpacking this into four
     names is a compile error rather than a silently short coordinate.
     """
-    if reseq.time_point_id is None:
+    if reseq.population_id is None:
         return None
-    time_point = reseq.time_point
-    return (time_point.population.name, time_point.value, reseq.name)
+    return (reseq.population.name, reseq.time_point, reseq.name)
 
 
 def coordinate_str(coordinate):
@@ -110,62 +111,55 @@ def coordinate_str(coordinate):
     return coordinates.format_coordinate(*coordinate)
 
 
-def resolve_time_point(experiment, coordinate, *, media, species="", strain=""):
-    """The TimePoint at `coordinate` within `experiment`, creating what is missing.
+def resolve_population(experiment, coordinate, *, species="", strain=""):
+    """The Population at `coordinate` within `experiment`, creating it if it is missing.
 
-    It used to resolve four rows and return the last one. Two of those rows are the sample
-    itself now, so it resolves two and returns the time point -- the caller re-points
-    `reseq.time_point` at it and writes the label straight onto the sample.
+    It used to resolve four rows and return the last one, then two and return the time
+    point. Three of those four are the sample itself now -- the isolate and the replicate
+    were merged into it, and the time point became a column on it -- so one row is left and
+    the caller writes the rest straight onto the sample.
 
-    **That deleted the subtlest paragraph in this module.** Isolate had no unique_together
-    and gd_import get_or_created it on six fields including `sequencing_date`, so real databases
-    held two Isolate rows at one (time point, label) and `get_or_create` raised
-    MultipleObjectsReturned on them. This resolved it with `filter().order_by("pk").first()`
-    -- lowest pk wins, deterministic if arbitrary. There is no such row to be ambiguous
-    about any more: the label is a column on the sample, and two samples sharing a
-    coordinate is what `plan_moves` refuses.
+    **Two paragraphs of hazard went with those rows**, and neither can come back:
 
-    Two differences from `gd_import._get_or_create_chain` remain, and each is a correction
-    rather than a preference:
+    - `Isolate` had no `unique_together` while `gd_import` get_or_created it on six fields
+      including `sequencing_date`, so real databases held two rows at one (time point,
+      label) and `get_or_create` raised `MultipleObjectsReturned`. This resolved it with
+      `filter().order_by("pk").first()` -- lowest pk wins, deterministic if arbitrary.
+    - `TimePoint` was unique on (population, value) while `gd_import` passed `media=` as a
+      *lookup* kwarg, so against an existing time point carrying different media that call
+      raised `IntegrityError` rather than returning the row. `Media` is gone and so is the
+      row it hung on.
 
-    - **TimePoint keys on (population, value) with media in `defaults`.** gd_import passes
-      `media=` as a *lookup* kwarg, but TimePoint is unique on (population, value) -- so
-      against an existing time point carrying different media that call raises
-      IntegrityError instead of returning the row. Keying on the unique tuple is the only
-      form that can't.
-    - **Population copies species/strain but not description.** The first two are facts about
-      the experiment's organism and hold across ALEs; a description is what makes *this*
-      ALE different from the others, so copying it onto a new one would be a lie.
+    One difference from `gd_import._get_or_create_chain` remains, and it is a correction
+    rather than a preference: **Population copies species/strain but not description.** The
+    first two are facts about the experiment's organism and hold across ALEs; a description
+    is what makes *this* ALE different from the others, so copying it onto a new one would
+    be a lie.
     """
-    population_name, time_point_value, _label = coordinate
+    population_name, _time_point, _label = coordinate
 
     population, _ = Population.objects.get_or_create(
         experiment=experiment, name=population_name,
         defaults={"species": species, "strain": strain})
-
-    time_point, _ = TimePoint.objects.get_or_create(
-        population=population, value=time_point_value,
-        defaults={"media": media})
-    return time_point
+    return population
 
 
-def prune_orphans(time_points):
-    """Delete the rows a move emptied, bottom-up.
+def prune_orphans(populations):
+    """Delete the rows a move emptied.
 
     Leaving them is not neutral. `aledb_dashboard.util.rebuild_sample_counts` counts
-    Population/TimePoint *rows* rather than samples, so an emptied row inflates the
-    dashboard's counts permanently; and the population picker in `aledb_sample.views.common`
-    is built from Population rows, so an emptied one would sit in the menu selecting
-    nothing.
+    Population *rows* rather than samples, so an emptied one inflates the dashboard's count
+    permanently; and the population picker in `aledb_sample.views.common` is built from
+    Population rows, so an emptied one would sit in the menu selecting nothing.
 
     Emptiness is re-queried here rather than taken from a snapshot made before the move:
     a swap vacates and refills the same rows, and a stale snapshot would delete a row that
-    had just been filled again -- taking its samples with it, since every downward FK
-    cascades.
+    had just been filled again -- taking its samples with it, since the FK cascades.
 
-    **Two of the four levels have gone**, so this walks time point then population rather
-    than replicate, isolate, flask, ALE. The two guards it dropped were the ones that could not
-    be got wrong; the two left are the ones that share rows between samples.
+    **Three of the four levels have gone**, so this walks one row where it once walked
+    replicate, isolate, flask, ALE. An emptied *time point* needs no pruning at all now and
+    is the clearest thing the removal bought: it was never a row, only a value some sample
+    held, so vacating it leaves nothing behind to count or to offer in a menu.
 
     `Isolate.parent_isolate` was guarded here, and both are gone: nothing in the suite ever
     wrote that column, so the guard protected a state no import or edit could produce.
@@ -174,14 +168,8 @@ def prune_orphans(time_points):
     written spelling of the ancestor, which is now one designation on the experiment; see
     `aledb_experiment/ancestor.py`.
     """
-    for time_point in time_points:
-        population = time_point.population
-
-        if time_point.sample_set.exists():
-            continue
-        time_point.delete()
-
-        if population.timepoint_set.exists():
+    for population in populations:
+        if population.sample_set.exists():
             continue
         population.delete()
 
@@ -450,7 +438,7 @@ def _write(instance, mapping, descriptive, always):
 
 
 @transaction.atomic
-def apply_rows(experiment, parsed, *, media):
+def apply_rows(experiment, parsed):
     """Phase three: write everything, or nothing.
 
     All-or-nothing because a bulk renumber is usually a permutation, and half a swap is a
@@ -464,27 +452,23 @@ def apply_rows(experiment, parsed, *, media):
 
     for reseq, coordinate, descriptive in parsed:
         current = sample_coordinate(reseq)
-        source_time_point = reseq.time_point
+        source_population = reseq.population
         always = ["is_clonal"]
 
         if current != coordinate:
-            source_population = (source_time_point.population
-                                 if source_time_point else None)
-
-            # A renumber re-labels a sample; it does not move it to different growth
-            # conditions. Inheriting these is the only answer that does not silently reset
-            # real data -- the placeholder is the fallback for a sample with nothing to
-            # inherit from. (There was a freezer box here too; it was a required FK to a
-            # singleton row nothing displayed, and it is gone.)
-            reseq.time_point = resolve_time_point(
+            # A renumber re-labels a sample; it does not move it to a different organism.
+            # Inheriting species/strain is the only answer that does not silently reset real
+            # data. (There was a medium and a freezer box here too, both required FKs to
+            # rows nothing displayed, and both are gone.)
+            reseq.population = resolve_population(
                 experiment, coordinate,
-                media=source_time_point.media if source_time_point else media,
                 species=source_population.species if source_population else "",
                 strain=source_population.strain if source_population else "")
+            reseq.time_point = coordinate[1]
             reseq.name = coordinate[2]
-            always += ["time_point", "name"]
-            if source_time_point is not None:
-                vacated.append(source_time_point)
+            always += ["population", "time_point", "name"]
+            if source_population is not None:
+                vacated.append(source_population)
 
         # One row written where there were three. The description and the tags used to
         # belong to the isolate and the replicate, which were *shared* -- so a move had to
@@ -509,7 +493,7 @@ def rebuild_after_structural_change(experiment):
 
     Fixation reads the numbers directly -- it sorts time points and takes the last two to
     decide what counts as fixed -- so it has to rebuild. Sample counts are counts of
-    Population/TimePoint *rows*, which this module creates and prunes.
+    Population *rows*, which this module creates and prunes.
 
     Deliberately not `gd_import.run_post_processing`: it lives in aledb_import, so calling
     it would point aledb_experiment at the import app, and it asks for every registered
@@ -525,7 +509,7 @@ def rebuild_after_structural_change(experiment):
     `aledb_fixation` were all named here, and none of them stores anything now -- the
     Overview's counts, the convergent set and the fixated set are each computed by the request
     that renders them, so a renumber has nothing of theirs to mark. What is left is
-    `sample_counts`, which counts the Population/TimePoint rows this module creates and prunes.
+    `sample_counts`, which counts the Population rows this module creates and prunes.
 
     Naming a plugin from here was always safe in itself: `get_rebuilders` skips a name nothing
     registered, so a deployment without the plugin simply had less to do. That property still

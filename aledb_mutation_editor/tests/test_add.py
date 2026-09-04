@@ -216,16 +216,15 @@ class AddTestCase(EditorTestCase):
     def test_a_sample_from_another_experiment_is_refused(self):
         """Targets are resolved through this experiment's own sample list, so an id from
         elsewhere matches nothing and a hand-built POST cannot reach across projects."""
-        from aledb_experiment.models import Experiment, Population, TimePoint
+        from aledb_experiment.models import Experiment, Population
         from aledb_sample.models import Sample
 
         created = self.client.post(
             "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         other = Experiment.objects.get(pk=created["experiment_id"])
         ale = Population.objects.create(experiment=other, name=1)
-        flask = TimePoint.objects.create(population=ale, value=1, media=self.context["media"])
         stranger = Sample.objects.create(
-            time_point=flask, name=1, is_clonal=True)
+            population=ale, time_point=1, name=1, is_clonal=True)
 
         response = self.add(seq_id="NC_000913", position=5000, new_seq="T",
                             targets=[stranger])

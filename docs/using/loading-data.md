@@ -10,7 +10,8 @@ rows.
 ## From the command line
 
 ```bash
-./aledb upload /path/to/experiment1 /path/to/experiment2
+./aledb import /path/to/experiment1 /path/to/experiment2 \
+    --project "My project" --experiment "My experiment" --person alice
 ./aledb delete 4 20 19
 ```
 

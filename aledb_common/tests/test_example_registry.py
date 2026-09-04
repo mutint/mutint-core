@@ -166,16 +166,17 @@ class LoadExampleCommandTestCase(TestCase):
         self.assertIn("Examples", [p.name for p in get_user_projects(self.admin)])
 
     def test_loading_imports_the_data(self):
-        from aledb_experiment.models import Experiment, TimePoint
+        from aledb_experiment.models import Experiment
         from aledb_sample.models import Mutation
 
         self._load("test-example")
 
         experiment = Experiment.objects.get(name="test-example")
+        from aledb_sample.models import Sample
         self.assertEqual(
             {100, 200},
-            {f.value for f in TimePoint.objects.filter(
-                **{paths.to_experiment(root="time_point"): experiment})})
+            set(Sample.objects.filter(**{paths.to_experiment(): experiment})
+                .values_list(paths.to_time_point_value(), flat=True)))
         self.assertTrue(Mutation.objects.filter(experiment=experiment).exists())
 
     def test_prose_beside_the_data_is_not_treated_as_a_failed_import(self):

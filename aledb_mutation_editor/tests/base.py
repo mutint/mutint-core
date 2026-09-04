@@ -16,7 +16,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    Experiment, Population, TimePoint,
+    Experiment, Population,
 )
 from aledb_import.gd_import import prepare_experiment_by_id
 from aledb_sample.models import Mutation, MutationCall, Sample
@@ -50,10 +50,8 @@ class EditorTestCase(TestCase):
     # --- fixture builders -----------------------------------------------------------------
 
     def make_sample(self, flask_number, isolate_number=1, is_mixed=False):
-        flask = TimePoint.objects.create(population=self.ale, value=flask_number,
-                                     media=self.context["media"])
         return Sample.objects.create(
-            time_point=flask, name=isolate_number, is_clonal=not is_mixed,
+            population=self.ale, time_point=flask_number, name=isolate_number, is_clonal=not is_mixed,
             source_name="A1 F%d I%d" % (flask_number, isolate_number))
 
     def make_mutation(self, position, sequence_change, gene="thrA", experiment=None):

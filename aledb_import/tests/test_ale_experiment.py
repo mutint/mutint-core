@@ -1,11 +1,14 @@
 """
-``./aledb upload`` and the shell helpers around it.
+``./aledb import`` and the shell helpers around it.
 
-The upload itself is now a thin wrapper: it reads the experiment's metadata for
-the project / experiment / person, hands the breseq folders to the same importer
-a web drop uses, and then parses the metadata. So what is worth asserting here is
-that a CLI upload really does produce what a web upload produces -- annotated
-mutations, stored .gd, stored alignment -- rather than re-testing the importer.
+The command is a thin wrapper over `import_registry.run_import` -- the same funnel the Add
+Data page posts into -- so what is worth asserting here is that a shell import really does
+produce what a web drop produces: annotated mutations owned by the experiment, the .gd
+record kept, the reference established and the alignment stored. Not the importer again.
+
+It was `./aledb upload`, and it read the project, experiment and person out of
+`<exp>/metadata/*.csv`. That directory and the app that parsed it are gone; identity is
+options now, which is what the web always did.
 """
 
 import io
@@ -27,11 +30,11 @@ from aledb_import import annotation
 from aledb_import.ale_experiment import (
     delete_experiments,
     delete_sample,
-    find_experiment_paths,
     find_user,
+    import_paths,
     remove_time_point,
+    resolve_experiment,
     try_creating_project,
-    upload_collection,
 )
 from aledb_import.tests import breseq_fixture
 from aledb_sample.models import (
@@ -41,13 +44,8 @@ from aledb_sample.models import (
     Sample,
 )
 
-METADATA_FIXTURE = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)),
-    "test_file_structure", "messy", "metadata")
-
-
-class UploadCommandTestCase(TestCase):
-    """A collection on disk, imported the way ``./aledb upload <path>`` does."""
+class ImportCommandTestCase(TestCase):
+    """A breseq tree on disk, imported the way ``./aledb import <path>`` does."""
 
     def setUp(self):
         annotation.clear_cache()
@@ -65,15 +63,14 @@ class UploadCommandTestCase(TestCase):
 
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root, True)
-        self.experiment_dir = os.path.join(self.root, "SSW Glu Ac")
-        breseq_fixture.write_sample(
-            os.path.join(self.experiment_dir, "breseq"), "1-10000-1-1")
-        shutil.copytree(METADATA_FIXTURE, os.path.join(self.experiment_dir, "metadata"))
+        breseq_fixture.write_sample(self.root, "1-10000-1-1")
 
     def upload(self):
-        upload_collection(self.root)
+        experiment, user = resolve_experiment(
+            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", person="pphaneuf")
+        import_paths([self.root], experiment, user)
 
-    def test_it_finds_the_experiment_and_imports_it(self):
+    def test_it_creates_the_experiment_and_imports_it(self):
         self.upload()
         self.assertEqual(1, Experiment.objects.count())
         self.assertEqual(1, Sample.objects.count())
@@ -107,10 +104,13 @@ class UploadCommandTestCase(TestCase):
         self.upload()
         self.assertTrue(Sample.objects.get().bam_stored)
 
-    def test_metadata_is_applied_after_the_import(self):
+    def test_the_sample_lands_under_the_named_project_and_experiment(self):
         self.upload()
         sample = Sample.objects.get()
-        self.assertTrue(sample.time_point.population.experiment.project)
+
+        self.assertEqual("SSW Glu Ac", sample.population.experiment.name)
+        self.assertEqual("SSW Glu Ac", sample.population.experiment.project.name)
+        self.assertEqual(self.user, sample.population.experiment.project.user)
 
     def test_derived_data_is_available_after_the_import(self):
         """This asserted that `StaticData` had a row. Nothing is stored now, so what the
@@ -128,10 +128,27 @@ class UploadCommandTestCase(TestCase):
         summary = get_experiment_summary(experiment.id)
         self.assertTrue(sum(summary.mutation_type_counts.values()))
 
-    def test_a_directory_with_no_metadata_is_skipped(self):
-        shutil.rmtree(os.path.join(self.experiment_dir, "metadata"))
+    def test_importing_twice_adds_to_the_same_experiment(self):
+        """`--experiment-id` is the web's form and the one to prefer, because the name-based
+        path keys on (name, person, project) and forks on a different person."""
         self.upload()
-        self.assertEqual(0, Mutation.objects.count())
+        experiment = Experiment.objects.get()
+
+        again, user = resolve_experiment(experiment_id=experiment.id)
+
+        self.assertEqual(experiment, again)
+        # No `--person`: with an experiment named by pk it comes from the project.
+        self.assertEqual(self.user, user)
+
+    def test_naming_a_project_without_a_person_is_refused(self):
+        """A new project needs an owner, and `Project.user` is NOT NULL. The old path took
+        the person out of the metadata file; there is nowhere else to get one."""
+        with self.assertRaises(ValueError):
+            resolve_experiment(project_name="P", experiment_name="E")
+
+    def test_neither_form_of_target_is_refused(self):
+        with self.assertRaises(ValueError):
+            resolve_experiment(person="pphaneuf")
 
 
 class DeleteExperimentsTestCase(TestCase):
@@ -151,10 +168,10 @@ class DeleteExperimentsTestCase(TestCase):
 
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root, True)
-        experiment_dir = os.path.join(self.root, "SSW Glu Ac")
-        breseq_fixture.write_sample(os.path.join(experiment_dir, "breseq"), "1-10000-1-1")
-        shutil.copytree(METADATA_FIXTURE, os.path.join(experiment_dir, "metadata"))
-        upload_collection(self.root)
+        breseq_fixture.write_sample(self.root, "1-10000-1-1")
+        experiment, user = resolve_experiment(
+            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", person="pphaneuf")
+        import_paths([self.root], experiment, user)
 
     def test_deleting_an_experiment_takes_its_mutations_with_it(self):
         self.assertEqual(2, Mutation.objects.count())
@@ -213,12 +230,11 @@ class DeleteSampleTestCase(TestCase):
 
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root, True)
-        experiment_dir = os.path.join(self.root, "SSW Glu Ac")
-        breseq = os.path.join(experiment_dir, "breseq")
-        breseq_fixture.write_sample(breseq, "1-10000-1-1")
-        breseq_fixture.write_sample(breseq, "1-20000-1-1")
-        shutil.copytree(METADATA_FIXTURE, os.path.join(experiment_dir, "metadata"))
-        upload_collection(self.root)
+        breseq_fixture.write_sample(self.root, "1-10000-1-1")
+        breseq_fixture.write_sample(self.root, "1-20000-1-1")
+        experiment, user = resolve_experiment(
+            project_name="SSW Glu Ac", experiment_name="SSW Glu Ac", person="pphaneuf")
+        import_paths([self.root], experiment, user)
         self.experiment = Experiment.objects.get()
         # Deliberately after the upload, which marks everything stale itself: what these tests
         # assert is that the *delete* marks it, and a row already stale would say nothing.
@@ -229,36 +245,21 @@ class DeleteSampleTestCase(TestCase):
         delete_sample(self.experiment.id, "1", 10000, "1-1")
 
         self.assertEqual(["1-1"], [s.name for s in Sample.objects.all()])
-        self.assertEqual([20000], [s.time_point.value for s in Sample.objects.all()])
+        self.assertEqual([20000], [s.time_point for s in Sample.objects.all()])
         self.assertTrue(is_stale("sample_counts"))
 
     def test_removing_a_time_point_marks_the_derived_data_stale(self):
-        sample = Sample.objects.get(time_point__value=10000)
+        sample = Sample.objects.get(time_point=10000)
 
-        remove_time_point(sample.time_point_id)
+        remove_time_point(sample.population_id, sample.time_point)
 
-        self.assertEqual([20000], [s.time_point.value for s in Sample.objects.all()])
+        self.assertEqual([20000], [s.time_point for s in Sample.objects.all()])
         self.assertTrue(is_stale("sample_counts"))
 
     def test_a_coordinate_naming_no_sample_deletes_nothing(self):
         delete_sample(self.experiment.id, "1", 30000, "1-1")
 
         self.assertEqual(2, Sample.objects.count())
-
-
-class FindExperimentPathsTestCase(TestCase):
-
-    def test_a_directory_needs_both_breseq_and_metadata(self):
-        root = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, root, True)
-
-        complete = os.path.join(root, "complete")
-        os.makedirs(os.path.join(complete, "breseq"))
-        os.makedirs(os.path.join(complete, "metadata"))
-        os.makedirs(os.path.join(root, "no-metadata", "breseq"))
-        os.makedirs(os.path.join(root, "no-breseq", "metadata"))
-
-        self.assertEqual([complete], find_experiment_paths(root))
 
 
 class ShellHelpersTestCase(TestCase):

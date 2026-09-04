@@ -2,7 +2,7 @@
 
 Every table in the suite hangs off one chain::
 
-    MutationCall -> Sample -> TimePoint -> Population -> Experiment
+    MutationCall -> Sample -> Population -> Experiment
 
 so almost every query has to spell some part of it as a lookup string. Before this module
 there were **39 hand-written copies** of that spelling across eight core files and three
@@ -48,12 +48,12 @@ FROM_EDIT = "sample"
 #: The chain, segment by segment, from a sample up to the experiment. Everything below is
 #: composed from this, so a queryset that starts **part-way along** it gets the same
 #: definition rather than a second hand-written one.
-SEGMENTS = ("time_point", "population", "experiment")
+SEGMENTS = ("population", "experiment")
 
 #: Where a queryset starts, as a position in SEGMENTS. `prefix` is for roots that sit
 #: *before* a sample -- a call, a change-log row -- and `root` for roots along the
 #: chain itself.
-ROOTS = {"sample": 0, "time_point": 1, "population": 2}
+ROOTS = {"sample": 0, "population": 1}
 
 
 def chain(root="sample", upto="experiment"):
@@ -61,10 +61,7 @@ def chain(root="sample", upto="experiment"):
     return "__".join(SEGMENTS[ROOTS[root]:SEGMENTS.index(upto) + 1])
 
 
-#: A sample to the time point it was drawn at.
-TO_TIME_POINT = chain(upto="time_point")
-
-#: ...to the population it belongs to.
+#: A sample to the population it belongs to.
 TO_POPULATION = chain(upto="population")
 
 #: ...to the experiment.
@@ -80,9 +77,11 @@ EXPERIMENT_PK = "id"
 #: against.
 POPULATION_LABEL = "name"
 
-#: `TimePoint`'s ordinal. It was `TimePoint.flask_number`, and "Time point" is what every label
-#: in the product had already called it for years.
-TIME_POINT_VALUE = "value"
+#: The sample's ordinal along its population's history. It was `TimePoint.value` on a row of
+#: its own and before that `TimePoint.flask_number`; it is a column on the sample now, so
+#: this is a field name rather than the tail of a chain -- which is why `to_time_point_value`
+#: below composes it with `to_sample` and no longer takes a `root`.
+TIME_POINT_VALUE = "time_point"
 
 #: The sample's label within its time point: `1`, `763A`, `1-2`.
 SAMPLE_LABEL = "name"
@@ -96,10 +95,10 @@ SAMPLE_CLONAL = "is_clonal"
 #: `SEGMENTS` reversed, and that is exactly why three files hand-wrote it independently
 #: (`aledb_dashboard/util.py`, `aledb_sample/views/common.py`, `aledb-phylogeny/selection.py`)
 #: while every upward traversal in the suite came from here.
-DOWN_SEGMENTS = ("population", "timepoint", "sample")
+DOWN_SEGMENTS = ("population", "sample")
 
 #: Where a downward traversal starts, as a position in DOWN_SEGMENTS.
-DOWN_ROOTS = {"experiment": 0, "population": 1, "time_point": 2}
+DOWN_ROOTS = {"experiment": 0, "population": 1}
 
 
 def down_chain(root="population", upto="sample"):
@@ -150,10 +149,6 @@ def mixed_filter(prefix=""):
     return {to_sample(prefix, SAMPLE_CLONAL): False}
 
 
-def to_time_point(prefix="", field="", root="sample"):
-    return join(prefix, chain(root, "time_point"), field)
-
-
 def to_population(prefix="", field="", root="sample"):
     return join(prefix, chain(root, "population"), field)
 
@@ -173,5 +168,11 @@ def to_population_label(prefix="", root="sample"):
     return join(prefix, chain(root, "population"), POPULATION_LABEL)
 
 
-def to_time_point_value(prefix="", root="sample"):
-    return join(prefix, chain(root, "time_point"), TIME_POINT_VALUE)
+def to_time_point_value(prefix=""):
+    """The sample's time point -- a column on the sample, not a hop.
+
+    It kept its name through the `TimePoint` removal on purpose: every caller wanted the
+    *value* all along, and the ones that had to spell the hop themselves are exactly the
+    ones this module exists to keep out of. There is no `root` any more, because there is
+    no row above the sample this could be rooted at."""
+    return join(prefix, TIME_POINT_VALUE)

@@ -158,7 +158,7 @@ class GridPageTestCase(EditorTestCase):
     def test_an_call_from_another_experiment_is_refused(self):
         """The endpoint scopes ids through the experiment, so a hand-built POST cannot reach
         across projects even with the grid handing it a longer list."""
-        from aledb_experiment.models import Experiment, Population, TimePoint
+        from aledb_experiment.models import Experiment, Population
         from aledb_import.gd_import import prepare_experiment_by_id
         from aledb_sample.models import Sample
 
@@ -167,9 +167,8 @@ class GridPageTestCase(EditorTestCase):
         other = Experiment.objects.get(pk=created["experiment_id"])
         context = prepare_experiment_by_id(other.id)
         ale = Population.objects.create(experiment=other, name=1)
-        flask = TimePoint.objects.create(population=ale, value=1, media=context["media"])
         sample = Sample.objects.create(
-            time_point=flask, name=1, is_clonal=True, source_name="x")
+            population=ale, time_point=1, name=1, is_clonal=True, source_name="x")
         outside = MutationCall.objects.create(
             sample=sample,
             mutation=self.make_mutation(position=999, sequence_change="T>A",

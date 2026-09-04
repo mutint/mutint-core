@@ -120,7 +120,8 @@ class AlignmentServingTestCase(TestCase):
     def test_sample_without_a_stored_bam_is_404(self):
         """A bare-.gd import has no alignment; the route must 404, not 500."""
         reseq = Sample.objects.create(
-            time_point=self.reseq.time_point, source_name="no-bam", person="tester")
+            population=self.reseq.population, time_point=self.reseq.time_point,
+            source_name="no-bam", person="tester")
         response = self.client.get("/mutations/alignments/%d/bam" % reseq.id)
         self.assertEqual(response.status_code, 404)
 

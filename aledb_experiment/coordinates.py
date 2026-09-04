@@ -29,11 +29,31 @@ SEPARATOR = " / "
 def format_coordinate(population, time_point, sample):
     """`Ara-1 / 500 / 763A`.
 
-    Every part is stringified rather than formatted: two of the three have been text since
-    `aledb_experiment.0008`, and the third is an integer that has nothing to gain from `%d`.
+    The outer two are stringified as they stand -- both have been text since
+    `aledb_experiment.0008`. The time point goes through `format_time_point`, which is the
+    whole of what became necessary when it stopped being an `IntegerField`.
     """
-    return SEPARATOR.join("" if part is None else str(part)
-                          for part in (population, time_point, sample))
+    return SEPARATOR.join(
+        "" if part is None else str(part)
+        for part in (population, format_time_point(time_point), sample))
+
+
+def format_time_point(time_point):
+    """A time point as a person writes it: `500`, not `500.0`; `12.5` when it is.
+
+    `Sample.time_point` is a float so that half a generation can be recorded, and the cost
+    of that is `str(500.0)`, which every label, column heading, CSV field and page title
+    would otherwise carry. Real data is overwhelmingly whole numbers, so the `.0` would be
+    on nearly every one of them.
+
+    None stays None rather than becoming a string, so callers can still tell an unplaced
+    sample from one at time point zero -- which is a real coordinate, and falsy.
+    """
+    if time_point is None:
+        return None
+    if isinstance(time_point, float) and time_point.is_integer():
+        return int(time_point)
+    return time_point
 
 
 #: A label of the shape this replaced: `A1 F30000 I1` or `A1 F30000 I1 R1`.

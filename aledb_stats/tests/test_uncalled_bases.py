@@ -11,7 +11,7 @@ this has to have an answer for, and the answer is to print no percentage rather 
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import Experiment, Media, Population, Project, TimePoint
+from aledb_experiment.models import Experiment, Population, Project
 from aledb_sample.models import ExperimentReference, Sample, UncalledRegion
 from aledb_stats.util import get_reseq_experiment_info_list, uncalled_bases_per_sample
 
@@ -26,12 +26,9 @@ class UncalledBasesTestCase(TestCase):
         from aledb_experiment.roles import ROLE_OWNER
         ProjectAccess.objects.create(project=project, user=user, role=ROLE_OWNER)
         self.experiment = Experiment.objects.create(name="E", project=project)
-        population = Population.objects.create(experiment=self.experiment, name="1")
-        self.time_point = TimePoint.objects.create(
-            population=population, value=500,
-            media=Media.objects.create(description="M9"))
+        self.population = Population.objects.create(experiment=self.experiment, name="1")
         self.sample = Sample.objects.create(
-            time_point=self.time_point, name="1", source_name="s")
+            population=self.population, time_point=500, name="1", source_name="s")
 
     def region(self, start, end, seq_id="REL606", sample=None):
         return UncalledRegion.objects.create(
@@ -74,7 +71,8 @@ class UncalledBasesTestCase(TestCase):
         self.assertEqual(0, self.rows()[0]["uncalled_bases"])
 
     def test_each_sample_is_counted_separately(self):
-        other = Sample.objects.create(time_point=self.time_point, name="2", source_name="t")
+        other = Sample.objects.create(population=self.population, time_point=500,
+                                      name="2", source_name="t")
         self.region(1, 10)
         self.region(1, 100, sample=other)
         self.assertEqual({self.sample.pk: 10, other.pk: 100},
