@@ -54,15 +54,15 @@ field is read as a number, because a time point is one: `500gen` is flask 500. A
 that does not start with a digit (`t0`) is not a time point, and the name falls through to
 auto-numbering.
 
-Anything else — `REL606_clone.gd` — gets its own auto-numbered isolate under ALE 1, flask 1,
-with the filename kept as its description so it displays by name.
+Anything else — `REL606_clone.gd` — gets its own auto-numbered sample under ALE 1 at time
+point 1, with the filename kept as its description so it displays by name.
 
 !!! warning "Auto-numbering has a consequence worth knowing before you import"
 
-    A 51-timepoint series imported under names of neither shape becomes 51 isolates of a
-    single flask. Analyses that read the *flask* as the time axis then have nothing to work
-    with — the Fixed Mutations analysis intersects an ALE's last two flasks, so an ALE with
-    one flask can never fix anything.
+    A 51-timepoint series imported under names of neither shape becomes 51 samples at one
+    time point. Analyses that read the *time point* as the time axis then have nothing to work
+    with — the Fixed Mutations analysis intersects an ALE's last two time points, so an ALE
+    with one time point can never fix anything.
 
     (Named rather than linked: a component's pages sit at a different path depending on
     whether it is being built alone or as part of a deployment's manual, so a link between

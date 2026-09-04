@@ -185,8 +185,9 @@ Or step by step:
 
 - All ALEdb data models, mutation views, experiment upload, fixation, convergence, and stats
 - `./aledb start` first-run setup (migrate + superuser + browser open)
-- Auth slot — swap `aledb_accounts_noauth` for `aledb_accounts` or your own implementation
-  by changing `INSTALLED_APPS` in your `config/settings.py`
+- Auth slot — `aledb_accounts_noauth` is the only implementation shipped; swap in your own
+  by changing `INSTALLED_APPS` in your `config/settings.py` and setting `auth_app = True` on
+  its `AppConfig`
 - Context registry — inject data into experiment views from your app without touching
   aledb-core code (see `aledb_common.context_registry`)
 

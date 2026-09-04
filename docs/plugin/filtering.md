@@ -18,7 +18,7 @@ from aledb_filter.view_filter import get_view_filter
 
 def my_page(request):
     experiment = aledb_sample.views.common.get_experiment(request)
-    view_filter = get_view_filter(request, experiment.ale_id)
+    view_filter = get_view_filter(request, experiment.id)
 
     rows = filter_mutation_calls(my_queryset, view_filter=view_filter)
 ```
@@ -102,8 +102,8 @@ which tints those rows red instead of hiding them.
 ## Filter *before* you analyse, not after
 
 If your plugin derives something — what has fixated, what has converged — **the filter has to
-reach the derivation.** Fixation asks what is present in both of an ALE's last two flasks, so
-hiding a low-frequency call in the last flask changes the answer. Convergence asks which genes
+reach the derivation.** Fixation asks what is present in both of an ALE's last two time
+points, so hiding a low-frequency call in the last one changes the answer. Convergence asks which genes
 were hit in more than one ALE, so an ignored gene must not make anything else look convergent.
 Filtering the *result* would show a different set of rows for the same claim.
 

@@ -202,22 +202,16 @@ it passes standalone and fails the moment a plugin is added. Assert core's own r
 and leave a plugin's to the plugin. Three tests said otherwise and were wrong; the About one
 now counts entries per *checkout*, which is the invariant it always meant.
 
-It was not green for years. The last six were all in
-`aledb_metadata.tests.test_metadata.TestParser` and all dated to two 2019 commits that changed
-code without migrating what depended on it: `14966400` switched the metadata schema to short
-keys (`A`/`F`/`I`/`R`) plus JSON blobs but migrated only the `test3/` fixtures, and `19dfc7a9`
-stopped the parser writing `Media.substrate` while the tests kept asserting on it.
+It was not green for years. The last six were all in `aledb_metadata`, whose parser and tests
+had disagreed since two 2019 commits that changed code without migrating what depended on it.
+That app and the `Media` table it wrote are gone; the story is kept because it is the reason
+this file says a red suite is a regression rather than the weather.
 
 ### Gotchas when writing tests
 
-- **Metadata is validated on CLI upload.** `aledb_metadata/xpmdvalidator/validate.py` used to
-  open with an unconditional `return True`, so every metadata directory passed. It is live now:
-  a fixture that does not satisfy `Json_schema.json` will fail
-  `_check_and_extract_parameters_from_metadata` and the upload returns early. Build metadata
-  fixtures from `aledb_metadata/tests/test3/`, which is the canonical shape.
-- **`find_user()` prompts on stdin.** Anything reaching `try_creating_project` with a person
+- **`find_user()` prompts on stdin.** Anything reaching `try_creating_project` with an owner
   name that matches no `User` raises `EOFError` under the test runner. Create the `User` first,
-  or use `gd_import.prepare_experiment_by_id`, which never resolves a person.
+  or use `gd_import.prepare_experiment_by_id`, which never resolves one.
 - **`Project.objects.create()` is enough now, and used to not be.** `can_view_project` read
   the django-guardian grant and never `Project.user`, so a project could name an owner who
   could not open it, and five test modules carried a `POST /project/create/` workaround
@@ -246,7 +240,7 @@ stopped the parser writing `Media.substrate` while the tests kept asserting on i
 ```bash
 ./aledb shell
 ./aledb makemigrations && ./aledb migrate
-./aledb upload path1 path2   # upload ALE experiments
+./aledb import path1 path2   # import breseq folders, .gd files and reference genomes
 ./aledb delete 4 20 19       # delete experiments by ID
 ./aledb collectstatic
 ./aledb ncbi_accessions --list            # which contigs are confirmed NCBI records
@@ -687,9 +681,12 @@ The log is two tables in `models.py`. A `MutationEditSet` is one user action aga
 experiment; a `MutationEdit` is one call it added or removed, carrying a **full
 snapshot** of the row (`call`) and of its mutation's identity (`mutation_identity`).
 
-- The call snapshot is every column, so a restore is exact rather than approximate.
-  `frequency` is a `DecimalField`, so it is stored as a string -- a round trip through `float`
-  moves it at the fourth decimal place, which is where that column keeps its precision.
+- The call snapshot is every column, so a restore is exact rather than approximate. Every
+  field goes in as it stands: `frequency` was a `DecimalField` and had to be stringified on
+  the way in and rebuilt with `Decimal(...)` on the way out, because JSON cannot carry one.
+  It is a float now, which JSON carries natively and round-trips exactly, so that detour is
+  gone -- but `_call_kwargs` still coerces through `float()`, because a changeset written
+  before the change holds a string and restoring one would put a string in a float column.
 - **`mutation_identity` exists because the Mutation row may not outlive the log.**
   `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
   no MutationCall, and runs after an experiment delete and after `delete_sample` -- so
@@ -985,7 +982,7 @@ effect was that adding a token silently reshuffled a colour list nobody rendered
 #### The dashboard counted what had been deleted
 
 `rebuild_mutation_counts` read `MutationCall.objects.all()` and `rebuild_sample_counts`
-counted every `Population`/`TimePoint`/`Isolate`, neither excluding soft-deleted rows -- and nothing
+counted every `Population` and `Sample`, neither excluding soft-deleted rows -- and nothing
 marked the totals stale when a project or experiment was removed, so even a rebuild would have
 produced the same numbers. Both halves are fixed. Both conditions are needed: **deleting a
 project does not stamp its experiments**, so a check on `Experiment.deleted_at` alone would
@@ -1272,7 +1269,7 @@ problem including the field-guard violations breseq's own output contains, so it
 refusing files that import cleanly today.
 
 **Leniency is not enough on its own**, which is the part that is easy to miss: a truncated line
-parses with its missing fields set to `None`, and `Mutation.position` is NOT NULL — so passing
+parses with its missing fields set to `None`, and `Mutation.start_position` is NOT NULL — so passing
 such a record on turns a reported bad line into an `IntegrityError` that rolls back the whole
 sample. `gd_import._is_storable` skips them, and the reason is already in `parse_warnings`.
 
@@ -1613,37 +1610,40 @@ The project summary on `ale/project_detail.html` **stays read-only**; editing di
 back into it. It now shows `description` and `status` as well, which were editable-but-never-
 displayed before: a save has to be visible somewhere or it reads as having done nothing.
 
-**Changing a sample's identity never writes a number.** `aledb_experiment/samples.py`
-resolves (or creates) the `Population`/`TimePoint`/`Isolate`/`TechnicalReplicate` row for the *target*
-A/F/I/R and re-points `Sample.tech_rep` at it. Those four rows are shared --
-`gd_import._get_or_create_chain` reuses one `Population` and one `TimePoint` across every sample under
-them -- so `flask.flask_number = 30; flask.save()` renumbers every sibling in that flask. The
-FK re-point also keeps `reseq.pk` fixed, which the store paths (`samples/<pk>/aligned.bam`)
-depend on, and makes a swap need no ordering logic: both samples move to freshly resolved
-targets and the rows they vacated are pruned afterwards.
+**Changing a sample's identity never writes a number.** A coordinate is
+`(population, time_point, label)`, and **half of it is on the sample and half is not**: the
+label and the time point are the sample's own columns, the population is a row it shares with
+its siblings. `aledb_experiment/samples.py` resolves (or creates) the `Population` for the
+*target* coordinate and re-points `Sample.population` at it, then assigns the other two.
 
-Three lookups there deliberately differ from `gd_import`, and each is a correction:
+The shared row must never be edited in place -- `population.name = "Ara-2"` renumbers every
+sample in that lineage rather than the one the user was looking at. Re-pointing instead buys
+three more things: `reseq.pk` never changes, so the store paths (`samples/<pk>/aligned.bam`)
+need no file moves; no transient `unique_together` violation is possible, because a name is
+only ever looked up; and a swap needs no ordering logic, since both samples move to freshly
+resolved targets and the rows they vacated are pruned at the end.
 
-- `TimePoint` keys on `(ale_id, flask_number)` with `media` in `defaults`. `gd_import` passes
-  `media=` as a *lookup* kwarg while `TimePoint` is unique on that pair, so it raises
-  `IntegrityError` against an existing flask carrying different media.
-- `Isolate` is `filter().order_by("pk").first()`, not `get_or_create`. `Isolate` has no
-  `unique_together` and `gd_import` get_or_creates it on six fields including `sequencing_date`, so
-  real databases already hold two rows at one `(flask, isolate_number)` and `get_or_create`
-  raises `MultipleObjectsReturned` on them. Adding the constraint needs a data-repair
-  migration and is a separate change.
-- A newly created row inherits `media`, `freezer_box`, the isolate description and the
-  replicate's text from the row it replaced. A renumber re-labels a sample; it does not move
-  it to different growth conditions or discard what was written about the run.
+**This was a four-row chain** -- `Population`, `TimePoint`, `Isolate`, `TechnicalReplicate` --
+and three of the four are the sample itself now. Two paragraphs of hazard went with them and
+cannot come back: `Isolate` had no `unique_together` while `gd_import` get_or_created it on six
+fields, so real databases held two rows at one coordinate and `get_or_create` raised
+`MultipleObjectsReturned`; and `TimePoint` was unique on `(population, value)` while
+`gd_import` passed `media=` as a *lookup* kwarg, raising `IntegrityError` against an existing
+time point carrying different media. `Media` is gone and so is the row it hung on.
 
-Two samples may not share a coordinate, and the save refuses it. There is no constraint
-saying so, but `aledb-fixation` builds `flask_isolate_mutation_dict[(flask, isolate)] = qs` by
+One difference from `gd_import._get_or_create_chain` remains, and it is a correction rather
+than a preference: **a newly created `Population` copies species and strain but not
+description.** The first two are facts about the organism and hold across ALEs; a description
+is what makes *this* ALE different from the others.
+
+Two samples may not share a coordinate, and the save refuses it. There is no constraint saying
+so, but `aledb-fixation` builds `flask_isolate_mutation_dict[(time_point, label)] = qs` by
 plain assignment, so the second sample at a coordinate silently overwrites the first and its
-mutations vanish from fixation with no error. Emptied rows are pruned bottom-up for the
-opposite reason: `rebuild_sample_counts` counts `Population`/`TimePoint`/`Isolate` **rows**, and the
-ALE picker is built from `Population` rows. An `Isolate` still referenced by another isolate's
-`parent_isolate` or an `Population.starting_strain` is kept instead -- both are `DO_NOTHING`, so
-the database would reject the delete, and nothing in the product writes either column.
+mutations vanish from fixation with no error. Emptied populations are pruned for the opposite
+reason: `rebuild_sample_counts` counts `Population` **rows**, and the ALE picker is built from
+them, so an emptied one would inflate the dashboard permanently and sit in the menu selecting
+nothing. Emptiness is re-queried rather than snapshotted, because a swap vacates and refills
+the same row.
 
 A structural save calls `run_post_experiment_hooks` and `rebuild_sample_counts`, once per
 POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls every
@@ -1651,8 +1651,9 @@ POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls ev
 count, and paying for the whole database on every rename is what would make this feel broken
 in production. A descriptive-only save rebuilds nothing.
 
-**`TimePoint.flask_number` is labelled "Time point" on the edit pages.** It is the only ordinal
-in the schema that places a sample along an ALE -- fixation sorts by it and takes the last two
+**`Sample.time_point` is labelled "Time point" on the edit pages**, and was
+`TimePoint.flask_number` on a row of its own. It is the only ordinal in the schema that places
+a sample along an ALE -- fixation sorts by it and takes the last two
 to decide what has fixed -- and real data carries values like 30000, so it is plainly being
 used to record cumulative divisions rather than a count of flasks. The column keeps its name;
 only the UI changed, including the validation message, which is the one place the internal
@@ -1678,7 +1679,7 @@ through `find_user` because a newly created project needs one -- it was never th
 field, and is renamed from `--person` to stop reading like it.
 
 **The trap to know about:** a renumber often changes no visible label.
-`label` returns `Isolate.description` verbatim whenever it is set, and the
+`label` returns `Sample.description` verbatim whenever it is set, and the
 import path fills it with the filename for every sample whose name is not `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
 keep the description editable in the same form. A duplicate `sample_name` within an
 experiment is refused for a related reason -- re-import finds an existing sample by name --
@@ -1912,7 +1913,7 @@ What stayed, and why none of it could go:
 - **`base_table_template.html` and `table_template.js`** -- rendered by three other pages.
 - **The curation endpoints**, now at `/mutation-table/` (`aledb_sample/views/table_actions.py`,
   `aledb_sample/table_urls.py`). Every table posts to them, not just Compare, and the state is
-  shared: `TechnicalReplicate.tags` is what the Show/Hide Tag control filters sample columns on
+  shared: `Sample.tags` is what the Show/Hide Tag control filters sample columns on
   in `get_reseq_ordered_dict`, so tagging from one table changes what the other three show.
   Replicating them per plugin would have meant four write paths to core-owned tables.
 
@@ -2006,15 +2007,14 @@ sample cannot answer differently. Two shapes are read and anything else is auto-
 | `3-30000-1-1` | `3` | 30000 | `1` | 1 |
 | `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | 1 |
 
-**`Population.ale_id` and `Isolate.isolate_number` are `CharField`s** (`aledb_experiment.0008`),
-which is what makes the second row expressible at all: `Ara-1` and `Ara+1` are two LTEE
-populations that both end in 1, and `763A` and `763B` are two clones from one flask that
-differ only in the trailer. Any rule reducing either to an integer merges rows that are not
-the same sample -- and a merge is invisible, because `aledb-fixation` builds a dict keyed by
-`(flask_number, isolate_number)` by plain assignment, so the second sample's mutations simply
-vanish.
+**`Population.name` and `Sample.name` are `CharField`s** (`aledb_experiment.0008`), which is
+what makes the second row expressible at all: `Ara-1` and `Ara+1` are two LTEE populations
+that both end in 1, and `763A` and `763B` are two clones from one flask that differ only in
+the trailer. Any rule reducing either to an integer merges rows that are not the same sample
+-- and a merge is invisible, because `aledb-fixation` builds a dict keyed by
+`(time_point, label)` by plain assignment, so the second sample's mutations simply vanish.
 
-**`TimePoint.flask_number` stays an `IntegerField`**, and is the reason the middle field is the
+**`Sample.time_point` stays numeric**, and is the reason the middle field is the
 only one whose trailing text is stripped: `500gen` is 500 because a time point is a genuine
 ordinal that fixation sorts by. A middle field with no leading digit (`t0`) is not a time
 point, so the whole name falls through rather than being half-read.
@@ -2025,10 +2025,10 @@ Three rules that look arbitrary and are not:
   `Ara-2_500gen` omits the isolate or the ALE; with four, which extra field is the replicate.
 - **A-F-I-R stays strict** -- all four dash-separated fields must be integers. It is checked
   first, so a name satisfying both shapes reads as A-F-I-R.
-- **A name of neither shape is auto-numbered**, as before: ALE `1`, flask 1, one isolate per
-  distinct sample name, and `Isolate.description` set to the filename so it still displays by
-  name. `_next_isolate_number` counts in Python because `Max()` over a text column answers
-  `"9"` for a flask holding 1 to 10.
+- **A name of neither shape is auto-numbered**, as before: ALE `1`, time point 1, one sample
+  per distinct source name, and `Sample.description` set to the filename so it still displays
+  by name. `_next_sample_number` counts in Python because `Max()` over a text column answers
+  `"9"` for a coordinate holding 1 to 10.
 
 `util.parse_ale_name` and `AleName` are **gone**. They read the same fields with a bare
 `except: return 1`, so every field they could not read became 1 and a whole drop of
@@ -2041,19 +2041,19 @@ import -- one isolate per sample, fifty-one of them in the dev database's larges
 is what every sample listing orders by, in core and in aledb-phylogeny: it pads each text
 field with zeros for the comparison, so digits sort by value and labels still sort as text.
 
-### A mutation is fixated in the last two flasks, so the time axis must be the flask
+### A mutation is fixated in the last two time points, so the time axis must be the time point
 
-`aledb-fixation` intersects an ALE's final two flasks by `flask_number`, so **an ALE with one
-flask can never fix anything** -- and neither can an experiment made entirely of such ALEs.
-That is the usual reason for an empty Fixed Mutations page and it is not a bug.
+`aledb-fixation` intersects an ALE's final two time points by `Sample.time_point`, so **an ALE
+with one time point can never fix anything** -- and neither can an experiment made entirely of
+such ALEs. That is the usual reason for an empty Fixed Mutations page and it is not a bug.
 
 It used to be easy to arrive at by accident, and the second filename shape is what fixed
-that. `gd_import` read a strict `A-F-I-R` filename (`1-1500-1-1.gd` = ALE 1, flask 1500,
+that. `gd_import` read a strict `A-F-I-R` filename (`1-1500-1-1.gd` = ALE 1, time point 1500,
 isolate 1, replicate 1) and **anything else fell to auto-numbering, which puts every sample
-under ALE 1 / flask 1 as separate isolates** -- so a 51-timepoint series imported as
-`Ara-1_500gen_762B.gd` and friends became 51 isolates of one flask, with the generations in
-`isolate_number`. That is exactly the shape of the MutInt dev database, and why fixation has
-never produced a row there.
+under ALE 1 / time point 1** -- so a 51-timepoint series imported as `Ara-1_500gen_762B.gd`
+and friends became 51 samples at one time point, with the generations in their labels. That is
+exactly the shape of the MutInt dev database, and why fixation has never produced a row
+there.
 
 `Ara-1_500gen_762B` is read now: ALE `Ara-1`, flask 500, isolate `762B` -- see **Reading a
 sample's identity out of its filename**. Data already imported does not move on its own; it
@@ -2165,9 +2165,11 @@ section is the history of a SQLite failure, and the suite is on PostgreSQL now; 
   MVCC produces serialisation failures a single-writer database structurally cannot.
 - **`import_lock` stays, and its stated reason is now the wrong one.** It was justified by
   "SQLite permits exactly one writer". What it actually buys, and buys more dearly now, is that
-  it makes the suite's unconstrained `get_or_create` calls -- `Instrument`, `Experiment`,
-  `Media`, `FreezerBox`, `Isolate` -- and `_next_isolate_number`'s unlocked read-then-write
-  **unreachable by two importers at once**. SQLite's whole-database lock hid that; MVCC does
+  it makes the suite's unconstrained `get_or_create` calls -- `Experiment` and `Project` --
+  and `_next_sample_number`'s unlocked read-then-write **unreachable by two importers at
+  once**. (`Instrument`, `Media`, `FreezerBox` and `Isolate` were on this list and are gone
+  with their tables; the argument is unchanged, it just has fewer call sites to make it
+  about.) SQLite's whole-database lock hid that; MVCC does
   not. Do not remove it on the grounds that its original justification expired.
 
 The original account follows, because the measurements are the argument.
@@ -2945,7 +2947,9 @@ through earlier versions is a non-goal for now.
 
 All apps use the `aledb_*` namespace. Key apps:
 
-- **`aledb_experiment/`** — Core data models: `Experiment`, `Project`, `Population`, `TimePoint`, `Isolate`, `Media`, `FreezerBox`. Central schema everything else references.
+- **`aledb_experiment/`** — Core data models: `Project`, `Experiment`, `Population`, plus
+  access control (`ProjectAccess`, `UserGroup`, `UserGroupMembership`) and the ORM join paths
+  in `paths.py`. Central schema everything else references.
 - **`aledb_import/`** — Experiment upload pipeline. **Every path ends in `gd_import`**, so a
   CLI upload and a web drop produce identical rows:
   - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
@@ -2957,10 +2961,11 @@ All apps use the `aledb_*` namespace. Key apps:
     landed in an emitted `.gd` file. It reads the one key, the column is namespaced by
     component, and a plugin may keep its own import records beside core's -- see
     `Mutation.supplemental_data` for what belongs there and what does not.
-  - CLI upload — `./aledb upload <path>` walks for `<exp>/breseq/` + `<exp>/metadata/`,
-    hands the folders to `breseq_folder`, then parses the metadata. It used to be a second
-    importer that read the .gd plus the breseq HTML report and shared no code with
-    the web paths; that is gone, along with `upload.py`.
+  - CLI import — `./aledb import <path>` resolves the target experiment from its options and
+    hands every path to the same `import_registry` handlers the Add page uses, so the shell
+    and the web agree by construction. It was `./aledb upload`, which read the project,
+    experiment and owner out of `<exp>/metadata/*.csv` and was a second importer sharing no
+    code with the web paths; that is gone, along with `upload.py` and the metadata app.
   - The vendored `gdparse/gdparse/gdparse.py` (`GDParser`) survives only for the annotation
     test fixtures. Note it has no `INT` type; `genomediff` does.
   - **Annotation is internal** (`annotation.py` + `annotate/`). Gene, codon and amino-acid
@@ -3024,7 +3029,6 @@ All apps use the `aledb_*` namespace. Key apps:
 - **`aledb_mutation_editor/`** — Adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
-- **`aledb_metadata/`** — Parses XPMD metadata files associated with experiments.
 - **`aledb_export/`** — Data export in various formats.
 - **`aledb_stats/`** — The `/stats` page: the Overview's mutation counts, the sample table,
   and whatever the installed components register as panels. **It has no models.** Its counts
@@ -3192,10 +3196,12 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 
 ### Data Flow: Uploading an Experiment
 
-1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_collection()`
-2. Hands each `<exp>/breseq/` to `aledb_import.breseq_folder`, which parses via
-   `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes
-3. Creates `aledb_experiment`, `aledb_sample`, and `aledb_metadata` model instances
+1. `./aledb import <path> --experiment-id <pk>` (or `--project`/`--experiment`/`--owner`)
+   calls `aledb_import.ale_experiment.resolve_experiment()` then `import_paths()`
+2. Hands each breseq folder to `aledb_import.breseq_folder`, which parses via
+   `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes,
+   through the same `import_registry` handlers
+3. Creates `aledb_experiment` and `aledb_sample` model instances
 4. Ends in `gd_import.run_post_processing`, which asks the rebuild registry to recompute
    everything derived -- the experiment filter defaults, `aledb_fixation`'s table, then the
    dashboard's installation-wide totals. It asks for whatever is registered, so the needle

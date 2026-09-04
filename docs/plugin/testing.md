@@ -114,8 +114,8 @@ database whatever the code does — and one that asserts it is *fresh* fails for
 unrelated to the change. Rebuild first, assert freshness, then act:
 
 ```python
-run_rebuilds(experiment.ale_id, force=True)
-self.assertFalse(is_stale("yourthing", experiment.ale_id))   # a real starting point
+run_rebuilds(experiment.id, force=True)
+self.assertFalse(is_stale("yourthing", experiment.id))   # a real starting point
 ```
 
 **Subclassing a `TestCase` re-runs every test it declares.** Inheriting from a class that
@@ -127,8 +127,8 @@ the symptom is a suite that grows by more tests than you wrote.
 
 Building an experiment from models is faster and clearer than driving an import, and every
 plugin's tests do it. The chain is
-`Population → TimePoint → Isolate → TechnicalReplicate → Sample`; mutations are
-`Mutation` rows joined to samples by `MutationCall`.
+`Experiment → Population → Sample`, and mutations are `Mutation` rows joined to samples by
+`MutationCall`. See [The data model](data-model.md) for what each of those holds.
 
 Two things that are easy to miss:
 

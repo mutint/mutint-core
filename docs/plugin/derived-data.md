@@ -125,7 +125,7 @@ plugin writes something that invalidates derived data — its own or core's — 
 ```python
 from aledb_common.rebuild_registry import request_rebuild
 
-request_rebuild(experiment.ale_id, reason='your thing recalculated')
+request_rebuild(experiment.id, reason='your thing recalculated')
 ```
 
 Name what changed with `only=` when you can. `get_rebuilders` **skips a name nothing

@@ -70,9 +70,13 @@ from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_view_project
 from aledb_filter.util import filtered_mutation_call_queryset
 from aledb_filter.view_filter import get_view_filter
+from aledb_experiment import paths
 from aledb_sample.models import MutationCall
 
-EXPERIMENT_PATH = "sample__tech_rep__isolate__flask__ale_id__ale_experiment"
+# The ORM path from a MutationCall up to its experiment. Spelled by
+# `aledb_experiment.paths` rather than by hand: it is `sample__population__experiment`
+# today, and it has changed twice.
+EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
 
 def your_thing(request):
@@ -93,13 +97,13 @@ def your_thing(request):
     # never returns None, and an unfiltered reader's filter changes nothing.
     queryset, ignored_genes = filtered_mutation_call_queryset(
         MutationCall.objects.filter(**{EXPERIMENT_PATH: experiment}),
-        view_filter=get_view_filter(request, experiment.ale_id))
+        view_filter=get_view_filter(request, experiment.id))
 
     counts = collections.Counter(
         queryset.values_list("mutation__mutation_type", flat=True))
 
     context.update({
-        "experiment_id": experiment.ale_id,
+        "experiment_id": experiment.id,
         "experiment_name": experiment.name,
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
@@ -179,7 +183,7 @@ class YourThingTestCase(TestCase):
 
     def test_the_page_renders(self):
         response = self.client.get(
-            "/yourthing/", {"experiment_id": self.experiment.ale_id})
+            "/yourthing/", {"experiment_id": self.experiment.id})
 
         self.assertEqual(200, response.status_code)
         self.assertIn("no mutations stored", response.content.decode())
