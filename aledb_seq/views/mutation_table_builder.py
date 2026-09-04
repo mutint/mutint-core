@@ -3,7 +3,7 @@ import re
 from django.urls import reverse
 from django.utils.html import strip_tags
 from aledb_seq.util import get_ecocyc_gene_list
-from aledb_filter.util import filter_observed_mutations
+from aledb_filter.util import filter_mutation_calls
 from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
 from aledb_experiment.models import Experiment
@@ -73,8 +73,8 @@ def get_table_header(user, reseq_dict, experiment: Experiment = None):
     return base_table_header + table_header_list
 
 
-def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, experiment: Experiment = None, is_gene_table: bool = False):
-    mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_dict, observed_mutations)
+def get_mutation_table_body(user: User, mutation_calls: [], reseq_dict, experiment: Experiment = None, is_gene_table: bool = False):
+    mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_dict, mutation_calls)
 
     # Resolved once for the whole table rather than per row: an experiment's table runs to
     # hundreds of mutations and they all share a handful of contigs.
@@ -122,17 +122,17 @@ def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, expe
     return table_body
 
 
-def get_mutation_table_data(reseq_dict, observed_mutations):
-    mutation_map = {obs_mut.mutation.id: obs_mut.mutation for obs_mut in observed_mutations}
+def get_mutation_table_data(reseq_dict, mutation_calls):
+    mutation_map = {call.mutation.id: call.mutation for call in mutation_calls}
     mutation_index_dict = dict((mutation_id, i) for i, mutation_id in enumerate(mutation_map.keys()))
     experiment_id_idx_mapping_dict = _get_experiment_id_idx_mapping_dict(reseq_dict)
     # Initialize all sample mutation table cells as empty.
     table_entry_list = _initialize_table(experiment_id_idx_mapping_dict, mutation_index_dict)
-    for observed_mutation in observed_mutations:
-        new_entry = _get_table_mutation_entry(observed_mutation, reseq_dict)
-        if new_entry is not None and observed_mutation.sample_id in reseq_dict.keys():
-            table_entry_list[mutation_index_dict[observed_mutation.mutation_id]][
-                experiment_id_idx_mapping_dict[observed_mutation.sample_id]] = new_entry
+    for mutation_call in mutation_calls:
+        new_entry = _get_table_mutation_entry(mutation_call, reseq_dict)
+        if new_entry is not None and mutation_call.sample_id in reseq_dict.keys():
+            table_entry_list[mutation_index_dict[mutation_call.mutation_id]][
+                experiment_id_idx_mapping_dict[mutation_call.sample_id]] = new_entry
     return mutation_map.values(), table_entry_list, mutation_index_dict
 
 
@@ -140,12 +140,12 @@ def get_mutation_table_data(reseq_dict, observed_mutations):
 # This makes this function very confusing.
 def get_table_body(user: User,
                    reseq_dict,
-                   observed_mutations_queryset,
+                   mutation_call_queryset,
                    experiment=None,
                    is_gene_table=False,
                    *,
                    view_filter=None):
-    """Render a queryset of observations as the shared mutation table's body.
+    """Render a queryset of calls as the shared mutation table's body.
 
     `filter_type='AMP'` means *exclude* AMP -- the values read backwards. Only the plugin tables
     (fixation, converge) reach this now, and they keep the old behaviour; /mutations deliberately
@@ -159,9 +159,9 @@ def get_table_body(user: User,
     a no-op in the good case and a source of drift in every other. Pass one only if you are
     rendering a queryset nobody has filtered yet.
     """
-    observed_mutations = filter_observed_mutations(
-        observed_mutations_queryset, filter_type='AMP', view_filter=view_filter)
-    return get_mutation_table_body(user, observed_mutations, reseq_dict, experiment, is_gene_table)
+    mutation_calls = filter_mutation_calls(
+        mutation_call_queryset, filter_type='AMP', view_filter=view_filter)
+    return get_mutation_table_body(user, mutation_calls, reseq_dict, experiment, is_gene_table)
 
 
 def get_gene_table_entry(mutation):
@@ -213,7 +213,7 @@ def _get_experiment_id_idx_mapping_dict(seq_experiment_dict):
     return experiment_id_idx_mapping
 
 
-def _get_table_mutation_entry(observed_mutation, reseq_dict):
+def _get_table_mutation_entry(mutation_call, reseq_dict):
     """One mutation-table cell.
 
     The frequency links to the genome browser when the sample has a stored alignment, so a
@@ -222,40 +222,40 @@ def _get_table_mutation_entry(observed_mutation, reseq_dict):
     whether a row renders at all, and table_template.js tests it to colour the cell.
     """
     table_entry = ""
-    if observed_mutation.present:
-        # An observation may carry no frequency at all -- a hand-added mutation need not
+    if mutation_call.present:
+        # A call may carry no frequency at all -- a hand-added mutation need not
         # claim one -- so a tick rather than None formatted with %.2f.
-        label = ("%.2f" % float(observed_mutation.frequency)
-                 if observed_mutation.frequency is not None else "&#10003;")
-        table_entry = _cell_html(observed_mutation, reseq_dict, label)
+        label = ("%.2f" % float(mutation_call.frequency)
+                 if mutation_call.frequency is not None else "&#10003;")
+        table_entry = _cell_html(mutation_call, reseq_dict, label)
 
     # TODO: Figure out what this is supposed to do.
-    elif observed_mutation.present is False:
-        table_entry = HTML_MUTATION_PRESENT_FALSE_CELL_HTML % (observed_mutation.mutated_reads,
-                                                               observed_mutation.wt_reads)
+    elif mutation_call.present is False:
+        table_entry = HTML_MUTATION_PRESENT_FALSE_CELL_HTML % (mutation_call.mutated_reads,
+                                                               mutation_call.wt_reads)
 
     return table_entry
 
 
-def _cell_html(observed_mutation, reseq_dict, label):
+def _cell_html(mutation_call, reseq_dict, label):
     """The cell's markup: a browser link when there is an alignment to show, else plain text.
 
     Only the breseq-folder importer stores a BAM, so a bare .gd or legacy CLI sample has none
     and gets no link -- linking would just send the user to a page explaining its absence.
     `reseq_dict` holds already-loaded rows, so `bam_stored` costs no query.
     """
-    reseq = reseq_dict.get(observed_mutation.sample_id)
+    reseq = reseq_dict.get(mutation_call.sample_id)
     if reseq is None or not reseq.bam_stored:
         return """<span class="true">%s</span>""" % label
 
-    return """<a class="true" href="%s?observed_mut_id=%d" title="View the pileup at this position">%s</a>""" % (
-        reverse("browse_mutation"), observed_mutation.id, label)
+    return """<a class="true" href="%s?mutation_call_id=%d" title="View the pileup at this position">%s</a>""" % (
+        reverse("browse_mutation"), mutation_call.id, label)
 
 
-def _contains_mutation(filtered_observed_mutations_row):
+def _contains_mutation(filtered_mutation_calls_row):
     contains_mutation = False
-    for observed_mutation_entry in filtered_observed_mutations_row:
-        if "true" in observed_mutation_entry:
+    for mutation_call_entry in filtered_mutation_calls_row:
+        if "true" in mutation_call_entry:
             contains_mutation = True
     return contains_mutation
 

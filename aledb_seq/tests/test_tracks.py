@@ -16,7 +16,7 @@ from django.test import TestCase, override_settings
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
 from aledb_seq import tracks
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 
 
 class _Fixture(TestCase):
@@ -66,7 +66,7 @@ class CoordinateTestCase(_Fixture):
 
 class MutationTrackTestCase(_Fixture):
     def test_it_finds_a_mutation_owned_by_no_experiment(self):
-        """The reason this reads through the observations rather than through
+        """The reason this reads through the calls rather than through
         `Mutation.experiment`. Two rows in the dev database were observed in an
         experiment while owned by none, so filtering on the column drew an empty Mutations
         track beside a populated per-sample one."""
@@ -138,8 +138,8 @@ class SampleTrackTestCase(_Fixture):
         self.assertEqual({tracks.SEG_PRESENT}, {f["value"] for f in features})
         self.assertTrue(all("frequency" in f for f in features))
 
-    def test_absent_observations_are_not_drawn(self):
-        ObservedMutation.objects.all().update(present=False)
+    def test_absent_calls_are_not_drawn(self):
+        MutationCall.objects.all().update(present=False)
         self.assertEqual([], tracks.sample_features(self.experiment.id))
 
 
@@ -147,5 +147,5 @@ class EmptyTestCase(_Fixture):
     def test_an_experiment_with_nothing_gets_no_tracks(self):
         """An empty track is worse than no track: igv draws its name and a blank lane, which
         reads as "no mutations here" rather than "nothing to show"."""
-        ObservedMutation.objects.all().delete()
+        MutationCall.objects.all().delete()
         self.assertEqual([], tracks.database_tracks(self.experiment.id))

@@ -2,7 +2,7 @@
 
 Every table in the suite hangs off one chain::
 
-    ObservedMutation -> Sample -> TimePoint -> Population -> Experiment
+    MutationCall -> Sample -> TimePoint -> Population -> Experiment
 
 so almost every query has to spell some part of it as a lookup string. Before this module
 there were **39 hand-written copies** of that spelling across eight core files and three
@@ -26,21 +26,21 @@ at all.
 
 Usage::
 
-    from aledb_experiment.paths import FROM_OBSERVATION, to_experiment_id, to_ale
+    from aledb_experiment.paths import FROM_CALL, to_experiment_id, to_ale
 
-    ObservedMutation.objects.filter(**{to_experiment_id(FROM_OBSERVATION): experiment_id})
+    MutationCall.objects.filter(**{to_experiment_id(FROM_CALL): experiment_id})
     Sample.objects.select_related(to_population())
 
 `prefix` is what the queryset starts from: nothing when it starts at a sample, and
-`FROM_OBSERVATION` when it starts at an observation. Anything else -- the mutation editor's
+`FROM_CALL` when it starts at a call. Anything else -- the mutation editor's
 change log reaches a sample as ``sample`` and ``changes__sample`` -- passes its own.
 """
 
-#: `ObservedMutation` reaches a sample through this FK. It was `sample`, on a
+#: `MutationCall` reaches a sample through this FK. It was `sample`, on a
 #: model called `Sample`, while the product called the thing a sample -- the
 #: field was spelled as neither. All three agree now, and the constant stays because a
-#: prefix is still what a caller starting at an observation has to pass.
-FROM_OBSERVATION = "sample"
+#: prefix is still what a caller starting at a call has to pass.
+FROM_CALL = "sample"
 
 #: `MutationChange` called it this before anything else did.
 FROM_CHANGE = "sample"
@@ -51,7 +51,7 @@ FROM_CHANGE = "sample"
 SEGMENTS = ("time_point", "population", "experiment")
 
 #: Where a queryset starts, as a position in SEGMENTS. `prefix` is for roots that sit
-#: *before* a sample -- an observation, a change-log row -- and `root` for roots along the
+#: *before* a sample -- a call, a change-log row -- and `root` for roots along the
 #: chain itself.
 ROOTS = {"sample": 0, "time_point": 1, "population": 2}
 

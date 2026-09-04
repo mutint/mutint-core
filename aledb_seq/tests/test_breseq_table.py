@@ -19,7 +19,7 @@ from aledb_experiment.models import Experiment
 from aledb_import import annotation, gd_import, reference, reference_store
 from aledb_import.tests.test_annotation import _uploaded_as
 from aledb_seq.breseq_report import build_rows, gd_entry
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), "aledb_import", "annotate", "tests", "fixtures")
@@ -70,7 +70,7 @@ class BreseqTablePageTestCase(TestCase):
         self.assertContains(response, "breseq-table")
 
     def test_every_mutation_of_the_sample_is_a_row(self):
-        rows = build_rows(list(ObservedMutation.objects.all()))
+        rows = build_rows(list(MutationCall.objects.all()))
         self.assertEqual(36, len(rows))
         self.assertTrue(all(row["annotated"] for row in rows))
 
@@ -206,9 +206,9 @@ class BreseqTablePageTestCase(TestCase):
     def test_a_polymorphic_call_is_shaded(self):
         self.reseq.is_clonal = False
         self.reseq.save()
-        observed = ObservedMutation.objects.order_by("id").first()
-        observed.frequency = 0.42
-        observed.save()
+        call = MutationCall.objects.order_by("id").first()
+        call.frequency = 0.42
+        call.save()
 
         content = self.content()
         self.assertIn("polymorphism_table_row", content)
@@ -219,13 +219,13 @@ class BreseqTablePageTestCase(TestCase):
     def test_evidence_links_to_the_alignment_when_there_is_one(self):
         self.reseq.bam_stored = True
         self.reseq.save()
-        observed = ObservedMutation.objects.order_by("id").first()
-        self.assertIn("observed_mut_id=%s" % observed.id, self.content())
+        call = MutationCall.objects.order_by("id").first()
+        self.assertIn("mutation_call_id=%s" % call.id, self.content())
 
     def test_evidence_is_plain_text_without_an_alignment(self):
         # A bare .gd import has no reads, so there is nothing to link to.
         self.assertFalse(self.reseq.bam_stored)
-        self.assertNotIn("observed_mut_id=", self.content())
+        self.assertNotIn("mutation_call_id=", self.content())
 
     # --- rows with no annotation ---------------------------------------------
 
@@ -235,7 +235,7 @@ class BreseqTablePageTestCase(TestCase):
         mutation.save()
 
         self.assertIsNone(gd_entry(mutation))
-        row = build_rows([ObservedMutation.objects.get(mutation=mutation)])[0]
+        row = build_rows([MutationCall.objects.get(mutation=mutation)])[0]
         self.assertFalse(row["annotated"])
         self.assertEqual(mutation.sequence_change, row["mutation"])
 

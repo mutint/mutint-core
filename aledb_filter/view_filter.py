@@ -8,13 +8,13 @@ dataset, which is `aledb_mutation_editor`'s job and is logged and reversible, wi
 you personally want to look at, which is nobody else's business.
 
 This module is the *value* layer and `util.py` is the *query* layer, deliberately apart: a plugin
-importing the filter should not drag in `ObservedMutation`'s joins, and these tests need no
+importing the filter should not drag in `MutationCall`'s joins, and these tests need no
 database at all -- where pinning the gene-subset rule used to take six model rows.
 
 ## The value
 
 Three fields, normalised at construction. `min_freq`/`max_freq` are percentages, matched against
-`ObservedMutation.frequency`, which is a fraction -- the division by 100 happens in `util.py`.
+`MutationCall.frequency`, which is a fraction -- the division by 100 happens in `util.py`.
 
 **Normalisation collapses two facts into one.** A stored row could be 0-100 with no genes, which
 is *configured* and hides nothing, so `describe_filters` had to distinguish "a filter exists" from

@@ -13,7 +13,7 @@ from aledb_import.gd_import import synthesize_sequence_change
 from aledb_mutation_editor import history, record_builder
 from aledb_mutation_editor.models import KIND_ADD, MutationChange, MutationChangeSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import Mutation, ObservedMutation
+from aledb_seq.models import Mutation, MutationCall
 from genomediff.records import Record
 
 ADD = "/mutation-editor/add/apply"
@@ -53,7 +53,7 @@ class AddTestCase(EditorTestCase):
         mutation = Mutation.objects.get(position=5000)
         self.assertEqual("SNP", mutation.mutation_type)
         self.assertEqual("NC_000913", mutation.reseq_reference)
-        self.assertIn(mutation.id, self.observed_ids(self.sample_a))
+        self.assertIn(mutation.id, self.call_ids(self.sample_a))
 
     def test_it_is_scoped_to_the_experiment(self):
         self.snp()
@@ -74,26 +74,26 @@ class AddTestCase(EditorTestCase):
                  targets=[self.sample_a, self.sample_b])
         self.assertEqual(1, Mutation.objects.filter(position=5000).count())
 
-    def test_the_observation_is_marked_manual(self):
+    def test_the_call_is_marked_manual(self):
         """Distinguishes a typed call from a called one everywhere `source` is read. Null
         would mean 'imported before the column existed', which is a different thing."""
         self.snp()
-        observed = ObservedMutation.objects.get(mutation__position=5000)
-        self.assertEqual("manual", observed.source)
-        self.assertTrue(observed.present,
+        call = MutationCall.objects.get(mutation__position=5000)
+        self.assertEqual("manual", call.source)
+        self.assertTrue(call.present,
                         "a typed mutation is in the sample, and every cross-sample table "
                         "decides that by asking `present`")
 
     def test_the_frequency_is_applied_to_every_sample(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T", frequency="0.25",
                  targets=[self.sample_a, self.sample_b])
-        for observed in ObservedMutation.objects.filter(mutation__position=5000):
-            self.assertEqual(Decimal("0.2500"), observed.frequency)
+        for call in MutationCall.objects.filter(mutation__position=5000):
+            self.assertEqual(Decimal("0.2500"), call.frequency)
 
     def test_frequency_defaults_to_one(self):
         self.snp()
         self.assertEqual(Decimal("1.0000"),
-                         ObservedMutation.objects.get(mutation__position=5000).frequency)
+                         MutationCall.objects.get(mutation__position=5000).frequency)
 
     def test_the_changeset_says_what_was_added(self):
         note = MutationChangeSet.objects.get().note if self.snp() else None
@@ -116,7 +116,7 @@ class AddTestCase(EditorTestCase):
             ("INV", {"size": 40}),
             ("MOB", {"repeat_name": "IS150", "strand": 1, "duplication_size": 9}),
         )
-        # A distinct position each, rather than deleting between rounds: `ObservedMutation`
+        # A distinct position each, rather than deleting between rounds: `MutationCall`
         # holds its Mutation with DO_NOTHING, so removing the mutation first leaves a dangling
         # row and SQLite's constraint check fails at the end of the test.
         for index, (mutation_type, fields) in enumerate(cases):
@@ -137,7 +137,7 @@ class AddTestCase(EditorTestCase):
         self.add(seq_id="NC_000913", position=5000, new_seq="T", targets=[self.sample_b])
 
         self.assertEqual(1, Mutation.objects.filter(position=5000).count())
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation__position=5000).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation__position=5000).count())
 
     def test_a_sample_that_already_has_it_is_skipped(self):
         self.snp()
@@ -146,7 +146,7 @@ class AddTestCase(EditorTestCase):
         self.assertEqual(0, response.json()["added"])
         self.assertEqual([self.sample_a.label],
                          response.json()["already"])
-        self.assertEqual(1, ObservedMutation.objects.filter(mutation__position=5000).count())
+        self.assertEqual(1, MutationCall.objects.filter(mutation__position=5000).count())
 
     def test_skipping_everything_writes_no_changeset(self):
         self.snp()
@@ -231,7 +231,7 @@ class AddTestCase(EditorTestCase):
                             targets=[stranger])
 
         self.assertEqual(404, response.status_code)
-        self.assertEqual(0, ObservedMutation.objects.filter(
+        self.assertEqual(0, MutationCall.objects.filter(
             sample=stranger).count())
 
     # --- it undoes ---------------------------------------------------------------------------
@@ -239,12 +239,12 @@ class AddTestCase(EditorTestCase):
     def test_an_addition_restores_away(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T",
                  targets=[self.sample_a, self.sample_b])
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation__position=5000).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation__position=5000).count())
 
         history.restore(self.experiment, self.owner, None)
 
-        self.assertEqual(0, ObservedMutation.objects.filter(mutation__position=5000).count())
-        self.assertEqual(4, self.observation_count(), "the fixture's own rows are untouched")
+        self.assertEqual(0, MutationCall.objects.filter(mutation__position=5000).count())
+        self.assertEqual(4, self.call_count(), "the fixture's own rows are untouched")
 
 
 class NoReferenceTestCase(EditorTestCase):

@@ -45,7 +45,7 @@ def natural(field_path):
 def sample_order(prefix=""):
     """The four keys a sample list is ordered by: experiment, ALE, flask, sample label.
 
-    Pass `prefix="sample__"` from a queryset of `ObservedMutation`. Returns
+    Pass `prefix="sample__"` from a queryset of `MutationCall`. Returns
     a tuple for `order_by(*sample_order())` -- expressions rather than field names, because
     two of the five need the padding above.
 
@@ -68,7 +68,7 @@ def sample_sort_key(reseq):
     """A sample's A/F/I coordinate as a sortable tuple, for a list already in memory.
 
     `sample_order()` above is the database form and is what every listing uses. This is for
-    the two places that cannot re-query: the CSV export, which has collapsed observations
+    the two places that cannot re-query: the CSV export, which has collapsed calls
     into the samples that appear in them, and the mutation editor's history tally, which has
     collapsed changes into a per-sample count.
 

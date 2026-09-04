@@ -14,7 +14,7 @@ import json
 
 from aledb_mutation_editor.models import MutationChangeSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 PAGE = "/mutation-editor/delete"
 
@@ -40,13 +40,13 @@ class GridPageTestCase(EditorTestCase):
         for mutation in (self.mut_1, self.mut_2, self.mut_3):
             self.assertIn('data-mutation="%d"' % mutation.id, html)
 
-    def test_every_observation_is_addressable_by_its_own_id(self):
-        """The cell is what gets selected, so each one carries the observation's id -- not the
+    def test_every_call_is_addressable_by_its_own_id(self):
+        """The cell is what gets selected, so each one carries the call's id -- not the
         mutation's, which is in two samples and would delete both."""
         html = self.grid().content.decode("utf-8")
 
-        for observed in ObservedMutation.objects.all():
-            self.assertIn('data-obs="%d"' % observed.id, html)
+        for call in MutationCall.objects.all():
+            self.assertIn('data-obs="%d"' % call.id, html)
 
     def test_a_sample_that_does_not_carry_a_mutation_gets_an_empty_cell(self):
         """sample_b has only mut_1. Its cells for mut_2 and mut_3 have to be empty rather
@@ -88,8 +88,8 @@ class GridPageTestCase(EditorTestCase):
         html = self.grid().content.decode("utf-8")
         by_mutation = json.loads(self._json_script(html, "me-by-mutation"))
 
-        both = {observed.id for observed in
-                ObservedMutation.objects.filter(mutation=self.mut_1)}
+        both = {call.id for call in
+                MutationCall.objects.filter(mutation=self.mut_1)}
         self.assertEqual(both, set(by_mutation[str(self.mut_1.id)]))
         self.assertEqual(2, len(both), "mut_1 is the one in both samples")
 
@@ -110,52 +110,52 @@ class GridPageTestCase(EditorTestCase):
     def test_one_post_across_two_samples_is_one_changeset(self):
         """The whole reason for the mode. It was one page load per sample before, and one
         history entry per sample with it."""
-        ids = [observed.id for observed in
-               ObservedMutation.objects.filter(mutation=self.mut_1)]
+        ids = [call.id for call in
+               MutationCall.objects.filter(mutation=self.mut_1)]
         self.assertEqual(2, len(ids))
 
         response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
-            "observed_ids": json.dumps(ids)})
+            "call_ids": json.dumps(ids)})
 
         self.assertEqual(200, response.status_code)
         self.assertEqual(2, response.json()["removed"])
         self.assertEqual(1, MutationChangeSet.objects.count())
-        self.assertFalse(ObservedMutation.objects.filter(mutation=self.mut_1).exists())
+        self.assertFalse(MutationCall.objects.filter(mutation=self.mut_1).exists())
 
     def test_the_mutation_row_itself_survives_the_delete(self):
-        """Deleting every observation of a mutation must not delete the Mutation: its
+        """Deleting every call of a mutation must not delete the Mutation: its
         primary key is stored as a bare integer in aledb-converge, aledb-phylogeny and every
         exported CSV."""
-        ids = [observed.id for observed in
-               ObservedMutation.objects.filter(mutation=self.mut_1)]
+        ids = [call.id for call in
+               MutationCall.objects.filter(mutation=self.mut_1)]
 
         self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
-            "observed_ids": json.dumps(ids)})
+            "call_ids": json.dumps(ids)})
 
         self.mut_1.refresh_from_db()
         self.assertIsNotNone(self.mut_1.pk)
 
     def test_a_selection_spanning_samples_and_mutations_deletes_exactly_it(self):
         """Not a whole row and not a whole column -- the arbitrary set a person clicks."""
-        keep = ObservedMutation.objects.get(sample=self.sample_a,
+        keep = MutationCall.objects.get(sample=self.sample_a,
                                             mutation=self.mut_2)
-        doomed = [ObservedMutation.objects.get(sample=self.sample_a,
+        doomed = [MutationCall.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1).id,
-                  ObservedMutation.objects.get(sample=self.sample_b,
+                  MutationCall.objects.get(sample=self.sample_b,
                                                mutation=self.mut_1).id,
-                  ObservedMutation.objects.get(sample=self.sample_a,
+                  MutationCall.objects.get(sample=self.sample_a,
                                                mutation=self.mut_3).id]
 
         self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
-            "observed_ids": json.dumps(doomed)})
+            "call_ids": json.dumps(doomed)})
 
         self.assertEqual([keep.id],
-                         list(ObservedMutation.objects.values_list("id", flat=True)))
+                         list(MutationCall.objects.values_list("id", flat=True)))
 
-    def test_an_observation_from_another_experiment_is_refused(self):
+    def test_an_call_from_another_experiment_is_refused(self):
         """The endpoint scopes ids through the experiment, so a hand-built POST cannot reach
         across projects even with the grid handing it a longer list."""
         from aledb_experiment.models import Experiment, Population, TimePoint
@@ -170,7 +170,7 @@ class GridPageTestCase(EditorTestCase):
         flask = TimePoint.objects.create(population=ale, value=1, media=context["media"])
         sample = Sample.objects.create(
             time_point=flask, name=1, is_clonal=True, source_name="x")
-        outside = ObservedMutation.objects.create(
+        outside = MutationCall.objects.create(
             sample=sample,
             mutation=self.make_mutation(position=999, sequence_change="T>A",
                                         experiment=other),
@@ -178,13 +178,13 @@ class GridPageTestCase(EditorTestCase):
 
         response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
-            "observed_ids": json.dumps([outside.id])})
+            "call_ids": json.dumps([outside.id])})
 
         self.assertEqual(404, response.status_code)
-        self.assertTrue(ObservedMutation.objects.filter(pk=outside.pk).exists())
+        self.assertTrue(MutationCall.objects.filter(pk=outside.pk).exists())
 
     def test_the_grid_shows_only_this_experiment(self):
-        """The other half of the same scoping: another experiment's observation must not
+        """The other half of the same scoping: another experiment's call must not
         appear as a selectable cell in the first place."""
         created = self.client.post(
             "/project/create/", {"name": "P3", "experiment": "E3"}).json()
@@ -199,25 +199,25 @@ class GridPageTestCase(EditorTestCase):
 
     # --- a mutation with nothing left in it -----------------------------------------------
 
-    def test_deleting_the_last_observation_removes_the_row(self):
+    def test_deleting_the_last_call_removes_the_row(self):
         """The reported bug. The page reloads; the row was genuinely still being rendered.
 
         `Mutation` rows are never deleted here -- their ids are stored as bare integers in
         aledb-converge, aledb-phylogeny and every exported CSV -- so a mutation whose last
-        observation goes still exists, and a grid built from `Mutation.objects.filter(...)`
+        call goes still exists, and a grid built from `Mutation.objects.filter(...)`
         renders it with every cell empty.
         """
-        ids = [observed.id for observed in
-               ObservedMutation.objects.filter(mutation=self.mut_1)]
+        ids = [call.id for call in
+               MutationCall.objects.filter(mutation=self.mut_1)]
 
         self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
-            "observed_ids": json.dumps(ids)})
+            "call_ids": json.dumps(ids)})
 
         html = self.grid().content.decode("utf-8")
         self.assertNotIn('data-mutation="%d"' % self.mut_1.id, html)
         self.assertIn('data-mutation="%d"' % self.mut_2.id, html,
-                      "the mutations that still have observations are untouched")
+                      "the mutations that still have calls are untouched")
 
     def test_a_mutation_no_sample_observes_is_not_listed(self):
         """The same state arrived at without a delete -- an import can leave one, and
@@ -294,7 +294,7 @@ class GridPageTestCase(EditorTestCase):
 
     def test_the_maps_cover_only_what_was_rendered(self):
         """They could just as easily cover the whole experiment. Then a column selector would
-        put observations a person cannot see into a selection whose next button deletes
+        put calls a person cannot see into a selection whose next button deletes
         them."""
         self.mut_2.gene = "ilvG"
         self.mut_2.save()

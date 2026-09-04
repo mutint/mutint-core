@@ -14,7 +14,7 @@ from django.test import TestCase, override_settings
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.util import get_all_observed_mutations_filtered
+from aledb_seq.util import get_all_calls_filtered
 from aledb_seq.models import Mutation
 
 # The shipped fixture carries only SNP and DEL. AMP fields are
@@ -75,8 +75,8 @@ class AmplificationsRemovedTestCase(TestCase):
 
     def test_amp_mutations_are_in_the_mutation_table(self):
         """The regression this whole change hangs on. /mutations used to exclude these."""
-        observed = get_all_observed_mutations_filtered(self.experiment.id)
-        types = {obs.mutation.mutation_type for obs in observed}
+        calls = get_all_calls_filtered(self.experiment.id)
+        types = {call.mutation.mutation_type for call in calls}
 
         self.assertIn("AMP", types)
         self.assertIn("SNP", types)   # and it did not become AMP-only by accident
@@ -97,10 +97,10 @@ class AmplificationsRemovedTestCase(TestCase):
         )
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.id)
+        call = get_all_calls_filtered(self.experiment.id)
 
         header = get_table_header(self.user, reseq_dict, self.experiment)
-        body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
+        body = get_mutation_table_body(self.user, call, reseq_dict, self.experiment)
 
         self.assertTrue(body, "the fixture produces rows")
         for index, row in enumerate(body):
@@ -133,8 +133,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.id)
-        row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
+        call = get_all_calls_filtered(self.experiment.id)
+        row = get_mutation_table_body(self.user, call, reseq_dict, self.experiment)[0]
 
         references = {mutation.reseq_reference for mutation in Mutation.objects.all()}
         self.assertIn(strip_tags(row[REFSEQ_COLUMN_IN_MUT_TABLE]).strip(), references)
@@ -146,8 +146,8 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.id)
-        row = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)[0]
+        call = get_all_calls_filtered(self.experiment.id)
+        row = get_mutation_table_body(self.user, call, reseq_dict, self.experiment)[0]
 
         self.assertNotIn("deleteRow", "".join(str(cell) for cell in row))
         self.assertNotIn("close-icon", "".join(str(cell) for cell in row))
@@ -159,13 +159,13 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = sorted(get_all_observed_mutations_filtered(self.experiment.id),
+        call = sorted(get_all_calls_filtered(self.experiment.id),
                           key=lambda o: o.id)[0]
-        reseq_dict[observed.sample_id].bam_stored = True
+        reseq_dict[call.sample_id].bam_stored = True
 
-        cell = _get_table_mutation_entry(observed, reseq_dict)
+        cell = _get_table_mutation_entry(call, reseq_dict)
 
-        self.assertIn("/mutations/browse?observed_mut_id=%d" % observed.id, cell)
+        self.assertIn("/mutations/browse?mutation_call_id=%d" % call.id, cell)
         # class="true" is load-bearing: _contains_mutation substring-tests it to decide
         # whether the row renders, and table_template.js tests it to colour the cell.
         self.assertIn('class="true"', cell)
@@ -176,11 +176,11 @@ class AmplificationsRemovedTestCase(TestCase):
         from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
 
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = sorted(get_all_observed_mutations_filtered(self.experiment.id),
+        call = sorted(get_all_calls_filtered(self.experiment.id),
                           key=lambda o: o.id)[0]
-        reseq_dict[observed.sample_id].bam_stored = False
+        reseq_dict[call.sample_id].bam_stored = False
 
-        cell = _get_table_mutation_entry(observed, reseq_dict)
+        cell = _get_table_mutation_entry(call, reseq_dict)
 
         self.assertNotIn("browse", cell)
         self.assertIn('class="true"', cell)
@@ -195,9 +195,9 @@ class AmplificationsRemovedTestCase(TestCase):
     def test_excluding_by_type_still_works_for_the_plugin_tables(self):
         """filter_type is now unused by core, but fixation and converge still pass it
         through get_table_body. Its values read backwards: 'AMP' means exclude AMP."""
-        observed = get_all_observed_mutations_filtered(
+        calls = get_all_calls_filtered(
             self.experiment.id, filter_type="AMP")
-        types = {obs.mutation.mutation_type for obs in observed}
+        types = {call.mutation.mutation_type for call in calls}
 
         self.assertNotIn("AMP", types)
         self.assertIn("SNP", types)
@@ -206,7 +206,7 @@ class AmplificationsRemovedTestCase(TestCase):
 class ManuallyAddedMutationTestCase(TestCase):
     """A mutation somebody typed in has to appear in the cross-sample table.
 
-    `aledb_mutation_editor` writes an observation with `present=True` and no caller flags --
+    `aledb_mutation_editor` writes a call with `present=True` and no caller flags --
     breseq did not call it, because a person asserted it. Every read path that decides "is
     this mutation in this sample" by asking which *caller* found it therefore answers no, and
     the row vanishes from a table that is supposed to be the experiment's contents.
@@ -235,14 +235,14 @@ class ManuallyAddedMutationTestCase(TestCase):
     def _add_by_hand(self):
         """The rows `mutation_add_apply` produces, built by the code that produces them.
 
-        `build_observation` rather than a literal dict on purpose: this test is about what
+        `build_call` rather than a literal dict on purpose: this test is about what
         the add form actually writes, and a hand-copied set of kwargs would go on passing
         after that function changed.
         """
         from decimal import Decimal
 
-        from aledb_mutation_editor.record_builder import build_observation
-        from aledb_seq.models import ObservedMutation
+        from aledb_mutation_editor.record_builder import build_call
+        from aledb_seq.models import MutationCall
         from aledb_seq.util import get_reseq_ordered_dict
 
         mutation = Mutation.objects.create(
@@ -254,10 +254,10 @@ class ManuallyAddedMutationTestCase(TestCase):
             gene="thrA")
         sample = list(get_reseq_ordered_dict(self.experiment.id, None, None, None)
                       .values())[0]
-        ObservedMutation.objects.create(
+        MutationCall.objects.create(
             sample=sample,
             mutation=mutation,
-            **build_observation(Decimal("1.0")))
+            **build_call(Decimal("1.0")))
         return mutation
 
     def test_a_hand_added_mutation_has_a_row_in_the_cross_sample_table(self):
@@ -267,9 +267,9 @@ class ManuallyAddedMutationTestCase(TestCase):
 
         mutation = self._add_by_hand()
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.id)
+        call = get_all_calls_filtered(self.experiment.id)
 
-        body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
+        body = get_mutation_table_body(self.user, call, reseq_dict, self.experiment)
         positions = {str(row[3]) for row in body}
         self.assertIn("4,242", positions,
                       "a mutation added through the editor is missing from the table")
@@ -283,9 +283,9 @@ class ManuallyAddedMutationTestCase(TestCase):
 
         self._add_by_hand()
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
-        observed = get_all_observed_mutations_filtered(self.experiment.id)
+        call = get_all_calls_filtered(self.experiment.id)
 
-        body = get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
+        body = get_mutation_table_body(self.user, call, reseq_dict, self.experiment)
         row = [entry for entry in body if str(entry[3]) == "4,242"][0]
         self.assertIn("1.00", "".join(str(cell) for cell in row[-len(reseq_dict):]))
 

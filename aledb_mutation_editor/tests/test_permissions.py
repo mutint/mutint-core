@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 
 from aledb_mutation_editor.models import MutationChangeSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 DELETE = "/mutation-editor/delete/apply"
 COPY = "/mutation-editor/copy/apply"
@@ -31,12 +31,12 @@ PAGES = ("/mutation-editor/", "/mutation-editor/add", "/mutation-editor/copy",
 class WriteEndpointPermissionTestCase(EditorTestCase):
 
     def _delete_one(self):
-        observed = ObservedMutation.objects.get(sample=self.sample_a,
+        call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         return self.client.post(DELETE, {
             "experiment_id": self.experiment.id,
             "sample_id": self.sample_a.id,
-            "observed_ids": json.dumps([observed.id])})
+            "call_ids": json.dumps([call.id])})
 
     def _copy_one(self):
         return self.client.post(COPY, {
@@ -65,8 +65,8 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
                 ("add", self._add_one), ("restore", self._restore))
 
     def _assert_nothing_was_written(self):
-        self.assertEqual(4, self.observation_count(),
-                         "the fixture's four observations are untouched")
+        self.assertEqual(4, self.call_count(),
+                         "the fixture's four calls are untouched")
         self.assertEqual(0, MutationChangeSet.objects.count())
 
     # --- who may -------------------------------------------------------------------------
@@ -105,7 +105,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         self.client.force_login(self._writer())
 
         self.assertEqual(200, self._delete_one().status_code)
-        self.assertEqual(3, self.observation_count(), "the observation is gone")
+        self.assertEqual(3, self.call_count(), "the call is gone")
 
     def test_a_writer_may_copy(self):
         self.client.force_login(self._writer())
@@ -188,7 +188,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
 
     def test_an_unknown_experiment_is_a_404_not_a_500(self):
         response = self.client.post(DELETE, {"experiment_id": 999999,
-                                             "observed_ids": "[1]"})
+                                             "call_ids": "[1]"})
         self.assertEqual(404, response.status_code)
 
     def test_the_refusal_is_json_a_caller_can_read(self):

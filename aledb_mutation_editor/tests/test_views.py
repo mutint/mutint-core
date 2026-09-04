@@ -10,7 +10,7 @@ import json
 from aledb_mutation_editor import history, validation
 from aledb_mutation_editor.models import KIND_DELETE
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 EDIT = "/mutation-editor/"
 DELETE = "/mutation-editor/delete"
@@ -31,18 +31,18 @@ class PageTestCase(EditorTestCase):
         response = self.get(EDIT, sample_id=self.sample_a.id)
 
         self.assertEqual(200, response.status_code)
-        for observed in ObservedMutation.objects.filter(sample=self.sample_a):
-            self.assertContains(response, 'data-observed-id="%d"' % observed.id)
+        for call in MutationCall.objects.filter(sample=self.sample_a):
+            self.assertContains(response, 'data-call-id="%d"' % call.id)
 
     def test_it_does_not_list_another_samples_mutations(self):
-        only_b = ObservedMutation.objects.get(sample=self.sample_b)
+        only_b = MutationCall.objects.get(sample=self.sample_b)
         response = self.get(EDIT, sample_id=self.sample_a.id)
-        self.assertNotContains(response, 'data-observed-id="%d"' % only_b.id)
+        self.assertNotContains(response, 'data-call-id="%d"' % only_b.id)
 
     def test_it_falls_back_to_the_first_sample(self):
         """Opening the page from the sidebar carries no sample_id."""
         response = self.get(EDIT)
-        self.assertContains(response, 'data-observed-id=')
+        self.assertContains(response, 'data-call-id=')
 
     def test_it_shows_mutations_the_experiment_filter_hides(self):
         """Filtering is a display concern; a filtered mutation is still stored.
@@ -51,7 +51,7 @@ class PageTestCase(EditorTestCase):
         would reappear the moment somebody widened the filter.
         """
         response = self.get(EDIT, sample_id=self.sample_a.id, ignore_genes="thrA")
-        self.assertEqual(3, response.content.decode().count("data-observed-id="))
+        self.assertEqual(3, response.content.decode().count("data-call-id="))
 
     def test_the_handler_guards_its_missing_control(self):
         """The button is absent for a reader, so the script must not assume it."""
@@ -182,9 +182,9 @@ class PageTestCase(EditorTestCase):
         self.assertContains(response, "No mutation edits have been recorded")
 
     def test_a_change_appears_on_the_history_page(self):
-        observed = ObservedMutation.objects.get(sample=self.sample_a,
+        call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed],
+        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call],
                               note="a note worth reading")
 
         response = self.get(HISTORY)
@@ -193,9 +193,9 @@ class PageTestCase(EditorTestCase):
         self.assertContains(response, self.sample_a.label)
 
     def test_a_system_change_is_labelled_system_not_left_blank(self):
-        observed = ObservedMutation.objects.get(sample=self.sample_a,
+        call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, None, KIND_DELETE, removals=[observed],
+        history.apply_changes(self.experiment, None, KIND_DELETE, removals=[call],
                               note="migrated")
 
         self.assertContains(self.get(HISTORY), "<em>system</em>")
@@ -206,9 +206,9 @@ class PageTestCase(EditorTestCase):
         nothing."""
         self.assertNotContains(self.get(HISTORY), 'data-change-set-id=""')
 
-        observed = ObservedMutation.objects.get(sample=self.sample_a,
+        call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed])
+        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[call])
 
         self.assertContains(self.get(HISTORY), 'data-change-set-id=""')
 
@@ -232,4 +232,4 @@ class NoExperimentTestCase(EditorTestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(200, response.status_code)
-                self.assertNotContains(response, "data-observed-id=")
+                self.assertNotContains(response, "data-call-id=")

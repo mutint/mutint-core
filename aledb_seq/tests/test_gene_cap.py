@@ -8,7 +8,7 @@ history, and the *rule* it repaired the database to is not: it lives in
 **Why the rule matters, which is easy to lose along with the migration.** `gene` is one of the
 seven fields `Mutation.objects.get_or_create` keys on, so what the importer computes and what
 is stored have to be the same string for ever. If they ever differ, re-importing a sample
-mints a second `Mutation` for the same biological mutation and splits its observations across
+mints a second `Mutation` for the same biological mutation and splits its calls across
 both -- silently. And the string can be enormous: a 4,318-gene inversion produced 23,003
 characters against a `CharField(max_length=19000)`, which SQLite accepted and PostgreSQL would
 refuse outright.

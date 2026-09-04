@@ -8,7 +8,7 @@ from django.utils.safestring import mark_safe
 blank_field = {"blank": True, "null": True}
 
 
-# TODO: Refactor: figure out how to get a Sample to return its list of observed mutations and remove functionality from aledb_seq.views.common
+# TODO: Refactor: figure out how to get a Sample to return its list of mutation calls and remove functionality from aledb_seq.views.common
 class Sample(models.Model):
     """One sample: what was sequenced, where it sits in the experiment, and what came back.
 
@@ -20,7 +20,7 @@ class Sample(models.Model):
     every query and bought nothing.
 
     Collapsing them onto *this* row rather than onto `Isolate` is what made the merge
-    cheap. `ObservedMutation.sample` and `MutationChange.sample` point here, the managed
+    cheap. `MutationCall.sample` and `MutationChange.sample` point here, the managed
     store is `<store>/samples/<pk>/` keyed by this pk, and every variable in the suite
     called `reseq` or `sample` already meant this row. Merging the other way would have
     moved all of it -- and the name this model now has was the argument.
@@ -295,9 +295,9 @@ class Mutation(models.Model):
         return mark_safe(", ".join(get_ecocyc_gene_list(names, self.is_ecocyc_gene())))
 
 
-class ObservedMutation(models.Model):
+class MutationCall(models.Model):
     sample = models.ForeignKey(Sample, on_delete=models.CASCADE, null=True)
-    # make sure not delete mutation if there is associated observed mutations
+    # make sure not delete mutation if there are associated mutation calls
     mutation = models.ForeignKey(Mutation, on_delete=models.DO_NOTHING)
     # Whether the mutation is in this sample. True is an assertion that it is there,
     # False that it was looked for and found absent, null that nothing was recorded. It used
@@ -318,7 +318,7 @@ class ObservedMutation(models.Model):
     frequency = models.DecimalField(null=True,
                                     max_digits=5,
                                     decimal_places=4)
-    # Which caller produced this observation. Imports record "breseq"; other
+    # Which caller produced this call. Imports record "breseq"; other
     # callers can be added alongside. Left null on rows imported before this
     # existed, which came from a gdtools COMPARE merge of breseq and
     # GATK/CNVnator, so "breseq" would misrepresent them.

@@ -120,7 +120,7 @@ def get_plugin_urlpatterns():
 
 
 def register_export_handler(type_str, fn, label=None):
-    """Register `fn(experiment_id, view_filter=None)` -> ObservedMutation queryset.
+    """Register `fn(experiment_id, view_filter=None)` -> MutationCall queryset.
 
     `label` is the human-readable name shown in export menus; it defaults to `type_str`.
 

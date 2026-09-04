@@ -23,10 +23,10 @@ from aledb_common.logger import join_extras, user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_project
-from aledb_filter.util import filter_observed_mutations
+from aledb_filter.util import filter_mutation_calls
 from aledb_filter.view_filter import get_view_filter
 from aledb_seq.breseq_report import build_rows, is_mixed
-from aledb_seq.models import ExperimentReference, ObservedMutation
+from aledb_seq.models import ExperimentReference, MutationCall
 from aledb_experiment.ancestor import ancestral_mutation_ids, describe_ancestor
 from aledb_seq.util import get_reseq_ordered_dict
 
@@ -158,17 +158,17 @@ def _selected_reseq(request, reseq_dict, experiment):
 def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
     """This sample's rows, ancestor included.
 
-    Deliberately the raw observation queryset. Every page that analyses the data subtracts the
+    Deliberately the raw call queryset. Every page that analyses the data subtracts the
     designated ancestor; this one tints those rows instead, because it is a view of what
     breseq called in one sample rather than a conclusion drawn from it.
     """
-    observed = filter_observed_mutations(
-        ObservedMutation.objects.filter(sample=reseq).select_related("mutation"),
+    call = filter_mutation_calls(
+        MutationCall.objects.filter(sample=reseq).select_related("mutation"),
         view_filter=view_filter)
-    # filter_observed_mutations orders across samples; within one sample breseq
+    # filter_mutation_calls orders across samples; within one sample breseq
     # orders by reference then position.
-    observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
-    return build_rows(observed, browse_url=_browse_url(reseq),
+    call.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
+    return build_rows(call, browse_url=_browse_url(reseq),
                       ancestral_mutation_ids=ancestral_ids,
                       refseq_url=_refseq_url())
 
@@ -177,8 +177,8 @@ def _browse_url(reseq):
     """Link the evidence cell at the alignment, when there is one to look at."""
     if not reseq.bam_stored:
         return None
-    return lambda observed: "%s?observed_mut_id=%s" % (
-        reverse("browse_mutation"), observed.id)
+    return lambda call: "%s?mutation_call_id=%s" % (
+        reverse("browse_mutation"), call.id)
 
 
 def _refseq_url():
@@ -187,11 +187,11 @@ def _refseq_url():
     Takes no experiment lookup and makes no query: whether the contig has been matched to
     an NCBI record decides what that page *shows*, not whether it is worth opening.
     """
-    def url_for(observed):
-        if not observed.mutation.reseq_reference:
+    def url_for(call):
+        if not call.mutation.reseq_reference:
             return None
         return "%s?mutation_id=%s&sample_id=%s" % (
-            reverse("ncbi_view"), observed.mutation_id, observed.sample_id)
+            reverse("ncbi_view"), call.mutation_id, call.sample_id)
 
     return url_for
 

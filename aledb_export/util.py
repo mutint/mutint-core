@@ -2,8 +2,8 @@ from aledb_common.plugin_registry import get_export_handler
 from aledb_seq.views.mutation_table_builder import get_mutation_table_data, HTML_MUTATION_TABLE_HEADER
 from django.utils.html import strip_tags
 
-from aledb_filter.util import filter_observed_mutations
-from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_dict
+from aledb_filter.util import filter_mutation_calls
+from aledb_seq.util import get_mutation_call_queryset, get_ordered_reseq_dict
 
 MUT_TYPE_STR = "mut"
 
@@ -20,11 +20,11 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
     export anyone has ever taken, so it is recorded rather than fixed.
 
     **The `mut` export does not subtract the designated ancestor**, which is why this reaches
-    for `get_observed_mutation_queryset` rather than the `get_evolved_*` sibling every
+    for `get_mutation_call_queryset` rather than the `get_evolved_*` sibling every
     analysis uses. A download called "all mutations" that quietly dropped a sample and a set
     of rows would be a worse answer than a faithful one; a reader who wants the subtracted set
     takes it from the page that shows it. The columns follow for free -- they are built from
-    `get_ordered_reseq_dict(observed_mutations)`, i.e. from the rows themselves, so the
+    `get_ordered_reseq_dict(mutation_calls)`, i.e. from the rows themselves, so the
     ancestor's column comes back with its rows and nothing here special-cases it.
 
     A *derived* export is a different question and answers it differently. `fixed_mut` and
@@ -34,17 +34,17 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
     page showed.
     """
     if mut_type_str == MUT_TYPE_STR:
-        obs_mut_qryset = get_observed_mutation_queryset(exp_id)
+        call_qryset = get_mutation_call_queryset(exp_id)
     else:
         handler = get_export_handler(mut_type_str)
         if handler is None:
             return []
-        obs_mut_qryset = handler(exp_id, view_filter)
+        call_qryset = handler(exp_id, view_filter)
 
-    observed_mutations = filter_observed_mutations(obs_mut_qryset, view_filter=view_filter)
-    reseq_ordered_dict = get_ordered_reseq_dict(observed_mutations)
+    mutation_calls = filter_mutation_calls(call_qryset, view_filter=view_filter)
+    reseq_ordered_dict = get_ordered_reseq_dict(mutation_calls)
 
-    mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_ordered_dict, observed_mutations)
+    mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_ordered_dict, mutation_calls)
 
     # Where the mutation's own columns start in HTML_MUTATION_TABLE_HEADER. Was 3, and
     # moved with the close-icon column that used to sit at index 0.

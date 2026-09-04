@@ -11,7 +11,7 @@ from aledb_import.tests import breseq_fixture
 from aledb_seq.models import (
     ExperimentReference,
     Mutation,
-    ObservedMutation,
+    MutationCall,
     Sample,
 )
 
@@ -219,7 +219,7 @@ class BreseqFolderImportTestCase(TestCase):
 
     def test_the_first_folders_mutations_survive_the_duplicate(self):
         """The failure this fixes was silent and total: `_database_gd_mutations` deletes the
-        sample's observations before writing its own, so the second folder took the first
+        sample's calls before writing its own, so the second folder took the first
         one's data with it while both were reported as imported.
 
         Asserted on *positions*, not on a count: the two folders carry the same number of
@@ -236,7 +236,7 @@ class BreseqFolderImportTestCase(TestCase):
         self._import()
 
         positions = set(
-            ObservedMutation.objects.values_list("mutation__position", flat=True))
+            MutationCall.objects.values_list("mutation__position", flat=True))
         self.assertEqual(positions, {100, 200},
                          "the surviving sample must be plate-a's, not plate-b's")
         self.assertEqual(Sample.objects.count(), 1)
@@ -272,12 +272,12 @@ class BreseqFolderImportTestCase(TestCase):
         first = self._import()
         self.assertEqual(first["files"][0].get("replaced", 0), 0,
                          "nothing was there the first time")
-        observations = ObservedMutation.objects.count()
-        self.assertGreater(observations, 0)
+        calls = MutationCall.objects.count()
+        self.assertGreater(calls, 0)
 
         second = self._import()
 
-        self.assertEqual(second["files"][0]["replaced"], observations)
+        self.assertEqual(second["files"][0]["replaced"], calls)
         self.assertIsNone(second["files"][0]["error"], "a re-import is not a failure")
         self.assertEqual(Sample.objects.count(), 1)
 

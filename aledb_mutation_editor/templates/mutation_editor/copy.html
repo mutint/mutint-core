@@ -156,7 +156,7 @@
                 mutation_ids: JSON.stringify(mutationIds),
                 target_sample_ids: JSON.stringify(targetIds)
             }).then(function (body) {
-                var message = "Copied " + body.added + " observation(s).";
+                var message = "Copied " + body.added + " call(s).";
                 if (body.already && body.already.length) {
                     message += " Already carried some of them: "
                              + body.already.join(", ") + ".";

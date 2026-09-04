@@ -10,7 +10,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from aledb_experiment.ancestor import exclude_all_ancestry
-from aledb_filter.util import filter_observed_mutations, filtered_observed_mutation_queryset
+from aledb_filter.util import filter_mutation_calls, filtered_mutation_call_queryset
 from aledb_filter.view_filter import PARAMS as FILTER_PARAMS, ViewFilter
 from aledb_common.logger import user_extra
 from aledb_metadata.views import get_sample_info_list
@@ -18,7 +18,7 @@ from aledb_metadata.views import get_sample_info_list
 # which merely imports it -- an accidental re-export, and the call site any signature change
 # would miss.
 from aledb_seq.util import get_ordered_reseq_dict, get_ordered_reseq_queryset
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -62,23 +62,23 @@ def _requested_filter(request):
 
 
 def _public_queryset(view_filter=None):
-    """Observations in public projects, through the caller's filter.
+    """Calls in public projects, through the caller's filter.
 
-    The cutoff half goes through the shared `filtered_observed_mutation_queryset`, replacing a
+    The cutoff half goes through the shared `filtered_mutation_call_queryset`, replacing a
     hand-rewritten copy of that `Q` that lived here and had already drifted: it skipped gene
     filtering entirely, with a comment saying doing it per row was too slow for the whole
     dataset. That is still true of the row-level subset test, and the two gene endpoints below
     do not need it -- see `_without_ignored_genes`.
     """
-    queryset = ObservedMutation.objects.filter(
-        **{paths.to_experiment(paths.FROM_OBSERVATION, 'project__is_public'): True}
+    queryset = MutationCall.objects.filter(
+        **{paths.to_experiment(paths.FROM_CALL, 'project__is_public'): True}
     )
     # Designated ancestors are subtracted here too, and unlike the cutoff above that is not
     # something the caller chose. An anonymous caller getting rows that every page on the site
     # excludes would be a wrong answer dressed as a right one -- the same reason `parse` raises
     # on a malformed `min_freq` rather than quietly returning everything.
     queryset = exclude_all_ancestry(queryset)
-    queryset, _ = filtered_observed_mutation_queryset(queryset, view_filter=view_filter)
+    queryset, _ = filtered_mutation_call_queryset(queryset, view_filter=view_filter)
     return queryset
 
 
@@ -152,7 +152,7 @@ def strains(request):
         view_filter = _requested_filter(request)
         mut_qryset = _public_queryset(view_filter)
         strain_values = mut_qryset.values_list(
-            paths.to_population(paths.FROM_OBSERVATION, 'strain'), flat=True
+            paths.to_population(paths.FROM_CALL, 'strain'), flat=True
         ).distinct()
         strains = sorted([s for s in strain_values if s and s != " N/A"])
 
@@ -180,7 +180,7 @@ def gene_strain_pairs(request):
         view_filter = _requested_filter(request)
         pairs_qs = _public_queryset(view_filter).values_list(
             'mutation__gene',
-            paths.to_population(paths.FROM_OBSERVATION, 'strain'),
+            paths.to_population(paths.FROM_CALL, 'strain'),
         ).distinct()
 
         # Expand comma-separated genes, strip HTML tags, into individual pairs
@@ -237,7 +237,7 @@ def query_by_pair(request):
             request,
             pairs,
             q_builder=lambda p: (
-                Q(**{paths.to_population(paths.FROM_OBSERVATION, 'strain'): p.get("strain", "").strip()}) &
+                Q(**{paths.to_population(paths.FROM_CALL, 'strain'): p.get("strain", "").strip()}) &
                 Q(mutation__gene__icontains=p.get("gene", "").strip())
             ) if p.get("gene") and p.get("strain") else None,
             empty_msg="No gene/strain pairs provided",
@@ -269,7 +269,7 @@ def query_by_strain(request):
         return _run_query(
             request,
             ids,
-            q_builder=lambda strain: Q(**{paths.to_population(paths.FROM_OBSERVATION, 'strain'): strain}),
+            q_builder=lambda strain: Q(**{paths.to_population(paths.FROM_CALL, 'strain'): strain}),
             empty_msg='No strains provided',
             invalid_msg='No valid strains provided'
         )
@@ -393,7 +393,7 @@ def _serialize_mutations(mutations, search_gene=None):
         strain = m.sample.time_point.population.strain
         url_gene = _extract_url_gene(gene, search_gene)
         item = {
-            'observed_mutation_id': m.id,
+            'mutation_call_id': m.id,
             'mutation_id': m.mutation_id,
             'gene': gene,
             'position': m.mutation.position,
@@ -418,7 +418,7 @@ def _serialize_mutations(mutations, search_gene=None):
                 'sample_label': exp.get('label'),
                 # **`genotype` held a formatted frequency.** Not a genotype, and not a
                 # sample type despite the local name that used to build it: the string is
-                # `"%2f"` of `ObservedMutation.frequency`, empty when the mutation is not
+                # `"%2f"` of `MutationCall.frequency`, empty when the mutation is not
                 # present in that sample. The same class of error as `knockouts` and
                 # `taxonomy_id` above, found the same way -- by reading what the value is.
                 'frequency': exp.get('frequency'),
@@ -447,10 +447,10 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         return JsonResponse({'error': str(bad_request)}, status=400)
 
     public_project_q = Q(
-        **{paths.to_experiment(paths.FROM_OBSERVATION, 'project__is_public'): True}
+        **{paths.to_experiment(paths.FROM_CALL, 'project__is_public'): True}
     )
 
-    observed_mutations = []
+    mutation_calls = []
     for item in ids:
         if not item:
             continue
@@ -458,19 +458,19 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         if q is None:
             continue
 
-        qs = exclude_all_ancestry(ObservedMutation.objects.filter(public_project_q & q))
-        mutations = filter_observed_mutations(qs, view_filter=view_filter)
+        qs = exclude_all_ancestry(MutationCall.objects.filter(public_project_q & q))
+        mutations = filter_mutation_calls(qs, view_filter=view_filter)
         logger.info("Found %d mutations for %s", len(mutations), item, extra=user_extra(request))
-        observed_mutations.extend(mutations)
+        mutation_calls.extend(mutations)
 
-    if not observed_mutations:
+    if not mutation_calls:
         return JsonResponse({'mutations': [], 'count': 0, 'message': invalid_msg})
 
-    # Sorted, not first-appearance. `observed_mutations` is a concatenation of one filtered
+    # Sorted, not first-appearance. `mutation_calls` is a concatenation of one filtered
     # list per requested id; each block is in A/F/I/R order but the concatenation is not, and
     # a sample appearing in two blocks keeps the position of the first. `get_ordered_reseq_dict`
     # sorts, so the samples come out in the same order every other list on the site uses.
-    reseq_dict = get_ordered_reseq_dict(observed_mutations)
+    reseq_dict = get_ordered_reseq_dict(mutation_calls)
 
     # A list, not a set: this is iterated below to build the response's metadata, and a set's
     # iteration order is not stable between runs -- so two identical requests could return
@@ -478,23 +478,23 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
     # diffing two responses would chase for an afternoon.
     experiment_ids = []
 
-    for observed_mutation in observed_mutations:
-        experiment_id = observed_mutation.sample.experiment.id
+    for mutation_call in mutation_calls:
+        experiment_id = mutation_call.sample.experiment.id
         logging.info("Processing mutation with ID: %s", experiment_id, extra=user_extra(request))
         if experiment_id not in experiment_ids:
             experiment_ids.append(experiment_id)
-        if observed_mutation.sample_id in reseq_dict.keys():
-            sample_name = reseq_dict[observed_mutation.sample_id].qualified_label
+        if mutation_call.sample_id in reseq_dict.keys():
+            sample_name = reseq_dict[mutation_call.sample_id].qualified_label
             # Initialised here, and not only inside the branch below: it used to be assigned
             # nowhere else, so a row that failed the test either raised NameError or silently
             # reported the *previous* row's frequency.
             frequency = ""
-            if observed_mutation.present:
-                frequency = ("%2f" % float(observed_mutation.frequency)
-                             if observed_mutation.frequency is not None else "")
-            observed_mutation.experiment = {
-                'experiment_id': observed_mutation.sample.experiment.id,
-                'sample_id': observed_mutation.sample.id,
+            if mutation_call.present:
+                frequency = ("%2f" % float(mutation_call.frequency)
+                             if mutation_call.frequency is not None else "")
+            mutation_call.experiment = {
+                'experiment_id': mutation_call.sample.experiment.id,
+                'sample_id': mutation_call.sample.id,
                 'label': sample_name,
                 'frequency': frequency,
             }
@@ -517,7 +517,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
             }
             metadata.append(experiment_info)
     
-    mutations_data = _serialize_mutations(observed_mutations, search_gene=search_gene)
+    mutations_data = _serialize_mutations(mutation_calls, search_gene=search_gene)
     experiment_metadata = _serialize_metadata(metadata)
 
     return JsonResponse({'mutations': mutations_data, 'experiment_metadata': experiment_metadata, 'count': len(mutations_data), 'message': 'Success'})

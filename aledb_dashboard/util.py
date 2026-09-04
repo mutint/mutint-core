@@ -1,7 +1,7 @@
 from aledb_dashboard.models import (
-    InventoryCounts, ObservedMutationCounts, UniqueMutationCounts,
+    InventoryCounts, MutationCallCounts, UniqueMutationCounts,
 )
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
@@ -18,9 +18,9 @@ def rebuild_dashboard_data():
     rebuild_mutation_counts()
 
 
-#: The join from an ObservedMutation up to its experiment, as `aledb_seq.util`,
+#: The join from a MutationCall up to its experiment, as `aledb_seq.util`,
 #: `aledb_filter.util` and `aledb_mutation_editor.history` all spell it.
-_EXPERIMENT_PATH = paths.to_experiment(paths.FROM_OBSERVATION)
+_EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
 #: Deletion here is soft: it sets `deleted_at` and leaves everything below the experiment in
 #: place, and this app's managers are deliberately unfiltered -- so these totals counted every
@@ -89,28 +89,28 @@ def rebuild_sample_counts():
                                          sample_count=sample_count)
 
 
-def _live_observation_rows():
-    """Every observation the installation still has, as `(mutation_id, type, snp_type)`.
+def _live_call_rows():
+    """Every call the installation still has, as `(mutation_id, type, snp_type)`.
 
     **The dashboard applies no filter, deliberately.** It is an inventory of what the
     installation holds, and an experiment's frequency cutoff or ignored-gene list is one
     person's view of one experiment -- a site-wide total computed through it answers a question
     nobody asked, and could not be computed at all once filtering is per-user, since a shared
-    table cannot be keyed by user. It used to call `filter_observed_mutations`, which in the
+    table cannot be keyed by user. It used to call `filter_mutation_calls`, which in the
     dev database made the stored total 73,857 where the installation holds 74,859.
 
     Tuples rather than model instances, and that is what the filter's removal buys: filtering
     needed the gene column parsed per row, so the rows had to be built -- every one of them
     joined across six tables and carrying two JSONFields. Counting needs three columns.
     `rebuild_after_structural_change` refuses to run this rebuild at all because it "pulls
-    every ObservedMutation in the database into Python", and that is the sentence this is
+    every MutationCall in the database into Python", and that is the sentence this is
     meant to stop being true.
 
     The third column is `snp_type`, breseq's own functional class, and used to be
     `protein_change` -- a rendered display string that contains none of the words being looked
     for. See `aledb_seq.functional_change`.
     """
-    queryset = ObservedMutation.objects.filter(
+    queryset = MutationCall.objects.filter(
         **{"%s__deleted_at__isnull" % _EXPERIMENT_PATH: True,
            "%s__project__deleted_at__isnull" % _EXPERIMENT_PATH: True})
 
@@ -128,61 +128,61 @@ def _live_observation_rows():
 def rebuild_mutation_counts():
     mut_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
     mut_func_change_type_dict = {t: 0 for t in FUNCTIONAL_CHANGE_TYPE_LIST}
-    obs_mut_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
-    obs_mut_func_change_type_dict = {t: 0 for t in FUNCTIONAL_CHANGE_TYPE_LIST}
+    call_count_dict = {mut_type: 0 for mut_type in MUTATION_TYPE_LIST}
+    call_func_change_type_dict = {t: 0 for t in FUNCTIONAL_CHANGE_TYPE_LIST}
 
     # "Unique" is distinct mutations, so each id is bucketed the first time it is seen. This
-    # was a `{id: mutation}` dict of model instances (`get_mutations_from_observed_muations`);
+    # was a `{id: mutation}` dict of model instances (`get_mutations_from_calls`);
     # a set of ids is the same answer without the rows.
     seen = set()
-    observed_total = 0
-    for mutation_id, mutation_type, snp_type in _live_observation_rows():
-        observed_total += 1
+    call_total = 0
+    for mutation_id, mutation_type, snp_type in _live_call_rows():
+        call_total += 1
         bucket = _mutation_type_bucket(mutation_type)
         change = functional_change_bucket(snp_type)
-        obs_mut_count_dict[bucket] += 1
-        obs_mut_func_change_type_dict[change] += 1
+        call_count_dict[bucket] += 1
+        call_func_change_type_dict[change] += 1
         if mutation_id not in seen:
             seen.add(mutation_id)
             mut_count_dict[bucket] += 1
             mut_func_change_type_dict[change] += 1
 
-    if ObservedMutationCounts.objects.all().count() == 0:
-        ObservedMutationCounts.objects.create()
-    obs_mut_count_qryset = ObservedMutationCounts.objects.all()
+    if MutationCallCounts.objects.all().count() == 0:
+        MutationCallCounts.objects.create()
+    call_count_qryset = MutationCallCounts.objects.all()
     if UniqueMutationCounts.objects.all().count() == 0:
         UniqueMutationCounts.objects.create()
     mut_count_qryset = UniqueMutationCounts.objects.all()
 
-    obs_mut_count_qryset.update(total=observed_total)
+    call_count_qryset.update(total=call_total)
     mut_count_qryset.update(total=len(seen))
 
     for mutation_type in MUTATION_TYPE_LIST:
-        observed_mutation_type_count = obs_mut_count_dict[mutation_type]
+        call_type_count = call_count_dict[mutation_type]
         unique_mutation_type_count = mut_count_dict[mutation_type]
         if mutation_type == 'SNP':
-            obs_mut_count_qryset.update(single_base_substitution=observed_mutation_type_count)
+            call_count_qryset.update(single_base_substitution=call_type_count)
             mut_count_qryset.update(single_base_substitution=unique_mutation_type_count)
         elif mutation_type == 'SUB':
-            obs_mut_count_qryset.update(multiple_base_substitution=observed_mutation_type_count)
+            call_count_qryset.update(multiple_base_substitution=call_type_count)
             mut_count_qryset.update(multiple_base_substitution=unique_mutation_type_count)
         elif mutation_type == 'DEL':
-            obs_mut_count_qryset.update(deletion=observed_mutation_type_count)
+            call_count_qryset.update(deletion=call_type_count)
             mut_count_qryset.update(deletion=unique_mutation_type_count)
         elif mutation_type == 'INS':
-            obs_mut_count_qryset.update(insertion=observed_mutation_type_count)
+            call_count_qryset.update(insertion=call_type_count)
             mut_count_qryset.update(insertion=unique_mutation_type_count)
         elif mutation_type == 'MOB':
-            obs_mut_count_qryset.update(mobile_element_insertion=observed_mutation_type_count)
+            call_count_qryset.update(mobile_element_insertion=call_type_count)
             mut_count_qryset.update(mobile_element_insertion=unique_mutation_type_count)
         elif mutation_type == 'AMP':
-            obs_mut_count_qryset.update(amplification=observed_mutation_type_count)
+            call_count_qryset.update(amplification=call_type_count)
             mut_count_qryset.update(amplification=unique_mutation_type_count)
         elif mutation_type == 'CON':
-            obs_mut_count_qryset.update(gene_conversion=observed_mutation_type_count)
+            call_count_qryset.update(gene_conversion=call_type_count)
             mut_count_qryset.update(gene_conversion=unique_mutation_type_count)
         elif mutation_type == 'INV':
-            obs_mut_count_qryset.update(inversion=observed_mutation_type_count)
+            call_count_qryset.update(inversion=call_type_count)
             mut_count_qryset.update(inversion=unique_mutation_type_count)
 
     # The two totals above deliberately do not equal the sum of these columns: a mutation
@@ -199,7 +199,7 @@ def rebuild_mutation_counts():
     #
     # The mutation-type chain above is left alone: 'SNP' -> single_base_substitution is a real
     # mapping between two different vocabularies, not an identity.
-    obs_mut_count_qryset.update(**{change: obs_mut_func_change_type_dict[change]
+    call_count_qryset.update(**{change: call_func_change_type_dict[change]
                                    for change in FUNCTIONAL_CHANGE_TYPE_LIST})
     mut_count_qryset.update(**{change: mut_func_change_type_dict[change]
                                for change in FUNCTIONAL_CHANGE_TYPE_LIST})

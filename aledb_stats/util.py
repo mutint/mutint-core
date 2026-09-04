@@ -99,9 +99,9 @@ def get_reseq_experiment_info_list(reseq_experiments):
     written, which is why that number never showed them. For an experiment with N samples the
     Overview issued 2N queries nobody was counting.
 
-    `Count('id')` on ObservedMutation rather than a `distinct` count of mutations, because that
-    is what `reseq.mutations.count()` did: the M2M goes through ObservedMutation, so its count
-    is of join rows, and ObservedMutation has no unique constraint on
+    `Count('id')` on MutationCall rather than a `distinct` count of mutations, because that
+    is what `reseq.mutations.count()` did: the M2M goes through MutationCall, so its count
+    is of join rows, and MutationCall has no unique constraint on
     (sample, mutation). Counting distinct mutations would quietly differ for a
     sample that observed one twice.
 
@@ -115,7 +115,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
     """
     from django.db.models import Count
     from aledb_experiment.ancestor import exclude_ancestry
-    from aledb_seq.models import ObservedMutation
+    from aledb_seq.models import MutationCall
 
     reseq_experiments = list(reseq_experiments)
     sample_ids = [reseq.id for reseq in reseq_experiments]
@@ -126,7 +126,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
     reference_length = _reference_length(experiment_id)
     mutation_counts = dict(
         exclude_ancestry(
-            ObservedMutation.objects.filter(sample_id__in=sample_ids),
+            MutationCall.objects.filter(sample_id__in=sample_ids),
             experiment_id)
         .values_list('sample_id')
         .annotate(total=Count('id')))
@@ -148,7 +148,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
 # The Overview page's mutation counts
 #
 # These four dictionaries are what `/stats` renders in its two count tables, and producing
-# them used to mean pulling every ObservedMutation in the experiment -- each joined across six
+# them used to mean pulling every MutationCall in the experiment -- each joined across six
 # tables and instantiated as a model carrying two JSONFields and a gene column of up to 19 000
 # characters -- to arrive at about sixteen integers. They are counted where the rows already
 # are instead, which is why nothing is stored: 0.07s on the largest experiment in the dev
@@ -181,7 +181,7 @@ def _count_in_sql(queryset):
 
     **Summing per-group distinct counts is exact, not an approximation**, and the reason is a
     constraint on anyone editing this: the group key is a column of `Mutation`, reached by a
-    forward foreign key, so every observation of a mutation falls in exactly one group and the
+    forward foreign key, so every call of a mutation falls in exactly one group and the
     per-group sets of `mutation_id` are disjoint. Group by anything reached through a reverse or
     many-to-many relation -- the sample, a tag -- and one mutation lands in several groups, and
     the sums silently exceed the true distinct count.
@@ -192,25 +192,25 @@ def _count_in_sql(queryset):
     """
     from django.db.models import Count
 
-    observed_types = {}
+    call_types = {}
     unique_types = {}
     for row in (queryset.values('mutation__mutation_type')
-                        .annotate(observed=Count('id'),
+                        .annotate(calls=Count('id'),
                                   unique=Count('mutation_id', distinct=True))):
-        observed_types[row['mutation__mutation_type']] = row['observed']
+        call_types[row['mutation__mutation_type']] = row['calls']
         unique_types[row['mutation__mutation_type']] = row['unique']
 
-    mutation_type_counts, observed_mutation_type_counts, \
-        protein_change_counts, observed_protein_change_counts = _empty_counts()
+    mutation_type_counts, call_type_counts, \
+        protein_change_counts, call_protein_change_counts = _empty_counts()
 
     # One group per distinct snp_type -- 19 of them across the whole dev database, including a
     # NULL group for rows imported before the annotator existed, which resolves to UNANNOTATED
     # like every other value with no answer in it.
     for row in (queryset.values('mutation__snp_type')
-                        .annotate(observed=Count('id'),
+                        .annotate(calls=Count('id'),
                                   unique=Count('mutation_id', distinct=True))):
         change = functional_change_bucket(row['mutation__snp_type'])
-        observed_protein_change_counts[change] += row['observed']
+        call_protein_change_counts[change] += row['calls']
         protein_change_counts[change] += row['unique']
 
     # A mutation_type outside MUTATION_TYPE_LIST is dropped, as it always was: the original
@@ -219,10 +219,10 @@ def _count_in_sql(queryset):
     # so these two sets of counts have different totals, deliberately.
     for mut_type in MUTATION_TYPE_LIST:
         mutation_type_counts[mut_type] = unique_types.get(mut_type, 0)
-        observed_mutation_type_counts[mut_type] = observed_types.get(mut_type, 0)
+        call_type_counts[mut_type] = call_types.get(mut_type, 0)
 
-    return (mutation_type_counts, observed_mutation_type_counts,
-            protein_change_counts, observed_protein_change_counts)
+    return (mutation_type_counts, call_type_counts,
+            protein_change_counts, call_protein_change_counts)
 
 
 def compute_experiment_counts(experiment_id):
@@ -238,19 +238,19 @@ def compute_experiment_counts(experiment_id):
     Nothing is filtered now, so there is nothing SQL cannot express, and `_count_in_python` went
     with the branch that chose it.
     """
-    from aledb_seq.util import get_evolved_observation_queryset
+    from aledb_seq.util import get_evolved_call_queryset
 
     # The join, not `sample_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.
-    return _count_in_sql(get_evolved_observation_queryset(experiment_id))
+    return _count_in_sql(get_evolved_call_queryset(experiment_id))
 
 
 #: What `/stats` reads. An `ExperimentSummary` row stood here with these four field names,
 #: which is why they are these four field names: the view and the template are unchanged.
 ExperimentCounts = collections.namedtuple(
     "ExperimentCounts",
-    "mutation_type_counts observed_mutation_type_counts "
-    "protein_change_counts observed_protein_change_counts")
+    "mutation_type_counts call_type_counts "
+    "protein_change_counts call_protein_change_counts")
 
 
 def get_experiment_summary(experiment_id):
@@ -258,8 +258,8 @@ def get_experiment_summary(experiment_id):
 
     **Nothing is stored.** `ExperimentSummary` held them and the 'overview' rebuilder kept it
     current. The row was worth having while producing the counts meant materialising every
-    observation in the experiment; it stopped being worth it when `compute_experiment_counts`
-    moved the work into SQL, which is 0.07s on 52 139 observations.
+    call in the experiment; it stopped being worth it when `compute_experiment_counts`
+    moved the work into SQL, which is 0.07s on 52 139 calls.
 
     The zero-filled fallback went with the table. It existed because a rebuild could fail and
     leave nothing stored, so the page had to render *something* rather than 500 -- a state

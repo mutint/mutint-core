@@ -609,12 +609,12 @@ today and is not a plan.
 
 ### `present` says whether it is there; `source` says who said so
 
-`ObservedMutation` used to carry `breseq_present` and `gatk_present` beside `present` -- one
+`MutationCall` used to carry `breseq_present` and `gatk_present` beside `present` -- one
 flag per variant caller -- and **every read path asked the caller flags rather than `present`**:
 `_get_table_mutation_entry` for a filled cell, `browse._samples_calling` for the genome
 browser's `*`, and `aledb_interop_query`. That was harmless while breseq was the only thing
 that ever wrote a mutation, and stopped being harmless the moment `aledb_mutation_editor` let a
-person add one. A hand-added observation is `present=True` with no caller flag, so it answered
+person add one. A hand-added call is `present=True` with no caller flag, so it answered
 no to all three: it was stored, it showed on the editor's own per-sample page, and it was
 **absent from Compare, fixation, converge and search** -- which reads as the add having
 silently failed rather than as a rendering rule being wrong.
@@ -635,16 +635,16 @@ nowhere. `aledb_seq/tests/test_caller_flag_migration.py` stands the database up 
 through the real migration executor to check it, which is the only way to test a data migration
 whose columns the live model no longer has.
 
-**Old change-log snapshots needed no migration.** `history._observation_kwargs` builds its
-kwargs by walking `OBSERVATION_FIELDS` and calling `snapshot.get(field)`, so the two keys left
-behind in stored `MutationChange.observation` blobs are simply never read again.
+**Old change-log snapshots needed no migration.** `history._call_kwargs` builds its
+kwargs by walking `CALL_FIELDS` and calling `snapshot.get(field)`, so the two keys left
+behind in stored `MutationChange.call` blobs are simply never read again.
 `aledb_mutation_editor.migrations.0002` writes those blobs and had its own copy of the field
 list; it now skips a column the model does not have, because which side of the drop it runs on
 depends on where it falls in a given database's graph.
 
 ### Editing a sample's mutations, and the history that makes it safe
 
-`aledb_mutation_editor` owns four operations -- **edit** a mutation, **delete** an observation
+`aledb_mutation_editor` owns four operations -- **edit** a mutation, **delete** a call
 from a sample, **add** one nothing carries yet and **batch-copy** one from a sibling sample --
 and an append-only change log that makes all of them reversible. The toolbar is
 `/mutation-editor/` (Edit), `/mutation-editor/delete`, `/mutation-editor/add`,
@@ -667,33 +667,33 @@ rather than two.
 Every write is `<what>/apply` -- `delete/apply`, `add/apply`, `copy/apply`, `edit/apply`.
 Deleting used to be a bare `^delete$`, the odd one out, and the Delete *tab* needed that name.
 
-**What it deletes is an `ObservedMutation`, never a `Mutation`.** That distinction is the whole
+**What it deletes is an `MutationCall`, never a `Mutation`.** That distinction is the whole
 design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
 prunes them, in aledb-phylogeny's `branch_mutations` JSON -- whose
 docstring says *"ids do not move"*, and which is not on the
 rebuild hook -- and in every exported CSV's "Mut ID" column. Deleting a Mutation and letting a
 re-import recreate it through `gd_import`'s seven-field `get_or_create` would mint a new pk for
 the same biological mutation and quietly invalidate all of it. Removing only the sample's
-observation changes nothing any stored id means.
+call changes nothing any stored id means.
 
 **The rows are hard-deleted, and that is what kept every read path untouched.** An
-ObservedMutation is read by `mutation_table_builder`, `breseq_table`, `aledb_export`,
+MutationCall is read by `mutation_table_builder`, `breseq_table`, `aledb_export`,
 `aledb_stats`, `aledb_dashboard`, `aledb_search`, aledb-fixation and aledb-converge, and this
 repo's default managers are deliberately unfiltered. A soft-delete flag would have needed all
 eight taught to filter, and the one that was missed would have gone on showing deleted
 mutations in an export or a fixation table. Nothing was added to any query.
 
 The log is two tables in `models.py`. A `MutationChangeSet` is one user action against one
-experiment; a `MutationChange` is one observation it added or removed, carrying a **full
-snapshot** of the row (`observation`) and of its mutation's identity (`mutation_identity`).
+experiment; a `MutationChange` is one call it added or removed, carrying a **full
+snapshot** of the row (`call`) and of its mutation's identity (`mutation_identity`).
 
-- The observation snapshot is every column, so a restore is exact rather than approximate.
+- The call snapshot is every column, so a restore is exact rather than approximate.
   `frequency` is a `DecimalField`, so it is stored as a string -- a round trip through `float`
   moves it at the fourth decimal place, which is where that column keeps its precision.
 - **`mutation_identity` exists because the Mutation row may not outlive the log.**
   `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
-  no ObservedMutation, and runs after an experiment delete and after `delete_sample` -- so
-  removing a mutation's last observation makes it eligible for a sweep triggered by something
+  no MutationCall, and runs after an experiment delete and after `delete_sample` -- so
+  removing a mutation's last call makes it eligible for a sweep triggered by something
   else entirely. The snapshot is the exact `get_or_create` key plus `gd_data` and `annotation`,
   which is enough to put it back indistinguishable from an imported row. `aledb_import` needed
   no edit for this, and `test_restore.SweptMutationTestCase` is what pins it.
@@ -709,19 +709,19 @@ restored row is a new row, and its Mutation may have been recreated. "Newer than
 order; the timestamp is what a person picks a version by.
 
 **The editor's listings are unfiltered.** `breseq_table` runs its rows through
-`filter_observed_mutations`; these pages do not. Filtering is a display concern, and a mutation
+`filter_mutation_calls`; these pages do not. Filtering is a display concern, and a mutation
 excluded by a gene or frequency filter has to stay visible here or it cannot be removed and
 returns the moment somebody widens the filter.
 
 Rebuilds run through `history.rebuild_after_edit`, outside the transaction as
 `gd_import.run_post_processing` does, and deliberately **without `only=`** -- unlike
 `samples.rebuild_after_structural_change`, which refuses to pay for the dashboard's totals
-because a renumber cannot change a mutation count. Adding or removing an observation changes
+because a renumber cannot change a mutation count. Adding or removing a call changes
 every registered rebuild.
 
-That used to have a sharper second reason -- aledb-fixation cached ObservedMutation *ids*, in a
+That used to have a sharper second reason -- aledb-fixation cached MutationCall *ids*, in a
 column only its delete-and-recompute rebuild cleared, and those are exactly the rows an edit
-hard-deletes. Fixation stores nothing now, so no registered rebuild holds an observation id.
+hard-deletes. Fixation stores nothing now, so no registered rebuild holds a call id.
 
 **Two traps in the templates.** The selection tables are DataTables with the Select extension,
 which is safe here only because no cell is an input -- selection lives in DataTables' data
@@ -773,17 +773,17 @@ stored before. A broken plugin rebuild degrades its own page instead of 500ing i
 
 `rebuild_after_edit` is **unnarrowed by name and narrowed by scope**, and those are different
 questions. Never `only=`, unlike `rebuild_after_structural_change`: adding or removing an
-observation changes every derived thing an experiment has. (It used to also be because
-aledb-fixation cached ObservedMutation ids that only its own rebuild cleared; it stores nothing
+call changes every derived thing an experiment has. (It used to also be because
+aledb-fixation cached MutationCall ids that only its own rebuild cleared; it stores nothing
 now, and the first reason stands alone.) But `request_rebuild`
 marks the **site-scoped** totals stale too, correctly, and running them here made a single
-delete recount every ObservedMutation in the installation -- measured at 4.9s for the read half
+delete recount every MutationCall in the installation -- measured at 4.9s for the read half
 alone on 74,859 rows, which is exactly the bill `rebuild_after_structural_change` refuses. They
 stay marked; the dashboard's own `ensure_fresh` pays it once on the next view. Ten deletes cost
 one recount rather than ten.
 
 **That 4.9s was measured on an implementation that no longer exists** -- `rebuild_mutation_counts`
-materialised every observation as a model in order to filter it, and reads three columns as
+materialised every call as a model in order to filter it, and reads three columns as
 tuples now. The behaviour above is unchanged and not up for revisiting on that account: it rests
 on ten deletes costing one recount rather than ten, which is true at any per-row price.
 
@@ -819,7 +819,7 @@ reads.
 
 `inputs=` took `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(changed=...)`
 said which had moved, so a filter save marked only what read through the filter. It existed for
-`aledb_phylogeny`, which reads `ObservedMutation` directly: marked by a cutoff edit, its stored
+`aledb_phylogeny`, which reads `MutationCall` directly: marked by a cutoff edit, its stored
 tree would have been thrown away and redrawn to the identical topology -- the false alarm that
 teaches people to ignore the real one.
 
@@ -851,7 +851,7 @@ is not.
 Every write path marks what it invalidated. Nothing marks anything when the code that decides
 what counts changes instead -- no experiment moved, so no `request_rebuild` fires, and the
 tables sit there holding pre-change values while `stale_since` says they are fresh. Measured
-right after the frequency cutoff started filtering: the dashboard stored **74,859** observations
+right after the frequency cutoff started filtering: the dashboard stored **74,859** calls
 where the filter yields **73,857**, marked fresh, so `ensure_fresh` would have left it
 indefinitely.
 
@@ -933,7 +933,7 @@ another would show a truncation nothing performed.
 
 `aledb_seq.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
 is not tidying: a row left holding the long string no longer matches what the importer computes,
-so re-importing that sample would mint a second `Mutation` and split its observations across
+so re-importing that sample would mint a second `Mutation` and split its calls across
 both. What it writes is `annotation['gene_name']`, which is exactly what
 `get_annotated_gene_list` now returns, and `test_gene_cap_migration` asserts that equality
 rather than asserting the string merely got shorter.
@@ -966,7 +966,7 @@ re-exports both so no importer changed. Four things about it are load-bearing:
   to a protein), and 1,631 non-SNPs are `coding`, a word with no bucket on this axis.
 - **`_count_in_sql` groups rather than matching.** `values('mutation__snp_type').annotate(...)`,
   then resolve each distinct value in Python. Summing per-group distinct counts is *exact*
-  because the group key is a column of `Mutation` reached by a forward FK, so every observation
+  because the group key is a column of `Mutation` reached by a forward FK, so every call
   of a mutation lands in one group. Group by anything reached through a reverse or m2m relation
   and the sums silently exceed the true distinct count.
 
@@ -983,7 +983,7 @@ effect was that adding a token silently reshuffled a colour list nobody rendered
 
 #### The dashboard counted what had been deleted
 
-`rebuild_mutation_counts` read `ObservedMutation.objects.all()` and `rebuild_sample_counts`
+`rebuild_mutation_counts` read `MutationCall.objects.all()` and `rebuild_sample_counts`
 counted every `Population`/`TimePoint`/`Isolate`, neither excluding soft-deleted rows -- and nothing
 marked the totals stale when a project or experiment was removed, so even a rebuild would have
 produced the same numbers. Both halves are fixed. Both conditions are needed: **deleting a
@@ -998,7 +998,7 @@ another's needle plot wrong, and `request_rebuild()` with no experiment would ma
 
 `aledb_filter`'s min/max cutoff is the oldest user-facing filter here and it did not work, in
 any configuration reachable through the form. Two independent faults in one block of
-`filtered_observed_mutation_queryset`, neither with a test. That queryset builds a `Q` and
+`filtered_mutation_call_queryset`, neither with a test. That queryset builds a `Q` and
 hands it to `.exclude()`, so every term describes something to **hide**.
 
 - **A `frequency_gatk__lt` term was ANDed in whenever `min_gatk_cutoff` was set** -- which was
@@ -1018,7 +1018,7 @@ settings -- so those settings were never values, only switches.
 does what the page has always said it does.
 
 **This changes what every read-only table shows**, which is the point and is still worth
-saying out loud. In the dev database it hides 1,002 of 74,859 observations, and **all 1,002 are
+saying out loud. In the dev database it hides 1,002 of 74,859 calls, and **all 1,002 are
 in one experiment** -- `Population tree`, where 1.9% of 53,141 calls sit below the default 20%
 floor. Every other experiment loses nothing, because a clonal isolate rarely carries a call
 that low. So the filter finally working is most visible exactly where it was designed to
@@ -1036,7 +1036,7 @@ same faults; it was fixed in the same shape.
 The Edit page has two modes in one sample picker -- a sample, or **All samples**, which lays
 the experiment out as a grid with mutations down and samples across and lets a selection span
 any number of both. It exists because `mutation_delete` has always taken a list of
-observations scoped to the experiment rather than to a sample, so removing the same bad call
+calls scoped to the experiment rather than to a sample, so removing the same bad call
 from twelve samples was already one changeset' worth of work and twelve page loads' worth of
 clicking. Per-sample stays the default: the grid is the more useful view of a large experiment
 and also much the more expensive one.
@@ -1051,7 +1051,7 @@ matches `position` exactly, since a substring match on a coordinate is never wha
 means.
 
 **Only mutations something observes are listed.** A `Mutation` is never deleted here, so
-removing its last observation leaves the row behind -- and a grid keyed on
+removing its last call leaves the row behind -- and a grid keyed on
 `Mutation.objects.filter(experiment=...)` went on rendering it with every cell empty, which
 is what "the page does not update when I delete" turned out to be. The page reloads; the row was
 genuinely still there. Restricted to the *shown* samples rather than to the experiment, because
@@ -1060,16 +1060,16 @@ sample is an all-empty row for the same reason. This is not the filtering the ed
 mutation no sample observes is stored in no sample, so there is nothing on its row to select and
 nothing on it to delete.
 
-**Selection lives in a `Set` of observation ids and never in the DOM.** DataTables detaches
+**Selection lives in a `Set` of call ids and never in the DOM.** DataTables detaches
 the rows of undrawn pages, so `.selected` on `<td>`s can only ever see the current page. The
 page carries two maps through `json_script` -- `by_mutation` and `by_sample` -- and the row
 and column selectors read those, so they reach rows that do not currently exist. Measured in
-headless Chrome: one click on a sample header selected **66 observations, of which only 32
+headless Chrome: one click on a sample header selected **66 calls, of which only 32
 were in the DOM**, split 32/23/11 across three pages, and the count survived paging back and
 forth. Walking the table would have found 32 and silently reported success.
 
 **The maps cover only the rendered rows, deliberately.** They could just as easily cover the
-whole experiment -- and then a column selector would put observations into the selection that
+whole experiment -- and then a column selector would put calls into the selection that
 the person cannot see and does not know about, on a page whose next button deletes them.
 
 Two smaller things the browser found:
@@ -1083,10 +1083,10 @@ Two smaller things the browser found:
   grid's and every delete went through whichever won.
 
 The grid is a **second** mutations-by-samples table beside Compare's, and that is allowed: this
-one is unfiltered, selectable, capped and shows uncalled observations, and Compare is none of
+one is unfiltered, selectable, capped and shows uncalled calls, and Compare is none of
 those. `mutation_table_builder` could not have been reused anyway -- its cells are `<a>`
 elements into the genome browser, which would fight a click meaning "select", and
-`get_table_body` filters through `filter_observed_mutations` while this page must show what is
+`get_table_body` filters through `filter_mutation_calls` while this page must show what is
 stored.
 
 ### Editing a mutation, in every sample or in some of them
@@ -1117,9 +1117,9 @@ and do the new values already name a mutation this experiment has?
 | samples | values already held by another row? | what happens |
 |---|---|---|
 | all of them | no | `apply_mutation_edit` moves the row itself; **its primary key never changes** |
-| all of them | yes | the observations move onto that row; the emptied one is left in place |
-| some | no | the chosen observations move onto a newly minted row |
-| some | yes | the chosen observations move onto the row already holding those values |
+| all of them | yes | the calls move onto that row; the emptied one is left in place |
+| some | no | the chosen calls move onto a newly minted row |
+| some | yes | the chosen calls move onto the row already holding those values |
 
 Only the first row keeps the primary key, and it is kept there because it can be: mutation ids
 are stored as bare integers, with no foreign key, in aledb-phylogeny's `branch_mutations` and in
@@ -1128,7 +1128,7 @@ every exported CSV, and nothing refreshes them.
 **The last three paths are one call, and it is the one that was already there.**
 `history.mutation_for_identity` `get_or_create`s on the six `MUTATION_KEY_FIELDS` -- which *is*
 "the existing row if these values name one, a new row otherwise", asked once rather than
-branched on -- and `apply_changes(removals=..., additions=...)` moves the observations. It was
+branched on -- and `apply_changes(removals=..., additions=...)` moves the calls. It was
 extracted from `_resolve_mutation`, which needed the same thing to put a swept mutation back, so
 there is still one definition of how a `Mutation` is minted from an identity. Nothing else in
 `history.py` changed: `KIND_EDIT` labels the changeset and its rows are `OP_ADD`/`OP_REMOVE`
@@ -1136,7 +1136,7 @@ either way, so `state_after`, `plan_restore` and `restore` needed nothing.
 
 **A restore across a subset change reuses the original row**, which is the opposite of what a
 restore across a whole-set change does and is not arranged -- it falls out. The row never moved,
-so `_resolve_mutation` finds it still holding the old identity and hands the observation straight
+so `_resolve_mutation` finds it still holding the old identity and hands the call straight
 back to the same primary key. On the whole-set path the row *has* moved, so `get_or_create` from
 the logged identity finds nothing and mints one; see below.
 
@@ -1145,7 +1145,7 @@ names instead is the *samples*: a chosen sample that already carries the target 
 and no addition, so it observes the mutation once rather than twice and keeps the frequency and
 read counts it already had. That is the same choice `_plan_add` and `_plan_copy` make, and it is
 the one part of the outcome a person cannot read off the page afterwards. Add and Copy report
-their skipped samples by name now too, for the same reason -- a count of skipped observations is
+their skipped samples by name now too, for the same reason -- a count of skipped calls is
 not a thing anybody can act on.
 
 **An emptied row is left in place, not deleted.** That is the posture delete takes with a
@@ -1154,12 +1154,12 @@ not a thing anybody can act on.
 a sweep.
 
 **The mutation the unchosen samples were left on is not re-annotated**, and that is a live trap
-rather than an observation: the old code called `record_builder.apply_annotation(mutation, ...)`
+rather than a call: the old code called `record_builder.apply_annotation(mutation, ...)`
 unconditionally after the edit, which is right only when the row itself moved. On the move path
-the annotation belongs to the row the observations landed on, and only when that row was minted
+the annotation belongs to the row the calls landed on, and only when that row was minted
 by this request -- one that was already there keeps what it has.
 
-**The observations are logged as removed and re-added, and that is not bookkeeping.** The
+**The calls are logged as removed and re-added, and that is not bookkeeping.** The
 change log is keyed on `(sample_id, mutation_key, source)` and `mutation_key` is derived from
 the six `MUTATION_KEY_FIELDS`. Move a Mutation without saying so and `live_state` starts
 computing a different key than every earlier entry recorded, with no changeset for
@@ -1174,7 +1174,7 @@ primary key never moves. Mutation ids are stored as bare integers, with no forei
 `branch_mutations` and in every exported CSV -- and **nothing refreshes them**. What
 aledb-phylogeny does on a mutation edit is throw its cached trees away, which corrects the ids
 it held by no longer holding them; an exported CSV cannot be reached to correct at all. Minting
-a new row would leave all of that pointing at a mutation with no observations; reusing it
+a new row would leave all of that pointing at a mutation with no calls; reusing it
 leaves them resolving, to the corrected call.
 
 **The order inside `apply_mutation_edit` is the whole of that path.** The removal snapshots are
@@ -1200,12 +1200,12 @@ minting a second.
 **`_resolve_mutation` now checks that the row still *is* the identity**, not merely that its pk
 still exists. That is a consequence of reusing the row, and the bug it fixes was silent: a
 restore to before an edit arrives holding the old identity and a row that has since become
-something else, and the old code handed the observations back to the *edited* mutation and
+something else, and the old code handed the calls back to the *edited* mutation and
 reported success having undone nothing.
 
 So **a restore to before a whole-set edit mints a new Mutation row** -- `get_or_create` from the
 logged identity finds nothing matching and creates it, leaving the edited row with no
-observations, as a swept mutation would be. It is the one place an edit does not preserve the
+calls, as a swept mutation would be. It is the one place an edit does not preserve the
 pk, and making it do so would mean `state_after` replaying mutation-level state, which nothing
 else needs. A restore across a *subset* edit does not have this problem, for the reason above:
 the row it is restoring to never moved, so the same check that rejects it here accepts it there.
@@ -1346,12 +1346,12 @@ that:
   a second rule for it would fork the mutation the next time the same call was imported.
 - `gd_data` carries **no `id`** — `to_gd_line()` falls back to the row's own pk, and a record
   built before its row exists has no id to give — and **no `frequency`**, which is
-  per-observation while `gd_data` lives on the `Mutation` every observing sample shares.
+  per-call while `gd_data` lives on the `Mutation` every observing sample shares.
 - `annotation.apply_to` runs *after* `apply_changes`, because `history._resolve_mutation` sets
   only what the identity carries and the promoted columns (`snp_type`, `gene_name`, …) are not
   in it. Without that call the new row renders through the unannotated fallback.
 
-The observation is written with `source="manual"`, which distinguishes a typed call from a
+The call is written with `source="manual"`, which distinguishes a typed call from a
 called one everywhere that column is read; null would mean "imported before the column
 existed", which is a different thing.
 
@@ -1365,7 +1365,7 @@ Fixing it means changing both paths at once plus a data migration, and is its ow
 
 `AleExperimentFilter.ignored_mutations`, `AleExperimentFilter.starting_strain_mutations` and
 `GlobalFilter.ignored_mutations` were comma-joined `Mutation.id` strings that
-`filter_observed_mutations` excluded from every table. They were a delete that kept the row:
+`filter_mutation_calls` excluded from every table. They were a delete that kept the row:
 scoped to a whole experiment rather than a sample, recording nothing about who did it, with no
 way back, and with nothing that ever pruned an id that had stopped meaning anything. The
 mutation table's first column carried the same idea in miniature -- a close icon that removed
@@ -1390,7 +1390,7 @@ it forward to and "calls below 20% here are noise" is a fact about the data that
 have recorded in it.
 
 `aledb_filter/view_filter.py` is the value and where it lives; `util.py` is what applies it.
-Separate modules so a plugin importing the filter does not drag in `ObservedMutation`'s joins,
+Separate modules so a plugin importing the filter does not drag in `MutationCall`'s joins,
 and so the value's tests need no database -- pinning the gene-subset rule used to take six model
 rows. `ViewFilter` normalises `0` and `100` to `None`, which collapses "configured" and
 "actually hides something" into one question: `is_empty`.
@@ -1468,14 +1468,14 @@ data only whoever ran the experiment can answer, and choosing for them would be 
 answer rather than a visible absent one.
 
 **Two defaults, pointing opposite ways, and the asymmetry is the reason.**
-`get_observed_mutation_queryset` stays raw and `get_evolved_observation_queryset` is the one
+`get_mutation_call_queryset` stays raw and `get_evolved_call_queryset` is the one
 that subtracts; `get_ordered_reseq_queryset` subtracts by default and takes
 `include_ancestor=True`. Forgetting to opt *in* hides the ancestor from a curation page, which
 is visible and gets reported the same day. Forgetting to opt *out* leaves ancestral data in an
 analysis, which is invisible and wrong. So each is defaulted to whichever mistake is louder.
 
-`observations_for_samples(sample_ids, experiment_id)` is what a plugin derives from -- it was
-`get_all_observed_mutations`, which had no callers because four repos had each written that one
+`calls_for_samples(sample_ids, experiment_id)` is what a plugin derives from -- it was
+`get_all_calls`, which had no callers because four repos had each written that one
 line out by hand. **Dropping the ancestor from a sample list is not enough**: that removes its
 column while its mutations sit in every other sample, and since an ancestral mutation is in
 every ALE by construction, convergence reports all of them as convergent and fixation all of
@@ -1522,11 +1522,11 @@ rather than runs, since it can fire in the middle of a cascade destroying the wh
 `{% view_filter_summary %}` renders a line under a mutation table naming the cutoffs and ignored
 genes behind it. It exists because filtering is shared state that nothing announced: the four
 plugins each chose differently what to do about it, and once the frequency cutoff started
-actually working, `Population tree` began rendering 1,002 fewer observations in the filtered
+actually working, `Population tree` began rendering 1,002 fewer calls in the filtered
 views than phylogeny counts, with nothing to explain the difference.
 
 **One resolution, two consumers**, and more directly than before: `describe_filters` and
-`filtered_observed_mutation_queryset` take the *same* `ViewFilter`, where they used to read the
+`filtered_mutation_call_queryset` take the *same* `ViewFilter`, where they used to read the
 same rows twice. Deriving the description separately would be a second opinion about what is
 being hidden, and a page confidently describing
 filtering it is not doing is worse than one saying nothing. Taking one value rather than reading
@@ -1646,7 +1646,7 @@ the database would reject the delete, and nothing in the product writes either c
 
 A structural save calls `run_post_experiment_hooks` and `rebuild_sample_counts`, once per
 POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls every
-`ObservedMutation` in the database into Python -- nothing about a renumber changes a mutation
+`MutationCall` in the database into Python -- nothing about a renumber changes a mutation
 count, and paying for the whole database on every rename is what would make this feel broken
 in production. A descriptive-only save rebuilds nothing.
 
@@ -1975,7 +1975,7 @@ unnoticed.
 named by its directory's basename. That name is its identity: an A-F-I-R name parses to one
 coordinate, and an auto-numbered one reuses the `Sample` already matching it.
 So the second folder never arrived *beside* the first, it **replaced** it --
-`_database_gd_mutations` deletes the sample's observations before writing its own -- and both
+`_database_gd_mutations` deletes the sample's calls before writing its own -- and both
 folders were reported as imported. Measured: two folders of two mutations each left two
 mutations, the first folder's gone, with nothing said.
 
@@ -2100,7 +2100,7 @@ record that the drop happened, so it rides across the reload in `sessionStorage`
 
 An import is long -- `coverage.build_quietly` walks the BAM and runs `bedGraphToBigWig` under a
 900-second timeout **per sample**, and the derived-data rebuild after the last one counts every
-observation in the installation. Reported as a single POST, all of it was a page that had
+call in the installation. Reported as a single POST, all of it was a page that had
 stopped moving, which is indistinguishable from one that had broken.
 
 `aledb_common/import_progress.py` is the seam. `run_import` **announces every unit before any
@@ -2268,10 +2268,10 @@ that looked like it had never finished. `stopPolling` bumps a generation counter
 whose generation is stale discards its own result.
 
 **A re-import says what it displaced.** Importing a sample the experiment already holds is
-allowed and destructive -- `_database_gd_mutations` clears the sample's observations before
+allowed and destructive -- `_database_gd_mutations` clears the sample's calls before
 writing its own, which is how a corrected breseq run supersedes the one before it, and
 `test_reimport_is_idempotent` pins it. What it must not be is silent, so the row carries
-`replaced`, the number of observations removed. That is **not** the same as two folders of one
+`replaced`, the number of calls removed. That is **not** the same as two folders of one
 name inside a single drop, which is refused outright: there, neither is an update of the other.
 It is also deliberately not a `warnings` entry -- those are lines the parser could not read, and
 the page says so in as many words.
@@ -2340,8 +2340,8 @@ nothing is still the parser's to judge.
 
 ### The genome browser
 
-`aledb_seq/views/browse.py` renders igv.js for one `ObservedMutation` at
-`/mutations/browse?observed_mut_id=<pk>`, linked from every mutation-table frequency cell whose
+`aledb_seq/views/browse.py` renders igv.js for one `MutationCall` at
+`/mutations/browse?mutation_call_id=<pk>`, linked from every mutation-table frequency cell whose
 sample has `bam_stored`. It is the first consumer of the alignment routes, which had been built
 and tested with nothing pointing at them.
 
@@ -2437,11 +2437,11 @@ clickable track without matching on the label a reader might reword.
 1-based inclusive. `start = start_1 - 1`, `end = end_1`. Wrong, it draws every mutation one
 base from where it is, beside the gene it is actually in, and nothing looks broken.
 
-**Both are reached through the observations, not through `Mutation.experiment`.**
+**Both are reached through the calls, not through `Mutation.experiment`.**
 That column can be null -- the unscoped-mutation case `can_curate` exists for -- and two such
 rows in the dev database were observed in an experiment while owned by none, so filtering on
 it drew an empty Mutations track beside a populated per-sample one. Going through the
-observations also makes both ancestor-subtracted, which is correct: an ancestral mutation is
+calls also makes both ancestor-subtracted, which is correct: an ancestral mutation is
 in every sample by construction.
 
 **The per-sample track marks presence, and deliberately does not encode frequency in colour.**
@@ -2589,7 +2589,7 @@ igv that total instead; it divides the space itself.
 
 A `*` marks the samples the mutation is **in**, using the mutation table's own rule
 (`present=True`) rather than a second one, so it agrees with the filled cells back on
-`/mutations`. An ObservedMutation row alone is not enough: one with `present=False` records
+`/mutations`. A MutationCall row alone is not enough: one with `present=False` records
 that the mutation was looked for and found absent, and one with `present` null records nothing
 either way. The same `*` is prefixed to the igv
 track name, so a stack of pileups says which of them carry the call — igv puts no constraints on
@@ -2618,13 +2618,13 @@ deletion's gene list survives the swap with nothing to re-bind.
 
 **The page has a second address, and this is what needed it.** `?mutation_id=&sample_id=` names
 a mutation and a sample separately, because a mutation the sample does *not* call has no
-`ObservedMutation` to name -- and the track offers plenty of those. `_resolve` takes either
-spelling and `?observed_mut_id=` stays canonical, so every existing link is untouched. The
+`MutationCall` to name -- and the track offers plenty of those. `_resolve` takes either
+spelling and `?mutation_call_id=` stays canonical, so every existing link is untouched. The
 pair is checked to be one experiment's: two ids arrive from the client, and nothing else stops
 a mutation from one experiment being paired with a sample from another.
 
-**A missing observation needed no new rendering path.** `_frequency` already answers
-`("", False)` for a null frequency, so an **unsaved** `ObservedMutation` renders the row with
+**A missing call needed no new rendering path.** `_frequency` already answers
+`("", False)` for a null frequency, so an **unsaved** `MutationCall` renders the row with
 an empty Freq cell and `breseq_report.py` did not change. Nothing announces "not called in
 this sample" either -- the Samples menu already says so, because the `*` follows the mutation
 and the current sample is simply left without one.
@@ -2743,7 +2743,7 @@ shows a mutation as *reads*, this one shows it in *curated annotation* -- the ge
 and features NCBI holds, which the stored GFF3 track cannot supply because it carries only
 what breseq's reference happened to annotate.
 
-**A `Mutation`, not an `ObservedMutation`.** That is the one structural difference from
+**A `Mutation`, not an `MutationCall`.** That is the one structural difference from
 browse, and it follows from the page drawing no sample data at all: the Reference Seq cell it
 is reached from is a property of the mutation's row rather than of any sample column.
 `sample_id` is accepted and used only to keep the way back pointing where somebody came from.
@@ -2999,7 +2999,7 @@ All apps use the `aledb_*` namespace. Key apps:
   were stored as `ExperimentSummary` with its own rebuilder, and are computed by the request
   that renders them now, in 0.07s on the largest experiment in the dev database — by reading
   the three or four columns the answer needs as `values_list` tuples instead of materialising
-  every ObservedMutation as a model. The needle plot was the other half of this app, stored as
+  every MutationCall as a model. The needle plot was the other half of this app, stored as
   `StaticData` and then computed the same way; it is the **aledb-needle** component now and
   reaches the page through `panel_registry`.
 - **`aledb_search/`** — Cross-experiment search.

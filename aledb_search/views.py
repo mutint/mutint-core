@@ -4,7 +4,7 @@ from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.template import loader
 from django.shortcuts import render
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 from django.db.models import Q
 import operator, collections
 import aledb_common as common
@@ -13,7 +13,7 @@ from aledb_seq.views import mutation_table_builder
 from aledb_experiment.utils import get_user_projects, get_strains
 from aledb_seq.util import get_ref_sequences
 from aledb_experiment.ancestor import exclude_all_ancestry
-from aledb_filter.util import filter_observed_mutations
+from aledb_filter.util import filter_mutation_calls
 from aledb_common.util import get_user_context
 from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 from django.core.serializers.json import DjangoJSONEncoder
@@ -62,21 +62,21 @@ def search(request):
             return render(request, 'search/search.html', context)
 
         hidden_columns = request.GET.get('hidden_columns', "")
-        observed_mutations = _get_observed_mutations(search_include_param_list, search_exclude_param_list)
-        reseq_dict = collections.OrderedDict({obs_mut.sample.id: obs_mut.sample
-                                                  for obs_mut in observed_mutations})
+        mutation_calls = _get_mutation_calls(search_include_param_list, search_exclude_param_list)
+        reseq_dict = collections.OrderedDict({call.sample.id: call.sample
+                                                  for call in mutation_calls})
 
         table_header = mutation_table_builder.get_table_header(request.user, reseq_dict)
-        # obs_mut_qryset is already filtered
+        # call_qryset is already filtered
         table_body = mutation_table_builder.get_mutation_table_body(request.user,
-                                                                    observed_mutations,
+                                                                    mutation_calls,
                                                                     reseq_dict)
 
         context.update({"table_body": mark_safe(json.dumps(table_body, cls=DjangoJSONEncoder)),
                         "title": "Search Results",
                         "table_header": mark_safe(table_header),
                         "mutation_count": len(table_body),
-                        "observed_mutation_count": len(observed_mutations),
+                        "mutation_call_count": len(mutation_calls),
                         "tag_dropdown": aledb_common.constants.TAGS,
                         "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
                         })
@@ -91,17 +91,17 @@ def search(request):
         return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def _get_observed_mutations(search_include_param_list, search_exclude_param_list):
+def _get_mutation_calls(search_include_param_list, search_exclude_param_list):
     """
     :param request:
-    :return: mutation_queryset and observed_mutation_queryset based on user request and user permission
+    :return: mutation_queryset and mutation_call_queryset based on user request and user permission
     """
-    obs_mut_qryset = _get_mut_qryset(search_include_param_list, search_exclude_param_list)
+    call_qryset = _get_mut_qryset(search_include_param_list, search_exclude_param_list)
     # Unfiltered, and deliberately. Search spans experiments and a reader's filter belongs to
     # one, so there is no single value to apply; the page's own frequency boxes are its filter.
     # It used to apply each experiment's shared row, which is what its summary line said.
-    observed_mutations = filter_observed_mutations(obs_mut_qryset)
-    return observed_mutations
+    mutation_calls = filter_mutation_calls(call_qryset)
+    return mutation_calls
 
 
 def _get_last_search(request):
@@ -241,18 +241,18 @@ def _add_project_to_query(request, include_argument_list, user_projects):
         project_id = request.GET['project']
         ok = int(project_id) in project_ids
         if ok:
-            include_argument_list.append(Q(**{paths.to_experiment(paths.FROM_OBSERVATION, 'project_id'): project_id}))
+            include_argument_list.append(Q(**{paths.to_experiment(paths.FROM_CALL, 'project_id'): project_id}))
         return ok
     elif not request.user.is_superuser:
         include_argument_list.append(
-            Q(**{paths.to_experiment(paths.FROM_OBSERVATION, 'project_id__in'): project_ids}))
+            Q(**{paths.to_experiment(paths.FROM_CALL, 'project_id__in'): project_ids}))
     return False
 
 
 def _add_strain_to_query(request, include_argument_list):
     strain = request.GET['strain']
     if strain and len(strain) > 0:
-        include_argument_list.append(Q(**{paths.to_population(paths.FROM_OBSERVATION, 'strain'): strain}))
+        include_argument_list.append(Q(**{paths.to_population(paths.FROM_CALL, 'strain'): strain}))
         return True
     return False
 
@@ -269,9 +269,9 @@ def _get_mut_qryset(include_argument_list, exclude_argument_list):
     include_argument_list = reduce(operator.and_, include_argument_list)
     if len(exclude_argument_list) > 0:
         exclude_argument_list = reduce(operator.or_, exclude_argument_list)
-        mut_qryset = ObservedMutation.objects.filter(include_argument_list).exclude(exclude_argument_list)
+        mut_qryset = MutationCall.objects.filter(include_argument_list).exclude(exclude_argument_list)
     else:
-        mut_qryset = ObservedMutation.objects.filter(include_argument_list)
+        mut_qryset = MutationCall.objects.filter(include_argument_list)
 
     # Designated ancestors are subtracted, across every experiment at once. Search is the one
     # page with no single experiment to name, so it cannot say *which* ancestor -- but showing

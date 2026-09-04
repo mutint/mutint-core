@@ -18,7 +18,7 @@ from django.test import TestCase, override_settings
 
 from aledb_common import store
 from aledb_import import annotation, gd_import, reference, reference_store
-from aledb_seq.models import ExperimentReference, Mutation, ObservedMutation
+from aledb_seq.models import ExperimentReference, Mutation, MutationCall
 
 ANNOTATE_FIXTURES = os.path.join(
     os.path.dirname(__file__), "..", "annotate", "tests", "fixtures")
@@ -154,8 +154,8 @@ class AnnotatedImportTestCase(TestCase):
         self.assertNotIn("gene_name", line)
         self.assertNotIn("html_mutation", line)
 
-    def test_observations_are_attributed_to_breseq(self):
-        self.assertEqual(36, ObservedMutation.objects.filter(source="breseq").count())
+    def test_calls_are_attributed_to_breseq(self):
+        self.assertEqual(36, MutationCall.objects.filter(source="breseq").count())
 
 
 class AnnotatedFromGenbankTestCase(AnnotatedImportTestCase):

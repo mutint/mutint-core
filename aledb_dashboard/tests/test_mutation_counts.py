@@ -1,6 +1,6 @@
 """The dashboard's mutation totals, which count the installation rather than a view of it.
 
-`rebuild_mutation_counts` used to run its rows through `filter_observed_mutations`, so the
+`rebuild_mutation_counts` used to run its rows through `filter_mutation_calls`, so the
 site-wide totals were computed through whatever frequency cutoffs and ignored-gene lists each
 experiment happened to carry. That is a category error twice over:
 
@@ -10,7 +10,7 @@ experiment happened to carry. That is a category error twice over:
     site-wide total is not merely wrong, it is not computable.
 
 These tests pin that the filter does not reach here, and that the counts are buckets over every
-live observation.
+live call.
 
 **They also used to be evidence of how a green test can pin the wrong thing.** The
 functional-change fixtures built `protein_change="nonsynonymous (A12T)"` -- a format the
@@ -22,12 +22,12 @@ writes.
 
 from django.test import TestCase
 
-from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts
+from aledb_dashboard.models import MutationCallCounts, UniqueMutationCounts
 from aledb_dashboard.util import rebuild_mutation_counts
 from aledb_experiment.models import (
     Experiment, Population, TimePoint, Media,
 )
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 
 
 class MutationCountsTestCase(TestCase):
@@ -55,7 +55,7 @@ class MutationCountsTestCase(TestCase):
             sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _observe(self, sample, mutation, frequency="1.0000"):
-        return ObservedMutation.objects.create(
+        return MutationCall.objects.create(
             sample=sample, mutation=mutation,
             present=True, frequency=frequency)
 
@@ -74,32 +74,32 @@ class MutationCountsTestCase(TestCase):
 
     def _counts(self):
         rebuild_mutation_counts()
-        return ObservedMutationCounts.objects.all()[0], UniqueMutationCounts.objects.all()[0]
+        return MutationCallCounts.objects.all()[0], UniqueMutationCounts.objects.all()[0]
 
     # ---- observed vs unique ----------------------------------------------------------
-    def test_observed_counts_every_observation_and_unique_counts_the_mutation_once(self):
+    def test_observed_counts_every_call_and_unique_counts_the_mutation_once(self):
         shared = self._mutation()
         self._observe(self.sample, shared)
         self._observe(self.other_sample, shared)
 
-        observed, unique = self._counts()
+        calls, unique = self._counts()
 
-        self.assertEqual(2, observed.total)
+        self.assertEqual(2, calls.total)
         self.assertEqual(1, unique.total)
-        self.assertEqual(2, observed.single_base_substitution)
+        self.assertEqual(2, calls.single_base_substitution)
         self.assertEqual(1, unique.single_base_substitution)
 
     # ---- the filter does not reach here ----------------------------------------------
     def test_a_frequency_cutoff_does_not_change_the_totals(self):
-        """The clearest case: an observation below an experiment's floor is hidden from every
+        """The clearest case: a call below an experiment's floor is hidden from every
         table in that experiment and is still something the installation holds."""
         self._observe(self.sample, self._mutation(position=100), frequency="0.0100")
         self._observe(self.sample, self._mutation(position=200))
         self._filter(min_cutoff=50)
 
-        observed, unique = self._counts()
+        calls, unique = self._counts()
 
-        self.assertEqual(2, observed.total, "the dashboard applied a frequency cutoff")
+        self.assertEqual(2, calls.total, "the dashboard applied a frequency cutoff")
         self.assertEqual(2, unique.total)
 
     def test_an_ignored_gene_does_not_change_the_totals(self):
@@ -107,9 +107,9 @@ class MutationCountsTestCase(TestCase):
         self._observe(self.sample, self._mutation(position=200, gene="thrA"))
         self._filter(ignored_genes="rrlA")
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(2, observed.total, "the dashboard applied a gene filter")
+        self.assertEqual(2, calls.total, "the dashboard applied a gene filter")
 
     def test_no_reader_can_change_these_totals(self):
         """Two tests stood here pinning that a filter change did *not* mark these counts stale
@@ -146,10 +146,10 @@ class MutationCountsTestCase(TestCase):
         self._observe(self.sample, self._mutation(position=100, snp_type="synonymous"))
         self._observe(self.sample, self._mutation(position=200, snp_type="nonsynonymous"))
 
-        observed, unique = self._counts()
+        calls, unique = self._counts()
 
-        self.assertEqual(1, observed.synonymous)
-        self.assertEqual(1, observed.nonsynonymous)
+        self.assertEqual(1, calls.synonymous)
+        self.assertEqual(1, calls.nonsynonymous)
         self.assertEqual(1, unique.synonymous)
         self.assertEqual(1, unique.nonsynonymous)
 
@@ -160,19 +160,19 @@ class MutationCountsTestCase(TestCase):
         self._observe(self.sample, self._mutation(snp_type="nonsynonymous",
                                                   protein_change="intergenic (-52/+201)"))
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(1, observed.nonsynonymous)
-        self.assertEqual(0, observed.intergenic, "protein_change is deciding the bucket again")
+        self.assertEqual(1, calls.nonsynonymous)
+        self.assertEqual(0, calls.intergenic, "protein_change is deciding the bucket again")
 
     def test_nonsense_has_its_own_column(self):
         """`nonsense` was missing from the vocabulary entirely, so a stop-codon substitution --
         the most severe thing breseq reports -- was counted as something else."""
         self._observe(self.sample, self._mutation(snp_type="nonsense"))
 
-        observed, unique = self._counts()
+        calls, unique = self._counts()
 
-        self.assertEqual(1, observed.nonsense)
+        self.assertEqual(1, calls.nonsense)
         self.assertEqual(1, unique.nonsense)
 
     def test_a_compound_snp_type_takes_the_most_severe_bucket(self):
@@ -180,11 +180,11 @@ class MutationCountsTestCase(TestCase):
         It is one mutation and must be counted once, under the worse of the two."""
         self._observe(self.sample, self._mutation(snp_type="synonymous|nonsynonymous"))
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(1, observed.nonsynonymous)
-        self.assertEqual(0, observed.synonymous)
-        self.assertEqual(1, observed.total)
+        self.assertEqual(1, calls.nonsynonymous)
+        self.assertEqual(0, calls.synonymous)
+        self.assertEqual(1, calls.total)
 
     def test_a_non_snp_is_unannotated(self):
         """breseq assigns `snp_type` for SNP and RA entries only, so every DEL, INS, MOB, AMP,
@@ -194,10 +194,10 @@ class MutationCountsTestCase(TestCase):
         self._observe(self.sample, self._mutation(mutation_type="DEL", snp_type="",
                                                   protein_change="intergenic (-52/+201)"))
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(1, observed.unannotated)
-        self.assertEqual(0, observed.intergenic)
+        self.assertEqual(1, calls.unannotated)
+        self.assertEqual(0, calls.intergenic)
 
     def test_a_nonsynonymous_change_is_not_counted_as_synonymous(self):
         """`nonsynonymous` contains `synonymous` as a substring. Tokens are split on '|' and
@@ -205,10 +205,10 @@ class MutationCountsTestCase(TestCase):
         mean severity instead. Kept because the hazard is real and the assertion is cheap."""
         self._observe(self.sample, self._mutation(snp_type="nonsynonymous"))
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(1, observed.nonsynonymous)
-        self.assertEqual(0, observed.synonymous)
+        self.assertEqual(1, calls.nonsynonymous)
+        self.assertEqual(0, calls.synonymous)
 
     def test_one_bucket_per_mutation(self):
         """The Overview used to count a mutation under every token it matched, so its sums
@@ -216,21 +216,21 @@ class MutationCountsTestCase(TestCase):
         agree."""
         self._observe(self.sample, self._mutation(snp_type="intergenic"))
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(1, observed.intergenic)
-        self.assertEqual(1, observed.total)
-        self.assertEqual(0, observed.noncoding)
+        self.assertEqual(1, calls.intergenic)
+        self.assertEqual(1, calls.total)
+        self.assertEqual(0, calls.noncoding)
 
     def test_an_unknown_type_is_bucketed_rather_than_dropped(self):
         """Also unlike the Overview, which drops it from every type count. The totals here
         deliberately exceed the sum of the type columns because UNANNOTATED has no column."""
         self._observe(self.sample, self._mutation(mutation_type="XYZ"))
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(1, observed.total)
-        self.assertEqual(0, observed.single_base_substitution)
+        self.assertEqual(1, calls.total)
+        self.assertEqual(0, calls.single_base_substitution)
 
     def test_the_counts_reach_the_page(self):
         """The six functional-change columns were written and rendered nowhere, which is how
@@ -259,6 +259,6 @@ class MutationCountsTestCase(TestCase):
                 mutation = self._mutation(position=1000 + index, snp_type=snp_type)
                 self._observe(self.sample, mutation)
 
-        observed, _ = self._counts()
+        calls, _ = self._counts()
 
-        self.assertEqual(3, observed.unannotated)
+        self.assertEqual(3, calls.unannotated)

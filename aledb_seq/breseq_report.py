@@ -68,12 +68,12 @@ def _plain_row(mutation):
     }
 
 
-def _frequency(observed):
+def _frequency(call):
     """breseq shows a polymorphism as a percentage; a fixed mutation shows nothing.
 
     Returns ``(text, is_polymorphism)``.
     """
-    frequency = observed.frequency
+    frequency = call.frequency
     if frequency is None:
         return "", False
     value = float(frequency)
@@ -82,11 +82,11 @@ def _frequency(observed):
     return "%.1f%%" % (value * 100), True
 
 
-def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=frozenset(),
+def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozenset(),
                refseq_url=None):
-    """One breseq-style row per observed mutation, ready for the template.
+    """One breseq-style row per mutation call, ready for the template.
 
-    ``browse_url`` is called with an ObservedMutation and returns where its
+    ``browse_url`` is called with a MutationCall and returns where its
     evidence cell should link, or None for no link -- which is how a sample with
     no stored alignment renders its type as plain text.
 
@@ -100,27 +100,27 @@ def build_rows(observed_mutations, browse_url=None, *, ancestral_mutation_ids=fr
     lost. Keyword-only because two callers already pass `browse_url` positionally.
 
     ``refseq_url`` is the same idea for the Reference column -- called with an
-    ObservedMutation, returning where its contig name should link, or None. It is how a row
+    MutationCall, returning where its contig name should link, or None. It is how a row
     reaches the NCBI Sequence Viewer, and it is None on the NCBI page itself, where the link
     would point at the page you are already on.
     """
     rows = []
-    for index, observed in enumerate(observed_mutations):
-        entry = gd_entry(observed.mutation)
-        row = _annotated_row(entry) if entry else _plain_row(observed.mutation)
+    for index, call in enumerate(mutation_calls):
+        entry = gd_entry(call.mutation)
+        row = _annotated_row(entry) if entry else _plain_row(call.mutation)
 
-        frequency_text, is_polymorphism = _frequency(observed)
+        frequency_text, is_polymorphism = _frequency(call)
         row["freq"] = frequency_text
-        row["mutation_type"] = observed.mutation.mutation_type or ""
-        row["mutation_id"] = observed.mutation_id
-        # The observation, not the mutation: the editor addresses rows by what it deletes,
+        row["mutation_type"] = call.mutation.mutation_type or ""
+        row["mutation_id"] = call.mutation_id
+        # The call, not the mutation: the editor addresses rows by what it deletes,
         # and one mutation is observed in many samples. Unused by the read-only tables.
-        row["observed_id"] = observed.id
-        row["evidence_url"] = browse_url(observed) if browse_url else None
-        row["refseq_url"] = refseq_url(observed) if refseq_url else None
+        row["call_id"] = call.id
+        row["evidence_url"] = browse_url(call) if browse_url else None
+        row["refseq_url"] = refseq_url(call) if refseq_url else None
         # breseq alternates row shading and colours a polymorphic call green.
         row["row_class"] = ("polymorphism_table_row" if is_polymorphism
                             else "alternate_table_row_%d" % (index % 2))
-        row["ancestral"] = observed.mutation_id in ancestral_mutation_ids
+        row["ancestral"] = call.mutation_id in ancestral_mutation_ids
         rows.append(row)
     return rows

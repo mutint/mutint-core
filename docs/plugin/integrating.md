@@ -11,18 +11,18 @@ edit:
 ```python
 from aledb_common.plugin_registry import register_export_handler
 
-register_export_handler('yourthing_mut', get_your_observations,
+register_export_handler('yourthing_mut', get_your_calls,
                         label='Your Mutations')
 ```
 
-The handler takes an experiment id and returns a queryset of `ObservedMutation`. `label` is
+The handler takes an experiment id and returns a queryset of `MutationCall`. `label` is
 what the menu shows; without it the menu shows the type string, which is a name for a URL
 rather than for a person.
 
 It may also take the reader's filter, so a download matches the page it was launched from:
 
 ```python
-def get_your_observations(experiment_id, view_filter=None):
+def get_your_calls(experiment_id, view_filter=None):
     ...
 ```
 

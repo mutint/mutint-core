@@ -2,14 +2,14 @@
 
 The case worth pinning is the skip: "make sure this call is on these samples too" is what the
 button means, so a target that already carries the mutation must be left alone rather than
-given a second observation of it, which would silently double that sample's count.
+given a second call of it, which would silently double that sample's count.
 """
 
 import json
 
 from aledb_mutation_editor.models import KIND_COPY, MutationChange, MutationChangeSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 COPY = "/mutation-editor/copy/apply"
 
@@ -28,14 +28,14 @@ class CopyTestCase(EditorTestCase):
         response = self._copy([self.mut_2], [self.sample_b])
 
         self.assertEqual(200, response.status_code)
-        self.assertEqual({self.mut_1.id, self.mut_2.id}, self.observed_ids(self.sample_b))
+        self.assertEqual({self.mut_1.id, self.mut_2.id}, self.call_ids(self.sample_b))
 
     def test_the_copy_carries_the_sources_values(self):
-        source = ObservedMutation.objects.get(sample=self.sample_a,
+        source = MutationCall.objects.get(sample=self.sample_a,
                                               mutation=self.mut_2)
         self._copy([self.mut_2], [self.sample_b])
 
-        copied = ObservedMutation.objects.get(sample=self.sample_b,
+        copied = MutationCall.objects.get(sample=self.sample_b,
                                               mutation=self.mut_2)
         self.assertEqual(source.frequency, copied.frequency)
         self.assertEqual(source.wt_reads, copied.wt_reads)
@@ -62,7 +62,7 @@ class CopyTestCase(EditorTestCase):
         body = response.json()
         self.assertEqual(0, body["added"])
         self.assertEqual([self.sample_b.label], body["already"])
-        self.assertEqual(1, ObservedMutation.objects.filter(
+        self.assertEqual(1, MutationCall.objects.filter(
             sample=self.sample_b, mutation=self.mut_1).count())
 
     def test_skipping_everything_writes_no_changeset(self):
@@ -73,11 +73,11 @@ class CopyTestCase(EditorTestCase):
         from aledb_mutation_editor import history
 
         self._copy([self.mut_2], [self.sample_b])
-        self.assertEqual({self.mut_1.id, self.mut_2.id}, self.observed_ids(self.sample_b))
+        self.assertEqual({self.mut_1.id, self.mut_2.id}, self.call_ids(self.sample_b))
 
         history.restore(self.experiment, self.owner, None)
 
-        self.assertEqual({self.mut_1.id}, self.observed_ids(self.sample_b))
+        self.assertEqual({self.mut_1.id}, self.call_ids(self.sample_b))
 
     def test_it_refuses_a_mutation_from_another_experiment(self):
         """Scoped through the experiment rather than taken on trust, so a hand-built POST
@@ -91,7 +91,7 @@ class CopyTestCase(EditorTestCase):
         response = self._copy([stranger], [self.sample_b])
 
         self.assertEqual(404, response.status_code)
-        self.assertEqual({self.mut_1.id}, self.observed_ids(self.sample_b))
+        self.assertEqual({self.mut_1.id}, self.call_ids(self.sample_b))
 
     def test_it_asks_for_something_to_do(self):
         for payload in ({"mutation_ids": "[]", "target_sample_ids": "[1]"},

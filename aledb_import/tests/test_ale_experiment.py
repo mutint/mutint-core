@@ -21,7 +21,7 @@ from django.test import TestCase, override_settings
 from aledb_common.rebuild_registry import (
     SITE_SCOPE, is_stale, request_rebuild, run_rebuilds,
 )
-from aledb_dashboard.models import InventoryCounts, ObservedMutationCounts
+from aledb_dashboard.models import InventoryCounts, MutationCallCounts
 from aledb_experiment.models import Experiment, Project
 from aledb_import import annotation
 from aledb_import.ale_experiment import (
@@ -37,7 +37,7 @@ from aledb_import.tests import breseq_fixture
 from aledb_seq.models import (
     ExperimentReference,
     Mutation,
-    ObservedMutation,
+    MutationCall,
     Sample,
 )
 
@@ -86,7 +86,7 @@ class UploadCommandTestCase(TestCase):
         # record -- none of which the old CLI importer produced.
         experiment = Experiment.objects.get()
         self.assertEqual(2, Mutation.objects.filter(experiment=experiment).count())
-        self.assertEqual(2, ObservedMutation.objects.filter(source="breseq").count())
+        self.assertEqual(2, MutationCall.objects.filter(source="breseq").count())
         self.assertFalse(Mutation.objects.filter(gd_data__isnull=True).exists())
 
     def test_the_reference_is_established_from_the_sample(self):
@@ -163,7 +163,7 @@ class DeleteExperimentsTestCase(TestCase):
         delete_experiments([experiment.id])
 
         self.assertEqual(0, Experiment.objects.count())
-        self.assertEqual(0, ObservedMutation.objects.count())
+        self.assertEqual(0, MutationCall.objects.count())
         self.assertEqual(0, Mutation.objects.count())
 
     def test_the_dashboard_totals_are_left_settled_and_not_merely_rewritten(self):
@@ -185,7 +185,7 @@ class DeleteExperimentsTestCase(TestCase):
         delete_experiments([Experiment.objects.get().id])
 
         self.assertEqual(0, InventoryCounts.objects.get().sample_count)
-        self.assertEqual(0, ObservedMutationCounts.objects.get().total)
+        self.assertEqual(0, MutationCallCounts.objects.get().total)
         for name in ("sample_counts", "mutation_counts"):
             self.assertFalse(is_stale(name), "%s was left marked stale" % name)
 

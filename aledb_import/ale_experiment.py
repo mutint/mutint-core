@@ -79,11 +79,11 @@ def delete_experiments(experiment_ids):
 
 
 def _delete_all_orphaned_mutations():
-    """Find the orphaned muations that don't have associated observed mutations.
-    Retrieving observed mutations for each mutation to check if it is orphan is very expensive
+    """Find the orphaned muations that don't have associated mutation calls.
+    Retrieving mutation calls for each mutation to check if it is orphan is very expensive
     """
     orphans = aledb_seq.models.Mutation.objects.raw(
-        'select * from aledb_seq_mutation m where not exists (select * from aledb_seq_observedmutation ob where ob.mutation_id = m.id)')
+        'select * from aledb_seq_mutation m where not exists (select * from aledb_seq_mutationcall ob where ob.mutation_id = m.id)')
     for mutation in orphans:
         mutation.delete()
 
@@ -108,7 +108,7 @@ def delete_sample(experiment_pk, population_name, time_point_value, sample_name)
     _delete_all_orphaned_mutations()
     # This marked nothing, where its sibling `remove_time_point` always has. Deleting a
     # sample changes both dashboard counts -- the sample count directly, the mutation counts
-    # through the observations that go with it and the mutations left orphaned -- so without
+    # through the calls that go with it and the mutations left orphaned -- so without
     # this the Overview kept reporting a sample that was gone until some unrelated write
     # happened to mark the totals stale.
     request_rebuild(experiment_pk, reason='sample removed')

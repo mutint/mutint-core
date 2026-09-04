@@ -66,12 +66,12 @@ class ClonalPolarityTestCase(TestCase):
                          list(Sample.objects.filter(**paths.mixed_filter())
                               .values_list("pk", flat=True)))
 
-    def test_the_filters_work_from_an_observation_too(self):
+    def test_the_filters_work_from_an_call_too(self):
         """`prefix` is what a queryset that starts further back has to pass."""
-        self.assertEqual({paths.FROM_OBSERVATION + "__is_clonal": True},
-                         paths.clonal_filter(paths.FROM_OBSERVATION))
-        self.assertEqual({paths.FROM_OBSERVATION + "__is_clonal": False},
-                         paths.mixed_filter(paths.FROM_OBSERVATION))
+        self.assertEqual({paths.FROM_CALL + "__is_clonal": True},
+                         paths.clonal_filter(paths.FROM_CALL))
+        self.assertEqual({paths.FROM_CALL + "__is_clonal": False},
+                         paths.mixed_filter(paths.FROM_CALL))
 
     # --- `?sample_type=` ------------------------------------------------------------------
 

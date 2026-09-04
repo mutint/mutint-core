@@ -515,7 +515,7 @@ def rebuild_after_structural_change(experiment):
     it would point aledb_experiment at the import app, and it asks for every registered
     rebuild rather than the two a renumber can change.
 
-    Deliberately not `mutation_counts`: it pulls every ObservedMutation in the database into
+    Deliberately not `mutation_counts`: it pulls every MutationCall in the database into
     Python. Nothing about a renumber changes a mutation count, and paying for the whole
     database on every rename is the one thing here that could make the feature feel broken in
     production. That refusal is what `only=` says -- it names what a renumber can change, and

@@ -24,7 +24,7 @@ from django.db import connection
 from aledb_experiment.models import (
     Experiment, Population, TimePoint,
 )
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 
 
 class OverviewQueryCountTestCase(TestCase):
@@ -54,7 +54,7 @@ class OverviewQueryCountTestCase(TestCase):
             mutation = Mutation.objects.create(
                 experiment=experiment, mutation_type="SNP", position=number,
                 sequence_change="A>T", protein_change="nonsynonymous (A1T)", gene="thrA")
-            ObservedMutation.objects.create(
+            MutationCall.objects.create(
                 sample=sample, mutation=mutation,
                 present=True, frequency="1.0000")
         return experiment

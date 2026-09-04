@@ -115,7 +115,7 @@
                 </thead>
                 <tbody>
                 {% for row in rows %}
-                    <tr data-observed-id="{{ row.observed_id }}">
+                    <tr data-call-id="{{ row.call_id }}">
                         {% if is_delete_mode %}
                             <td></td>
                         {% else %}
@@ -202,7 +202,7 @@
             // rows({selected:true}) reads DataTables' own selection model, so rows on other
             // pages and rows hidden by the search box are included.
             table.rows({ selected: true }).every(function () {
-                var id = this.node().getAttribute("data-observed-id");
+                var id = this.node().getAttribute("data-call-id");
                 if (id) { ids.push(parseInt(id, 10)); }
             });
 
@@ -229,7 +229,7 @@
                 window.aledbPost("/mutation-editor/delete/apply", {
                     experiment_id: "{{ experiment_id }}",
                     sample_id: "{{ selected_sample_id }}",
-                    observed_ids: JSON.stringify(ids)
+                    call_ids: JSON.stringify(ids)
                 }).then(function () {
                     window.location.reload();
                 }).catch(function (err) {

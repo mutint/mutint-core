@@ -68,9 +68,9 @@ from django.shortcuts import render
 from aledb_common.util import get_user_context
 from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_view_project
-from aledb_filter.util import filtered_observed_mutation_queryset
+from aledb_filter.util import filtered_mutation_call_queryset
 from aledb_filter.view_filter import get_view_filter
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 EXPERIMENT_PATH = "sample__tech_rep__isolate__flask__ale_id__ale_experiment"
 
@@ -91,8 +91,8 @@ def your_thing(request):
 
     # Through the reader's own filter -- see "Showing filtered data". `get_view_filter`
     # never returns None, and an unfiltered reader's filter changes nothing.
-    queryset, ignored_genes = filtered_observed_mutation_queryset(
-        ObservedMutation.objects.filter(**{EXPERIMENT_PATH: experiment}),
+    queryset, ignored_genes = filtered_mutation_call_queryset(
+        MutationCall.objects.filter(**{EXPERIMENT_PATH: experiment}),
         view_filter=get_view_filter(request, experiment.ale_id))
 
     counts = collections.Counter(
@@ -118,7 +118,7 @@ def your_thing(request):
 
 {% block content %}
     <table class="table">
-        <thead><tr><th>Type</th><th>Observations</th></tr></thead>
+        <thead><tr><th>Type</th><th>Calls</th></tr></thead>
         <tbody>
         {% for type, count in counts %}
             <tr><td>{{ type }}</td><td>{{ count }}</td></tr>

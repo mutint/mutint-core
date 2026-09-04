@@ -20,7 +20,7 @@ from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
 from aledb_experiment.roles import ROLE_OWNER
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 
 
 class ExportViewTestCase(TestCase):
@@ -41,7 +41,7 @@ class ExportViewTestCase(TestCase):
         mutation = Mutation.objects.create(
             experiment=self.experiment, mutation_type="SNP", position=150,
             sequence_change="T", gene="thrA", reseq_reference="SYN001")
-        ObservedMutation.objects.create(sample=sample, mutation=mutation,
+        MutationCall.objects.create(sample=sample, mutation=mutation,
                                         frequency=1.0)
 
     def _zip(self, response):

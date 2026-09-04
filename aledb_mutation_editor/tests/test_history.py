@@ -13,23 +13,23 @@ from aledb_mutation_editor.models import (
     KIND_DELETE, OP_ADD, OP_REMOVE, MutationChange, MutationChangeSet,
 )
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 
 class ApplyChangesTestCase(EditorTestCase):
 
     def _delete(self, sample, mutation):
-        observed = ObservedMutation.objects.get(sample=sample,
+        call = MutationCall.objects.get(sample=sample,
                                                 mutation=mutation)
         return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
-                                     removals=[observed], note="test delete")
+                                     removals=[call], note="test delete")
 
     def test_a_delete_removes_the_row(self):
         self._delete(self.sample_a, self.mut_2)
 
-        self.assertFalse(ObservedMutation.objects.filter(
+        self.assertFalse(MutationCall.objects.filter(
             sample=self.sample_a, mutation=self.mut_2).exists())
-        self.assertEqual({self.mut_1.id, self.mut_3.id}, self.observed_ids(self.sample_a))
+        self.assertEqual({self.mut_1.id, self.mut_3.id}, self.call_ids(self.sample_a))
 
     def test_it_leaves_the_mutation_row_alone(self):
         """The whole design rests on this.
@@ -44,11 +44,11 @@ class ApplyChangesTestCase(EditorTestCase):
 
     def test_it_leaves_other_samples_alone(self):
         self._delete(self.sample_a, self.mut_1)
-        self.assertEqual({self.mut_1.id}, self.observed_ids(self.sample_b))
+        self.assertEqual({self.mut_1.id}, self.call_ids(self.sample_b))
 
     def test_one_changeset_per_call_however_many_rows(self):
-        observed = list(ObservedMutation.objects.filter(sample=self.sample_a))
-        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=observed,
+        calls = list(MutationCall.objects.filter(sample=self.sample_a))
+        history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=calls,
                               note="all three")
 
         self.assertEqual(1, MutationChangeSet.objects.count())
@@ -81,13 +81,13 @@ class ApplyChangesTestCase(EditorTestCase):
 
 class SnapshotTestCase(EditorTestCase):
 
-    def test_every_observed_mutation_column_is_captured(self):
+    def test_every_mutation_call_column_is_captured(self):
         """A removal has to be undoable exactly, not approximately."""
-        observed = ObservedMutation.objects.get(sample=self.sample_a,
+        call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_1)
-        snapshot = history.observation_snapshot(observed)
+        snapshot = history.call_snapshot(call)
 
-        self.assertEqual(set(history.OBSERVATION_FIELDS), set(snapshot))
+        self.assertEqual(set(history.CALL_FIELDS), set(snapshot))
         self.assertEqual(True, snapshot["present"])
         self.assertEqual("breseq", snapshot["source"])
         self.assertEqual(10, snapshot["wt_reads"])
@@ -95,13 +95,13 @@ class SnapshotTestCase(EditorTestCase):
 
     def test_frequency_survives_as_a_decimal_not_a_float(self):
         """These columns keep four decimal places, which is where a float round trip moves."""
-        observed = self.observe(self.sample_b, self.mut_2, frequency="0.1234")
-        snapshot = history.observation_snapshot(observed)
+        call = self.observe(self.sample_b, self.mut_2, frequency="0.1234")
+        snapshot = history.call_snapshot(call)
 
         self.assertEqual("0.1234", snapshot["frequency"])
         self.assertIsInstance(snapshot["frequency"], str)
         self.assertEqual(Decimal("0.1234"),
-                         history._observation_kwargs(snapshot)["frequency"])
+                         history._call_kwargs(snapshot)["frequency"])
 
     def test_the_mutation_identity_is_the_importers_get_or_create_key(self):
         """If these drift apart, a restore mints a second row for one mutation."""
@@ -148,7 +148,7 @@ class RebuildTestCase(EditorTestCase):
 
         `rebuild_after_structural_change` refuses to pay for these because a renumber cannot
         change a mutation count. Deleting a mutation can, so it has to be *marked*. Running it
-        is a different question: it recounts every ObservedMutation in the installation, which
+        is a different question: it recounts every MutationCall in the installation, which
         is 4.9 seconds of read on a 74,859-row database and not a bill a single delete should
         pick up. The dashboard calls `ensure_fresh` and pays it once on its next view.
 

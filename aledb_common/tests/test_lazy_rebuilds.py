@@ -24,7 +24,7 @@ from decimal import Decimal
 
 from aledb_common.rebuild_registry import is_stale, request_rebuild, run_rebuilds
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 
 class LazyRebuildTestCase(EditorTestCase):

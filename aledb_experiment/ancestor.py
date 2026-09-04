@@ -22,7 +22,7 @@ click. This is the opposite on every count.
 
 - **It belongs to the dataset, not the reader.** Two people looking at one experiment see the
   same subtraction.
-- **It is not optional.** There is no toggle and no query parameter. `filter_observed_mutations`
+- **It is not optional.** There is no toggle and no query parameter. `filter_mutation_calls`
   takes `view_filter=None` to mean unfiltered; there is no equivalent here.
 - **It reaches further.** aledb-phylogeny never touches the filter layer, and this still
   applies to it.
@@ -82,18 +82,18 @@ def ancestral_mutation_ids(experiment_id):
     per-sample breseq page genuinely wants the set, because it tests membership per rendered
     row in Python.
     """
-    from aledb_seq.models import ObservedMutation
+    from aledb_seq.models import MutationCall
 
     ancestor_id = get_ancestor(experiment_id)
     if ancestor_id is None:
         return frozenset()
-    return frozenset(ObservedMutation.objects
+    return frozenset(MutationCall.objects
                      .filter(sample_id=ancestor_id)
                      .values_list("mutation_id", flat=True))
 
 
-def exclude_ancestry(observed_mutation_queryset, experiment_id):
-    """Subtract the designated ancestor from a queryset of observations.
+def exclude_ancestry(mutation_call_queryset, experiment_id):
+    """Subtract the designated ancestor from a queryset of calls.
 
     Two exclusions, and both are needed. Dropping the ancestor from a sample listing removes
     its *column* from a table but leaves its mutations in every other sample; excluding the
@@ -104,21 +104,21 @@ def exclude_ancestry(observed_mutation_queryset, experiment_id):
     an empty `Q` handed to `.exclude()` excludes everything, and once emptied a whole
     experiment.
     """
-    from aledb_seq.models import ObservedMutation
+    from aledb_seq.models import MutationCall
 
     ancestor_id = get_ancestor(experiment_id)
     if ancestor_id is None:
-        return observed_mutation_queryset
+        return mutation_call_queryset
 
-    ancestral = (ObservedMutation.objects
+    ancestral = (MutationCall.objects
                  .filter(sample_id=ancestor_id)
                  .values("mutation_id"))
-    return (observed_mutation_queryset
+    return (mutation_call_queryset
             .exclude(sample_id=ancestor_id)
             .exclude(mutation_id__in=ancestral))
 
 
-def exclude_all_ancestry(observed_mutation_queryset):
+def exclude_all_ancestry(mutation_call_queryset):
     """`exclude_ancestry` for a queryset that spans experiments.
 
     Search, the public interop API and the dashboard's totals all query across experiments,
@@ -130,15 +130,15 @@ def exclude_all_ancestry(observed_mutation_queryset):
     mutation id observed in one experiment's ancestor cannot appear in another's samples. The
     global set is therefore unambiguous rather than merely convenient.
     """
-    from aledb_seq.models import ObservedMutation
+    from aledb_seq.models import MutationCall
 
     ancestors = Experiment.objects.filter(ancestor__isnull=False).values("ancestor")
     if not ancestors.exists():
-        return observed_mutation_queryset
+        return mutation_call_queryset
 
-    ancestral = (ObservedMutation.objects.filter(sample__in=ancestors)
+    ancestral = (MutationCall.objects.filter(sample__in=ancestors)
                  .values("mutation_id"))
-    return (observed_mutation_queryset
+    return (mutation_call_queryset
             .exclude(sample__in=ancestors)
             .exclude(mutation_id__in=ancestral))
 

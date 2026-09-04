@@ -5,17 +5,17 @@ is never amended and never deleted; undoing one is a *new* changeset that happen
 things back. That is what makes "the mutation set as of last Tuesday" a question with an
 answer, and it is why restoring is not a rewind.
 
-The unit of change is an `aledb_seq.ObservedMutation` -- one sample's observation of one
+The unit of change is an `aledb_seq.MutationCall` -- one sample's call of one
 mutation -- and **never an `aledb_seq.Mutation`**. That distinction is load-bearing. Mutation
 primary keys are stored as bare integers, with no foreign key and no pruning, in
 aledb-phylogeny's `branch_mutations` JSON and in every exported CSV's "Mut ID" column.
 Deleting a Mutation and letting a later re-import recreate it through `gd_import`'s
 seven-field `get_or_create` would mint a new pk for the same biological mutation and quietly
-invalidate all of that. Removing only the sample's observation of it changes nothing any
+invalidate all of that. Removing only the sample's call of it changes nothing any
 stored id means.
 
-The other consequence of working at the observation level is that **no read path had to
-change**. An ObservedMutation that is gone is gone; `mutation_table_builder`, `aledb_export`,
+The other consequence of working at the call level is that **no read path had to
+change**. A MutationCall that is gone is gone; `mutation_table_builder`, `aledb_export`,
 `aledb_stats`, `aledb_dashboard`, `aledb_search`, aledb-fixation and aledb-converge all keep
 their unfiltered queries. A soft-delete flag would have needed every one of them taught to
 filter, and the one that was missed would have gone on showing deleted mutations.
@@ -30,7 +30,7 @@ KIND_ADD = "add"
 KIND_RESTORE = "restore"
 #: A mutation's own fields changed, everywhere it was observed. The *changeset* is labelled
 #: this; its rows are still OP_REMOVE and OP_ADD, because that is what happened to every
-#: observation -- each one moved from the old identity to the new. Nothing in `state_after`,
+#: call -- each one moved from the old identity to the new. Nothing in `state_after`,
 #: `plan_restore` or `restore` needed to learn about it.
 KIND_EDIT = "edit"
 
@@ -93,16 +93,16 @@ class MutationChangeSet(models.Model):
 
 
 class MutationChange(models.Model):
-    """One ObservedMutation this changeset added or removed.
+    """One MutationCall this changeset added or removed.
 
-    `observation` is every column of the row, so a removal can be undone exactly rather than
+    `call` is every column of the row, so a removal can be undone exactly rather than
     approximately -- frequency, the per-caller present flags and the read counts all come back
     as they were.
 
     `mutation` is nullable and `mutation_identity` exists because the Mutation row is not
     guaranteed to outlive the log. `aledb_import.ale_experiment._delete_all_orphaned_mutations`
-    hard-deletes any Mutation with no ObservedMutation, and it runs after an experiment delete
-    and after `delete_sample` -- so removing a mutation's last observation makes it eligible
+    hard-deletes any Mutation with no MutationCall, and it runs after an experiment delete
+    and after `delete_sample` -- so removing a mutation's last call makes it eligible
     for a sweep triggered by something else entirely. `mutation_identity` carries the exact
     seven-field `get_or_create` tuple `gd_import` dedups on, plus `gd_data` and `annotation`,
     which is enough to put the row back indistinguishable from an imported one. It is also
@@ -121,7 +121,7 @@ class MutationChange(models.Model):
                                       on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name="+")
 
-    observation = models.JSONField(default=dict)
+    call = models.JSONField(default=dict)
     mutation_identity = models.JSONField(default=dict)
 
     class Meta:

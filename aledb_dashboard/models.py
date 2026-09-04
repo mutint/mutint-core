@@ -2,7 +2,7 @@ from django.db import models
 from jsonfield import JSONField
 
 
-class ObservedMutationCounts(models.Model):
+class MutationCallCounts(models.Model):
     total = models.IntegerField(default=0)
     single_base_substitution = models.IntegerField(default=0)
     multiple_base_substitution = models.IntegerField(default=0)
@@ -23,7 +23,7 @@ class ObservedMutationCounts(models.Model):
     unannotated = models.IntegerField(default=0)
 
     def __str__(self):
-        return "ObservedMutationCounts Object with the following parameters: "+locals()
+        return "MutationCallCounts Object with the following parameters: "+locals()
 
 
 class UniqueMutationCounts(models.Model):

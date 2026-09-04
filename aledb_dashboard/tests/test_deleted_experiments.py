@@ -2,13 +2,13 @@
 
 Deletion here is soft -- `SoftDeleteMixin` stamps `deleted_at` and leaves everything below the
 experiment in place -- and this codebase's managers are deliberately unfiltered, so
-`ObservedMutation.objects.all()` and `Population.objects.count()` still see every project and
+`MutationCall.objects.all()` and `Population.objects.count()` still see every project and
 experiment anybody has ever removed. Nothing marked the totals stale on a delete either, so
 even a rebuild would have produced the same numbers.
 """
 
 from aledb_common.rebuild_registry import is_stale, run_rebuilds
-from aledb_dashboard.models import InventoryCounts, ObservedMutationCounts
+from aledb_dashboard.models import InventoryCounts, MutationCallCounts
 from aledb_dashboard.util import rebuild_mutation_counts, rebuild_sample_counts
 from aledb_mutation_editor.tests.base import EditorTestCase
 
@@ -18,17 +18,17 @@ class DeletedExperimentTestCase(EditorTestCase):
     def _totals(self):
         rebuild_mutation_counts()
         rebuild_sample_counts()
-        return (ObservedMutationCounts.objects.first().total,
+        return (MutationCallCounts.objects.first().total,
                 InventoryCounts.objects.first().population_count)
 
     def test_a_deleted_experiments_mutations_leave_the_totals(self):
-        observed_before, _ = self._totals()
-        self.assertEqual(4, observed_before, "the fixture's four observations")
+        calls_before, _ = self._totals()
+        self.assertEqual(4, calls_before, "the fixture's four calls")
 
         self.experiment.soft_delete(self.owner)
 
-        observed_after, _ = self._totals()
-        self.assertEqual(0, observed_after)
+        calls_after, _ = self._totals()
+        self.assertEqual(0, calls_after)
 
     def test_a_deleted_experiments_samples_leave_the_counts(self):
         _, ales_before = self._totals()
@@ -46,8 +46,8 @@ class DeletedExperimentTestCase(EditorTestCase):
 
         self.experiment.project.soft_delete(self.owner)
 
-        observed_after, ales_after = self._totals()
-        self.assertEqual(0, observed_after)
+        calls_after, ales_after = self._totals()
+        self.assertEqual(0, calls_after)
         self.assertEqual(0, ales_after)
 
     # --- and the totals are told about it -------------------------------------------------

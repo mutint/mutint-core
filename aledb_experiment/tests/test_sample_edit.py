@@ -506,7 +506,7 @@ class RebuildHooksTestCase(SampleEditTestCase):
 
     Fixation reads the flask numbers directly, so it has to rebuild. Mutation counts
     cannot depend on a sample's identity, and rebuild_mutation_counts pulls every
-    ObservedMutation in the database into Python -- paying that on every rename is the one
+    MutationCall in the database into Python -- paying that on every rename is the one
     thing here that could make the feature feel broken in production.
     """
 
@@ -541,7 +541,7 @@ class RebuildHooksTestCase(SampleEditTestCase):
     def test_a_structural_save_leaves_the_mutation_counts_alone(self):
         """The expensive one, and the reason `only=` exists.
 
-        `mutation_counts` pulls every ObservedMutation in the database into Python. A
+        `mutation_counts` pulls every MutationCall in the database into Python. A
         renumber provably changes no mutation count, so asking for it would be the one thing
         here that could make the feature feel broken in production.
         """

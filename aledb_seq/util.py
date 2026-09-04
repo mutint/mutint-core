@@ -2,52 +2,52 @@ import collections
 import aledb_seq.models
 from aledb_common.util import is_int
 from aledb_experiment.ordering import sample_order, sample_sort_key
-from aledb_filter.util import filter_observed_mutations
+from aledb_filter.util import filter_mutation_calls
 from aledb_common.constants import SAMPLE_TYPE_MIXED
 from aledb_experiment import paths
 
 HTML_ECOCYC = """<a href = "https://ecocyc.org/ECOLI/substring-search?type=GENE&object={gene}">{gene}</a>"""
 
 
-def get_observed_mutation_queryset(experiment_id):
-    """Every observation this experiment holds -- what is *stored*, ancestor included.
+def get_mutation_call_queryset(experiment_id):
+    """Every call this experiment holds -- what is *stored*, ancestor included.
 
     **Usually not what you want.** An experiment may designate an ancestor, whose mutations
     are the starting line rather than evolution; anything analysing or summarising the data
-    wants `get_evolved_observation_queryset` below. This raw form is for the three places
+    wants `get_evolved_call_queryset` below. This raw form is for the three places
     that mean "what is stored": the CSV export, the mutation editor, and the per-sample
     breseq page, which tints ancestral rows rather than hiding them.
     """
-    return aledb_seq.models.ObservedMutation.objects.filter(**{paths.to_experiment_id(paths.FROM_OBSERVATION): experiment_id})
+    return aledb_seq.models.MutationCall.objects.filter(**{paths.to_experiment_id(paths.FROM_CALL): experiment_id})
 
 
-def get_evolved_observation_queryset(experiment_id):
-    """This experiment's observations with its designated ancestor subtracted.
+def get_evolved_call_queryset(experiment_id):
+    """This experiment's calls with its designated ancestor subtracted.
 
     The default choice for anything that analyses or counts. See
     `aledb_experiment/ancestor.py` for what subtraction means and why it is not the reader's
-    filter. With no ancestor designated this is `get_observed_mutation_queryset` exactly.
+    filter. With no ancestor designated this is `get_mutation_call_queryset` exactly.
     """
     from aledb_experiment.ancestor import exclude_ancestry
-    return exclude_ancestry(get_observed_mutation_queryset(experiment_id), experiment_id)
+    return exclude_ancestry(get_mutation_call_queryset(experiment_id), experiment_id)
 
 
-def get_all_observed_mutations_filtered(experiment_id, *, filter_type=None, view_filter=None):
-    """An experiment's observations, through the reader's filter.
+def get_all_calls_filtered(experiment_id, *, filter_type=None, view_filter=None):
+    """An experiment's calls, through the reader's filter.
 
     `view_filter` comes from `aledb_filter.view_filter.get_view_filter(request, experiment_id)`
     and is the reader's own; None means unfiltered. It replaced `skip_experiment_filter`, which
     asked to see through a *shared* filter -- a question that stops meaning anything once the
     filter is yours to clear.
     """
-    queryset = get_evolved_observation_queryset(experiment_id)
-    return filter_observed_mutations(queryset, filter_type=filter_type, view_filter=view_filter)
+    queryset = get_evolved_call_queryset(experiment_id)
+    return filter_mutation_calls(queryset, filter_type=filter_type, view_filter=view_filter)
 
 
-def observations_for_samples(sample_id_list, experiment_id):
-    """Observations in these samples, with the experiment's designated ancestor subtracted.
+def calls_for_samples(sample_id_list, experiment_id):
+    """Calls in these samples, with the experiment's designated ancestor subtracted.
 
-    The entry point for a plugin that derives something. It was `get_all_observed_mutations`,
+    The entry point for a plugin that derives something. It was `get_all_calls`,
     which did the `filter` half and had no callers left -- aledb-compare, aledb-converge,
     aledb-fixation and aledb-phylogeny had each written that one line out by hand instead.
 
@@ -59,7 +59,7 @@ def observations_for_samples(sample_id_list, experiment_id):
     reader's filter and for the same reason.
     """
     from aledb_experiment.ancestor import exclude_ancestry
-    queryset = aledb_seq.models.ObservedMutation.objects.filter(
+    queryset = aledb_seq.models.MutationCall.objects.filter(
         sample_id__in=sample_id_list)
     return exclude_ancestry(queryset, experiment_id)
 
@@ -73,7 +73,7 @@ def get_ordered_reseq_queryset(experiment_id, ale_id=None, sample_type=None, *,
     must still be able to see and change it.
 
     Defaulting this way round is deliberate, and it is the opposite of what
-    `get_observed_mutation_queryset` does. The two mistakes are not symmetric. Forgetting to
+    `get_mutation_call_queryset` does. The two mistakes are not symmetric. Forgetting to
     opt *in* hides the ancestor from a curation page, which is visible and gets reported the
     same day; forgetting to opt *out* leaves ancestral data in an analysis, which is
     invisible and wrong. It also means aledb-compare, aledb-converge and aledb-fixation need
@@ -141,30 +141,30 @@ def get_reseq_ordered_dict(experiment_id, population=None, sample_type=None, req
     return reseq_ordered_dict
 
 
-def get_mutations_from_observed_muations(observed_mutations):
-    mut_map = {obs_mut.mutation.id: obs_mut.mutation for obs_mut in observed_mutations}
+def get_mutations_from_calls(mutation_calls):
+    mut_map = {call.mutation.id: call.mutation for call in mutation_calls}
     return mut_map.values()
 
 
-def get_ordered_reseq_dict(observed_mutations):
-    """The samples appearing in these observations, `{id: reseq}`, in A/F/I/R order.
+def get_ordered_reseq_dict(mutation_calls):
+    """The samples appearing in these calls, `{id: reseq}`, in A/F/I/R order.
 
     **It sorts rather than trusting what it was handed.** The name said "ordered" and nothing
     here did any ordering: the dict came out in first-appearance order, which is A/F/I/R only
-    because `filter_observed_mutations` applies `sample_order` two modules away. Its one
+    because `filter_mutation_calls` applies `sample_order` two modules away. Its one
     caller is the CSV export, so every exported file's column order rested on an `order_by`
     that carries no comment saying anything depends on it -- and which
-    `filtered_observed_mutation_queryset` explicitly warns callers to strip before
+    `filtered_mutation_call_queryset` explicitly warns callers to strip before
     aggregating. Sorting here costs nothing on a list already in the right order and makes
     the guarantee local to the function that claims it.
 
-    Still only the samples that *appear*: a sample with no observations left after filtering
+    Still only the samples that *appear*: a sample with no calls left after filtering
     gets no column, where the on-screen table builds its columns from the sample list and so
     keeps an empty one. That difference is left alone -- a CSV of the rows it contains is a
     defensible thing for an export to be -- but it is a difference, not an oversight.
     """
-    by_id = {observed.sample.id: observed.sample
-             for observed in observed_mutations}
+    by_id = {call.sample.id: call.sample
+             for call in mutation_calls}
     return collections.OrderedDict(
         (reseq.id, reseq) for reseq in sorted(by_id.values(), key=sample_sort_key))
 
@@ -188,11 +188,11 @@ def get_ref_sequences():
     )
 
 
-def get_matching_observed_mutation_ids(mutation_id, experiment_id):
-    local_observed_mutations = aledb_seq.models.ObservedMutation.objects.filter(
-        **{paths.to_experiment_id(paths.FROM_OBSERVATION): experiment_id},
+def get_matching_call_ids(mutation_id, experiment_id):
+    local_mutation_calls = aledb_seq.models.MutationCall.objects.filter(
+        **{paths.to_experiment_id(paths.FROM_CALL): experiment_id},
         mutation__id=mutation_id).order_by(*sample_order("sample__"))
-    matching_observed_mutation_ids = []
-    for local_observed_mutation in local_observed_mutations:
-        matching_observed_mutation_ids.append(local_observed_mutation.id)
-    return matching_observed_mutation_ids
+    matching_call_ids = []
+    for local_mutation_call in local_mutation_calls:
+        matching_call_ids.append(local_mutation_call.id)
+    return matching_call_ids

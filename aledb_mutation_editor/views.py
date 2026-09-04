@@ -8,7 +8,7 @@ button being hidden is not a permission check.
 Two things here differ from the mutation tables next door, and both are deliberate.
 
 **The listings are unfiltered.** `breseq_table` runs its rows through
-`aledb_filter.util.filter_observed_mutations`; these pages do not. Filtering is a display
+`aledb_filter.util.filter_mutation_calls`; these pages do not. Filtering is a display
 concern, and a mutation excluded by a gene or frequency filter must still be visible to
 whoever is curating -- otherwise it cannot be deleted, and it reappears the moment somebody
 widens the filter.
@@ -44,10 +44,10 @@ from aledb_mutation_editor.models import (
     KIND_ADD, KIND_COPY, KIND_DELETE, KIND_EDIT, MutationChangeSet,
 )
 from aledb_seq.breseq_report import build_rows, is_mixed
-from aledb_seq.models import Mutation, ObservedMutation
+from aledb_seq.models import Mutation, MutationCall
 # `include_ancestor=True` on every call below: the editor curates rather than reads, so
 # it must show the designated ancestor, which every reading page hides. It is also why
-# `history.observations_for` uses the raw observation queryset -- this app shows what is
+# `history.calls_for` uses the raw call queryset -- this app shows what is
 # stored, and ancestral rows are stored.
 from aledb_seq.util import get_reseq_ordered_dict
 from aledb_experiment import paths
@@ -108,36 +108,36 @@ def _selected_reseq(request, reseq_dict, param=REQUEST_SAMPLE_ID):
 
 
 def _rows_for(reseq):
-    """One sample's mutations as breseq-style rows, carrying the observation id.
+    """One sample's mutations as breseq-style rows, carrying the call id.
 
     `build_rows` is aledb_seq's, shared with the Samples page and the genome browser, so the
     editor's table reads identically to the one people already know. It is rendered from this
     app's own template rather than by including `breseq_table/_mutation_table.html`, which is
     shared between those two and must not grow a third caller's checkbox column.
     """
-    observed = list(ObservedMutation.objects
+    calls = list(MutationCall.objects
                     .filter(sample=reseq)
                     .select_related("mutation"))
-    observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
-    return build_rows(observed)
+    calls.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
+    return build_rows(calls)
 
 
-def _cell_for(observed):
-    """One observation as a grid cell.
+def _cell_for(call):
+    """One call as a grid cell.
 
     `label` is the frequency where there is one, because that is what the read-only tables put
-    in the same place, and a tick where there is not -- an observation with no frequency is
+    in the same place, and a tick where there is not -- a call with no frequency is
     still an assertion that the mutation is there.
     """
-    if observed.present is False:
+    if call.present is False:
         state, label = "absent", "\u2013"
-    elif observed.present:
+    elif call.present:
         state = "present"
-        label = ("%.2f" % float(observed.frequency)
-                 if observed.frequency is not None else "\u2713")
+        label = ("%.2f" % float(call.frequency)
+                 if call.frequency is not None else "\u2713")
     else:
         state, label = "unknown", "?"
-    return {"id": observed.id, "label": label, "state": state}
+    return {"id": call.id, "label": label, "state": state}
 
 
 #: How many mutations the grid lays out at once. Not a display preference -- a real
@@ -156,7 +156,7 @@ def _grid_mutations(experiment, reseq_dict, query):
 
     **Only mutations something in `reseq_dict` observes.** A `Mutation` is never deleted here
     -- its id is stored as a bare integer in aledb-converge, in aledb-phylogeny's JSON and in
-    every exported CSV -- so removing a mutation's last observation leaves the row behind, and
+    every exported CSV -- so removing a mutation's last call leaves the row behind, and
     a grid keyed on `Mutation.objects.filter(experiment=...)` went on rendering it with
     every cell empty. That is what "the page does not update when I delete" was: the page
     reloads, and the row is genuinely still there.
@@ -169,11 +169,11 @@ def _grid_mutations(experiment, reseq_dict, query):
     sample: there is no cell on its row to select and nothing on it to delete. It is not being
     hidden, it is not there.
     """
-    observed_here = (history.observations_for(experiment)
+    calls_here = (history.calls_for(experiment)
                      .filter(sample_id__in=list(reseq_dict))
                      .values("mutation_id"))
     mutations = Mutation.objects.filter(experiment=experiment,
-                                        id__in=observed_here)
+                                        id__in=calls_here)
     query = (query or "").strip()
     if query:
         terms = (Q(gene__icontains=query) | Q(reseq_reference__icontains=query)
@@ -189,7 +189,7 @@ def _grid_mutations(experiment, reseq_dict, query):
 
 
 def _grid_for(experiment, reseq_dict, query=None):
-    """Every observation of the matching mutations, as mutations down and samples across.
+    """Every call of the matching mutations, as mutations down and samples across.
 
     Returns `(rows, by_mutation, by_sample, total, shown)`. The two maps are what the page's
     row and column selectors read: `deferRender` means a cell on an undrawn page has no DOM,
@@ -197,14 +197,14 @@ def _grid_for(experiment, reseq_dict, query=None):
     everything not currently on screen.
 
     **The maps cover only the rendered rows**, deliberately. They could just as easily cover
-    the whole experiment, and then a column selector would put observations into the selection
+    the whole experiment, and then a column selector would put calls into the selection
     that the person cannot see and did not know about -- on a page whose next button deletes
     them.
 
     Built here rather than through `mutation_table_builder`, for the reasons `_rows_for` gives
     about `breseq_table/_mutation_table.html` and two more of its own. That builder renders a
     cell as an `<a>` into the genome browser, which would fight a click that means "select";
-    and `get_table_body` filters through `filter_observed_mutations`, while this page must show
+    and `get_table_body` filters through `filter_mutation_calls`, while this page must show
     what is stored -- a mutation hidden by a gene or frequency filter has to stay deletable.
     """
     matching = _grid_mutations(experiment, reseq_dict, query)
@@ -217,14 +217,14 @@ def _grid_for(experiment, reseq_dict, query=None):
 
     by_mutation = {}
     by_sample = {}
-    observed = (history.observations_for(experiment)
+    calls = (history.calls_for(experiment)
                 .filter(mutation_id__in=list(rows))
                 .order_by("pk"))
-    for entry in observed:
+    for entry in calls:
         position = column_of.get(entry.sample_id)
         if position is None:
             # A sample the picker is not showing -- `get_reseq_ordered_dict` applies the
-            # experiment's sample tag filters. Its observations are not selectable here
+            # experiment's sample tag filters. Its calls are not selectable here
             # because they are not on the page; they are untouched, not hidden.
             continue
         rows[entry.mutation_id]["cells"][position] = _cell_for(entry)
@@ -486,10 +486,10 @@ def _initial_selection(request, carrying):
 def _carrying_samples(experiment, mutation):
     """The experiment's samples that observe `mutation`, in the usual sample order.
 
-    Ordered through `get_reseq_ordered_dict` rather than by whatever the observations come
+    Ordered through `get_reseq_ordered_dict` rather than by whatever the calls come
     back in, so the list reads the same way as every other list of samples on the site.
     """
-    observing = set(history.observations_for(experiment)
+    observing = set(history.calls_for(experiment)
                     .filter(mutation=mutation)
                     .values_list("sample_id", flat=True))
     return [reseq for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
@@ -627,17 +627,17 @@ def _changeset_context(change_set):
 
 @require_POST
 def mutation_delete_apply(request):
-    """Remove selected observations from one sample."""
+    """Remove selected calls from one sample."""
     try:
         experiment = _experiment_for_write(request)
-        observed_ids = _int_list(request, "observed_ids")
-        if not observed_ids:
+        call_ids = _int_list(request, "call_ids")
+        if not call_ids:
             raise EditorError("Select at least one mutation to delete.")
 
         # Scoped through the experiment, not taken on trust: an id from another experiment
         # simply does not match, so a hand-built POST cannot reach across projects.
-        removals = list(history.observations_for(experiment)
-                        .filter(pk__in=observed_ids))
+        removals = list(history.calls_for(experiment)
+                        .filter(pk__in=call_ids))
         if not removals:
             raise EditorError("Those mutations are not in this experiment.", status=404)
 
@@ -659,7 +659,7 @@ def mutation_copy_apply(request):
     """Copy chosen mutations from one sample onto one or more others.
 
     A target that already carries the mutation is skipped rather than given a second
-    observation of it: "make sure this call is on these samples too" is what the button means,
+    call of it: "make sure this call is on these samples too" is what the button means,
     and duplicating a row would quietly double that sample's count of it.
     """
     try:
@@ -672,7 +672,7 @@ def mutation_copy_apply(request):
             raise EditorError("Select at least one sample to copy to.")
 
         source_id = request.POST.get(REQUEST_SOURCE_SAMPLE_ID)
-        sources = list(history.observations_for(experiment)
+        sources = list(history.calls_for(experiment)
                        .filter(sample_id=source_id,
                                mutation_id__in=mutation_ids))
         if not sources:
@@ -701,18 +701,18 @@ def mutation_copy_apply(request):
 
 
 def _plan_copy(experiment, sources, targets):
-    """Additions for copying each source observation onto each target that lacks it.
+    """Additions for copying each source call onto each target that lacks it.
 
     Returns `(additions, already)` -- the targets that were skipped at least once, by name. A
-    count would say how many observations were not copied, which is not a number anybody can
+    count would say how many calls were not copied, which is not a number anybody can
     act on; the samples are, and they are what the page reports.
     """
     existing = history.live_state(experiment, sample_ids=list(targets))
     additions = []
     skipped = set()
-    for observed in sources:
-        identity = history.mutation_identity(observed.mutation)
-        snapshot = history.observation_snapshot(observed)
+    for call in sources:
+        identity = history.mutation_identity(call.mutation)
+        snapshot = history.call_snapshot(call)
         for target_id in targets:
             key = (target_id, history.key_from_identity(identity), snapshot.get("source"))
             if existing.get(key):
@@ -721,10 +721,10 @@ def _plan_copy(experiment, sources, targets):
             additions.append({
                 "sample_id": target_id,
                 "identity": identity,
-                "observation": snapshot,
-                "mutation": observed.mutation,
-                "observed": None,
-                "source_sample_id": observed.sample_id,
+                "snapshot": snapshot,
+                "mutation": call.mutation,
+                "call": None,
+                "source_sample_id": call.sample_id,
             })
             # Keep the map current so copying two source rows that collapse to the same key
             # onto one target adds it once rather than twice.
@@ -769,9 +769,9 @@ def mutation_add_apply(request):
         gd_data = record_builder.build_gd_data(mutation_type, attributes)
         annotated_record, _ = record_builder.annotate(gd_data, experiment)
         identity = record_builder.build_identity(mutation_type, gd_data, annotated_record)
-        observation = record_builder.build_observation(frequency)
+        call = record_builder.build_call(frequency)
 
-        additions, already = _plan_add(experiment, identity, observation, targets)
+        additions, already = _plan_add(experiment, identity, call, targets)
         change_set = history.apply_changes(
             experiment, request.user, KIND_ADD, additions=additions,
             note="Added %s at %s:%s to %d sample(s)." % (
@@ -795,7 +795,7 @@ def mutation_add_apply(request):
 
 
 def _frequency(request):
-    """The one frequency every selected sample's observation gets."""
+    """The one frequency every selected sample's call gets."""
     raw = (request.POST.get("frequency") or "").strip()
     if not raw:
         return Decimal("1.0")
@@ -810,7 +810,7 @@ def _frequency(request):
     return value
 
 
-def _plan_add(experiment, identity, observation, targets):
+def _plan_add(experiment, identity, call, targets):
     """One addition per target that does not already carry this mutation.
 
     Returns `(additions, already)`, the second being the skipped samples by name -- which is
@@ -822,15 +822,15 @@ def _plan_add(experiment, identity, observation, targets):
     additions = []
     already = []
     for target_id, reseq in targets.items():
-        if existing.get((target_id, key_part, observation.get("source"))):
+        if existing.get((target_id, key_part, call.get("source"))):
             already.append(reseq.label)
             continue
         additions.append({
             "sample_id": target_id,
             "identity": identity,
-            "observation": observation,
+            "snapshot": call,
             "mutation": None,          # -- minted by _resolve_mutation from the identity
-            "observed": None,
+            "call": None,
             "source_sample_id": None,  # -- nothing was copied; this is a new assertion
         })
     return additions, already
@@ -847,14 +847,14 @@ def mutation_edit_apply(request):
       itself and its primary key never changes. Worth keeping wherever it can be kept:
       mutation ids are stored as bare integers, with no foreign key, in aledb-phylogeny's
       `branch_mutations` and in every exported CSV, and nothing refreshes them.
-    - **Anything else.** The chosen observations move *off* their mutation and onto a
+    - **Anything else.** The chosen calls move *off* their mutation and onto a
       different one -- the row already holding the new values, or a new row -- and the mutation
       they came off keeps whichever samples were not chosen. Correcting a call in three of
       eleven samples leaves two mutations behind, which is the point of being able to.
 
     A whole-set change onto values another mutation already has takes the second path too, and
     leaves the row it emptied in place rather than deleting it. That is the posture delete
-    takes with a `Mutation` as well, and it is what lets a restore hand the observations back
+    takes with a `Mutation` as well, and it is what lets a restore hand the calls back
     to the same primary key.
     """
     try:
@@ -876,11 +876,11 @@ def mutation_edit_apply(request):
 
         _refuse_unchanged(mutation, identity)
 
-        carrying = list(history.observations_for(experiment).filter(mutation=mutation))
+        carrying = list(history.calls_for(experiment).filter(mutation=mutation))
         if not carrying:
             raise EditorError("No sample carries that mutation, so there is nothing to "
                               "change.", status=404)
-        chosen = _chosen_observations(request, carrying)
+        chosen = _chosen_calls(request, carrying)
         note = "Changed %s at %s:%s to %s at %s:%s in %d of %d sample(s)." % (
             mutation.mutation_type, mutation.reseq_reference, mutation.position,
             mutation_type, attributes.get("seq_id"), attributes.get("position"),
@@ -897,7 +897,7 @@ def mutation_edit_apply(request):
             landed_on, already = mutation, []
         else:
             landed_on, created = history.mutation_for_identity(experiment, identity)
-            change_set, already = _move_observations(
+            change_set, already = _move_calls(
                 experiment, request.user, landed_on, identity, chosen, note)
             if created:
                 record_builder.apply_annotation(landed_on, annotated_record)
@@ -916,8 +916,8 @@ def mutation_edit_apply(request):
                          "change_set_id": change_set.pk if change_set else None})
 
 
-def _chosen_observations(request, carrying):
-    """The observations to change, named by `target_sample_ids` out of the ones carrying it.
+def _chosen_calls(request, carrying):
+    """The calls to change, named by `target_sample_ids` out of the ones carrying it.
 
     An absent or empty list means every carrying sample. That is what the page posted before
     it could pick a subset, so the endpoint's old contract still holds and a caller that does
@@ -928,16 +928,16 @@ def _chosen_observations(request, carrying):
         return list(carrying)
 
     wanted = set(wanted)
-    if wanted - {observed.sample_id for observed in carrying}:
+    if wanted - {call.sample_id for call in carrying}:
         # Scoped to the samples carrying it for the reason `_mutation_for_page` scopes the
         # mutation to the experiment: a hand-typed id must not reach past what the page
         # offered. There is also nothing to change in a sample that does not carry it.
         raise EditorError("Those samples do not carry this mutation.", status=404)
-    return [observed for observed in carrying
-            if observed.sample_id in wanted]
+    return [call for call in carrying
+            if call.sample_id in wanted]
 
 
-def _move_observations(experiment, user, target, identity, chosen, note):
+def _move_calls(experiment, user, target, identity, chosen, note):
     """Move `chosen` off the mutation they observe and onto `target`, as one changeset.
 
     Returns `(change_set, already)` -- the samples that already carried `target`, by name.
@@ -948,27 +948,27 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     `_plan_copy` make about a target that already has what is being put on it, and it is the
     one part of the result a person cannot read off the page, so it is named back to them.
     """
-    sample_ids = [observed.sample_id for observed in chosen]
+    sample_ids = [call.sample_id for call in chosen]
     present = history.live_state(experiment, sample_ids=sample_ids)
     names = {reseq.id: reseq.label
              for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()}
 
     additions = []
     already = []
-    for observed in chosen:
-        snapshot = history.observation_snapshot(observed)
-        key = (observed.sample_id, history.key_from_identity(identity),
+    for call in chosen:
+        snapshot = history.call_snapshot(call)
+        key = (call.sample_id, history.key_from_identity(identity),
                snapshot.get("source"))
         if present.get(key):
-            already.append(observed.sample_id)
+            already.append(call.sample_id)
             continue
         additions.append({
-            "sample_id": observed.sample_id,
+            "sample_id": call.sample_id,
             "identity": identity,
-            "observation": snapshot,
+            "snapshot": snapshot,
             "mutation": target,
-            "observed": None,
-            # Nothing was copied from a sibling: this is the sample's own observation,
+            "call": None,
+            # Nothing was copied from a sibling: this is the sample's own call,
             # carried across to what it is now a call of.
             "source_sample_id": None,
         })
@@ -976,7 +976,7 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     change_set = history.apply_changes(experiment, user, KIND_EDIT,
                                        removals=chosen, additions=additions, note=note)
     # Named in sample order, which is the order `names` is in, rather than in whatever order
-    # the observations came back in.
+    # the calls came back in.
     already = set(already)
     return change_set, [name for sample_id, name in names.items() if sample_id in already]
 

@@ -1,6 +1,6 @@
 """The Overview's mutation counts, computed as aggregates instead of in Python.
 
-`/stats` used to build these four dictionaries by pulling every ObservedMutation in the
+`/stats` used to build these four dictionaries by pulling every MutationCall in the
 experiment -- each joined across six tables, instantiated as a model, carrying two JSONFields
 and a gene column of up to 19 000 characters -- to arrive at about sixteen integers. They are
 computed where the rows already are now, and nothing is stored.
@@ -37,7 +37,7 @@ from django.test import TestCase
 from aledb_experiment.models import (
     Experiment, Population, TimePoint,
 )
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 from aledb_stats.util import compute_experiment_counts
 
 
@@ -113,7 +113,7 @@ class SummaryTestCase(TestCase):
                                 genes=fields.get("ignored_genes"))
 
     def _observe(self, sample, mutation):
-        return ObservedMutation.objects.create(
+        return MutationCall.objects.create(
             sample=sample, mutation=mutation,
             present=True, frequency="1.0000")
 
@@ -124,11 +124,11 @@ class SummaryTestCase(TestCase):
     def test_the_counts_are_the_ones_the_page_shows(self):
         """The whole fixture, stated. Every rule below is one somebody could reasonably
         "fix" and be wrong, so each is asserted with the reason beside it."""
-        types, observed_types, protein, observed_protein = compute_experiment_counts(
+        types, call_types, protein, observed_protein = compute_experiment_counts(
             self.experiment.id)
 
         self.assertEqual(2, types["SNP"], "snp and noncoding are both SNPs")
-        self.assertEqual(4, observed_types["SNP"], "the SNP is seen in three samples")
+        self.assertEqual(4, call_types["SNP"], "the SNP is seen in three samples")
         self.assertEqual(1, types["DEL"])
         self.assertEqual(1, types["INS"])
         # 'XYZ' is not a known mutation type, so it is counted under nothing at all.
@@ -173,13 +173,13 @@ class SummaryTestCase(TestCase):
     def test_a_deleted_mutation_is_excluded(self):
         """This used to set the filter's `ignored_mutations` list, which hid a mutation from
         every table while leaving its rows in place. That mechanism is gone; deleting an
-        observation through `aledb_mutation_editor` is what replaces it, and the Overview must
+        call through `aledb_mutation_editor` is what replaces it, and the Overview must
         stop counting it for the same reason -- by simply not finding the row any more.
         """
         from aledb_mutation_editor import history
         from aledb_mutation_editor.models import KIND_DELETE
 
-        removals = list(ObservedMutation.objects.filter(mutation=self.deletion))
+        removals = list(MutationCall.objects.filter(mutation=self.deletion))
         self.assertTrue(removals, "the fixture's DEL is observed somewhere")
         history.apply_changes(self.experiment, None, KIND_DELETE, removals=removals)
 
@@ -249,17 +249,17 @@ class SummaryTestCase(TestCase):
         rename here fails at template-render time and not here."""
         from aledb_stats.util import get_experiment_summary
 
-        types, observed_types, protein, observed_protein = self._counts()
+        types, call_types, protein, observed_protein = self._counts()
         summary = get_experiment_summary(self.experiment.id)
 
         self.assertEqual(types, summary.mutation_type_counts)
-        self.assertEqual(observed_types, summary.observed_mutation_type_counts)
+        self.assertEqual(call_types, summary.call_type_counts)
         self.assertEqual(protein, summary.protein_change_counts)
-        self.assertEqual(observed_protein, summary.observed_protein_change_counts)
+        self.assertEqual(observed_protein, summary.call_protein_change_counts)
 
     def test_it_reflects_an_edit_with_nothing_to_invalidate(self):
         """The counts were stored and rebuilt through the 'overview' rebuilder, so a new
-        observation showed up only once something marked them stale. Computed, there is no
+        call showed up only once something marked them stale. Computed, there is no
         such window -- which is the behaviour that replaced the rebuilder."""
         from aledb_stats.util import get_experiment_summary
 

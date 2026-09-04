@@ -37,9 +37,9 @@ class NoSharedFilterRemainsTestCase(TestCase):
         which is also why everything after the queryset is keyword-only."""
         import inspect
 
-        from aledb_filter.util import filter_observed_mutations
+        from aledb_filter.util import filter_mutation_calls
 
-        parameters = inspect.signature(filter_observed_mutations).parameters
+        parameters = inspect.signature(filter_mutation_calls).parameters
 
         self.assertNotIn("skip_global_filter", parameters)
         self.assertNotIn("skip_experiment_filter", parameters)

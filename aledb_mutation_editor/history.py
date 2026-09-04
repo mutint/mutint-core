@@ -2,8 +2,8 @@
 
 Three ideas, in order of how much they depend on each other.
 
-**A change is an observation appearing or disappearing.** `apply_changes` is the only writer
-of `ObservedMutation` in this app, and it writes the log in the same transaction as the rows,
+**A change is a call appearing or disappearing.** `apply_changes` is the only writer
+of `MutationCall` in this app, and it writes the log in the same transaction as the rows,
 so there is no state in which a row moved and the log did not.
 
 **A version is a changeset.** The rows in a changeset are what that version did. There is no
@@ -17,9 +17,9 @@ is never rewritten, restoring twice to the same point is a no-op the second time
 can itself be restored past -- because by the time you look back at it, it is just another
 changeset with rows in it.
 
-The identity of an observation, throughout, is `(sample_id, mutation_key, source)` and
+The identity of a call, throughout, is `(sample_id, mutation_key, source)` and
 deliberately **not** its primary key. A restored row is a new row with a new pk, and the
-Mutation it points at may itself have been recreated -- see `mutation_key`. Two observations
+Mutation it points at may itself have been recreated -- see `mutation_key`. Two calls
 can legitimately share that key (nothing in the schema forbids it), so the state maps a key to
 a *list* and the diff compares lengths.
 
@@ -39,15 +39,15 @@ from aledb_mutation_editor.models import (
     KIND_EDIT, KIND_RESTORE, OP_ADD, OP_REMOVE,
     MutationChange, MutationChangeSet,
 )
-from aledb_seq.models import Mutation, ObservedMutation
+from aledb_seq.models import Mutation, MutationCall
 from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
-#: Every column of ObservedMutation except the two foreign keys and the pk. Snapshotted whole
+#: Every column of MutationCall except the two foreign keys and the pk. Snapshotted whole
 #: so a removal can be undone exactly: a restore that guessed at `frequency` or dropped the
 #: read counts would put back a row that renders differently from the one that was deleted.
-OBSERVATION_FIELDS = (
+CALL_FIELDS = (
     "present",
     "wt_reads", "mutated_reads", "other_reads",
     "reference_genome_likelihood", "frequency", "source",
@@ -63,16 +63,16 @@ MUTATION_KEY_FIELDS = (
 
 _DECIMAL_FIELDS = ("frequency",)
 
-#: The join from an ObservedMutation up to its experiment. Spelled once here; it is the same
+#: The join from a MutationCall up to its experiment. Spelled once here; it is the same
 #: traversal `aledb_seq.util` and `aledb_filter.util` use.
-_EXPERIMENT_PATH = paths.to_experiment(paths.FROM_OBSERVATION)
+_EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
 
 # --- snapshotting ---------------------------------------------------------------------------
 
 
-def observation_snapshot(observed):
-    """Every column of an ObservedMutation, JSON-safe.
+def call_snapshot(call):
+    """Every column of a MutationCall, JSON-safe.
 
     `frequency` is a `DecimalField`, which JSON cannot carry, so it is stored as a string and
     rebuilt with `Decimal(...)` rather than through `float` -- a round trip through float would
@@ -80,18 +80,18 @@ def observation_snapshot(observed):
     precision.
     """
     snapshot = {}
-    for field in OBSERVATION_FIELDS:
-        value = getattr(observed, field)
+    for field in CALL_FIELDS:
+        value = getattr(call, field)
         if field in _DECIMAL_FIELDS and value is not None:
             value = str(value)
         snapshot[field] = value
     return snapshot
 
 
-def _observation_kwargs(snapshot):
+def _call_kwargs(snapshot):
     """A snapshot back into constructor kwargs."""
     kwargs = {}
-    for field in OBSERVATION_FIELDS:
+    for field in CALL_FIELDS:
         value = snapshot.get(field)
         if field in _DECIMAL_FIELDS and value is not None:
             try:
@@ -122,7 +122,7 @@ def mutation_key(mutation):
     """A mutation's stable identity, as a hashable tuple.
 
     Deliberately not the primary key. `_delete_all_orphaned_mutations` can sweep a Mutation
-    whose last observation this app removed, and a later restore recreates it through
+    whose last call this app removed, and a later restore recreates it through
     `get_or_create` -- with a *new* pk for the same biological mutation. Keying the state map
     on pk would make that restore look like a different mutation entirely.
     """
@@ -138,22 +138,22 @@ def key_from_identity(identity):
     return tuple(identity.get(field) for field in MUTATION_KEY_FIELDS)
 
 
-def _entry(sample_id, identity, snapshot, mutation=None, observed=None,
+def _entry(sample_id, identity, snapshot, mutation=None, call=None,
            source_sample_id=None):
-    """One observation in a state map -- live or reconstructed."""
+    """One call in a state map -- live or reconstructed."""
     return {
         "sample_id": sample_id,
         "identity": identity,
-        "observation": snapshot,
+        "snapshot": snapshot,
         "mutation": mutation,
-        "observed": observed,
+        "call": call,
         "source_sample_id": source_sample_id,
     }
 
 
 def _entry_key(entry):
     return (entry["sample_id"], key_from_identity(entry["identity"]),
-            entry["observation"].get("source"))
+            entry["snapshot"].get("source"))
 
 
 # --- applying -------------------------------------------------------------------------------
@@ -165,7 +165,7 @@ def mutation_for_identity(experiment, identity):
     `get_or_create` on exactly the fields `gd_import` keys on, so a row minted here is the row
     a re-import would have produced -- and a later import finds it rather than adding a second.
     That single behaviour is what both callers want and why it is one function: `_resolve_mutation`
-    puts a swept mutation back, and `mutation_edit_apply` moves observations onto the row that
+    puts a swept mutation back, and `mutation_edit_apply` moves calls onto the row that
     already holds the corrected values or onto a new one, which is the same question asked with
     a different motive.
 
@@ -192,7 +192,7 @@ def _resolve_mutation(experiment, mutation, identity):
         # The row has to still *be* the mutation the identity describes. It is not enough that
         # it exists: `apply_mutation_edit` moves a row's fields while keeping its primary key,
         # so a restore to before an edit arrives here holding the old identity and a row that
-        # has since become something else. Returning it would put the observation back on the
+        # has since become something else. Returning it would put the call back on the
         # edited mutation and report success, leaving the restore silently undone.
         if live is not None and mutation_key(live) == key_from_identity(identity):
             return live
@@ -207,11 +207,11 @@ def _resolve_mutation(experiment, mutation, identity):
 @transaction.atomic
 def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
                   restored_to=None):
-    """Write a changeset and make it true. The only writer of ObservedMutation here.
+    """Write a changeset and make it true. The only writer of MutationCall here.
 
-    removals   ObservedMutation instances to delete.
+    removals   MutationCall instances to delete.
     additions  entry dicts (see `_entry`): the target sample id, the mutation identity, the
-               observation snapshot, and optionally the live Mutation and a source sample.
+               call snapshot, and optionally the live Mutation and a source sample.
 
     Returns the changeset, or None if there was nothing to do. An empty changeset would be a
     history entry recording that nothing happened -- noise on the page, and a step
@@ -243,34 +243,34 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
 
     changes = []
 
-    for observed in removals:
+    for call in removals:
         changes.append(MutationChange(
             change_set=change_set,
             operation=OP_REMOVE,
-            sample_id=observed.sample_id,
-            mutation=observed.mutation,
-            observation=observation_snapshot(observed),
-            mutation_identity=mutation_identity(observed.mutation)))
+            sample_id=call.sample_id,
+            mutation=call.mutation,
+            call=call_snapshot(call),
+            mutation_identity=mutation_identity(call.mutation)))
 
     for entry in additions:
         identity = entry["identity"]
         resolved = _resolve_mutation(experiment, entry.get("mutation"), identity)
-        created = ObservedMutation.objects.create(
+        created = MutationCall.objects.create(
             sample_id=entry["sample_id"],
             mutation=resolved,
-            **_observation_kwargs(entry["observation"]))
+            **_call_kwargs(entry["snapshot"]))
         changes.append(MutationChange(
             change_set=change_set,
             operation=OP_ADD,
             sample_id=entry["sample_id"],
             mutation=resolved,
             source_sample_id=entry.get("source_sample_id"),
-            observation=observation_snapshot(created),
+            call=call_snapshot(created),
             mutation_identity=identity))
 
     if removals:
-        ObservedMutation.objects.filter(
-            pk__in=[observed.pk for observed in removals]).delete()
+        MutationCall.objects.filter(
+            pk__in=[call.pk for call in removals]).delete()
 
     MutationChange.objects.bulk_create(changes)
     return change_set
@@ -280,7 +280,7 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
 def apply_mutation_edit(experiment, user, mutation, identity, note=""):
     """Change a mutation's own fields, everywhere it is observed. One changeset.
 
-    The observations are logged as **removed and re-added**, which is not bookkeeping: the log
+    The calls are logged as **removed and re-added**, which is not bookkeeping: the log
     is keyed on `(sample_id, mutation_key, source)`, and `mutation_key` is derived from the six
     identity fields. Move a Mutation without saying so and `live_state` starts computing a
     different key than every earlier entry recorded, with no changeset for `state_after` to
@@ -293,7 +293,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
     refreshes them. What aledb-phylogeny does on a mutation edit is throw its cached trees
     away, which corrects the ids it held by no longer holding them; an exported CSV is not
     even reachable to correct. Minting a new row would leave all of that pointing at a
-    mutation with no observations; reusing it leaves them resolving, to the corrected call.
+    mutation with no calls; reusing it leaves them resolving, to the corrected call.
 
     The order below is the whole of this function. The removal snapshots have to be taken
     **before** the row moves, or both sides of the changeset would record the new identity and
@@ -302,8 +302,8 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
     if experiment is not None and experiment.is_locked:
         raise ExperimentLocked(experiment.lock_message())
 
-    observations = list(observations_for(experiment).filter(mutation=mutation))
-    if not observations:
+    calls = list(calls_for(experiment).filter(mutation=mutation))
+    if not calls:
         # Nothing observes it, so there is no state to move and nothing to log. The row is
         # left alone rather than edited in silence.
         return None
@@ -319,11 +319,11 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
         MutationChange(
             change_set=change_set,
             operation=OP_REMOVE,
-            sample_id=observed.sample_id,
+            sample_id=call.sample_id,
             mutation=mutation,
-            observation=observation_snapshot(observed),
+            call=call_snapshot(call),
             mutation_identity=before)
-        for observed in observations
+        for call in calls
     ]
 
     for field in MUTATION_KEY_FIELDS:
@@ -334,21 +334,21 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
     mutation.protein_change = identity.get("protein_change") or ""
     mutation.save()
 
-    for observed in observations:
-        created = ObservedMutation.objects.create(
-            sample_id=observed.sample_id,
+    for call in calls:
+        created = MutationCall.objects.create(
+            sample_id=call.sample_id,
             mutation=mutation,
-            **_observation_kwargs(observation_snapshot(observed)))
+            **_call_kwargs(call_snapshot(call)))
         changes.append(MutationChange(
             change_set=change_set,
             operation=OP_ADD,
-            sample_id=observed.sample_id,
+            sample_id=call.sample_id,
             mutation=mutation,
-            observation=observation_snapshot(created),
+            call=call_snapshot(created),
             mutation_identity=identity))
 
-    ObservedMutation.objects.filter(
-        pk__in=[observed.pk for observed in observations]).delete()
+    MutationCall.objects.filter(
+        pk__in=[call.pk for call in calls]).delete()
     MutationChange.objects.bulk_create(changes)
     return change_set
 
@@ -361,22 +361,22 @@ def rebuild_after_edit(experiment):
 
     Never narrowed with `only=`, unlike `aledb_experiment.samples.rebuild_after_structural_change`
     -- a renumber provably cannot change a mutation count, while adding or removing an
-    observation changes every derived thing an experiment has.
+    call changes every derived thing an experiment has.
 
-    That used to have a second and sharper reason: aledb-fixation cached ObservedMutation
+    That used to have a second and sharper reason: aledb-fixation cached MutationCall
     *ids*, in a column only its delete-and-recompute rebuild cleared, and those are rows this
     module hard-deletes. Fixation stores nothing now, so no registered rebuild holds an
-    observation id and that particular trap is gone. The first reason stands on its own.
+    call id and that particular trap is gone. The first reason stands on its own.
 
     But `request_rebuild` marks the **site-scoped** totals stale too, correctly, and running
-    them here made a single delete recount every ObservedMutation in the installation --
+    them here made a single delete recount every MutationCall in the installation --
     measured at 4.9 seconds for the read half alone on a 74,859-row database, which is exactly
     the cost `rebuild_after_structural_change` refuses to pay. They stay marked; the dashboard
     calls `ensure_fresh` and rebuilds them on the next view. Ten deletes then cost one recount
     rather than ten.
 
     That measurement predates `rebuild_mutation_counts` reading tuples rather than
-    materialising every observation to filter it, so the per-recount price is lower than it
+    materialising every call to filter it, so the per-recount price is lower than it
     was. What this does is unchanged: one recount instead of ten is the argument, and it does
     not depend on what one costs.
     """
@@ -391,14 +391,14 @@ def rebuild_after_edit(experiment):
 # --- reconstructing -------------------------------------------------------------------------
 
 
-def observations_for(experiment, sample_ids=None):
-    """Every live observation in an experiment, as a queryset.
+def calls_for(experiment, sample_ids=None):
+    """Every live call in an experiment, as a queryset.
 
-    Unfiltered on purpose -- no `filter_observed_mutations` here. Filtering is a display
+    Unfiltered on purpose -- no `filter_mutation_calls` here. Filtering is a display
     concern; a mutation excluded by a gene or frequency filter must still be visible to the
     editor, or it cannot be deleted and silently returns when the filter changes.
     """
-    queryset = (ObservedMutation.objects
+    queryset = (MutationCall.objects
                 .filter(**{_EXPERIMENT_PATH: experiment})
                 .select_related("mutation"))
     if sample_ids is not None:
@@ -407,20 +407,20 @@ def observations_for(experiment, sample_ids=None):
 
 
 def live_state(experiment, sample_ids=None):
-    """The current observations, as {key: [entry, ...]}."""
+    """The current calls, as {key: [entry, ...]}."""
     state = {}
-    for observed in observations_for(experiment, sample_ids):
-        entry = _entry(observed.sample_id,
-                       mutation_identity(observed.mutation),
-                       observation_snapshot(observed),
-                       mutation=observed.mutation,
-                       observed=observed)
+    for call in calls_for(experiment, sample_ids):
+        entry = _entry(call.sample_id,
+                       mutation_identity(call.mutation),
+                       call_snapshot(call),
+                       mutation=call.mutation,
+                       call=call)
         state.setdefault(_entry_key(entry), []).append(entry)
     return state
 
 
 def state_after(experiment, change_set=None, sample_ids=None):
-    """The observations as they stood immediately after `change_set` was applied.
+    """The calls as they stood immediately after `change_set` was applied.
 
     `change_set=None` means before any recorded change -- what the import produced.
 
@@ -445,7 +445,7 @@ def state_after(experiment, change_set=None, sample_ids=None):
     for change in changes:
         if wanted is not None and change.sample_id not in wanted:
             continue
-        entry = _entry(change.sample_id, change.mutation_identity, change.observation,
+        entry = _entry(change.sample_id, change.mutation_identity, change.call,
                        mutation=change.mutation)
         key = _entry_key(entry)
         if change.operation == OP_ADD:
@@ -481,7 +481,7 @@ def plan_restore(experiment, change_set=None, sample_ids=None):
     for key, entries in current.items():
         surplus = len(entries) - len(target.get(key, ()))
         if surplus > 0:
-            removals.extend(entry["observed"] for entry in entries[-surplus:])
+            removals.extend(entry["call"] for entry in entries[-surplus:])
 
     for key, entries in target.items():
         missing = len(entries) - len(current.get(key, ()))

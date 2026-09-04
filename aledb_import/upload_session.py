@@ -236,7 +236,7 @@ def finalize_upload(request, upload_id):
 
     Long -- a sample's coverage alone runs `bedtools` and `bedGraphToBigWig` under a
     900-second timeout, and the derived-data rebuild after the last sample counts every
-    observation in the installation. What makes that bearable to watch is
+    call in the installation. What makes that bearable to watch is
     `_SessionProgress`, which writes a snapshot onto the session as each unit starts and
     finishes; `upload_progress` serves it and the Add page polls.
 

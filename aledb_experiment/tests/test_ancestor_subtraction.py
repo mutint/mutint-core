@@ -9,9 +9,9 @@ invisible when it over-reaches and invisible when it under-reaches.
 from aledb_experiment.ancestor import (ancestral_mutation_ids, describe_ancestor,
                                        exclude_all_ancestry, exclude_ancestry, get_ancestor)
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
-from aledb_seq.util import (get_evolved_observation_queryset, get_observed_mutation_queryset,
-                            get_reseq_ordered_dict, observations_for_samples)
+from aledb_seq.models import MutationCall
+from aledb_seq.util import (get_evolved_call_queryset, get_mutation_call_queryset,
+                            get_reseq_ordered_dict, calls_for_samples)
 
 
 class SubtractionTestCase(EditorTestCase):
@@ -21,7 +21,7 @@ class SubtractionTestCase(EditorTestCase):
         self.experiment.set_ancestor(self.sample_a, self.owner)
 
     def evolved_mutation_ids(self):
-        return set(get_evolved_observation_queryset(self.experiment.id)
+        return set(get_evolved_call_queryset(self.experiment.id)
                    .values_list("mutation_id", flat=True))
 
 
@@ -30,7 +30,7 @@ class TestNothingHappensWithoutADesignation(SubtractionTestCase):
     def test_the_queryset_is_returned_untouched(self):
         """The common case must add no SQL, and must not be an empty `.exclude()` -- an empty
         Q handed to exclude() excludes everything, which once emptied a whole experiment."""
-        raw = get_observed_mutation_queryset(self.experiment.id)
+        raw = get_mutation_call_queryset(self.experiment.id)
         self.assertEqual(str(exclude_ancestry(raw, self.experiment.id).query),
                          str(raw.query))
 
@@ -51,17 +51,17 @@ class TestSubtraction(SubtractionTestCase):
         # sample_b carried mut_1, and mut_1 is in the ancestor.
         self.assertNotIn(self.mut_1.id, self.evolved_mutation_ids())
 
-    def test_the_ancestor_sample_leaves_the_observations(self):
+    def test_the_ancestor_sample_leaves_the_calls(self):
         self.designate_a()
-        remaining = set(get_evolved_observation_queryset(self.experiment.id)
+        remaining = set(get_evolved_call_queryset(self.experiment.id)
                         .values_list("sample_id", flat=True))
         self.assertNotIn(self.sample_a.id, remaining)
 
     def test_the_raw_queryset_still_has_everything(self):
-        """`get_observed_mutation_queryset` means "what is stored" and has to keep meaning it:
+        """`get_mutation_call_queryset` means "what is stored" and has to keep meaning it:
         the export, the editor and the per-sample page all depend on that."""
         self.designate_a()
-        self.assertEqual(get_observed_mutation_queryset(self.experiment.id).count(), 4)
+        self.assertEqual(get_mutation_call_queryset(self.experiment.id).count(), 4)
 
     def test_a_mutation_missing_from_a_sample_subtracts_cleanly(self):
         """The miscall case, stated in the requirement: nothing requires an ancestral mutation
@@ -104,7 +104,7 @@ class TestListings(SubtractionTestCase):
 
 
 class TestThePluginEntryPoint(SubtractionTestCase):
-    """`observations_for_samples` is what aledb-converge, aledb-fixation and aledb-phylogeny
+    """`calls_for_samples` is what aledb-converge, aledb-fixation and aledb-phylogeny
     derive from. Subtracting only the *sample* would leave an ancestral mutation in every ALE,
     which reports as convergent everywhere and fixed everywhere -- the loudest possible wrong
     answer, and the one this feature exists to remove."""
@@ -112,7 +112,7 @@ class TestThePluginEntryPoint(SubtractionTestCase):
     def test_it_subtracts_the_mutations_not_merely_the_sample(self):
         self.designate_a()
         both = [self.sample_a.id, self.sample_b.id]
-        ids = set(observations_for_samples(both, self.experiment.id)
+        ids = set(calls_for_samples(both, self.experiment.id)
                   .values_list("mutation_id", flat=True))
         self.assertNotIn(self.mut_1.id, ids)
 
@@ -122,7 +122,7 @@ class TestCrossExperiment(SubtractionTestCase):
 
     def test_it_subtracts_without_being_told_which_experiment(self):
         self.designate_a()
-        ids = set(exclude_all_ancestry(ObservedMutation.objects.all())
+        ids = set(exclude_all_ancestry(MutationCall.objects.all())
                   .values_list("mutation_id", flat=True))
         self.assertEqual(ids, set())
 
@@ -137,7 +137,7 @@ class TestCrossExperiment(SubtractionTestCase):
         self.observe(self.sample_b, elsewhere)
 
         self.designate_a()
-        ids = set(exclude_all_ancestry(ObservedMutation.objects.all())
+        ids = set(exclude_all_ancestry(MutationCall.objects.all())
                   .values_list("mutation_id", flat=True))
         self.assertEqual(ids, {elsewhere.id})
 

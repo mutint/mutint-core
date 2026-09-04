@@ -57,15 +57,15 @@ def stats(request):
 
         experiments_info_list = get_reseq_experiment_info_list(reseq_queryset)
 
-        # One row, not every ObservedMutation in the experiment. `get_experiment_summary`
+        # One row, not every MutationCall in the experiment. `get_experiment_summary`
         # rebuilds it first if anything has marked it stale, so the first view after an
         # import, a sample renumber or a filter change pays for the recomputation and every
         # view after it does not. See aledb_common/rebuild_registry.py.
         summary = get_experiment_summary(experiment.id)
         mutation_type_count_dict = summary.mutation_type_counts
-        observed_mutation_type_count_dict = summary.observed_mutation_type_counts
+        call_type_count_dict = summary.call_type_counts
         protein_change_type_count_dict = summary.protein_change_counts
-        observed_protein_change_type_count_dict = summary.observed_protein_change_counts
+        call_protein_change_type_count_dict = summary.call_protein_change_counts
         template = loader.get_template(STATS_TEMPLATE)
 
         # Whatever the installed components put on this page under what it owns itself.
@@ -80,12 +80,12 @@ def stats(request):
                         "ale_project_id": experiment.project.id,
                         "protein_change_type_count_dict": protein_change_type_count_dict,
                         "protein_change_sum": sum(protein_change_type_count_dict.values()),
-                        "observed_protein_change_type_count_dict": observed_protein_change_type_count_dict,
-                        "observed_protein_change_sum": sum(observed_protein_change_type_count_dict.values()),
+                        "call_protein_change_type_count_dict": call_protein_change_type_count_dict,
+                        "call_protein_change_sum": sum(call_protein_change_type_count_dict.values()),
                         "mutation_type_count_dict": mutation_type_count_dict,
                         "mutation_sum": sum(mutation_type_count_dict.values()),
-                        "observed_mutation_type_count_dict": observed_mutation_type_count_dict,
-                        "observed_mutation_sum": sum(observed_mutation_type_count_dict.values()),
+                        "call_type_count_dict": call_type_count_dict,
+                        "mutation_call_sum": sum(call_type_count_dict.values()),
                         "experiments_info_list": experiments_info_list,
                         "panels": panels,
                         # `seq_color_set` and `protein_types` stood here and are gone with the

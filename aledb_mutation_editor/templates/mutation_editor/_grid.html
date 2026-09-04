@@ -1,11 +1,11 @@
 {% comment %}
-The whole experiment: mutations down, samples across, one cell per stored observation.
+The whole experiment: mutations down, samples across, one cell per stored call.
 
 Not `mutation_table_builder`'s table, for the reasons `views._grid_for` gives -- its cells are
 links into the genome browser, and it filters. Not `breseq_table/_mutation_table.html` either,
 which is shared between two read-only pages and must not grow a third caller's selection.
 
-**Selection lives in a Set of observation ids, never in the DOM.** This is a DataTable with
+**Selection lives in a Set of call ids, never in the DOM.** This is a DataTable with
 `deferRender`, so the cells of an undrawn page do not exist; reading `.selected` off `<td>`s
 would silently miss every row not currently on screen, and the row and column selectors would
 appear to work while covering only the visible page. The Set is the truth, the classes are a
@@ -14,7 +14,7 @@ rendering of it, and `draw` re-applies them.
 
 <div class="row">
     <p style="color: #666;">
-        Every observation stored for this experiment, including any the gene or frequency
+        Every call stored for this experiment, including any the gene or frequency
         filters hide elsewhere.
         {% if is_delete_mode %}
             Click a cell to select it; use the box in a mutation's row or the header of a
@@ -70,7 +70,7 @@ rendering of it, and `draw` re-applies them.
 {% endif %}
 
 {% if is_delete_mode %}
-    {% comment %} Only the Delete tab reads these, and they are one entry per *observation* --
+    {% comment %} Only the Delete tab reads these, and they are one entry per *call* --
        the largest experiment here has 52,139 of them. Emitting them for a tab that never
        looks is a measurable slice of the page for nothing. {% endcomment %}
     {{ by_mutation|json_script:"me-by-mutation" }}
@@ -267,7 +267,7 @@ $(document).ready(function () {
             return;
         }
         swal({
-            title: "Delete " + ids.length + " observation(s)?",
+            title: "Delete " + ids.length + " call(s)?",
             text: "They are removed from the samples they are selected in and the change is "
                 + "recorded, so you can restore them from the history page.",
             icon: "warning",
@@ -280,7 +280,7 @@ $(document).ready(function () {
             // makes it one entry in the history rather than one per sample.
             window.aledbPost("/mutation-editor/delete/apply", {
                 experiment_id: "{{ experiment_id }}",
-                observed_ids: JSON.stringify(ids)
+                call_ids: JSON.stringify(ids)
             }).then(function () {
                 window.location.reload();
             }).catch(function (err) {

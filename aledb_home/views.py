@@ -4,7 +4,7 @@ from aledb_common.util import get_user_context
 
 from django.template import TemplateDoesNotExist, loader
 from aledb_common.logger import user_extra
-from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts
+from aledb_dashboard.models import MutationCallCounts, UniqueMutationCounts
 from aledb_dashboard.views import get_general_count_dict
 # from aledb_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, STRAINS, REF_SEQS
 from aledb_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, load_strains, load_ref_sequences
@@ -37,17 +37,17 @@ def home(request):
         return projects(request)
 
     general_count_dict = get_general_count_dict()
-    observed_mutation_counts = ObservedMutationCounts.objects.first()
+    mutation_call_counts = MutationCallCounts.objects.first()
     unique_mutation_counts = UniqueMutationCounts.objects.first()
 
-    if unique_mutation_counts and observed_mutation_counts:
-        general_count_dict['observed'] = observed_mutation_counts.total
+    if unique_mutation_counts and mutation_call_counts:
+        general_count_dict['observed'] = mutation_call_counts.total
         general_count_dict['unique'] = unique_mutation_counts.total
 
     context = get_user_context(request.user)
     context.update({"count_dict": general_count_dict,
                     "unique_mutation_counts": unique_mutation_counts,
-                    "observed_mutation_counts": observed_mutation_counts})
+                    "mutation_call_counts": mutation_call_counts})
     user_projects = get_user_projects(request.user)
     context.update({"mut_types": MUT_TYPES,
                     "strains": load_strains(),

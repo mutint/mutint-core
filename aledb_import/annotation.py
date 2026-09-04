@@ -154,16 +154,16 @@ def sample_groups(experiment, mutations):
     first group that contains it, so the result does not depend on iteration
     order.
     """
-    from aledb_seq.models import ObservedMutation
+    from aledb_seq.models import MutationCall
 
     by_id = {mutation.pk: mutation for mutation in mutations}
-    observed = (ObservedMutation.objects
+    calls = (MutationCall.objects
                 .filter(mutation__experiment=experiment)
                 .values_list("sample_id", "mutation_id")
                 .order_by("sample_id", "mutation_id"))
 
     groups, assigned = {}, set()
-    for sample_id, mutation_id in observed.iterator():
+    for sample_id, mutation_id in calls.iterator():
         if mutation_id in assigned or mutation_id not in by_id:
             continue
         assigned.add(mutation_id)

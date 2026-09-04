@@ -1,6 +1,6 @@
 """The experiment frequency cutoff, which for a long time excluded nothing.
 
-Two independent faults, both in one block of `filtered_observed_mutation_queryset`, and
+Two independent faults, both in one block of `filtered_mutation_call_queryset`, and
 neither had a test. The queryset builds a `Q` and hands it to `.exclude()`, so every term in
 it describes something to *hide*.
 
@@ -17,10 +17,10 @@ Between them the cutoff was inert in every configuration a person could reach th
 
 from decimal import Decimal
 
-from aledb_filter.util import filter_observed_mutations
+from aledb_filter.util import filter_mutation_calls
 from aledb_filter.view_filter import ViewFilter
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import ObservedMutation
+from aledb_seq.models import MutationCall
 
 
 class FrequencyCutoffTestCase(EditorTestCase):
@@ -34,15 +34,15 @@ class FrequencyCutoffTestCase(EditorTestCase):
         self.high = self._at(self.mut_3, "0.9900")
 
     def _at(self, mutation, frequency):
-        observed = ObservedMutation.objects.get(sample=self.sample_a,
+        call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=mutation)
-        observed.frequency = Decimal(frequency)
-        observed.save()
-        return observed
+        call.frequency = Decimal(frequency)
+        call.save()
+        return call
 
     def _kept(self):
-        return {observed.id for observed in filter_observed_mutations(
-            ObservedMutation.objects.all(), view_filter=self.view_filter)}
+        return {call.id for call in filter_mutation_calls(
+            MutationCall.objects.all(), view_filter=self.view_filter)}
 
     def _cutoffs(self, **values):
         self.view_filter = ViewFilter.parse(
@@ -52,7 +52,7 @@ class FrequencyCutoffTestCase(EditorTestCase):
     # --- the floor ------------------------------------------------------------------------
 
     def test_a_mutation_below_the_floor_is_excluded(self):
-        """The regression. With the default 20% floor this returned the 1% observation,
+        """The regression. With the default 20% floor this returned the 1% call,
         because a null `frequency_gatk` made the exclusion unsatisfiable."""
         self.assertNotIn(self.low.id, self._kept())
 
@@ -81,7 +81,7 @@ class FrequencyCutoffTestCase(EditorTestCase):
         """The other half: an exclusion that hid everything would pass the two above."""
         self._cutoffs(min_cutoff=20, max_cutoff=90)
 
-        middle = ObservedMutation.objects.get(sample=self.sample_a,
+        middle = MutationCall.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1)
         self.assertEqual(Decimal("0.7500"), middle.frequency)
         self.assertIn(middle.id, self._kept())

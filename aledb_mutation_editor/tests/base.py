@@ -19,7 +19,7 @@ from aledb_experiment.models import (
     Experiment, Population, TimePoint,
 )
 from aledb_import.gd_import import prepare_experiment_by_id
-from aledb_seq.models import Mutation, ObservedMutation, Sample
+from aledb_seq.models import Mutation, MutationCall, Sample
 from aledb_experiment import paths
 
 
@@ -71,7 +71,7 @@ class EditorTestCase(TestCase):
             annotation={"gene_name": gene})
 
     def observe(self, sample, mutation, frequency="0.7500", present=True):
-        return ObservedMutation.objects.create(
+        return MutationCall.objects.create(
             sample=sample,
             mutation=mutation,
             present=present,
@@ -82,11 +82,11 @@ class EditorTestCase(TestCase):
 
     # --- assertions the suites share ------------------------------------------------------
 
-    def observed_ids(self, sample):
-        return set(ObservedMutation.objects
+    def call_ids(self, sample):
+        return set(MutationCall.objects
                    .filter(sample=sample)
                    .values_list("mutation_id", flat=True))
 
-    def observation_count(self):
-        return ObservedMutation.objects.filter(
-            **{paths.to_experiment(paths.FROM_OBSERVATION): self.experiment}).count()
+    def call_count(self):
+        return MutationCall.objects.filter(
+            **{paths.to_experiment(paths.FROM_CALL): self.experiment}).count()

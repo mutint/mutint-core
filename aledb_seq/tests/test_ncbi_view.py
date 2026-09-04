@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import (ExperimentReference, Mutation, NcbiSequence, ObservedMutation,
+from aledb_seq.models import (ExperimentReference, Mutation, NcbiSequence, MutationCall,
                               Sample)
 
 SVIEWER_SCRIPT = "sviewer/js/sviewer.js"
@@ -44,9 +44,9 @@ class _Fixture(TestCase):
             self.drop, project_name="P", experiment_name="e", person="tester")
 
         self.reseq = Sample.objects.get()
-        self.observed = ObservedMutation.objects.filter(
+        self.call = MutationCall.objects.filter(
             sample=self.reseq).first()
-        self.mutation = self.observed.mutation
+        self.mutation = self.call.mutation
         self.experiment = self.reseq.experiment
         self.reference = ExperimentReference.objects.get(experiment=self.experiment)
         self.entry = self.reference.seq_ids[0]
@@ -252,9 +252,9 @@ class TableLinkTestCase(_Fixture):
         from aledb_seq.views.mutation_table_builder import get_mutation_table_body
         from aledb_seq.util import get_reseq_ordered_dict
         reseq_dict = get_reseq_ordered_dict(self.experiment.id)
-        observed = list(ObservedMutation.objects.filter(
+        calls = list(MutationCall.objects.filter(
             sample__in=reseq_dict.keys()).select_related("mutation"))
-        return get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
+        return get_mutation_table_body(self.user, calls, reseq_dict, self.experiment)
 
     def test_an_unverified_contig_is_still_linked(self):
         """The bootstrapping fix. Gating this link on verification made the only page
@@ -296,7 +296,7 @@ class TableLinkTestCase(_Fixture):
         self._verify_contig()
         rows = self._cells()
         expected = len(HTML_MUTATION_TABLE_HEADER) + len(
-            {o.sample_id for o in ObservedMutation.objects.all()}) - 1
+            {o.sample_id for o in MutationCall.objects.all()}) - 1
         for row in rows:
             self.assertEqual(len(row), len(rows[0]))
             self.assertGreaterEqual(len(row), len(HTML_MUTATION_TABLE_HEADER) - 1)
@@ -324,7 +324,7 @@ class BrowseLinkTestCase(_Fixture):
     def _html(self):
         return self.client.get(
             "/mutations/browse",
-            {"observed_mut_id": self.observed.id}).content.decode("utf-8")
+            {"mutation_call_id": self.call.id}).content.decode("utf-8")
 
     def test_the_contig_is_linked_before_it_is_verified(self):
         self.assertIn("/mutations/ncbi?mutation_id=", self._html())

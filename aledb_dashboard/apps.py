@@ -27,6 +27,6 @@ class DashboardConfig(AppConfig):
         # experiment's derived data at once -- would not mark the most expensive rebuild there
         # is. Nothing can edit a filter for anybody but themselves now, so there is no such
         # edit and no vocabulary left to say it with. The dashboard still applies no filter, for
-        # the reason `_live_observation_rows` gives.
+        # the reason `_live_call_rows` gives.
         register_rebuilder('mutation_counts', rebuild_mutation_counts, scope=SITE_SCOPE,
                            label='Dashboard mutation counts', priority=PRIORITY_AGGREGATE)

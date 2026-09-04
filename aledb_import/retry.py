@@ -7,9 +7,9 @@ short, and they can still land on a sample's ``BEGIN`` and cost it the wait.
 
 **Retrying a sample is safe, and that is a property of how imports are built rather than
 something arranged here.** Each sample is its own ``transaction.atomic()``, so a failed one
-rolls back whole -- the chain rows, the mutations, the observations and the delete that
+rolls back whole -- the chain rows, the mutations, the calls and the delete that
 preceded them all go together. And re-import is idempotent by design
-(``_database_gd_mutations`` clears the sample's observations before writing its own), so an
+(``_database_gd_mutations`` clears the sample's calls before writing its own), so an
 attempt that got part-way leaves nothing for the next one to trip over.
 
 What must *not* be retried is a real error. A malformed file, a reference mismatch or a locked

@@ -116,14 +116,14 @@ def _label(mutation_type, sequence_change, gene):
 def mutation_features(experiment_id, contig=None):
     """This experiment's `Mutation` rows as igv annotation features.
 
-    One feature per mutation rather than per observation: this track answers "what was called
+    One feature per mutation rather than per call: this track answers "what was called
     anywhere in this experiment", and `frequency_features` is the per-sample view.
 
     Read as `values_list` tuples rather than model instances, the `get_needle_plot_data`
     pattern, and for the same reason: a `Mutation` carries two JSONFields and a gene column of
     up to 19,000 characters, and this needs eight columns.
 
-    **Reached through the observations, not through `Mutation.experiment`**, so this track
+    **Reached through the calls, not through `Mutation.experiment`**, so this track
     and `frequency_features` can never disagree about what belongs to the experiment. Filtering
     on the column looks equivalent and is not: a `Mutation` may carry a null `experiment`
     -- the unscoped case `permissions.can_curate` exists to handle -- and two such rows in the
@@ -135,14 +135,14 @@ def mutation_features(experiment_id, contig=None):
     "what evolved in this experiment", rather than two subtly different ones.
     """
     from aledb_seq.models import Mutation
-    from aledb_seq.util import get_evolved_observation_queryset
+    from aledb_seq.util import get_evolved_call_queryset
 
-    observed = get_evolved_observation_queryset(experiment_id)
+    calls = get_evolved_call_queryset(experiment_id)
     if contig:
-        observed = observed.filter(mutation__reseq_reference=contig)
+        calls = calls.filter(mutation__reseq_reference=contig)
 
     rows = (Mutation.objects
-            .filter(id__in=observed.values("mutation_id"))
+            .filter(id__in=calls.values("mutation_id"))
             .exclude(reseq_reference__isnull=True)
             .order_by("reseq_reference", "position"))
     if contig:
@@ -178,7 +178,7 @@ def sample_features(experiment_id, contig=None):
     experiment out as mutations across samples on a genome axis. The colour says only
     "present"; see `SEG_PRESENT` for why the frequency is not in it.
 
-    **Ancestor-subtracted**, through `get_evolved_observation_queryset`. An ancestral mutation
+    **Ancestor-subtracted**, through `get_evolved_call_queryset`. An ancestral mutation
     is in every sample by construction, so drawing it would paint a band across the whole track
     that says nothing about what evolved -- the same reason convergence and fixation subtract.
 
@@ -193,12 +193,12 @@ def sample_features(experiment_id, contig=None):
     "sample". One small query for the samples and a dict is the fix; there are tens of them,
     not thousands.
     """
-    from aledb_seq.util import get_evolved_observation_queryset, get_ordered_reseq_queryset
+    from aledb_seq.util import get_evolved_call_queryset, get_ordered_reseq_queryset
 
     labels = {reseq.id: reseq.label
               for reseq in get_ordered_reseq_queryset(experiment_id)}
 
-    rows = get_evolved_observation_queryset(experiment_id).filter(present=True)
+    rows = get_evolved_call_queryset(experiment_id).filter(present=True)
     if contig:
         rows = rows.filter(mutation__reseq_reference=contig)
 

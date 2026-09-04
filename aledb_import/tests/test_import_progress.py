@@ -22,7 +22,7 @@ from aledb_common.import_registry import run_import
 from aledb_experiment.models import Project
 from aledb_import import breseq_folder
 from aledb_import.models import STATE_FAILED, STATE_FINALIZED, UploadSession
-from aledb_seq.models import ObservedMutation, Sample
+from aledb_seq.models import MutationCall, Sample
 from aledb_import.tests import breseq_fixture
 
 
@@ -299,19 +299,19 @@ class GenomeDiffReplacementTestCase(ImportProgressTestCase):
             handle.write(breseq_fixture.GD_TEXT)
 
     def test_a_second_drop_of_the_same_gd_reports_what_it_replaced(self):
-        from aledb_seq.models import ObservedMutation
+        from aledb_seq.models import MutationCall
 
         self._drop_gd()
         first = self.run_drop(import_type="genomediff")[1]
         self.assertEqual(first["files"][0].get("replaced", 0), 0)
-        observations = ObservedMutation.objects.count()
-        self.assertGreater(observations, 0)
+        calls = MutationCall.objects.count()
+        self.assertGreater(calls, 0)
 
         second = self.run_drop(import_type="genomediff")[1]
 
-        self.assertEqual(second["files"][0]["replaced"], observations)
+        self.assertEqual(second["files"][0]["replaced"], calls)
         self.assertIsNone(second["files"][0]["error"])
-        self.assertEqual(ObservedMutation.objects.count(), observations)
+        self.assertEqual(MutationCall.objects.count(), calls)
 
 
 class PluginDegradationTestCase(ImportProgressTestCase):
@@ -498,8 +498,8 @@ class ProgressEndpointTestCase(TestCase):
         """
         first = self._upload("s1")
         self.client.post("/import/uploads/%s/finalize" % first, {})
-        observations = ObservedMutation.objects.count()
-        self.assertGreater(observations, 0)
+        calls = MutationCall.objects.count()
+        self.assertGreater(calls, 0)
 
         # A separate drop, a separate session, the same sample.
         second = self._upload("s1")
@@ -510,14 +510,14 @@ class ProgressEndpointTestCase(TestCase):
         row = summary["files"][0]
         self.assertEqual(row["file"], "s1")
         self.assertIsNone(row["error"], "a re-import is not a failure")
-        self.assertEqual(row["replaced"], observations)
+        self.assertEqual(row["replaced"], calls)
         # And the same answer through the endpoint the page polls.
         polled = self.client.get("/import/uploads/%s/progress" % second).json()
-        self.assertEqual(polled["units"][0]["replaced"], observations)
+        self.assertEqual(polled["units"][0]["replaced"], calls)
 
         # Still one sample: it superseded, it did not accumulate.
         self.assertEqual(Sample.objects.count(), 1)
-        self.assertEqual(ObservedMutation.objects.count(), observations)
+        self.assertEqual(MutationCall.objects.count(), calls)
 
     def test_a_first_upload_reports_nothing_replaced(self):
         """The guardrail: the notice must mean something, so it cannot show on every import."""

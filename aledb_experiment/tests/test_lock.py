@@ -20,7 +20,7 @@ from aledb_experiment.permissions import (
 )
 from aledb_experiment.roles import ROLE_ADMIN, ROLE_WRITE
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import Mutation, ObservedMutation
+from aledb_seq.models import Mutation, MutationCall
 
 
 class LockTestCase(EditorTestCase):
@@ -184,7 +184,7 @@ class EveryWritePathTestCase(LockTestCase):
 
     def setUp(self):
         super().setUp()
-        self.observed = ObservedMutation.objects.filter(
+        self.call = MutationCall.objects.filter(
             sample=self.sample_a).first()
         self.lock()
 
@@ -211,7 +211,7 @@ class EveryWritePathTestCase(LockTestCase):
         return (
             ("mutation delete", lambda: self.client.post("/mutation-editor/delete/apply", {
                 "experiment_id": experiment_id,
-                "observed_ids": json.dumps([self.observed.id])})),
+                "call_ids": json.dumps([self.call.id])})),
             ("mutation add", lambda: self.client.post("/mutation-editor/add/apply", {
                 "experiment_id": experiment_id, "mutation_type": "SNP",
                 "seq_id": "NC_000913", "position": 999, "new_seq": "T",
@@ -247,11 +247,11 @@ class EveryWritePathTestCase(LockTestCase):
                               "%s did not refuse a locked experiment" % name)
 
     def test_nothing_was_written_by_any_of_them(self):
-        before = self.observation_count()
+        before = self.call_count()
         for _, call in self.writes():
             call()
 
-        self.assertEqual(before, self.observation_count())
+        self.assertEqual(before, self.call_count())
         self.experiment.refresh_from_db()
         self.assertEqual("E", self.experiment.name, "experiment_update did not land")
         self.assertIsNone(self.experiment.deleted_at, "experiment_delete did not land")
@@ -291,7 +291,7 @@ class EveryWritePathTestCase(LockTestCase):
 
         with self.assertRaises(ExperimentLocked):
             history.apply_changes(self.experiment, self.owner, KIND_DELETE,
-                                  removals=[self.observed])
+                                  removals=[self.call])
 
     def test_an_import_is_refused_at_the_registry(self):
         """The one funnel every import type passes through, including plugin-registered ones."""
@@ -388,11 +388,11 @@ class StillAllowedTestCase(LockTestCase):
         self.lock()
         self.post_lock()
 
-        observed = ObservedMutation.objects.filter(
+        call = MutationCall.objects.filter(
             sample=self.sample_a).first()
         response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
-            "observed_ids": json.dumps([observed.id])})
+            "call_ids": json.dumps([call.id])})
         self.assertEqual(200, response.status_code)
 
         self.assertTrue(self.post_lock(locked="1").json()["locked"])

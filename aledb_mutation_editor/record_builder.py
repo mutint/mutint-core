@@ -20,7 +20,7 @@ from genomediff.records import Record
 
 logger = logging.getLogger(__name__)
 
-#: What `ObservedMutation.source` records for a mutation someone typed in. The column already
+#: What `MutationCall.source` records for a mutation someone typed in. The column already
 #: distinguishes callers -- imports write "breseq" -- and null means "imported before this
 #: column existed", which is a different thing and must not be overloaded.
 MANUAL_SOURCE = "manual"
@@ -35,7 +35,7 @@ def build_gd_data(mutation_type, attributes):
     makes an exported line carry the Mutation's own primary key -- which exists, is unique, and
     needs nothing invented. A record built before the row exists has no id to give it.
 
-    **No `frequency`.** It is per-observation, and `gd_data` lives on the `Mutation`, which
+    **No `frequency`.** It is per-call, and `gd_data` lives on the `Mutation`, which
     every sample observing it shares. Putting one sample's frequency there would attach it to
     all of them.
     """
@@ -103,11 +103,11 @@ def build_identity(mutation_type, gd_data, annotated_record):
     }
 
 
-def build_observation(frequency):
-    """One sample's observation of a hand-entered mutation.
+def build_call(frequency):
+    """One sample's call of a hand-entered mutation.
 
     `present` is True because asserting the mutation is the whole point of the form -- an
-    ObservedMutation with `present=False` records that something was looked for and found
+    MutationCall with `present=False` records that something was looked for and found
     absent, which is not what this page is for. `source` is what records that a person rather
     than a caller said so.
     """

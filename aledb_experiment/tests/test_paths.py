@@ -16,7 +16,7 @@ from django.test import TestCase
 
 from aledb_experiment import paths
 from aledb_experiment.models import Experiment, Population, TimePoint
-from aledb_seq.models import ObservedMutation, Sample
+from aledb_seq.models import MutationCall, Sample
 
 
 class ResolutionTestCase(TestCase):
@@ -36,18 +36,18 @@ class ResolutionTestCase(TestCase):
             with self.subTest(path=path):
                 self.assert_resolves(Sample, path)
 
-    def test_from_an_observation(self):
-        prefix = paths.FROM_OBSERVATION
+    def test_from_an_call(self):
+        prefix = paths.FROM_CALL
         for path in (paths.to_time_point(prefix), paths.to_population(prefix),
                      paths.to_experiment(prefix), paths.to_experiment_id(prefix),
                      paths.to_population_label(prefix), paths.to_time_point_value(prefix)):
             with self.subTest(path=path):
-                self.assert_resolves(ObservedMutation, path)
+                self.assert_resolves(MutationCall, path)
 
     def test_a_field_can_be_appended(self):
         self.assert_resolves(Sample, paths.to_population(field="strain"))
-        self.assert_resolves(ObservedMutation,
-                             paths.to_experiment(paths.FROM_OBSERVATION, "project_id"))
+        self.assert_resolves(MutationCall,
+                             paths.to_experiment(paths.FROM_CALL, "project_id"))
 
 
 class TwoColumnsOneWordTestCase(TestCase):
@@ -88,7 +88,7 @@ class JoinTestCase(TestCase):
         """Callers wrote `"sample__"` when the old code concatenated, and one
         still does. Joined naively that is four underscores, which Django reports as
         `Unsupported lookup ''` -- a message that says nothing about the cause."""
-        self.assertEqual(paths.to_experiment(paths.FROM_OBSERVATION),
+        self.assertEqual(paths.to_experiment(paths.FROM_CALL),
                          paths.to_experiment("sample__"))
 
     def test_an_absent_prefix_is_skipped_rather_than_leading_the_path(self):

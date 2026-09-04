@@ -90,7 +90,7 @@ _SCOPES = (EXPERIMENT_SCOPE, SITE_SCOPE)
 # the default, so the whole mechanism went by its own rule rather than sitting unused waiting
 # for a second input to justify it.
 #
-# What it bought was worth having at the time: `aledb_phylogeny` reads ObservedMutation directly
+# What it bought was worth having at the time: `aledb_phylogeny` reads MutationCall directly
 # and declared itself independent of filters so that a cutoff edit would not hide its tree behind
 # a warning asking for a rebuild that redrew the identical topology. Nothing can edit a cutoff
 # for anyone but themselves now, so the false alarm cannot happen either.
@@ -279,7 +279,7 @@ def run_rebuilds(experiment_id=None, only=None, force=False, scope=None):
 
     `scope` restricts to EXPERIMENT_SCOPE or SITE_SCOPE. It is how a caller says "recompute
     what I just changed, and leave the installation-wide totals for whoever reads them" --
-    `rebuild_after_edit` does exactly that, because counting every ObservedMutation in the
+    `rebuild_after_edit` does exactly that, because counting every MutationCall in the
     database is not a cost a single delete should pay.
 
     Each rebuilder is isolated: one raising neither aborts the others nor propagates. See the

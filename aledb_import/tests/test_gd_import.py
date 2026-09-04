@@ -13,7 +13,7 @@ from aledb_experiment.models import (
 from aledb_import import gd_import, reference_store
 from aledb_import.tests import breseq_fixture
 from aledb_seq.models import (
-    Mutation, ObservedMutation, Sample, UncalledRegion,
+    Mutation, MutationCall, Sample, UncalledRegion,
 )
 
 from genomediff import GenomeDiff
@@ -88,7 +88,7 @@ class GdImportTestCase(TestCase):
 
         self.assertEqual(summary["total_mutations"], len(expected))
         self.assertEqual(Mutation.objects.count(), len(expected))
-        self.assertEqual(ObservedMutation.objects.count(), len(expected))
+        self.assertEqual(MutationCall.objects.count(), len(expected))
 
         # Experiment chain synthesized from the filename 3-30000-1-1.
         self.assertEqual(Experiment.objects.count(), 1)
@@ -127,7 +127,7 @@ class GdImportTestCase(TestCase):
 
         self.assertEqual(Experiment.objects.count(), 2)
         self.assertEqual(Sample.objects.count(), 2)
-        self.assertEqual(ObservedMutation.objects.count(), per_experiment * 2)
+        self.assertEqual(MutationCall.objects.count(), per_experiment * 2)
 
         # Each experiment has its own copies, and no row is shared.
         self.assertEqual(Mutation.objects.count(), per_experiment * 2)
@@ -144,14 +144,14 @@ class GdImportTestCase(TestCase):
         self._import_named(["4-30000-1-1.gd"], experiment="exp one")
 
         self.assertEqual(Mutation.objects.count(), per_experiment)
-        self.assertEqual(ObservedMutation.objects.count(), per_experiment * 2)
+        self.assertEqual(MutationCall.objects.count(), per_experiment * 2)
 
     def test_reimport_same_sample_is_idempotent(self):
         self._import(CLEAN_GD)
         self._import(CLEAN_GD)  # same experiment + filename
 
         self.assertEqual(Sample.objects.count(), 1)
-        self.assertEqual(ObservedMutation.objects.count(), Mutation.objects.count())
+        self.assertEqual(MutationCall.objects.count(), Mutation.objects.count())
 
     def test_web_upload_through_the_chunked_session(self):
         """The route a .gd actually takes now that /import/ is gone: create, chunk, finalize.
@@ -294,7 +294,7 @@ class GdImportTestCase(TestCase):
         self._import_named(self.TRIPLE_NAMES)
 
         self.assertEqual(Sample.objects.count(), len(self.TRIPLE_NAMES))
-        self.assertEqual(ObservedMutation.objects.count(),
+        self.assertEqual(MutationCall.objects.count(),
                          Mutation.objects.count() * len(self.TRIPLE_NAMES))
 
     def test_a_name_of_neither_shape_is_still_auto_numbered(self):
@@ -498,7 +498,7 @@ class UncalledRegionTestCase(TestCase):
             sample = self._import_with_evidence("MC\t900\t.\tREL606\tnot-a-number\t200\t0\t0")
 
         self.assertEqual(0, UncalledRegion.objects.count())
-        self.assertTrue(ObservedMutation.objects.filter(sample=sample).exists(),
+        self.assertTrue(MutationCall.objects.filter(sample=sample).exists(),
                         "the sample still has its mutations")
 
 
@@ -639,8 +639,8 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         self.assertAlmostEqual(0.839314286, stored)
         self.assertIsInstance(stored, float)
         self.assertEqual(
-            0.8393, float(ObservedMutation.objects.get().frequency),
-            "and it reaches the observation's Decimal column")
+            0.8393, float(MutationCall.objects.get().frequency),
+            "and it reaches the call's Decimal column")
 
     def test_the_same_mutation_spelled_two_ways_is_one_row(self):
         """The sharpest consequence of the bump, and a silent one.

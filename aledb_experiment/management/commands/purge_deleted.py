@@ -5,7 +5,7 @@ retention window so flagged rows age out, or by hand with --dry-run first.
 
 Purging an experiment reuses `delete_experiments`, which already handles the two things
 a plain `.delete()` misses -- the sweep of mutations left orphaned
-once their observations go. It also removes the experiment's files from the managed store,
+once their calls go. It also removes the experiment's files from the managed store,
 which nothing else in the codebase does.
 
 Projects are purged after their experiments: `Experiment.project` is DO_NOTHING, so

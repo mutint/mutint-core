@@ -14,7 +14,7 @@ urlpatterns = [
     # (aledb_seq/table_urls.py): every table page posts to them, not just Compare.
     re_path(r'^breseq$', aledb_seq.views.breseq_table.breseq_table, name="breseq_table"),
 
-    # igv.js at one observed mutation's position, linked from the mutation table's cells.
+    # igv.js at one mutation call's position, linked from the mutation table's cells.
     re_path(r'^browse$', aledb_seq.views.browse.browse_mutation, name='browse_mutation'),
     # What a click on the Mutations track calls: the page's state for a different mutation,
     # so the switch does not rebuild igv and re-fetch the reads to show a locus already up.

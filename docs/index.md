@@ -28,7 +28,7 @@ Four levels, and every page here assumes them:
 | **Sample** | one sequencing run, carrying the mutations called from it. |
 
 A mutation belongs to an experiment; a sample *observes* it. That distinction runs through
-everything: deleting a mutation from one sample removes the observation and leaves the mutation
+everything: deleting a mutation from one sample removes the call and leaves the mutation
 for the samples that still carry it.
 
 ## Getting started

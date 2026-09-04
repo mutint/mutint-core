@@ -12,7 +12,7 @@ stored verbatim in ``Mutation.gd_data`` so it can be round-tripped back to a
 ``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
 
 Imported mutations are attached to the normal experiment hierarchy
-(``Experiment -> Population -> TimePoint -> Sample -> ObservedMutation``) so they appear in the existing
+(``Experiment -> Population -> TimePoint -> Sample -> MutationCall``) so they appear in the existing
 mutation tables, stats, and dashboards with no extra plumbing. The chain is
 synthesized the same way the CLI does it: a default Media
 placeholders, and the A-F-I-R identity parsed from each filename.
@@ -39,7 +39,7 @@ from aledb_import import sample_names
 from aledb_import.sample_names import parse_sample_identity
 from aledb_seq.models import (
     Mutation,
-    ObservedMutation,
+    MutationCall,
     Sample,
     UncalledRegion,
 )
@@ -50,7 +50,7 @@ from aledb_experiment import paths
 
 logger = logging.getLogger("aledb_import.gd_import")
 
-# Which caller produced an observation. Recorded per row so other variant
+# Which caller produced a call. Recorded per row so other variant
 # callers can be added alongside breseq later.
 BRESEQ_SOURCE = "breseq"
 
@@ -200,9 +200,9 @@ def import_document_as_sample(document, sample_name, context, person):
     identity through exactly one rule.
 
     Returns ``(seq_experiment, mutation_count, replaced)``, where ``replaced`` is how many
-    observations this sample already had. **Re-importing a sample is deliberately allowed
+    calls this sample already had. **Re-importing a sample is deliberately allowed
     and deliberately destructive**: `_database_gd_mutations` clears the sample's
-    observations before writing its own, which is how a corrected breseq run replaces the
+    calls before writing its own, which is how a corrected breseq run replaces the
     call set it supersedes, and `test_reimport_is_idempotent` pins it.
 
     What that leaves is a silence worth breaking. A drop containing a sample the experiment
@@ -232,7 +232,7 @@ def import_document_as_sample(document, sample_name, context, person):
                                  if identity.shape == sample_names.SHAPE_TRIPLE else ""))
 
     # Counted before the write, which is what clears them.
-    replaced = ObservedMutation.objects.filter(
+    replaced = MutationCall.objects.filter(
         sample=seq_experiment).count()
 
     return seq_experiment, _database_gd_mutations(
@@ -407,9 +407,9 @@ def _check_seq_ids(document, experiment, sample_name):
 
 
 def _database_gd_mutations(seq_experiment, document, experiment=None):
-    """Create Mutation + ObservedMutation rows from the parsed mutations.
+    """Create Mutation + MutationCall rows from the parsed mutations.
 
-    Re-importing the same sample is idempotent: existing ObservedMutations for this
+    Re-importing the same sample is idempotent: existing MutationCalls for this
     Sample are cleared first, and Mutations are deduplicated via
     get_or_create (per experiment).
 
@@ -417,7 +417,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
     codon and amino-acid fields come from the reference rather than from whatever
     the .gd happened to carry. A .gd dropped before any reference simply imports
     unannotated; `./aledb reannotate` fills it in once one arrives."""
-    ObservedMutation.objects.filter(sample=seq_experiment).delete()
+    MutationCall.objects.filter(sample=seq_experiment).delete()
 
     records = [record for record in document.mutations if _is_storable(record)]
     verbatim = [{
@@ -433,7 +433,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
     if experiment is not None:
         annotation.annotate_records(annotated, experiment)
 
-    observed_mutations = []
+    mutation_calls = []
     for record, gd_data, annotated_record in zip(records, verbatim, annotated):
         attributes = dict(record.attributes)
         gene_list = get_annotated_gene_list(
@@ -461,16 +461,16 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             mutation.save(update_fields=["gd_data"])
         annotation.apply_to(mutation, annotated_record)
 
-        observed_mutations.append(ObservedMutation(
+        mutation_calls.append(MutationCall(
             sample=seq_experiment,
             mutation=mutation,
             present=True,
             source=BRESEQ_SOURCE,
             frequency=_coerce_frequency(attributes.get("frequency"))))
 
-    ObservedMutation.objects.bulk_create(observed_mutations)
+    MutationCall.objects.bulk_create(mutation_calls)
     _database_uncalled_regions(seq_experiment, document)
-    return len(observed_mutations)
+    return len(mutation_calls)
 
 
 def _database_uncalled_regions(seq_experiment, document):
@@ -518,12 +518,12 @@ def export_gd_text(seq_experiment):
     if reseq_reference:
         lines.append("#=REFSEQ\t%s" % reseq_reference)
 
-    observed = (ObservedMutation.objects
+    calls = (MutationCall.objects
                 .filter(sample=seq_experiment)
                 .select_related("mutation")
                 .order_by("mutation__position"))
-    for observed_mutation in observed:
-        gd_line = observed_mutation.mutation.to_gd_line()
+    for mutation_call in calls:
+        gd_line = mutation_call.mutation.to_gd_line()
         if gd_line:
             lines.append(gd_line)
     return "\n".join(lines) + "\n"
@@ -582,7 +582,7 @@ def _plain(value):
 
 
 def _coerce_frequency(value):
-    """ObservedMutation.frequency is Decimal(5,4); default clonal 1.0."""
+    """MutationCall.frequency is Decimal(5,4); default clonal 1.0."""
     if value is None:
         return Decimal("1.0")
     try:

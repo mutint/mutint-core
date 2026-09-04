@@ -387,7 +387,7 @@ def _rename_mutations(Mutation, experiment, mapping):
 def _rename_evidence(Evidence, experiment, mapping):
     """Missing-coverage evidence, rewritten the same way and for the same swap reason."""
     queryset = Evidence.objects.filter(
-        **{paths.to_experiment(paths.FROM_OBSERVATION): experiment},
+        **{paths.to_experiment(paths.FROM_CALL): experiment},
         seq_id__in=list(mapping)).only("id", "seq_id")
     batch, total = [], 0
     for row in queryset.iterator(chunk_size=BATCH):

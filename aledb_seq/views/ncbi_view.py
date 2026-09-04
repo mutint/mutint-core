@@ -5,7 +5,7 @@ pileup against the reference the experiment was called on. This one shows it as 
 the genes, operons and features NCBI curates around it, which the stored GFF3 gene track
 cannot supply because it only carries what breseq's reference happened to annotate.
 
-A **Mutation** is the handle here rather than an ObservedMutation, which is the one structural
+A **Mutation** is the handle here rather than a MutationCall, which is the one structural
 difference from browse. That page needs a sample because it draws that sample's reads; this
 one draws no sample data at all, and the Reference Seq cell it is reached from is a property
 of the mutation's row rather than of any column. `sample_id` is accepted and used only to keep
@@ -29,7 +29,7 @@ from aledb_seq import ncbi
 from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.locus import buffered_extent, mutation_extent
 from aledb_seq.views.common import get_experiment, no_experiment_selected
-from aledb_seq.models import ExperimentReference, Mutation, ObservedMutation, NcbiSequence
+from aledb_seq.models import ExperimentReference, Mutation, MutationCall, NcbiSequence
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def ncbi_view(request):
         "sample_id": _sample_id(request),
         # breseq's own row, as browse does, so the page states which mutation it is showing
         # in the same words every other table uses.
-        "rows": build_rows([_any_observation(mutation)]) if _any_observation(mutation) else [],
+        "rows": build_rows([_any_call(mutation)]) if _any_call(mutation) else [],
         "is_mixed": False,
         # Every state the template renders is decided here rather than in the template, so
         # the reasons stay beside the data that determines them.
@@ -158,14 +158,14 @@ def _sample_id(request):
         return None
 
 
-def _any_observation(mutation):
-    """One observation of this mutation, purely so the row can be rendered.
+def _any_call(mutation):
+    """One call of this mutation, purely so the row can be rendered.
 
     The page is about the mutation rather than about a sample, but `build_rows` describes
-    observations -- so any of them will render the same mutation columns. Deliberately not
+    calls -- so any of them will render the same mutation columns. Deliberately not
     the sample from `sample_id`: the row must read identically however the page was reached.
     """
-    return (ObservedMutation.objects
+    return (MutationCall.objects
             .select_related("mutation", "sample")
             .filter(mutation=mutation).order_by("pk").first())
 

@@ -3,11 +3,11 @@
 Two paths, and which runs depends on two independent questions: does the whole set move, and
 do the new values already name a mutation this experiment has? Only "the whole set, onto
 values nothing else holds" moves the `Mutation` row itself and keeps its primary key.
-Everything else moves the chosen observations *off* it and onto a different row, leaving the
+Everything else moves the chosen calls *off* it and onto a different row, leaving the
 samples that were not chosen where they were.
 
 The fixture's `mut_1` is in both samples and `mut_2` in one, which is the difference that
-matters -- an edit has to take every chosen observation with it, however many there are, and
+matters -- an edit has to take every chosen call with it, however many there are, and
 a subset of two is the smallest subset there is.
 """
 
@@ -19,7 +19,7 @@ from aledb_mutation_editor.models import (
     KIND_EDIT, MutationChange, MutationChangeSet,
 )
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import Mutation, ObservedMutation
+from aledb_seq.models import Mutation, MutationCall
 
 PAGE = "/mutation-editor/edit"
 APPLY = "/mutation-editor/edit/apply"
@@ -132,7 +132,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(200, response.status_code, response.content)
         self.mut_1.refresh_from_db()
         self.assertEqual(150, self.mut_1.position)
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     def test_the_mutation_keeps_its_primary_key(self):
         """The whole reason the row is updated rather than re-created. Mutation ids are stored
@@ -147,16 +147,16 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(before, self.mut_1.pk)
         self.assertEqual(1, Mutation.objects.filter(pk=before).count())
 
-    def test_each_sample_keeps_its_own_observation(self):
+    def test_each_sample_keeps_its_own_call(self):
         """What moves is what the mutation *is*. A frequency belongs to the sample."""
-        ObservedMutation.objects.filter(sample=self.sample_b,
+        MutationCall.objects.filter(sample=self.sample_b,
                                         mutation=self.mut_1).update(frequency=Decimal("0.25"))
 
         self.change(position=150)
 
-        frequencies = {observed.sample_id: observed.frequency
-                       for observed in
-                       ObservedMutation.objects.filter(mutation=self.mut_1)}
+        frequencies = {call.sample_id: call.frequency
+                       for call in
+                       MutationCall.objects.filter(mutation=self.mut_1)}
         self.assertEqual(Decimal("0.7500"), frequencies[self.sample_a.id])
         self.assertEqual(Decimal("0.2500"), frequencies[self.sample_b.id])
 
@@ -165,7 +165,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.mut_2.refresh_from_db()
         self.assertEqual(250, self.mut_2.position)
-        self.assertEqual(1, ObservedMutation.objects.filter(mutation=self.mut_2).count())
+        self.assertEqual(1, MutationCall.objects.filter(mutation=self.mut_2).count())
 
     def test_the_type_can_change_too(self):
         self.change(mutation=self.mut_2, mutation_type="SUB", position=200, size=3,
@@ -192,7 +192,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(KIND_EDIT, change_set.kind)
         self.assertEqual(self.owner, change_set.created_by)
 
-    def test_the_observations_are_logged_as_moving_between_identities(self):
+    def test_the_calls_are_logged_as_moving_between_identities(self):
         """Not bookkeeping. The log is keyed on (sample, mutation_key, source), so an edit
         that logged nothing would leave `state_after` computing a key no earlier entry
         recorded -- and a restore to before it would silently leave the edit in place."""
@@ -210,8 +210,8 @@ class ChangeMutationTestCase(EditorTestCase):
 
         history.restore(self.experiment, self.owner, change_set=None)
 
-        positions = {observed.mutation.position
-                     for observed in ObservedMutation.objects.all()}
+        positions = {call.mutation.position
+                     for call in MutationCall.objects.all()}
         self.assertIn(100, positions)
 
     def test_a_restore_puts_it_back_in_every_sample(self):
@@ -219,7 +219,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         history.restore(self.experiment, self.owner, change_set=None)
 
-        at_100 = ObservedMutation.objects.filter(mutation__position=100)
+        at_100 = MutationCall.objects.filter(mutation__position=100)
         self.assertEqual(2, at_100.count())
 
     def test_a_restore_mints_a_new_row_rather_than_moving_the_edited_one_back(self):
@@ -230,18 +230,18 @@ class ChangeMutationTestCase(EditorTestCase):
         `state_after` replaying mutation-level state, which nothing else needs.
 
         What must never happen is the earlier bug this replaced: `_resolve_mutation` used to
-        accept any row whose pk still existed, so the restored observations went back onto
+        accept any row whose pk still existed, so the restored calls went back onto
         the *edited* mutation and the restore reported success having undone nothing."""
         original = self.mut_1.pk
         self.change(position=150)
 
         history.restore(self.experiment, self.owner, change_set=None)
 
-        restored = ObservedMutation.objects.filter(mutation__position=100).first().mutation
+        restored = MutationCall.objects.filter(mutation__position=100).first().mutation
         self.assertNotEqual(original, restored.pk)
         self.assertFalse(
-            ObservedMutation.objects.filter(mutation__pk=original).exists(),
-            "the edited row is left with no observations, as a swept mutation would be")
+            MutationCall.objects.filter(mutation__pk=original).exists(),
+            "the edited row is left with no calls, as a swept mutation would be")
 
     # --- a subset of the samples ----------------------------------------------------------
 
@@ -251,9 +251,9 @@ class ChangeMutationTestCase(EditorTestCase):
         response = self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
-        moved = ObservedMutation.objects.get(sample=self.sample_b,
+        moved = MutationCall.objects.get(sample=self.sample_b,
                                              mutation__position=150)
-        stayed = ObservedMutation.objects.get(sample=self.sample_a,
+        stayed = MutationCall.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1)
         self.assertNotEqual(self.mut_1.pk, moved.mutation_id)
         self.assertEqual(self.mut_1.pk, stayed.mutation_id)
@@ -265,7 +265,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.mut_1.refresh_from_db()
         self.assertEqual(100, self.mut_1.position)
-        self.assertEqual(1, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+        self.assertEqual(1, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     def test_a_subset_mints_a_row_when_the_values_are_new(self):
         self.change(position=150, target_sample_ids=[self.sample_b.id])
@@ -286,7 +286,7 @@ class ChangeMutationTestCase(EditorTestCase):
                                target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_2).count())
         self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
                                                     position=150).count())
 
@@ -302,7 +302,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(100, self.mut_1.gd_data["position"])
 
     def test_a_sample_that_already_carries_the_target_is_not_given_a_second_copy(self):
-        """It loses the old call and keeps the observation it already had, frequency and read
+        """It loses the old call and keeps the call it already had, frequency and read
         counts included -- and is named back, because that is the one part of the result a
         person cannot read off the page."""
         self.observe(self.sample_b, self.mut_2, frequency="0.1000")
@@ -316,11 +316,11 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual([self.sample_b.label], response.json()["already"])
-        observations = ObservedMutation.objects.filter(sample=self.sample_b,
+        calls = MutationCall.objects.filter(sample=self.sample_b,
                                                        mutation=self.mut_2)
-        self.assertEqual(1, observations.count())
-        self.assertEqual(Decimal("0.1000"), observations.first().frequency)
-        self.assertFalse(ObservedMutation.objects.filter(
+        self.assertEqual(1, calls.count())
+        self.assertEqual(Decimal("0.1000"), calls.first().frequency)
+        self.assertFalse(MutationCall.objects.filter(
             sample=self.sample_b, mutation=self.mut_1).exists())
 
     def test_a_subset_is_one_changeset_of_removals_and_additions(self):
@@ -334,16 +334,16 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_restoring_across_a_subset_change_reuses_the_original_row(self):
         """The opposite of the whole-set path, and it falls out rather than being arranged:
         the row never moved, so `_resolve_mutation` finds it still holding the old identity
-        and hands the observation straight back to the same primary key."""
+        and hands the call straight back to the same primary key."""
         self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         history.restore(self.experiment, self.owner, change_set=None)
 
         self.assertEqual(
             {self.mut_1.pk},
-            set(ObservedMutation.objects.filter(mutation__position=100)
+            set(MutationCall.objects.filter(mutation__position=100)
                 .values_list("mutation_id", flat=True)))
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     def test_naming_every_carrying_sample_is_the_whole_set(self):
         """The two paths are decided on the *set*, not on whether the request named it."""
@@ -366,7 +366,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(200, response.status_code, response.content)
         self.mut_1.refresh_from_db()
         self.assertEqual(before, self.mut_1.pk)
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_1).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     # --- refusals -------------------------------------------------------------------------
 
@@ -401,7 +401,7 @@ class ChangeMutationTestCase(EditorTestCase):
         when everything deriving it agrees.
 
         The emptied row is left in place rather than deleted, which is what delete does with a
-        Mutation as well -- and is what lets a restore hand the observations back to the same
+        Mutation as well -- and is what lets a restore hand the calls back to the same
         primary key."""
         self.change(mutation=self.mut_2, position=150)
         self.mut_2.refresh_from_db()
@@ -411,10 +411,10 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
         # sample_a already carries mut_2, so it gets the removal and no addition: two
-        # observations afterwards rather than three, and it is named back.
+        # calls afterwards rather than three, and it is named back.
         self.assertEqual([self.sample_a.label], response.json()["already"])
-        self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
-        self.assertFalse(ObservedMutation.objects.filter(mutation=self.mut_1).exists())
+        self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_2).count())
+        self.assertFalse(MutationCall.objects.filter(mutation=self.mut_1).exists())
         self.assertTrue(Mutation.objects.filter(pk=self.mut_1.pk).exists())
         self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
                                                     position=150).count(),
