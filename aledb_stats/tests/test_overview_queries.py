@@ -99,4 +99,8 @@ class OverviewQueryCountTestCase(TestCase):
         html = self.client.get("/stats?experiment_id=%d" % experiment.id,
                                follow=True).content.decode()
         self.assertIn('<td class="mutation_count">1</td>', html)
-        self.assertIn('<td class="uncalled_region_count">0</td>', html)
+        # Bases, not a count of regions. These samples have neither, so it is 0 -- and no
+        # percentage beside it, because the fixture establishes no reference and a share of
+        # an unknown genome is not 0%.
+        self.assertIn('<td class="uncalled_bases">0', html)
+        self.assertNotIn("%)", html.split('class="uncalled_bases"')[1][:120])

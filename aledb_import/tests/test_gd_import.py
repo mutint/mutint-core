@@ -13,7 +13,7 @@ from aledb_experiment.models import (
 from aledb_import import gd_import, reference_store
 from aledb_import.tests import breseq_fixture
 from aledb_seq.models import (
-    Mutation, ObservedMutation, Sample, UncalledRegions,
+    Mutation, ObservedMutation, Sample, UncalledRegion,
 )
 
 from genomediff import GenomeDiff
@@ -438,7 +438,7 @@ class PolymorphismModeTestCase(TestCase):
 
 
 class UncalledRegionTestCase(TestCase):
-    """An MC evidence record becomes an `UncalledRegions` row, with integer bounds.
+    """An MC evidence record becomes an `UncalledRegion` row, with integer bounds.
 
     `start` and `end` were `CharField`s, so nothing here was ever exercised against a real
     integer column -- and none of the four example datasets carries an MC record, so loading
@@ -469,7 +469,7 @@ class UncalledRegionTestCase(TestCase):
     def test_an_mc_record_is_stored_with_integer_bounds(self):
         sample = self._import_with_evidence("MC\t900\t.\tREL606\t100\t200\t0\t0")
 
-        region = UncalledRegions.objects.get(sample=sample)
+        region = UncalledRegion.objects.get(sample=sample)
         self.assertEqual("REL606", region.seq_id)
         self.assertEqual((100, 200), (region.start, region.end))
         self.assertIsInstance(region.start, int)
@@ -481,14 +481,14 @@ class UncalledRegionTestCase(TestCase):
         self._import_with_evidence("MC\t900\t.\tREL606\t9\t1000\t0\t0")
 
         self.assertTrue(
-            UncalledRegions.objects.filter(start__lte=500, end__gte=500).exists())
+            UncalledRegion.objects.filter(start__lte=500, end__gte=500).exists())
 
     def test_a_reimport_replaces_the_regions_rather_than_adding(self):
         self._import_with_evidence("MC\t900\t.\tREL606\t100\t200\t0\t0")
         self._import_with_evidence("MC\t900\t.\tREL606\t300\t400\t0\t0")
 
         self.assertEqual([(300, 400)],
-                         list(UncalledRegions.objects.values_list("start", "end")))
+                         list(UncalledRegion.objects.values_list("start", "end")))
 
     def test_an_unreadable_bound_is_skipped_and_the_import_survives(self):
         """genomediff leaves a field it cannot parse as the raw string, and an integer
@@ -497,7 +497,7 @@ class UncalledRegionTestCase(TestCase):
         with self.assertLogs("aledb_import.gd_import", level="WARNING"):
             sample = self._import_with_evidence("MC\t900\t.\tREL606\tnot-a-number\t200\t0\t0")
 
-        self.assertEqual(0, UncalledRegions.objects.count())
+        self.assertEqual(0, UncalledRegion.objects.count())
         self.assertTrue(ObservedMutation.objects.filter(sample=sample).exists(),
                         "the sample still has its mutations")
 

@@ -152,11 +152,11 @@ class Sample(models.Model):
         return self.experiment.name + " " + self.label
 
 
-class UncalledRegions(models.Model):
+class UncalledRegion(models.Model):
     """A stretch of a sample's genome no call could be made over.
 
     Written from a GenomeDiff's `MC` (missing coverage) evidence records, which is why it
-    was called `UncalledRegions` -- a name that described the file it came
+    was called `UncalledRegion` -- a name that described the file it came
     out of rather than the thing it stores, and led with "Unassigned", which stopped meaning
     anything when the columns it referred to went. What it holds is a region nothing is known
     about, however that came to be known.

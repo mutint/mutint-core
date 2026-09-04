@@ -111,6 +111,9 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'django.contrib.sites',
             'django.contrib.messages',
             'django.contrib.staticfiles',
+            # For `intcomma` alone: the Overview prints uncalled bases, which run to
+            # millions on a real genome and are unreadable without separators.
+            'django.contrib.humanize',
             # django_tables2, django_filters, bootstrap3 and bootstrap4 were all here and are
             # gone. Not one of them was used: no template loaded a bootstrap tag library, the
             # single `{% load render_table %}` never called the tag, and django_filters' two

@@ -41,7 +41,7 @@ from aledb_seq.models import (
     Mutation,
     ObservedMutation,
     Sample,
-    UncalledRegions,
+    UncalledRegion,
 )
 
 from genomediff import GenomeDiff
@@ -483,7 +483,7 @@ def _database_uncalled_regions(seq_experiment, document):
     Only the breseq-directory CLI path used to write them, so a web-imported sample had
     none; both paths go through here now.
     """
-    UncalledRegions.objects.filter(sample=seq_experiment).delete()
+    UncalledRegion.objects.filter(sample=seq_experiment).delete()
     for record in document.evidence:
         if record.type != "MC":
             continue
@@ -500,7 +500,7 @@ def _database_uncalled_regions(seq_experiment, document):
                            attributes.get("start"), attributes.get("end"),
                            seq_experiment.source_name)
             continue
-        UncalledRegions.objects.get_or_create(
+        UncalledRegion.objects.get_or_create(
             seq_id=attributes.get("seq_id"),
             start=start,
             end=end,

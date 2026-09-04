@@ -1,12 +1,14 @@
 import re
 from aledb_common.constants import SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED
-from aledb_seq.models import UncalledRegions
+from aledb_seq.models import UncalledRegion
 from aledb_seq.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
 from aledb_seq.views.common import MUTATION_TYPE_LIST
 import collections
 import logging
+
+from django.db.models import F, Sum
 
 
 logger = logging.getLogger(__name__)
@@ -28,8 +30,67 @@ def count_per_population(reseq_queryset):
             for name, time_points in per_population.items()]
 
 
+
+def uncalled_bases_per_sample(sample_ids):
+    """``{sample_id: bases}`` -- how much of the genome could not be called, per sample.
+
+    Summed in the database rather than in Python: one row per region and one aggregate,
+    where the count it replaced was already a single query and it would be a shame to trade
+    that for a loop.
+
+    **Bounds are inclusive**, hence the `+ 1`: `_is_uncovered` in aledb-phylogeny asks
+    `start <= position <= end`, so a region from 100 to 100 is one base and not zero. This
+    also assumes a sample's regions do not overlap, which is what breseq's MC evidence
+    gives -- overlapping ones would have their shared bases counted twice, and on a page
+    that renders this as a percentage that can read as more than 100%.
+    """
+    return dict(
+        UncalledRegion.objects
+        .filter(sample_id__in=sample_ids)
+        .values_list("sample_id")
+        .annotate(total=Sum(F("end") - F("start") + 1)))
+
+
+def _reference_length(experiment_id):
+    """Total bases in the experiment's reference, or 0 if there is no usable figure.
+
+    `ExperimentReference.total_length` defaults to 0, and an experiment can have no
+    reference row at all -- so this is "unknown" as often as it is a number, which is why
+    `_percent_of` answers None rather than dividing.
+    """
+    if experiment_id is None:
+        return 0
+    from aledb_seq.models import ExperimentReference
+
+    return (ExperimentReference.objects
+            .filter(experiment_id=experiment_id)
+            .values_list("total_length", flat=True).first() or 0)
+
+
+def _percent_of(bases, reference_length):
+    """The share of the reference these bases are, or None when that cannot be said.
+
+    None rather than 0: an experiment whose reference length is unknown has *no* answer
+    here, and printing "0.0%" beside a real base count would be a claim that the genome is
+    entirely called.
+    """
+    if not reference_length:
+        return None
+    return 100.0 * bases / reference_length
+
 def get_reseq_experiment_info_list(reseq_experiments):
-    """One tuple per sample for the Sample Resequencing Stats table.
+    """One dict per sample for the Overview's per-sample table.
+
+    **Keyed by name, and this used to be an eleven-member tuple the template indexed.**
+    `aledb_metadata.get_sample_info_list` was converted away from exactly that shape after
+    two of its values drifted onto the wrong column, and this one was one insertion away
+    from the same thing: adding the uncalled-bases percentage in the middle moved the
+    mutation count from `.9` to `.10`, in a template that says neither name.
+
+    Seven of those eleven members went with the conversion -- species, strain, the
+    population's description, the sample type, two media fields and the carbon source. The
+    template read `.0`, `.1` and `.9` and nothing else, so each of the seven was traversed
+    off the sample on every request and rendered nowhere.
 
     **Two counts, two queries, however many samples there are.** Both used to be per-sample:
     the missing-coverage list was a queryset built in this loop, and the mutation count was
@@ -61,11 +122,8 @@ def get_reseq_experiment_info_list(reseq_experiments):
     experiment_id = (reseq_experiments[0].experiment.id
                      if reseq_experiments else None)
 
-    uncalled_region_counts = dict(
-        UncalledRegions.objects
-        .filter(sample_id__in=sample_ids)
-        .values_list('sample_id')
-        .annotate(total=Count('id')))
+    uncalled_bases = uncalled_bases_per_sample(sample_ids)
+    reference_length = _reference_length(experiment_id)
     mutation_counts = dict(
         exclude_ancestry(
             ObservedMutation.objects.filter(sample_id__in=sample_ids),
@@ -73,35 +131,17 @@ def get_reseq_experiment_info_list(reseq_experiments):
         .values_list('sample_id')
         .annotate(total=Count('id')))
 
-    reseq_experiments_info_list = []
+    rows = []
     for reseq in reseq_experiments:
-        species = reseq.time_point.population.species
-        strain = reseq.time_point.population.strain
-        knockouts = reseq.time_point.population.description
-        clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.is_mixed
-                                else SAMPLE_TYPE_CLONAL)
-        media_temperature = reseq.time_point.media.temperature
-        media_description = reseq.time_point.media.description
-        # carbon_source, not substrate: the metadata parser stopped writing `substrate`
-        # in 2019 when media moved to per-component columns, so it is None for anything
-        # imported with metadata.
-        substrate = reseq.time_point.media.carbon_source
-
-        # Using tuple because immutable; the counts must remain associated with particular
-        # experiment. Position 1 holds the missing-coverage *count* -- it held the queryset
-        # itself until the template's `|length` on it turned out to be a per-row query.
-        experiment_info_tuple = (reseq,
-                                 uncalled_region_counts.get(reseq.id, 0),
-                                 clonal_or_population,
-                                 media_temperature,
-                                 media_description,
-                                 substrate,
-                                 species,
-                                 strain,
-                                 knockouts,
-                                 mutation_counts.get(reseq.id, 0))
-        reseq_experiments_info_list.append(experiment_info_tuple)
-    return reseq_experiments_info_list
+        bases = uncalled_bases.get(reseq.id, 0)
+        rows.append({
+            "sample": reseq,
+            "mutation_count": mutation_counts.get(reseq.id, 0),
+            "uncalled_bases": bases,
+            # None when the reference length is unknown -- see `_percent_of`.
+            "uncalled_percent": _percent_of(bases, reference_length),
+        })
+    return rows
 
 
 # --------------------------------------------------------------------------------------
