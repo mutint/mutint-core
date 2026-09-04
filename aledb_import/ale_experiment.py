@@ -7,7 +7,6 @@ import aledb_seq.views.common
 from aledb_import.gdparse.gdparse import gdparse
 from aledb_common.util import _find_between
 import aledb_metadata.parser
-from aledb_dashboard.util import rebuild_dashboard_data
 import logging
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment.models import Experiment, Project
@@ -28,31 +27,35 @@ REF_RELATIVE_PATH = 'ref/'
 logger = logging.getLogger(__name__)
 
 
-def remove_flask(flask_primary_key):
-    """
-    Executed from Django ipython shell
+def remove_time_point(time_point_pk):
+    """Delete one time point and every sample at it.
+
+    Executed from Django ipython shell.
     """
     from aledb_common.rebuild_registry import request_rebuild
 
-    flask_to_delete = aledb_experiment.models.TimePoint.objects.get(pk=flask_primary_key)
-    experiment_id = flask_to_delete.population.experiment_id
-    flask_to_delete.delete()
+    time_point = aledb_experiment.models.TimePoint.objects.get(pk=time_point_pk)
+    experiment_id = time_point.population.experiment_id
+    time_point.delete()
     _delete_all_orphaned_mutations()
     # After the delete, not before: marking data stale that is about to change again would be
     # cleared by any rebuild that ran in between. Marked rather than rebuilt, because this is
     # a shell operation and the next reader of any of it will rebuild what it needs.
-    request_rebuild(experiment_id, reason='flask removed')
+    request_rebuild(experiment_id, reason='time point removed')
 
 
-def delete_ale_experiments(ale_experiment_primary_key_list):
+def delete_experiments(experiment_ids):
+    """Hard-delete experiments and everything below them.
+
+    Executed from Django ipython shell, and by `./aledb delete` and `purge_deleted`.
     """
-    Executed from Django ipython shell.
-    """
-    for exp_id in ale_experiment_primary_key_list:
-        ale_experiment_to_delete = aledb_experiment.models.Experiment.objects.get(pk=exp_id)
-        print("Deleting Experiment #" + str(exp_id) + ":", ale_experiment_to_delete.name)
-        message = "Experiment %s was deleted" % ale_experiment_to_delete.name
-        ale_experiment_to_delete.delete()
+    from aledb_common.rebuild_registry import SITE_SCOPE, run_rebuilds
+
+    for exp_id in experiment_ids:
+        experiment_to_delete = aledb_experiment.models.Experiment.objects.get(pk=exp_id)
+        print("Deleting Experiment #" + str(exp_id) + ":", experiment_to_delete.name)
+        message = "Experiment %s was deleted" % experiment_to_delete.name
+        experiment_to_delete.delete()
         # The `StaticData` sweep that stood here is gone with the table. It was needed because
         # that row had no FK to the experiment -- only the convention that its pk *was* the
         # experiment's -- so a cascade could not reach it, and `get()` raised on an experiment
@@ -61,7 +64,18 @@ def delete_ale_experiments(ale_experiment_primary_key_list):
         print(message)
     _delete_all_orphaned_mutations()
     print("deleted orphaned mutations")
-    rebuild_dashboard_data()
+    # Through the registry rather than calling `rebuild_dashboard_data()` directly, which is
+    # what stood here. Both produce the right numbers; only this one *clears the flag*. The
+    # direct call left `stale_since` set and `rebuilt_at` unwritten, so the next reader of
+    # /dashboard recomputed the same answer over again -- the mechanism bypassed rather than
+    # used.
+    #
+    # `scope=SITE_SCOPE` rather than naming the two dashboard rebuilders: the installation-wide
+    # totals are exactly the site-scoped ones, and a list of names here would be a second copy
+    # of something `aledb_dashboard` already declares. `force=True` because this deletion is
+    # the change -- there is no earlier `request_rebuild` for it to answer, and running eagerly
+    # is right for a command the operator is already waiting on.
+    run_rebuilds(scope=SITE_SCOPE, force=True)
 
 
 def _delete_all_orphaned_mutations():
@@ -74,24 +88,33 @@ def _delete_all_orphaned_mutations():
         mutation.delete()
 
 
-def delete_isolate(ale_experiment_primary_key, ale_number, flask_number, isolate_number):
+def delete_sample(experiment_pk, population_name, time_point_value, sample_name):
     """Delete the sample at a coordinate.
 
+    Executed from Django ipython shell.
+
     It deleted an `Isolate` and took its replicates and their runs with it by cascade.
-    There is one row now, so the cascade it relied on is the row itself -- and
-    `isolate_number` is the whole label (`1-2`), not the isolate half of a pair.
+    There is one row now, so the cascade it relied on is the row itself -- and `sample_name`
+    is the whole label (`1-2`), not the isolate half of a pair.
     """
-    for sample in aledb_seq.models.Sample.objects.filter(
-            name=isolate_number):
-        if sample.time_point.population.experiment_id == ale_experiment_primary_key and \
-                sample.time_point.population.name == ale_number and \
-                sample.time_point.value == flask_number:
+    from aledb_common.rebuild_registry import request_rebuild
+
+    for sample in aledb_seq.models.Sample.objects.filter(name=sample_name):
+        if sample.time_point.population.experiment_id == experiment_pk and \
+                sample.time_point.population.name == population_name and \
+                sample.time_point.value == time_point_value:
             sample.delete()
-            print("Successfully removed: ", ale_number, flask_number, isolate_number)
+            print("Successfully removed: ", population_name, time_point_value, sample_name)
     _delete_all_orphaned_mutations()
+    # This marked nothing, where its sibling `remove_time_point` always has. Deleting a
+    # sample changes both dashboard counts -- the sample count directly, the mutation counts
+    # through the observations that go with it and the mutations left orphaned -- so without
+    # this the Overview kept reporting a sample that was gone until some unrelated write
+    # happened to mark the totals stale.
+    request_rebuild(experiment_pk, reason='sample removed')
 
 
-def upload_ale_experiment(experiment_path):
+def upload_experiment(experiment_path):
     """Import one experiment directory: ``<path>/breseq/<sample>/`` plus ``<path>/metadata/``.
 
     The mutations go through ``breseq_folder``, the same importer a folder dropped on
@@ -123,13 +146,13 @@ def upload_ale_experiment(experiment_path):
     return summary
 
 
-def upload_ale_collection(root_path):
-    upload_ale_experiments(find_experiment_paths(root_path))
+def upload_collection(root_path):
+    upload_experiments(find_experiment_paths(root_path))
 
 
-def upload_ale_experiments(exp_files_path_list):
+def upload_experiments(exp_files_path_list):
     for each in exp_files_path_list:
-        upload_ale_experiment(each)
+        upload_experiment(each)
 
 
 def find_experiment_paths(root_path):

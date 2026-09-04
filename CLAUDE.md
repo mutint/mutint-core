@@ -692,7 +692,7 @@ snapshot** of the row (`observation`) and of its mutation's identity (`mutation_
   moves it at the fourth decimal place, which is where that column keeps its precision.
 - **`mutation_identity` exists because the Mutation row may not outlive the log.**
   `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
-  no ObservedMutation, and runs after an experiment delete and after `delete_isolate` -- so
+  no ObservedMutation, and runs after an experiment delete and after `delete_sample` -- so
   removing a mutation's last observation makes it eligible for a sweep triggered by something
   else entirely. The snapshot is the exact `get_or_create` key plus `gd_data` and `annotation`,
   which is enough to put it back indistinguishable from an imported row. `aledb_import` needed
@@ -3160,7 +3160,7 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 
 ### Data Flow: Uploading an Experiment
 
-1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_ale_collection()`
+1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_collection()`
 2. Hands each `<exp>/breseq/` to `aledb_import.breseq_folder`, which parses via
    `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes
 3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances

@@ -1,5 +1,5 @@
 from django.core.management import BaseCommand
-from aledb_import.ale_experiment import delete_ale_experiments
+from aledb_import.ale_experiment import delete_experiments
 
 
 class Command(BaseCommand):
@@ -11,4 +11,4 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         ids = options['ids']
-        delete_ale_experiments(ids)
+        delete_experiments(ids)

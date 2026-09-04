@@ -140,7 +140,7 @@ class SweptMutationTestCase(EditorTestCase):
     """Restoring after the orphan sweep has taken the Mutation row.
 
     `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes every Mutation
-    with no ObservedMutation, and it runs after an experiment delete and after `delete_isolate`
+    with no ObservedMutation, and it runs after an experiment delete and after `delete_sample`
     -- neither of which this app is involved in. So removing a mutation's last observation can
     leave a Mutation that some later, unrelated operation destroys. This is the whole reason
     `MutationChange.mutation_identity` exists rather than the log just holding a foreign key.

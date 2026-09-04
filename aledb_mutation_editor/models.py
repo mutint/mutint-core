@@ -102,7 +102,7 @@ class MutationChange(models.Model):
     `mutation` is nullable and `mutation_identity` exists because the Mutation row is not
     guaranteed to outlive the log. `aledb_import.ale_experiment._delete_all_orphaned_mutations`
     hard-deletes any Mutation with no ObservedMutation, and it runs after an experiment delete
-    and after `delete_isolate` -- so removing a mutation's last observation makes it eligible
+    and after `delete_sample` -- so removing a mutation's last observation makes it eligible
     for a sweep triggered by something else entirely. `mutation_identity` carries the exact
     seven-field `get_or_create` tuple `gd_import` dedups on, plus `gd_data` and `annotation`,
     which is enough to put the row back indistinguishable from an imported one. It is also

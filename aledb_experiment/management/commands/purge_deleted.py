@@ -3,7 +3,7 @@
 Deletion in the UI only flags a row. This is the second half: run it from cron with a
 retention window so flagged rows age out, or by hand with --dry-run first.
 
-Purging an experiment reuses `delete_ale_experiments`, which already handles the two things
+Purging an experiment reuses `delete_experiments`, which already handles the two things
 a plain `.delete()` misses -- the sweep of mutations left orphaned
 once their observations go. It also removes the experiment's files from the managed store,
 which nothing else in the codebase does.
@@ -70,13 +70,13 @@ class Command(BaseCommand):
                              len(experiments), len(projects)))
 
     def _purge_experiment(self, experiment):
-        from aledb_import.ale_experiment import delete_ale_experiments
+        from aledb_import.ale_experiment import delete_experiments
 
         experiment_id = experiment.id
         sample_dirs = [store.sample_dir(reseq.id)
                        for reseq in self._samples(experiment)]
 
-        delete_ale_experiments([experiment_id])
+        delete_experiments([experiment_id])
 
         # Files are keyed by database id, so they must be collected before the rows go.
         shutil.rmtree(store.experiment_reference_dir(experiment_id), ignore_errors=True)

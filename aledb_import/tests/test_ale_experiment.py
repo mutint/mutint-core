@@ -18,14 +18,20 @@ from datetime import datetime
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
+from aledb_common.rebuild_registry import (
+    SITE_SCOPE, is_stale, request_rebuild, run_rebuilds,
+)
+from aledb_dashboard.models import InventoryCounts, ObservedMutationCounts
 from aledb_experiment.models import Experiment, Project
 from aledb_import import annotation
 from aledb_import.ale_experiment import (
-    delete_ale_experiments,
+    delete_experiments,
+    delete_sample,
     find_experiment_paths,
     find_user,
+    remove_time_point,
     try_creating_project,
-    upload_ale_collection,
+    upload_collection,
 )
 from aledb_import.tests import breseq_fixture
 from aledb_seq.models import (
@@ -65,7 +71,7 @@ class UploadCommandTestCase(TestCase):
         shutil.copytree(METADATA_FIXTURE, os.path.join(self.experiment_dir, "metadata"))
 
     def upload(self):
-        upload_ale_collection(self.root)
+        upload_collection(self.root)
 
     def test_it_finds_the_experiment_and_imports_it(self):
         self.upload()
@@ -148,17 +154,96 @@ class DeleteExperimentsTestCase(TestCase):
         experiment_dir = os.path.join(self.root, "SSW Glu Ac")
         breseq_fixture.write_sample(os.path.join(experiment_dir, "breseq"), "1-10000-1-1")
         shutil.copytree(METADATA_FIXTURE, os.path.join(experiment_dir, "metadata"))
-        upload_ale_collection(self.root)
+        upload_collection(self.root)
 
     def test_deleting_an_experiment_takes_its_mutations_with_it(self):
         self.assertEqual(2, Mutation.objects.count())
         experiment = Experiment.objects.get()
 
-        delete_ale_experiments([experiment.id])
+        delete_experiments([experiment.id])
 
         self.assertEqual(0, Experiment.objects.count())
         self.assertEqual(0, ObservedMutation.objects.count())
         self.assertEqual(0, Mutation.objects.count())
+
+    def test_the_dashboard_totals_are_left_settled_and_not_merely_rewritten(self):
+        """The delete goes through the registry, so the flag clears as well as the numbers.
+
+        It called `rebuild_dashboard_data()` directly, which writes the same totals and
+        settles nothing -- `stale_since` stayed set, so the next reader of /dashboard paid
+        for the identical recomputation over again. Asserting the counts alone cannot see
+        that: both spellings write the right numbers, and only one of them clears the mark.
+
+        The `request_rebuild` is what makes the difference visible, and it is not contrived
+        -- it is the ordinary state of these rows. An import leaves them fresh, and anything
+        that has happened since (an edit, a `delete_sample`) marks them again, so a delete
+        arriving at a stale dashboard is the common case rather than the corner.
+        """
+        request_rebuild(reason='test setup')
+        self.assertEqual(1, InventoryCounts.objects.get().sample_count)
+
+        delete_experiments([Experiment.objects.get().id])
+
+        self.assertEqual(0, InventoryCounts.objects.get().sample_count)
+        self.assertEqual(0, ObservedMutationCounts.objects.get().total)
+        for name in ("sample_counts", "mutation_counts"):
+            self.assertFalse(is_stale(name), "%s was left marked stale" % name)
+
+
+class DeleteSampleTestCase(TestCase):
+    """`delete_sample` and `remove_time_point`, the two shell deletes below an experiment.
+
+    Both change what the dashboard counts, so both have to mark it. Only the second did.
+    """
+
+    def setUp(self):
+        annotation.clear_cache()
+        self.addCleanup(annotation.clear_cache)
+        # The metadata fixture names this person, and `find_user` *prompts on stdin* for one
+        # it cannot resolve -- which under the runner hangs rather than failing.
+        User.objects.create(
+            username="pphaneuf", password="test123", first_name="Patrick",
+            last_name="Phaneuf", email="email@email.com", is_active=True,
+            is_staff=True, date_joined=datetime.now())
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        experiment_dir = os.path.join(self.root, "SSW Glu Ac")
+        breseq = os.path.join(experiment_dir, "breseq")
+        breseq_fixture.write_sample(breseq, "1-10000-1-1")
+        breseq_fixture.write_sample(breseq, "1-20000-1-1")
+        shutil.copytree(METADATA_FIXTURE, os.path.join(experiment_dir, "metadata"))
+        upload_collection(self.root)
+        self.experiment = Experiment.objects.get()
+        # Deliberately after the upload, which marks everything stale itself: what these tests
+        # assert is that the *delete* marks it, and a row already stale would say nothing.
+        run_rebuilds(scope=SITE_SCOPE, force=True)
+        self.assertFalse(is_stale("sample_counts"))
+
+    def test_deleting_a_sample_marks_the_derived_data_stale(self):
+        delete_sample(self.experiment.id, "1", 10000, "1-1")
+
+        self.assertEqual(["1-1"], [s.name for s in Sample.objects.all()])
+        self.assertEqual([20000], [s.time_point.value for s in Sample.objects.all()])
+        self.assertTrue(is_stale("sample_counts"))
+
+    def test_removing_a_time_point_marks_the_derived_data_stale(self):
+        sample = Sample.objects.get(time_point__value=10000)
+
+        remove_time_point(sample.time_point_id)
+
+        self.assertEqual([20000], [s.time_point.value for s in Sample.objects.all()])
+        self.assertTrue(is_stale("sample_counts"))
+
+    def test_a_coordinate_naming_no_sample_deletes_nothing(self):
+        delete_sample(self.experiment.id, "1", 30000, "1-1")
+
+        self.assertEqual(2, Sample.objects.count())
 
 
 class FindExperimentPathsTestCase(TestCase):

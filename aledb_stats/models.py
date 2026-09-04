@@ -14,7 +14,7 @@ database -- 52 139 observations, against 3.38s for the model-instance path.
 What went with them is what a cache costs beyond disk. Two registered rebuilders, marked stale
 by every mutation edit and every filter change. Two `ensure_fresh` calls on the read path. A
 `StaticData` row tied to its experiment only by the convention `id == ale_id`, with no foreign
-key, which both `delete_ale_experiments` and `purge_deleted` had to remember to sweep. And a
+key, which both `delete_experiments` and `purge_deleted` had to remember to sweep. And a
 failure mode particular to caching two halves of one page: `/stats` renders both of these from
 the same mutations, and while both were stored they could disagree in the same viewport.
 Neither is stored now and both read `get_observed_mutation_queryset`, so they cannot.

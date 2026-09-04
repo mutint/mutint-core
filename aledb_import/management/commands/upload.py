@@ -1,5 +1,5 @@
 from django.core.management import BaseCommand
-from aledb_import.ale_experiment import upload_ale_collection
+from aledb_import.ale_experiment import upload_collection
 
 
 class Command(BaseCommand):
@@ -13,4 +13,4 @@ class Command(BaseCommand):
         paths = options['path(s)']
         for path in paths:
             print("Uploading", path)
-            upload_ale_collection(path)
+            upload_collection(path)
