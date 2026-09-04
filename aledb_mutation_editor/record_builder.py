@@ -113,10 +113,9 @@ def build_call(frequency):
     """
     return {
         "present": True,
-        "wt_reads": None,
-        "mutated_reads": None,
-        "other_reads": None,
-        "reference_genome_likelihood": None,
+        # No caller looked at any reads, so there is no evidence to record -- null rather
+        # than `{}`, which would claim a caller had looked and found nothing to say.
+        "evidence": None,
         "frequency": str(frequency),
         "source": MANUAL_SOURCE,
     }

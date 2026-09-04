@@ -46,11 +46,15 @@ logger = logging.getLogger(__name__)
 
 #: Every column of MutationCall except the two foreign keys and the pk. Snapshotted whole
 #: so a removal can be undone exactly: a restore that guessed at `frequency` or dropped the
-#: read counts would put back a row that renders differently from the one that was deleted.
+#: caller's evidence would put back a row that renders differently from the one deleted.
+#:
+#: `evidence` is one entry here where four used to be, and the list is what keeps that from
+#: mattering to stored blobs: `_call_kwargs` builds its kwargs by walking this tuple and
+#: calling `snapshot.get(field)`, so the retired keys left behind in older
+#: `MutationChange.snapshot` blobs are simply never read again, and a blob written before
+#: `evidence` existed restores with it null. No migration either way.
 CALL_FIELDS = (
-    "present",
-    "wt_reads", "mutated_reads", "other_reads",
-    "reference_genome_likelihood", "frequency", "source",
+    "present", "evidence", "frequency", "source",
 )
 
 #: The fields `gd_import._database_gd_mutations` passes to `Mutation.objects.get_or_create`.
@@ -249,7 +253,7 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
             operation=OP_REMOVE,
             sample_id=call.sample_id,
             mutation=call.mutation,
-            call=call_snapshot(call),
+            snapshot=call_snapshot(call),
             mutation_identity=mutation_identity(call.mutation)))
 
     for entry in additions:
@@ -265,7 +269,7 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
             sample_id=entry["sample_id"],
             mutation=resolved,
             source_sample_id=entry.get("source_sample_id"),
-            call=call_snapshot(created),
+            snapshot=call_snapshot(created),
             mutation_identity=identity))
 
     if removals:
@@ -321,7 +325,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
             operation=OP_REMOVE,
             sample_id=call.sample_id,
             mutation=mutation,
-            call=call_snapshot(call),
+            snapshot=call_snapshot(call),
             mutation_identity=before)
         for call in calls
     ]
@@ -344,7 +348,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
             operation=OP_ADD,
             sample_id=call.sample_id,
             mutation=mutation,
-            call=call_snapshot(created),
+            snapshot=call_snapshot(created),
             mutation_identity=identity))
 
     MutationCall.objects.filter(
@@ -445,7 +449,7 @@ def state_after(experiment, change_set=None, sample_ids=None):
     for change in changes:
         if wanted is not None and change.sample_id not in wanted:
             continue
-        entry = _entry(change.sample_id, change.mutation_identity, change.call,
+        entry = _entry(change.sample_id, change.mutation_identity, change.snapshot,
                        mutation=change.mutation)
         key = _entry_key(entry)
         if change.operation == OP_ADD:

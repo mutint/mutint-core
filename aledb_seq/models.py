@@ -296,6 +296,15 @@ class Mutation(models.Model):
 
 
 class MutationCall(models.Model):
+    """One caller's assertion about one mutation in one sample.
+
+    Written by `gd_import` for every record in a sample's `.gd`, and by
+    `aledb_mutation_editor` for a mutation somebody adds or copies by hand. It is the row the
+    change log works at, the row every cross-sample table has a cell for, and the row an edit
+    hard-deletes -- never the `Mutation`, whose primary key is stored as a bare integer in
+    aledb-phylogeny's `branch_mutations` and in every exported CSV.
+    """
+
     sample = models.ForeignKey(Sample, on_delete=models.CASCADE, null=True)
     # make sure not delete mutation if there are associated mutation calls
     mutation = models.ForeignKey(Mutation, on_delete=models.DO_NOTHING)
@@ -306,10 +315,23 @@ class MutationCall(models.Model):
     # found, was absent from every cross-sample table. `source` says who asserted it; this
     # says whether it is there.
     present = models.BooleanField(null=True)
-    wt_reads = models.IntegerField(null=True)
-    mutated_reads = models.IntegerField(null=True)
-    other_reads = models.IntegerField(null=True)
-    reference_genome_likelihood = models.FloatField(null=True)
+
+    # Whatever a caller said about *this sample's* call beyond the three columns above --
+    # read counts, likelihoods, per-sample coverage. Four scalar columns stood here
+    # (`wt_reads`, `mutated_reads`, `other_reads`, `reference_genome_likelihood`) and no
+    # import path had ever written one of them.
+    #
+    # The same argument as `Mutation.annotation`, one level down: nothing queries these, they
+    # are read whole and per row to render a cell, and a caller with a field we have no
+    # column for should not need a migration. What differs is the *scope* -- `annotation` and
+    # `gd_data` describe the mutation, which every sample carrying it shares, while this
+    # describes one sample's evidence for it and is exactly what cannot live up there.
+    #
+    # Deliberately not folded into `gd_data`: `Mutation.to_gd_line()` splats every key of
+    # that field onto the line it emits for `gdtools APPLY`, so a per-sample read count would
+    # end up in a file describing the mutation.
+    evidence = models.JSONField(**blank_field)
+
     # The one frequency. `frequency_gatk` sat beside it, for the GATK half of a gdtools
     # COMPARE merge that no import path has ever written -- 0 of 74,859 rows had a value.
     # Being always null was not merely useless: `aledb_filter` ANDed a `frequency_gatk__lt`

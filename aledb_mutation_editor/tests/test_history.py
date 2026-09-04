@@ -1,7 +1,7 @@
 """Applying a change, and what the log records about it.
 
 The snapshot is what these mostly assert. A change log that recorded *that* a mutation was
-deleted but not what its frequency and read counts were would let you see the history and not
+deleted but not what its frequency or the caller's evidence were would let you see the history and not
 undo it, which is most of the value gone.
 """
 
@@ -90,8 +90,9 @@ class SnapshotTestCase(EditorTestCase):
         self.assertEqual(set(history.CALL_FIELDS), set(snapshot))
         self.assertEqual(True, snapshot["present"])
         self.assertEqual("breseq", snapshot["source"])
-        self.assertEqual(10, snapshot["wt_reads"])
-        self.assertEqual(30, snapshot["mutated_reads"])
+        # Whole, not merely present: `evidence` is a JSON column, so a snapshot that stored
+        # the key and dropped what was under it would still satisfy the field-set check above.
+        self.assertEqual({"wt_reads": 10, "mutated_reads": 30}, snapshot["evidence"])
 
     def test_frequency_survives_as_a_decimal_not_a_float(self):
         """These columns keep four decimal places, which is where a float round trip moves."""

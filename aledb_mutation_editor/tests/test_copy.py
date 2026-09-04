@@ -38,7 +38,7 @@ class CopyTestCase(EditorTestCase):
         copied = MutationCall.objects.get(sample=self.sample_b,
                                               mutation=self.mut_2)
         self.assertEqual(source.frequency, copied.frequency)
-        self.assertEqual(source.wt_reads, copied.wt_reads)
+        self.assertEqual(source.evidence, copied.evidence)
         self.assertEqual(source.source, copied.source)
 
     def test_a_batch_is_one_changeset(self):

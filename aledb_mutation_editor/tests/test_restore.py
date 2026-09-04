@@ -36,6 +36,11 @@ class RestoreTestCase(EditorTestCase):
                                                 mutation=self.mut_2)
         self.assertEqual(before, history.call_snapshot(restored))
         self.assertEqual(Decimal("0.7500"), restored.frequency)
+        # `evidence` is the first snapshotted field that is not a scalar, so it rides through
+        # the log as JSON inside JSON -- `MutationChange.snapshot` is itself a JSONField. A
+        # restore that put back the key holding a string of a dict would satisfy the
+        # whole-snapshot comparison above and still be wrong on the way out.
+        self.assertEqual({"wt_reads": 10, "mutated_reads": 30}, restored.evidence)
 
     def test_the_restore_is_itself_a_changeset(self):
         deletion = self._delete(self.sample_a, self.mut_2)

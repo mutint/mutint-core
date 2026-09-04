@@ -185,6 +185,59 @@ class AmplificationsRemovedTestCase(TestCase):
         self.assertNotIn("browse", cell)
         self.assertIn('class="true"', cell)
 
+    # --- a call that says the mutation is absent ----------------------------------------
+
+    def test_an_absent_call_renders_its_read_support_from_evidence(self):
+        """`present=False` is "looked for and not found", and the counts say how firmly."""
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        call = sorted(get_all_calls_filtered(self.experiment.id), key=lambda o: o.id)[0]
+        call.present = False
+        call.evidence = {"mutated_reads": 2, "wt_reads": 48}
+
+        cell = _get_table_mutation_entry(call, reseq_dict)
+
+        self.assertIn("2/48", cell)
+        self.assertIn('class="false"', cell)
+        # Same rule as the empty cell below, and it matters more here: this cell renders for
+        # a mutation the sample does *not* have, so carrying the marker would make a row of
+        # absences render as a row of mutations.
+        self.assertNotIn("true", cell)
+
+    def test_an_absent_call_with_no_evidence_renders_rather_than_raising(self):
+        """The regression this replaces. The cell read two columns straight into `%d`, and
+        no import path has ever written either -- so the first such row to reach a table
+        would have been a TypeError, not a cell. Nothing writes `evidence` today either,
+        which is exactly why the empty case is the one to pin."""
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        call = sorted(get_all_calls_filtered(self.experiment.id), key=lambda o: o.id)[0]
+        call.present = False
+        call.evidence = None
+
+        cell = _get_table_mutation_entry(call, reseq_dict)
+
+        self.assertIn('class="false"', cell)
+        self.assertNotIn("None", cell)
+
+    def test_half_a_pair_of_read_counts_is_not_reported(self):
+        """One number over a blank is not something a reader can act on."""
+        from aledb_seq.util import get_reseq_ordered_dict
+        from aledb_seq.views.mutation_table_builder import _get_table_mutation_entry
+
+        reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
+        call = sorted(get_all_calls_filtered(self.experiment.id), key=lambda o: o.id)[0]
+        call.present = False
+        call.evidence = {"mutated_reads": 2}
+
+        cell = _get_table_mutation_entry(call, reseq_dict)
+
+        self.assertNotIn("2", cell)
+
     def test_an_empty_cell_never_contains_the_true_marker(self):
         """_contains_mutation substring-tests for `true`; an empty cell carrying it would
         make a row of nothing render as a row of mutations."""

@@ -12,7 +12,12 @@ from aledb_seq.ncbi import verified_contig_names
 
 
 HTML_EMPTY_MUTATION_CELL = """<span class="empty"></span>"""
-HTML_MUTATION_PRESENT_FALSE_CELL_HTML = """<span class="false">%d/%d</span>"""
+#: A call that says the mutation was looked for and *not* found. The counts are how many
+#: reads supported each answer, when the caller recorded them; `evidence` is where they live
+#: now and `.get` is why an absent pair renders the marker alone rather than raising. It used
+#: to read two columns straight into `%d` -- and since no import path ever wrote them, the
+#: first `present=False` row to reach a table would have been a TypeError, not a cell.
+HTML_MUTATION_ABSENT_CELL = """<span class="false">%s</span>"""
 
 EXPANDABLE_COLUMN_PLUS_SIGN = """<i onclick="expand_collapse_gene_entry(this)" class="fa fa-plus pull-left" aria-hidden="true" data-toggle="collapse" data-target="#%s"></i>"""
 EXPANDABLE_GENE_ENTRY = """<div class="collapse pull-left" id="%s">%s</div>"""
@@ -229,12 +234,26 @@ def _get_table_mutation_entry(mutation_call, reseq_dict):
                  if mutation_call.frequency is not None else "&#10003;")
         table_entry = _cell_html(mutation_call, reseq_dict, label)
 
-    # TODO: Figure out what this is supposed to do.
     elif mutation_call.present is False:
-        table_entry = HTML_MUTATION_PRESENT_FALSE_CELL_HTML % (mutation_call.mutated_reads,
-                                                               mutation_call.wt_reads)
+        # Looked for and not found. `class="false"`, never `"true"`: `_contains_mutation`
+        # substring-tests the row for the latter, so an absent call must not be what makes a
+        # row render.
+        table_entry = HTML_MUTATION_ABSENT_CELL % _read_support(mutation_call)
 
     return table_entry
+
+
+def _read_support(mutation_call):
+    """``<mutated>/<wt>`` when the caller recorded both, else nothing.
+
+    Both halves or neither: one number over a blank says nothing a reader can act on, and a
+    caller records the pair together or not at all.
+    """
+    evidence = mutation_call.evidence or {}
+    mutated, wt = evidence.get("mutated_reads"), evidence.get("wt_reads")
+    if mutated is None or wt is None:
+        return ""
+    return "%s/%s" % (mutated, wt)
 
 
 def _cell_html(mutation_call, reseq_dict, label):

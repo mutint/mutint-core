@@ -95,9 +95,11 @@ class MutationChangeSet(models.Model):
 class MutationChange(models.Model):
     """One MutationCall this changeset added or removed.
 
-    `call` is every column of the row, so a removal can be undone exactly rather than
-    approximately -- frequency, the per-caller present flags and the read counts all come back
-    as they were.
+    `snapshot` is every column of the row, so a removal can be undone exactly rather than
+    approximately -- `present`, `frequency`, `source` and the caller's `evidence` all come
+    back as they were. That last one is a JSONField inside this JSONField, and is the reason
+    `history.CALL_FIELDS` is worth reading before adding a column: a snapshot is built by
+    walking that tuple, so a field missing from it is a field a restore silently drops.
 
     `mutation` is nullable and `mutation_identity` exists because the Mutation row is not
     guaranteed to outlive the log. `aledb_import.ale_experiment._delete_all_orphaned_mutations`
@@ -121,7 +123,7 @@ class MutationChange(models.Model):
                                       on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name="+")
 
-    call = models.JSONField(default=dict)
+    snapshot = models.JSONField(default=dict)
     mutation_identity = models.JSONField(default=dict)
 
     class Meta:

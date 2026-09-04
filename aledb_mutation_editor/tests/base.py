@@ -76,8 +76,7 @@ class EditorTestCase(TestCase):
             mutation=mutation,
             present=present,
             source="breseq",
-            wt_reads=10,
-            mutated_reads=30,
+            evidence={"wt_reads": 10, "mutated_reads": 30},
             frequency=Decimal(frequency))
 
     # --- assertions the suites share ------------------------------------------------------
