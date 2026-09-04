@@ -254,7 +254,7 @@ class FinalizeUnderLockTestCase(TestCase):
 
         created = self.client.post(
             "/import/uploads/",
-            data=json.dumps({"ale_experiment_id": self.experiment.id,
+            data=json.dumps({"experiment_id": self.experiment.id,
                              "import_type": "breseq_folder",
                              "files": [{"path": p, "size": len(b)} for p, b in entries]}),
             content_type="application/json")
@@ -383,7 +383,7 @@ class PollMustNotWriteTestCase(TestCase):
         from django.test.utils import CaptureQueriesContext
 
         with CaptureQueriesContext(connection) as queries:
-            self.client.get("/ale/experiments/")
+            self.client.get("/experiment/")
 
         session_writes = [q["sql"] for q in queries.captured_queries
                           if "django_session" in q["sql"]

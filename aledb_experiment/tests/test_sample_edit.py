@@ -33,7 +33,7 @@ class SampleEditTestCase(TestCase):
         # Through the view, not Project.objects.create: the latter leaves the owner
         # without the django-guardian grant and every page then 403s.
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
@@ -68,13 +68,13 @@ class SampleEditTestCase(TestCase):
     def bulk(self, rows, experiment=None):
         experiment = experiment or self.experiment
         return self.client.post(
-            "/ale/experiment/%d/samples/update/" % experiment.id,
+            "/experiment/%d/samples/update/" % experiment.id,
             {"rows": json.dumps(rows)})
 
     def single(self, reseq, **overrides):
         data = self.row(reseq, **overrides)
         data.pop("id")
-        return self.client.post("/ale/sample/%d/update/" % reseq.pk, data)
+        return self.client.post("/sample/%d/update/" % reseq.pk, data)
 
     def coordinate(self, reseq):
         from aledb_experiment.samples import sample_coordinate
@@ -93,7 +93,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         self.sample = self.make_sample(1, 1, "1-1", name="first")
 
     def test_the_sample_page_renders(self):
-        response = self.client.get("/ale/sample/%d/edit/" % self.sample.pk)
+        response = self.client.get("/sample/%d/edit/" % self.sample.pk)
         self.assertEqual(200, response.status_code)
         # No `se-rep`: the replicate box went with the replicate row, and the label box
         # holds the whole of it.
@@ -103,13 +103,13 @@ class SampleEditPagesTestCase(SampleEditTestCase):
 
     def test_the_bulk_page_lists_this_experiment_only(self):
         other_project = Project.objects.get(
-            pk=self.client.post("/ale/projects/create/",
+            pk=self.client.post("/project/create/",
                                 {"name": "Q", "experiment": "F"}).json()["project_id"])
         other = Experiment.objects.filter(project=other_project).first()
         stranger_sample = self.make_sample(1, 1, "1-1", name="elsewhere", experiment=other)
 
         html = self.client.get(
-            "/ale/experiment/%d/samples/" % self.experiment.id).content.decode()
+            "/experiment/%d/samples/" % self.experiment.id).content.decode()
 
         self.assertIn('data-reseq-id="%d"' % self.sample.pk, html)
         self.assertNotIn('data-reseq-id="%d"' % stranger_sample.pk, html)
@@ -122,8 +122,8 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         self.sample.description = "Ara-1_500gen_762B"
         self.sample.save()
 
-        for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.id):
+        for url in ("/sample/%d/edit/" % self.sample.pk,
+                    "/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 html = self.client.get(url).content.decode()
                 self.assertIn("Ara-1_500gen_762B", html)
@@ -131,8 +131,8 @@ class SampleEditPagesTestCase(SampleEditTestCase):
 
     def test_signed_out_they_are_forbidden(self):
         self.client.logout()
-        for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.id):
+        for url in ("/sample/%d/edit/" % self.sample.pk,
+                    "/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
@@ -141,14 +141,14 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         stranger = User.objects.create(
             username="stranger", email="s@e.com", is_active=True, is_staff=True)
         self.client.force_login(stranger)
-        for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.id):
+        for url in ("/sample/%d/edit/" % self.sample.pk,
+                    "/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
     def test_every_handler_guards_its_missing_control(self):
-        for url, control in (("/ale/sample/%d/edit/" % self.sample.pk, "se-save"),
-                             ("/ale/experiment/%d/samples/" % self.experiment.id,
+        for url, control in (("/sample/%d/edit/" % self.sample.pk, "se-save"),
+                             ("/experiment/%d/samples/" % self.experiment.id,
                               "sb-save")):
             with self.subTest(url=url):
                 self.assertContains(
@@ -156,8 +156,8 @@ class SampleEditPagesTestCase(SampleEditTestCase):
                     'if (!document.getElementById("%s")) { return; }' % control)
 
     def test_neither_is_a_modal_and_both_offer_a_way_back(self):
-        for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.id):
+        for url in ("/sample/%d/edit/" % self.sample.pk,
+                    "/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertNotContains(response, 'data-toggle="modal"')
@@ -167,7 +167,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         """It has no project, so it cannot be permission-checked. Repairing those belongs
         in a management command, not in a page that would have to skip the check."""
         orphan = Sample.objects.create(time_point=None, source_name="loose")
-        self.assertEqual(404, self.client.get("/ale/sample/%d/edit/" % orphan.pk).status_code)
+        self.assertEqual(404, self.client.get("/sample/%d/edit/" % orphan.pk).status_code)
 
 
 class DescriptiveEditTestCase(SampleEditTestCase):
@@ -190,7 +190,7 @@ class DescriptiveEditTestCase(SampleEditTestCase):
 
         payload = self.row(self.sample, sample_name="renamed", person="impostor")
         payload.pop("id")
-        response = self.client.post("/ale/sample/%d/update/" % self.sample.pk, payload)
+        response = self.client.post("/sample/%d/update/" % self.sample.pk, payload)
 
         self.assertEqual(200, response.status_code, response.content)
         self.sample.refresh_from_db()
@@ -473,7 +473,7 @@ class BulkSampleEditTestCase(SampleEditTestCase):
 
     def test_a_sample_from_another_experiment_is_refused(self):
         created = self.client.post(
-            "/ale/projects/create/", {"name": "Q", "experiment": "F"}).json()
+            "/project/create/", {"name": "Q", "experiment": "F"}).json()
         other = Experiment.objects.get(pk=created["experiment_id"])
         foreign = self.make_sample(1, 1, "1-1", name="foreign", experiment=other)
 
@@ -484,13 +484,13 @@ class BulkSampleEditTestCase(SampleEditTestCase):
 
     def test_malformed_rows_is_a_400_not_a_500(self):
         response = self.client.post(
-            "/ale/experiment/%d/samples/update/" % self.experiment.id,
+            "/experiment/%d/samples/update/" % self.experiment.id,
             {"rows": "not json"})
         self.assertEqual(400, response.status_code)
 
     def test_rows_must_be_a_list(self):
         response = self.client.post(
-            "/ale/experiment/%d/samples/update/" % self.experiment.id,
+            "/experiment/%d/samples/update/" % self.experiment.id,
             {"rows": json.dumps({"id": "1"})})
         self.assertEqual(400, response.status_code)
 
@@ -616,8 +616,8 @@ class TimePointLabellingTestCase(SampleEditTestCase):
         self.sample = self.make_sample(1, 30000, "1-1", name="first")
 
     def test_both_pages_label_it_time_point(self):
-        for url in ("/ale/sample/%d/edit/" % self.sample.pk,
-                    "/ale/experiment/%d/samples/" % self.experiment.id):
+        for url in ("/sample/%d/edit/" % self.sample.pk,
+                    "/experiment/%d/samples/" % self.experiment.id):
             with self.subTest(url=url):
                 # {% comment %} blocks never render, so the internal name in the
                 # template's own notes cannot make this pass by accident.
@@ -628,7 +628,7 @@ class TimePointLabellingTestCase(SampleEditTestCase):
 
     def test_the_time_point_input_has_no_stepper(self):
         """type=number puts up/down arrows on a value that runs to five figures."""
-        html = self.client.get("/ale/sample/%d/edit/" % self.sample.pk).content.decode()
+        html = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
         field = [line for line in html.splitlines() if 'id="se-flask"' in line][0]
         self.assertIn('type="text"', field)
         self.assertNotIn('type="number"', field)

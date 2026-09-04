@@ -57,7 +57,7 @@ MAX_BULK_SUBJECTS = 500
 
 @ensure_csrf_cookie
 def project_access(request, pk):
-    """`/ale/project/<pk>/access/` -- the sharing page."""
+    """`/project/<pk>/access/` -- the sharing page."""
     project = get_object_or_404(Project, pk=pk)
     context = get_user_context(request.user)
     if not can_manage_project_access(request.user, project):

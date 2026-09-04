@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 @task()
-def build_coverage(reseq_id):
+def build_coverage(sample_id):
     """Derive and store one sample's coverage BigWig.
 
     **Takes the primary key, not the model.** Task arguments are serialised to JSON, so a
@@ -54,11 +54,11 @@ def build_coverage(reseq_id):
     likely to hit: a `db_worker` started outside `./aledb` has no `ALEDB_TOOLS_DIR`, so
     `bedGraphToBigWig` is not found and every sample would silently get no coverage.
     """
-    reseq = Sample.objects.filter(pk=reseq_id).first()
+    reseq = Sample.objects.filter(pk=sample_id).first()
     if reseq is None:
         # Deleted between enqueue and execution. Not an error: there is nothing to derive.
-        logger.info("sample %s is gone; no coverage to build", reseq_id)
+        logger.info("sample %s is gone; no coverage to build", sample_id)
         return None
     tally = coverage.build_for(reseq)
-    logger.info("coverage built for sample %s", reseq_id)
+    logger.info("coverage built for sample %s", sample_id)
     return str(tally) if tally is not None else None

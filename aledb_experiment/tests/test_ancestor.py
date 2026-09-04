@@ -15,8 +15,8 @@ from django.contrib.auth.models import User
 from aledb_experiment.models import Experiment
 from aledb_mutation_editor.tests.base import EditorTestCase
 
-PAGE = "/ale/experiment/%d/ancestor/"
-APPLY = "/ale/experiment/%d/ancestor/apply/"
+PAGE = "/experiment/%d/ancestor/"
+APPLY = "/experiment/%d/ancestor/apply/"
 
 
 class AncestorPageTestCase(EditorTestCase):
@@ -82,7 +82,7 @@ class TestThePage(AncestorPageTestCase):
 class TestTheWrite(AncestorPageTestCase):
 
     def test_designating_records_who_and_when(self):
-        self.apply(reseq_id=self.sample_a.id)
+        self.apply(sample_id=self.sample_a.id)
         experiment = self.reloaded()
         self.assertEqual(experiment.ancestor_id, self.sample_a.id)
         self.assertEqual(experiment.ancestor_set_by_id, self.owner.id)
@@ -91,7 +91,7 @@ class TestTheWrite(AncestorPageTestCase):
     def test_designating_switches_away_from_the_prior_one_in_one_write(self):
         """One column, so there is no prior flag left to clear and no way to end up with two."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
-        self.apply(reseq_id=self.sample_b.id)
+        self.apply(sample_id=self.sample_b.id)
         self.assertEqual(self.reloaded().ancestor_id, self.sample_b.id)
 
     def test_posting_nothing_clears_the_designation(self):
@@ -106,14 +106,14 @@ class TestTheWrite(AncestorPageTestCase):
         """Nothing in the schema stops the column pointing across experiments, so the endpoint
         has to: a mutation belongs to one experiment's reference genome."""
         other = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         foreign = Experiment.objects.get(pk=other["experiment_id"])
-        response = self.client.post(APPLY % foreign.id, {"reseq_id": self.sample_a.id})
+        response = self.client.post(APPLY % foreign.id, {"sample_id": self.sample_a.id})
         self.assertEqual(404, response.status_code)
         self.assertIsNone(Experiment.objects.get(pk=foreign.pk).ancestor_id)
 
     def test_a_nonsense_id_is_refused(self):
-        response = self.apply(reseq_id="banana")
+        response = self.apply(sample_id="banana")
         self.assertEqual(400, response.status_code)
         self.assertIsNone(self.reloaded().ancestor_id)
 
@@ -125,13 +125,13 @@ class TestPermission(AncestorPageTestCase):
     def test_a_stranger_cannot_designate(self):
         stranger = User.objects.create(username="stranger", is_active=True)
         self.client.force_login(stranger)
-        response = self.apply(reseq_id=self.sample_a.id)
+        response = self.apply(sample_id=self.sample_a.id)
         self.assertEqual(403, response.status_code)
         self.assertIsNone(self.reloaded().ancestor_id)
 
     def test_a_locked_experiment_refuses_its_owner(self):
         self.experiment.lock(self.owner)
-        response = self.apply(reseq_id=self.sample_a.id)
+        response = self.apply(sample_id=self.sample_a.id)
         self.assertEqual(403, response.status_code)
         self.assertIsNone(self.reloaded().ancestor_id)
 
@@ -141,7 +141,7 @@ class TestPermission(AncestorPageTestCase):
                                    is_staff=True)
         self.experiment.lock(self.owner)
         self.client.force_login(root)
-        response = self.apply(reseq_id=self.sample_a.id)
+        response = self.apply(sample_id=self.sample_a.id)
         self.assertEqual(403, response.status_code)
         self.assertIsNone(self.reloaded().ancestor_id)
 
@@ -155,4 +155,4 @@ class TestPermission(AncestorPageTestCase):
 
     def test_the_refusal_says_the_experiment_is_locked(self):
         self.experiment.lock(self.owner)
-        self.assertIn("locked", self.apply(reseq_id=self.sample_a.id).json()["error"])
+        self.assertIn("locked", self.apply(sample_id=self.sample_a.id).json()["error"])

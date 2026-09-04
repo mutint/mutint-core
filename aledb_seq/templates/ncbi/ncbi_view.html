@@ -9,7 +9,7 @@
     <script src="{% static "js/breseq_table.js" %}?v={{ aledb_version }}"></script>
     <link href="{% static "css/ncbi_view.css" %}?v={{ aledb_version }}" rel="stylesheet">
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -19,10 +19,10 @@
             {% comment %} Back the way you came: to the sample's own mutations when a sample was
                named, and to the experiment's page otherwise -- this page can be reached from a
                cross-sample table, where no one sample is the one you left. {% endcomment %}
-            {% if reseq_id %}
-                <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq_id }}">&laquo; back to mutations</a>
+            {% if sample_id %}
+                <a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ sample_id }}">&laquo; back to mutations</a>
             {% else %}
-                <a href="/stats?ale_experiment_id={{ ale_experiment_id }}">&laquo; back to the experiment</a>
+                <a href="/stats?experiment_id={{ experiment_id }}">&laquo; back to the experiment</a>
             {% endif %}
             {% if is_verified %}
                 &middot; <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ accession }}"
@@ -95,7 +95,7 @@
                 {% if may_check %}
                     <form id="ncbi-check-form" class="form-inline ncbi-check">
                         {% csrf_token %}
-                        <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id }}">
+                        <input type="hidden" name="experiment_id" value="{{ experiment_id }}">
                         <input type="hidden" name="seq_id" value="{{ contig_name }}">
                         <label for="ncbi-accession">NCBI accession for {{ contig_name }}</label>
                         <input type="text" class="form-control" id="ncbi-accession"
@@ -110,14 +110,14 @@
                         The accession is only a proposal: it is accepted only if NCBI's record
                         for it is byte-for-byte this contig's sequence. Every sequence in this
                         experiment's reference is listed on its
-                        <a href="/mutations/reference?ale_experiment_id={{ ale_experiment_id }}">Reference</a>
+                        <a href="/mutations/reference?experiment_id={{ experiment_id }}">Reference</a>
                         page.
                     </p>
                 {% else %}
                     <p class="ncbi-check-help">
                         Someone with write access to this experiment can record its accession,
                         here or on the
-                        <a href="/mutations/reference?ale_experiment_id={{ ale_experiment_id }}">Reference</a>
+                        <a href="/mutations/reference?experiment_id={{ experiment_id }}">Reference</a>
                         page.
                     </p>
                 {% endif %}

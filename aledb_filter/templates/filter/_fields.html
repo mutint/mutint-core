@@ -4,7 +4,7 @@ looking at and the file you download from it, it is remembered in your session, 
 
 Renders nothing without an experiment. That is the whole of the gate the old
 `show_filter_toggles` flag used to be -- a control that does nothing is worse than no control,
-and a page with an `ale_experiment_id` always resolves its filter through `get_view_filter`.
+and a page with an `experiment_id` always resolves its filter through `get_view_filter`.
 
 `standalone` wraps the inputs in their own GET form, for a page that has none of its own.
 `base_table_template.html` passes False and drops these into the form it already has, because
@@ -13,7 +13,7 @@ buttons that discard each other's edits.
 {% endcomment %}
 {% if experiment_id %}
     {% if standalone %}<form action="" method="get" class="form-inline" style="margin: 6px 0;">
-        <input type="hidden" name="ale_experiment_id" value="{{ experiment_id }}"/>{% endif %}
+        <input type="hidden" name="experiment_id" value="{{ experiment_id }}"/>{% endif %}
     <b>Showing: </b>
     <label style="font-weight: normal; margin-left: 6px;">
         frequency
@@ -35,7 +35,7 @@ buttons that discard each other's edits.
         {% comment %} The parameters are present and empty, which is what clears it: the
            resolver tests for presence, not truthiness, so this is how a URL says "no
            filter". Shown only when there is something to clear. {% endcomment %}
-        <a href="?ale_experiment_id={{ experiment_id }}&amp;{{ min_param }}=&amp;{{ max_param }}=&amp;{{ genes_param }}="
+        <a href="?experiment_id={{ experiment_id }}&amp;{{ min_param }}=&amp;{{ max_param }}=&amp;{{ genes_param }}="
            class="btn btn-link btn-sm">clear</a>
     {% endif %}
     {% if standalone %}</form>{% endif %}

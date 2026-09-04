@@ -1,6 +1,6 @@
 # Loading data
 
-Everything arrives through **one page** — `/import/add/?ale_experiment_id=<id>` — or the
+Everything arrives through **one page** — `/import/add/?experiment_id=<id>` — or the
 equivalent command. There is no separate reference-genome page and no per-format workflow: you
 drop files, and the type is either chosen or detected.
 
@@ -77,7 +77,7 @@ Files are stored under `ALEDB_STORE_DIR`, keyed by database id:
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
-<store>/samples/<reseq_id>/{sample.gd,aligned.bam,aligned.bam.bai}
+<store>/samples/<sample_id>/{sample.gd,aligned.bam,aligned.bam.bai}
 ```
 
 Alignments are served with HTTP range support, which is what lets the genome browser read them

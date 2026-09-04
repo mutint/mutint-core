@@ -22,7 +22,7 @@ logger = logging.getLogger("aledb_import.add_views")
 
 @ensure_csrf_cookie
 def add_view(request):
-    """GET renders the drop page for `?ale_experiment_id=<pk>`.
+    """GET renders the drop page for `?experiment_id=<pk>`.
 
     Always scoped to one experiment; there is no unscoped form of this page. Without a
     usable id it is a 404.
@@ -30,7 +30,7 @@ def add_view(request):
     There is no POST here: uploads go through the chunked session endpoints, which is what
     lets a multi-GB drop work at all.
     """
-    experiment_id = request.GET.get("ale_experiment_id")
+    experiment_id = request.GET.get("experiment_id")
     try:
         experiment = Experiment.objects.get(pk=experiment_id)
     except (Experiment.DoesNotExist, ValueError, TypeError):

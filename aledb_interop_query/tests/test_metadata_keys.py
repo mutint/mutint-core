@@ -65,8 +65,8 @@ class MetadataKeyTestCase(TestCase):
     def serialized(self):
         payload = _serialize_metadata([{
             "reseq_info_list": self.rows(),
-            "ale_experiment_id": self.experiment.id,
-            "ale_experiment_name": self.experiment.name,
+            "experiment_id": self.experiment.id,
+            "experiment_name": self.experiment.name,
             "ale_project_id": self.experiment.project.id,
             "ale_project_name": self.experiment.project.name,
             "multiple": False,

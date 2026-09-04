@@ -34,7 +34,7 @@ class LockTestCase(EditorTestCase):
 
     def post_lock(self, **data):
         return self.client.post(
-            "/ale/experiment/%d/lock/" % self.experiment.id, data)
+            "/experiment/%d/lock/" % self.experiment.id, data)
 
 
 class ModelTestCase(LockTestCase):
@@ -173,7 +173,7 @@ class LockEndpointTestCase(LockTestCase):
 
     def test_it_refuses_a_GET(self):
         self.assertEqual(
-            405, self.client.get("/ale/experiment/%d/lock/" % self.experiment.id).status_code)
+            405, self.client.get("/experiment/%d/lock/" % self.experiment.id).status_code)
 
 
 class EveryWritePathTestCase(LockTestCase):
@@ -215,13 +215,13 @@ class EveryWritePathTestCase(LockTestCase):
             ("mutation add", lambda: self.client.post("/mutation-editor/add/apply", {
                 "experiment_id": experiment_id, "mutation_type": "SNP",
                 "seq_id": "NC_000913", "position": 999, "new_seq": "T",
-                "target_reseq_ids": json.dumps([self.sample_a.id])})),
+                "target_sample_ids": json.dumps([self.sample_a.id])})),
             ("mutation copy", lambda: self.client.post("/mutation-editor/copy/apply", {
-                "experiment_id": experiment_id, "source_reseq_id": self.sample_a.id,
+                "experiment_id": experiment_id, "source_sample_id": self.sample_a.id,
                 "mutation_ids": json.dumps([self.mut_2.id]),
-                "target_reseq_ids": json.dumps([self.sample_b.id])})),
+                "target_sample_ids": json.dumps([self.sample_b.id])})),
             ("mutation restore", lambda: self.client.post("/mutation-editor/restore", {
-                "experiment_id": experiment_id, "change_set_id": "", "reseq_ids": "[]"})),
+                "experiment_id": experiment_id, "change_set_id": "", "sample_ids": "[]"})),
             ("mutation tag", lambda: self.client.post(
                 "/mutation-table/toggle-mut-tag/",
                 {"mut_id": self.mut_1.id, "tag_name": "contaminated"},
@@ -231,13 +231,13 @@ class EveryWritePathTestCase(LockTestCase):
                 {"rep_id": self.sample_a.pk, "tag_name": "contaminated"},
                 HTTP_X_REQUESTED_WITH="XMLHttpRequest")),
             ("sample update", lambda: self.client.post(
-                "/ale/sample/%d/update/" % self.sample_a.id, {"sample_name": "x"})),
+                "/sample/%d/update/" % self.sample_a.id, {"sample_name": "x"})),
             ("bulk sample update", lambda: self.client.post(
-                "/ale/experiment/%d/samples/update/" % experiment_id, {"rows": "[]"})),
+                "/experiment/%d/samples/update/" % experiment_id, {"rows": "[]"})),
             ("experiment update", lambda: self.client.post(
-                "/ale/experiment/%d/update/" % experiment_id, {"name": "renamed"})),
+                "/experiment/%d/update/" % experiment_id, {"name": "renamed"})),
             ("experiment delete", lambda: self.client.post(
-                "/ale/experiment/%d/delete/" % experiment_id, {})),
+                "/experiment/%d/delete/" % experiment_id, {})),
         )
 
     def test_every_write_endpoint_refuses(self):
@@ -277,10 +277,10 @@ class EveryWritePathTestCase(LockTestCase):
 
     def test_the_edit_pages_refuse_as_well(self):
         """Not only the endpoints: a form you can fill in and never save is a dead end."""
-        for url in ("/ale/experiment/%d/edit/" % self.experiment.id,
-                    "/ale/experiment/%d/samples/" % self.experiment.id,
-                    "/ale/sample/%d/edit/" % self.sample_a.id,
-                    "/import/add/?ale_experiment_id=%d" % self.experiment.id):
+        for url in ("/experiment/%d/edit/" % self.experiment.id,
+                    "/experiment/%d/samples/" % self.experiment.id,
+                    "/sample/%d/edit/" % self.sample_a.id,
+                    "/import/add/?experiment_id=%d" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
@@ -304,7 +304,7 @@ class EveryWritePathTestCase(LockTestCase):
                        import_type="genomediff")
 
     def test_the_refusal_says_why(self):
-        response = self.client.post("/ale/experiment/%d/delete/" % self.experiment.id, {})
+        response = self.client.post("/experiment/%d/delete/" % self.experiment.id, {})
         error = response.json()["error"]
         self.assertIn("locked", error)
         self.assertIn(self.experiment.name, error, "lock_message() is what is carried through")
@@ -316,13 +316,13 @@ class StillAllowedTestCase(LockTestCase):
 
     def test_reading_the_experiment_still_works(self):
         self.lock()
-        response = self.client.get("/stats", {"ale_experiment_id": self.experiment.id},
+        response = self.client.get("/stats", {"experiment_id": self.experiment.id},
                                    follow=True)
         self.assertEqual(200, response.status_code)
 
     def test_the_overview_says_it_is_locked(self):
         self.lock()
-        response = self.client.get("/stats", {"ale_experiment_id": self.experiment.id},
+        response = self.client.get("/stats", {"experiment_id": self.experiment.id},
                                    follow=True)
 
         self.assertContains(response, "This experiment is locked")
@@ -333,7 +333,7 @@ class StillAllowedTestCase(LockTestCase):
         """One row of actions, in reading order. Three `{% if %}`s, so it is easy to reorder
         by accident and nothing else would notice."""
         html = self.client.get(
-            "/stats", {"ale_experiment_id": self.experiment.id},
+            "/stats", {"experiment_id": self.experiment.id},
             follow=True).content.decode()
 
         samples = html.index("/samples/")
@@ -345,7 +345,7 @@ class StillAllowedTestCase(LockTestCase):
     def test_the_edit_controls_are_gone_and_unlock_is_offered(self):
         self.lock()
         html = self.client.get(
-            "/stats", {"ale_experiment_id": self.experiment.id},
+            "/stats", {"experiment_id": self.experiment.id},
             follow=True).content.decode()
 
         self.assertNotIn('id="delete-experiment"', html)
@@ -379,7 +379,7 @@ class StillAllowedTestCase(LockTestCase):
         self.lock()
 
         response = self.client.post(
-            "/ale/project/%d/access/grant/" % self.experiment.project_id,
+            "/project/%d/access/grant/" % self.experiment.project_id,
             {"username": colleague.get_username(), "role": ROLE_ADMIN})
 
         self.assertEqual(200, response.status_code)
@@ -404,7 +404,7 @@ class ProjectDeleteTestCase(LockTestCase):
         """Otherwise the lock is sidestepped by the most obvious adjacent button."""
         self.lock()
         response = self.client.post(
-            "/ale/project/%d/delete/" % self.experiment.project_id, {})
+            "/project/%d/delete/" % self.experiment.project_id, {})
 
         self.assertEqual(409, response.status_code)
         self.experiment.project.refresh_from_db()
@@ -413,10 +413,10 @@ class ProjectDeleteTestCase(LockTestCase):
     def test_the_refusal_names_the_experiment(self):
         self.lock()
         response = self.client.post(
-            "/ale/project/%d/delete/" % self.experiment.project_id, {})
+            "/project/%d/delete/" % self.experiment.project_id, {})
         self.assertIn(self.experiment.name, response.json()["error"])
 
     def test_an_unlocked_project_still_deletes(self):
         response = self.client.post(
-            "/ale/project/%d/delete/" % self.experiment.project_id, {})
+            "/project/%d/delete/" % self.experiment.project_id, {})
         self.assertEqual(200, response.status_code)

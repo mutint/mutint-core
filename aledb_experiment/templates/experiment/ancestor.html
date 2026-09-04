@@ -29,7 +29,7 @@ saying before it is chosen: this is the only setting in the product that changes
                     Set{% if experiment.ancestor_set_at %} on
                         {{ experiment.ancestor_set_at|date:"Y-m-d H:i" }}{% endif %}
                     by {{ experiment.ancestor_set_by.get_username|default:"the system" }}.
-                    <a href="/mutations/breseq?ale_experiment_id={{ experiment.id }}&amp;reseq_id={{ experiment.ancestor_id }}">See its mutations</a>
+                    <a href="/mutations/breseq?experiment_id={{ experiment.id }}&amp;sample_id={{ experiment.ancestor_id }}">See its mutations</a>
                 </div>
             </div>
         {% else %}
@@ -68,7 +68,7 @@ saying before it is chosen: this is the only setting in the product that changes
                 <button type="button" class="btn btn-default" id="anc-clear">No ancestor</button>
             {% endif %}
             <a class="btn btn-default"
-               href="/stats?ale_experiment_id={{ experiment.id }}">Back to experiment</a>
+               href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
         </div>
         <div id="anc-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
     </div>
@@ -110,7 +110,7 @@ saying before it is chosen: this is the only setting in the product that changes
                 if (!confirmed) { return; }
                 show("Saving\u2026");
                 return window.aledbPost(
-                    "/ale/experiment/{{ experiment.id }}/ancestor/apply/", data
+                    "/experiment/{{ experiment.id }}/ancestor/apply/", data
                 ).then(function () {
                     // Reload rather than patch the page in place: designating changes what
                     // every panel on it would say, and the banner at the top is what the
@@ -130,7 +130,7 @@ saying before it is chosen: this is the only setting in the product that changes
             show("Pick exactly one sample, or choose No ancestor.");
             return;
         }
-        post({reseq_id: chosen[0]}, "Designate this ancestor?",
+        post({sample_id: chosen[0]}, "Designate this ancestor?",
              "This sample will be excluded from every view and analysis, and its mutations "
              + "subtracted from every other sample. Everyone sees this change.");
     });

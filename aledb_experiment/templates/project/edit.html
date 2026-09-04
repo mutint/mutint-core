@@ -43,7 +43,7 @@
 
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="pe-save">Save project</button>
-            <a class="btn btn-default" href="/ale/project/{{ project.id }}/">Cancel</a>
+            <a class="btn btn-default" href="/project/{{ project.id }}/">Cancel</a>
         </div>
         <div id="pe-error" style="color: #a00; margin-top: 1em;"></div>
     </div>
@@ -59,8 +59,8 @@
             status: document.getElementById("pe-status").value
         };
         if (document.getElementById("pe-public").checked) { data.is_public = "1"; }
-        window.aledbPost("/ale/project/{{ project.id }}/update/", data).then(function () {
-            window.location.href = "/ale/project/{{ project.id }}/";
+        window.aledbPost("/project/{{ project.id }}/update/", data).then(function () {
+            window.location.href = "/project/{{ project.id }}/";
         }).catch(function (err) {
             document.getElementById("pe-error").textContent = err.message;
         });

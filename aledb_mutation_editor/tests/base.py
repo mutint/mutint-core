@@ -30,7 +30,7 @@ class EditorTestCase(TestCase):
         self.owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.owner)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.context = prepare_experiment_by_id(self.experiment.id)

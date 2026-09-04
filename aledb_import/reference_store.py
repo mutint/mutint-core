@@ -173,9 +173,9 @@ def _apply_sequence_fields(reference, sequences, fasta_sha, sequence_sha, extra=
     reference.save(update_fields=list(fields) + list(extra))
 
 
-def _stored_gff3_text(ale_experiment_id):
+def _stored_gff3_text(experiment_id):
     """The experiment's stored annotation, or None if it cannot be read."""
-    path = store.experiment_reference_path(ale_experiment_id, store.REFERENCE_GFF3)
+    path = store.experiment_reference_path(experiment_id, store.REFERENCE_GFF3)
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return handle.read()
@@ -206,28 +206,28 @@ def _ensure_sequence_identity(reference):
                            reference_io.sequence_set_digest(sequences))
 
 
-def _write_store(ale_experiment_id, gff3_text, fasta_text):
-    directory = store.ensure_dir(store.experiment_reference_dir(ale_experiment_id))
-    gff3_path = store.experiment_reference_path(ale_experiment_id, store.REFERENCE_GFF3)
-    fasta_path = store.experiment_reference_path(ale_experiment_id, store.REFERENCE_FASTA)
+def _write_store(experiment_id, gff3_text, fasta_text):
+    directory = store.ensure_dir(store.experiment_reference_dir(experiment_id))
+    gff3_path = store.experiment_reference_path(experiment_id, store.REFERENCE_GFF3)
+    fasta_path = store.experiment_reference_path(experiment_id, store.REFERENCE_FASTA)
 
     with open(gff3_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(gff3_text)
     with open(fasta_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(fasta_text)
     reference_io.write_fai(
-        fasta_path, store.experiment_reference_path(ale_experiment_id, store.REFERENCE_FAI))
+        fasta_path, store.experiment_reference_path(experiment_id, store.REFERENCE_FAI))
     return directory
 
 
-def annotation_reference_path(ale_experiment_id):
+def annotation_reference_path(experiment_id):
     """The stored reference to annotate against, or None if there is none.
 
     This is the same canonical GFF3 the store hashes and igv.js draws. It is in
     breseq's own dialect precisely so it can serve all three (see
     ``aledb_import.reference.normalize_reference``).
     """
-    path = store.experiment_reference_path(ale_experiment_id, store.REFERENCE_GFF3)
+    path = store.experiment_reference_path(experiment_id, store.REFERENCE_GFF3)
     return path if os.path.isfile(path) else None
 
 

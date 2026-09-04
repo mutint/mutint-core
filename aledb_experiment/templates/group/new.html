@@ -28,7 +28,7 @@
 
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="gn-save">Create group</button>
-            <a class="btn btn-default" href="/ale/groups/">Cancel</a>
+            <a class="btn btn-default" href="/group/">Cancel</a>
         </div>
         <div id="gn-error" style="color: #a00; margin-top: 1em;"></div>
     </div>
@@ -38,11 +38,11 @@
     "use strict";
     if (!document.getElementById("gn-save")) { return; }
     document.getElementById("gn-save").addEventListener("click", function () {
-        window.aledbPost("/ale/groups/create/", {
+        window.aledbPost("/group/create/", {
             name: document.getElementById("gn-name").value,
             description: document.getElementById("gn-description").value
         }).then(function (body) {
-            window.location.href = "/ale/group/" + body.group_id + "/";
+            window.location.href = "/group/" + body.group_id + "/";
         }).catch(function (err) {
             document.getElementById("gn-error").textContent = err.message;
         });

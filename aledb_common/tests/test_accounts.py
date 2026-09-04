@@ -66,10 +66,10 @@ class LoginPageTestCase(TestCase):
         """`next` beats the view's `next_page`, so a @login_required bounce comes back."""
         response = self.client.post(
             "/accounts/login/",
-            {"username": "reader", "password": PASSWORD, "next": "/ale/projects/"})
+            {"username": "reader", "password": PASSWORD, "next": "/project/"})
 
         self.assertEqual(302, response.status_code)
-        self.assertEqual("/ale/projects/", response["Location"])
+        self.assertEqual("/project/", response["Location"])
 
     def test_each_input_is_in_its_own_form_group(self):
         """This is the fix for "no space between the text boxes": `form-group` is what carries
@@ -300,7 +300,7 @@ class LogoutTestCase(TestCase):
     def test_the_sidebar_posts_rather_than_linking(self):
         """The markup, because a form that renders as an anchor again would 405 on click and
         the page would look entirely correct until somebody tried to leave."""
-        body = self.client.get("/ale/projects/").content.decode()
+        body = self.client.get("/project/").content.decode()
 
         form = re.search(r'<form[^>]*action="/accounts/logout/"[^>]*>(.*?)</form>',
                          body, re.S)

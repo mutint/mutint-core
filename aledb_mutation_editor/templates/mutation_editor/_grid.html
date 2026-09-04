@@ -24,7 +24,7 @@ rendering of it, and `draw` re-applies them.
             itself. Editing is recorded and
         {% endif %}
         can be undone from the
-        <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>.
+        <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>.
     </p>
 </div>
 
@@ -33,13 +33,13 @@ rendering of it, and `draw` re-applies them.
    to 32.8 MB. This box decides what is built. {% endcomment %}
 <div class="row" style="margin-bottom: 10px;">
     <form method="get" class="form-inline">
-        <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id }}">
-        <input type="hidden" name="reseq_id" value="{{ all_samples_value }}">
+        <input type="hidden" name="experiment_id" value="{{ experiment_id }}">
+        <input type="hidden" name="sample_id" value="{{ all_samples_value }}">
         <input type="text" class="form-control" name="q" value="{{ grid_query }}"
                placeholder="gene, position, type or change" style="width: 22em;">
         <button type="submit" class="btn btn-default">Search</button>
         {% if grid_query %}
-            <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ all_samples_value }}"
+            <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ all_samples_value }}"
                class="btn btn-link">clear</a>
         {% endif %}
     </form>
@@ -119,11 +119,11 @@ rendering of it, and `draw` re-applies them.
                                data-mutation="{{ row.mutation.id }}"
                                title="Select this mutation in every sample"></td>
                 {% else %}
-                    {% comment %} No `reseq_id`, unlike the per-sample table's link: this row
+                    {% comment %} No `sample_id`, unlike the per-sample table's link: this row
                        spans every sample, so there is no one sample the person clicked and
                        the whole set is the honest default. {% endcomment %}
                     <td class="me-change"><a
-                        href="/mutation-editor/edit?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
+                        href="/mutation-editor/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
                         title="Edit this mutation in every sample that carries it">edit</a></td>
                 {% endif %}
                 <td class="breseq-seq-id">{{ row.mutation.reseq_reference|default_if_none:"" }}</td>
@@ -279,7 +279,7 @@ $(document).ready(function () {
             // One POST for the whole batch across every sample it touches -- which is what
             // makes it one entry in the history rather than one per sample.
             window.aledbPost("/mutation-editor/delete/apply", {
-                experiment_id: "{{ ale_experiment_id }}",
+                experiment_id: "{{ experiment_id }}",
                 observed_ids: JSON.stringify(ids)
             }).then(function () {
                 window.location.reload();

@@ -47,20 +47,20 @@
     </style>
 
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 {% block content %}
-    {% if ale_experiment_id %}
+    {% if experiment_id %}
         <div class="row"> <!-- Columns -->
             <form action="" method="get">
             {% csrf_token %}
                 <br>
                 <b>Columns: </b>
-                <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id  }}"/>
+                <input type="hidden" name="experiment_id" value="{{ experiment_id  }}"/>
                 <input type="hidden" id="hidden_columns" name="hidden_columns" value="{{ hidden_columns }}"/>
-                <select name="{{ PARAM_ALE }}" class="selectpicker">
+                <select name="{{ PARAM_POPULATION }}" class="selectpicker">
                     <option value="{{ PARAM_ALL }}">All ales</option>
                     {% for ale in ales %}
-                        <option {% if ale == ale_no %}selected="selected" {% endif %}
+                        <option {% if ale == population %}selected="selected" {% endif %}
                                 value="{{ ale }}">{{ ale }}</option>
                     {% endfor %}
                 </select>
@@ -95,7 +95,7 @@
         {% comment %} What filtering produced the table below. Included here rather than in
            each page, because this template is shared by aledb-compare, aledb-fixation and
            aledb-converge -- so all three say what they did, and all three get the controls
-           above, without a line of their own. The tags read `ale_experiment_id` and the request
+           above, without a line of their own. The tags read `experiment_id` and the request
            straight out of the context they already set. {% endcomment %}
         {% view_filter_summary %}
         <div><i>Note: You must select the Apply button when selecting specific ALEs or show/hide of columns according to
@@ -129,11 +129,11 @@
 
         <!-- Mutation table -->
         <form action="" method="get">
-            <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id  }}"/>
-            {% if ale_no %}
-                <input type="hidden" name="{{ PARAM_ALE }}" value="{{ ale_no }}"/>
+            <input type="hidden" name="experiment_id" value="{{ experiment_id  }}"/>
+            {% if population %}
+                <input type="hidden" name="{{ PARAM_POPULATION }}" value="{{ population }}"/>
             {% else %}
-                <input type="hidden" name="{{ PARAM_ALE }}" value="{{ PARAM_ALL }}"/>
+                <input type="hidden" name="{{ PARAM_POPULATION }}" value="{{ PARAM_ALL }}"/>
             {% endif %}
             <table id="data" class="table" cellspacing="0px">
                 <br>

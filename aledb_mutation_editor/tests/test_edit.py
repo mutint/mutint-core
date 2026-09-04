@@ -27,8 +27,8 @@ APPLY = "/mutation-editor/edit/apply"
 
 class ChangeMutationTestCase(EditorTestCase):
 
-    def change(self, mutation=None, target_reseq_ids=None, **fields):
-        """POST the change form. `target_reseq_ids` left out is the endpoint's older contract,
+    def change(self, mutation=None, target_sample_ids=None, **fields):
+        """POST the change form. `target_sample_ids` left out is the endpoint's older contract,
         "every sample carrying it", and is what most of this file exercises."""
         payload = {
             "experiment_id": self.experiment.id,
@@ -38,15 +38,15 @@ class ChangeMutationTestCase(EditorTestCase):
             "position": 100,
             "new_seq": "T",
         }
-        if target_reseq_ids is not None:
-            payload["target_reseq_ids"] = json.dumps(target_reseq_ids)
+        if target_sample_ids is not None:
+            payload["target_sample_ids"] = json.dumps(target_sample_ids)
         payload.update(fields)
         return self.client.post(APPLY, payload)
 
     # --- the page -------------------------------------------------------------------------
 
     def test_the_page_opens_on_what_is_stored(self):
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        response = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                           "mutation_id": self.mut_1.id})
         html = response.content.decode("utf-8")
 
@@ -55,7 +55,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertIn('id="mutation-initial"', html)
 
     def test_the_page_says_how_many_samples_follow(self):
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id}).content.decode("utf-8")
 
         self.assertIn("<b>2</b> that carr", html)
@@ -64,19 +64,19 @@ class ChangeMutationTestCase(EditorTestCase):
         """There is nothing to change in a sample that does not carry the mutation, and
         `data-value` is what `aledbSelectList` reads a row's id off -- a list rendered without
         it looks right and posts an empty selection."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_2.id}).content.decode("utf-8")
 
         self.assertIn('data-value="%d"' % self.sample_a.id, html)
         self.assertNotIn('data-value="%d"' % self.sample_b.id, html)
 
     def test_it_opens_on_the_sample_the_link_came_from(self):
-        """The per-sample table's `change` link carries `?reseq_id=`, and correcting a call
+        """The per-sample table's `change` link carries `?sample_id=`, and correcting a call
         you are looking at in the sample you are looking at it in is what following it means.
         `active` on the <li> is the selection, so that is what has to be there."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id,
-                                      "reseq_id": self.sample_b.id}).content.decode("utf-8")
+                                      "sample_id": self.sample_b.id}).content.decode("utf-8")
 
         self.assertIn('data-value="%d" class="active"' % self.sample_b.id, html)
         self.assertIn('<li data-value="%d">' % self.sample_a.id, html)
@@ -84,18 +84,18 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_it_opens_on_every_sample_when_the_link_names_none(self):
         """The grid's link, whose row spans every sample -- so there is no one sample that was
         clicked and the whole set is the honest default."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id}).content.decode("utf-8")
 
         for sample in (self.sample_a, self.sample_b):
             self.assertIn('data-value="%d" class="active"' % sample.id, html)
 
-    def test_reseq_id_all_opens_on_every_sample(self):
-        """`?reseq_id=all` is the editor's whole-experiment sentinel. It is not a sample, so it
+    def test_sample_id_all_opens_on_every_sample(self):
+        """`?sample_id=all` is the editor's whole-experiment sentinel. It is not a sample, so it
         lands on the default rather than on an empty selection."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_1.id,
-                                      "reseq_id": "all"}).content.decode("utf-8")
+                                      "sample_id": "all"}).content.decode("utf-8")
 
         for sample in (self.sample_a, self.sample_b):
             self.assertIn('data-value="%d" class="active"' % sample.id, html)
@@ -103,9 +103,9 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_a_sample_that_does_not_carry_it_is_not_preselected(self):
         """A link naming a sample this mutation is not in cannot select nothing: the page
         would open with a Save button that refuses."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                       "mutation_id": self.mut_2.id,
-                                      "reseq_id": self.sample_b.id}).content.decode("utf-8")
+                                      "sample_id": self.sample_b.id}).content.decode("utf-8")
 
         self.assertIn('data-value="%d" class="active"' % self.sample_a.id, html)
 
@@ -113,13 +113,13 @@ class ChangeMutationTestCase(EditorTestCase):
         """Scoped through the experiment, for the reason mutation_delete scopes its ids: a
         mutation belongs to one experiment's reference genome."""
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         from aledb_experiment.models import Experiment
 
         other = Experiment.objects.get(pk=created["experiment_id"])
         stranger = self.make_mutation(position=1, sequence_change="A>C", experiment=other)
 
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
+        response = self.client.get(PAGE, {"experiment_id": self.experiment.id,
                                           "mutation_id": stranger.id})
 
         self.assertEqual(404, response.status_code)
@@ -248,7 +248,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_only_the_chosen_samples_move(self):
         """The point of the whole thing: a call right in one sample and wrong in another is
         one correction to make, not a delete and a retype."""
-        response = self.change(position=150, target_reseq_ids=[self.sample_b.id])
+        response = self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
         moved = ObservedMutation.objects.get(sample=self.sample_b,
@@ -261,14 +261,14 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_the_row_they_came_off_is_left_alone(self):
         """It has not changed. Its remaining samples still observe the call it always was --
         and its primary key still means that to every exported CSV holding it."""
-        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+        self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         self.mut_1.refresh_from_db()
         self.assertEqual(100, self.mut_1.position)
         self.assertEqual(1, ObservedMutation.objects.filter(mutation=self.mut_1).count())
 
     def test_a_subset_mints_a_row_when_the_values_are_new(self):
-        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+        self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.assertNotEqual(self.mut_1.pk, minted.pk)
@@ -283,7 +283,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.mut_2.refresh_from_db()
 
         response = self.change(mutation=self.mut_1, position=150,
-                               target_reseq_ids=[self.sample_b.id])
+                               target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
         self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
@@ -294,7 +294,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """`gd_data` is what `to_gd_line()` round-trips for gdtools APPLY, so the two rows
         have to disagree about it -- the mutation the unchosen samples were left on has not
         changed, and re-annotating it as though it had is the bug this pins."""
-        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+        self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.mut_1.refresh_from_db()
@@ -312,7 +312,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.change(mutation=self.mut_2, position=200, new_seq="G")
 
         response = self.change(mutation=self.mut_1, position=200, new_seq="G",
-                               target_reseq_ids=[self.sample_b.id])
+                               target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual([self.sample_b.ale_flask_isolate_str], response.json()["already"])
@@ -324,7 +324,7 @@ class ChangeMutationTestCase(EditorTestCase):
             sample=self.sample_b, mutation=self.mut_1).exists())
 
     def test_a_subset_is_one_changeset_of_removals_and_additions(self):
-        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+        self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         change_set = MutationChangeSet.objects.get()
         self.assertEqual(KIND_EDIT, change_set.kind)
@@ -335,7 +335,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """The opposite of the whole-set path, and it falls out rather than being arranged:
         the row never moved, so `_resolve_mutation` finds it still holding the old identity
         and hands the observation straight back to the same primary key."""
-        self.change(position=150, target_reseq_ids=[self.sample_b.id])
+        self.change(position=150, target_sample_ids=[self.sample_b.id])
 
         history.restore(self.experiment, self.owner, change_set=None)
 
@@ -350,7 +350,7 @@ class ChangeMutationTestCase(EditorTestCase):
         before = self.mut_1.pk
 
         self.change(position=150,
-                    target_reseq_ids=[self.sample_a.id, self.sample_b.id])
+                    target_sample_ids=[self.sample_a.id, self.sample_b.id])
 
         self.mut_1.refresh_from_db()
         self.assertEqual(before, self.mut_1.pk)
@@ -374,7 +374,7 @@ class ChangeMutationTestCase(EditorTestCase):
         """Scoped to the samples carrying it for the reason the mutation is scoped to the
         experiment: a hand-typed id must not reach past what the page offered."""
         response = self.change(mutation=self.mut_2, position=250,
-                               target_reseq_ids=[self.sample_b.id])
+                               target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(404, response.status_code)
         self.assertIn("do not carry", response.json()["error"])

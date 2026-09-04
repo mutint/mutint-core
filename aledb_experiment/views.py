@@ -71,10 +71,10 @@ def project_detail(request, pk):
 def experiment_detail(request, pk):
     # experiment = get_object_or_404(Experiment, pk=pk)
     # context = {
-    #     "ale_experiment_id": experiment.id,
-    #     "ale_experiment_name": experiment.name,
+    #     "experiment_id": experiment.id,
+    #     "experiment_name": experiment.name,
     # }
-    url = "/stats?ale_experiment_id="+pk
+    url = "/stats?experiment_id="+pk
     return redirect(url)
 
 
@@ -128,7 +128,7 @@ def experiment_new(request):
     if project is None and not editable:
         # Nothing to create under. The project page is where that starts, and it
         # offers the button once you get there.
-        return redirect("/ale/projects/new/")
+        return redirect("/project/new/")
 
     context.update({"project": project, "editable_projects": editable})
     return render(request, "experiment/new.html", context)
@@ -259,7 +259,7 @@ def experiment_ancestor(request, pk):
 def experiment_ancestor_apply(request, pk):
     """Set or clear the designated ancestor. Write access, and not while locked.
 
-    Posting no `reseq_id` clears the designation, which is what the "No ancestor" row does.
+    Posting no `sample_id` clears the designation, which is what the "No ancestor" row does.
 
     **`can_edit_experiment`, not `can_edit_project`.** A predicate handed the project cannot
     see the lock on the experiment, and this is exactly the kind of write a lock exists to
@@ -274,13 +274,13 @@ def experiment_ancestor_apply(request, pk):
                        or "You do not have permission to change this experiment.")},
             status=403)
 
-    raw = (request.POST.get("reseq_id") or "").strip()
+    raw = (request.POST.get("sample_id") or "").strip()
     if not raw:
         experiment.clear_ancestor()
     else:
         from aledb_seq.util import get_ordered_reseq_queryset
         try:
-            reseq_id = int(raw)
+            sample_id = int(raw)
         except (TypeError, ValueError):
             return JsonResponse({"error": "That is not a sample id."}, status=400)
 
@@ -289,7 +289,7 @@ def experiment_ancestor_apply(request, pk):
         # belongs to one experiment's reference genome -- subtracting a foreign sample's
         # mutations would be meaningless where it was not simply a no-op.
         reseq = get_ordered_reseq_queryset(
-            experiment.id, include_ancestor=True).filter(pk=reseq_id).first()
+            experiment.id, include_ancestor=True).filter(pk=sample_id).first()
         if reseq is None:
             return JsonResponse(
                 {"error": "That sample is not in this experiment."}, status=404)

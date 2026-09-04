@@ -163,7 +163,7 @@ def to_experiment(prefix="", field="", root="sample"):
 
 
 def to_experiment_id(prefix="", root="sample"):
-    """The experiment's primary key -- what `?ale_experiment_id=` carries."""
+    """The experiment's primary key -- what `?experiment_id=` carries."""
     return join(prefix, chain(root), EXPERIMENT_PK)
 
 

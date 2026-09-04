@@ -4,7 +4,7 @@
 {% block title %}Add to {{ experiment.name }}{% endblock %}
 
 {% block header %}
-    <b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>:
+    <b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>:
        {{ experiment.name }}</b> &mdash; Add data
 {% endblock %}
 
@@ -69,7 +69,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary" id="add-submit" disabled>Add</button>
-        <a class="btn btn-default" href="/stats?ale_experiment_id={{ experiment.id }}">Back to experiment</a>
+        <a class="btn btn-default" href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
     </form>
 
     <div id="add-result" style="margin-top: 1.5em;"></div>
@@ -556,7 +556,7 @@
 
         var uploadId = null;
         postJson("/import/uploads/", {
-            ale_experiment_id: EXPERIMENT_ID,
+            experiment_id: EXPERIMENT_ID,
             import_type: typeSelect.value,
             files: toUpload.map(function (entry) {
                 return { path: entry.path, size: entry.file.size };
@@ -745,7 +745,7 @@
             "Added to " + summary.experiment + " (#" + summary.experiment_id + "): "
             + whatLanded(summary) + " "));
         var link = document.createElement("a");
-        link.href = "/stats?ale_experiment_id=" + encodeURIComponent(summary.experiment_id);
+        link.href = "/stats?experiment_id=" + encodeURIComponent(summary.experiment_id);
         link.textContent = "View experiment";
         alert.appendChild(link);
         return alert;

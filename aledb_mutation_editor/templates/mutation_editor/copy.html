@@ -10,7 +10,7 @@
     <script src="{% static 'js/breseq_table.js' %}?v={{ aledb_version }}"></script>
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     {% include "mutation_editor/_toolbar.html" with active='copy' %}
@@ -25,8 +25,8 @@
             </button>
             <ul class="dropdown-menu aledb-menu">
                 {% for reseq in reseq_list %}
-                    <li {% if reseq.id == source_reseq_id %}class="active"{% endif %}>
-                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;source_reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                    <li {% if reseq.id == source_sample_id %}class="active"{% endif %}>
+                        <a href="?experiment_id={{ experiment_id }}&amp;source_sample_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -43,7 +43,7 @@
                 Pick mutations from this sample and the samples to put them on. A target that
                 already carries a mutation is skipped rather than given a second copy of it.
                 Copying is recorded and can be undone from the
-                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>.
+                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>.
                 Copying between <em>experiments</em> is not offered: a mutation belongs to one
                 experiment's reference genome, so the same position can mean a different locus
                 in another.
@@ -108,7 +108,7 @@
     // extensions in the last <script> of <body>, after this block. Initialising at parse time
     // silently drops `select:` and `buttons:` -- the table draws either way and the checkbox
     // column still gets its class from the stylesheet, so the failure looks like styling
-    // rather than a load-order problem. /ale/experiments/ does the same thing for the same
+    // rather than a load-order problem. /experiment/ does the same thing for the same
     // reason.
     $(document).ready(function () {
         "use strict";
@@ -151,10 +151,10 @@
 
             document.getElementById("me-error").textContent = "";
             window.aledbPost("/mutation-editor/copy/apply", {
-                experiment_id: "{{ ale_experiment_id }}",
-                source_reseq_id: "{{ source_reseq_id }}",
+                experiment_id: "{{ experiment_id }}",
+                source_sample_id: "{{ source_sample_id }}",
                 mutation_ids: JSON.stringify(mutationIds),
-                target_reseq_ids: JSON.stringify(targetIds)
+                target_sample_ids: JSON.stringify(targetIds)
             }).then(function (body) {
                 var message = "Copied " + body.added + " observation(s).";
                 if (body.already && body.already.length) {

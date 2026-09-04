@@ -27,7 +27,7 @@ class SummaryTestCase(EditorTestCase):
     def render(self, template=TEMPLATE):
         request = RequestFactory().get("/")
         request.session = {}
-        return template.render(Context({"ale_experiment_id": self.experiment.id,
+        return template.render(Context({"experiment_id": self.experiment.id,
                                         "request": request}))
 
 
@@ -56,7 +56,7 @@ class TestWithAnAncestor(SummaryTestCase):
         self.assertNotIn("every stored mutation", self.render())
 
     def test_it_links_to_the_ancestor(self):
-        self.assertIn("reseq_id=%d" % self.sample_a.id, self.render())
+        self.assertIn("sample_id=%d" % self.sample_a.id, self.render())
 
     def test_a_page_that_does_not_subtract_can_say_so(self):
         """Exactly one page passes this: the per-sample breseq table, which tints instead."""

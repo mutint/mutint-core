@@ -26,7 +26,7 @@ class RebuildRegistryTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
         self.calls = []
 
@@ -107,7 +107,7 @@ class RebuildRegistryTestCase(TestCase):
     def test_requesting_with_no_experiment_marks_every_experiment(self):
         """The global-filter case: every experiment's counts are computed through it."""
         second = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         other = Experiment.objects.get(pk=second["experiment_id"])
 
         self._register("test.global")
@@ -268,7 +268,7 @@ class RebuildCommandTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.rebuilt = []
@@ -318,7 +318,7 @@ class RebuildCommandTestCase(TestCase):
 
     def test_all_rebuilds_every_live_experiment(self):
         second = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         other = Experiment.objects.get(pk=second["experiment_id"])
 
         self._run("--all", only=["test.watched"])

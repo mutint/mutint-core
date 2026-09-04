@@ -104,6 +104,6 @@ class FrequencyCutoffTestCase(EditorTestCase):
         hidden from every table has to stay visible where it can be removed, or it cannot be
         curated and returns the moment somebody widens the filter."""
         response = self.client.get("/mutation-editor/", {
-            "ale_experiment_id": self.experiment.id, "reseq_id": "all"})
+            "experiment_id": self.experiment.id, "sample_id": "all"})
 
         self.assertIn('data-obs="%d"' % self.low.id, response.content.decode("utf-8"))

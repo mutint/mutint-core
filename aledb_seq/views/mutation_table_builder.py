@@ -55,8 +55,8 @@ def get_table_header(user, reseq_dict, experiment: Experiment = None):
     base_table_header = HTML_MUTATION_TABLE_HEADER
     table_header_list = []
 
-    for reseq_id in reseq_dict:
-        reseq = reseq_dict[reseq_id]
+    for sample_id in reseq_dict:
+        reseq = reseq_dict[sample_id]
         sample_name = reseq.ale_flask_isolate_str
         if not experiment:
             sample_name = reseq.exp_ale_flask_isolate_str

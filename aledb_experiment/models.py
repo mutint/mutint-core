@@ -98,7 +98,7 @@ class Experiment(SoftDeleteMixin):
     # 32-bit `integer` primary key left among 26 `bigint` ones, and every foreign key
     # pointing at it was 32-bit too.
     #
-    # The query parameter has always been `ale_experiment_id`, so the URLs did not move.
+    # The query parameter has always been `experiment_id`, so the URLs did not move.
     name = models.CharField(max_length=200)
     person = models.CharField(max_length=200)
     date = models.DateTimeField(auto_now_add=True)
@@ -230,7 +230,7 @@ class Experiment(SoftDeleteMixin):
         """The four things base.html needs to render the experiment in the sidebar.
 
         It returns the experiment's own name and the project's separately, because that is
-        how the template joins them: `{{ ale_project_name }}: {{ ale_experiment_name }}`.
+        how the template joins them: `{{ ale_project_name }}: {{ experiment_name }}`.
         This used to return a *composed* `"project: experiment"` under the experiment key
         and no project key at all, so a caller that trusted it rendered `": project:
         experiment"` -- a stray leading colon -- and one that added the project name without
@@ -244,8 +244,8 @@ class Experiment(SoftDeleteMixin):
         colon regardless, which is a template question rather than this one's.
         """
         return {
-            "ale_experiment_name": self.name,
-            "ale_experiment_id": self.id,
+            "experiment_name": self.name,
+            "experiment_id": self.id,
             "ale_project_name": self.project.name if self.project else "",
             "ale_project_id": self.project_id,
             # Fifth, and here for the same reason as the other four: every experiment-scoped

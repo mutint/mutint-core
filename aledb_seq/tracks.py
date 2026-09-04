@@ -204,11 +204,11 @@ def sample_features(experiment_id, contig=None):
 
     features = []
     for (seq_id, position, start_position, end_position, frequency,
-         reseq_id) in rows.order_by(*sample_order("sample__")).values_list(
+         sample_id) in rows.order_by(*sample_order("sample__")).values_list(
             "mutation__reseq_reference", "mutation__position", "mutation__start_position",
             "mutation__end_position", "frequency", "sample_id",
     ).iterator(chunk_size=2000):
-        if not seq_id or reseq_id not in labels:
+        if not seq_id or sample_id not in labels:
             # Not in the ordered list means filtered out of it -- the ancestor, or a sample
             # type the listing excludes. Drawing it would put a row on the track that the
             # tables beside it do not show.
@@ -222,7 +222,7 @@ def sample_features(experiment_id, contig=None):
             # Not encoded in the colour -- see SEG_PRESENT -- but carried so igv's popup can
             # show the number, which is exact where a colour would only be suggestive.
             "frequency": None if frequency is None else float(frequency),
-            "sample": labels[reseq_id],
+            "sample": labels[sample_id],
         })
         if len(features) >= MAX_FEATURES:
             break

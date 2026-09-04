@@ -101,7 +101,7 @@ class CuratePermissionTestCase(TestCase):
 
         self.client.force_login(self.superuser)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         experiment = Experiment.objects.get(pk=created["experiment_id"])
         self.assertTrue(can_curate(self.superuser, experiment))
 

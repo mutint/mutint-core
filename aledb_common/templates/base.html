@@ -139,17 +139,17 @@
                 {% endfor %}
 
                 {# <li><a href="/bibliome">Bibliome</a></li> #}
-                {% if ale_experiment_id %}
+                {% if experiment_id %}
                     <li>
                         {% comment %} The padlock goes here rather than in the page header,
                            because `{% block header %}` is overridden by almost every
                            experiment page and a badge added to the default would render on
                            none of them. This block is not overridden anywhere. {% endcomment %}
-                        <a href="/stats?ale_experiment_id={{ ale_experiment_id }}"><b>{% if ale_experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ ale_project_name }}: {{ ale_experiment_name }}</b></a>
+                        <a href="/stats?experiment_id={{ experiment_id }}"><b>{% if ale_experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ ale_project_name }}: {{ experiment_name }}</b></a>
                     </li>
                     {% for item in nav_experiment_items %}
                         <li>
-                            <a href="{{ item.url }}?ale_experiment_id={{ ale_experiment_id }}">&nbsp;&nbsp;&nbsp;{{ item.label }}</a>
+                            <a href="{{ item.url }}?experiment_id={{ experiment_id }}">&nbsp;&nbsp;&nbsp;{{ item.label }}</a>
                         </li>
                     {% endfor %}
                 {% endif %}
@@ -177,21 +177,21 @@
                 <div class="col-lg-12">
                     <div class="page-header">
                         <h2>{% block header %}
-                            <b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}
+                            <b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}
                             </b>{% endblock %}
                             {% if branding.logo %}
                                 <a href="/"><img src="{% static branding.logo %}"
                                                  style="max-width: 10%; max-height: 10%; float: right"></a>
                             {% endif %}
                         </h2>
-                        {% if ale_experiment_id %}
+                        {% if experiment_id %}
                             {% comment %} The route keeps its /stats name; only the label changes.
                                This one is hardcoded rather than coming from nav_registry because
                                it is the section's landing page, always first. {% endcomment %}
-                            <a href="/stats?ale_experiment_id={{ ale_experiment_id }}" class="btn-primary2"
+                            <a href="/stats?experiment_id={{ experiment_id }}" class="btn-primary2"
                                role="button">Overview</a>
                             {% for item in nav_experiment_items %}
-                                | <a href="{{ item.url }}?ale_experiment_id={{ ale_experiment_id }}"
+                                | <a href="{{ item.url }}?experiment_id={{ experiment_id }}"
                                      class="btn-primary2" role="button">{{ item.label }}</a>
                             {% endfor %}
                         {% endif %}

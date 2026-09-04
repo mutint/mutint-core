@@ -178,4 +178,4 @@ class Command(BaseCommand):
             raise CommandError(
                 "%d of %d file(s) were not imported; the example is incomplete."
                 % (len(failed), len(files)))
-        self.stdout.write("  /stats?ale_experiment_id=%s" % experiment.id)
+        self.stdout.write("  /stats?experiment_id=%s" % experiment.id)

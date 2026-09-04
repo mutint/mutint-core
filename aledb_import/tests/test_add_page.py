@@ -25,14 +25,14 @@ class AddPageTestCase(TestCase):
         # can_view_project would refuse the owner their own project (it consults the grant,
         # never Project.user).
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
         from aledb_experiment.models import Experiment
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def test_page_renders_scoped_to_the_experiment(self):
         response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id})
+            "/import/add/", {"experiment_id": self.experiment.id})
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
@@ -43,7 +43,7 @@ class AddPageTestCase(TestCase):
 
     def test_dropdown_lists_the_registered_types_this_experiment_can_use(self):
         response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id})
+            "/import/add/", {"experiment_id": self.experiment.id})
         html = response.content.decode("utf-8")
 
         # No Auto-detect: the type is chosen, never guessed.
@@ -63,7 +63,7 @@ class AddPageTestCase(TestCase):
             [h for h in import_registry._import_handlers if h["name"] != "page_test_type"]))
 
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id}
+            "/import/add/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         self.assertIn("Plugin readings (.tsv)",
                       html.split('id="add-type"')[1].split("</select>")[0])
@@ -108,7 +108,7 @@ class AddPageTestCase(TestCase):
             self.experiment, breseq_fixture.gff3_text(sequences), sequences)
 
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id}
+            "/import/add/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         select = html.split('id="add-type"')[1].split("</select>")[0]
 
@@ -129,7 +129,7 @@ class AddPageTestCase(TestCase):
         server -- used to leave the page polling a finished import for as long as it was
         open. The snapshot's own state is what ends it."""
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id}
+            "/import/add/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
 
         self.assertIn("TERMINAL_STATES", html)
@@ -137,7 +137,7 @@ class AddPageTestCase(TestCase):
 
     def test_the_page_polls_for_import_progress(self):
         html = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id}
+            "/import/add/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         self.assertIn("/progress", html)
         # A completed import must forget what was dropped, or pressing Add again
@@ -149,7 +149,7 @@ class AddPageTestCase(TestCase):
         would just be a way to get an error message."""
         def dropdown():
             html = self.client.get(
-                "/import/add/", {"ale_experiment_id": self.experiment.id}
+                "/import/add/", {"experiment_id": self.experiment.id}
             ).content.decode("utf-8")
             # The <select> alone: the page also embeds the unscoped registry for naming
             # stray files, so every label appears somewhere regardless.
@@ -169,9 +169,9 @@ class AddPageTestCase(TestCase):
         """The page is only ever scoped to one experiment; there is no unscoped form."""
         self.assertEqual(self.client.get("/import/add/").status_code, 404)
         self.assertEqual(
-            self.client.get("/import/add/", {"ale_experiment_id": 999999}).status_code, 404)
+            self.client.get("/import/add/", {"experiment_id": 999999}).status_code, 404)
         self.assertEqual(
-            self.client.get("/import/add/", {"ale_experiment_id": "nonsense"}).status_code, 404)
+            self.client.get("/import/add/", {"experiment_id": "nonsense"}).status_code, 404)
 
     def test_no_add_data_entry_in_the_sidebar(self):
         """It could only ever have led to /import/add/ with nothing to add to."""
@@ -187,15 +187,15 @@ class AddPageTestCase(TestCase):
         self.client.force_login(stranger)
 
         response = self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id})
+            "/import/add/", {"experiment_id": self.experiment.id})
         self.assertEqual(response.status_code, 403)
 
     def test_experiment_page_offers_add_and_delete(self):
-        response = self.client.get("/stats/", {"ale_experiment_id": self.experiment.id})
+        response = self.client.get("/stats/", {"experiment_id": self.experiment.id})
         html = response.content.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("/import/add/?ale_experiment_id=%d" % self.experiment.id, html)
+        self.assertIn("/import/add/?experiment_id=%d" % self.experiment.id, html)
         self.assertIn("delete-experiment", html)
         # The dialog copy used to be inlined here, and this asserted the literal
         # "This is permanent." Deleting an experiment is one of the four controls behind
@@ -203,17 +203,17 @@ class AddPageTestCase(TestCase):
         self.assertIn("aledbConfirmTypedDelete", html)
 
     def test_list_pages_offer_create_and_delete(self):
-        projects = self.client.get("/ale/projects/").content.decode("utf-8")
+        projects = self.client.get("/project/").content.decode("utf-8")
         self.assertIn("New project", projects)
         self.assertIn("delete-selected", projects)
         # The form moved to a page of its own; the list only links to it.
-        self.assertIn('href="/ale/projects/new/"', projects)
-        new_project = self.client.get("/ale/projects/new/").content.decode("utf-8")
+        self.assertIn('href="/project/new/"', projects)
+        new_project = self.client.get("/project/new/").content.decode("utf-8")
         self.assertIn("First experiment", new_project)   # optional, in the same step
         # aledbConfirmDelete calls swal(), which base.html does not load.
         self.assertIn("sweetalert", projects)
 
-        experiments = self.client.get("/ale/experiments/").content.decode("utf-8")
+        experiments = self.client.get("/experiment/").content.decode("utf-8")
         self.assertIn("delete-selected", experiments)
 
     def test_both_list_pages_load_the_shared_crud_helpers(self):
@@ -236,7 +236,7 @@ class AddPageTestCase(TestCase):
         # sharing pages use. If this line fails, the wrong helper was edited.
         self.assertIn("This is permanent.", source)
 
-        for url in ("/ale/projects/", "/ale/experiments/"):
+        for url in ("/project/", "/experiment/"):
             html = self.client.get(url).content.decode("utf-8")
             self.assertIn("js/aledb_crud.js", html, url)
             # And no longer inline, in two byte-identical copies.
@@ -265,7 +265,7 @@ class ImportTypesOfferedTestCase(TestCase):
         patcher.enable()
         self.addCleanup(patcher.disable)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         from aledb_experiment.models import Experiment
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
@@ -278,7 +278,7 @@ class ImportTypesOfferedTestCase(TestCase):
 
     def _html(self):
         return self.client.get(
-            "/import/add/", {"ale_experiment_id": self.experiment.id}
+            "/import/add/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
 
     def _dropdown(self):

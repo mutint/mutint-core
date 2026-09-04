@@ -53,7 +53,7 @@ class AmplificationsRemovedTestCase(TestCase):
 
     def test_the_amplifications_route_no_longer_resolves(self):
         response = self.client.get(
-            "/mutations/amplifications", {"ale_experiment_id": self.experiment.id})
+            "/mutations/amplifications", {"experiment_id": self.experiment.id})
         self.assertEqual(response.status_code, 404)
 
     def test_no_amplifications_entry_in_the_sidebar(self):

@@ -22,7 +22,7 @@ from aledb_common.version import __version__
 BRANDED = {"name": "ALEdb", "version": "9.9.9", "logo": "img/aledb_header.png"}
 
 # An internal page, so base.html renders; `/` is the landing page and is its own case.
-INTERNAL_PAGE = "/ale/projects/"
+INTERNAL_PAGE = "/project/"
 
 
 def _templates_with(extra_dir):

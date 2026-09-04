@@ -60,7 +60,7 @@
                     <td><input type="text" class="form-control input-sm" maxlength="300"
                                id="sb-isolate-description-{{ sample.id }}"
                                value="{{ sample.isolate_description }}"></td>
-                    <td><a href="/ale/sample/{{ sample.id }}/edit/">Edit</a></td>
+                    <td><a href="/sample/{{ sample.id }}/edit/">Edit</a></td>
                 </tr>
             {% endfor %}
             </tbody>
@@ -69,15 +69,15 @@
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="sb-save">Save all samples</button>
             <a class="btn btn-default"
-               href="/stats?ale_experiment_id={{ experiment.id }}">Cancel</a>
+               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
         </div>
         <div id="sb-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
         {% else %}
         <p>This experiment has no samples yet.
-           <a href="/import/add/?ale_experiment_id={{ experiment.id }}">Add data</a>.</p>
+           <a href="/import/add/?experiment_id={{ experiment.id }}">Add data</a>.</p>
         <div style="margin-top: 1.5em;">
             <a class="btn btn-default"
-               href="/stats?ale_experiment_id={{ experiment.id }}">Cancel</a>
+               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
         </div>
         {% endif %}
     </div>
@@ -113,7 +113,7 @@
 
         // One JSON string, because aledbPost stringifies each value into FormData -- a
         // nested object would arrive as "[object Object]".
-        window.aledbPost("/ale/experiment/{{ experiment.id }}/samples/update/",
+        window.aledbPost("/experiment/{{ experiment.id }}/samples/update/",
                          { rows: JSON.stringify(rows) }).then(function () {
             window.location.reload();
         }).catch(function (err) {

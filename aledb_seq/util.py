@@ -44,7 +44,7 @@ def get_all_observed_mutations_filtered(experiment_id, *, filter_type=None, view
     return filter_observed_mutations(queryset, filter_type=filter_type, view_filter=view_filter)
 
 
-def observations_for_samples(reseq_id_list, experiment_id):
+def observations_for_samples(sample_id_list, experiment_id):
     """Observations in these samples, with the experiment's designated ancestor subtracted.
 
     The entry point for a plugin that derives something. It was `get_all_observed_mutations`,
@@ -60,11 +60,11 @@ def observations_for_samples(reseq_id_list, experiment_id):
     """
     from aledb_experiment.ancestor import exclude_ancestry
     queryset = aledb_seq.models.ObservedMutation.objects.filter(
-        sample_id__in=reseq_id_list)
+        sample_id__in=sample_id_list)
     return exclude_ancestry(queryset, experiment_id)
 
 
-def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None, *,
+def get_ordered_reseq_queryset(experiment_id, ale_id=None, sample_type=None, *,
                                include_ancestor=False):
     """An experiment's samples in A/F/I/R order, without its designated ancestor.
 
@@ -86,8 +86,8 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
     reseq_qryset = aledb_seq.models.Sample.objects.select_related(
         paths.to_experiment(), paths.to_time_point(field='media')
     ).order_by(*sample_order())
-    if ale_experiment_id:
-        reseq_qryset = reseq_qryset.filter(**{paths.to_experiment_id(): ale_experiment_id})
+    if experiment_id:
+        reseq_qryset = reseq_qryset.filter(**{paths.to_experiment_id(): experiment_id})
     # `is not None`, not truthiness: the starting strain's ALE is "0"
     # (`common.STARTING_STRAIN_ALE_ID`), which was falsy while this column held integers and
     # so quietly selected every ALE instead of that one.
@@ -102,16 +102,16 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
                else paths.clonal_filter()))
     if not include_ancestor:
         from aledb_experiment.ancestor import exclude_ancestor_samples
-        reseq_qryset = exclude_ancestor_samples(reseq_qryset, ale_experiment_id)
+        reseq_qryset = exclude_ancestor_samples(reseq_qryset, experiment_id)
     return reseq_qryset
 
 
-def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, request=None,
+def get_reseq_ordered_dict(experiment_id, population=None, sample_type=None, request=None,
                            *, include_ancestor=False):
     """
     Args:
-        ale_experiment_id:
-        ale_no:
+        experiment_id:
+        population:
         sample_type: population sample
         include_ancestor: keep the designated ancestor, for a page that curates rather
             than reads. See `get_ordered_reseq_queryset`, which this wraps.
@@ -123,7 +123,7 @@ def get_reseq_ordered_dict(ale_experiment_id, ale_no=None, sample_type=None, req
         :param request:
 
     """
-    reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, ale_no, sample_type,
+    reseq_queryset = get_ordered_reseq_queryset(experiment_id, population, sample_type,
                                                 include_ancestor=include_ancestor)
     if request and request.GET.get('tag_select'):
         tag = request.GET.get('tag_select').split(':')

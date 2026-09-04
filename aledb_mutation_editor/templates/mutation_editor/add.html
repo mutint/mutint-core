@@ -5,7 +5,7 @@
 {% block scripts_and_style %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     {% include "mutation_editor/_toolbar.html" with active='add' %}
@@ -29,7 +29,7 @@
             for shape &mdash; a size has to be a number, a strand has to be 1 or &minus;1
             &mdash; but nothing can be compared against the sequence, so a mutation that would
             change nothing cannot be detected and will be accepted. Establish a reference on
-            the <a href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">Add Data</a>
+            the <a href="/import/add/?experiment_id={{ experiment_id }}">Add Data</a>
             page to turn those checks on.
         </div>
         {% endif %}
@@ -38,7 +38,7 @@
             <p style="color: #666;">
                 Records a mutation no sample carries yet. It is added to every sample you
                 highlight, as one entry in the
-                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>,
+                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>,
                 and can be restored away from there. A sample that already has this mutation is
                 skipped rather than given a second copy of it.
             </p>
@@ -105,10 +105,10 @@
             form.clearFieldErrors();
 
             var payload = {
-                experiment_id: "{{ ale_experiment_id }}",
+                experiment_id: "{{ experiment_id }}",
                 mutation_type: form.type(),
                 frequency: document.getElementById("me-f-frequency").value,
-                target_reseq_ids: JSON.stringify(targetIds)
+                target_sample_ids: JSON.stringify(targetIds)
             };
             var fields = form.fields();
             Object.keys(fields).forEach(function (name) { payload[name] = fields[name]; });

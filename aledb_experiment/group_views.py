@@ -36,7 +36,7 @@ def _standing(user, group):
 
 
 def groups(request):
-    """`/ale/groups/` -- the groups you own or belong to."""
+    """`/group/` -- the groups you own or belong to."""
     if not request.user.is_authenticated:
         return render(request, "403.html", get_user_context(request.user), status=403)
 

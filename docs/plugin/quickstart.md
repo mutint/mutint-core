@@ -78,7 +78,7 @@ EXPERIMENT_PATH = "sample__tech_rep__isolate__flask__ale_id__ale_experiment"
 def your_thing(request):
     context = get_user_context(request.user)
     try:
-        experiment = aledb_seq.views.common.get_ale_experiment(request)
+        experiment = aledb_seq.views.common.get_experiment(request)
     except Experiment.DoesNotExist:
         # Not an error: it is how the page opens before an experiment is chosen.
         return aledb_seq.views.common.no_experiment_selected(
@@ -99,8 +99,8 @@ def your_thing(request):
         queryset.values_list("mutation__mutation_type", flat=True))
 
     context.update({
-        "ale_experiment_id": experiment.ale_id,
-        "ale_experiment_name": experiment.name,
+        "experiment_id": experiment.ale_id,
+        "experiment_name": experiment.name,
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
         "title": "%s mutation types" % experiment.name,
@@ -114,7 +114,7 @@ def your_thing(request):
 ```django
 {% extends 'base.html' %}
 {% block title %}{{ title }}{% endblock %}
-{% block header %}<b>{{ ale_project_name }}: {{ ale_experiment_name }}</b> - Your Thing{% endblock %}
+{% block header %}<b>{{ ale_project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
 
 {% block content %}
     <table class="table">
@@ -174,12 +174,12 @@ class YourThingTestCase(TestCase):
         # Through the view, not Project.objects.create: access is granted on the project, and
         # an experiment nobody owns can be viewed by nobody.
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def test_the_page_renders(self):
         response = self.client.get(
-            "/yourthing/", {"ale_experiment_id": self.experiment.ale_id})
+            "/yourthing/", {"experiment_id": self.experiment.ale_id})
 
         self.assertEqual(200, response.status_code)
         self.assertIn("no mutations stored", response.content.decode())

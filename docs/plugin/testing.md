@@ -132,7 +132,7 @@ plugin's tests do it. The chain is
 
 Two things that are easy to miss:
 
-- **Create the project through the view**, `POST /ale/projects/create/`, rather than
+- **Create the project through the view**, `POST /project/create/`, rather than
   `Project.objects.create()`. Access is granted on the project, and an experiment whose
   project nobody owns can be viewed by nobody — a page test then fails with a permission
   error rather than anything to do with your plugin.

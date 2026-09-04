@@ -71,7 +71,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# fn(ale_experiment_id) -- derived data belonging to one experiment.
+# fn(experiment_id) -- derived data belonging to one experiment.
 EXPERIMENT_SCOPE = 'experiment'
 # fn() -- derived data covering the whole installation, e.g. the dashboard's totals.
 SITE_SCOPE = 'site'
@@ -121,7 +121,7 @@ def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
     name   stable identifier, e.g. 'fixation'. It is what `only=` and `./aledb rebuild --only`
            name, and what a DerivedDataState row is keyed by, so changing it orphans that row
            and the data reads as never built.
-    fn     callable(ale_experiment_id) for EXPERIMENT_SCOPE, callable() for SITE_SCOPE.
+    fn     callable(experiment_id) for EXPERIMENT_SCOPE, callable() for SITE_SCOPE.
     scope  EXPERIMENT_SCOPE or SITE_SCOPE.
     label  human-readable name for `./aledb rebuild --list`; defaults to name.
     priority  lower runs first; see the constants above. Ties break on registration order,

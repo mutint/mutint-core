@@ -15,15 +15,15 @@ from aledb_import import gd_import
 from aledb_seq.models import Sample
 
 
-def gd_export_view(request, reseq_id):
+def gd_export_view(request, sample_id):
     """Download the reconstructed .gd for a Sample (gdtools APPLY input)."""
     try:
-        seq_experiment = Sample.objects.get(pk=reseq_id)
+        seq_experiment = Sample.objects.get(pk=sample_id)
     except Sample.DoesNotExist:
         return HttpResponse("Resequencing experiment not found.", status=404)
 
     gd_text = gd_import.export_gd_text(seq_experiment)
-    filename = "%s.gd" % (seq_experiment.source_name or ("reseq_%s" % reseq_id))
+    filename = "%s.gd" % (seq_experiment.source_name or ("reseq_%s" % sample_id))
     response = HttpResponse(gd_text, content_type="text/plain")
     response["Content-Disposition"] = 'attachment; filename="%s"' % filename
     return response

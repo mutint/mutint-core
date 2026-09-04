@@ -16,19 +16,19 @@ from aledb_experiment.permissions import can_view_project
 from aledb_seq.models import Sample
 
 
-def sample_bam(request, reseq_id):
-    return _serve_sample(request, reseq_id, store.SAMPLE_BAM)
+def sample_bam(request, sample_id):
+    return _serve_sample(request, sample_id, store.SAMPLE_BAM)
 
 
-def sample_bai(request, reseq_id):
-    return _serve_sample(request, reseq_id, store.SAMPLE_BAI)
+def sample_bai(request, sample_id):
+    return _serve_sample(request, sample_id, store.SAMPLE_BAI)
 
 
-def sample_bigwig(request, reseq_id):
+def sample_bigwig(request, sample_id):
     """The sample's coverage track. `.bw` falls through to application/octet-stream, which is
     what igv wants, and BigWig is unreadable without the byte ranges serve_file already does --
     igv fetches its header and R-tree index by range before any data."""
-    return _serve_sample(request, reseq_id, store.SAMPLE_BIGWIG)
+    return _serve_sample(request, sample_id, store.SAMPLE_BIGWIG)
 
 
 def reference_fasta(request, experiment_id):
@@ -90,9 +90,9 @@ def chromalias_text(seq_ids):
     return "\n".join(lines) + "\n"
 
 
-def _serve_sample(request, reseq_id, filename):
+def _serve_sample(request, sample_id, filename):
     try:
-        reseq = Sample.objects.get(pk=reseq_id)
+        reseq = Sample.objects.get(pk=sample_id)
     except Sample.DoesNotExist:
         raise Http404("No such resequencing experiment.")
 

@@ -1,4 +1,4 @@
-"""The whole experiment at once: `/mutation-editor/delete?reseq_id=all`.
+"""The whole experiment at once: `/mutation-editor/delete?sample_id=all`.
 
 The grid is on both tabs, but selection is the Delete tab's -- so that is where these run. The
 Edit tab renders the same rows with an `edit` link instead of a checkbox and no selection at
@@ -22,8 +22,8 @@ PAGE = "/mutation-editor/delete"
 class GridPageTestCase(EditorTestCase):
 
     def grid(self, **params):
-        params.setdefault("ale_experiment_id", self.experiment.id)
-        params.setdefault("reseq_id", "all")
+        params.setdefault("experiment_id", self.experiment.id)
+        params.setdefault("sample_id", "all")
         return self.client.get(PAGE, params)
 
     # --- what it renders ------------------------------------------------------------------
@@ -66,8 +66,8 @@ class GridPageTestCase(EditorTestCase):
         self.assertIn('id="me-grid"', html)
 
     def test_picking_a_sample_still_renders_the_per_sample_table(self):
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
-                                          "reseq_id": self.sample_a.id})
+        response = self.client.get(PAGE, {"experiment_id": self.experiment.id,
+                                          "sample_id": self.sample_a.id})
         html = response.content.decode("utf-8")
 
         self.assertIn('id="me-table"', html)
@@ -76,7 +76,7 @@ class GridPageTestCase(EditorTestCase):
     def test_all_samples_is_not_the_default(self):
         """Arriving from a sample should not land on a page that lays out every mutation
         against every sample."""
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id})
+        response = self.client.get(PAGE, {"experiment_id": self.experiment.id})
 
         self.assertIn('id="me-table"', response.content.decode("utf-8"))
 
@@ -163,7 +163,7 @@ class GridPageTestCase(EditorTestCase):
         from aledb_seq.models import Sample
 
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         other = Experiment.objects.get(pk=created["experiment_id"])
         context = prepare_experiment_by_id(other.id)
         ale = Population.objects.create(experiment=other, name=1)
@@ -187,7 +187,7 @@ class GridPageTestCase(EditorTestCase):
         """The other half of the same scoping: another experiment's observation must not
         appear as a selectable cell in the first place."""
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P3", "experiment": "E3"}).json()
+            "/project/create/", {"name": "P3", "experiment": "E3"}).json()
         from aledb_experiment.models import Experiment
 
         other = Experiment.objects.get(pk=created["experiment_id"])
@@ -310,7 +310,7 @@ class EditGridTestCase(EditorTestCase):
 
     def grid(self):
         return self.client.get("/mutation-editor/", {
-            "ale_experiment_id": self.experiment.id, "reseq_id": "all"})
+            "experiment_id": self.experiment.id, "sample_id": "all"})
 
     def test_it_offers_an_edit_link_per_mutation(self):
         html = self.grid().content.decode("utf-8")
@@ -330,8 +330,8 @@ class EditGridTestCase(EditorTestCase):
     def test_the_delete_tab_still_has_them(self):
         """The counterpart, so a mode that rendered nothing anywhere would not pass the two
         assertions above by being broken."""
-        html = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
-                                      "reseq_id": "all"}).content.decode("utf-8")
+        html = self.client.get(PAGE, {"experiment_id": self.experiment.id,
+                                      "sample_id": "all"}).content.decode("utf-8")
 
         self.assertIn('class="me-row-box"', html)
         self.assertIn('id="me-by-mutation"', html)

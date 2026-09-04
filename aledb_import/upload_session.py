@@ -101,14 +101,14 @@ def staged_path(session, raw_path):
 
 @require_POST
 def create_upload_session(request):
-    """Open a session. Body: {ale_experiment_id, import_type, files:[{path,size}]}."""
+    """Open a session. Body: {experiment_id, import_type, files:[{path,size}]}."""
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
     except ValueError:
         return JsonResponse({"error": "Body must be JSON."}, status=400)
 
     try:
-        experiment = Experiment.objects.get(pk=payload.get("ale_experiment_id"))
+        experiment = Experiment.objects.get(pk=payload.get("experiment_id"))
     except (Experiment.DoesNotExist, ValueError, TypeError):
         return JsonResponse({"error": "Unknown experiment."}, status=404)
     if not can_edit_experiment(request.user, experiment):

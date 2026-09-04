@@ -172,7 +172,7 @@ from aledb_common.plugin_registry import register_sequence_rename_hook
 register_sequence_rename_hook(resync_after_rename)
 ```
 
-Called as `fn(ale_experiment_id, renames)` where `renames` maps old contig name to new, when
+Called as `fn(experiment_id, renames)` where `renames` maps old contig name to new, when
 an experiment's reference contigs are renamed. It is separate from the rebuild registry
 because a rename carries a *mapping*: rewriting a stored blob in place is as valid a response
 as recomputing from scratch, and only you know which applies.

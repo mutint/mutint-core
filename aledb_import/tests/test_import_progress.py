@@ -405,7 +405,7 @@ class ProgressEndpointTestCase(TestCase):
 
         created = self.client.post(
             "/import/uploads/",
-            data=json.dumps({"ale_experiment_id": self.experiment.id,
+            data=json.dumps({"experiment_id": self.experiment.id,
                              "import_type": "breseq_folder",
                              "files": [{"path": p, "size": len(b)} for p, b in entries]}),
             content_type="application/json")
@@ -472,11 +472,11 @@ class ProgressEndpointTestCase(TestCase):
             """Stands in for the Task object, not for its method: django.tasks' Task is a
             frozen dataclass, so `enqueue` cannot be reassigned on it."""
 
-            def enqueue(inner, reseq_id):
+            def enqueue(inner, sample_id):
                 if "snapshot" not in seen:
                     seen["snapshot"] = UploadSession.objects.get(
                         pk=self.upload_id).progress
-                return real.enqueue(reseq_id)
+                return real.enqueue(sample_id)
 
         upload_id = self._upload("s1", "s2")
         self.upload_id = upload_id

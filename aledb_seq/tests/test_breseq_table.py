@@ -56,7 +56,7 @@ class BreseqTablePageTestCase(TestCase):
         self.client.force_login(self.user)
 
     def get_page(self, **params):
-        params.setdefault("ale_experiment_id", self.experiment.id)
+        params.setdefault("experiment_id", self.experiment.id)
         return self.client.get(PAGE, params)
 
     def content(self, **params):
@@ -139,17 +139,17 @@ class BreseqTablePageTestCase(TestCase):
         self.assertContains(response, self.reseq.ale_flask_isolate_str)
 
     def test_selecting_a_sample(self):
-        response = self.get_page(reseq_id=self.reseq.id)
+        response = self.get_page(sample_id=self.reseq.id)
         self.assertEqual(200, response.status_code)
         self.assertContains(response, self.reseq.ale_flask_isolate_str)
 
     def test_an_unknown_sample_falls_back_to_the_first(self):
-        response = self.get_page(reseq_id=999999)
+        response = self.get_page(sample_id=999999)
         self.assertEqual(200, response.status_code)
         self.assertContains(response, "breseq-table")
 
     def test_a_junk_sample_id_does_not_500(self):
-        response = self.get_page(reseq_id="not-a-number")
+        response = self.get_page(sample_id="not-a-number")
         self.assertEqual(200, response.status_code)
 
     # --- frequency column -----------------------------------------------------
@@ -265,10 +265,10 @@ class BreseqTablePermissionTestCase(TestCase):
         stranger = User.objects.create(username="stranger", email="s@e.com",
                                        is_active=True, date_joined=datetime.now())
         self.client.force_login(stranger)
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id})
+        response = self.client.get(PAGE, {"experiment_id": self.experiment.id})
         self.assertNotContains(response, "breseq-table", status_code=200)
 
     def test_an_experiment_with_no_samples_says_so(self):
         self.client.force_login(User.objects.get(username="tester"))
-        response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id})
+        response = self.client.get(PAGE, {"experiment_id": self.experiment.id})
         self.assertContains(response, "no resequencing samples")

@@ -2,8 +2,18 @@ __author__ = "Patrick Phaneuf"
 
 REQUEST_ALL = "all"
 REQUEST_MUTATION_ID = "mutation_id"
-REQUEST_ALE_EXPERIMENT_ID = "ale_experiment_id"
-REQUEST_ALE_ID = "ale_no"
+
+#: The query string every experiment-scoped page carries. It was `experiment_id`, which
+#: named a model that no longer exists.
+REQUEST_EXPERIMENT_ID = "experiment_id"
+
+#: Which population to narrow to. It was `population` -- a *number*, for a column that has been
+#: text since `aledb_experiment.0008` and holds `Ara-1` as readily as `3`.
+REQUEST_POPULATION = "population"
+
+#: One sample, by primary key. It was `sample_id`, after `ResequencingExperiment`.
+REQUEST_SAMPLE_ID = "sample_id"
+
 REQUEST_SAMPLE_TYPE = "sample_type"
 
 #: What `?sample_type=` accepts. Routing these through constants is what made the second one

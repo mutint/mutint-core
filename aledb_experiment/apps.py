@@ -8,9 +8,9 @@ class ExperimentConfig(AppConfig):
         from aledb_common.nav_registry import (
             MAIN_SECTION, register_nav_item,
         )
-        register_nav_item('Projects', url='/ale/projects/', section=MAIN_SECTION)
-        register_nav_item('Experiments', url='/ale/experiments/', section=MAIN_SECTION)
-        register_nav_item('Groups', url='/ale/groups/', section=MAIN_SECTION)
+        register_nav_item('Projects', url='/project/', section=MAIN_SECTION)
+        register_nav_item('Experiments', url='/experiment/', section=MAIN_SECTION)
+        register_nav_item('Groups', url='/group/', section=MAIN_SECTION)
 
         # Deleting the designated ancestor un-subtracts its mutations everywhere. A signal
         # rather than a call in each delete path, because there are several -- `remove_flask`,

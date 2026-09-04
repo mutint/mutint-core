@@ -36,7 +36,7 @@ class AddTestCase(EditorTestCase):
         payload = {
             "experiment_id": self.experiment.id,
             "mutation_type": mutation_type,
-            "target_reseq_ids": json.dumps([s.id for s in targets]),
+            "target_sample_ids": json.dumps([s.id for s in targets]),
         }
         payload.update(fields)
         return self.client.post(ADD, payload)
@@ -220,7 +220,7 @@ class AddTestCase(EditorTestCase):
         from aledb_seq.models import Sample
 
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         other = Experiment.objects.get(pk=created["experiment_id"])
         ale = Population.objects.create(experiment=other, name=1)
         flask = TimePoint.objects.create(population=ale, value=1, media=self.context["media"])
@@ -252,7 +252,7 @@ class NoReferenceTestCase(EditorTestCase):
 
     def test_the_page_says_the_sequence_checks_are_off(self):
         response = self.client.get("/mutation-editor/add",
-                                   {"ale_experiment_id": self.experiment.id})
+                                   {"experiment_id": self.experiment.id})
         self.assertContains(response, "no reference genome")
 
     def test_a_mutation_that_would_change_nothing_is_accepted(self):
@@ -263,7 +263,7 @@ class NoReferenceTestCase(EditorTestCase):
             "seq_id": "NC_000913",
             "position": 1,
             "new_seq": "A",
-            "target_reseq_ids": json.dumps([self.sample_a.id])})
+            "target_sample_ids": json.dumps([self.sample_a.id])})
         self.assertEqual(200, response.status_code)
 
     def test_shape_is_still_enforced(self):
@@ -275,7 +275,7 @@ class NoReferenceTestCase(EditorTestCase):
             "repeat_name": "IS150",
             "strand": 7,
             "duplication_size": 0,
-            "target_reseq_ids": json.dumps([self.sample_a.id])})
+            "target_sample_ids": json.dumps([self.sample_a.id])})
         self.assertEqual(400, response.status_code)
         self.assertIn("strand", response.json()["errors"])
 
@@ -323,7 +323,7 @@ class AnnotatedAddTestCase(EditorTestCase):
         payload = {
             "experiment_id": self.experiment.id,
             "mutation_type": mutation_type,
-            "target_reseq_ids": json.dumps(
+            "target_sample_ids": json.dumps(
                 [s.id for s in (targets if targets is not None else [self.sample_a])]),
         }
         payload.setdefault("seq_id", self.SEQ)
@@ -379,7 +379,7 @@ class AnnotatedAddTestCase(EditorTestCase):
 
     def test_the_page_offers_the_reference_contigs(self):
         response = self.client.get("/mutation-editor/add",
-                                   {"ale_experiment_id": self.experiment.id})
+                                   {"experiment_id": self.experiment.id})
         self.assertContains(response, 'id="me-f-seq_id"')
         self.assertContains(response, self.SEQ)
         self.assertNotContains(response, "no reference genome")

@@ -12,7 +12,7 @@
        to pull it in. {% endcomment %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     {% include "mutation_editor/_toolbar.html" with active=mode %}
@@ -31,21 +31,21 @@
                    than a separate control: it is the same question -- which samples am I
                    editing -- and two controls could disagree about the answer. {% endcomment %}
                 <li {% if all_samples %}class="active"{% endif %}>
-                    <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ all_samples_value }}"><b>All samples</b></a>
+                    <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ all_samples_value }}"><b>All samples</b></a>
                 </li>
                 <li role="separator" class="divider"></li>
                 {% for reseq in reseq_list %}
-                    <li {% if reseq.id == selected_reseq_id %}class="active"{% endif %}>
-                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                    <li {% if reseq.id == selected_sample_id %}class="active"{% endif %}>
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
                     </li>
                 {% endfor %}
             </ul>
         </div>
         {% if all_samples %}
-            <a href="/compare/?ale_experiment_id={{ ale_experiment_id }}"
+            <a href="/compare/?experiment_id={{ experiment_id }}"
                class="breseq-crosslink">compare this experiment &raquo;</a>
         {% else %}
-            <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ selected_reseq_id }}"
+            <a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ selected_sample_id }}"
                class="breseq-crosslink">view this sample &raquo;</a>
         {% endif %}
     </div>
@@ -68,7 +68,7 @@
                 {% else %}
                     Editing is recorded and can be undone from the
                 {% endif %}
-                <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">history</a>.
+                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>.
             </p>
         </div>
 
@@ -119,11 +119,11 @@
                         {% if is_delete_mode %}
                             <td></td>
                         {% else %}
-                            {% comment %} `reseq_id` is what opens the Edit page on this
+                            {% comment %} `sample_id` is what opens the Edit page on this
                                sample alone rather than on every sample sharing the mutation:
                                correcting a call you are looking at, in the sample you are
                                looking at it in, is the common case. {% endcomment %}
-                            <td><a href="/mutation-editor/edit?ale_experiment_id={{ ale_experiment_id }}&amp;mutation_id={{ row.mutation_id }}&amp;reseq_id={{ selected_reseq_id }}"
+                            <td><a href="/mutation-editor/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation_id }}&amp;sample_id={{ selected_sample_id }}"
                                    title="Edit this mutation in this sample">edit</a></td>
                         {% endif %}
                         <td class="breseq-evidence">{{ row.mutation_type }}</td>
@@ -164,7 +164,7 @@
                     </li>
                 {% endfor %}
             </ul>
-            <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">Full history &raquo;</a>
+            <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">Full history &raquo;</a>
         </div>
         {% endif %}
 
@@ -173,7 +173,7 @@
     // extensions in the last <script> of <body>, after this block. Initialising at parse time
     // silently drops `select:` and `buttons:` -- the table draws either way and the checkbox
     // column still gets its class from the stylesheet, so the failure looks like styling
-    // rather than a load-order problem. /ale/experiments/ does the same thing for the same
+    // rather than a load-order problem. /experiment/ does the same thing for the same
     // reason.
     $(document).ready(function () {
         "use strict";
@@ -227,8 +227,8 @@
                 // One POST for the whole batch, not one per row: it is what makes this a
                 // single entry in the history rather than eleven.
                 window.aledbPost("/mutation-editor/delete/apply", {
-                    experiment_id: "{{ ale_experiment_id }}",
-                    reseq_id: "{{ selected_reseq_id }}",
+                    experiment_id: "{{ experiment_id }}",
+                    sample_id: "{{ selected_sample_id }}",
                     observed_ids: JSON.stringify(ids)
                 }).then(function () {
                     window.location.reload();

@@ -12,7 +12,7 @@
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ aledb_version }}"/>
     <script src="{% static 'js/breseq_table.js' %}?v={{ aledb_version }}"></script>
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     <div class="row breseq-picker">
@@ -39,8 +39,8 @@
                    The tint is the same colour as `ancestral_table_row` so the two read as
                    one statement rather than two coincidences. {% endcomment %}
                 {% for reseq in reseq_list %}
-                    <li class="{% if reseq.id == selected_reseq_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
-                        <a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
+                    <li class="{% if reseq.id == selected_sample_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -51,13 +51,13 @@
            nav_registry takes with a url_name that will not reverse. {% endcomment %}
         {% url 'compare' as compare_url %}
         {% if compare_url %}
-        <a href="{{ compare_url }}?ale_experiment_id={{ ale_experiment_id }}"
+        <a href="{{ compare_url }}?experiment_id={{ experiment_id }}"
            class="breseq-crosslink">all samples &raquo;</a>
         {% endif %}
         {% comment %} You are looking at one sample's mutations when you realise its
            identity is wrong, so the edit page is one click from here. {% endcomment %}
-        {% if can_edit and selected_reseq_id %}
-        <a href="/ale/sample/{{ selected_reseq_id }}/edit/"
+        {% if can_edit and selected_sample_id %}
+        <a href="/sample/{{ selected_sample_id }}/edit/"
            class="breseq-crosslink">edit this sample &raquo;</a>
         {% endif %}
     </div>
@@ -78,7 +78,7 @@
                 It is excluded from every view and analysis of this experiment, and the
                 mutations below are subtracted from every other sample before anything is
                 computed.
-                <a href="/ale/experiment/{{ ale_experiment_id }}/ancestor/">Change</a>
+                <a href="/experiment/{{ experiment_id }}/ancestor/">Change</a>
             </div>
         {% endif %}
         {% view_filter_form %}
@@ -102,7 +102,7 @@
                 <div class="breseq-unannotated">
                     {{ unannotated_count }} of {{ rows|length }} mutations were imported before a
                     reference was available and are shown without breseq formatting. Run
-                    <code>./aledb reannotate {{ ale_experiment_id }}</code> to fill them in.
+                    <code>./aledb reannotate {{ experiment_id }}</code> to fill them in.
                 </div>
             {% endif %}
             <div>
@@ -123,7 +123,7 @@
                 <div>
                     <span style="background-color: rgb(255, 218, 218);">Rows shaded red</span>
                     ({{ ancestral_count }}) are in this experiment's designated ancestor{% if ancestor %}
-                    ({% if is_ancestor %}{{ ancestor.name }}, this sample{% else %}<a href="?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ ancestor.sample_id }}">{{ ancestor.name }}</a>{% endif %}){% endif %}
+                    ({% if is_ancestor %}{{ ancestor.name }}, this sample{% else %}<a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ ancestor.sample_id }}">{{ ancestor.name }}</a>{% endif %}){% endif %}
                     and are subtracted everywhere else.
                 </div>
             {% endif %}

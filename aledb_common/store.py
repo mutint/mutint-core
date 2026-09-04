@@ -42,16 +42,16 @@ def store_root():
     return settings.ALEDB_STORE_DIR
 
 
-def experiment_reference_dir(ale_experiment_id):
+def experiment_reference_dir(experiment_id):
     return os.path.join(
-        store_root(), "experiments", str(int(ale_experiment_id)), "reference")
+        store_root(), "experiments", str(int(experiment_id)), "reference")
 
 
-def experiment_reference_path(ale_experiment_id, filename):
+def experiment_reference_path(experiment_id, filename):
     """Path to one reference artifact. ``filename`` must be one of the module constants."""
     if filename not in (REFERENCE_GFF3, REFERENCE_FASTA, REFERENCE_FAI):
         raise ValueError("unknown reference artifact: %r" % (filename,))
-    return os.path.join(experiment_reference_dir(ale_experiment_id), filename)
+    return os.path.join(experiment_reference_dir(experiment_id), filename)
 
 
 def sample_dir(sample_id):

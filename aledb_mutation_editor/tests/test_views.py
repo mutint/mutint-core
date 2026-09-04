@@ -22,13 +22,13 @@ HISTORY = "/mutation-editor/history"
 class PageTestCase(EditorTestCase):
 
     def get(self, url, **params):
-        params.setdefault("ale_experiment_id", self.experiment.id)
+        params.setdefault("experiment_id", self.experiment.id)
         return self.client.get(url, params)
 
     # --- the edit page --------------------------------------------------------------------
 
     def test_the_edit_page_lists_the_selected_samples_mutations(self):
-        response = self.get(EDIT, reseq_id=self.sample_a.id)
+        response = self.get(EDIT, sample_id=self.sample_a.id)
 
         self.assertEqual(200, response.status_code)
         for observed in ObservedMutation.objects.filter(sample=self.sample_a):
@@ -36,11 +36,11 @@ class PageTestCase(EditorTestCase):
 
     def test_it_does_not_list_another_samples_mutations(self):
         only_b = ObservedMutation.objects.get(sample=self.sample_b)
-        response = self.get(EDIT, reseq_id=self.sample_a.id)
+        response = self.get(EDIT, sample_id=self.sample_a.id)
         self.assertNotContains(response, 'data-observed-id="%d"' % only_b.id)
 
     def test_it_falls_back_to_the_first_sample(self):
-        """Opening the page from the sidebar carries no reseq_id."""
+        """Opening the page from the sidebar carries no sample_id."""
         response = self.get(EDIT)
         self.assertContains(response, 'data-observed-id=')
 
@@ -50,7 +50,7 @@ class PageTestCase(EditorTestCase):
         If the editor hid what the filter hides, there would be no way to delete it -- and it
         would reappear the moment somebody widened the filter.
         """
-        response = self.get(EDIT, reseq_id=self.sample_a.id, ignore_genes="thrA")
+        response = self.get(EDIT, sample_id=self.sample_a.id, ignore_genes="thrA")
         self.assertEqual(3, response.content.decode().count("data-observed-id="))
 
     def test_the_handler_guards_its_missing_control(self):
@@ -78,14 +78,14 @@ class PageTestCase(EditorTestCase):
     def test_the_edit_tab_offers_a_link_and_no_delete(self):
         """The whole point of the split: the tab you are on decides what the next click can
         mean, rather than which column you happen to aim at."""
-        html = self.get(EDIT, reseq_id=self.sample_a.id).content.decode()
+        html = self.get(EDIT, sample_id=self.sample_a.id).content.decode()
 
         self.assertIn("/mutation-editor/edit?", html)
         self.assertNotIn('id="me-apply"', html)
         self.assertNotIn("select-checkbox", html)
 
     def test_the_delete_tab_offers_selection_and_no_link(self):
-        html = self.get(DELETE, reseq_id=self.sample_a.id).content.decode()
+        html = self.get(DELETE, sample_id=self.sample_a.id).content.decode()
 
         self.assertIn('id="me-apply"', html)
         self.assertIn("select-checkbox", html)
@@ -99,7 +99,7 @@ class PageTestCase(EditorTestCase):
         """
         for url in (EDIT, DELETE):
             with self.subTest(page=url):
-                self.assertContains(self.get(url, reseq_id=self.sample_a.id),
+                self.assertContains(self.get(url, sample_id=self.sample_a.id),
                                     "js/breseq_table.js")
 
     def test_each_tab_marks_itself_active_in_the_toolbar(self):
@@ -127,14 +127,14 @@ class PageTestCase(EditorTestCase):
     # --- the copy page --------------------------------------------------------------------
 
     def test_the_copy_page_offers_the_other_samples_as_targets(self):
-        response = self.get(COPY, source_reseq_id=self.sample_a.id)
+        response = self.get(COPY, source_sample_id=self.sample_a.id)
 
         self.assertEqual(200, response.status_code)
         self.assertContains(response, 'data-value="%d"' % self.sample_b.id)
         self.assertNotContains(response, 'data-value="%d"' % self.sample_a.id)
 
     def test_the_copy_page_lists_the_sources_mutations(self):
-        response = self.get(COPY, source_reseq_id=self.sample_a.id)
+        response = self.get(COPY, source_sample_id=self.sample_a.id)
         for mutation in (self.mut_1, self.mut_2, self.mut_3):
             self.assertContains(response, 'data-mutation-id="%d"' % mutation.id)
 
@@ -221,7 +221,7 @@ class PageTestCase(EditorTestCase):
             with self.subTest(url=url):
                 self.assertContains(
                     self.get(url),
-                    "/mutation-editor/history?ale_experiment_id=%d" % self.experiment.id)
+                    "/mutation-editor/history?experiment_id=%d" % self.experiment.id)
 
 
 class NoExperimentTestCase(EditorTestCase):

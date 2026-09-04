@@ -15,7 +15,7 @@
             <div class="alert alert-info">
                 This project is <strong>public</strong>: anyone can read it, signed in or
                 not. The grants below add editing and administration on top of that.
-                <a href="/ale/project/{{ project.id }}/edit/">Change that on the edit page.</a>
+                <a href="/project/{{ project.id }}/edit/">Change that on the edit page.</a>
             </div>
         {% endif %}
 
@@ -49,7 +49,7 @@
                     </td>
                     <td>
                         {% if row.entry.group %}
-                            <a href="/ale/group/{{ row.entry.group.id }}/">{{ row.entry.subject_name }}</a>
+                            <a href="/group/{{ row.entry.group.id }}/">{{ row.entry.subject_name }}</a>
                         {% else %}
                             {{ row.entry.subject_name }}
                         {% endif %}
@@ -182,13 +182,13 @@
         <p class="help-block">
             {% if my_groups %}
                 You can add these groups:
-                {% for group in my_groups %}<a href="/ale/group/{{ group.id }}/">{{ group.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+                {% for group in my_groups %}<a href="/group/{{ group.id }}/">{{ group.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
             {% else %}
                 You do not belong to any group yet.
             {% endif %}
         </p>
         <p>
-            <a class="btn btn-default btn-sm" href="/ale/groups/">Manage Groups</a>
+            <a class="btn btn-default btn-sm" href="/group/">Manage Groups</a>
         </p>
 
         <p class="help-block" style="margin-top: 1.5em;">
@@ -196,7 +196,7 @@
         </p>
 
         <div style="margin-top: 1.5em;">
-            <a class="btn btn-default" href="/ale/project/{{ project.id }}/">Back to project</a>
+            <a class="btn btn-default" href="/project/{{ project.id }}/">Back to project</a>
         </div>
         <div id="pa-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
     </div>
@@ -206,8 +206,8 @@
     "use strict";
     if (!document.getElementById("pa-add-user")) { return; }
 
-    var grantUrl = "/ale/project/{{ project.id }}/access/grant/";
-    var revokeUrl = "/ale/project/{{ project.id }}/access/revoke/";
+    var grantUrl = "/project/{{ project.id }}/access/grant/";
+    var revokeUrl = "/project/{{ project.id }}/access/revoke/";
     var errorBox = document.getElementById("pa-error");
 
     function fail(err) { errorBox.textContent = err.message; }
@@ -247,7 +247,7 @@
         });
     });
 
-    var bulkUrl = "/ale/project/{{ project.id }}/access/bulk/";
+    var bulkUrl = "/project/{{ project.id }}/access/bulk/";
 
     function picked() {
         var ids = [];
@@ -370,7 +370,7 @@
                 if (!confirmed) { return; }
                 window.aledbPost(revokeUrl, {
                     access_id: button.getAttribute("data-access-id")
-                }).then(isSelf ? function () { window.location.href = "/ale/projects/"; }
+                }).then(isSelf ? function () { window.location.href = "/project/"; }
                                : reload).catch(fail);
             });
         });

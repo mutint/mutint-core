@@ -19,7 +19,7 @@ aledb_yourthing/static/aledb_yourthing/thing.css   ->  {% static 'aledb_yourthin
 {% block scripts_and_style %}
     <link rel="stylesheet" href="{% static 'aledb_yourthing/thing.css' %}">
 {% endblock %}
-{% block header %}<b>{{ ale_project_name }}: {{ ale_experiment_name }}</b> - Your Thing{% endblock %}
+{% block header %}<b>{{ ale_project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
 
 {% block content %}
     ...

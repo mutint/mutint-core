@@ -161,7 +161,7 @@ def can_own_project(user, project):
 
 
 def can_manage_project_access(user, project):
-    """Who may open /ale/project/<pk>/access/ and change what is on it."""
+    """Who may open /project/<pk>/access/ and change what is on it."""
     return has_project_role(user, project, ROLE_ADMIN)
 
 

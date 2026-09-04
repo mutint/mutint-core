@@ -36,7 +36,7 @@ class AccessTestCase(TestCase):
         grant_project_access(self.project, self.writer, ROLE_WRITE)
         grant_project_access(self.project, self.reader, ROLE_READ)
 
-        self.page = "/ale/project/%s/access/" % self.project.id
+        self.page = "/project/%s/access/" % self.project.id
         self.grant_url = self.page + "grant/"
         self.revoke_url = self.page + "revoke/"
 
@@ -132,7 +132,7 @@ class PageTestCase(AccessTestCase):
         self.client.force_login(self.owner)
         html = self.client.get(self.page).content.decode("utf-8")
         self.assertIn("You can add these groups:", html)
-        self.assertIn('class="btn btn-default btn-sm" href="/ale/groups/">Manage Groups', html)
+        self.assertIn('class="btn btn-default btn-sm" href="/group/">Manage Groups', html)
 
     def test_a_public_project_says_so(self):
         self.project.is_public = True
@@ -152,7 +152,7 @@ class PageTestCase(AccessTestCase):
             with self.subTest(user=user.username):
                 self.client.force_login(user)
                 html = self.client.get(
-                    "/ale/project/%s/" % self.project.id).content.decode("utf-8")
+                    "/project/%s/" % self.project.id).content.decode("utf-8")
                 self.assertEqual(self.page in html, expected)
 
 
@@ -374,15 +374,15 @@ class EndToEndTestCase(AccessTestCase):
     def test_a_stranger_granted_write_can_use_the_project(self):
         self.client.force_login(self.stranger)
         self.assertEqual(
-            self.client.get("/ale/project/%s/" % self.project.id).status_code, 403)
+            self.client.get("/project/%s/" % self.project.id).status_code, 403)
 
         self.client.force_login(self.owner)
         self.assertEqual(self.grant(username="stranger", role=ROLE_WRITE).status_code, 200)
 
         self.client.force_login(self.stranger)
         self.assertEqual(
-            self.client.get("/ale/project/%s/" % self.project.id).status_code, 200)
-        created = self.client.post("/ale/experiments/create/",
+            self.client.get("/project/%s/" % self.project.id).status_code, 200)
+        created = self.client.post("/experiment/create/",
                                    {"name": "E", "project": self.project.id})
         self.assertEqual(created.status_code, 200)
         self.assertIn("experiment_id", created.json())
@@ -392,21 +392,21 @@ class EndToEndTestCase(AccessTestCase):
         self.client.force_login(self.owner)
         self.grant(username="stranger", role=ROLE_WRITE)
         self.client.force_login(self.stranger)
-        response = self.client.post("/ale/project/%s/delete/" % self.project.id)
+        response = self.client.post("/project/%s/delete/" % self.project.id)
         self.assertEqual(response.status_code, 403)
         self.project.refresh_from_db()
         self.assertIsNone(self.project.deleted_at)
 
     def test_an_admin_can_delete_it(self):
         self.client.force_login(self.admin)
-        response = self.client.post("/ale/project/%s/delete/" % self.project.id)
+        response = self.client.post("/project/%s/delete/" % self.project.id)
         self.assertEqual(response.status_code, 200)
         self.project.refresh_from_db()
         self.assertIsNotNone(self.project.deleted_at)
 
     def test_a_reader_cannot_create_an_experiment(self):
         self.client.force_login(self.reader)
-        response = self.client.post("/ale/experiments/create/",
+        response = self.client.post("/experiment/create/",
                                     {"name": "E", "project": self.project.id})
         self.assertEqual(response.status_code, 403)
 

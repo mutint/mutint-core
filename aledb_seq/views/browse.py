@@ -7,7 +7,7 @@ Reached from a frequency cell in the mutation table, which is exactly that pair 
 It is not the only way in any more. Clicking a mutation on the Mutations track switches the
 page to it, and that track draws every mutation in the *experiment* -- including ones the
 sample on screen does not call, which have no ObservedMutation to name. `_resolve` takes
-`?mutation_id=&reseq_id=` for those, and `browse_at` is what the click actually calls.
+`?mutation_id=&sample_id=` for those, and `browse_at` is what the click actually calls.
 
 The files themselves come from `aledb_seq.views.alignments`, which serves BAM/BAI and the
 reference by primary key with HTTP range support. This view contributes no file access of its
@@ -41,7 +41,7 @@ def _resolve(request):
     pairs is always a stored row:
 
     - `?observed_mut_id=` -- an `ObservedMutation`, and what every link into this page uses.
-    - `?mutation_id=&reseq_id=` -- a mutation and a sample named separately, which is the
+    - `?mutation_id=&sample_id=` -- a mutation and a sample named separately, which is the
       only way to address a mutation the sample does **not** call. Clicking a feature on the
       Mutations track reaches exactly that: the track draws every mutation in the experiment,
       and the sample whose reads are on screen carries only some of them.
@@ -70,7 +70,7 @@ def _resolve(request):
         # column, so the chain is named the way `aledb_seq.util` names it.
         reseq = (Sample.objects
                  .select_related(paths.to_experiment())
-                 .get(pk=request.GET.get("reseq_id")))
+                 .get(pk=request.GET.get("sample_id")))
         mutation = Mutation.objects.get(pk=request.GET.get("mutation_id"))
     except (Sample.DoesNotExist, Mutation.DoesNotExist, ValueError, TypeError):
         raise Http404("No such mutation or sample.")
@@ -119,7 +119,7 @@ def browse_url_for(mutation, reseq, observed):
         return "%s?%s" % (reverse("browse_mutation"),
                           urlencode({"observed_mut_id": observed.pk}))
     return "%s?%s" % (reverse("browse_mutation"),
-                      urlencode({"mutation_id": mutation.pk, "reseq_id": reseq.pk}))
+                      urlencode({"mutation_id": mutation.pk, "sample_id": reseq.pk}))
 
 
 def browse_mutation(request):
@@ -144,7 +144,7 @@ def browse_mutation(request):
         "sample_name": reseq.ale_flask_isolate_str,
         # For the way back: the per-sample page, on the sample this browser is showing,
         # rather than the cross-experiment comparison it used to land on.
-        "reseq_id": reseq.id,
+        "sample_id": reseq.id,
         # The mutation is described by breseq's own table rather than by a sentence of this
         # page's own, so the row reads exactly as it does on the Samples page. One row, and
         # no evidence link -- its destination is the page you are already on.
@@ -219,7 +219,7 @@ def _ncbi_url():
     def url_for(observed):
         if not observed.mutation.reseq_reference:
             return None
-        return "%s?mutation_id=%s&reseq_id=%s" % (
+        return "%s?mutation_id=%s&sample_id=%s" % (
             reverse("ncbi_view"), observed.mutation_id, observed.sample_id)
 
     return url_for

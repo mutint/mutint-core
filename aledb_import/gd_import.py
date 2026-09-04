@@ -140,7 +140,7 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
     return {"experiment": experiment, "media": media}
 
 
-def prepare_experiment_by_id(ale_experiment_id):
+def prepare_experiment_by_id(experiment_id):
     """Context for adding to an *existing* experiment, identified by primary key.
 
     The web paths use this rather than `_prepare_experiment`, whose name-based
@@ -151,7 +151,7 @@ def prepare_experiment_by_id(ale_experiment_id):
     It also avoids `try_creating_project` -> `find_user`, which prompts on stdin and therefore
     cannot run inside a web request.
     """
-    experiment = Experiment.objects.get(pk=ale_experiment_id)
+    experiment = Experiment.objects.get(pk=experiment_id)
     media, _ = Media.objects.get_or_create(
         description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
         temperature=metadata_defaults.DEFAULT_TEMPERATURE)

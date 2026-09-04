@@ -174,7 +174,7 @@ class ButtonsAreNotFloatedTestCase(unittest.TestCase):
 
 
 class ExperimentSidebarLabelTestCase(TestCase):
-    """base.html joins the two names itself: `{{ ale_project_name }}: {{ ale_experiment_name }}`.
+    """base.html joins the two names itself: `{{ ale_project_name }}: {{ experiment_name }}`.
 
     `Experiment.experiment_context()` used to return a *composed* "project: experiment"
     under the experiment key and no project key at all, so a view that simply trusted it
@@ -190,7 +190,7 @@ class ExperimentSidebarLabelTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "Proj", "experiment": "Exp"}).json()
+            "/project/create/", {"name": "Proj", "experiment": "Exp"}).json()
         from aledb_experiment.models import Experiment
 
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
@@ -198,7 +198,7 @@ class ExperimentSidebarLabelTestCase(TestCase):
     def test_the_context_keeps_the_names_apart(self):
         context = self.experiment.experiment_context()
 
-        self.assertEqual("Exp", context["ale_experiment_name"])
+        self.assertEqual("Exp", context["experiment_name"])
         self.assertEqual("Proj", context["ale_project_name"])
         self.assertEqual(self.experiment.project_id, context["ale_project_id"])
 
@@ -214,17 +214,17 @@ class ExperimentSidebarLabelTestCase(TestCase):
 
         html = self.client.get(url, follow=True).content.decode()
         match = re.search(
-            r'<a href="/stats\?ale_experiment_id=%d"><b>(.*?)</b>' % self.experiment.id,
+            r'<a href="/stats\?experiment_id=%d"><b>(.*?)</b>' % self.experiment.id,
             html)
         return match.group(1).strip() if match else None
 
     def test_every_experiment_page_labels_it_the_same_way(self):
         """No leading colon, no doubled project -- on the pages that used to have each."""
         pages = {
-            "edit samples": "/ale/experiment/%d/samples/" % self.experiment.id,
-            "add data": "/import/add/?ale_experiment_id=%d" % self.experiment.id,
-            "overview": "/stats/?ale_experiment_id=%d" % self.experiment.id,
-            "metadata": "/metadata/?ale_experiment_id=%d" % self.experiment.id,
+            "edit samples": "/experiment/%d/samples/" % self.experiment.id,
+            "add data": "/import/add/?experiment_id=%d" % self.experiment.id,
+            "overview": "/stats/?experiment_id=%d" % self.experiment.id,
+            "metadata": "/metadata/?experiment_id=%d" % self.experiment.id,
         }
         for name, url in pages.items():
             with self.subTest(page=name):

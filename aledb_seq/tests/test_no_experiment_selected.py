@@ -1,7 +1,7 @@
 """Opening an experiment-scoped page before picking an experiment.
 
-Every one of these pages resolves `?ale_experiment_id` through
-`get_ale_experiment`, so arriving without one raises DoesNotExist. That is the
+Every one of these pages resolves `?experiment_id` through
+`get_experiment`, so arriving without one raises DoesNotExist. That is the
 page's opening state, not a breakage. It used to fall through each view's
 catch-all handler, which logged an ERROR with a traceback and showed the reader
 Django's raw "Experiment matching query does not exist" -- so the log could

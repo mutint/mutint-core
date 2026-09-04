@@ -12,7 +12,7 @@ _export_takes_filter = {}
 
 
 def register_post_experiment_hook(fn):
-    """Register fn(ale_experiment_id) to be called after each experiment upload.
+    """Register fn(experiment_id) to be called after each experiment upload.
 
     Kept as the name plugins already call. It is a thin wrapper over
     `aledb_common.rebuild_registry.register_rebuilder`, which is the general form: a
@@ -52,7 +52,7 @@ def _candidate_names(app, fn_name):
         counter += 1
 
 
-def run_post_experiment_hooks(ale_experiment_id):
+def run_post_experiment_hooks(experiment_id):
     """Run every registered rebuild for this experiment, stale or not.
 
     Retained because it is the name the import path and the sample editor call, and because
@@ -67,11 +67,11 @@ def run_post_experiment_hooks(ale_experiment_id):
     """
     from aledb_common.rebuild_registry import run_rebuilds
 
-    run_rebuilds(ale_experiment_id, force=True)
+    run_rebuilds(experiment_id, force=True)
 
 
 def register_sequence_rename_hook(fn):
-    """Register fn(ale_experiment_id, renames) for when an experiment's contigs are renamed.
+    """Register fn(experiment_id, renames) for when an experiment's contigs are renamed.
 
     `renames` is `{old_name: new_name}`, covering only the names that changed.
 
@@ -93,7 +93,7 @@ def register_sequence_rename_hook(fn):
     _sequence_rename_hooks.append(fn)
 
 
-def run_sequence_rename_hooks(ale_experiment_id, renames):
+def run_sequence_rename_hooks(experiment_id, renames):
     """Fire every rename hook, isolating failures.
 
     One plugin raising must not take down a rename that has already been committed -- the
@@ -104,10 +104,10 @@ def run_sequence_rename_hooks(ale_experiment_id, renames):
         return
     for fn in _sequence_rename_hooks:
         try:
-            fn(ale_experiment_id, dict(renames))
+            fn(experiment_id, dict(renames))
         except Exception:  # noqa: BLE001
             logger.exception("sequence rename hook %r failed for experiment %s",
-                             getattr(fn, "__name__", fn), ale_experiment_id)
+                             getattr(fn, "__name__", fn), experiment_id)
 
 
 def register_plugin_urlpatterns(patterns):
@@ -120,7 +120,7 @@ def get_plugin_urlpatterns():
 
 
 def register_export_handler(type_str, fn, label=None):
-    """Register `fn(ale_experiment_id, view_filter=None)` -> ObservedMutation queryset.
+    """Register `fn(experiment_id, view_filter=None)` -> ObservedMutation queryset.
 
     `label` is the human-readable name shown in export menus; it defaults to `type_str`.
 

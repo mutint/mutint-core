@@ -57,7 +57,7 @@ class DeletedExperimentTestCase(EditorTestCase):
         self.assertFalse(is_stale("mutation_counts"))
 
         response = self.client.post(
-            "/ale/experiment/%d/delete/" % self.experiment.id, {})
+            "/experiment/%d/delete/" % self.experiment.id, {})
 
         self.assertEqual(200, response.status_code)
         self.assertTrue(is_stale("mutation_counts"))
@@ -67,7 +67,7 @@ class DeletedExperimentTestCase(EditorTestCase):
         self.assertFalse(is_stale("sample_counts"))
 
         response = self.client.post(
-            "/ale/project/%d/delete/" % self.experiment.project_id, {})
+            "/project/%d/delete/" % self.experiment.project_id, {})
 
         self.assertEqual(200, response.status_code)
         self.assertTrue(is_stale("sample_counts"))
@@ -94,7 +94,7 @@ class DeletedExperimentTestCase(EditorTestCase):
         run_rebuilds(other.id, force=True)
         self.assertFalse(is_stale("test.other_experiment", other.id))
 
-        self.client.post("/ale/experiment/%d/delete/" % self.experiment.id, {})
+        self.client.post("/experiment/%d/delete/" % self.experiment.id, {})
 
         self.assertFalse(is_stale("test.other_experiment", other.id),
                          "deleting one experiment marked another's derived data stale")
@@ -103,5 +103,5 @@ class DeletedExperimentTestCase(EditorTestCase):
         from aledb_experiment.models import Experiment
 
         created = self.client.post(
-            "/ale/projects/create/", {"name": "Other", "experiment": "Other"}).json()
+            "/project/create/", {"name": "Other", "experiment": "Other"}).json()
         return Experiment.objects.get(pk=created["experiment_id"])

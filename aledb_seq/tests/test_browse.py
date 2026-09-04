@@ -253,7 +253,7 @@ class SwitchingMutationTestCase(TestCase):
 
     The track draws every mutation in the *experiment*, so a click can land on one the sample
     on screen does not call -- which has no ObservedMutation to name it by. That is the whole
-    reason `?mutation_id=&reseq_id=` exists beside `?observed_mut_id=`.
+    reason `?mutation_id=&sample_id=` exists beside `?observed_mut_id=`.
     """
 
     def setUp(self):
@@ -284,7 +284,7 @@ class SwitchingMutationTestCase(TestCase):
         by_observation = self.client.get(
             "/mutations/browse", {"observed_mut_id": self.observed.id})
         by_pair = self.client.get("/mutations/browse", {
-            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+            "mutation_id": self.observed.mutation_id, "sample_id": self.reseq.id})
         self.assertEqual(200, by_observation.status_code)
         self.assertEqual(200, by_pair.status_code)
         # The locus is what positions the browser, and it must not depend on how the page
@@ -312,7 +312,7 @@ class SwitchingMutationTestCase(TestCase):
         ObservedMutation.objects.filter(
             mutation=self.observed.mutation, sample=self.reseq).delete()
         response = self.client.get("/mutations/browse", {
-            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+            "mutation_id": self.observed.mutation_id, "sample_id": self.reseq.id})
         self.assertEqual(200, response.status_code)
         row = response.context["rows"][0]
         self.assertEqual(self.observed.mutation_id, row["mutation_id"])
@@ -331,13 +331,13 @@ class SwitchingMutationTestCase(TestCase):
             sample=self.reseq).first()
 
         response = self.client.get("/mutations/browse", {
-            "mutation_id": stranger.mutation_id, "reseq_id": self.reseq.id})
+            "mutation_id": stranger.mutation_id, "sample_id": self.reseq.id})
         self.assertEqual(404, response.status_code)
 
     def test_an_unknown_pair_is_a_404(self):
-        for params in ({"mutation_id": 999999, "reseq_id": self.reseq.id},
-                       {"mutation_id": self.observed.mutation_id, "reseq_id": 999999},
-                       {"mutation_id": "x", "reseq_id": "y"},
+        for params in ({"mutation_id": 999999, "sample_id": self.reseq.id},
+                       {"mutation_id": self.observed.mutation_id, "sample_id": 999999},
+                       {"mutation_id": "x", "sample_id": "y"},
                        {}):
             with self.subTest(params=params):
                 self.assertEqual(
@@ -347,7 +347,7 @@ class SwitchingMutationTestCase(TestCase):
 
     def test_it_returns_the_row_and_who_calls_it(self):
         response = self.client.get("/mutations/browse/at", {
-            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+            "mutation_id": self.observed.mutation_id, "sample_id": self.reseq.id})
         self.assertEqual(200, response.status_code)
         body = response.json()
         self.assertEqual(self.observed.mutation_id, body["mutation_id"])
@@ -363,7 +363,7 @@ class SwitchingMutationTestCase(TestCase):
         ObservedMutation.objects.filter(
             mutation=self.observed.mutation, sample=self.reseq).delete()
         body = self.client.get("/mutations/browse/at", {
-            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id}).json()
+            "mutation_id": self.observed.mutation_id, "sample_id": self.reseq.id}).json()
         self.assertNotIn(self.reseq.id, body["calling"])
         # The sibling still calls it, which is what the menu's `*` will now mark.
         self.assertIn(sibling.id, body["calling"])
@@ -371,11 +371,11 @@ class SwitchingMutationTestCase(TestCase):
         # No observation to name it by, so the URL has to be the pair spelling or a reload
         # would 404 on the page it just came from.
         self.assertIn("mutation_id=%d" % self.observed.mutation_id, body["url"])
-        self.assertIn("reseq_id=%d" % self.reseq.id, body["url"])
+        self.assertIn("sample_id=%d" % self.reseq.id, body["url"])
 
     def test_it_404s_an_unknown_mutation(self):
         self.assertEqual(404, self.client.get("/mutations/browse/at", {
-            "mutation_id": 999999, "reseq_id": self.reseq.id}).status_code)
+            "mutation_id": 999999, "sample_id": self.reseq.id}).status_code)
 
     def test_a_stranger_is_refused(self):
         """Through the same `_may_view` the page uses -- one answer to "may you see it"."""
@@ -385,7 +385,7 @@ class SwitchingMutationTestCase(TestCase):
             username="nobody", email="n@e.com", is_active=True)
         self.client.force_login(stranger)
         response = self.client.get("/mutations/browse/at", {
-            "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
+            "mutation_id": self.observed.mutation_id, "sample_id": self.reseq.id})
         self.assertEqual(403, response.status_code)
 
     # --- what the page hands the click handler ------------------------------------------

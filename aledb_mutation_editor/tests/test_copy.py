@@ -19,9 +19,9 @@ class CopyTestCase(EditorTestCase):
     def _copy(self, mutations, targets, source=None):
         return self.client.post(COPY, {
             "experiment_id": self.experiment.id,
-            "source_reseq_id": (source or self.sample_a).id,
+            "source_sample_id": (source or self.sample_a).id,
             "mutation_ids": json.dumps([m.id for m in mutations]),
-            "target_reseq_ids": json.dumps([t.id for t in targets]),
+            "target_sample_ids": json.dumps([t.id for t in targets]),
         })
 
     def test_a_mutation_lands_on_the_target(self):
@@ -83,7 +83,7 @@ class CopyTestCase(EditorTestCase):
         """Scoped through the experiment rather than taken on trust, so a hand-built POST
         cannot reach across projects."""
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         from aledb_experiment.models import Experiment
         other = Experiment.objects.get(pk=created["experiment_id"])
         stranger = self.make_mutation(position=999, sequence_change="T>A", experiment=other)
@@ -94,19 +94,19 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual({self.mut_1.id}, self.observed_ids(self.sample_b))
 
     def test_it_asks_for_something_to_do(self):
-        for payload in ({"mutation_ids": "[]", "target_reseq_ids": "[1]"},
-                        {"mutation_ids": "[1]", "target_reseq_ids": "[]"}):
+        for payload in ({"mutation_ids": "[]", "target_sample_ids": "[1]"},
+                        {"mutation_ids": "[1]", "target_sample_ids": "[]"}):
             with self.subTest(payload=payload):
                 data = {"experiment_id": self.experiment.id,
-                        "source_reseq_id": self.sample_a.id}
+                        "source_sample_id": self.sample_a.id}
                 data.update(payload)
                 self.assertEqual(400, self.client.post(COPY, data).status_code)
 
     def test_a_malformed_list_is_a_400_not_a_500(self):
         response = self.client.post(COPY, {
             "experiment_id": self.experiment.id,
-            "source_reseq_id": self.sample_a.id,
+            "source_sample_id": self.sample_a.id,
             "mutation_ids": "not json",
-            "target_reseq_ids": "[]"})
+            "target_sample_ids": "[]"})
         self.assertEqual(400, response.status_code)
         self.assertIn("JSON", response.json()["error"])

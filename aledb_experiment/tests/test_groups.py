@@ -42,7 +42,7 @@ class GroupTestCase(TestCase):
         self.member_row = UserGroupMembership.objects.create(
             group=self.group, user=self.member)
 
-        self.base = "/ale/group/%s/" % self.group.id
+        self.base = "/group/%s/" % self.group.id
 
     def owner_row(self):
         return UserGroupMembership.objects.get(group=self.group, user=self.owner)
@@ -97,26 +97,26 @@ class StandingTestCase(GroupTestCase):
 
 class ListAndCreateTestCase(GroupTestCase):
     def test_the_list_is_403_signed_out(self):
-        self.assertEqual(self.client.get("/ale/groups/").status_code, 403)
+        self.assertEqual(self.client.get("/group/").status_code, 403)
 
     def test_it_shows_your_groups_and_your_standing(self):
         self.client.force_login(self.manager)
-        html = self.client.get("/ale/groups/").content.decode("utf-8")
+        html = self.client.get("/group/").content.decode("utf-8")
         self.assertIn("Lab", html)
         self.assertIn("Manager", html)
 
     def test_it_does_not_show_someone_elses(self):
         self.client.force_login(self.stranger)
-        html = self.client.get("/ale/groups/").content.decode("utf-8")
+        html = self.client.get("/group/").content.decode("utf-8")
         self.assertNotIn("Lab", html)
 
     def test_the_new_page_is_403_signed_out(self):
-        self.assertEqual(self.client.get("/ale/groups/new/").status_code, 403)
+        self.assertEqual(self.client.get("/group/new/").status_code, 403)
 
     def test_creating_makes_you_owner_and_a_manager_member(self):
         """The owner's membership row is what lets the permission query reach them."""
         self.client.force_login(self.stranger)
-        response = self.client.post("/ale/groups/create/",
+        response = self.client.post("/group/create/",
                                     {"name": "New Lab", "description": "d"})
         self.assertEqual(response.status_code, 200)
         group = UserGroup.objects.get(pk=response.json()["group_id"])
@@ -126,18 +126,18 @@ class ListAndCreateTestCase(GroupTestCase):
 
     def test_a_duplicate_name_is_a_message_not_an_integrityerror(self):
         self.client.force_login(self.stranger)
-        response = self.client.post("/ale/groups/create/", {"name": "LAB"})
+        response = self.client.post("/group/create/", {"name": "LAB"})
         self.assertEqual(response.status_code, 400)
         self.assertIn("already a group", response.json()["error"])
 
     def test_a_missing_name_is_400(self):
         self.client.force_login(self.stranger)
         self.assertEqual(
-            self.client.post("/ale/groups/create/", {"name": "  "}).status_code, 400)
+            self.client.post("/group/create/", {"name": "  "}).status_code, 400)
 
     def test_signed_out_is_403(self):
         self.assertEqual(
-            self.client.post("/ale/groups/create/", {"name": "X"}).status_code, 403)
+            self.client.post("/group/create/", {"name": "X"}).status_code, 403)
 
 
 class DetailPageTestCase(GroupTestCase):

@@ -1,6 +1,6 @@
 {% comment %}
 The pages of this app are one task at different moments, so they share a strip rather than five
-sidebar entries. `?ale_experiment_id=` is carried by hand on every link: there is no session
+sidebar entries. `?experiment_id=` is carried by hand on every link: there is no session
 state holding the current experiment, and a link that dropped it lands on the "pick an
 experiment first" page.
 
@@ -11,13 +11,13 @@ you happen to aim at.
 {% endcomment %}
 <ul class="nav nav-tabs" style="margin-bottom: 16px;">
     <li{% if active == 'edit' %} class="active"{% endif %}>
-        <a href="/mutation-editor/?ale_experiment_id={{ ale_experiment_id }}">Edit</a></li>
+        <a href="/mutation-editor/?experiment_id={{ experiment_id }}">Edit</a></li>
     <li{% if active == 'delete' %} class="active"{% endif %}>
-        <a href="/mutation-editor/delete?ale_experiment_id={{ ale_experiment_id }}">Delete</a></li>
+        <a href="/mutation-editor/delete?experiment_id={{ experiment_id }}">Delete</a></li>
     <li{% if active == 'add' %} class="active"{% endif %}>
-        <a href="/mutation-editor/add?ale_experiment_id={{ ale_experiment_id }}">Add</a></li>
+        <a href="/mutation-editor/add?experiment_id={{ experiment_id }}">Add</a></li>
     <li{% if active == 'copy' %} class="active"{% endif %}>
-        <a href="/mutation-editor/copy?ale_experiment_id={{ ale_experiment_id }}">Copy</a></li>
+        <a href="/mutation-editor/copy?experiment_id={{ experiment_id }}">Copy</a></li>
     <li{% if active == 'history' %} class="active"{% endif %}>
-        <a href="/mutation-editor/history?ale_experiment_id={{ ale_experiment_id }}">History</a></li>
+        <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">History</a></li>
 </ul>

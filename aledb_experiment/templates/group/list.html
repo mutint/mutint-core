@@ -9,7 +9,7 @@
         </p>
 
         <div style="margin-bottom: 1em;">
-            <a class="btn btn-primary" href="/ale/groups/new/">+ New group</a>
+            <a class="btn btn-primary" href="/group/new/">+ New group</a>
         </div>
 
         {% comment %} A plain table, not a DataTable: a person belongs to a handful of
@@ -26,7 +26,7 @@
             <tbody>
             {% for row in groups %}
                 <tr>
-                    <td><a href="/ale/group/{{ row.group.id }}/">{{ row.group.name }}</a></td>
+                    <td><a href="/group/{{ row.group.id }}/">{{ row.group.name }}</a></td>
                     <td>{{ row.group.description|default:"&mdash;" }}</td>
                     <td>{{ row.members }}</td>
                     <td>{{ row.standing }}</td>

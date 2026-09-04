@@ -8,7 +8,7 @@ cannot supply because it only carries what breseq's reference happened to annota
 A **Mutation** is the handle here rather than an ObservedMutation, which is the one structural
 difference from browse. That page needs a sample because it draws that sample's reads; this
 one draws no sample data at all, and the Reference Seq cell it is reached from is a property
-of the mutation's row rather than of any column. `reseq_id` is accepted and used only to keep
+of the mutation's row rather than of any column. `sample_id` is accepted and used only to keep
 the way back pointing at the sample somebody came from.
 
 Nothing is drawn until the contig has been verified against NCBI -- see `aledb_seq.ncbi`. The
@@ -28,7 +28,7 @@ from aledb_experiment.permissions import can_edit_experiment, can_view_project
 from aledb_seq import ncbi
 from aledb_seq.breseq_report import build_rows, is_mixed
 from aledb_seq.locus import buffered_extent, mutation_extent
-from aledb_seq.views.common import get_ale_experiment, no_experiment_selected
+from aledb_seq.views.common import get_experiment, no_experiment_selected
 from aledb_seq.models import ExperimentReference, Mutation, ObservedMutation, NcbiSequence
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def ncbi_view(request):
         "mutation": mutation,
         "contig_name": mutation.reseq_reference or "",
         # For the way back to the sample somebody arrived from, when they arrived from one.
-        "reseq_id": _reseq_id(request),
+        "sample_id": _sample_id(request),
         # breseq's own row, as browse does, so the page states which mutation it is showing
         # in the same words every other table uses.
         "rows": build_rows([_any_observation(mutation)]) if _any_observation(mutation) else [],
@@ -95,7 +95,7 @@ def ncbi_view(request):
 def ncbi_check(request):
     """Record an accession for one contig and verify it against NCBI.
 
-    Keyed on `(ale_experiment_id, seq_id)` rather than on a mutation, because an accession
+    Keyed on `(experiment_id, seq_id)` rather than on a mutation, because an accession
     is a property of the reference: the Reference page has no mutation to name, and the
     mutation page knows both anyway. One endpoint, one contract.
 
@@ -103,7 +103,7 @@ def ncbi_check(request):
     handed the project cannot see the lock that lives on the experiment.
     """
     try:
-        experiment = Experiment.objects.get(pk=request.POST.get("ale_experiment_id"))
+        experiment = Experiment.objects.get(pk=request.POST.get("experiment_id"))
     except (Experiment.DoesNotExist, ValueError, TypeError):
         raise Http404("No such experiment.")
 
@@ -151,9 +151,9 @@ def _may_check(user, experiment):
     return can_edit_experiment(user, experiment)
 
 
-def _reseq_id(request):
+def _sample_id(request):
     try:
-        return int(request.GET.get("reseq_id"))
+        return int(request.GET.get("sample_id"))
     except (TypeError, ValueError):
         return None
 
@@ -163,7 +163,7 @@ def _any_observation(mutation):
 
     The page is about the mutation rather than about a sample, but `build_rows` describes
     observations -- so any of them will render the same mutation columns. Deliberately not
-    the sample from `reseq_id`: the row must read identically however the page was reached.
+    the sample from `sample_id`: the row must read identically however the page was reached.
     """
     return (ObservedMutation.objects
             .select_related("mutation", "sample")
@@ -228,7 +228,7 @@ def reference_view(request):
     """
     context = get_user_context(request.user)
     try:
-        experiment = get_ale_experiment(request)
+        experiment = get_experiment(request)
     except Experiment.DoesNotExist:
         return no_experiment_selected(request, context, logger, "reference genome")
 

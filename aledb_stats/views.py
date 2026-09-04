@@ -30,7 +30,7 @@ def stats(request):
     try:
         start_time = time.time()
         context = get_user_context(request.user)
-        experiment = common.get_ale_experiment(request)
+        experiment = common.get_experiment(request)
         if experiment:
             context.update(experiment.experiment_context())
             context.update(get_experiment_context(experiment))
@@ -43,7 +43,7 @@ def stats(request):
         # the lines above had already fetched. The duplicate import is gone with it.
         exp_name = experiment.name
         experiment_id=experiment.id
-        ale_number = common.get_ale_id(request)
+        ale_number = common.get_population(request)
 
         ale_id = ale_number
         reseq_queryset = get_ordered_reseq_queryset(experiment.id, ale_id)
@@ -73,9 +73,9 @@ def stats(request):
         # `aledb-needle` now, and a deployment without that component simply has no such
         # section. See aledb_common/panel_registry.py.
         panels = render_overview_panels(experiment, request)
-        context.update({"ale_experiment_name": exp_name,
-                        "ale_no": ale_number,
-                        "ale_experiment_id": experiment_id,
+        context.update({"experiment_name": exp_name,
+                        "population": ale_number,
+                        "experiment_id": experiment_id,
                         "ale_project_name": experiment.project.name,
                         "ale_project_id": experiment.project.id,
                         "protein_change_type_count_dict": protein_change_type_count_dict,

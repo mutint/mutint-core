@@ -93,13 +93,13 @@ class TestListings(SubtractionTestCase):
 
     def test_the_edit_samples_page_still_shows_it(self):
         self.designate_a()
-        response = self.client.get("/ale/experiment/%d/samples/" % self.experiment.id)
+        response = self.client.get("/experiment/%d/samples/" % self.experiment.id)
         self.assertContains(response, self.sample_a.source_name)
 
     def test_the_mutation_editor_still_shows_it(self):
         self.designate_a()
         response = self.client.get("/mutation-editor/",
-                                   {"ale_experiment_id": self.experiment.id})
+                                   {"experiment_id": self.experiment.id})
         self.assertContains(response, self.sample_a.ale_flask_isolate_str)
 
 
@@ -129,7 +129,7 @@ class TestCrossExperiment(SubtractionTestCase):
     def test_another_experiments_rows_are_untouched(self):
         """Safe because `Mutation` rows are per experiment, so an id cannot cross."""
         other = self.client.post(
-            "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
+            "/project/create/", {"name": "P2", "experiment": "E2"}).json()
         from aledb_experiment.models import Experiment
         foreign = Experiment.objects.get(pk=other["experiment_id"])
         elsewhere = self.make_mutation(position=100, sequence_change="A>T",

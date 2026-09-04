@@ -24,7 +24,7 @@ class ProjectExperimentCreateTestCase(TestCase):
         self.client.force_login(self.user)
 
     def test_create_project_alone(self):
-        response = self.client.post("/ale/projects/create/", {"name": "Just a project"})
+        response = self.client.post("/project/create/", {"name": "Just a project"})
 
         self.assertEqual(response.status_code, 200, response.content)
         body = response.json()
@@ -35,7 +35,7 @@ class ProjectExperimentCreateTestCase(TestCase):
         self.assertEqual(Experiment.objects.count(), 0)
 
     def test_create_project_with_an_experiment_in_one_step(self):
-        response = self.client.post("/ale/projects/create/",
+        response = self.client.post("/project/create/",
                                     {"name": "P", "experiment": "First experiment"})
 
         self.assertEqual(response.status_code, 200, response.content)
@@ -48,16 +48,16 @@ class ProjectExperimentCreateTestCase(TestCase):
 
     def test_project_name_is_required(self):
         self.assertEqual(
-            self.client.post("/ale/projects/create/", {"name": "  "}).status_code, 400)
+            self.client.post("/project/create/", {"name": "  "}).status_code, 400)
 
     def test_same_named_experiments_stay_distinct(self):
         """Identity is the primary key, so a duplicate name is allowed, not merged."""
         project_id = self.client.post(
-            "/ale/projects/create/", {"name": "P"}).json()["project_id"]
+            "/project/create/", {"name": "P"}).json()["project_id"]
 
-        first = self.client.post("/ale/experiments/create/",
+        first = self.client.post("/experiment/create/",
                                  {"name": "Ara-1", "project": project_id}).json()
-        second = self.client.post("/ale/experiments/create/",
+        second = self.client.post("/experiment/create/",
                                   {"name": "Ara-1", "project": project_id}).json()
 
         self.assertNotEqual(first["experiment_id"], second["experiment_id"])
@@ -70,14 +70,14 @@ class ProjectExperimentCreateTestCase(TestCase):
         stranger.save()
         self.client.force_login(stranger)
 
-        response = self.client.post("/ale/experiments/create/",
+        response = self.client.post("/experiment/create/",
                                     {"name": "X", "project": project.id})
         self.assertEqual(response.status_code, 403)
 
     def test_anonymous_cannot_create(self):
         self.client.logout()
         self.assertEqual(
-            self.client.post("/ale/projects/create/", {"name": "P"}).status_code, 403)
+            self.client.post("/project/create/", {"name": "P"}).status_code, 403)
 
 
 class SoftDeleteTestCase(TestCase):
@@ -93,7 +93,7 @@ class SoftDeleteTestCase(TestCase):
 
     def test_delete_flags_rather_than_removes(self):
         response = self.client.post(
-            "/ale/experiment/%d/delete/" % self.experiment.id)
+            "/experiment/%d/delete/" % self.experiment.id)
 
         self.assertEqual(response.status_code, 200, response.content)
         self.experiment.refresh_from_db()
@@ -124,10 +124,10 @@ class SoftDeleteTestCase(TestCase):
         self.client.force_login(stranger)
 
         self.assertEqual(
-            self.client.post("/ale/experiment/%d/delete/" % self.experiment.id
+            self.client.post("/experiment/%d/delete/" % self.experiment.id
                              ).status_code, 403)
         self.assertEqual(
-            self.client.post("/ale/project/%d/delete/" % self.project.id).status_code, 403)
+            self.client.post("/project/%d/delete/" % self.project.id).status_code, 403)
 
     def test_superuser_can_delete_anything(self):
         admin = User.objects.create(
@@ -137,16 +137,16 @@ class SoftDeleteTestCase(TestCase):
         self.client.force_login(admin)
 
         self.assertEqual(
-            self.client.post("/ale/project/%d/delete/" % self.project.id).status_code, 200)
+            self.client.post("/project/%d/delete/" % self.project.id).status_code, 200)
 
     def test_delete_is_idempotent(self):
-        url = "/ale/experiment/%d/delete/" % self.experiment.id
+        url = "/experiment/%d/delete/" % self.experiment.id
         first = self.client.post(url).json()["deleted_at"]
         second = self.client.post(url).json()["deleted_at"]
         self.assertEqual(first, second)
 
     def test_owner_can_delete_their_own_project(self):
-        response = self.client.post("/ale/project/%d/delete/" % self.project.id)
+        response = self.client.post("/project/%d/delete/" % self.project.id)
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["project_id"], self.project.id)
@@ -157,7 +157,7 @@ class SoftDeleteTestCase(TestCase):
         self.assertTrue(Project.objects.filter(pk=self.project.id).exists())
 
     def test_project_delete_is_idempotent(self):
-        url = "/ale/project/%d/delete/" % self.project.id
+        url = "/project/%d/delete/" % self.project.id
         first = self.client.post(url).json()["deleted_at"]
         second = self.client.post(url).json()["deleted_at"]
         self.assertEqual(first, second)
@@ -176,7 +176,7 @@ class DeleteControlsTestCase(TestCase):
         self.owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.owner)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
         self.experiment = Experiment.objects.get(project=self.project)
 
@@ -184,7 +184,7 @@ class DeleteControlsTestCase(TestCase):
         return self.client.get(url).content.decode()
 
     def _project_page(self):
-        return self._html("/ale/project/%d/" % self.project.id)
+        return self._html("/project/%d/" % self.project.id)
 
     # --- the new control on the project page ---------------------------------------
 
@@ -202,7 +202,7 @@ class DeleteControlsTestCase(TestCase):
         self.client.force_login(reader)
         html = self._project_page()
         self.assertNotIn('id="delete-selected"', html)
-        self.assertEqual(200, self.client.get("/ale/project/%d/" % self.project.id).status_code)
+        self.assertEqual(200, self.client.get("/project/%d/" % self.project.id).status_code)
 
     def test_the_handler_survives_the_button_being_gone(self):
         """The script is unconditional and the button is not, so the guard is what
@@ -233,11 +233,11 @@ class DeleteControlsTestCase(TestCase):
         mean what the other three say.
         """
         for url, control, call in (
-                ("/ale/projects/", 'id="delete-selected"', "aledbDeleteSelected"),
-                ("/ale/experiments/", 'id="delete-selected"', "aledbDeleteSelected"),
-                ("/ale/project/%d/" % self.project.id,
+                ("/project/", 'id="delete-selected"', "aledbDeleteSelected"),
+                ("/experiment/", 'id="delete-selected"', "aledbDeleteSelected"),
+                ("/project/%d/" % self.project.id,
                  'id="delete-selected"', "aledbDeleteSelected"),
-                ("/stats/?ale_experiment_id=%d" % self.experiment.id,
+                ("/stats/?experiment_id=%d" % self.experiment.id,
                  'id="delete-experiment"', "aledbConfirmTypedDelete")):
             with self.subTest(url=url):
                 html = self._html(url)
@@ -253,15 +253,15 @@ class DeleteControlsTestCase(TestCase):
 
     def test_revoking_access_stays_a_plain_confirm(self):
         """Removing a grant destroys nothing, and should not feel like it does."""
-        html = self._html("/ale/project/%d/access/" % self.project.id)
+        html = self._html("/project/%d/access/" % self.project.id)
         self.assertIn("aledbConfirmDelete(", html)
         self.assertNotIn("aledbConfirmTypedDelete", html)
 
     # --- where a single delete lands -----------------------------------------------
 
     def test_deleting_the_experiment_you_are_looking_at_returns_to_its_project(self):
-        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.id)
-        self.assertIn('data-after-delete="/ale/project/%d/"' % self.project.id, html)
+        html = self._html("/stats/?experiment_id=%d" % self.experiment.id)
+        self.assertIn('data-after-delete="/project/%d/"' % self.project.id, html)
 
     def test_an_experiment_with_no_project_has_no_delete_button_to_aim(self):
         """Which is why the button's fallback destination is a guard, not a live path.
@@ -276,7 +276,7 @@ class DeleteControlsTestCase(TestCase):
         self.experiment.save()
         self.owner.is_superuser = True
         self.owner.save()
-        html = self._html("/stats/?ale_experiment_id=%d" % self.experiment.id)
+        html = self._html("/stats/?experiment_id=%d" % self.experiment.id)
         self.assertNotIn('id="delete-experiment"', html)
         self.assertIn("permission", html)
 
@@ -296,11 +296,11 @@ class ProjectDetailIsReadOnlyTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
 
     def _html(self):
-        return self.client.get("/ale/project/%d/" % self.project.id).content.decode()
+        return self.client.get("/project/%d/" % self.project.id).content.decode()
 
     def test_the_summary_has_no_inputs(self):
         summary = self._html().split('id="exp_table"')[0]
@@ -323,7 +323,7 @@ class NewExperimentControlTestCase(TestCase):
     """Creating an experiment under a project that already exists.
 
     `experiment_create` existed and was permission-checked from the start, but nothing in
-    the UI called it: the experiments page's "+ New experiment" was a link to /ale/projects/,
+    the UI called it: the experiments page's "+ New experiment" was a link to /project/,
     which can only make an experiment alongside a *new* project. There was no way to add a
     second experiment to an existing one.
     """
@@ -336,33 +336,33 @@ class NewExperimentControlTestCase(TestCase):
         self.client.force_login(self.user)
 
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
 
     def test_the_experiments_page_links_to_the_create_page(self):
         """The control is a link to a page of its own, not a dialog over the table."""
-        html = self.client.get("/ale/experiments/").content.decode("utf-8")
+        html = self.client.get("/experiment/").content.decode("utf-8")
 
-        self.assertIn('href="/ale/experiments/new/"', html)
+        self.assertIn('href="/experiment/new/"', html)
         # No longer a link that dead-ends on the project list.
-        self.assertNotIn('href="/ale/projects/">+ New experiment', html)
+        self.assertNotIn('href="/project/">+ New experiment', html)
 
     def test_the_create_page_offers_a_project_to_create_under(self):
-        html = self.client.get("/ale/experiments/new/").content.decode("utf-8")
+        html = self.client.get("/experiment/new/").content.decode("utf-8")
 
         self.assertIn('id="ne-project"', html)
         self.assertIn("P", html)
 
     def test_the_project_page_links_to_the_create_page_with_itself_fixed(self):
         html = self.client.get(
-            "/ale/project/%d/" % self.project.id).content.decode("utf-8")
+            "/project/%d/" % self.project.id).content.decode("utf-8")
 
-        self.assertIn('href="/ale/experiments/new/?project=%d"' % self.project.id, html)
+        self.assertIn('href="/experiment/new/?project=%d"' % self.project.id, html)
 
     def test_the_create_page_fixes_the_project_when_given_one(self):
         """Arrived at from a project, the project is settled -- no picker to get wrong."""
         html = self.client.get(
-            "/ale/experiments/new/", {"project": self.project.id}).content.decode("utf-8")
+            "/experiment/new/", {"project": self.project.id}).content.decode("utf-8")
 
         self.assertIn('id="ne-name"', html)
         self.assertIn("P", html)
@@ -370,7 +370,7 @@ class NewExperimentControlTestCase(TestCase):
 
     def test_creating_one_returns_it_and_it_shows_up(self):
         response = self.client.post(
-            "/ale/experiments/create/", {"project": self.project.id, "name": "second"})
+            "/experiment/create/", {"project": self.project.id, "name": "second"})
 
         self.assertEqual(response.status_code, 200, response.content)
         body = response.json()
@@ -386,14 +386,14 @@ class NewExperimentControlTestCase(TestCase):
         """Experiments are identified by pk, so a duplicate name is allowed."""
         for _ in range(2):
             response = self.client.post(
-                "/ale/experiments/create/", {"project": self.project.id, "name": "dup"})
+                "/experiment/create/", {"project": self.project.id, "name": "dup"})
             self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(
             Experiment.objects.filter(name="dup").count(), 2)
 
     def test_a_nameless_experiment_is_refused(self):
         response = self.client.post(
-            "/ale/experiments/create/", {"project": self.project.id, "name": "   "})
+            "/experiment/create/", {"project": self.project.id, "name": "   "})
         self.assertEqual(response.status_code, 400)
 
     def test_a_stranger_cannot_create_under_someone_elses_project(self):
@@ -404,7 +404,7 @@ class NewExperimentControlTestCase(TestCase):
         self.client.force_login(stranger)
 
         response = self.client.post(
-            "/ale/experiments/create/", {"project": self.project.id, "name": "sneaky"})
+            "/experiment/create/", {"project": self.project.id, "name": "sneaky"})
         self.assertEqual(response.status_code, 403)
 
     def test_a_project_you_cannot_edit_is_not_offered(self):
@@ -417,8 +417,8 @@ class NewExperimentControlTestCase(TestCase):
 
         # Staff may *view* every project, but may not create under this one, so the
         # experiments page sends them to make one instead.
-        html = self.client.get("/ale/experiments/").content.decode("utf-8")
-        self.assertNotIn('href="/ale/experiments/new/"', html)
+        html = self.client.get("/experiment/").content.decode("utf-8")
+        self.assertNotIn('href="/experiment/new/"', html)
         self.assertIn("+ New project", html)
 
     def test_the_create_page_refuses_a_project_you_cannot_edit(self):
@@ -427,7 +427,7 @@ class NewExperimentControlTestCase(TestCase):
             username="stranger", email="s2@e.com", is_active=True, is_staff=True)
         self.client.force_login(stranger)
 
-        response = self.client.get("/ale/experiments/new/", {"project": self.project.id})
+        response = self.client.get("/experiment/new/", {"project": self.project.id})
         self.assertEqual(403, response.status_code)
 
 
@@ -568,7 +568,7 @@ class SignedOutControlsTestCase(TestCase):
         owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(owner)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
         self.client.logout()
 
@@ -576,13 +576,13 @@ class SignedOutControlsTestCase(TestCase):
         return self.client.get(url).content.decode()
 
     def test_the_project_list_offers_nothing(self):
-        html = self._html("/ale/projects/")
+        html = self._html("/project/")
         self.assertNotIn("+ New project", html)
         self.assertNotIn('id="delete-selected"', html)
         self.assertNotIn('id="new-project-modal"', html)
 
     def test_the_experiment_list_offers_no_delete(self):
-        self.assertNotIn('id="delete-selected"', self._html("/ale/experiments/"))
+        self.assertNotIn('id="delete-selected"', self._html("/experiment/"))
 
     def test_the_experiment_list_offers_no_create(self):
         """Neither the create button nor the fallback that used to stand in for it.
@@ -591,19 +591,19 @@ class SignedOutControlsTestCase(TestCase):
         to the project list -- which, signed out, no longer offers one either. A
         link to a button that is not there is worse than no link.
         """
-        html = self._html("/ale/experiments/")
+        html = self._html("/experiment/")
         self.assertNotIn('data-target="#new-experiment-modal"', html)
         self.assertNotIn("+ New project", html)
 
     def test_the_pages_still_render(self):
         """Gating hides controls; it must not take the page with it. The delete
         handlers call getElementById(...).addEventListener, which throws on null."""
-        for url in ("/ale/projects/", "/ale/experiments/"):
+        for url in ("/project/", "/experiment/"):
             with self.subTest(url=url):
                 self.assertEqual(200, self.client.get(url).status_code)
 
     def test_every_handler_guards_its_missing_control(self):
-        for url in ("/ale/projects/", "/ale/experiments/"):
+        for url in ("/project/", "/experiment/"):
             with self.subTest(url=url):
                 html = self._html(url)
                 for call in ('document.getElementById("delete-selected").addEventListener',
@@ -616,16 +616,16 @@ class SignedOutControlsTestCase(TestCase):
 
     def test_signed_in_they_come_back(self):
         self.client.force_login(User.objects.get(username="owner"))
-        html = self._html("/ale/projects/")
+        html = self._html("/project/")
         self.assertIn("+ New project", html)
         self.assertIn('id="delete-selected"', html)
 
     def test_the_endpoints_refuse_anonymous_regardless(self):
         """The gating is cosmetic; these are the checks that matter."""
-        for url, data in (("/ale/projects/create/", {"name": "x"}),
-                          ("/ale/experiments/create/",
+        for url, data in (("/project/create/", {"name": "x"}),
+                          ("/experiment/create/",
                            {"project": self.project.id, "name": "x"}),
-                          ("/ale/project/%d/delete/" % self.project.id, {})):
+                          ("/project/%d/delete/" % self.project.id, {})):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.post(url, data).status_code)
 
@@ -643,30 +643,30 @@ class CreatePagesTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
 
     # --- they exist and render ------------------------------------------------
 
     def test_the_project_page_renders(self):
-        response = self.client.get("/ale/projects/new/")
+        response = self.client.get("/project/new/")
         self.assertEqual(200, response.status_code)
         self.assertContains(response, 'id="np-name"')
         self.assertContains(response, 'id="np-save"')
 
     def test_the_experiment_page_renders(self):
-        response = self.client.get("/ale/experiments/new/")
+        response = self.client.get("/experiment/new/")
         self.assertEqual(200, response.status_code)
         self.assertContains(response, 'id="ne-name"')
         self.assertContains(response, 'id="ne-save"')
 
     def test_neither_is_a_modal(self):
-        for url in ("/ale/projects/new/", "/ale/experiments/new/"):
+        for url in ("/project/new/", "/experiment/new/"):
             with self.subTest(url=url):
                 self.assertNotContains(self.client.get(url), "data-toggle=\"modal\"")
 
     def test_both_offer_a_way_back(self):
-        for url in ("/ale/projects/new/", "/ale/experiments/new/"):
+        for url in ("/project/new/", "/experiment/new/"):
             with self.subTest(url=url):
                 self.assertContains(self.client.get(url), "Cancel")
 
@@ -676,7 +676,7 @@ class CreatePagesTestCase(TestCase):
         """Reachable by URL, so each page checks rather than relying on the button
         being hidden."""
         self.client.logout()
-        for url in ("/ale/projects/new/", "/ale/experiments/new/"):
+        for url in ("/project/new/", "/experiment/new/"):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 
@@ -686,14 +686,14 @@ class CreatePagesTestCase(TestCase):
         stranger = User.objects.create(username="stranger", email="s@e.com", is_active=True)
         self.client.force_login(stranger)
 
-        response = self.client.get("/ale/experiments/new/")
+        response = self.client.get("/experiment/new/")
         self.assertEqual(302, response.status_code)
-        self.assertEqual("/ale/projects/new/", response["Location"])
+        self.assertEqual("/project/new/", response["Location"])
 
     def test_creating_still_goes_through_the_same_endpoint(self):
         """The pages are presentation; the permission checks stay on the POST."""
         response = self.client.post(
-            "/ale/experiments/create/", {"project": self.project.id, "name": "second"})
+            "/experiment/create/", {"project": self.project.id, "name": "second"})
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual("second", response.json()["experiment"])
 
@@ -711,11 +711,11 @@ class ProjectEditTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
 
     def test_the_page_renders_with_the_current_values(self):
-        response = self.client.get("/ale/project/%d/edit/" % self.project.id)
+        response = self.client.get("/project/%d/edit/" % self.project.id)
 
         self.assertEqual(200, response.status_code)
         self.assertContains(response, 'id="pe-name"')
@@ -724,33 +724,33 @@ class ProjectEditTestCase(TestCase):
 
     def test_it_offers_every_status(self):
         """project_create hardcodes "in progress" and never exposes the choices."""
-        response = self.client.get("/ale/project/%d/edit/" % self.project.id)
+        response = self.client.get("/project/%d/edit/" % self.project.id)
         for value, _label in Project.PROJECT_STATUS:
             self.assertContains(response, 'value="%s"' % value)
 
     def test_the_detail_page_links_to_it_only_for_someone_who_may_edit(self):
-        html = self.client.get("/ale/project/%d/" % self.project.id).content.decode()
-        self.assertIn('href="/ale/project/%d/edit/"' % self.project.id, html)
+        html = self.client.get("/project/%d/" % self.project.id).content.decode()
+        self.assertIn('href="/project/%d/edit/"' % self.project.id, html)
 
         self.client.logout()
-        html = self.client.get("/ale/project/%d/" % self.project.id).content.decode()
-        self.assertNotIn('href="/ale/project/%d/edit/"' % self.project.id, html)
+        html = self.client.get("/project/%d/" % self.project.id).content.decode()
+        self.assertNotIn('href="/project/%d/edit/"' % self.project.id, html)
 
     def test_the_summary_shows_what_the_edit_page_can_change(self):
         """Description and status were editable-but-never-displayed before. A save that
         changes one has to be visible somewhere, or it reads as having done nothing."""
-        self.client.post("/ale/project/%d/update/" % self.project.id,
+        self.client.post("/project/%d/update/" % self.project.id,
                          {"name": "P", "description": "words about it",
                           "status": "completed"})
 
-        html = self.client.get("/ale/project/%d/" % self.project.id).content.decode()
+        html = self.client.get("/project/%d/" % self.project.id).content.decode()
         summary = html.split('id="exp_table"')[0]
         self.assertIn("words about it", summary)
         self.assertIn("Completed", summary)
 
     def test_saving_changes_the_project(self):
         response = self.client.post(
-            "/ale/project/%d/update/" % self.project.id,
+            "/project/%d/update/" % self.project.id,
             {"name": "Renamed", "description": "now with words",
              "status": "completed", "is_public": "1"})
 
@@ -762,34 +762,34 @@ class ProjectEditTestCase(TestCase):
         self.assertTrue(self.project.is_public)
 
     def test_unchecking_public_makes_it_private_again(self):
-        self.client.post("/ale/project/%d/update/" % self.project.id,
+        self.client.post("/project/%d/update/" % self.project.id,
                          {"name": "P", "is_public": "1"})
-        self.client.post("/ale/project/%d/update/" % self.project.id, {"name": "P"})
+        self.client.post("/project/%d/update/" % self.project.id, {"name": "P"})
 
         self.project.refresh_from_db()
         self.assertFalse(self.project.is_public)
 
     def test_a_blank_name_is_refused(self):
         self.assertEqual(400, self.client.post(
-            "/ale/project/%d/update/" % self.project.id, {"name": "   "}).status_code)
+            "/project/%d/update/" % self.project.id, {"name": "   "}).status_code)
 
     def test_an_unknown_status_is_refused(self):
         self.assertEqual(400, self.client.post(
-            "/ale/project/%d/update/" % self.project.id,
+            "/project/%d/update/" % self.project.id,
             {"name": "P", "status": "abandoned"}).status_code)
 
     def test_an_over_long_name_is_refused_rather_than_truncated(self):
         """CharField(max_length=50). SQLite would accept it, so the check has to be ours."""
         self.assertEqual(400, self.client.post(
-            "/ale/project/%d/update/" % self.project.id,
+            "/project/%d/update/" % self.project.id,
             {"name": "x" * 51}).status_code)
 
     def test_signed_out_the_page_and_the_endpoint_both_refuse(self):
         self.client.logout()
         self.assertEqual(403, self.client.get(
-            "/ale/project/%d/edit/" % self.project.id).status_code)
+            "/project/%d/edit/" % self.project.id).status_code)
         self.assertEqual(403, self.client.post(
-            "/ale/project/%d/update/" % self.project.id, {"name": "x"}).status_code)
+            "/project/%d/update/" % self.project.id, {"name": "x"}).status_code)
 
     def test_staff_may_view_but_not_edit(self):
         stranger = User.objects.create(
@@ -797,9 +797,9 @@ class ProjectEditTestCase(TestCase):
         self.client.force_login(stranger)
 
         self.assertEqual(403, self.client.get(
-            "/ale/project/%d/edit/" % self.project.id).status_code)
+            "/project/%d/edit/" % self.project.id).status_code)
         self.assertEqual(403, self.client.post(
-            "/ale/project/%d/update/" % self.project.id, {"name": "x"}).status_code)
+            "/project/%d/update/" % self.project.id, {"name": "x"}).status_code)
 
 
 class ExperimentEditTestCase(TestCase):
@@ -807,12 +807,12 @@ class ExperimentEditTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
+            "/project/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def test_the_page_renders_with_the_current_values(self):
-        response = self.client.get("/ale/experiment/%d/edit/" % self.experiment.id)
+        response = self.client.get("/experiment/%d/edit/" % self.experiment.id)
 
         self.assertEqual(200, response.status_code)
         self.assertContains(response, 'id="ee-name"')
@@ -821,7 +821,7 @@ class ExperimentEditTestCase(TestCase):
 
     def test_saving_changes_the_experiment(self):
         response = self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.id,
+            "/experiment/%d/update/" % self.experiment.id,
             {"name": "Ara-1", "notes": "ran hot",
              "doi": "10.1/abc 10.1/def", "project": self.project.id})
 
@@ -835,10 +835,10 @@ class ExperimentEditTestCase(TestCase):
         """Changing an owner is its own workflow. A details form that carried the field
         would rewrite it on every save, and one that dropped it would blank it."""
         self.assertNotContains(
-            self.client.get("/ale/experiment/%d/edit/" % self.experiment.id),
+            self.client.get("/experiment/%d/edit/" % self.experiment.id),
             'id="ee-person"')
 
-        self.client.post("/ale/experiment/%d/update/" % self.experiment.id,
+        self.client.post("/experiment/%d/update/" % self.experiment.id,
                          {"name": "first", "person": "impostor"})
 
         self.experiment.refresh_from_db()
@@ -846,10 +846,10 @@ class ExperimentEditTestCase(TestCase):
 
     def test_it_moves_between_projects_you_own(self):
         other = Project.objects.get(pk=self.client.post(
-            "/ale/projects/create/", {"name": "Q"}).json()["project_id"])
+            "/project/create/", {"name": "Q"}).json()["project_id"])
 
         response = self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.id,
+            "/experiment/%d/update/" % self.experiment.id,
             {"name": "first", "project": other.id})
 
         self.assertEqual(200, response.status_code, response.content)
@@ -866,7 +866,7 @@ class ExperimentEditTestCase(TestCase):
         theirs = Project.objects.create(name="Theirs", user=stranger)
 
         response = self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.id,
+            "/experiment/%d/update/" % self.experiment.id,
             {"name": "first", "project": theirs.id})
 
         self.assertEqual(403, response.status_code)
@@ -879,22 +879,22 @@ class ExperimentEditTestCase(TestCase):
         Project.objects.create(name="NotYours", user=stranger)
 
         html = self.client.get(
-            "/ale/experiment/%d/edit/" % self.experiment.id).content.decode()
+            "/experiment/%d/edit/" % self.experiment.id).content.decode()
 
         self.assertIn("P", html)
         self.assertNotIn("NotYours", html)
 
     def test_a_blank_name_is_refused(self):
         self.assertEqual(400, self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.id,
+            "/experiment/%d/update/" % self.experiment.id,
             {"name": "  "}).status_code)
 
     def test_signed_out_the_page_and_the_endpoint_both_refuse(self):
         self.client.logout()
         self.assertEqual(403, self.client.get(
-            "/ale/experiment/%d/edit/" % self.experiment.id).status_code)
+            "/experiment/%d/edit/" % self.experiment.id).status_code)
         self.assertEqual(403, self.client.post(
-            "/ale/experiment/%d/update/" % self.experiment.id,
+            "/experiment/%d/update/" % self.experiment.id,
             {"name": "x"}).status_code)
 
     def test_the_experiment_page_offers_the_controls_only_to_an_owner(self):
@@ -903,10 +903,10 @@ class ExperimentEditTestCase(TestCase):
         only ever produce a 403, which is a dead end dressed up as an action."""
         # follow=True: /stats has no trailing slash, so APPEND_SLASH redirects first and
         # an unfollowed GET returns an empty 301 body.
-        url = "/stats?ale_experiment_id=%d" % self.experiment.id
+        url = "/stats?experiment_id=%d" % self.experiment.id
         html = self.client.get(url, follow=True).content.decode()
-        self.assertIn('href="/ale/experiment/%d/edit/"' % self.experiment.id, html)
-        self.assertIn('href="/ale/experiment/%d/samples/"' % self.experiment.id, html)
+        self.assertIn('href="/experiment/%d/edit/"' % self.experiment.id, html)
+        self.assertIn('href="/experiment/%d/samples/"' % self.experiment.id, html)
         self.assertIn('id="delete-experiment"', html)
 
         stranger = User.objects.create(

@@ -55,7 +55,7 @@ class MutationChangeSet(models.Model):
     """One user action against one experiment. `created_at` is the version identifier.
 
     Scoped to an experiment rather than to a sample because that is the unit everything else
-    uses: `?ale_experiment_id=` scopes every page, and the rebuild registry recomputes per
+    uses: `?experiment_id=` scopes every page, and the rebuild registry recomputes per
     experiment. One action may still touch many samples -- a batch copy does -- and a restore
     may be narrowed to a few of them.
 

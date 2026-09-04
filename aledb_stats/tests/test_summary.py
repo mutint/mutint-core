@@ -48,7 +48,7 @@ class SummaryTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
@@ -234,7 +234,7 @@ class SummaryTestCase(TestCase):
         """`aledb_stats.views` has pushed these four names into the context for a long time and
         `stats.html` read none of them, so the numbers were computed and discarded. Nothing
         would have caught that; this would."""
-        html = self.client.get("/stats", {"ale_experiment_id": self.experiment.id},
+        html = self.client.get("/stats", {"experiment_id": self.experiment.id},
                                follow=True).content.decode()
 
         self.assertIn("functional change counts", html.lower())

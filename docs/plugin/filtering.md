@@ -17,7 +17,7 @@ from aledb_filter.util import filter_observed_mutations
 from aledb_filter.view_filter import get_view_filter
 
 def my_page(request):
-    experiment = aledb_seq.views.common.get_ale_experiment(request)
+    experiment = aledb_seq.views.common.get_experiment(request)
     view_filter = get_view_filter(request, experiment.ale_id)
 
     rows = filter_observed_mutations(my_queryset, view_filter=view_filter)
@@ -52,7 +52,7 @@ them inside it. Two Apply buttons on one page means each discards the other's pe
 for: Compare, Fixed Mutations and Converged Mutations got their controls without an edit to any of
 their repositories.
 
-Both render **nothing** when the context has no `ale_experiment_id`. That is deliberate and it is
+Both render **nothing** when the context has no `experiment_id`. That is deliberate and it is
 the rule to keep: a control that does nothing is worse than no control. There used to be a
 `show_filter_toggles` flag each page had to set for exactly this reason, and it was forgotten on
 three pages, which rendered a dead checkbox for a year.

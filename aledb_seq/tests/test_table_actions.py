@@ -30,7 +30,7 @@ class TableActionsTestCase(TestCase):
         # Through the view: it issues the guardian grant that can_add_experiment_filter
         # consults. Project.objects.create leaves the owner without it.
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.mutation = Mutation.objects.create(

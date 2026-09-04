@@ -57,18 +57,18 @@ def get_reseq_experiment_info_list(reseq_experiments):
     from aledb_seq.models import ObservedMutation
 
     reseq_experiments = list(reseq_experiments)
-    reseq_ids = [reseq.id for reseq in reseq_experiments]
+    sample_ids = [reseq.id for reseq in reseq_experiments]
     experiment_id = (reseq_experiments[0].experiment.id
                      if reseq_experiments else None)
 
     missing_coverage_counts = dict(
         UnassignedMissingCoverageEvidence.objects
-        .filter(sample_id__in=reseq_ids)
+        .filter(sample_id__in=sample_ids)
         .values_list('sample_id')
         .annotate(total=Count('id')))
     mutation_counts = dict(
         exclude_ancestry(
-            ObservedMutation.objects.filter(sample_id__in=reseq_ids),
+            ObservedMutation.objects.filter(sample_id__in=sample_ids),
             experiment_id)
         .values_list('sample_id')
         .annotate(total=Count('id')))
@@ -185,7 +185,7 @@ def _count_in_sql(queryset):
             protein_change_counts, observed_protein_change_counts)
 
 
-def compute_experiment_counts(ale_experiment_id):
+def compute_experiment_counts(experiment_id):
     """The Overview's four count dicts for one experiment, without materialising its rows.
 
     **Unfiltered**, for the same reason as the needle plot above: `/stats` summarises what the
@@ -202,7 +202,7 @@ def compute_experiment_counts(ale_experiment_id):
 
     # The join, not `sample_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.
-    return _count_in_sql(get_evolved_observation_queryset(ale_experiment_id))
+    return _count_in_sql(get_evolved_observation_queryset(experiment_id))
 
 
 #: What `/stats` reads. An `ExperimentSummary` row stood here with these four field names,
@@ -213,7 +213,7 @@ ExperimentCounts = collections.namedtuple(
     "protein_change_counts observed_protein_change_counts")
 
 
-def get_experiment_summary(ale_experiment_id):
+def get_experiment_summary(experiment_id):
     """The Overview's four count dicts, computed now.
 
     **Nothing is stored.** `ExperimentSummary` held them and the 'overview' rebuilder kept it
@@ -225,4 +225,4 @@ def get_experiment_summary(ale_experiment_id):
     leave nothing stored, so the page had to render *something* rather than 500 -- a state
     that cannot arise when the counts are computed by the request that needs them.
     """
-    return ExperimentCounts(*compute_experiment_counts(ale_experiment_id))
+    return ExperimentCounts(*compute_experiment_counts(experiment_id))

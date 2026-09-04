@@ -31,7 +31,7 @@ class ClonalPolarityTestCase(TestCase):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.client.force_login(self.user)
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
@@ -97,7 +97,7 @@ class ClonalPolarityTestCase(TestCase):
         for sample, expected in ((self.clone, False), (self.mixed, True)):
             with self.subTest(sample=sample.source_name):
                 response = self.client.get(
-                    "/mutations/breseq?ale_experiment_id=%d&reseq_id=%d"
+                    "/mutations/breseq?experiment_id=%d&sample_id=%d"
                     % (self.experiment.id, sample.pk), follow=True)
                 self.assertEqual(200, response.status_code)
                 body = response.content.decode()
@@ -119,7 +119,7 @@ class ClonalPolarityTestCase(TestCase):
         for sample, expected in ((self.clone, False), (self.mixed, True)):
             with self.subTest(sample=sample.source_name):
                 body = self.client.get(
-                    "/ale/sample/%d/edit/" % sample.pk).content.decode()
+                    "/sample/%d/edit/" % sample.pk).content.decode()
                 self.assertIn('id="se-mixed"', body)
                 # The box is ticked by `checked` appearing inside that input's tag.
                 tag = body.split('id="se-mixed"', 1)[1].split(">", 1)[0]
@@ -127,7 +127,7 @@ class ClonalPolarityTestCase(TestCase):
 
     def test_ticking_the_box_makes_the_sample_mixed(self):
         response = self.client.post(
-            "/ale/sample/%d/update/" % self.clone.pk,
+            "/sample/%d/update/" % self.clone.pk,
             {"sample_name": "clone", "ale": "1", "flask": 500, "isolate": "1",
              "isolate_description": "", "rep_description": "", "rep_tags": "",
              "is_mixed": "1"})
@@ -140,7 +140,7 @@ class ClonalPolarityTestCase(TestCase):
         """The other direction, because a form that can only set one way is half a form --
         and because an unchecked box posts `0` rather than omitting the key."""
         response = self.client.post(
-            "/ale/sample/%d/update/" % self.mixed.pk,
+            "/sample/%d/update/" % self.mixed.pk,
             {"sample_name": "mixed", "ale": "1", "flask": 500, "isolate": "2",
              "isolate_description": "", "rep_description": "", "rep_tags": "",
              "is_mixed": "0"})

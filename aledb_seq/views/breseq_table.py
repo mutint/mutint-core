@@ -32,15 +32,15 @@ from aledb_seq.util import get_reseq_ordered_dict
 
 logger = logging.getLogger(__name__)
 
-REQUEST_RESEQ_ID = "reseq_id"
+REQUEST_SAMPLE_ID = "sample_id"
 
 
 def breseq_table(request):
     context = get_user_context(request.user)
     try:
         started = time.time()
-        experiment = aledb_seq.views.common.get_ale_experiment(request)
-        ale_number = aledb_seq.views.common.get_ale_id(request)
+        experiment = aledb_seq.views.common.get_experiment(request)
+        ale_number = aledb_seq.views.common.get_population(request)
         sample_type = aledb_seq.views.common.get_sample_type(request)
 
         # `include_ancestor=True`, unlike every other reading page. This one shows a single
@@ -61,15 +61,15 @@ def breseq_table(request):
 
         context.update(experiment.experiment_context())
         context.update({
-            "ales": aledb_seq.views.common.get_aleid_ale_id_list(experiment.id),
-            "ale_no": ale_number,
-            "ale_experiment_name": experiment.name,
+            "ales": aledb_seq.views.common.get_population_names(experiment.id),
+            "population": ale_number,
+            "experiment_name": experiment.name,
             "ale_project_name": experiment.project.name if experiment.project else "",
             "ale_project_id": experiment.project_id,
             "sample_type": sample_type,
             "reseq_list": list(reseq_dict.values()),
             "selected_reseq": reseq,
-            "selected_reseq_id": reseq.id if reseq is not None else None,
+            "selected_sample_id": reseq.id if reseq is not None else None,
             "is_mixed": is_mixed(reseq),
             "is_ancestor": reseq is not None and reseq.id == experiment.ancestor_id,
             "ancestral_count": sum(1 for row in rows if row["ancestral"]),
@@ -134,18 +134,18 @@ def _selected_reseq(request, reseq_dict, experiment):
     the worst available outcome because the page would look entirely normal while showing the
     wrong thing. Scoped to the experiment, so it is not a way around anything.
     """
-    requested = request.GET.get(REQUEST_RESEQ_ID)
+    requested = request.GET.get(REQUEST_SAMPLE_ID)
     if requested:
         try:
-            reseq_id = int(requested)
+            sample_id = int(requested)
         except (TypeError, ValueError):
-            reseq_id = None
-        if reseq_id in reseq_dict:
-            return reseq_dict[reseq_id]
-        if reseq_id is not None:
+            sample_id = None
+        if sample_id in reseq_dict:
+            return reseq_dict[sample_id]
+        if sample_id is not None:
             hidden = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
-            if reseq_id in hidden:
-                return hidden[reseq_id]
+            if sample_id in hidden:
+                return hidden[sample_id]
     for reseq in reseq_dict.values():
         if reseq.id != experiment.ancestor_id:
             return reseq
@@ -190,7 +190,7 @@ def _refseq_url():
     def url_for(observed):
         if not observed.mutation.reseq_reference:
             return None
-        return "%s?mutation_id=%s&reseq_id=%s" % (
+        return "%s?mutation_id=%s&sample_id=%s" % (
             reverse("ncbi_view"), observed.mutation_id, observed.sample_id)
 
     return url_for

@@ -78,8 +78,8 @@ that loops, ask through the same helpers rather than querying `ProjectAccess` yo
 
 ## Getting the experiment
 
-Core's pages take `?ale_experiment_id=` and resolve it through
-`aledb_seq.views.common.get_ale_experiment(request)`, which raises
+Core's pages take `?experiment_id=` and resolve it through
+`aledb_seq.views.common.get_experiment(request)`, which raises
 `Experiment.DoesNotExist` when none was selected — a normal state, not an error, and
 `no_experiment_selected()` renders the page that explains it — and a bare `ValueError` when
 the caller may not view it.
@@ -96,7 +96,7 @@ register_nav_item('Your Thing', url_name='yourthing', section=EXPERIMENT_SECTION
 ```
 
 `MAIN_SECTION` is always shown. `EXPERIMENT_SECTION` appears only when an experiment is
-selected and is rendered with `?ale_experiment_id=` appended, in both the sidebar and the
+selected and is rendered with `?experiment_id=` appended, in both the sidebar and the
 header button bar.
 
 Pass `url=` (a literal path) or `url_name=` (reversed at render time), never both. Prefer

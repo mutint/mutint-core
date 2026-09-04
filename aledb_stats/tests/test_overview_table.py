@@ -21,7 +21,7 @@ class OverviewTableTestCase(TestCase):
         # Through the view: Project.objects.create leaves no guardian grant and the
         # experiment's pages then 403.
         created = self.client.post(
-            "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
@@ -40,7 +40,7 @@ class OverviewTableTestCase(TestCase):
 
     def _html(self):
         return self.client.get(
-            "/stats?ale_experiment_id=%d" % self.experiment.id,
+            "/stats?experiment_id=%d" % self.experiment.id,
             follow=True).content.decode()
 
     def test_the_headings_are_the_short_ones(self):

@@ -312,8 +312,8 @@ def _serialize_metadata(metadata_list):
     out = []
     for m in metadata_list:
         item = {
-            'ale_experiment_id':   m['ale_experiment_id'],
-            'ale_experiment_name': m['ale_experiment_name'],
+            'experiment_id':   m['experiment_id'],
+            'experiment_name': m['experiment_name'],
             'ale_project_id':      m['ale_project_id'],
             'ale_project_name':    m['ale_project_name'],
             'multiple':            m['multiple'],
@@ -399,7 +399,7 @@ def _serialize_mutations(mutations, search_gene=None):
         exp = getattr(m, 'experiment', None)
         if isinstance(exp, dict):
             item['experiment'] = {
-                'ale_experiment_id': exp.get('ale_experiment_id', m.sample.experiment.id),
+                'experiment_id': exp.get('experiment_id', m.sample.experiment.id),
                 'sample_id': exp.get('sample_id', m.sample.id),
                 'sample_name': exp.get('name'),
                 'genotype': exp.get('type'),
@@ -457,13 +457,13 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
     # iteration order is not stable between runs -- so two identical requests could return
     # the experiments in different orders, which is exactly the kind of thing a caller
     # diffing two responses would chase for an afternoon.
-    ale_experiment_ids = []
+    experiment_ids = []
 
     for observed_mutation in observed_mutations:
-        ale_experiment_id = observed_mutation.sample.experiment.id
-        logging.info("Processing mutation with ID: %s", ale_experiment_id, extra=user_extra(request))
-        if ale_experiment_id not in ale_experiment_ids:
-            ale_experiment_ids.append(ale_experiment_id)
+        experiment_id = observed_mutation.sample.experiment.id
+        logging.info("Processing mutation with ID: %s", experiment_id, extra=user_extra(request))
+        if experiment_id not in experiment_ids:
+            experiment_ids.append(experiment_id)
         if observed_mutation.sample_id in reseq_dict.keys():
             sample_name = reseq_dict[observed_mutation.sample_id].exp_ale_flask_isolate_str
             # Initialised here, and not only inside the branch below: it used to be assigned
@@ -474,7 +474,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
                 sample_type = ("%2f" % float(observed_mutation.frequency)
                                if observed_mutation.frequency is not None else "")
             observed_mutation.experiment = {
-                'ale_experiment_id': observed_mutation.sample.experiment.id,
+                'experiment_id': observed_mutation.sample.experiment.id,
                 'sample_id': observed_mutation.sample.id,
                 'name': sample_name,
                 'type': sample_type
@@ -482,19 +482,19 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
 
     metadata = []
 
-    for ale_experiment_id in sorted(ale_experiment_ids):
-        logging.info("Processing reseq experiment with ID: %s", ale_experiment_id, extra=user_extra(request))
-        experiment = Experiment.objects.get(pk=ale_experiment_id)
+    for experiment_id in sorted(experiment_ids):
+        logging.info("Processing reseq experiment with ID: %s", experiment_id, extra=user_extra(request))
+        experiment = Experiment.objects.get(pk=experiment_id)
         if experiment:
-            reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, None)
+            reseq_queryset = get_ordered_reseq_queryset(experiment_id, None)
             reseq_info_list = get_reseq_info_list(reseq_queryset)
             experiment_info = {
                 "reseq_info_list": reseq_info_list,
-                "ale_experiment_name": experiment.name,
+                "experiment_name": experiment.name,
                 "ale_project_name": experiment.project.name,
                 "ale_project_id": experiment.project.id,
                 "multiple": False,
-                "ale_experiment_id": ale_experiment_id
+                "experiment_id": experiment_id
             }
             metadata.append(experiment_info)
     

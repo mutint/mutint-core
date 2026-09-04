@@ -5,7 +5,7 @@
 {% block scripts_and_style %}
     <link href="{% static "css/ncbi_view.css" %}?v={{ aledb_version }}" rel="stylesheet">
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -14,7 +14,7 @@
             <div class="alert alert-warning">
                 This experiment has no reference genome. One arrives with a breseq result
                 folder, or on its own (GenBank, GFF3 or FASTA) from the experiment's
-                <a href="/import/add/?ale_experiment_id={{ ale_experiment_id }}">Add data</a>
+                <a href="/import/add/?experiment_id={{ experiment_id }}">Add data</a>
                 page.
             </div>
         {% else %}
@@ -73,7 +73,7 @@
                                 {% if may_check %}
                                     <form class="form-inline ncbi-check">
                                         {% csrf_token %}
-                                        <input type="hidden" name="ale_experiment_id" value="{{ ale_experiment_id }}">
+                                        <input type="hidden" name="experiment_id" value="{{ experiment_id }}">
                                         <input type="hidden" name="seq_id" value="{{ contig.id }}">
                                         <input type="text" class="form-control input-sm"
                                                name="accession" value="{{ contig.accession }}"

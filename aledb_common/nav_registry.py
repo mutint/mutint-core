@@ -25,7 +25,7 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION):
     url_name  URL pattern name, reversed at render time
     section   MAIN_SECTION, always shown, or EXPERIMENT_SECTION, shown only
               when an experiment is selected and rendered with
-              ?ale_experiment_id=... appended
+              ?experiment_id=... appended
     """
     if (url is None) == (url_name is None):
         raise ValueError("register_nav_item() needs exactly one of url or url_name")

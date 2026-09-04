@@ -111,7 +111,7 @@
         <ul>
             {% for grant in shared_projects %}
                 <li>
-                    <a href="/ale/project/{{ grant.project.id }}/">{{ grant.project.name }}</a>
+                    <a href="/project/{{ grant.project.id }}/">{{ grant.project.name }}</a>
                     &mdash; {{ grant.get_role_display }}
                 </li>
             {% empty %}
@@ -142,7 +142,7 @@
         {% endif %}
 
         <div style="margin-top: 1.5em;">
-            <a class="btn btn-default" href="/ale/groups/">Back to groups</a>
+            <a class="btn btn-default" href="/group/">Back to groups</a>
             {% if is_owner %}
                 <button type="button" class="btn btn-danger" id="gd-delete">Delete group</button>
             {% endif %}
@@ -155,7 +155,7 @@
     "use strict";
     if (!document.getElementById("gd-error")) { return; }
 
-    var base = "/ale/group/{{ group.id }}/";
+    var base = "/group/{{ group.id }}/";
     var errorBox = document.getElementById("gd-error");
     var sharedCount = {{ shared_projects|length }};
 
@@ -234,7 +234,7 @@
             window.aledbConfirmDelete(what).then(function (confirmed) {
                 if (!confirmed) { return; }
                 window.aledbPost(base + "delete/", {}).then(function () {
-                    window.location.href = "/ale/groups/";
+                    window.location.href = "/group/";
                 }).catch(fail);
             });
         });

@@ -50,11 +50,11 @@
             </dl>
             {% if can_edit %}
             <a class="btn btn-default"
-               href="/ale/project/{{ project.id }}/edit/">Edit project</a>
+               href="/project/{{ project.id }}/edit/">Edit project</a>
             {% endif %}
             {% if can_admin %}
             <a class="btn btn-default"
-               href="/ale/project/{{ project.id }}/access/">Sharing</a>
+               href="/project/{{ project.id }}/access/">Sharing</a>
             {% endif %}
         </div>
     </div>
@@ -78,7 +78,7 @@
         {% if can_edit %}
         <div style="margin-bottom: 1em;">
             <a class="btn btn-primary"
-               href="/ale/experiments/new/?project={{ project.id }}">+ New experiment</a>
+               href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
             <button type="button" class="btn btn-danger" id="delete-selected">
                 &minus; Delete selected</button>
             <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
@@ -103,10 +103,10 @@
                     <td></td>
                     <td width="90">{{ experiment.id }}</td>
                     <td>
-                        <a href="/ale/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
+                        <a href="/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
                     </td>
                     <td>
-                        <a href="/ale/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
+                        <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
                     </td>
                     <td>
                         {% for doi in experiment.doi_as_list %}
@@ -125,7 +125,7 @@
     "use strict";
     if (!document.getElementById("delete-selected")) { return; }   // no write access
     document.getElementById("delete-selected").addEventListener("click", function () {
-        window.aledbDeleteSelected({tableId: "exp_table", path: "/ale/experiment/",
+        window.aledbDeleteSelected({tableId: "exp_table", path: "/experiment/",
                                     noun: "experiment"});
     });
 })();

@@ -32,11 +32,11 @@ urlpatterns = [
     re_path(r'^reference$', aledb_seq.views.ncbi_view.reference_view, name='reference_view'),
 
     # Managed-store files, addressed by primary key and streamed with Range support.
-    re_path(r'^alignments/(?P<reseq_id>\d+)/bam$',
+    re_path(r'^alignments/(?P<sample_id>\d+)/bam$',
             aledb_seq.views.alignments.sample_bam, name='sample_bam'),
-    re_path(r'^alignments/(?P<reseq_id>\d+)/bai$',
+    re_path(r'^alignments/(?P<sample_id>\d+)/bai$',
             aledb_seq.views.alignments.sample_bai, name='sample_bai'),
-    re_path(r'^alignments/(?P<reseq_id>\d+)/bigwig$',
+    re_path(r'^alignments/(?P<sample_id>\d+)/bigwig$',
             aledb_seq.views.alignments.sample_bigwig, name='sample_bigwig'),
     re_path(r'^reference/(?P<experiment_id>\d+)/fasta$',
             aledb_seq.views.alignments.reference_fasta, name='reference_fasta'),

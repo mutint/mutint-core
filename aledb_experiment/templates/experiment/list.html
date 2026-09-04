@@ -21,15 +21,15 @@
 {% block header %}Experiment List{% endblock %}
 {% block content %}
     <div style="margin-bottom: 1em;">
-        {% comment %} Was a link to /ale/projects/, which dead-ended: that page can only create an
+        {% comment %} Was a link to /project/, which dead-ended: that page can only create an
            experiment alongside a *new* project, so there was no way to add one to a project
            that already existed. The endpoint always existed; nothing called it. {% endcomment %}
         {% if editable_projects %}
-            <a class="btn btn-primary" href="/ale/experiments/new/">+ New experiment</a>
+            <a class="btn btn-primary" href="/experiment/new/">+ New experiment</a>
         {% elif user.is_authenticated %}
             {% comment %} Signed in with nothing to add to. The project list is where that
                starts, and it will offer the button once they get there. {% endcomment %}
-            <a class="btn btn-primary" href="/ale/projects/new/">+ New project</a>
+            <a class="btn btn-primary" href="/project/new/">+ New project</a>
             <small style="color: #666; margin-left: 0.5em;">An experiment needs a project to live in.</small>
         {% endif %}
         {% if user.is_authenticated %}
@@ -60,10 +60,10 @@
                 <td></td>
                 <td>{{ experiment.id }}</td>
                 <td>
-                    <a href="/ale/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
+                    <a href="/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
                 </td>
                 <td>
-                    <a href="/ale/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
+                    <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
                 </td>
                 <td>
                     {% for doi in experiment.doi_as_list %}
@@ -82,7 +82,7 @@
     "use strict";
     if (!document.getElementById("delete-selected")) { return; }   // signed out
     document.getElementById("delete-selected").addEventListener("click", function () {
-        window.aledbDeleteSelected({tableId: "exp_table", path: "/ale/experiment/",
+        window.aledbDeleteSelected({tableId: "exp_table", path: "/experiment/",
                                     noun: "experiment"});
     });
 })();

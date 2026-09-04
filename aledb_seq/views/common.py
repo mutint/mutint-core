@@ -1,7 +1,7 @@
 import aledb_experiment.models
 from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_view_project
-from aledb_common.constants import (REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID,
+from aledb_common.constants import (REQUEST_EXPERIMENT_ID, REQUEST_POPULATION,
                                     REQUEST_ALL, REQUEST_SAMPLE_TYPE, SAMPLE_TYPES)
 import logging
 
@@ -38,7 +38,7 @@ MUTATION_TYPE_LIST = ['SNP', 'SUB', 'DEL', 'INS', 'MOB', 'AMP', 'CON', 'INV', UN
 # TODO: change all instance of 'seq_experiment' to 'reseq'
 
 
-def get_aleid_ale_id_list(experiment_id):
+def get_population_names(experiment_id):
     """The ALE labels the picker should offer: those that still have a visible sample.
 
     **This used to exclude the literal string "0".** `STARTING_STRAIN_ALE_ID` was the
@@ -71,14 +71,14 @@ def get_aleid_ale_id_list(experiment_id):
             .values_list("name", flat=True))
 
 
-def get_ale_id(request):
+def get_population(request):
     """The ALE picked in the query string, or None for "all".
 
     No `int()` any more: `Population.name` is text (`aledb_experiment.0008`), and coercing
     would have raised a ValueError on the first lineage called `Ara-1`. An empty parameter
     reads as "all" too, so a cleared picker cannot filter to a nonexistent ALE.
     """
-    ale_id = request.GET.get(REQUEST_ALE_ID)
+    ale_id = request.GET.get(REQUEST_POPULATION)
     if ale_id is None or ale_id in ("", "all"):
         return None
     return ale_id
@@ -106,13 +106,13 @@ def get_sample_type(request):
         return None
     return sample_type
 
-def get_ale_experiment(request):
+def get_experiment(request):
     """
     Parse experiment id and validate permission
     :param request:
     :return: experiment or raise exception
     """
-    exp_id = request.GET.get(REQUEST_ALE_EXPERIMENT_ID)
+    exp_id = request.GET.get(REQUEST_EXPERIMENT_ID)
     experiment = Experiment.objects.get(pk=exp_id)
     if experiment:
         if can_view_project(request.user, experiment.project):
@@ -123,8 +123,8 @@ def get_ale_experiment(request):
 def no_experiment_selected(request, context, logger, what):
     """Render the "pick an experiment first" page.
 
-    Every experiment-scoped page reaches `get_ale_experiment` with whatever is in
-    `?ale_experiment_id`, so opening one without a usable id raises DoesNotExist.
+    Every experiment-scoped page reaches `get_experiment` with whatever is in
+    `?experiment_id`, so opening one without a usable id raises DoesNotExist.
     That is how these pages open, not a breakage: caught by a view's catch-all it
     logs an ERROR-level traceback and shows the reader Django's raw "Experiment
     matching query does not exist". Catch it ahead of the catch-all instead and
@@ -138,20 +138,20 @@ def no_experiment_selected(request, context, logger, what):
     return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def get_ale_experiment_name(request):
+def get_experiment_name(request):
 
-    ale_experiment_id = request.GET.get(REQUEST_ALE_EXPERIMENT_ID)
+    experiment_id = request.GET.get(REQUEST_EXPERIMENT_ID)
 
-    ale_experiment_name = "All ALE Experiments"
+    experiment_name = "All ALE Experiments"
 
-    if ale_experiment_id is not None and ale_experiment_id != "all":
+    if experiment_id is not None and experiment_id != "all":
 
-        experiment = aledb_experiment.models.Experiment.objects.filter(pk=ale_experiment_id)
+        experiment = aledb_experiment.models.Experiment.objects.filter(pk=experiment_id)
 
         # TODO: should only ever be returning 1 experiment. Implement error handling for more than one returned.
-        ale_experiment_name = experiment[0].name
+        experiment_name = experiment[0].name
 
-    return ale_experiment_name
+    return experiment_name
 
 
 # `filter_out_wt_reseq` and `get_wt_reseq_id` stood here. They were the ancestor subtraction

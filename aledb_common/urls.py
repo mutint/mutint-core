@@ -31,7 +31,13 @@ def get_core_urlpatterns():
 
     urlpatterns += [
         re_path(r'^about', include('aledb_about.urls')),
-        re_path(r'^ale/', include('aledb_experiment.urls')),
+        # Four subjects that shared one `^ale/` prefix, each at its own. Projects and
+        # groups were never about ALEs at all; the experiment and the sample are, and are
+        # still two different things to address.
+        re_path(r'^experiment/', include('aledb_experiment.experiment_urls')),
+        re_path(r'^sample/', include('aledb_experiment.sample_urls')),
+        re_path(r'^project/', include('aledb_experiment.project_urls')),
+        re_path(r'^group/', include('aledb_experiment.group_urls')),
         re_path(r'^bibliome/', include('aledb_bibliome.urls')),
         re_path(r'^export/', include('aledb_export.urls')),
         re_path(r'^import/', include('aledb_import.urls')),

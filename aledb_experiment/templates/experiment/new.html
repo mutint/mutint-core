@@ -30,7 +30,7 @@
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="ne-save">Create experiment</button>
             <a class="btn btn-default"
-               href="{% if project %}/ale/project/{{ project.id }}/{% else %}/ale/experiments/{% endif %}">Cancel</a>
+               href="{% if project %}/project/{{ project.id }}/{% else %}/experiment/{% endif %}">Cancel</a>
         </div>
         <div id="ne-error" style="color: #a00; margin-top: 1em;"></div>
     </div>
@@ -46,11 +46,11 @@
             document.getElementById("ne-error").textContent = "An experiment name is required.";
             return;
         }
-        window.aledbPost("/ale/experiments/create/", {
+        window.aledbPost("/experiment/create/", {
             project: document.getElementById("ne-project").value,
             name: name
         }).then(function (body) {
-            window.location.href = "/import/add/?ale_experiment_id=" + body.experiment_id;
+            window.location.href = "/import/add/?experiment_id=" + body.experiment_id;
         }).catch(function (err) {
             document.getElementById("ne-error").textContent = err.message;
         });

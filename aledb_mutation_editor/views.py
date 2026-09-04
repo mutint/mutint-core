@@ -13,7 +13,7 @@ concern, and a mutation excluded by a gene or frequency filter must still be vis
 whoever is curating -- otherwise it cannot be deleted, and it reappears the moment somebody
 widens the filter.
 
-**The write endpoints take a list, not one id.** `/ale/experiments/`'s bulk delete fires one
+**The write endpoints take a list, not one id.** `/experiment/`'s bulk delete fires one
 request per row, which is fine for the dozen experiments on that page and wrong for the several
 hundred mutations on this one. One POST is also what makes a batch a single changeset, which is
 the whole point: "I removed these eleven calls" is one decision and reads as one line of
@@ -54,10 +54,10 @@ from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
-REQUEST_RESEQ_ID = "reseq_id"
-REQUEST_SOURCE_RESEQ_ID = "source_reseq_id"
+REQUEST_SAMPLE_ID = "sample_id"
+REQUEST_SOURCE_SAMPLE_ID = "source_sample_id"
 
-#: `?reseq_id=all` -- the whole experiment at once rather than one sample. A sentinel in the
+#: `?sample_id=all` -- the whole experiment at once rather than one sample. A sentinel in the
 #: same parameter, not a parameter of its own, so the sample picker stays one control with one
 #: link per entry and there is no state in which both are set and disagree.
 ALL_SAMPLES = "all"
@@ -92,16 +92,16 @@ class EditorError(Exception):
 # --- shared plumbing ------------------------------------------------------------------------
 
 
-def _selected_reseq(request, reseq_dict, param=REQUEST_RESEQ_ID):
+def _selected_reseq(request, reseq_dict, param=REQUEST_SAMPLE_ID):
     """The requested sample, or the experiment's first one."""
     requested = request.GET.get(param)
     if requested:
         try:
-            reseq_id = int(requested)
+            sample_id = int(requested)
         except (TypeError, ValueError):
-            reseq_id = None
-        if reseq_id in reseq_dict:
-            return reseq_dict[reseq_id]
+            sample_id = None
+        if sample_id in reseq_dict:
+            return reseq_dict[sample_id]
     for reseq in reseq_dict.values():
         return reseq
     return None
@@ -211,7 +211,7 @@ def _grid_for(experiment, reseq_dict, query=None):
     total = matching.count()
     page = list(matching[:GRID_ROW_LIMIT])
 
-    column_of = {reseq_id: position for position, reseq_id in enumerate(reseq_dict)}
+    column_of = {sample_id: position for position, sample_id in enumerate(reseq_dict)}
     rows = {mutation.id: {"mutation": mutation, "cells": [None] * len(column_of)}
             for mutation in page}
 
@@ -236,8 +236,8 @@ def _grid_for(experiment, reseq_dict, query=None):
     # sample with nothing among the rendered rows renders as plain text instead of a link:
     # measured in a browser, an experiment's mutations are often concentrated in a subset of
     # its samples, and a control that looks live and silently does nothing reads as broken.
-    columns = [{"reseq": reseq, "count": len(by_sample.get(reseq_id, ()))}
-               for reseq_id, reseq in reseq_dict.items()]
+    columns = [{"reseq": reseq, "count": len(by_sample.get(sample_id, ()))}
+               for sample_id, reseq in reseq_dict.items()]
     return ordered, columns, by_mutation, by_sample, total, len(ordered)
 
 
@@ -263,7 +263,7 @@ class _NotForYou(Exception):
 def _experiment_for_page(request, context):
     """The experiment a page is scoped to, or a refusal to render instead.
 
-    `seq_common.get_ale_experiment` signals two different things and neither is an exception
+    `seq_common.get_experiment` signals two different things and neither is an exception
     type of its own: `Experiment.DoesNotExist` for "no experiment selected", which is how
     these pages open and is not an error, and a bare `ValueError` for "you may not view this".
     The pages next door catch the second with a blanket `except Exception` and render
@@ -272,7 +272,7 @@ def _experiment_for_page(request, context):
     permission.
     """
     try:
-        return seq_common.get_ale_experiment(request)
+        return seq_common.get_experiment(request)
     except Experiment.DoesNotExist:
         raise _NotForYou(seq_common.no_experiment_selected(
             request, context, logger, "mutation editor"))
@@ -367,7 +367,7 @@ def _listing(request, mode):
     try:
         experiment = _experiment_for_page(request, context)
         reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
-        all_samples = request.GET.get(REQUEST_RESEQ_ID) == ALL_SAMPLES
+        all_samples = request.GET.get(REQUEST_SAMPLE_ID) == ALL_SAMPLES
         reseq = None if all_samples else _selected_reseq(request, reseq_dict)
 
         context = _page_context(request, experiment)
@@ -376,7 +376,7 @@ def _listing(request, mode):
             "all_samples": all_samples,
             "all_samples_value": ALL_SAMPLES,
             "selected_reseq": reseq,
-            "selected_reseq_id": reseq.id if reseq is not None else None,
+            "selected_sample_id": reseq.id if reseq is not None else None,
             "is_mixed": is_mixed(reseq),
             "rows": _rows_for(reseq) if reseq is not None else [],
             "recent_changes": _recent_changes(experiment),
@@ -468,16 +468,16 @@ def mutation_edit(request):
 def _initial_selection(request, carrying):
     """Which of the carrying samples start highlighted: the one linked from, or all of them.
 
-    A `change` link on a sample's own mutation table carries `?reseq_id=`, and the page opens
+    A `change` link on a sample's own mutation table carries `?sample_id=`, and the page opens
     on that sample alone -- correcting a call you are looking at, in the sample you are
     looking at it in, is what somebody following that link means. The grid's link carries
     none, because its row spans every sample and there is no one sample that was clicked; the
-    whole set stays the default there, and `?reseq_id=all` lands on it too rather than on
+    whole set stays the default there, and `?sample_id=all` lands on it too rather than on
     nothing, since `int("all")` is not a sample.
     """
     ids = [reseq.id for reseq in carrying]
     try:
-        chosen = int(request.GET.get(REQUEST_RESEQ_ID))
+        chosen = int(request.GET.get(REQUEST_SAMPLE_ID))
     except (TypeError, ValueError):
         return ids
     return [chosen] if chosen in ids else ids
@@ -538,13 +538,13 @@ def mutation_copy(request):
     try:
         experiment = _experiment_for_page(request, context)
         reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
-        source = _selected_reseq(request, reseq_dict, REQUEST_SOURCE_RESEQ_ID)
+        source = _selected_reseq(request, reseq_dict, REQUEST_SOURCE_SAMPLE_ID)
 
         context = _page_context(request, experiment)
         context.update({
             "reseq_list": list(reseq_dict.values()),
             "source_reseq": source,
-            "source_reseq_id": source.id if source is not None else None,
+            "source_sample_id": source.id if source is not None else None,
             "targets": [reseq for reseq in reseq_dict.values()
                         if source is None or reseq.id != source.id],
             "rows": _rows_for(source) if source is not None else [],
@@ -665,13 +665,13 @@ def mutation_copy_apply(request):
     try:
         experiment = _experiment_for_write(request)
         mutation_ids = _int_list(request, "mutation_ids")
-        target_ids = _int_list(request, "target_reseq_ids")
+        target_ids = _int_list(request, "target_sample_ids")
         if not mutation_ids:
             raise EditorError("Select at least one mutation to copy.")
         if not target_ids:
             raise EditorError("Select at least one sample to copy to.")
 
-        source_id = request.POST.get(REQUEST_SOURCE_RESEQ_ID)
+        source_id = request.POST.get(REQUEST_SOURCE_SAMPLE_ID)
         sources = list(history.observations_for(experiment)
                        .filter(sample_id=source_id,
                                mutation_id__in=mutation_ids))
@@ -743,7 +743,7 @@ def mutation_add_apply(request):
     """
     try:
         experiment = _experiment_for_write(request)
-        target_ids = _int_list(request, "target_reseq_ids")
+        target_ids = _int_list(request, "target_sample_ids")
         if not target_ids:
             raise EditorError("Select at least one sample to add it to.")
 
@@ -917,13 +917,13 @@ def mutation_edit_apply(request):
 
 
 def _chosen_observations(request, carrying):
-    """The observations to change, named by `target_reseq_ids` out of the ones carrying it.
+    """The observations to change, named by `target_sample_ids` out of the ones carrying it.
 
     An absent or empty list means every carrying sample. That is what the page posted before
     it could pick a subset, so the endpoint's old contract still holds and a caller that does
     not care about samples need not learn about them.
     """
-    wanted = _int_list(request, "target_reseq_ids")
+    wanted = _int_list(request, "target_sample_ids")
     if not wanted:
         return list(carrying)
 
@@ -1029,7 +1029,7 @@ def mutation_restore(request):
                 raise EditorError("That point is not in this experiment's history.",
                                   status=404)
 
-        sample_ids = _int_list(request, "reseq_ids") or None
+        sample_ids = _int_list(request, "sample_ids") or None
         change = history.restore(experiment, request.user, change_set, sample_ids)
     except EditorError as error:
         return _error_response(error)

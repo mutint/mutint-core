@@ -9,7 +9,7 @@
     <script src="{% static "js/breseq_table.js" %}?v={{ aledb_version }}"></script>
     <link href="{% static "css/browse.css" %}?v={{ aledb_version }}" rel="stylesheet">
 {% endblock %}
-{% block header %}<b><a href="/ale/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ ale_experiment_name }}</b>{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -19,7 +19,7 @@
             {% comment %} Back to this sample's own mutations, not the comparison across every
                sample: you arrived from one sample's row and that is where you belong on the way
                out. /mutations/breseq is the page the nav calls Mutations. {% endcomment %}
-            <a href="/mutations/breseq?ale_experiment_id={{ ale_experiment_id }}&amp;reseq_id={{ reseq_id }}">&laquo; back to mutations</a>
+            <a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ sample_id }}">&laquo; back to mutations</a>
         </p>
 
         {% comment %} The mutation itself, in breseq's own table -- the same row, from the same
@@ -668,7 +668,7 @@
 
             function pageUrlFor(mutationId) {
                 return "{% url 'browse_mutation' %}?mutation_id=" + encodeURIComponent(mutationId)
-                    + "&reseq_id={{ reseq_id }}";
+                    + "&sample_id={{ sample_id }}";
             }
 
             // The `*` follows the mutation, not the sample, so every row is rewritten from
@@ -691,7 +691,7 @@
                 if (switching) { return; }
                 switching = true;
                 fetch("{% url 'browse_at' %}?mutation_id=" + encodeURIComponent(mutationId)
-                      + "&reseq_id={{ reseq_id }}")
+                      + "&sample_id={{ sample_id }}")
                     .then(function (resp) {
                         if (!resp.ok) { throw new Error("HTTP " + resp.status); }
                         return resp.json();

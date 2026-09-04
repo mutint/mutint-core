@@ -169,7 +169,7 @@ class GdImportTestCase(TestCase):
 
         created = self.client.post(
             "/import/uploads/",
-            data=json.dumps({"ale_experiment_id": experiment.id,
+            data=json.dumps({"experiment_id": experiment.id,
                              "import_type": "genomediff",
                              "files": [{"path": "3-30000-1-1.gd", "size": len(payload)}]}),
             content_type="application/json")
@@ -354,7 +354,7 @@ class GdImportTestCase(TestCase):
         experiment_id = summary["experiment_id"]
         self.client.force_login(self.user)
 
-        stats = self.client.get("/stats/", {"ale_experiment_id": experiment_id})
+        stats = self.client.get("/stats/", {"experiment_id": experiment_id})
         self.assertEqual(stats.status_code, 200)
         stats_html = stats.content.decode("utf-8")
         # Every sample is listed, as plain text rather than a dead report link.
@@ -363,13 +363,13 @@ class GdImportTestCase(TestCase):
 
         # The per-sample table, not the cross-sample one: Compare is the aledb-compare
         # plugin's now, and core's suite cannot reach a plugin.
-        mutations = self.client.get("/mutations/breseq", {"ale_experiment_id": experiment_id})
+        mutations = self.client.get("/mutations/breseq", {"experiment_id": experiment_id})
         self.assertEqual(mutations.status_code, 200)
         mutations_html = mutations.content.decode("utf-8")
         self.assertNotIn("Page not available", mutations_html)
         self.assertNotIn("name 'ale' is not defined", mutations_html)
 
-        metadata = self.client.get("/metadata/", {"ale_experiment_id": experiment_id})
+        metadata = self.client.get("/metadata/", {"experiment_id": experiment_id})
         self.assertEqual(metadata.status_code, 200)
 
 

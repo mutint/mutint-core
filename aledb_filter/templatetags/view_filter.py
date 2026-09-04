@@ -2,7 +2,7 @@
 
 The plugin-facing surface of filtering: the controls a reader changes their view with, and the
 line a table shows about what it did. Tags rather than context keys, and that is what makes them
-generic -- they read `ale_experiment_id` and the request straight out of the context every table
+generic -- they read `experiment_id` and the request straight out of the context every table
 page already has, so including them in `base_table_template.html` reaches aledb-compare,
 aledb-fixation and aledb-converge without touching any of those repositories.
 
@@ -12,7 +12,7 @@ It renders the controls now as well, because the filter belongs to whoever is re
 **A control that does nothing is worse than no control.** The old checkbox this replaces was
 gated on a `show_filter_toggles` flag each page had to remember to set, because it rendered inert
 on three pages that never read it back. That flag is gone and the property is structural instead:
-these tags render nothing at all without an `ale_experiment_id` in the context, and any page that
+these tags render nothing at all without an `experiment_id` in the context, and any page that
 has one resolves its filter through `get_view_filter`, so there is no way to draw a control that
 is not connected to anything.
 """
@@ -28,7 +28,7 @@ register = template.Library()
 
 def _resolved(context):
     """The experiment on this page and the filter the reader has on it, or `(None, None)`."""
-    experiment_id = context.get("ale_experiment_id")
+    experiment_id = context.get("experiment_id")
     request = context.get("request")
     if not experiment_id or request is None:
         return None, None

@@ -101,7 +101,7 @@
     /* "Delete selected" over a DataTable of rows that each link to what they are.
      *
      * opts: {tableId, path, noun} -- e.g. {tableId: "exp_table",
-     *        path: "/ale/experiment/", noun: "experiment"}.
+     *        path: "/experiment/", noun: "experiment"}.
      *
      * Three pages want this and it was inline in two of them, near enough byte for byte;
      * ale/project_detail.html would have made a third copy, which is the reason this file

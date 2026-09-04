@@ -36,7 +36,7 @@
        The server checks stand on their own; this only stops advertising them. {% endcomment %}
     {% if user.is_authenticated %}
     <div style="margin-bottom: 1em;">
-        <a class="btn btn-primary" href="/ale/projects/new/">+ New project</a>
+        <a class="btn btn-primary" href="/project/new/">+ New project</a>
         <button type="button" class="btn btn-danger" id="delete-selected">
             &minus; Delete selected</button>
         <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
@@ -60,7 +60,7 @@
             <tr>
                 <td></td>
                 <td>
-                    <a href="/ale/project/{{ project.id }}">{{ project.name }}</a>
+                    <a href="/project/{{ project.id }}">{{ project.name }}</a>
                 </td>
                 <td>
                     {% for doi in publications %}
@@ -79,7 +79,7 @@
     "use strict";
     if (!document.getElementById("delete-selected")) { return; }   // signed out
     document.getElementById("delete-selected").addEventListener("click", function () {
-        window.aledbDeleteSelected({tableId: "project_table", path: "/ale/project/",
+        window.aledbDeleteSelected({tableId: "project_table", path: "/project/",
                                     noun: "project"});
     });
 })();

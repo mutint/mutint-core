@@ -77,7 +77,7 @@ never leaves your machine. They are stored under `ALEDB_STORE_DIR`, keyed by dat
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
-<store>/samples/<reseq_id>/{sample.gd,aligned.bam,aligned.bam.bai}
+<store>/samples/<sample_id>/{sample.gd,aligned.bam,aligned.bam.bai}
 ```
 
 Every sample in an experiment must share a reference; the first import establishes it and a
@@ -85,8 +85,8 @@ later mismatch rejects that sample while the rest of the batch proceeds. Alignme
 served with HTTP range support, so a genome browser can read them:
 
 ```
-/mutations/alignments/<reseq_id>/bam
-/mutations/alignments/<reseq_id>/bai
+/mutations/alignments/<sample_id>/bam
+/mutations/alignments/<sample_id>/bai
 /mutations/reference/<experiment_id>/{fasta,fai,gff3}
 ```
 
@@ -108,7 +108,7 @@ single long request. Files are stored under `ALEDB_STORE_DIR`, keyed by database
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
-<store>/samples/<reseq_id>/{sample.gd,aligned.bam,aligned.bam.bai}
+<store>/samples/<sample_id>/{sample.gd,aligned.bam,aligned.bam.bai}
 ```
 
 **Sample statistics come from `data/summary.json`.** breseq writes it beside `output/`;
@@ -157,8 +157,8 @@ Alignments are served with HTTP range support, so a genome browser can read them
 project permissions:
 
 ```
-/mutations/alignments/<reseq_id>/bam
-/mutations/alignments/<reseq_id>/bai
+/mutations/alignments/<sample_id>/bam
+/mutations/alignments/<sample_id>/bai
 /mutations/reference/<experiment_id>/{fasta,fai,gff3}
 ```
 
