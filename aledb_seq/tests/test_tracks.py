@@ -127,7 +127,7 @@ class SampleTrackTestCase(_Fixture):
         values_list collapsed every sample onto one row called "sample"."""
         features = tracks.sample_features(self.experiment.id)
         self.assertTrue(features)
-        self.assertEqual({self.reseq.ale_flask_isolate_str},
+        self.assertEqual({self.reseq.label},
                          {f["sample"] for f in features})
 
     def test_presence_is_uniform_and_frequency_rides_alongside(self):

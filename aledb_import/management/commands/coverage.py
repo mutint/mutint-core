@@ -53,7 +53,7 @@ class Command(BaseCommand):
 
         built = failed = untagged = 0
         for reseq in samples:
-            name = reseq.ale_flask_isolate_str
+            name = reseq.label
             if options["dry_run"]:
                 self.stdout.write("  %s  would build" % name)
                 continue

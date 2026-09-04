@@ -112,5 +112,5 @@ class TestThePythonFormAgrees(OrderingTestCase):
         by_label = sorted(
             Sample.objects.filter(
                 **{paths.to_experiment(): self.experiment}),
-            key=lambda r: r.ale_flask_isolate_str)
+            key=lambda r: r.label)
         self.assertNotEqual([r.source_name for r in by_label], self.order())

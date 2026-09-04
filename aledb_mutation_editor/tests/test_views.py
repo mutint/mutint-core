@@ -190,7 +190,7 @@ class PageTestCase(EditorTestCase):
         response = self.get(HISTORY)
         self.assertContains(response, "a note worth reading")
         self.assertContains(response, "owner")
-        self.assertContains(response, self.sample_a.ale_flask_isolate_str)
+        self.assertContains(response, self.sample_a.label)
 
     def test_a_system_change_is_labelled_system_not_left_blank(self):
         observed = ObservedMutation.objects.get(sample=self.sample_a,

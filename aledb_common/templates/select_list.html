@@ -12,7 +12,7 @@ The page's own script does the wiring, because only it knows what to do with the
 The Select all / Select none buttons and the count are wired by the helper itself: it looks
 for them in the list's parent, which is the wrapper below.
 
-  items          the objects to list; each needs `.id` and `.ale_flask_isolate_str`
+  items          the objects to list; each needs `.id` and `.label`
   id             the <ul> id, which the page hands to aledbSelectList
   selected_ids   the ids to start highlighted; omit for none
   empty_message  what to say instead of rows when `items` is empty
@@ -34,7 +34,7 @@ for them in the list's parent, which is the wrapper below.
     <ul class="aledb-select-list aledb-menu" id="{{ id }}">
         {% for item in items %}
             <li data-value="{{ item.id }}"{% if item.id in selected_ids %} class="active"{% endif %}>
-                <a href="#">{{ item.ale_flask_isolate_str }}</a>
+                <a href="#">{{ item.label }}</a>
             </li>
         {% empty %}
             <li class="aledb-select-empty">{{ empty_message }}</li>

@@ -331,7 +331,7 @@ def _serialize_metadata(metadata_list):
         flat = []
         for row in m.get('reseq_info_list', []):
             flat.append({
-                'ale_flask_isolate_str': row['sample'].ale_flask_isolate_str,
+                'label': row['sample'].label,
                 'clonal_or_population':  row['clonal_or_population'],
                 'tech_rep_description':  row['tech_rep_description'],
                 'media_description':     row['media_description'],
@@ -465,7 +465,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
         if experiment_id not in experiment_ids:
             experiment_ids.append(experiment_id)
         if observed_mutation.sample_id in reseq_dict.keys():
-            sample_name = reseq_dict[observed_mutation.sample_id].exp_ale_flask_isolate_str
+            sample_name = reseq_dict[observed_mutation.sample_id].qualified_label
             # Initialised here, and not only inside the branch below: it used to be assigned
             # nowhere else, so a row that failed the test either raised NameError or silently
             # reported the *previous* row's frequency.

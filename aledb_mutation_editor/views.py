@@ -600,7 +600,7 @@ def _changeset_context(change_set):
         # A deleted sample sorts last: it has no coordinate, and keeping the rows nobody can
         # act on together at the end beats interleaving them.
         order = (0, sample_sort_key(change.sample)) if change.sample_id else (1, ())
-        label = change.sample.ale_flask_isolate_str if change.sample_id else "(deleted sample)"
+        label = change.sample.label if change.sample_id else "(deleted sample)"
         tally = samples.setdefault(
             label, {"label": label, "added": 0, "removed": 0, "order": order})
         if change.operation == "add":
@@ -613,11 +613,11 @@ def _changeset_context(change_set):
         "change_set": change_set,
         "added": added,
         "removed": removed,
-        # By coordinate, not by label. Sorting on `ale_flask_isolate_str` is a lexicographic
+        # By coordinate, not by label. Sorting on `label` is a lexicographic
         # sort over text, which puts `A1 F10 I1` above `A1 F2 I1` -- the exact thing
         # `aledb_experiment.ordering` exists to prevent, and it read as correct here because
         # single-digit flasks are the common case. It also sorted by the *isolate description*
-        # wherever one is set, since that is what `ale_flask_isolate_str` returns.
+        # wherever one is set, since that is what `label` returns.
         "samples": sorted(samples.values(), key=lambda entry: entry["order"]),
     }
 
@@ -729,7 +729,7 @@ def _plan_copy(experiment, sources, targets):
             # Keep the map current so copying two source rows that collapse to the same key
             # onto one target adds it once rather than twice.
             existing.setdefault(key, []).append(None)
-    return additions, [reseq.ale_flask_isolate_str for target_id, reseq in targets.items()
+    return additions, [reseq.label for target_id, reseq in targets.items()
                        if target_id in skipped]
 
 
@@ -823,7 +823,7 @@ def _plan_add(experiment, identity, observation, targets):
     already = []
     for target_id, reseq in targets.items():
         if existing.get((target_id, key_part, observation.get("source"))):
-            already.append(reseq.ale_flask_isolate_str)
+            already.append(reseq.label)
             continue
         additions.append({
             "sample_id": target_id,
@@ -950,7 +950,7 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     """
     sample_ids = [observed.sample_id for observed in chosen]
     present = history.live_state(experiment, sample_ids=sample_ids)
-    names = {reseq.id: reseq.ale_flask_isolate_str
+    names = {reseq.id: reseq.label
              for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()}
 
     additions = []

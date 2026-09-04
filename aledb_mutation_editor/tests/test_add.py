@@ -144,7 +144,7 @@ class AddTestCase(EditorTestCase):
         response = self.snp()
 
         self.assertEqual(0, response.json()["added"])
-        self.assertEqual([self.sample_a.ale_flask_isolate_str],
+        self.assertEqual([self.sample_a.label],
                          response.json()["already"])
         self.assertEqual(1, ObservedMutation.objects.filter(mutation__position=5000).count())
 

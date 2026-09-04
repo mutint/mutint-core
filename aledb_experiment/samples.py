@@ -34,6 +34,7 @@ import logging
 
 from django.db import transaction
 
+from aledb_experiment import coordinates
 from aledb_experiment.models import Population, TimePoint
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,12 @@ def sample_coordinate(reseq):
 
 
 def coordinate_str(coordinate):
-    return "A%s F%s I%s" % coordinate
+    """The tuple `sample_coordinate` answers, written the one way it is written.
+
+    This was the second copy of the format string; `aledb_experiment.coordinates` is the
+    first and only one now.
+    """
+    return coordinates.format_coordinate(*coordinate)
 
 
 def resolve_time_point(experiment, coordinate, *, media, species="", strain=""):

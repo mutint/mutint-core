@@ -273,19 +273,19 @@ class GdImportTestCase(TestCase):
             ["763A", "763B"])
 
     def test_a_read_name_displays_as_itself(self):
-        """`ale_flask_isolate_str` prefers the sample's description, so the label survives."""
+        """`label` prefers the sample's description, so the label survives."""
         self._import_named(["Ara-1_500gen_762B.gd"])
 
         reseq = Sample.objects.get()
-        self.assertEqual(reseq.ale_flask_isolate_str, "Ara-1_500gen_762B")
+        self.assertEqual(reseq.label, "Ara-1_500gen_762B")
 
     def test_an_afir_name_still_displays_as_its_coordinate(self):
-        """It says exactly what the coordinate says, so labelling the isolate with it would
-        relabel every table column with a filename."""
+        """It says exactly what the coordinate says, so storing it as the description
+        would relabel every table column with a filename."""
         self._import_named(["3-30000-1-1.gd"])
 
         reseq = Sample.objects.get()
-        self.assertEqual(reseq.ale_flask_isolate_str, "A3 F30000 I1-1")
+        self.assertEqual(reseq.label, "3 / 30000 / 1-1")
 
     def test_underscore_triple_reimport_is_idempotent(self):
         self._import_named(self.TRIPLE_NAMES)

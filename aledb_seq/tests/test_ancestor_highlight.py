@@ -129,7 +129,7 @@ class TestWhatThePageClaims(BreseqAncestorTestCase):
         legend answers it rather than leaving the reader to go and look."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
         body = self.get(sample_id=self.sample_b.id).content.decode()
-        self.assertIn(self.sample_a.ale_flask_isolate_str, body)
+        self.assertIn(self.sample_a.label, body)
         self.assertIn("sample_id=%d" % self.sample_a.id, body)
 
     def test_the_legend_is_its_own_row(self):

@@ -6,9 +6,9 @@ it that it shares with its siblings, so the naive implementation (write the numb
 row) silently renumbers every other sample under the same flask. Half of what follows
 exists to pin that down.
 
-**The coordinate is a 3-tuple.** It ended in a replicate number until `Isolate` and
-`TechnicalReplicate` were folded into the sample; the replicate is part of the label now,
-so `make_sample(1, 1, "1-2")` is what `1-1-1-2` used to be.
+**The coordinate is a 3-tuple**, written `1 / 1 / 1-2`. It ended in a replicate number
+until `Isolate` and `TechnicalReplicate` were folded into the sample; the replicate is part
+of the label now, so `make_sample(1, 1, "1-2")` is what `1-1-1-2` used to be.
 """
 
 import json
@@ -115,7 +115,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         self.assertNotIn('data-reseq-id="%d"' % stranger_sample.pk, html)
 
     def test_the_pages_show_the_coordinate_beside_the_displayed_label(self):
-        """A renumber can change no visible label at all: ale_flask_isolate_str returns
+        """A renumber can change no visible label at all: label returns
         the isolate description whenever it is set, and the import path fills it with the
         filename. Both pages must show the numbers as well, or a successful save looks
         like it did nothing."""
@@ -127,7 +127,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
             with self.subTest(url=url):
                 html = self.client.get(url).content.decode()
                 self.assertIn("Ara-1_500gen_762B", html)
-                self.assertIn("A1 F1 I1-1", html)
+                self.assertIn("1 / 1 / 1-1", html)
 
     def test_signed_out_they_are_forbidden(self):
         self.client.logout()

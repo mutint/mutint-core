@@ -141,7 +141,7 @@ def browse_mutation(request):
         "template_header": "Alignments",
         "mutation": mutation,
         "observed": observed,
-        "sample_name": reseq.ale_flask_isolate_str,
+        "sample_name": reseq.label,
         # For the way back: the per-sample page, on the sample this browser is showing,
         # rather than the cross-experiment comparison it used to land on.
         "sample_id": reseq.id,
@@ -295,7 +295,7 @@ def _sample_track(reseq):
         return None
     return {
         "id": reseq.id,
-        "name": reseq.ale_flask_isolate_str,
+        "name": reseq.label,
         # indexURL must be explicit: the store renames breseq's data/reference.bam.bai to
         # aligned.bam.bai, so igv.js's default "<url>.bai" derivation would be wrong.
         "url": reverse("sample_bam", args=[reseq.id]),

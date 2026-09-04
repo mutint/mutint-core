@@ -136,12 +136,12 @@ class BreseqTablePageTestCase(TestCase):
     def test_the_picker_lists_the_experiment_samples(self):
         response = self.get_page()
         self.assertContains(response, "reseq_picker")
-        self.assertContains(response, self.reseq.ale_flask_isolate_str)
+        self.assertContains(response, self.reseq.label)
 
     def test_selecting_a_sample(self):
         response = self.get_page(sample_id=self.reseq.id)
         self.assertEqual(200, response.status_code)
-        self.assertContains(response, self.reseq.ale_flask_isolate_str)
+        self.assertContains(response, self.reseq.label)
 
     def test_an_unknown_sample_falls_back_to_the_first(self):
         response = self.get_page(sample_id=999999)

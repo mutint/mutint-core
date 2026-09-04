@@ -74,7 +74,7 @@ def sample_sort_key(reseq):
 
     **It has to agree with `natural()`**, so it pads the same two text fields the same way --
     that is what puts `F2` before `F10`, and it is the whole reason this exists rather than
-    `sorted(..., key=lambda r: r.ale_flask_isolate_str)`, which is a lexicographic sort over
+    `sorted(..., key=lambda r: r.label)`, which is a lexicographic sort over
     a *display* string and gets both the numbers and, wherever an isolate description is set,
     the field itself wrong.
 

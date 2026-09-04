@@ -181,7 +181,7 @@ def describe_ancestor(experiment_id):
         # SET_NULL should make this unreachable; a page saying nothing beats a page 500ing.
         logger.warning("experiment %s designates a sample that is gone", experiment_id)
         return None
-    return {"name": reseq.ale_flask_isolate_str, "sample_id": reseq.pk}
+    return {"name": reseq.label, "sample_id": reseq.pk}
 
 
 def note_sample_deleted(sender, instance, **kwargs):

@@ -29,7 +29,7 @@
         <div class="btn-group" id="reseq_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {{ selected_reseq.ale_flask_isolate_str }} <span class="caret"></span>
+                {{ selected_reseq.label }} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu aledb-menu">
                 {% comment %} The designated ancestor is listed, first, and tinted the same
@@ -40,7 +40,7 @@
                    one statement rather than two coincidences. {% endcomment %}
                 {% for reseq in reseq_list %}
                     <li class="{% if reseq.id == selected_sample_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
-                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
                     </li>
                 {% endfor %}
             </ul>

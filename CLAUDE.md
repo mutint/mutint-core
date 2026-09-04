@@ -1667,7 +1667,7 @@ Changing who owns or ran something is its own workflow: folding it into a detail
 every save rewrites it, and a form that dropped the field would silently blank it.
 
 **The trap to know about:** a renumber often changes no visible label.
-`ale_flask_isolate_str` returns `Isolate.description` verbatim whenever it is set, and the
+`label` returns `Isolate.description` verbatim whenever it is set, and the
 import path fills it with the filename for every sample whose name is not `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
 keep the description editable in the same form. A duplicate `sample_name` within an
 experiment is refused for a related reason -- re-import finds an existing sample by name --
@@ -2456,7 +2456,7 @@ where it is a number rather than a suggestion.
 
 `showSampleNames: true` is set on the browser, or a seg track draws its rows unlabelled.
 
-**The sample label cannot come out of `values_list`.** `ale_flask_isolate_str` is a property
+**The sample label cannot come out of `values_list`.** `label` is a property
 falling back through the isolate's description to a computed `A# F# I# R#`, so pulling
 `...isolate__description` instead -- which this did first -- yields NULL for every sample
 without one and collapses the whole experiment onto a single row named "sample". One small

@@ -225,7 +225,7 @@ def import_document_as_sample(document, sample_name, context, person):
             context, document, identity.ale, identity.flask, identity.isolate,
             identity.replicate, person, sample_name,
             # A label only where the name carries one. `3-30000-1-1` says exactly what the
-            # coordinate says, and `ale_flask_isolate_str` prefers the description over the
+            # coordinate says, and `label` prefers the description over the
             # computed `A3 F30000 I1-1` -- so filling it for an A-F-I-R sample would
             # relabel every table column with the filename it came from.
             isolate_description=(sample_name
@@ -313,7 +313,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
             "is_clonal": is_clonal,
             "reference_genome": reseq_reference[:200],
             "reseq_date": reseq_date[:200],
-            # A label to read the sample by, on creation only: `ale_flask_isolate_str`
+            # A label to read the sample by, on creation only: `label`
             # prefers it, so `Ara-2_500gen_763A` shows as itself rather than as
             # `AAra-2 F500 I763A`. Not part of the identity -- a sample found by its
             # coordinate keeps whatever description it was given, including a hand-edited
@@ -345,7 +345,7 @@ def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     return Sample.objects.create(
         time_point=flask,
         name=_next_isolate_number(flask),
-        # ale_flask_isolate_str() prefers the description, so this is what makes the
+        # label() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
         is_clonal=" -p" not in (metadata.get("COMMAND", "") or ""),

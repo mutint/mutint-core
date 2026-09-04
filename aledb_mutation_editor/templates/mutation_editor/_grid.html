@@ -101,11 +101,11 @@ rendering of it, and `draw` re-applies them.
                         {% if column.count %}
                             <a href="#" data-sample="{{ column.reseq.id }}"
                                title="Select all {{ column.count }} in this sample"
-                               >{{ column.reseq.ale_flask_isolate_str }}</a>
+                               >{{ column.reseq.label }}</a>
                         {% else %}
                             <span class="me-sample-empty"
                                   title="Nothing from this sample is on this page"
-                                  >{{ column.reseq.ale_flask_isolate_str }}</span>
+                                  >{{ column.reseq.label }}</span>
                         {% endif %}
                     </th>
                 {% endfor %}

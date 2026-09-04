@@ -58,7 +58,7 @@ class TestThePage(AncestorPageTestCase):
         self.experiment.set_ancestor(self.sample_a, self.owner)
         body = self.page().content.decode()
         self.assertIn("Ancestor:", body)
-        self.assertIn(self.sample_a.ale_flask_isolate_str, body)
+        self.assertIn(self.sample_a.label, body)
         self.assertIn(self.owner.get_username(), body)
 
     def test_it_says_so_when_there_is_no_ancestor(self):

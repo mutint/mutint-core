@@ -50,7 +50,7 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
     # moved with the close-icon column that used to sit at index 0.
     mut_pos_index = 2
     rows = [
-        HTML_MUTATION_TABLE_HEADER[mut_pos_index:] + [reseq_ordered_dict[reseq].exp_ale_flask_isolate_str for reseq in
+        HTML_MUTATION_TABLE_HEADER[mut_pos_index:] + [reseq_ordered_dict[reseq].qualified_label for reseq in
                                                       reseq_ordered_dict]]
 
     rows += ([

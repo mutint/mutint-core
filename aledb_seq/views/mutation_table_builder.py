@@ -57,9 +57,9 @@ def get_table_header(user, reseq_dict, experiment: Experiment = None):
 
     for sample_id in reseq_dict:
         reseq = reseq_dict[sample_id]
-        sample_name = reseq.ale_flask_isolate_str
+        sample_name = reseq.label
         if not experiment:
-            sample_name = reseq.exp_ale_flask_isolate_str
+            sample_name = reseq.qualified_label
 
         # Plain text: this used to link to <experiment_location>/<sample>.html, a breseq
         # report page that no longer exists.

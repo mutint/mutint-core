@@ -24,7 +24,7 @@ saying before it is chosen: this is the only setting in the product that changes
         {% if experiment.has_ancestor %}
             <div class="alert alert-info" style="font-size: 15px;">
                 Ancestor:
-                <strong>{{ experiment.ancestor.ale_flask_isolate_str }}</strong>
+                <strong>{{ experiment.ancestor.label }}</strong>
                 <div style="color: #555; font-size: 13px; margin-top: 4px;">
                     Set{% if experiment.ancestor_set_at %} on
                         {{ experiment.ancestor_set_at|date:"Y-m-d H:i" }}{% endif %}

@@ -100,7 +100,7 @@ class TestListings(SubtractionTestCase):
         self.designate_a()
         response = self.client.get("/mutation-editor/",
                                    {"experiment_id": self.experiment.id})
-        self.assertContains(response, self.sample_a.ale_flask_isolate_str)
+        self.assertContains(response, self.sample_a.label)
 
 
 class TestThePluginEntryPoint(SubtractionTestCase):

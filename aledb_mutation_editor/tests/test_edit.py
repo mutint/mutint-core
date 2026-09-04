@@ -315,7 +315,7 @@ class ChangeMutationTestCase(EditorTestCase):
                                target_sample_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
-        self.assertEqual([self.sample_b.ale_flask_isolate_str], response.json()["already"])
+        self.assertEqual([self.sample_b.label], response.json()["already"])
         observations = ObservedMutation.objects.filter(sample=self.sample_b,
                                                        mutation=self.mut_2)
         self.assertEqual(1, observations.count())
@@ -412,7 +412,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
         # sample_a already carries mut_2, so it gets the removal and no addition: two
         # observations afterwards rather than three, and it is named back.
-        self.assertEqual([self.sample_a.ale_flask_isolate_str], response.json()["already"])
+        self.assertEqual([self.sample_a.label], response.json()["already"])
         self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
         self.assertFalse(ObservedMutation.objects.filter(mutation=self.mut_1).exists())
         self.assertTrue(Mutation.objects.filter(pk=self.mut_1.pk).exists())

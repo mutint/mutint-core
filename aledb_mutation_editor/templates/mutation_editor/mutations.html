@@ -23,7 +23,7 @@
         <div class="btn-group" id="reseq_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {% if all_samples %}All samples{% else %}{{ selected_reseq.ale_flask_isolate_str }}{% endif %}
+                {% if all_samples %}All samples{% else %}{{ selected_reseq.label }}{% endif %}
                 <span class="caret"></span>
             </button>
             <ul class="dropdown-menu aledb-menu">
@@ -36,7 +36,7 @@
                 <li role="separator" class="divider"></li>
                 {% for reseq in reseq_list %}
                     <li {% if reseq.id == selected_sample_id %}class="active"{% endif %}>
-                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}</a>
                     </li>
                 {% endfor %}
             </ul>

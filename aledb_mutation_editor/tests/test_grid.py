@@ -255,7 +255,7 @@ class GridPageTestCase(EditorTestCase):
 
         self.assertIn('data-sample="%d"' % self.sample_a.id, html)
         self.assertNotIn('data-sample="%d"' % empty.id, html)
-        self.assertIn(empty.ale_flask_isolate_str, html)
+        self.assertIn(empty.label, html)
 
     def test_the_header_says_how_much_it_would_select(self):
         html = self.grid().content.decode("utf-8")

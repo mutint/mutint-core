@@ -49,7 +49,7 @@ class TestWithAnAncestor(SummaryTestCase):
     def test_it_names_the_ancestor(self):
         rendered = self.render()
         self.assertIn("designated ancestor", rendered)
-        self.assertIn(self.sample_a.ale_flask_isolate_str, rendered)
+        self.assertIn(self.sample_a.label, rendered)
 
     def test_it_stops_claiming_every_stored_mutation(self):
         """The lie this whole sentence exists to prevent."""

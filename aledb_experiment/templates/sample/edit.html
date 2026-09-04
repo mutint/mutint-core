@@ -17,7 +17,7 @@
 
         <h4 style="margin-top: 2em;">Identity</h4>
         {% comment %} The coordinate and the displayed label are shown together on
-           purpose. `ale_flask_isolate_str` returns the isolate description whenever it is
+           purpose. `label` returns the isolate description whenever it is
            set, and the import path sets it to the filename for every sample not already
            named A-F-I-R -- so changing these four numbers can leave every label on every
            page byte-identical. Seeing both is what stops a successful save looking like
@@ -71,7 +71,7 @@
                    maxlength="300" value="{{ sample.isolate_description }}">
             <small class="help-block">
                 When set, this is what the sample is called throughout the site, in place
-                of A#&nbsp;F#&nbsp;I#. Clear it to display the numbers instead.
+                of its coordinate. Clear it to show the coordinate instead.
             </small>
         </div>
 

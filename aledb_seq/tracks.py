@@ -186,7 +186,7 @@ def sample_features(experiment_id, contig=None):
     sample listing uses, so the track reads in the order of the tables beside it and calls
     each sample what they call it.
 
-    **The label cannot come out of `values_list`.** `ale_flask_isolate_str` is a property that
+    **The label cannot come out of `values_list`.** `label` is a property that
     falls back through the isolate's description to a computed `A# F# I# R#`, so pulling
     `...isolate__description` instead -- which is what this did first -- yields NULL for every
     sample that has none, and every row in the experiment collapses onto one track row named
@@ -195,7 +195,7 @@ def sample_features(experiment_id, contig=None):
     """
     from aledb_seq.util import get_evolved_observation_queryset, get_ordered_reseq_queryset
 
-    labels = {reseq.id: reseq.ale_flask_isolate_str
+    labels = {reseq.id: reseq.label
               for reseq in get_ordered_reseq_queryset(experiment_id)}
 
     rows = get_evolved_observation_queryset(experiment_id).filter(present=True)

@@ -21,12 +21,12 @@
         <div class="btn-group" id="source_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {{ source_reseq.ale_flask_isolate_str }} <span class="caret"></span>
+                {{ source_reseq.label }} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu aledb-menu">
                 {% for reseq in reseq_list %}
                     <li {% if reseq.id == source_sample_id %}class="active"{% endif %}>
-                        <a href="?experiment_id={{ experiment_id }}&amp;source_sample_id={{ reseq.id }}">{{ reseq.ale_flask_isolate_str }}</a>
+                        <a href="?experiment_id={{ experiment_id }}&amp;source_sample_id={{ reseq.id }}">{{ reseq.label }}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -60,7 +60,7 @@
            copy, then where to -- and a page whose sample list is on the left and another's on
            the right is a difference the person has to notice. {% endcomment %}
         <div class="col-lg-8" style="padding-left: 0;">
-            <h4>Mutations in {{ source_reseq.ale_flask_isolate_str }}</h4>
+            <h4>Mutations in {{ source_reseq.label }}</h4>
             {% comment %} Same DataTables-with-Select reasoning as the edit page: no cell here
                is an input, so selection lives in DataTables' data model and survives paging
                and searching. {% endcomment %}

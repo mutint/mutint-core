@@ -1,4 +1,6 @@
 from django.db import models
+
+from aledb_experiment import coordinates
 from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_seq.util import get_ecocyc_gene_list
 from django.utils.safestring import mark_safe
@@ -51,7 +53,7 @@ class Sample(models.Model):
     is_clonal = models.BooleanField(default=True)
 
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
-    #: sample is labelled -- see `ale_flask_isolate_str`.
+    #: sample is labelled -- see `label`.
     description = models.CharField(max_length=300, **blank_field)
     #: The reference genome this sample was called against, by name. It was
     #: `reseq_reference`, which read like a contig and is not one -- `Mutation.reseq_reference`
@@ -123,22 +125,28 @@ class Sample(models.Model):
         return self.time_point.value
 
     @property
-    def ale_flask_isolate_str(self):
+    def label(self):
+        """What this sample is called, everywhere one is named.
+
+        The sample's own `description` if it has one, and otherwise its coordinate. That
+        preference is why an import writes the filename into `description` for a name that
+        says something (`Ara-2_500gen_763A`) and leaves it empty for one that only repeats
+        the coordinate -- filling the second would relabel every column with a filename.
+
+        It was `label`, which named the three levels it joined; two of them
+        no longer exist and the third had moved. `aledb_experiment.coordinates` owns the
+        format now, because this was one of two places writing it out by hand.
+        """
         if self.description:
             return self.description
-
-        # `%s` throughout: the ALE and the isolate are text (`aledb_experiment.0008`), and
-        # writing the one that is still a number as `%d` would only invite the next reader
-        # to think the difference means something here.
-        #
-        # No `R` any more. The replicate was never a level of anything -- it is part of what
-        # a sample is called, so `3-30000-1-2` reads `I1-2` rather than `I1 R2`.
-        return u"A%s F%s I%s" % (self.population_name, self.time_point_value,
-                                 self.name)
+        return coordinates.format_coordinate(
+            self.population_name, self.time_point_value, self.name)
 
     @property
-    def exp_ale_flask_isolate_str(self):
-        return self.experiment.name + " " + self.ale_flask_isolate_str
+    def qualified_label(self):
+        """The label with its experiment in front, for the places that show samples from
+        more than one -- the CSV export's column headings and the interop payload."""
+        return self.experiment.name + " " + self.label
 
 
 class UnassignedMissingCoverageEvidence(models.Model):

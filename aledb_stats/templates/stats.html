@@ -94,7 +94,7 @@
                explains what designating does before anything is written, which is the whole
                reason it is a page. {% endcomment %}
             <a class="btn btn-default"
-               href="/experiment/{{ experiment_id }}/ancestor/">{% if experiment.has_ancestor %}Ancestor: {{ experiment.ancestor.ale_flask_isolate_str }}{% else %}Designate ancestor{% endif %}</a>
+               href="/experiment/{{ experiment_id }}/ancestor/">{% if experiment.has_ancestor %}Ancestor: {{ experiment.ancestor.label }}{% else %}Designate ancestor{% endif %}</a>
         {% endif %}
         {% if can_lock %}
             {% if experiment.is_locked %}
@@ -358,7 +358,7 @@
             {% for experiment_info_tuple in experiments_info_list %}
                 <tr class="experiment_stats">
                     <td class="sample_name">
-                        {{ experiment_info_tuple.0.ale_flask_isolate_str }}
+                        {{ experiment_info_tuple.0.label }}
                     </td>
                     <td class="mutation_count">{{ experiment_info_tuple.9 }}</td>
                     <td class="missing_coverage_count">{{ experiment_info_tuple.1 }}</td>

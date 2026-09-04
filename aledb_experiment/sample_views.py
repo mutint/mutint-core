@@ -69,7 +69,7 @@ def _get_sample(pk):
 def _row_context(reseq):
     """What both templates need per sample.
 
-    `label` is deliberately alongside `coordinate`. `ale_flask_isolate_str` returns
+    `label` is deliberately alongside `coordinate`. `label` returns
     the sample's `description` verbatim whenever it is set, and the import path sets it to the
     filename for every sample whose name is not already an A-F-I-R string -- so on a
     typical experiment the coordinate can change and every label on every page stays
@@ -81,7 +81,7 @@ def _row_context(reseq):
         "reseq": reseq,
         "id": reseq.pk,
         "coordinate": coordinate_str(coordinate),
-        "label": reseq.ale_flask_isolate_str,
+        "label": reseq.label,
         "ale": coordinate[0],
         "flask": coordinate[1],
         "isolate": coordinate[2],
