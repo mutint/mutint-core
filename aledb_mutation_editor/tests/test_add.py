@@ -13,7 +13,7 @@ from aledb_import.gd_import import synthesize_sequence_change
 from aledb_mutation_editor import history, record_builder
 from aledb_mutation_editor.models import KIND_ADD, MutationEdit, MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import Mutation, MutationCall
+from aledb_sample.models import Mutation, MutationCall
 from genomediff.records import Record
 
 ADD = "/mutation-editor/add/apply"
@@ -217,7 +217,7 @@ class AddTestCase(EditorTestCase):
         """Targets are resolved through this experiment's own sample list, so an id from
         elsewhere matches nothing and a hand-built POST cannot reach across projects."""
         from aledb_experiment.models import Experiment, Population, TimePoint
-        from aledb_seq.models import Sample
+        from aledb_sample.models import Sample
 
         created = self.client.post(
             "/project/create/", {"name": "P2", "experiment": "E2"}).json()

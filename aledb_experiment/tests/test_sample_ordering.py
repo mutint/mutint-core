@@ -14,8 +14,8 @@ from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Population, TimePoint, Media
 from aledb_experiment.ordering import sample_sort_key
-from aledb_seq.models import Sample
-from aledb_seq.util import get_ordered_reseq_queryset
+from aledb_sample.models import Sample
+from aledb_sample.util import get_ordered_reseq_queryset
 from aledb_experiment import paths
 
 

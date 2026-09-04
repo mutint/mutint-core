@@ -22,7 +22,7 @@ from django.db import transaction
 from aledb_experiment.models import Experiment
 from aledb_import import annotation, reference as reference_io, reference_store
 from aledb_import.gd_import import run_post_processing
-from aledb_seq.models import ExperimentReference, Mutation
+from aledb_sample.models import ExperimentReference, Mutation
 
 
 class Command(BaseCommand):

@@ -28,7 +28,7 @@ from aledb_common.panel_registry import (
 )
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 
 class PanelRegistryTestCase(TestCase):

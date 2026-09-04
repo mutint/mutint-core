@@ -4,7 +4,7 @@ import csv
 import json
 
 from aledb_import.sample_names import sample_label
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 from aledb_experiment.models import Media
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment import paths

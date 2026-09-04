@@ -1,0 +1,481 @@
+from django.db import models
+
+from aledb_experiment import coordinates
+from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
+from aledb_sample.util import get_ecocyc_gene_list
+from django.utils.safestring import mark_safe
+
+blank_field = {"blank": True, "null": True}
+
+
+# TODO: Refactor: figure out how to get a Sample to return its list of mutation calls and remove functionality from aledb_sample.views.common
+class Sample(models.Model):
+    """One sample: what was sequenced, where it sits in the experiment, and what came back.
+
+    **Three models used to be here** -- `Isolate` held where the sample sat and what it was
+    called, `TechnicalReplicate` sat between them holding a number and some tags, and this
+    row (`Sample`) held the sequencing. The 1:N between them was structural and never used: only two
+    code paths ever created a run, both one per replicate, and re-importing a sample is
+    replace-in-place rather than a second row. So the layers cost a four-segment join on
+    every query and bought nothing.
+
+    Collapsing them onto *this* row rather than onto `Isolate` is what made the merge
+    cheap. `MutationCall.sample` and `MutationEdit.sample` point here, the managed
+    store is `<store>/samples/<pk>/` keyed by this pk, and every variable in the suite
+    called `reseq` or `sample` already meant this row. Merging the other way would have
+    moved all of it -- and the name this model now has was the argument.
+
+    What a replicate was is now a suffix on the label: `3-30000-1-1` and `3-30000-1-2`
+    import as two samples named `1-1` and `1-2` under one flask, which is what they always
+    were.
+    """
+
+    #: Where the sample sits. Nullable because it always was: a sample with no chain above
+    #: it is unreachable from every listing (`get_ordered_reseq_queryset` filters it out)
+    #: and the views 404 on it rather than treating it as ownerless.
+    time_point = models.ForeignKey("aledb_experiment.TimePoint", on_delete=models.CASCADE,
+                                   null=True)
+
+    #: Text, not a number -- see `Population.name`. A clone is named `763A` as often as
+    #: `763`, and two clones from one time point differ only in that trailer. Unique within
+    #: its time point by convention rather than by constraint; `aledb_experiment.samples`
+    #: enforces it on the edit path, and `plan_moves` says why two samples must not share a
+    #: coordinate.
+    name = models.CharField(max_length=100, default="1")
+
+    #: **Clonal, not mixed** -- the flag was `is_population` and its meaning is inverted.
+    #: A clone is one genotype; a mixed sample is a whole evolving population sequenced
+    #: together, which is why its mutations carry frequencies and a clone's do not.
+    #:
+    #: `True` by default because a sample is clonal unless something says otherwise, and
+    #: what says otherwise is breseq: an import reads `-p` (polymorphism mode) out of the
+    #: `#=COMMAND` line, and that is the only thing that sets this False on the way in.
+    is_clonal = models.BooleanField(default=True)
+
+    #: What a person calls this sample. Preferred over the computed coordinate wherever a
+    #: sample is labelled -- see `label`.
+    description = models.CharField(max_length=300, **blank_field)
+    #: The reference genome this sample was called against, by name. It was
+    #: `reseq_reference`, which read like a contig and is not one -- `Mutation.reseq_reference`
+    #: beside it genuinely is a seq_id, and the two sharing a spelling is what this separates.
+    reference_genome = models.CharField(max_length=200, **blank_field)
+    sequencing_date = models.CharField(max_length=200, **blank_field)
+    breseq_version = models.CharField(max_length=200, **blank_field)
+    library_prep = models.CharField(max_length=200, **blank_field)
+
+    #: Both came from `TechnicalReplicate`.
+    tags = models.CharField(max_length=500, **blank_field)
+    #: **Not a duplicate of `description` above, and not `Media.description` either.** The
+    #: metadata importer writes the CSV's *"medium description"* column here, per sample;
+    #: `Media.description` holds that file's *"medium derived from"*, which is a property of
+    #: the medium rather than of the sample grown in it. Both reach `/metadata` and the
+    #: interop API, which is why the payload spells this one `sample_medium_description` --
+    #: two keys a letter apart would be worse than a long one.
+    #:
+    #: It was `rep_description`, on a `TechnicalReplicate`. The merge kept the column rather
+    #: than dropping it as planned, precisely because two pages publish it.
+    medium_description = models.CharField(max_length=500, **blank_field)
+
+    person = models.CharField(max_length=200, blank=True)
+    #: What the file or folder this was imported from was called. `source_name`, because
+    #: `sample_name` on a model called `Sample` says nothing about which of its several
+    #: names it is -- this is the one the import read, not the one the product displays.
+    source_name = models.CharField(max_length=200, blank=True, null=True)
+    reads = models.IntegerField(blank=True, default=0)
+    average_read_length = models.FloatField(blank=True, default=0)
+    mean_coverage = models.FloatField(blank=True, default=0)
+    percentage_mapped = models.FloatField(blank=True, default=0)
+    # Whether this sample's alignment lives in the managed store. Deliberately a flag and
+    # not a path: the location is derived from this row's pk by aledb_common.store. Three
+    # per-row path columns used to live here -- location, experiment_location,
+    # gatk_location -- pointing into a bring-your-own breseq tree. They were only ever used
+    # to build breseq HTML report URLs, and went with that feature.
+    bam_stored = models.BooleanField(default=False)
+    # Whether the coverage BigWig derived from that alignment is in the store. A second flag
+    # rather than something inferred from bam_stored: the derivation needs external tools and
+    # is best-effort, so a sample can have its reads and not its coverage.
+    coverage_stored = models.BooleanField(default=False)
+
+    # Three shortcuts up the chain, for the many call sites that want one field from it and
+    # not the rows in between. They were `ale_experiment`, `ale_id` and `flask_number`.
+    #
+    # `population_name` and `time_point_value` rather than `population` and `time_point`,
+    # because each answers a *value* and the row of that name is one hop away
+    # (`sample.time_point.population`). A property called `population` that handed back a
+    # string would reintroduce, one level down, exactly the ambiguity this rename removed.
+
+    @property
+    def is_mixed(self):
+        """The other half of `is_clonal`, spelled out.
+
+        Every read site says either `is_clonal` or `is_mixed` and never `not is_clonal`, so
+        reviewing the inversion that introduced them is a question about *words* -- does
+        this line say the same one it used to mean? -- rather than about counting negations.
+        `paths.clonal_filter()` and `paths.mixed_filter()` are the same idea for querysets.
+        """
+        return not self.is_clonal
+
+    @property
+    def experiment(self):
+        return self.time_point.population.experiment
+
+    @property
+    def population_name(self):
+        return self.time_point.population.name
+
+    @property
+    def time_point_value(self):
+        return self.time_point.value
+
+    @property
+    def label(self):
+        """What this sample is called, everywhere one is named.
+
+        The sample's own `description` if it has one, and otherwise its coordinate. That
+        preference is why an import writes the filename into `description` for a name that
+        says something (`Ara-2_500gen_763A`) and leaves it empty for one that only repeats
+        the coordinate -- filling the second would relabel every column with a filename.
+
+        It was `label`, which named the three levels it joined; two of them
+        no longer exist and the third had moved. `aledb_experiment.coordinates` owns the
+        format now, because this was one of two places writing it out by hand.
+        """
+        if self.description:
+            return self.description
+        return coordinates.format_coordinate(
+            self.population_name, self.time_point_value, self.name)
+
+    @property
+    def qualified_label(self):
+        """The label with its experiment in front, for the places that show samples from
+        more than one -- the CSV export's column headings and the interop payload."""
+        return self.experiment.name + " " + self.label
+
+
+class UncalledRegion(models.Model):
+    """A stretch of a sample's genome no call could be made over.
+
+    Written from a GenomeDiff's `MC` (missing coverage) evidence records, which is why it
+    was called `UncalledRegion` -- a name that described the file it came
+    out of rather than the thing it stores, and led with "Unassigned", which stopped meaning
+    anything when the columns it referred to went. What it holds is a region nothing is known
+    about, however that came to be known.
+
+    **It is not only a statistic.** aledb-phylogeny reads these to decide which cells of its
+    character matrix are *ambiguous*: a mutation inside one of these regions is unknown for
+    that sample, not absent. Without them `_encode` falls through to its next branch and
+    scores the site ancestral -- a claim where there was an absence, which moves branches and
+    changes the parsimony score with nothing raised. `aledb_stats` counts them per sample and
+    `aledb_import.reference_rename` rewrites `seq_id` with everything else that stores one.
+
+    `start` and `end` are **integers**. They were `CharField`s, so every reader had to cast
+    before comparing -- and a reader that forgot compared as text, where `"1000"` sorts
+    before `"9"` and a region silently covers the wrong positions. genomediff already parses
+    them as ints; the column was the only thing making them strings.
+
+    Eight further columns -- reads_left_url, reads_right_url, coverage, size, reads_left,
+    reads_right, gene, description -- were scraped out of breseq's index.html and attached
+    here. Nothing ever read any of them, and they went with the HTML report support.
+    """
+
+    seq_id = models.CharField(max_length=100)
+    start = models.IntegerField()
+    end = models.IntegerField()
+    sample = models.ForeignKey(Sample, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name_plural = "uncalled regions"
+
+
+class Mutation(models.Model):
+    mutation_type = models.CharField(max_length=3,
+                                     null=True,
+                                     help_text="""Use breseq mutation codes, see the genome diff site
+                                     on the barrick lab wiki (http://tinyurl.com/l3fvnap) for more
+                                     information""")
+    position = models.IntegerField()
+    feature_length = models.IntegerField(blank=True,
+                                         null=True)
+    sequence_change = models.CharField(max_length=200)
+    protein_change = models.CharField(max_length=300,
+                                      default="")
+    gene = models.CharField(max_length=19000, blank=True, null=True)  # TODO: use TextField for this.
+    product = models.TextField(default="", null=True)
+    reseq_reference = models.CharField(max_length=200, **blank_field)
+    tags = models.CharField(max_length=500, **blank_field)
+
+    # Mutations belong to one experiment. Two experiments that call the same
+    # variant get their own rows, so re-annotating one against a new reference
+    # cannot silently rewrite another's annotation.
+    experiment = models.ForeignKey("aledb_experiment.Experiment",
+                                       related_name="mutations",
+                                       on_delete=models.CASCADE, db_index=True,
+                                       **blank_field)
+
+    # ---- breseq annotation, generated at import by aledb_import.annotate -----
+    #
+    # Split by how it is used, not by how it arrived. These six are filtered,
+    # counted and sorted on, so they are real columns; snp_type and
+    # mutation_category are indexed because that is what replaces
+    # aledb_dashboard.util substring-matching the rendered protein_change.
+    snp_type = models.CharField(max_length=100, db_index=True, **blank_field)
+    mutation_category = models.CharField(max_length=100, db_index=True, **blank_field)
+    gene_name = models.TextField(**blank_field)
+    locus_tag = models.TextField(**blank_field)
+    start_position = models.IntegerField(**blank_field)
+    end_position = models.IntegerField(**blank_field)
+
+    # Everything else breseq annotates -- gene_position, gene_strand, the codon_*
+    # and aa_* fields, genes_overlapping/inactivated/promoter and their locus_tag
+    # counterparts, transl_table. Nothing queries these; they are read whole, per
+    # row, to render a mutation. Keeping them here means a new annotation field
+    # needs no migration.
+    #
+    # Deliberately NOT folded into gd_data: to_gd_line() splats every gd_data key
+    # onto the line it emits for gdtools APPLY, and display markup has no place
+    # there.
+    annotation = models.JSONField(**blank_field)
+
+    # Verbatim parsed GenomeDiff mutation record (type, id, parent_ids and all
+    # type-specific + optional key=value fields), stored losslessly so a mutation
+    # can be round-tripped back to a .gd line for gdtools APPLY. Null for mutations
+    # imported before this field existed (e.g. via the breseq-directory CLI path).
+    gd_data = models.JSONField(**blank_field)
+
+    def __unicode__(self):
+        return u"%d %s" % (self.position,
+                           self.sequence_change)
+
+    def to_gd_line(self) -> str:
+        """Reconstruct this mutation's GenomeDiff line (for gdtools APPLY).
+
+        Prefers the verbatim ``gd_data``; falls back to a best-effort line built
+        from the scalar columns for legacy rows where ``gd_data`` is null (that
+        fallback is not guaranteed APPLY-complete — the discrete alleles were not
+        captured for those rows)."""
+        from genomediff.records import Record, TYPE_SPECIFIC_FIELDS
+
+        if self.gd_data:
+            data = dict(self.gd_data)
+            record_type = data.pop('type', self.mutation_type)
+            record_id = data.pop('id', self.id)
+            parent_ids = data.pop('parent_ids', None)
+            return str(Record(record_type, record_id, parent_ids=parent_ids, **data))
+
+        if self.mutation_type not in TYPE_SPECIFIC_FIELDS:
+            return ""
+        attributes = {'seq_id': self.reseq_reference, 'position': self.position}
+        if self.feature_length is not None:
+            attributes['size'] = self.feature_length
+        return str(Record(self.mutation_type, self.id, parent_ids=None, **attributes))
+
+    #: The K-12 MG1655 accession EcoCyc's gene pages are keyed on. Matched on the accession
+    #: rather than the exact string so a versioned name -- NC_000913.3, which is what RefSeq
+    #: actually distributes -- is still recognised. Exact equality was fine while a contig
+    #: name could never change; renaming an experiment's sequences makes it a live trap,
+    #: because re-establishing the reference from a RefSeq download would silently turn every
+    #: EcoCyc link off.
+    ECOCYC_ACCESSION = 'NC_000913'
+
+    def is_ecocyc_gene(self) -> bool:
+        name = self.reseq_reference or ''
+        return name == self.ECOCYC_ACCESSION or name.startswith(self.ECOCYC_ACCESSION + '.')
+
+    def ecocyc_gene_urls(self) -> str:
+        """Gene links for a mutation table cell.
+
+        A mutation spanning more than `GENE_LIST_LIMIT` genes renders its count instead of its
+        names, the same answer `get_gene_table_entry` gives -- one link per gene over a
+        4,318-gene inversion is a third of a megabyte in one cell, and no list that long is
+        read. The import path stops recording the names at the same limit.
+        """
+        names = get_gene_list(self.gene)
+        if len(names) > GENE_LIST_LIMIT:
+            return mark_safe("%d genes" % len(names))
+        return mark_safe(", ".join(get_ecocyc_gene_list(names, self.is_ecocyc_gene())))
+
+
+class MutationCall(models.Model):
+    """One caller's assertion about one mutation in one sample.
+
+    Written by `gd_import` for every record in a sample's `.gd`, and by
+    `aledb_mutation_editor` for a mutation somebody adds or copies by hand. It is the row the
+    edit log works at, the row every cross-sample table has a cell for, and the row an edit
+    hard-deletes -- never the `Mutation`, whose primary key is stored as a bare integer in
+    aledb-phylogeny's `branch_mutations` and in every exported CSV.
+    """
+
+    sample = models.ForeignKey(Sample, on_delete=models.CASCADE, null=True)
+    # make sure not delete mutation if there are associated mutation calls
+    mutation = models.ForeignKey(Mutation, on_delete=models.DO_NOTHING)
+    # Whether the mutation is in this sample. True is an assertion that it is there,
+    # False that it was looked for and found absent, null that nothing was recorded. It used
+    # to sit beside `breseq_present` and `gatk_present`, one flag per caller, and every read
+    # path asked those rather than this -- so a mutation a *person* added, which no caller
+    # found, was absent from every cross-sample table. `source` says who asserted it; this
+    # says whether it is there.
+    present = models.BooleanField(null=True)
+
+    # Whatever a caller said about *this sample's* call beyond the three columns above --
+    # read counts, likelihoods, per-sample coverage. Four scalar columns stood here
+    # (`wt_reads`, `mutated_reads`, `other_reads`, `reference_genome_likelihood`) and no
+    # import path had ever written one of them.
+    #
+    # The same argument as `Mutation.annotation`, one level down: nothing queries these, they
+    # are read whole and per row to render a cell, and a caller with a field we have no
+    # column for should not need a migration. What differs is the *scope* -- `annotation` and
+    # `gd_data` describe the mutation, which every sample carrying it shares, while this
+    # describes one sample's evidence for it and is exactly what cannot live up there.
+    #
+    # Deliberately not folded into `gd_data`: `Mutation.to_gd_line()` splats every key of
+    # that field onto the line it emits for `gdtools APPLY`, so a per-sample read count would
+    # end up in a file describing the mutation.
+    evidence = models.JSONField(**blank_field)
+
+    # The one frequency. `frequency_gatk` sat beside it, for the GATK half of a gdtools
+    # COMPARE merge that no import path has ever written -- 0 of 74,859 rows had a value.
+    # Being always null was not merely useless: `aledb_filter` ANDed a `frequency_gatk__lt`
+    # term into the exclusion, and a comparison against null is never true, so the frequency
+    # cutoff excluded nothing at all.
+    frequency = models.DecimalField(null=True,
+                                    max_digits=5,
+                                    decimal_places=4)
+    # Which caller produced this call. Imports record "breseq"; other
+    # callers can be added alongside. Left null on rows imported before this
+    # existed, which came from a gdtools COMPARE merge of breseq and
+    # GATK/CNVnator, so "breseq" would misrepresent them.
+    source = models.CharField(max_length=50, db_index=True, blank=True, null=True)
+
+    def get_experiment_id(self):
+        return self.sample.time_point.population.experiment_id
+
+
+
+class ExperimentReference(models.Model):
+    """The single reference genome shared by every sample in an experiment.
+
+    breseq writes `data/reference.gff3` and `data/reference.fasta` alongside each run, so the
+    reference arrives with the results rather than being uploaded separately. The first
+    imported sample establishes it; every later sample must hash-match or be rejected, which
+    is what keeps an experiment from silently ending up with mixed references.
+
+    The files themselves live in the managed store, at a path derived from
+    `experiment_id` -- see aledb_common.store.
+    """
+
+    experiment = models.OneToOneField("aledb_experiment.Experiment",
+                                          on_delete=models.CASCADE,
+                                          related_name="reference")
+    # Provenance for the stored artifacts -- "did the files on disk change" -- not identity.
+    # `gff3_sha256` embeds the inline ##FASTA, so it is the finest of the three: equal
+    # gff3_sha256 means identical genome *and* identical annotation.
+    gff3_sha256 = models.CharField(max_length=64)
+    fasta_sha256 = models.CharField(max_length=64)
+    # Identity: the bases alone, independent of names and order. See
+    # aledb_import.reference.sequence_set_digest. Blank on a row whose stored FASTA was
+    # missing when the backfill ran -- blank means *unknown*, never "matches".
+    sequence_sha256 = models.CharField(max_length=64, blank=True, default="")
+    # [{"id": ..., "length": ..., "sha256": ..., "aliases": [...]}, ...] in the order they
+    # appear in the FASTA. `sha256` is the per-sequence digest a rename maps old names onto
+    # new ones by; `aliases` is the names this sequence used to have, and is what
+    # /mutations/reference/<id>/chromalias serves so stored BAMs and BigWigs -- which keep
+    # the names they were built with -- still resolve. Absent on both counts until a
+    # reference is re-established or renamed.
+    seq_ids = models.JSONField(default=list)
+    total_length = models.BigIntegerField(default=0)
+
+    def __str__(self):
+        return "Reference for %s" % (self.experiment_id,)
+
+    def matches_sequence(self, sequence_sha256, fasta_sha256=None):
+        """Whether a reference is *the same reference* as this one.
+
+        The bases alone are the invariant -- not their names, not their order, not their
+        annotation. Two breseq runs against the same genome can legitimately carry
+        annotation that differs in detail, and the same genome can legitimately arrive
+        under a different set of contig names; refusing either would refuse valid data.
+
+        A row whose `sequence_sha256` was never computed -- its stored FASTA was missing
+        when the backfill ran -- falls back to the old, name-sensitive comparison. That is
+        exactly this row's behaviour before the column existed, and `plan_rename` refuses
+        to rename against it, because it has no per-sequence hashes to match names on.
+        """
+        if self.sequence_sha256:
+            return self.sequence_sha256 == sequence_sha256
+        return fasta_sha256 is not None and self.fasta_sha256 == fasta_sha256
+
+
+class NcbiSequence(models.Model):
+    """One reference contig, matched -- or not -- to an NCBI nucleotide record.
+
+    The NCBI Sequence Viewer draws a locus from NCBI's own annotation, and it is addressed by
+    accession rather than by a file. Nothing in this repo stores an accession: the importer
+    takes a GenBank's LOCUS name (`NC_000913`) and not its VERSION (`NC_000913.3`), because
+    breseq does, and every seq_id in a `.gd` is therefore unversioned. So a contig name is an
+    accession only by convention -- and drawing a mutation in the coordinate space of the
+    wrong genome is not a visible failure, it is a convincing page pointing at the wrong gene.
+
+    Hence this table, and the rule it exists to enforce: **a contig is drawn in NCBI's
+    coordinates only once NCBI has confirmed the record is byte-for-byte our sequence.** The
+    name is never the evidence.
+
+    Keyed on the sequence digest rather than on a contig name or an experiment, so that the
+    verdict *cannot outlive the sequence it was about*: the key is the bases, and there is no
+    path by which a stored accession survives onto a different sequence. It also means the
+    same genome imported into ten experiments is verified once, and that a contig rename --
+    which does not change the bases -- cannot invalidate it.
+
+    `accession` is only ever a proposal until `status` is VERIFIED. Anyone with write access
+    to any experiment carrying this sequence may propose one, which is a cross-experiment
+    write and is deliberate: what decides the status is NCBI's sequence, not the proposer, so
+    a wrong proposal can become a rejected verdict but never a wrong one.
+    """
+
+    #: Nobody has said what this contig is. A missing row means this, so no backfill is ever
+    #: needed -- the same convention `DerivedDataState` uses for staleness.
+    UNCHECKED = "unchecked"
+    #: NCBI's record for `accession` is byte-for-byte this sequence. The only drawable state.
+    VERIFIED = "verified"
+    #: There is such a record and it is a different sequence -- a sibling strain, or another
+    #: assembly version. The interesting failure, and the one worth wording carefully.
+    MISMATCH = "mismatch"
+    #: NCBI has no record under that accession.
+    NOT_FOUND = "not_found"
+    #: The check could not be completed -- no network, a timeout, a malformed answer. Says
+    #: nothing about whether the sequence matches, which is why it is not MISMATCH.
+    ERROR = "error"
+
+    STATUS_CHOICES = [
+        (UNCHECKED, "Not checked"),
+        (VERIFIED, "Verified against NCBI"),
+        (MISMATCH, "Sequence does not match"),
+        (NOT_FOUND, "No such NCBI record"),
+        (ERROR, "Check failed"),
+    ]
+
+    #: aledb_import.reference.sequence_digest() of this contig -- sha256 of its uppercased
+    #: bases alone. Equal to the `sha256` of an ExperimentReference.seq_ids entry, which is
+    #: how a contig finds its row.
+    sha256 = models.CharField(max_length=64, unique=True)
+    length = models.BigIntegerField()
+    #: Versioned once verified: NCBI's own `accessionversion`, not whatever was typed. An
+    #: unversioned proposal that verifies is stored as the version that actually matched.
+    accession = models.CharField(max_length=64, blank=True, default="")
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=UNCHECKED)
+    #: Why it failed, in words, for a page and for `./aledb ncbi_accessions --list`. A status
+    #: alone cannot distinguish "4,641,652 bases here, 4,558,660 there" from "same length,
+    #: different bases", and those call for different next steps.
+    detail = models.TextField(blank=True, default="")
+    checked_at = models.DateTimeField(**blank_field)
+    proposed_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, **blank_field)
+
+    class Meta:
+        verbose_name = "NCBI sequence"
+        verbose_name_plural = "NCBI sequences"
+
+    def __str__(self):
+        return "%s (%s)" % (self.accession or self.sha256[:12], self.status)
+
+    @property
+    def is_verified(self):
+        return self.status == self.VERIFIED

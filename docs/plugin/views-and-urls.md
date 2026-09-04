@@ -79,7 +79,7 @@ that loops, ask through the same helpers rather than querying `ProjectAccess` yo
 ## Getting the experiment
 
 Core's pages take `?experiment_id=` and resolve it through
-`aledb_seq.views.common.get_experiment(request)`, which raises
+`aledb_sample.views.common.get_experiment(request)`, which raises
 `Experiment.DoesNotExist` when none was selected — a normal state, not an error, and
 `no_experiment_selected()` renders the page that explains it — and a bare `ValueError` when
 the caller may not view it.

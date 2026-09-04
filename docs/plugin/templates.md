@@ -41,7 +41,7 @@ A plugin that shows mutations should render them the way every other page does, 
 it. The cells come from `aledb_import.annotate.display`, a port of the code that wrote the
 report the sample was imported from, and they mean nothing without the surrounding columns.
 
-- **`aledb_seq/templates/breseq_table/_mutation_table.html`** — one sample's mutations, the
+- **`aledb_sample/templates/breseq_table/_mutation_table.html`** — one sample's mutations, the
   partial the per-sample page and the genome browser share.
 - **`mutation_table_builder` + `base_table_template.html`** — the cross-sample table, mutations
   down and samples across. `aledb-compare`, `aledb-fixation` and `aledb-converge` are all this

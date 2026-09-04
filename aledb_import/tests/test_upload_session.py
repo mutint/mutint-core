@@ -13,7 +13,7 @@ from aledb_import.models import STATE_FINALIZED, UploadSession
 from aledb_import.tests import breseq_fixture
 from aledb_import.upload_session import UploadError, sanitize_relative_path
 from aledb_experiment.models import Project
-from aledb_seq.models import ExperimentReference, Sample
+from aledb_sample.models import ExperimentReference, Sample
 
 
 class SanitizePathTestCase(TestCase):

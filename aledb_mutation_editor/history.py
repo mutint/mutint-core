@@ -39,7 +39,7 @@ from aledb_mutation_editor.models import (
     KIND_EDIT, KIND_RESTORE, OP_ADD, OP_REMOVE,
     MutationEdit, MutationEditSet,
 )
-from aledb_seq.models import Mutation, MutationCall
+from aledb_sample.models import Mutation, MutationCall
 from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ MUTATION_KEY_FIELDS = (
 _DECIMAL_FIELDS = ("frequency",)
 
 #: The join from a MutationCall up to its experiment. Spelled once here; it is the same
-#: traversal `aledb_seq.util` and `aledb_filter.util` use.
+#: traversal `aledb_sample.util` and `aledb_filter.util` use.
 _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
 

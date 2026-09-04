@@ -1,6 +1,6 @@
 """One contract for serving a file off disk: content type, streaming, and byte ranges.
 
-Extracted from ``aledb_seq.views.alignments`` when the legacy ``/aledata/`` route shared it.
+Extracted from ``aledb_sample.views.alignments`` when the legacy ``/aledata/`` route shared it.
 That route is gone; this stays as the one file-serving contract for the alignment routes.
 
 Range support is hand-rolled because Django 4.2 implements it in neither ``FileResponse`` nor

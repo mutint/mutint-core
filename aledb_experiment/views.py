@@ -238,7 +238,7 @@ def experiment_ancestor(request, pk):
     if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", context, status=403)
 
-    from aledb_seq.util import get_ordered_reseq_queryset
+    from aledb_sample.util import get_ordered_reseq_queryset
 
     # `include_ancestor=True`: the current ancestor has to appear in the list that changes it.
     samples = list(get_ordered_reseq_queryset(experiment.id, include_ancestor=True))
@@ -278,7 +278,7 @@ def experiment_ancestor_apply(request, pk):
     if not raw:
         experiment.clear_ancestor()
     else:
-        from aledb_seq.util import get_ordered_reseq_queryset
+        from aledb_sample.util import get_ordered_reseq_queryset
         try:
             sample_id = int(raw)
         except (TypeError, ValueError):

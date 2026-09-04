@@ -19,7 +19,7 @@ from django.core.management.base import BaseCommand, CommandError
 from aledb_experiment.models import Experiment
 from aledb_import import reference as reference_io
 from aledb_import import reference_rename, reference_store
-from aledb_seq.models import ExperimentReference, Mutation
+from aledb_sample.models import ExperimentReference, Mutation
 
 
 class Command(BaseCommand):

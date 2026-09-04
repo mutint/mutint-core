@@ -1,6 +1,6 @@
 """Editing a sample's identity.
 
-A "sample" is an `aledb_seq.Sample`. Its identity is the population / time point / label
+A "sample" is an `aledb_sample.Sample`. Its identity is the population / time point / label
 coordinate
 everything in the product labels it by, and **half of it is stored on the sample and half
 is not**. The label is the sample's own column; the population and the time point live in
@@ -154,7 +154,7 @@ def prune_orphans(time_points):
 
     Leaving them is not neutral. `aledb_dashboard.util.rebuild_sample_counts` counts
     Population/TimePoint *rows* rather than samples, so an emptied row inflates the
-    dashboard's counts permanently; and the population picker in `aledb_seq.views.common`
+    dashboard's counts permanently; and the population picker in `aledb_sample.views.common`
     is built from Population rows, so an emptied one would sit in the menu selecting
     nothing.
 

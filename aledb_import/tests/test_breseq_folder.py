@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from aledb_common import store
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import (
+from aledb_sample.models import (
     ExperimentReference,
     Mutation,
     MutationCall,

@@ -1,7 +1,7 @@
 """How a sample's coordinate is written, in one place.
 
 Three parts -- population, time point, sample label -- and until now the format string for
-them existed twice, in `aledb_seq.models.Sample` and in `aledb_experiment.samples`, kept in
+them existed twice, in `aledb_sample.models.Sample` and in `aledb_experiment.samples`, kept in
 step by hand. They had already drifted once: the model's was rebuilt when the replicate
 folded into the label and the other was edited separately to match.
 

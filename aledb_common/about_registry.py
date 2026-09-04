@@ -11,8 +11,8 @@ be told about it.
 has to read as one entry on the page, so entries are keyed by the directory an app package
 sits in -- the checkout the app came from. That works out the same in both layouts:
 
-    aledb-core standalone   <repo>/aledb_seq          -> <repo>
-    assembled in mutint     mutint/aledb-core/aledb_seq        -> mutint/aledb-core
+    aledb-core standalone   <repo>/aledb_sample          -> <repo>
+    assembled in mutint     mutint/aledb-core/aledb_sample        -> mutint/aledb-core
                             mutint/aledb-fixation/aledb_fixation -> mutint/aledb-fixation
                             mutint/mutint-app/mutint_app       -> mutint/mutint-app
 

@@ -16,7 +16,7 @@ from django.test import TestCase
 
 from aledb_experiment import paths
 from aledb_experiment.models import Experiment, Population, TimePoint
-from aledb_seq.models import MutationCall, Sample
+from aledb_sample.models import MutationCall, Sample
 
 
 class ResolutionTestCase(TestCase):

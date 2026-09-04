@@ -82,7 +82,7 @@ def ancestral_mutation_ids(experiment_id):
     per-sample breseq page genuinely wants the set, because it tests membership per rendered
     row in Python.
     """
-    from aledb_seq.models import MutationCall
+    from aledb_sample.models import MutationCall
 
     ancestor_id = get_ancestor(experiment_id)
     if ancestor_id is None:
@@ -104,7 +104,7 @@ def exclude_ancestry(mutation_call_queryset, experiment_id):
     an empty `Q` handed to `.exclude()` excludes everything, and once emptied a whole
     experiment.
     """
-    from aledb_seq.models import MutationCall
+    from aledb_sample.models import MutationCall
 
     ancestor_id = get_ancestor(experiment_id)
     if ancestor_id is None:
@@ -130,7 +130,7 @@ def exclude_all_ancestry(mutation_call_queryset):
     mutation id observed in one experiment's ancestor cannot appear in another's samples. The
     global set is therefore unambiguous rather than merely convenient.
     """
-    from aledb_seq.models import MutationCall
+    from aledb_sample.models import MutationCall
 
     ancestors = Experiment.objects.filter(ancestor__isnull=False).values("ancestor")
     if not ancestors.exists():
@@ -172,7 +172,7 @@ def describe_ancestor(experiment_id):
     if ancestor_id is None:
         return None
 
-    from aledb_seq.models import Sample
+    from aledb_sample.models import Sample
 
     reseq = (Sample.objects
              .select_related(paths.to_population())

@@ -55,7 +55,7 @@ class BreseqTableAssetsTravelTogetherTestCase(unittest.TestCase):
     """breseq's table markup is generated in Python, so its behaviour cannot live in a page.
 
     `aledb_import.annotate.display` collapses a wide deletion's gene list behind a Show
-    button, and every page rendering a row from `aledb_seq.breseq_report.build_rows` gets
+    button, and every page rendering a row from `aledb_sample.breseq_report.build_rows` gets
     that markup: the Samples page, the genome browser and the mutation editor's Edit/Delete
     listing. The click handler was an inline script in the first of those three, so on the
     other two the button rendered, was styled by the shared stylesheet, and did nothing.

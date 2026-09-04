@@ -59,7 +59,7 @@ class DatabaseBackendTestCase(TestCase):
         Passing one fails at enqueue -- loudly here, and invisibly in an import, where the
         exception would be swallowed along with the rest of coverage's best-effort contract.
         """
-        from aledb_seq.models import Sample
+        from aledb_sample.models import Sample
 
         with self.assertRaises(Exception):
             tasks.build_coverage.enqueue(Sample())

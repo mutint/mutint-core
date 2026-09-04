@@ -94,7 +94,7 @@ SAMPLE_CLONAL = "is_clonal"
 #: The same chain read **downward**. Django spells a reverse relation with the lowercased
 #: model name, because none of these declares a `related_name` -- so it is not simply
 #: `SEGMENTS` reversed, and that is exactly why three files hand-wrote it independently
-#: (`aledb_dashboard/util.py`, `aledb_seq/views/common.py`, `aledb-phylogeny/selection.py`)
+#: (`aledb_dashboard/util.py`, `aledb_sample/views/common.py`, `aledb-phylogeny/selection.py`)
 #: while every upward traversal in the suite came from here.
 DOWN_SEGMENTS = ("population", "timepoint", "sample")
 

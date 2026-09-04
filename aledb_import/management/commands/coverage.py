@@ -22,7 +22,7 @@ this output is the only way to tell a normalized track from one that predates th
 from django.core.management.base import BaseCommand
 
 from aledb_import import coverage
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 from aledb_experiment import paths
 
 

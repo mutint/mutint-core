@@ -9,7 +9,7 @@ from aledb_common import import_registry
 from aledb_import.tests import breseq_fixture
 from aledb_import.tests.test_reference_upload import write_genbank
 from aledb_experiment.models import Experiment
-from aledb_seq.models import ExperimentReference, Sample
+from aledb_sample.models import ExperimentReference, Sample
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 

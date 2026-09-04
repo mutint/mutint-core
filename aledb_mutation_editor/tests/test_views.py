@@ -10,7 +10,7 @@ import json
 from aledb_mutation_editor import history, validation
 from aledb_mutation_editor.models import KIND_DELETE
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 
 EDIT = "/mutation-editor/"
 DELETE = "/mutation-editor/delete"

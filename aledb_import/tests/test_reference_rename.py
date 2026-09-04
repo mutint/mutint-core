@@ -16,7 +16,7 @@ from aledb_common import plugin_registry
 from aledb_import import breseq_folder, reference as reference_io, reference_rename
 from aledb_import import reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ExperimentReference, Mutation
+from aledb_sample.models import ExperimentReference, Mutation
 
 
 class SequenceIdentityTestCase(TestCase):

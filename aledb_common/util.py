@@ -105,7 +105,7 @@ def is_int(s):
         return False
 
 
-# Gene annotation parsing — used across aledb_seq, aledb_filter, aledb_converge, aledb_stats
+# Gene annotation parsing — used across aledb_sample, aledb_filter, aledb_converge, aledb_stats
 #
 # `Mutation.gene` is written with this delimiter, and is *also* read back holding the other
 # spelling -- see GENE_LIST_SPLIT below for why both exist and why this one cannot simply be

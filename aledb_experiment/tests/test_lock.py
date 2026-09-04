@@ -20,7 +20,7 @@ from aledb_experiment.permissions import (
 )
 from aledb_experiment.roles import ROLE_ADMIN, ROLE_WRITE
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import Mutation, MutationCall
+from aledb_sample.models import Mutation, MutationCall
 
 
 class LockTestCase(EditorTestCase):

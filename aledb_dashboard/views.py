@@ -1,7 +1,7 @@
 import time
 from django.shortcuts import render
 
-from aledb_seq.views import common
+from aledb_sample.views import common
 from django.utils.safestring import mark_safe
 from aledb_common.util import get_user_context
 from aledb_experiment.models import Experiment, Project, live

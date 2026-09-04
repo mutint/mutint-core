@@ -20,7 +20,7 @@ from decimal import Decimal
 from aledb_filter.util import filter_mutation_calls
 from aledb_filter.view_filter import ViewFilter
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 
 
 class FrequencyCutoffTestCase(EditorTestCase):

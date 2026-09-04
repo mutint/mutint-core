@@ -5,8 +5,8 @@ is never amended and never deleted; undoing one is a *new* edit set that happens
 things back. That is what makes "the mutation set as of last Tuesday" a question with an
 answer, and it is why restoring is not a rewind.
 
-The unit of change is an `aledb_seq.MutationCall` -- one sample's call of one
-mutation -- and **never an `aledb_seq.Mutation`**. That distinction is load-bearing. Mutation
+The unit of change is an `aledb_sample.MutationCall` -- one sample's call of one
+mutation -- and **never an `aledb_sample.Mutation`**. That distinction is load-bearing. Mutation
 primary keys are stored as bare integers, with no foreign key and no pruning, in
 aledb-phylogeny's `branch_mutations` JSON and in every exported CSV's "Mut ID" column.
 Deleting a Mutation and letting a later re-import recreate it through `gd_import`'s
@@ -114,12 +114,12 @@ class MutationEdit(models.Model):
     edit_set = models.ForeignKey(MutationEditSet, on_delete=models.CASCADE,
                                  related_name="edits")
     operation = models.CharField(max_length=10, choices=OPERATION_CHOICES)
-    sample = models.ForeignKey("aledb_seq.Sample", on_delete=models.CASCADE,
+    sample = models.ForeignKey("aledb_sample.Sample", on_delete=models.CASCADE,
                                related_name="+")
-    mutation = models.ForeignKey("aledb_seq.Mutation", on_delete=models.SET_NULL,
+    mutation = models.ForeignKey("aledb_sample.Mutation", on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name="+")
     # Where a copy came from. Null for a delete, and for a restore that re-adds a row.
-    source_sample = models.ForeignKey("aledb_seq.Sample",
+    source_sample = models.ForeignKey("aledb_sample.Sample",
                                       on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name="+")
 

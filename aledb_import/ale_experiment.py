@@ -2,8 +2,8 @@ import os
 import aledb_experiment.models
 import aledb_import.util
 from aledb_import import breseq_folder
-import aledb_seq.models
-import aledb_seq.views.common
+import aledb_sample.models
+import aledb_sample.views.common
 from aledb_import.gdparse.gdparse import gdparse
 from aledb_common.util import _find_between
 import aledb_metadata.parser
@@ -82,8 +82,8 @@ def _delete_all_orphaned_mutations():
     """Find the orphaned muations that don't have associated mutation calls.
     Retrieving mutation calls for each mutation to check if it is orphan is very expensive
     """
-    orphans = aledb_seq.models.Mutation.objects.raw(
-        'select * from aledb_seq_mutation m where not exists (select * from aledb_seq_mutationcall ob where ob.mutation_id = m.id)')
+    orphans = aledb_sample.models.Mutation.objects.raw(
+        'select * from aledb_sample_mutation m where not exists (select * from aledb_sample_mutationcall ob where ob.mutation_id = m.id)')
     for mutation in orphans:
         mutation.delete()
 
@@ -99,7 +99,7 @@ def delete_sample(experiment_pk, population_name, time_point_value, sample_name)
     """
     from aledb_common.rebuild_registry import request_rebuild
 
-    for sample in aledb_seq.models.Sample.objects.filter(name=sample_name):
+    for sample in aledb_sample.models.Sample.objects.filter(name=sample_name):
         if sample.time_point.population.experiment_id == experiment_pk and \
                 sample.time_point.population.name == population_name and \
                 sample.time_point.value == time_point_value:

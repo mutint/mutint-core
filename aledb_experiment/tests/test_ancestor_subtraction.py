@@ -9,8 +9,8 @@ invisible when it over-reaches and invisible when it under-reaches.
 from aledb_experiment.ancestor import (ancestral_mutation_ids, describe_ancestor,
                                        exclude_all_ancestry, exclude_ancestry, get_ancestor)
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import MutationCall
-from aledb_seq.util import (get_evolved_call_queryset, get_mutation_call_queryset,
+from aledb_sample.models import MutationCall
+from aledb_sample.util import (get_evolved_call_queryset, get_mutation_call_queryset,
                             get_reseq_ordered_dict, calls_for_samples)
 
 

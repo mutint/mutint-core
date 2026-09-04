@@ -1,11 +1,11 @@
 from aledb_dashboard.models import (
     InventoryCounts, MutationCallCounts, UniqueMutationCounts,
 )
-from aledb_seq.models import MutationCall
-from aledb_seq.functional_change import (
+from aledb_sample.models import MutationCall
+from aledb_sample.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
-from aledb_seq.views.common import MUTATION_TYPE_LIST, UNANNOTATED
+from aledb_sample.views.common import MUTATION_TYPE_LIST, UNANNOTATED
 from aledb_experiment.ancestor import (exclude_all_ancestry,
                                        exclude_ancestor_samples)
 from aledb_experiment.models import Experiment, Population, TimePoint
@@ -18,7 +18,7 @@ def rebuild_dashboard_data():
     rebuild_mutation_counts()
 
 
-#: The join from a MutationCall up to its experiment, as `aledb_seq.util`,
+#: The join from a MutationCall up to its experiment, as `aledb_sample.util`,
 #: `aledb_filter.util` and `aledb_mutation_editor.history` all spell it.
 _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
@@ -29,7 +29,7 @@ _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
 
 def _evolved_samples():
-    from aledb_seq.models import Sample
+    from aledb_sample.models import Sample
     return exclude_ancestor_samples(Sample.objects.all())
 
 
@@ -108,7 +108,7 @@ def _live_call_rows():
 
     The third column is `snp_type`, breseq's own functional class, and used to be
     `protein_change` -- a rendered display string that contains none of the words being looked
-    for. See `aledb_seq.functional_change`.
+    for. See `aledb_sample.functional_change`.
     """
     queryset = MutationCall.objects.filter(
         **{"%s__deleted_at__isnull" % _EXPERIMENT_PATH: True,

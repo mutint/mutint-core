@@ -62,7 +62,7 @@ urlpatterns = [
 ```python
 import collections
 
-import aledb_seq.views.common
+import aledb_sample.views.common
 from django.shortcuts import render
 
 from aledb_common.util import get_user_context
@@ -70,7 +70,7 @@ from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_view_project
 from aledb_filter.util import filtered_mutation_call_queryset
 from aledb_filter.view_filter import get_view_filter
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 
 EXPERIMENT_PATH = "sample__tech_rep__isolate__flask__ale_id__ale_experiment"
 
@@ -78,10 +78,10 @@ EXPERIMENT_PATH = "sample__tech_rep__isolate__flask__ale_id__ale_experiment"
 def your_thing(request):
     context = get_user_context(request.user)
     try:
-        experiment = aledb_seq.views.common.get_experiment(request)
+        experiment = aledb_sample.views.common.get_experiment(request)
     except Experiment.DoesNotExist:
         # Not an error: it is how the page opens before an experiment is chosen.
-        return aledb_seq.views.common.no_experiment_selected(
+        return aledb_sample.views.common.no_experiment_selected(
             request, context, None, "your thing")
     except ValueError:
         return render(request, "403.html", context, status=403)

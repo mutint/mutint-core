@@ -33,7 +33,7 @@ import logging
 from django.tasks import task
 
 from aledb_import import coverage
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 logger = logging.getLogger(__name__)
 

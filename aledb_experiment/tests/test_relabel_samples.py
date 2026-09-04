@@ -12,7 +12,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Media, Population, Project, TimePoint
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 
 class RelabelSamplesTestCase(TestCase):

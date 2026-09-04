@@ -22,7 +22,7 @@ from aledb_common.import_registry import run_import
 from aledb_experiment.models import Project
 from aledb_import import breseq_folder
 from aledb_import.models import STATE_FAILED, STATE_FINALIZED, UploadSession
-from aledb_seq.models import MutationCall, Sample
+from aledb_sample.models import MutationCall, Sample
 from aledb_import.tests import breseq_fixture
 
 
@@ -299,7 +299,7 @@ class GenomeDiffReplacementTestCase(ImportProgressTestCase):
             handle.write(breseq_fixture.GD_TEXT)
 
     def test_a_second_drop_of_the_same_gd_reports_what_it_replaced(self):
-        from aledb_seq.models import MutationCall
+        from aledb_sample.models import MutationCall
 
         self._drop_gd()
         first = self.run_drop(import_type="genomediff")[1]

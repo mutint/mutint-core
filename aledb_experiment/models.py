@@ -134,7 +134,7 @@ class Experiment(SoftDeleteMixin):
     # experiment" structural -- designating a new one is a single UPDATE, so there is no
     # prior flag left to clear and no way to end up with two.
     #
-    # Named by string because `aledb_experiment` must not import `aledb_seq` at load time;
+    # Named by string because `aledb_experiment` must not import `aledb_sample` at load time;
     # the dependency runs the other way, which is why `Sample.time_point` names its own
     # target the same way.
     #
@@ -146,7 +146,7 @@ class Experiment(SoftDeleteMixin):
     # everyone sees, which is exactly what `AleExperimentFilter` got wrong -- one row per
     # experiment that anybody with write access could change silently, with no record of
     # who did it. Attribution is the difference between that and this.
-    ancestor = models.ForeignKey("aledb_seq.Sample",
+    ancestor = models.ForeignKey("aledb_sample.Sample",
                                  on_delete=models.SET_NULL, related_name="ancestor_of",
                                  **blank_field)
     ancestor_set_at = models.DateTimeField(**blank_field)
@@ -364,7 +364,7 @@ class TimePoint(models.Model):
 # is `Sample.reference_genome` now, which says the same thing without the abbreviation.
 #TODO: Change 'library_prep' field to 'wgs_kit'
 # `Isolate` and `TechnicalReplicate` stood here. Both are gone, folded into
-# `aledb_seq.Sample` -- the sample row itself -- along with everything they held. See that
+# `aledb_sample.Sample` -- the sample row itself -- along with everything they held. See that
 # model's docstring for why the merge went that way round rather than the other. The chain
 # is `Experiment -> Population -> TimePoint -> Sample` now.
 

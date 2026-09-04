@@ -34,7 +34,7 @@ from aledb_import.ale_experiment import (
     upload_collection,
 )
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import (
+from aledb_sample.models import (
     ExperimentReference,
     Mutation,
     MutationCall,

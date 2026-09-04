@@ -17,7 +17,7 @@ import os
 from aledb_common import store
 from aledb_import import reference as reference_io
 from aledb_import import reference_rename
-from aledb_seq.models import ExperimentReference
+from aledb_sample.models import ExperimentReference
 
 
 class ReferenceMismatch(Exception):

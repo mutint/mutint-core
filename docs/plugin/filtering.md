@@ -17,7 +17,7 @@ from aledb_filter.util import filter_mutation_calls
 from aledb_filter.view_filter import get_view_filter
 
 def my_page(request):
-    experiment = aledb_seq.views.common.get_experiment(request)
+    experiment = aledb_sample.views.common.get_experiment(request)
     view_filter = get_view_filter(request, experiment.ale_id)
 
     rows = filter_mutation_calls(my_queryset, view_filter=view_filter)
@@ -69,7 +69,7 @@ the same for everyone, and **there is no opting out** — no toggle, no query pa
 `ancestor=None` to pass. If you are deriving something, you subtract it.
 
 ```python
-from aledb_seq.util import calls_for_samples
+from aledb_sample.util import calls_for_samples
 
 queryset = calls_for_samples(list(reseq_dict), experiment_id)
 queryset, ignored_genes = filtered_mutation_call_queryset(queryset, view_filter=view_filter)

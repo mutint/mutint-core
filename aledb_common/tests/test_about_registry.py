@@ -42,7 +42,7 @@ class ComponentGroupingTestCase(TestCase):
     def test_the_component_is_the_directory_the_app_sits_in(self):
         """aledb-core is fifteen apps in one checkout and has to read as one entry."""
         self.assertEqual(
-            component_dir(FakeAppConfig("/srv/mutint/aledb-core/aledb_seq")),
+            component_dir(FakeAppConfig("/srv/mutint/aledb-core/aledb_sample")),
             "/srv/mutint/aledb-core")
         self.assertEqual(
             component_dir(FakeAppConfig("/srv/mutint/aledb-fixation/aledb_fixation")),

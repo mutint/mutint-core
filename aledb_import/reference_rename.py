@@ -112,7 +112,7 @@ def apply_rename(experiment, reference, plan, actor=""):
     (`reference_store`) afterwards, deliberately: a rollback cannot unwrite a file, so files
     must never lead the rows.
     """
-    from aledb_seq.models import Mutation, UncalledRegion
+    from aledb_sample.models import Mutation, UncalledRegion
 
     mapping = plan.mapping
     if not mapping:

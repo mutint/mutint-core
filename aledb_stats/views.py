@@ -3,8 +3,8 @@ from django.http import HttpResponse, Http404, HttpResponseForbidden
 from django.template import loader
 from django.utils.safestring import mark_safe
 from django.conf import settings
-from aledb_seq.util import get_ordered_reseq_queryset
-from aledb_seq.views import common
+from aledb_sample.util import get_ordered_reseq_queryset
+from aledb_sample.views import common
 from aledb_stats.util import count_per_population,\
     get_experiment_summary,\
     get_reseq_experiment_info_list
@@ -36,8 +36,8 @@ def stats(request):
             context.update(get_experiment_context(experiment))
 
         # This used to fetch the experiment a second time here. The file imported the same
-        # module twice under two names -- `import aledb_seq.views.common` alongside
-        # `from aledb_seq.views import common` -- which made the second call look like a
+        # module twice under two names -- `import aledb_sample.views.common` alongside
+        # `from aledb_sample.views import common` -- which made the second call look like a
         # different one, so every view of this page paid for a second Experiment query, a
         # second project FK query and a second permission check, then discarded the object
         # the lines above had already fetched. The duplicate import is gone with it.
@@ -89,7 +89,7 @@ def stats(request):
                         "experiments_info_list": experiments_info_list,
                         "panels": panels,
                         # `seq_color_set` and `protein_types` stood here and are gone with the
-                        # colour machinery in aledb_seq.views.common: a palette and a vocabulary
+                        # colour machinery in aledb_sample.views.common: a palette and a vocabulary
                         # for a chart that was never built, and which no template has ever read.
                         # The functional-change counts below are rendered as a table instead.
                         "population_counts": population_counts,

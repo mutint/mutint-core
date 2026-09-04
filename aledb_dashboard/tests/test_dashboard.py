@@ -20,7 +20,7 @@ from aledb_dashboard.models import InventoryCounts
 from aledb_dashboard.util import rebuild_sample_counts
 from aledb_experiment.models import (Experiment, Population, TimePoint,
                                      Media)
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 
 class DashboardCountTestCase(TestCase):

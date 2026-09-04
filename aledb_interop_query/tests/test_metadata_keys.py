@@ -28,7 +28,7 @@ from django.test import TestCase
 from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
 from aledb_interop_query.views import _serialize_metadata
 from aledb_metadata.views import get_sample_info_list
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 #: What each column is set to, and what the key naming it must therefore hold.
 VALUES = {

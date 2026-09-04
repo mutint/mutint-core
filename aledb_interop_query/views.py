@@ -14,11 +14,11 @@ from aledb_filter.util import filter_mutation_calls, filtered_mutation_call_quer
 from aledb_filter.view_filter import PARAMS as FILTER_PARAMS, ViewFilter
 from aledb_common.logger import user_extra
 from aledb_metadata.views import get_sample_info_list
-# From `aledb_seq.util`, where it is defined. This used to come via `aledb_metadata.views`,
+# From `aledb_sample.util`, where it is defined. This used to come via `aledb_metadata.views`,
 # which merely imports it -- an accidental re-export, and the call site any signature change
 # would miss.
-from aledb_seq.util import get_ordered_reseq_dict, get_ordered_reseq_queryset
-from aledb_seq.models import MutationCall
+from aledb_sample.util import get_ordered_reseq_dict, get_ordered_reseq_queryset
+from aledb_sample.models import MutationCall
 from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)

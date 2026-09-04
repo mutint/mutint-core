@@ -9,7 +9,7 @@ from aledb_common import store
 from aledb_import import reference as reference_io
 from aledb_import import reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ExperimentReference
+from aledb_sample.models import ExperimentReference
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 

@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def _samples(experiment):
-        from aledb_seq.models import Sample
+        from aledb_sample.models import Sample
 
         # Nothing below Population carries an experiment id, so this is the four-hop traversal.
         return Sample.objects.filter(

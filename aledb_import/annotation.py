@@ -154,7 +154,7 @@ def sample_groups(experiment, mutations):
     first group that contains it, so the result does not depend on iteration
     order.
     """
-    from aledb_seq.models import MutationCall
+    from aledb_sample.models import MutationCall
 
     by_id = {mutation.pk: mutation for mutation in mutations}
     calls = (MutationCall.objects
@@ -218,7 +218,7 @@ def reannotate_experiment(experiment, mutations=None, references=None, dry_run=F
 
     `on_error` receives a message per sample that fails; one bad sample never stops the rest.
     """
-    from aledb_seq.models import Mutation
+    from aledb_sample.models import Mutation
 
     if mutations is None:
         mutations = list(Mutation.objects.filter(experiment=experiment))

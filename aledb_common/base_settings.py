@@ -75,7 +75,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
         # Chunked uploads staged but never finalized are reaped after this many hours.
         'ALEDB_UPLOAD_SESSION_TTL_HOURS': int(
             os.environ.get('ALEDB_UPLOAD_SESSION_TTL_HOURS', '24')),
-        # NCBI E-utilities, used by aledb_seq.ncbi to confirm that a reference contig
+        # NCBI E-utilities, used by aledb_sample.ncbi to confirm that a reference contig
         # really is the accession somebody said it was. All optional: with none of them set
         # the check still works, just politely slower and anonymously.
         #
@@ -132,7 +132,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_search',          # nav: Search
             'aledb_experiment',      # nav: Projects, Experiments
             'aledb_metadata',        # nav: Metadata
-            'aledb_seq',             # nav: Mutations
+            'aledb_sample',             # nav: Mutations
             'aledb_mutation_editor', # nav: Edit Mutations
             'aledb_filter',          # nav: Filter
             'aledb_import',          # nav: none (Add data is reached from an experiment)

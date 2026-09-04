@@ -18,7 +18,7 @@ from django.test import TestCase, override_settings
 
 from aledb_common import store
 from aledb_import import annotation, gd_import, reference, reference_store
-from aledb_seq.models import ExperimentReference, Mutation, MutationCall
+from aledb_sample.models import ExperimentReference, Mutation, MutationCall
 
 ANNOTATE_FIXTURES = os.path.join(
     os.path.dirname(__file__), "..", "annotate", "tests", "fixtures")

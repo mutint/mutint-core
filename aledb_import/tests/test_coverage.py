@@ -18,7 +18,7 @@ from aledb_common import store
 from aledb_common.tools import ToolMissing
 from aledb_import import breseq_folder, coverage
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 
 class ChromSizesTestCase(TestCase):

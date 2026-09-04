@@ -1,9 +1,9 @@
 from aledb_common.plugin_registry import get_export_handler
-from aledb_seq.views.mutation_table_builder import get_mutation_table_data, HTML_MUTATION_TABLE_HEADER
+from aledb_sample.views.mutation_table_builder import get_mutation_table_data, HTML_MUTATION_TABLE_HEADER
 from django.utils.html import strip_tags
 
 from aledb_filter.util import filter_mutation_calls
-from aledb_seq.util import get_mutation_call_queryset, get_ordered_reseq_dict
+from aledb_sample.util import get_mutation_call_queryset, get_ordered_reseq_dict
 
 MUT_TYPE_STR = "mut"
 

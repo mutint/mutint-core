@@ -167,7 +167,7 @@ class LoadExampleCommandTestCase(TestCase):
 
     def test_loading_imports_the_data(self):
         from aledb_experiment.models import Experiment, TimePoint
-        from aledb_seq.models import Mutation
+        from aledb_sample.models import Mutation
 
         self._load("test-example")
 

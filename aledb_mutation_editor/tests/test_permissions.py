@@ -1,6 +1,6 @@
 """Who may edit an experiment's mutations.
 
-The four-actor matrix `aledb_seq.tests.test_table_actions` established, applied to all three
+The four-actor matrix `aledb_sample.tests.test_table_actions` established, applied to all three
 write endpoints. Every refusal is followed by an assertion that the write did not happen: a
 status code alone would still pass if the endpoint refused *and* wrote, which is exactly the
 failure the tag endpoints once had.
@@ -17,7 +17,7 @@ from django.contrib.auth.models import User
 
 from aledb_mutation_editor.models import MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 
 DELETE = "/mutation-editor/delete/apply"
 COPY = "/mutation-editor/copy/apply"

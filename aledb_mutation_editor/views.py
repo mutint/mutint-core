@@ -30,7 +30,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
-import aledb_seq.views.common as seq_common
+import aledb_sample.views.common as seq_common
 from aledb_common.logger import user_extra
 from aledb_common.util import get_user_context
 from aledb_experiment.models import Experiment
@@ -43,13 +43,13 @@ from aledb_mutation_editor import history, record_builder, validation
 from aledb_mutation_editor.models import (
     KIND_ADD, KIND_COPY, KIND_DELETE, KIND_EDIT, MutationEditSet,
 )
-from aledb_seq.breseq_report import build_rows, is_mixed
-from aledb_seq.models import Mutation, MutationCall
+from aledb_sample.breseq_report import build_rows, is_mixed
+from aledb_sample.models import Mutation, MutationCall
 # `include_ancestor=True` on every call below: the editor curates rather than reads, so
 # it must show the designated ancestor, which every reading page hides. It is also why
 # `history.calls_for` uses the raw call queryset -- this app shows what is
 # stored, and ancestral rows are stored.
-from aledb_seq.util import get_reseq_ordered_dict
+from aledb_sample.util import get_reseq_ordered_dict
 from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ def _selected_reseq(request, reseq_dict, param=REQUEST_SAMPLE_ID):
 def _rows_for(reseq):
     """One sample's mutations as breseq-style rows, carrying the call id.
 
-    `build_rows` is aledb_seq's, shared with the Samples page and the genome browser, so the
+    `build_rows` is aledb_sample's, shared with the Samples page and the genome browser, so the
     editor's table reads identically to the one people already know. It is rendered from this
     app's own template rather than by including `breseq_table/_mutation_table.html`, which is
     shared between those two and must not grow a third caller's checkbox column.
@@ -526,7 +526,7 @@ def _initial_fields(mutation):
 
 def _reference_row(experiment):
     """The experiment's `ExperimentReference`, or None. Reads no files."""
-    from aledb_seq.models import ExperimentReference
+    from aledb_sample.models import ExperimentReference
 
     return ExperimentReference.objects.filter(experiment=experiment).first()
 

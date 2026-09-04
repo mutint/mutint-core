@@ -38,11 +38,11 @@ logger = logging.getLogger(__name__)
 def _experiment_samples(experiment):
     """Every sample of an experiment, in A/F/I/R order.
 
-    Imported here rather than at module scope: aledb_experiment must not import aledb_seq
+    Imported here rather than at module scope: aledb_experiment must not import aledb_sample
     at load time -- the dependency runs the other way, which is why
     `Sample.time_point` names its target by string.
     """
-    from aledb_seq.util import get_ordered_reseq_queryset
+    from aledb_sample.util import get_ordered_reseq_queryset
     # `include_ancestor=True`: this is the page that edits and deletes samples, so it has to
     # show the designated ancestor, which every reading page hides.
     return get_ordered_reseq_queryset(experiment.id, include_ancestor=True)
@@ -56,7 +56,7 @@ def _get_sample(pk):
     the check, those 404: they are filtered out of every list already, and repairing them
     belongs in a management command.
     """
-    from aledb_seq.models import Sample
+    from aledb_sample.models import Sample
     from django.http import Http404
 
     reseq = get_object_or_404(Sample, pk=pk)

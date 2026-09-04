@@ -4,7 +4,7 @@
 function produces is a database key and not merely a display string. Two things follow, and
 both are asserted here: the string for a range under the limit must not move (or every such
 mutation forks on the next import), and the string for one over it must equal what
-`aledb_seq.0012` writes for the rows already stored.
+`aledb_sample.0012` writes for the rows already stored.
 """
 
 import unittest
@@ -48,7 +48,7 @@ class GeneAnnotationTestCase(unittest.TestCase):
         self.assertNotIn("gene0500", ", ".join(recorded))
 
     def test_what_it_records_over_the_limit_is_what_the_migration_writes(self):
-        """`aledb_seq.0012` sets `gene` to `annotation['gene_name']`. If these two ever
+        """`aledb_sample.0012` sets `gene` to `annotation['gene_name']`. If these two ever
         disagree, a migrated row stops matching the importer and forks on re-import."""
         gene_name, gene_product = _range_of(4318)
 

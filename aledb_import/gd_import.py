@@ -37,7 +37,7 @@ from aledb_import import sniff
 from aledb_import.gene_annotation import get_annotated_gene_list
 from aledb_import import sample_names
 from aledb_import.sample_names import parse_sample_identity
-from aledb_seq.models import (
+from aledb_sample.models import (
     Mutation,
     MutationCall,
     Sample,

@@ -6,9 +6,9 @@ from django.template import loader
 
 from django.conf import settings
 from aledb_experiment.models import Experiment
-from aledb_seq.views import common
+from aledb_sample.views import common
 from aledb_common.util import get_user_context
-from aledb_seq.util import get_ordered_reseq_queryset
+from aledb_sample.util import get_ordered_reseq_queryset
 
 from aledb_common.constants import (REQUEST_EXPERIMENT_ID, REQUEST_POPULATION,
                                     SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED)

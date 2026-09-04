@@ -189,8 +189,8 @@ working directory, and an assembled project's code lives in submodule directorie
 `aledb-core`, `aledb-compare` and so on, which can never be Python packages, so discovery
 could not descend into them however they were laid out. Renaming them would not have helped:
 a directory is skipped unless it holds an `__init__.py`, and giving one to a submodule root
-would make every app importable by two dotted paths at once — `aledb_seq.models` and
-`aledb_core.aledb_seq.models` are two module objects, which means two sets of model classes.
+would make every app importable by two dotted paths at once — `aledb_sample.models` and
+`aledb_core.aledb_sample.models` are two module objects, which means two sets of model classes.
 
 The app set comes from `about_registry.first_party_app_configs()`, the same predicate the
 About page inventories with, so "which apps are ours" is stated once.
@@ -485,7 +485,7 @@ starts printing Django's version instead — `aledb_common/tests/test_version.py
 
 ### The per-sample mutation page
 
-`aledb_seq/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
+`aledb_sample/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
 column order and colouring, as the per-sample companion to Compare, which pivots the whole
 experiment and lives in the **aledb-compare** plugin at `/compare/` (see **Compare is a
 plugin** below). A picker moves between samples; the evidence cell links into the genome
@@ -521,7 +521,7 @@ silently.
 It is called **Mutations** in the nav and on the page. **Compare** used to sit beside it
 here; it is registered by the aledb-compare plugin now, so on a deployment without that
 plugin this page is the only mutation table core offers. The table markup
-itself lives in `aledb_seq/templates/breseq_table/_mutation_table.html`, shared with the genome
+itself lives in `aledb_sample/templates/breseq_table/_mutation_table.html`, shared with the genome
 browser, which renders the one mutation it is open at through the same `build_rows` — the two
 must not drift, because the cell contents come from `annotate.display` and mean nothing without
 these columns around them.
@@ -628,10 +628,10 @@ Both columns are gone. The two questions they conflated are now asked of separat
   Null means imported before that column existed, which is its own thing and must not be
   read as "unknown caller".
 
-`aledb_seq.0010` backfills `present=True` wherever a caller flag was set and `present` was
+`aledb_sample.0010` backfills `present=True` wherever a caller flag was set and `present` was
 null, then drops the columns -- in that order, because a row whose presence was recorded only
 in a flag would otherwise become a row about which nothing was ever recorded, and those render
-nowhere. `aledb_seq/tests/test_caller_flag_migration.py` stands the database up at `0009`
+nowhere. `aledb_sample/tests/test_caller_flag_migration.py` stands the database up at `0009`
 through the real migration executor to check it, which is the only way to test a data migration
 whose columns the live model no longer has.
 
@@ -931,7 +931,7 @@ rather than a list, with no expander to open. The limit lives in `aledb_common/u
 the importer and the renderers have to agree: a row written under one limit and read under
 another would show a truncation nothing performed.
 
-`aledb_seq.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
+`aledb_sample.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
 is not tidying: a row left holding the long string no longer matches what the importer computes,
 so re-importing that sample would mint a second `Mutation` and split its calls across
 both. What it writes is `annotation['gene_name']`, which is exactly what
@@ -948,7 +948,7 @@ mutations bucketed as `unannotated`, including every one of the 12,793 nonsynony
 synonymous SNPs. The comment on `FUNCTIONAL_CHANGE_TYPE_LIST` said as much all along: *"these
 names match with Breseq's HTML annotations"* -- they are `snp_type`'s vocabulary.
 
-`aledb_seq/functional_change.py` owns the vocabulary and the rule; `aledb_seq/views/common.py`
+`aledb_sample/functional_change.py` owns the vocabulary and the rule; `aledb_sample/views/common.py`
 re-exports both so no importer changed. Four things about it are load-bearing:
 
 - **`nonsense` was missing from the vocabulary**, though `annotator.py:470` has always written
@@ -1013,7 +1013,7 @@ Two smaller things fell out with them: one branch was a straight duplicate of th
 it, and both gatk branches compared against `min_cutoff`/`max_cutoff` rather than their own
 settings -- so those settings were never values, only switches.
 
-`frequency_gatk`, `min_gatk_cutoff` and `max_gatk_cutoff` are gone (`aledb_seq.0011`,
+`frequency_gatk`, `min_gatk_cutoff` and `max_gatk_cutoff` are gone (`aledb_sample.0011`,
 `aledb_filter.0004`), and the two remaining terms are **OR**ed. The block is now two lines and
 does what the page has always said it does.
 
@@ -1427,7 +1427,7 @@ so.
 Deleting the left half outright looked safe because `effective_role` already answers `owner` to
 a superuser. It is not: the case it really covered is a **`Mutation` with no experiment**, where
 `can_edit_experiment(user, None)` returns False for everybody and an unscoped mutation becomes
-uncurateable by anyone. `aledb_seq.tests.test_table_actions` pins it. `can_curate` keeps that
+uncurateable by anyone. `aledb_sample.tests.test_table_actions` pins it. `can_curate` keeps that
 case and asks the question once, so the lock is no longer something to route around.
 
 Two things that fell out with it: `aledb_interop_query` had been assigning `global_filter_genes`
@@ -1768,7 +1768,7 @@ two releases.
 migration history. It is worth one paragraph, because the shape of what it got wrong outlives
 it. The file was inert and had to stay under its name, because a dependency on an uninstalled
 app makes `migrate` fail with `NodeNotFoundError` on a fresh database — and this note listed
-the four apps that named it: `aledb_seq.0005`, `aledb_stats.0003`, `aledb_filter.0002`,
+the four apps that named it: `aledb_sample.0005`, `aledb_stats.0003`, `aledb_filter.0002`,
 `aledb_common.0001`. **There were five.** The fifth was
 `aledb-phylogeny/…/0001_initial.py`, invisible to a note written from inside this repo, and it
 is why the migration reset had to span four repositories at once. `./mutint check` passes
@@ -1899,13 +1899,13 @@ What stayed, and why none of it could go:
 - **`mutation_table_builder`** -- `aledb_search`, `aledb_export`, aledb-fixation and
   aledb-converge all call it.
 - **`base_table_template.html` and `table_template.js`** -- rendered by three other pages.
-- **The curation endpoints**, now at `/mutation-table/` (`aledb_seq/views/table_actions.py`,
-  `aledb_seq/table_urls.py`). Every table posts to them, not just Compare, and the state is
+- **The curation endpoints**, now at `/mutation-table/` (`aledb_sample/views/table_actions.py`,
+  `aledb_sample/table_urls.py`). Every table posts to them, not just Compare, and the state is
   shared: `TechnicalReplicate.tags` is what the Show/Hide Tag control filters sample columns on
   in `get_reseq_ordered_dict`, so tagging from one table changes what the other three show.
   Replicating them per plugin would have meant four write paths to core-owned tables.
 
-**`/mutations/` is not a page any more** and returns 404. `aledb_seq.urls` has no `^$`, and a
+**`/mutations/` is not a page any more** and returns 404. `aledb_sample.urls` has no `^$`, and a
 plugin cannot reclaim that path: Django does not backtrack out of a matched `include()`.
 
 Two consequences worth knowing before wondering whether something is broken:
@@ -1927,7 +1927,7 @@ anything else tag-shaped, **including inside a `//` or `/* */` comment**, which 
 engine does not recognise as a comment at all. Writing a tag name in a comment there executes it.
 
 Nothing in core rendered that file until this change: `aledb_search` has no tests and the other
-three consumers are plugin pages. `aledb_seq/tests/test_table_actions.py` renders it directly now,
+three consumers are plugin pages. `aledb_sample/tests/test_table_actions.py` renders it directly now,
 which is what lets core notice a broken tag before four pages do.
 
 ### Example datasets
@@ -2340,7 +2340,7 @@ nothing is still the parser's to judge.
 
 ### The genome browser
 
-`aledb_seq/views/browse.py` renders igv.js for one `MutationCall` at
+`aledb_sample/views/browse.py` renders igv.js for one `MutationCall` at
 `/mutations/browse?mutation_call_id=<pk>`, linked from every mutation-table frequency cell whose
 sample has `bam_stored`. It is the first consumer of the alignment routes, which had been built
 and tested with nothing pointing at them.
@@ -2407,7 +2407,7 @@ nav tests, sprung again in a new place.
 
 ### The mutations are drawn from the database, not from a file
 
-`aledb_seq/tracks.py` builds igv features out of database rows. Until it existed `browse.html`
+`aledb_sample/tracks.py` builds igv features out of database rows. Until it existed `browse.html`
 passed igv **`tracks: []`** -- the page drew the reference, the gene track and the reads, and
 not the calls the reads were opened to look at. The only thing the database contributed was
 the locus string that positioned the view.
@@ -2737,7 +2737,7 @@ locate what it guards must say so rather than agree.
 
 ### The NCBI Sequence Viewer, and the check that has to come first
 
-`aledb_seq/views/ncbi_view.py` renders NCBI's own Sequence Viewer at one mutation's locus, at
+`aledb_sample/views/ncbi_view.py` renders NCBI's own Sequence Viewer at one mutation's locus, at
 `/mutations/ncbi?mutation_id=<pk>`. It is the companion to the genome browser above: that page
 shows a mutation as *reads*, this one shows it in *curated annotation* -- the genes, operons
 and features NCBI holds, which the stored GFF3 track cannot supply because it carries only
@@ -2775,7 +2775,7 @@ touch them.
 
 #### The check is a verification, not a search
 
-`aledb_seq/ncbi.py`, two stages, cheapest first:
+`aledb_sample/ncbi.py`, two stages, cheapest first:
 
 1. **esummary** -> `accessionversion` and `slen`. A length that differs is a definitive no,
    settled for one small request with **no genome downloaded** -- which matters, because a
@@ -2845,7 +2845,7 @@ anywhere. The right-hand end is clamped using the `length` in `seq_ids`, so no f
 
 #### The extent rule moved, and there is one of it
 
-`aledb_seq/locus.py` holds `mutation_extent` and `LOCUS_BUFFER_BASES`, extracted from
+`aledb_sample/locus.py` holds `mutation_extent` and `LOCUS_BUFFER_BASES`, extracted from
 `browse.py` when this became a second page drawing the same interval. A pure module, in the
 shape `functional_change.py` was extracted into and for the same reason: `views/common.py`
 imports django.http and the permissions layer, and "which bases does this mutation cover"
@@ -2923,7 +2923,7 @@ All apps use the `aledb_*` namespace. Key apps:
   CLI upload and a web drop produce identical rows:
   - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
     the one place mutations are stored. Each record is kept verbatim in `Mutation.gd_data`
-    and round-tripped back out by `Mutation.to_gd_line()` (`aledb_seq/models.py`) for
+    and round-tripped back out by `Mutation.to_gd_line()` (`aledb_sample/models.py`) for
     `gdtools APPLY`, so nothing but the raw record may go in that field.
   - CLI upload — `./aledb upload <path>` walks for `<exp>/breseq/` + `<exp>/metadata/`,
     hands the folders to `breseq_folder`, then parses the metadata. It used to be a second
@@ -2943,7 +2943,7 @@ All apps use the `aledb_*` namespace. Key apps:
     stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
     records the shared reference as `ExperimentReference`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
-    range support by `aledb_seq/views/alignments.py`, which resolves every path from a
+    range support by `aledb_sample/views/alignments.py`, which resolves every path from a
     primary key rather than from anything the client sends.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
@@ -2974,10 +2974,10 @@ All apps use the `aledb_*` namespace. Key apps:
     same genome would hash differently and the shared-reference check would reject valid data.
     GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
     Biopython has no GFF3 parser. Alignments are served with HTTP range support by
-    `aledb_seq/views/alignments.py`.
+    `aledb_sample/views/alignments.py`.
     Sample identity comes from the filename, through `sample_names.parse_sample_identity`
     and nowhere else -- see **Reading a sample's identity out of its filename** below.
-- **`aledb_seq/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`,
+- **`aledb_sample/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`,
   `/mutations/ncbi`, `/mutations/reference`), the shared `mutation_table_builder`, and the
   curation endpoints at `/mutation-table/`. `/mutations/reference` is the only page that says
   what genome an experiment is called against, and is where an NCBI accession is recorded. `browse` is igv.js over the sample's reads; `ncbi` is NCBI's Sequence
@@ -3163,7 +3163,7 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 1. `./aledb upload <path>` calls `aledb_import.ale_experiment.upload_collection()`
 2. Hands each `<exp>/breseq/` to `aledb_import.breseq_folder`, which parses via
    `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes
-3. Creates `aledb_experiment`, `aledb_seq`, and `aledb_metadata` model instances
+3. Creates `aledb_experiment`, `aledb_sample`, and `aledb_metadata` model instances
 4. Ends in `gd_import.run_post_processing`, which asks the rebuild registry to recompute
    everything derived -- the experiment filter defaults, `aledb_fixation`'s table, then the
    dashboard's installation-wide totals. It asks for whatever is registered, so the needle

@@ -22,7 +22,7 @@ such a string is prose about a sample, not a stale label, and is left alone.
 from django.core.management.base import BaseCommand
 
 from aledb_experiment import coordinates
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 
 class Command(BaseCommand):

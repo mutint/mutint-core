@@ -17,7 +17,7 @@ everybody with a working connection.
 ## Two deliberate exceptions
 
 **NCBI's Sequence Viewer** (`https://www.ncbi.nlm.nih.gov/projects/sviewer/js/sviewer.js`,
-loaded by `aledb_seq/templates/ncbi/ncbi_view.html`) **cannot be vendored and is not meant to
+loaded by `aledb_sample/templates/ncbi/ncbi_view.html`) **cannot be vendored and is not meant to
 be.** It is a client for NCBI's own backend, so the page needs `ncbi.nlm.nih.gov` reachable
 whatever we do with the file. Offline it simply never reaches a verified state and never renders
 the script. It is the one host the guard test allows, by name.

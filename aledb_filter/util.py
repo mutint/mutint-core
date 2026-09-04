@@ -20,7 +20,7 @@ unchanged and is worse than saying nothing: a page confidently describing a filt
 apply.
 
 **Everything after the queryset is keyword-only.** Not style: `aledb_export/util.py` and
-`aledb_seq/views/breseq_table.py` both passed an experiment id positionally into the second slot,
+`aledb_sample/views/breseq_table.py` both passed an experiment id positionally into the second slot,
 and this repo already carries a scar from exactly that shape -- `get_reseq_ordered_dict` was once
 called with a `request` in the `sample_type` slot, which silently dropped every population sample
 from two plugin pages. Keyword-only turns a call site nobody updated into a `TypeError` instead

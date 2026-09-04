@@ -5,7 +5,7 @@ from aledb_experiment.models import Experiment,\
     TimePoint,\
     Population,\
     Project
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 from aledb_metadata.parser import parse_metadata_post_experiment_upload, _get_media_supplement_description
 from datetime import datetime
 import os

@@ -24,7 +24,7 @@ def get_annotated_gene_list(breseq_mutation_gene_annotation, breseq_gene_product
     this list into `Mutation.gene`, which is one of the seven fields
     `Mutation.objects.get_or_create` keys on, so a tidier split here would rewrite the stored
     string for every range mutation and fork all of them on the next import. Only the rows over
-    the limit change, and `aledb_seq.0012` moves the ones already stored.
+    the limit change, and `aledb_sample.0012` moves the ones already stored.
     """
     mutation_gene_str = _get_str_from_annotation(breseq_mutation_gene_annotation)
     gene_product_str = _get_str_from_annotation(breseq_gene_product_annotation) if breseq_gene_product_annotation is not None else None

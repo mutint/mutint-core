@@ -13,7 +13,7 @@ from aledb_mutation_editor.models import (
     KIND_DELETE, MutationEdit, MutationEditSet,
 )
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import Mutation, MutationCall
+from aledb_sample.models import Mutation, MutationCall
 
 
 class RestoreTestCase(EditorTestCase):

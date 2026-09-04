@@ -12,7 +12,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Media, Population, Project, TimePoint
-from aledb_seq.models import ExperimentReference, Sample, UncalledRegion
+from aledb_sample.models import ExperimentReference, Sample, UncalledRegion
 from aledb_stats.util import get_reseq_experiment_info_list, uncalled_bases_per_sample
 
 

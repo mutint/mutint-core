@@ -20,7 +20,7 @@ from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
 from aledb_experiment.roles import ROLE_OWNER
-from aledb_seq.models import Mutation, MutationCall, Sample
+from aledb_sample.models import Mutation, MutationCall, Sample
 
 
 class ExportViewTestCase(TestCase):

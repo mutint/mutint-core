@@ -7,7 +7,7 @@ made directly: Population -> TimePoint -> Sample.
 
 The project is created through the view rather than with `Project.objects.create`, because that
 is what issues the ProjectAccess row `can_add_experiment_filter` consults -- the same reason
-`aledb_seq.tests.test_table_actions` does it.
+`aledb_sample.tests.test_table_actions` does it.
 """
 
 from decimal import Decimal
@@ -19,7 +19,7 @@ from aledb_experiment.models import (
     Experiment, Population, TimePoint,
 )
 from aledb_import.gd_import import prepare_experiment_by_id
-from aledb_seq.models import Mutation, MutationCall, Sample
+from aledb_sample.models import Mutation, MutationCall, Sample
 from aledb_experiment import paths
 
 

@@ -252,7 +252,7 @@ def can_curate(user, experiment):
     **But it was load-bearing for one case**, which is why it is not simply deleted: a
     `Mutation` with no experiment cannot be scoped to a project, so there is nothing to grant
     against and `can_add_experiment_filter` answers False for everybody. Superusers could tag
-    one and still can. `aledb_seq.tests.test_table_actions` pins that, and it is the case the
+    one and still can. `aledb_sample.tests.test_table_actions` pins that, and it is the case the
     removal note originally guessed wrong -- it is not about an experiment with no *project*,
     which `effective_role` already handles by answering `owner` to a superuser.
     """

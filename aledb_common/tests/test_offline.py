@@ -25,7 +25,7 @@ ALLOWED_PREFIXES = (
     # NCBI's Sequence Viewer is a client for NCBI's own backend -- the page it draws needs
     # ncbi.nlm.nih.gov reachable whatever we do with the script file, so vendoring buys
     # nothing. Offline it never reaches a verified contig and never renders the script at
-    # all, which `aledb_seq/tests/test_ncbi_view.py` asserts directly.
+    # all, which `aledb_sample/tests/test_ncbi_view.py` asserts directly.
     "https://www.ncbi.nlm.nih.gov/projects/sviewer/js/sviewer.js",
     # Analytics, and **conditional**: the tag sits inside `{% if GOOGLE_ANALYTICS_TAG %}` and
     # that setting defaults to ''. So a deployment that has not configured analytics makes no

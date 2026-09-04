@@ -9,7 +9,7 @@ import json
 
 from aledb_mutation_editor.models import KIND_COPY, MutationEdit, MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 
 COPY = "/mutation-editor/copy/apply"
 

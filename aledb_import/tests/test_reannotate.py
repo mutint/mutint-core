@@ -19,7 +19,7 @@ from django.test import TestCase, override_settings
 
 from aledb_common import store
 from aledb_import import annotation, gd_import, reference, reference_store
-from aledb_seq.models import ExperimentReference, Mutation
+from aledb_sample.models import ExperimentReference, Mutation
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "..", "annotate", "tests", "fixtures")
 SYNTHETIC_GFF3 = os.path.join(FIXTURES, "synthetic.gff3")

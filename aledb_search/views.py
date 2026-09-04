@@ -4,14 +4,14 @@ from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.template import loader
 from django.shortcuts import render
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 from django.db.models import Q
 import operator, collections
 import aledb_common as common
 from functools import reduce
-from aledb_seq.views import mutation_table_builder
+from aledb_sample.views import mutation_table_builder
 from aledb_experiment.utils import get_user_projects, get_strains
-from aledb_seq.util import get_ref_sequences
+from aledb_sample.util import get_ref_sequences
 from aledb_experiment.ancestor import exclude_all_ancestry
 from aledb_filter.util import filter_mutation_calls
 from aledb_common.util import get_user_context

@@ -3,7 +3,7 @@ from django.urls import re_path
 from aledb_mutation_editor import views
 
 # Mounted at ^mutation-editor/ (aledb_common/urls.py). Deliberately not under ^mutations/,
-# which is aledb_seq's and names the read-only tables, nor under ^mutation-table/, which is
+# which is aledb_sample's and names the read-only tables, nor under ^mutation-table/, which is
 # the curation endpoints every table posts to. This app owns a different thing: the stored
 # mutations themselves, rather than a way of looking at them.
 urlpatterns = [

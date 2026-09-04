@@ -12,7 +12,7 @@ from aledb_experiment.models import (
 )
 from aledb_import import gd_import, reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import (
+from aledb_sample.models import (
     Mutation, MutationCall, Sample, UncalledRegion,
 )
 

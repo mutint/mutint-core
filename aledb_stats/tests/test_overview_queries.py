@@ -24,7 +24,7 @@ from django.db import connection
 from aledb_experiment.models import (
     Experiment, Population, TimePoint,
 )
-from aledb_seq.models import Mutation, MutationCall, Sample
+from aledb_sample.models import Mutation, MutationCall, Sample
 
 
 class OverviewQueryCountTestCase(TestCase):

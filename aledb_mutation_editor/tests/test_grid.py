@@ -14,7 +14,7 @@ import json
 
 from aledb_mutation_editor.models import MutationEditSet
 from aledb_mutation_editor.tests.base import EditorTestCase
-from aledb_seq.models import MutationCall
+from aledb_sample.models import MutationCall
 
 PAGE = "/mutation-editor/delete"
 
@@ -160,7 +160,7 @@ class GridPageTestCase(EditorTestCase):
         across projects even with the grid handing it a longer list."""
         from aledb_experiment.models import Experiment, Population, TimePoint
         from aledb_import.gd_import import prepare_experiment_by_id
-        from aledb_seq.models import Sample
+        from aledb_sample.models import Sample
 
         created = self.client.post(
             "/project/create/", {"name": "P2", "experiment": "E2"}).json()

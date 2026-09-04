@@ -12,7 +12,7 @@ is now the `replace_annotation` import type in `handlers.py`.
 from django.http import HttpResponse
 
 from aledb_import import gd_import
-from aledb_seq.models import Sample
+from aledb_sample.models import Sample
 
 
 def gd_export_view(request, sample_id):

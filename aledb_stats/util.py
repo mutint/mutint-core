@@ -1,10 +1,10 @@
 import re
 from aledb_common.constants import SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED
-from aledb_seq.models import UncalledRegion
-from aledb_seq.functional_change import (
+from aledb_sample.models import UncalledRegion
+from aledb_sample.functional_change import (
     FUNCTIONAL_CHANGE_TYPE_LIST, functional_change_bucket,
 )
-from aledb_seq.views.common import MUTATION_TYPE_LIST
+from aledb_sample.views.common import MUTATION_TYPE_LIST
 import collections
 import logging
 
@@ -60,7 +60,7 @@ def _reference_length(experiment_id):
     """
     if experiment_id is None:
         return 0
-    from aledb_seq.models import ExperimentReference
+    from aledb_sample.models import ExperimentReference
 
     return (ExperimentReference.objects
             .filter(experiment_id=experiment_id)
@@ -115,7 +115,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
     """
     from django.db.models import Count
     from aledb_experiment.ancestor import exclude_ancestry
-    from aledb_seq.models import MutationCall
+    from aledb_sample.models import MutationCall
 
     reseq_experiments = list(reseq_experiments)
     sample_ids = [reseq.id for reseq in reseq_experiments]
@@ -177,7 +177,7 @@ def _count_in_sql(queryset):
     because the tokens overlap (`synonymous` inside `nonsynonymous`). It groups by
     `mutation__snp_type` instead and resolves each distinct value in Python, because a severity
     hierarchy over `|`-joined values is not something `LIKE` can express -- see
-    `aledb_seq.functional_change`.
+    `aledb_sample.functional_change`.
 
     **Summing per-group distinct counts is exact, not an approximation**, and the reason is a
     constraint on anyone editing this: the group key is a column of `Mutation`, reached by a
@@ -238,7 +238,7 @@ def compute_experiment_counts(experiment_id):
     Nothing is filtered now, so there is nothing SQL cannot express, and `_count_in_python` went
     with the branch that chose it.
     """
-    from aledb_seq.util import get_evolved_call_queryset
+    from aledb_sample.util import get_evolved_call_queryset
 
     # The join, not `sample_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.

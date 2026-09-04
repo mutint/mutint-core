@@ -27,7 +27,7 @@ from aledb_dashboard.util import rebuild_mutation_counts
 from aledb_experiment.models import (
     Experiment, Population, TimePoint, Media,
 )
-from aledb_seq.models import Mutation, MutationCall, Sample
+from aledb_sample.models import Mutation, MutationCall, Sample
 
 
 class MutationCountsTestCase(TestCase):

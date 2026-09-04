@@ -3,7 +3,7 @@
 `{"status": 403, "statusText": "FORBIDDEN", "content": "..."}`, sent as HTTP **200** whatever
 the real status was, so a caller reads the outcome out of the body. That contract is not new
 and is not ours to choose: `table_template.js` has always read `result['content']` for the
-message it shows, and `aledb_seq/tests/test_table_actions.py` reads `status` out of the body
+message it shows, and `aledb_sample/tests/test_table_actions.py` reads `status` out of the body
 for the same reason.
 
 **This replaces the `djangoajax` package, which was abandoned.** Version 3.3 was its last
