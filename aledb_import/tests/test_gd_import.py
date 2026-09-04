@@ -636,9 +636,11 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         stored = Mutation.objects.get(start_position=100).genome_diff["frequency"]
         self.assertAlmostEqual(0.839314286, stored)
         self.assertIsInstance(stored, float)
-        self.assertEqual(
-            0.8393, float(MutationCall.objects.get().frequency),
-            "and it reaches the call's Decimal column")
+        # **All of it reaches the column**, which is the point of this test now. It used to
+        # assert `0.8393`: the column was `DecimalField(max_digits=5, decimal_places=4)` and
+        # threw the rest away, so the queryable copy was the degraded one while the JSON
+        # beside it kept the whole value.
+        self.assertEqual(0.839314286, MutationCall.objects.get().frequency)
 
     def test_the_same_mutation_spelled_two_ways_is_one_row(self):
         """The sharpest consequence of the bump, and a silent one.

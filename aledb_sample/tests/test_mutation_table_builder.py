@@ -292,8 +292,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         the add form actually writes, and a hand-copied set of kwargs would go on passing
         after that function changed.
         """
-        from decimal import Decimal
-
+        
         from aledb_mutation_editor.record_builder import build_call
         from aledb_sample.models import MutationCall
         from aledb_sample.util import get_reseq_ordered_dict
@@ -310,7 +309,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         MutationCall.objects.create(
             sample=sample,
             mutation=mutation,
-            **build_call(Decimal("1.0")))
+            **build_call(1.0))
         return mutation
 
     def test_a_hand_added_mutation_has_a_row_in_the_cross_sample_table(self):

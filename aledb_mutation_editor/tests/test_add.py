@@ -7,7 +7,6 @@ later re-import of the same call quietly become two rows for one mutation.
 """
 
 import json
-from decimal import Decimal
 
 from aledb_import.gd_import import synthesize_sequence_change
 from aledb_mutation_editor import history, record_builder
@@ -88,11 +87,11 @@ class AddTestCase(EditorTestCase):
         self.add(seq_id="NC_000913", position=5000, new_seq="T", frequency="0.25",
                  targets=[self.sample_a, self.sample_b])
         for call in MutationCall.objects.filter(mutation__start_position=5000):
-            self.assertEqual(Decimal("0.2500"), call.frequency)
+            self.assertEqual(0.25, call.frequency)
 
     def test_frequency_defaults_to_one(self):
         self.snp()
-        self.assertEqual(Decimal("1.0000"),
+        self.assertEqual(1.0,
                          MutationCall.objects.get(mutation__start_position=5000).frequency)
 
     def test_the_edit_set_says_what_was_added(self):

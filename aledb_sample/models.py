@@ -494,9 +494,19 @@ class MutationCall(models.Model):
     # Being always null was not merely useless: `aledb_filter` ANDed a `frequency_gatk__lt`
     # term into the exclusion, and a comparison against null is never true, so the frequency
     # cutoff excluded nothing at all.
-    frequency = models.DecimalField(null=True,
-                                    max_digits=5,
-                                    decimal_places=4)
+    #
+    # **A float, and it was `DecimalField(max_digits=5, decimal_places=4)`.** breseq's
+    # polymorphism mode reports more precision than four places -- `frequency=8.39314286e-01`
+    # is a real value out of the fixtures -- and the column rounded it to `0.8393`. The
+    # precision was never lost from the *row*: the same import writes the full float into
+    # `Mutation.supplemental_data`'s GenomeDiff record, so the copy being degraded was the
+    # queryable one, which is backwards.
+    #
+    # Nothing has to *show* the extra digits, and nothing does. Every display site formats
+    # explicitly -- `"%.2f"` in `mutation_table_builder`, `"%.1f%%"` in `breseq_report`,
+    # `"%2f"` in the interop payload -- and no template renders the value raw. Nothing
+    # aggregates or orders on it either; the only query use is `aledb_filter`'s two bounds.
+    frequency = models.FloatField(null=True)
     # Which caller produced this call. Imports record "breseq"; other
     # callers can be added alongside. Left null on rows imported before this
     # existed, which came from a gdtools COMPARE merge of breseq and

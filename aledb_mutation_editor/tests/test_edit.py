@@ -12,7 +12,6 @@ a subset of two is the smallest subset there is.
 """
 
 import json
-from decimal import Decimal
 
 from aledb_mutation_editor import history
 from aledb_mutation_editor.models import (
@@ -150,15 +149,15 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_each_sample_keeps_its_own_call(self):
         """What moves is what the mutation *is*. A frequency belongs to the sample."""
         MutationCall.objects.filter(sample=self.sample_b,
-                                        mutation=self.mut_1).update(frequency=Decimal("0.25"))
+                                        mutation=self.mut_1).update(frequency=0.25)
 
         self.edit(position=150)
 
         frequencies = {call.sample_id: call.frequency
                        for call in
                        MutationCall.objects.filter(mutation=self.mut_1)}
-        self.assertEqual(Decimal("0.7500"), frequencies[self.sample_a.id])
-        self.assertEqual(Decimal("0.2500"), frequencies[self.sample_b.id])
+        self.assertEqual(0.75, frequencies[self.sample_a.id])
+        self.assertEqual(0.25, frequencies[self.sample_b.id])
 
     def test_a_mutation_in_one_sample_behaves_the_same(self):
         self.edit(mutation=self.mut_2, position=250, new_seq="G")
@@ -319,7 +318,7 @@ class ChangeMutationTestCase(EditorTestCase):
         calls = MutationCall.objects.filter(sample=self.sample_b,
                                                        mutation=self.mut_2)
         self.assertEqual(1, calls.count())
-        self.assertEqual(Decimal("0.1000"), calls.first().frequency)
+        self.assertEqual(0.1, calls.first().frequency)
         self.assertFalse(MutationCall.objects.filter(
             sample=self.sample_b, mutation=self.mut_1).exists())
 

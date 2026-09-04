@@ -5,7 +5,7 @@ deleted but not what its frequency or the caller's evidence were would let you s
 undo it, which is most of the value gone.
 """
 
-from decimal import Decimal
+import json
 
 from aledb_common.models import DerivedDataState
 from aledb_mutation_editor import history
@@ -94,15 +94,27 @@ class SnapshotTestCase(EditorTestCase):
         # the key and dropped what was under it would still satisfy the field-set check above.
         self.assertEqual({"wt_reads": 10, "mutated_reads": 30}, snapshot["evidence"])
 
-    def test_frequency_survives_as_a_decimal_not_a_float(self):
-        """These columns keep four decimal places, which is where a float round trip moves."""
-        call = self.observe(self.sample_b, self.mut_2, frequency="0.1234")
+    def test_frequency_survives_the_json_round_trip_at_full_precision(self):
+        """It goes in as a JSON number now, not a string.
+
+        A snapshot is written to a JSONField and read back, so the assertion that matters is
+        what survives `dumps`/`loads` -- and it has to be *all* of it, since the column stopped
+        rounding to four places. This value has nine significant digits, the shape breseq's
+        polymorphism mode actually writes, and it is the reason the column is a float.
+        """
+        call = self.observe(self.sample_b, self.mut_2, frequency=0.839314286)
         snapshot = history.call_snapshot(call)
 
-        self.assertEqual("0.1234", snapshot["frequency"])
-        self.assertIsInstance(snapshot["frequency"], str)
-        self.assertEqual(Decimal("0.1234"),
-                         history._call_kwargs(snapshot)["frequency"])
+        self.assertIsInstance(snapshot["frequency"], float)
+        restored = json.loads(json.dumps(snapshot))
+        self.assertEqual(0.839314286, history._call_kwargs(restored)["frequency"])
+
+    def test_a_snapshot_written_before_the_column_was_a_float_still_restores(self):
+        """Every changeset row stored before this change holds `frequency` as a *string* --
+        that was how a `Decimal` was made JSON-safe. Restoring one must not put a string into
+        a float column, which is what the coercion in `_call_kwargs` is for."""
+        self.assertEqual(0.1234,
+                         history._call_kwargs({"frequency": "0.1234"})["frequency"])
 
     def test_the_mutation_identity_is_the_importers_get_or_create_key(self):
         """If these drift apart, a restore mints a second row for one mutation."""

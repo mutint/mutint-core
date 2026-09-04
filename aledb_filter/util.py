@@ -27,7 +27,6 @@ from two plugin pages. Keyword-only turns a call site nobody updated into a `Typ
 of a `ViewFilter` quietly landing in `filter_type`.
 """
 
-from decimal import Decimal
 
 from django.db.models import Q
 
@@ -71,16 +70,20 @@ def filtered_mutation_call_queryset(mutation_call_queryset, *, view_filter=None)
     #
     # The cutoffs are percentages and `frequency` is a fraction, which is what the /100 is.
     #
-    # Decimal, not float. `frequency` is a DecimalField(max_digits=5, decimal_places=4), and
-    # `int / 100` is a binary float that cannot represent 0.2 exactly -- so a call stored as
-    # exactly 0.2000 sits on the wrong side of a 20% cutoff depending on how the backend
-    # coerces the two types to compare them. Building the bound as a Decimal makes the
-    # comparison exact, and makes "20% means 0.2000" true rather than nearly true.
+    # **"20% means 0.2" has to be exactly true**, and this used to build the bound as a
+    # `Decimal` to make it so: `frequency` was `DecimalField(5,4)`, `int / 100` is a binary
+    # float that cannot represent 0.2, and a call stored as exactly 0.2000 then sat on
+    # whichever side of the cutoff the backend's cross-type coercion put it.
+    #
+    # The column is a float now, so both sides of the comparison are the same IEEE double --
+    # `20 / 100` and the stored value are bit-identical when the value really is 0.2 -- and
+    # there is no coercion left to get wrong. The exactness is kept; what changed is what
+    # keeps it. `test_a_call_at_exactly_the_floor_is_kept` is the guard.
     exclusion = Q()
     if view_filter.min_freq is not None:
-        exclusion.add(Q(frequency__lt=Decimal(view_filter.min_freq) / 100), Q.OR)
+        exclusion.add(Q(frequency__lt=view_filter.min_freq / 100), Q.OR)
     if view_filter.max_freq is not None:
-        exclusion.add(Q(frequency__gt=Decimal(view_filter.max_freq) / 100), Q.OR)
+        exclusion.add(Q(frequency__gt=view_filter.max_freq / 100), Q.OR)
     return mutation_call_queryset.exclude(exclusion), view_filter.genes_set
 
 

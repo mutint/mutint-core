@@ -15,7 +15,6 @@ it describes something to *hide*.
 Between them the cutoff was inert in every configuration a person could reach through the UI.
 """
 
-from decimal import Decimal
 
 from aledb_filter.util import filter_mutation_calls
 from aledb_filter.view_filter import ViewFilter
@@ -36,7 +35,7 @@ class FrequencyCutoffTestCase(EditorTestCase):
     def _at(self, mutation, frequency):
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=mutation)
-        call.frequency = Decimal(frequency)
+        call.frequency = float(frequency)
         call.save()
         return call
 
@@ -77,13 +76,27 @@ class FrequencyCutoffTestCase(EditorTestCase):
         self.assertNotIn(self.low.id, kept, "1% is below the 20% floor")
         self.assertNotIn(self.high.id, kept, "99% is above the 90% ceiling")
 
+    def test_a_call_at_exactly_the_floor_is_kept(self):
+        """The boundary, which nothing pinned until `frequency` became a float.
+
+        The cutoff is a percentage and the column is a fraction, so 20% has to mean exactly
+        0.2 and a call sitting on it is *inside* the range. This used to be guaranteed by
+        building the bound as a `Decimal` against a `DecimalField`; it is guaranteed now by
+        both sides being the same IEEE double. Either way it is a claim, and a claim with no
+        test is where a rounding change hides.
+        """
+        exact = self._at(self.mut_2, 0.2)
+        self.view_filter = ViewFilter.parse(min_freq=20)
+
+        self.assertIn(exact.id, self._kept())
+
     def test_what_lies_between_survives_both(self):
         """The other half: an exclusion that hid everything would pass the two above."""
         self._cutoffs(min_cutoff=20, max_cutoff=90)
 
         middle = MutationCall.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1)
-        self.assertEqual(Decimal("0.7500"), middle.frequency)
+        self.assertEqual(0.75, middle.frequency)
         self.assertIn(middle.id, self._kept())
 
     # --- no cutoff at either end ----------------------------------------------------------

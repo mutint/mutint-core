@@ -20,7 +20,6 @@ the reader's back, mark stale the way a filter edit does, and read through the p
 point.
 """
 
-from decimal import Decimal
 
 from aledb_common.rebuild_registry import is_stale, request_rebuild, run_rebuilds
 from aledb_mutation_editor.tests.base import EditorTestCase

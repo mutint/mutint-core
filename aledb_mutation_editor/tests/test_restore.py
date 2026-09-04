@@ -5,7 +5,6 @@ undoing everything newer, and restoring is a *new* edit set rather than a rewind
 case in `SweptMutationTestCase` is the one that justifies storing `mutation_identity` at all.
 """
 
-from decimal import Decimal
 
 from aledb_import.ale_experiment import _delete_all_orphaned_mutations
 from aledb_mutation_editor import history
@@ -35,7 +34,7 @@ class RestoreTestCase(EditorTestCase):
         restored = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         self.assertEqual(before, history.call_snapshot(restored))
-        self.assertEqual(Decimal("0.7500"), restored.frequency)
+        self.assertEqual(0.75, restored.frequency)
         # `evidence` is the first snapshotted field that is not a scalar, so it rides through
         # the log as JSON inside JSON -- `MutationEdit.snapshot` is itself a JSONField. A
         # restore that put back the key holding a string of a dict would satisfy the

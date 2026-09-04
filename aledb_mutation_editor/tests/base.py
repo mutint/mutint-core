@@ -10,7 +10,6 @@ is what issues the ProjectAccess row `can_add_experiment_filter` consults -- the
 `aledb_sample.tests.test_table_actions` does it.
 """
 
-from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -75,7 +74,7 @@ class EditorTestCase(TestCase):
             present=present,
             source="breseq",
             evidence={"wt_reads": 10, "mutated_reads": 30},
-            frequency=Decimal(frequency))
+            frequency=float(frequency))
 
     # --- assertions the suites share ------------------------------------------------------
 

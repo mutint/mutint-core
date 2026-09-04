@@ -30,7 +30,6 @@ would otherwise not have.
 """
 
 import logging
-from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
@@ -65,8 +64,6 @@ MUTATION_KEY_FIELDS = (
     "sequence_change", "gene",
 )
 
-_DECIMAL_FIELDS = ("frequency",)
-
 #: The join from a MutationCall up to its experiment. Spelled once here; it is the same
 #: traversal `aledb_sample.util` and `aledb_filter.util` use.
 _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
@@ -78,18 +75,12 @@ _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 def call_snapshot(call):
     """Every column of a MutationCall, JSON-safe.
 
-    `frequency` is a `DecimalField`, which JSON cannot carry, so it is stored as a string and
-    rebuilt with `Decimal(...)` rather than through `float` -- a round trip through float would
-    move the value at the fourth decimal place, which is exactly where that column keeps its
-    precision.
+    Every field goes in as it stands. `frequency` used to be stringified here and rebuilt with
+    `Decimal(...)` on the way out, because JSON cannot carry a `Decimal` and a round trip
+    through float would have moved the value. It is a float now, which JSON carries natively
+    and `json` round-trips exactly, so the detour is gone.
     """
-    snapshot = {}
-    for field in CALL_FIELDS:
-        value = getattr(call, field)
-        if field in _DECIMAL_FIELDS and value is not None:
-            value = str(value)
-        snapshot[field] = value
-    return snapshot
+    return {field: getattr(call, field) for field in CALL_FIELDS}
 
 
 def _call_kwargs(snapshot):
@@ -97,10 +88,12 @@ def _call_kwargs(snapshot):
     kwargs = {}
     for field in CALL_FIELDS:
         value = snapshot.get(field)
-        if field in _DECIMAL_FIELDS and value is not None:
+        # Coerced rather than trusted: a snapshot written before `frequency` became a float
+        # holds a *string*, and restoring one would put a string in a float column.
+        if field == "frequency" and value is not None:
             try:
-                value = Decimal(str(value))
-            except (InvalidOperation, ValueError):
+                value = float(value)
+            except (TypeError, ValueError):
                 value = None
         kwargs[field] = value
     return kwargs

@@ -22,7 +22,6 @@ history.
 
 import json
 import logging
-from decimal import Decimal, InvalidOperation
 
 from django.db.models import F, Q
 from django.http import JsonResponse
@@ -799,13 +798,13 @@ def _frequency(request):
     """The one frequency every selected sample's call gets."""
     raw = (request.POST.get("frequency") or "").strip()
     if not raw:
-        return Decimal("1.0")
+        return 1.0
     try:
-        value = Decimal(raw)
-    except (InvalidOperation, ValueError):
+        value = float(raw)
+    except (TypeError, ValueError):
         raise EditorError("That mutation cannot be added as entered.",
                           errors={"frequency": "Must be a number between 0 and 1."})
-    if not Decimal("0") < value <= Decimal("1"):
+    if not 0 < value <= 1:
         raise EditorError("That mutation cannot be added as entered.",
                           errors={"frequency": "Frequencies run from just above 0 to 1."})
     return value

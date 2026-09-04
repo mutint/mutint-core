@@ -21,7 +21,6 @@ that nothing ever read.
 
 import logging
 import os
-from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
@@ -588,13 +587,19 @@ def _plain(value):
 
 
 def _coerce_frequency(value):
-    """MutationCall.frequency is Decimal(5,4); default clonal 1.0."""
+    """MutationCall.frequency is a float; default clonal 1.0.
+
+    `float(value)` rather than `float(str(value))`: genomediff hands back `PreservedFloat` /
+    `PreservedInt` for numbers whose source text would not format back identically, and those
+    subclass `float` / `int` -- so this reaches the *parsed* number directly and needs none of
+    the detour through source text that `_plain` exists to undo.
+    """
     if value is None:
-        return Decimal("1.0")
+        return 1.0
     try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return Decimal("1.0")
+        return float(value)
+    except (TypeError, ValueError):
+        return 1.0
 
 
 def run_post_processing(experiment):

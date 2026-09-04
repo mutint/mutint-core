@@ -240,8 +240,7 @@ class BrowseMutationTestCase(TestCase):
         answered no to, so a mutation somebody added went unstarred in a menu whose whole job
         is saying which pileups to look at.
         """
-        from decimal import Decimal
-
+        
         from aledb_mutation_editor.record_builder import build_call
 
         other = self._second_sample()
@@ -249,7 +248,7 @@ class BrowseMutationTestCase(TestCase):
         MutationCall.objects.filter(sample=other,
                                         mutation=mutation).delete()
         MutationCall.objects.create(sample=other, mutation=mutation,
-                                        **build_call(Decimal("1.0")))
+                                        **build_call(1.0))
 
         marked = {s["id"]: s["has_mutation"]
                   for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
