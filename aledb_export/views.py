@@ -39,7 +39,14 @@ def export(request):
 
         if mut_type_str and exp_id_str:
             exp_id_set = set(exp_id_str.split(','))
-            exp_list = [exp for exp in experiments if str(exp.ale_id) in exp_id_set]
+            # `exp.id`, not `exp.ale_id`. `AleExperiment`'s primary key was called
+            # `ale_id` -- the same word as `AleId.ale_id`, which is a lineage label on
+            # a different table -- and was renamed to the implicit `id` like every
+            # other table's. These two lines were missed, so both export paths have
+            # been raising AttributeError on every request since. `paths.EXPERIMENT_PK`
+            # exists so that lookup *strings* survive that rename; an attribute access
+            # is what it cannot reach.
+            exp_list = [exp for exp in experiments if str(exp.id) in exp_id_set]
             if len(exp_list) > 0:
                 tmp_file = NamedTemporaryFile(delete=False, suffix=".zip")
                 try:
@@ -98,14 +105,14 @@ def export_experiment_index(request):
 
         if exp_id_str:
             exp_id_set = set(exp_id_str.split(','))
-            exp_list = [exp for exp in experiments if str(exp.ale_id) in exp_id_set]
+            exp_list = [exp for exp in experiments if str(exp.id) in exp_id_set]
             if len(exp_list) > 0:
                 response = HttpResponse(content_type='text/csv')
                 response['Content-Disposition'] = 'attachment; filename="experiment_index.csv"'
                 writer = csv.writer(response)
                 writer.writerow(['ale_id', 'experiment_name', 'project_id', 'project_name', 'person', 'is_public', 'date'])
-                for e in sorted(exp_list, key=lambda x: x.ale_id):
-                    writer.writerow([e.ale_id, e.name, e.project_id, e.project.name, e.person, e.project.is_public, e.date_str()])
+                for e in sorted(exp_list, key=lambda x: x.id):
+                    writer.writerow([e.id, e.name, e.project_id, e.project.name, e.person, e.project.is_public, e.date_str()])
                 return response
         return HttpResponse("Invalid export request.", status=400)
     except Exception:
