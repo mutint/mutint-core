@@ -372,7 +372,7 @@ class MutationCall(models.Model):
 
 
 
-class ExperimentReference(models.Model):
+class ReferenceSequence(models.Model):
     """The single reference genome shared by every sample in an experiment.
 
     breseq writes `data/reference.gff3` and `data/reference.fasta` alongside each run, so the
@@ -381,7 +381,15 @@ class ExperimentReference(models.Model):
     is what keeps an experiment from silently ending up with mixed references.
 
     The files themselves live in the managed store, at a path derived from
-    `experiment_id` -- see aledb_common.store.
+    `experiment_id` -- see aledb_common.store, whose `experiment_reference_dir` keeps that
+    name: it is a directory on disk, not this table.
+
+    **One row holds many sequences.** `seq_ids` is the contig list, so this is a reference
+    *genome* rather than a single sequence, and it is one-to-one with the experiment. Worth
+    knowing beside `aledb_import.annotate.model.ReferenceSequences`, which is one letter
+    away and is a different thing entirely: the parsed genome held in memory for the
+    annotator and the mutation editor's validator, built from the stored files rather than
+    stored itself. `aledb_mutation_editor.validation` handles both.
     """
 
     experiment = models.OneToOneField("aledb_experiment.Experiment",
@@ -475,7 +483,7 @@ class NcbiSequence(models.Model):
     ]
 
     #: aledb_import.reference.sequence_digest() of this contig -- sha256 of its uppercased
-    #: bases alone. Equal to the `sha256` of an ExperimentReference.seq_ids entry, which is
+    #: bases alone. Equal to the `sha256` of an ReferenceSequence.seq_ids entry, which is
     #: how a contig finds its row.
     sha256 = models.CharField(max_length=64, unique=True)
     length = models.BigIntegerField()

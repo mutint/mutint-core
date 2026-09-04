@@ -38,7 +38,7 @@ from aledb_import.ale_experiment import (
 )
 from aledb_import.tests import breseq_fixture
 from aledb_sample.models import (
-    ExperimentReference,
+    ReferenceSequence,
     Mutation,
     MutationCall,
     Sample,
@@ -88,7 +88,7 @@ class ImportCommandTestCase(TestCase):
 
     def test_the_reference_is_established_from_the_sample(self):
         self.upload()
-        reference = ExperimentReference.objects.get()
+        reference = ReferenceSequence.objects.get()
         self.assertEqual(Experiment.objects.get(), reference.experiment)
         self.assertTrue(reference.fasta_sha256)
 

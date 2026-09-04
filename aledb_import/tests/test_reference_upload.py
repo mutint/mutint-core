@@ -9,7 +9,7 @@ from aledb_common import store
 from aledb_import import reference as reference_io
 from aledb_import import reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_sample.models import ExperimentReference
+from aledb_sample.models import ReferenceSequence
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 
@@ -299,14 +299,14 @@ class ReferenceStoreTestCase(TestCase):
         reference, created = self._establish(
             experiment, "other.fasta", other, replace=True)
         self.assertFalse(created)
-        self.assertEqual(ExperimentReference.objects.count(), 1)
+        self.assertEqual(ReferenceSequence.objects.count(), 1)
         self.assertEqual(reference.total_length, len(breseq_fixture.SEQUENCE_B))
 
     def test_reuploading_the_same_reference_is_accepted(self):
         experiment = self._experiment()
         self._establish(experiment, "REL606.gbk", self._genbank_bytes())
         self._establish(experiment, "REL606.gbk", self._genbank_bytes())
-        self.assertEqual(ExperimentReference.objects.count(), 1)
+        self.assertEqual(ReferenceSequence.objects.count(), 1)
 
     def test_same_sequence_with_new_annotation_refreshes_it(self):
         """Sequence is the invariant, so this is the same reference -- but an explicit

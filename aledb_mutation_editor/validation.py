@@ -10,7 +10,7 @@ Four stages, in increasing cost, and the order is load-bearing:
 1. **Shape** -- the fields this type requires are present and parse. Needs nothing.
 2. **Sequence-independent no-ops** -- an AMP to one copy is not an amplification. Needs
    nothing, so it is refused even on an experiment with no reference.
-3. **Contig and bounds** -- read from `ExperimentReference.seq_ids`, which carries a `length`
+3. **Contig and bounds** -- read from `ReferenceSequence.seq_ids`, which carries a `length`
    per contig, so this costs one already-loaded JSON column and no file access.
 4. **Sequence no-ops** -- the only stage that needs the bases. Loading them parses the whole
    genome (seconds on a cold worker, memoised after), which is why `load_references` is a
@@ -237,7 +237,7 @@ def _sequence_independent_noop(attributes, mutation_type, errors):
 
 
 def contig_lengths(reference_row):
-    """{seq_id: length} from `ExperimentReference.seq_ids` -- no file access."""
+    """{seq_id: length} from `ReferenceSequence.seq_ids` -- no file access."""
     if reference_row is None:
         return {}
     return {entry.get("id"): entry.get("length")
@@ -354,7 +354,7 @@ def validate_record(raw, mutation_type, reference_row=None, load_references=None
     `attributes` is the coerced, spec-named field dict, and is only meaningful when `errors`
     is empty. `errors` maps a field name to a sentence written for the person who typed it.
 
-    reference_row     `ExperimentReference` or None. None means the experiment has no stored
+    reference_row     `ReferenceSequence` or None. None means the experiment has no stored
                       reference, and stages 3 and 4 are skipped -- the mutation is stored
                       unvalidated against any sequence, which the page says out loud.
     load_references   zero-argument callable returning `ReferenceSequences` or None, called

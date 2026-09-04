@@ -13,7 +13,7 @@ from aledb_import.models import STATE_FINALIZED, UploadSession
 from aledb_import.tests import breseq_fixture
 from aledb_import.upload_session import UploadError, sanitize_relative_path
 from aledb_experiment.models import Project
-from aledb_sample.models import ExperimentReference, Sample
+from aledb_sample.models import ReferenceSequence, Sample
 
 
 class SanitizePathTestCase(TestCase):
@@ -217,7 +217,7 @@ class UploadSessionEndpointTestCase(TestCase):
         reseq = Sample.objects.get()
         self.assertTrue(reseq.bam_stored)
         self.assertTrue(os.path.isfile(store.sample_path(reseq.id, store.SAMPLE_BAM)))
-        self.assertEqual(ExperimentReference.objects.count(), 1)
+        self.assertEqual(ReferenceSequence.objects.count(), 1)
 
         self.assertFalse(os.path.exists(store.staging_dir(upload_id)),
                          "staging directory should be removed on finalize")

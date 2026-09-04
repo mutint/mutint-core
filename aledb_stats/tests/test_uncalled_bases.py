@@ -3,7 +3,7 @@
 The column used to be a count of `UncalledRegion` rows, which said nothing about how much
 of the genome was actually missing: one region can be a single base or a megabase.
 
-The share needs `ExperimentReference.total_length`, which defaults to 0 and is absent
+The share needs `ReferenceSequence.total_length`, which defaults to 0 and is absent
 entirely for an experiment whose reference was never established -- so "unknown" is a state
 this has to have an answer for, and the answer is to print no percentage rather than 0%.
 """
@@ -12,7 +12,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import Experiment, Population, Project
-from aledb_sample.models import ExperimentReference, Sample, UncalledRegion
+from aledb_sample.models import ReferenceSequence, Sample, UncalledRegion
 from aledb_stats.util import get_reseq_experiment_info_list, uncalled_bases_per_sample
 
 
@@ -35,7 +35,7 @@ class UncalledBasesTestCase(TestCase):
             sample=sample or self.sample, seq_id=seq_id, start=start, end=end)
 
     def reference(self, total_length):
-        return ExperimentReference.objects.create(
+        return ReferenceSequence.objects.create(
             experiment=self.experiment, gff3_sha256="a", fasta_sha256="b",
             total_length=total_length)
 

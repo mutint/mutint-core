@@ -26,7 +26,7 @@ from aledb_experiment.permissions import can_view_project
 from aledb_sample.breseq_report import build_rows, is_mixed
 from aledb_sample.locus import LOCUS_BUFFER_BASES, mutation_extent
 from aledb_sample.tracks import MUTATION_TRACK_ID, database_tracks
-from aledb_sample.models import (ExperimentReference, Mutation, MutationCall,
+from aledb_sample.models import (ReferenceSequence, Mutation, MutationCall,
                               Sample)
 from aledb_sample.util import get_mutation_call_queryset, get_ordered_reseq_queryset
 from aledb_experiment import paths
@@ -260,7 +260,7 @@ def _reference_urls(experiment):
     """The igv reference config, or None when the experiment has no reference genome."""
     try:
         reference = experiment.reference
-    except ExperimentReference.DoesNotExist:
+    except ReferenceSequence.DoesNotExist:
         return None
 
     config = {

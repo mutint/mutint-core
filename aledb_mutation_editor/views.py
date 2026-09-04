@@ -525,10 +525,10 @@ def _initial_fields(mutation):
 
 
 def _reference_row(experiment):
-    """The experiment's `ExperimentReference`, or None. Reads no files."""
-    from aledb_sample.models import ExperimentReference
+    """The experiment's `ReferenceSequence`, or None. Reads no files."""
+    from aledb_sample.models import ReferenceSequence
 
-    return ExperimentReference.objects.filter(experiment=experiment).first()
+    return ReferenceSequence.objects.filter(experiment=experiment).first()
 
 
 @ensure_csrf_cookie

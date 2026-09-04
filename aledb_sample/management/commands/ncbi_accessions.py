@@ -20,7 +20,7 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 
 from aledb_sample import ncbi
-from aledb_sample.models import ExperimentReference, NcbiSequence
+from aledb_sample.models import ReferenceSequence, NcbiSequence
 
 #: Seconds between requests. NCBI allows 3/second unauthenticated and 10 with a key; this is
 #: comfortably under the slower limit and this command is never in a hurry.
@@ -66,10 +66,10 @@ class Command(BaseCommand):
     def _contigs(self, experiment_id):
         """Every stored contig as `(experiment, seq_id, length, sha256)`, deduplicated later.
 
-        Read from `ExperimentReference.seq_ids`, which already carries the per-contig digest
+        Read from `ReferenceSequence.seq_ids`, which already carries the per-contig digest
         the whole check compares against -- no reference file is opened here or anywhere.
         """
-        references = ExperimentReference.objects.select_related("experiment")
+        references = ReferenceSequence.objects.select_related("experiment")
         if experiment_id is not None:
             references = references.filter(experiment_id=experiment_id)
             if not references.exists():

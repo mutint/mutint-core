@@ -9,7 +9,7 @@ from aledb_common import import_registry
 from aledb_import.tests import breseq_fixture
 from aledb_import.tests.test_reference_upload import write_genbank
 from aledb_experiment.models import Experiment
-from aledb_sample.models import ExperimentReference, Sample
+from aledb_sample.models import ReferenceSequence, Sample
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 
@@ -67,7 +67,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertIsNone(results["REL606.gbk"]["error"])
         self.assertIsNone(results["s1"]["error"])
         self.assertIsNone(results["Ara-1_500gen_762B.gd"]["error"])
-        self.assertEqual(ExperimentReference.objects.count(), 1)
+        self.assertEqual(ReferenceSequence.objects.count(), 1)
         self.assertEqual(Sample.objects.count(), 2)
 
     def test_reference_is_established_before_a_bare_gd_even_though_listed_later(self):
@@ -108,7 +108,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         summary = self._run(import_type="reference")
 
         self.assertIsNone(summary["files"][0]["error"])
-        self.assertEqual(ExperimentReference.objects.count(), 1)
+        self.assertEqual(ReferenceSequence.objects.count(), 1)
 
     def test_choosing_a_type_reports_files_it_does_not_claim(self):
         """The point of choosing explicitly: nothing gets quietly routed elsewhere."""
@@ -177,26 +177,26 @@ class ImportRegistryRoutingTestCase(TestCase):
         summary = self._run()
 
         self.assertIsNone(summary["files"][0]["error"])
-        self.assertEqual(ExperimentReference.objects.count(), 1)
+        self.assertEqual(ReferenceSequence.objects.count(), 1)
 
     def test_replace_annotation_refuses_when_there_is_no_reference_yet(self):
         write_genbank(os.path.join(self.drop, "REL606.gbk"))
         summary = self._run(import_type="replace_annotation")
 
         self.assertIn("no reference genome yet", summary["files"][0]["error"])
-        self.assertEqual(ExperimentReference.objects.count(), 0)
+        self.assertEqual(ReferenceSequence.objects.count(), 0)
 
     def test_replace_annotation_refreshes_the_annotation_of_the_same_genome(self):
         self._write("ref.fasta", breseq_fixture.fasta_text(SEQUENCES))
         self._run(import_type="reference")
-        before = ExperimentReference.objects.get()
+        before = ReferenceSequence.objects.get()
 
         os.remove(os.path.join(self.drop, "ref.fasta"))
         write_genbank(os.path.join(self.drop, "REL606.gbk"))
         summary = self._run(import_type="replace_annotation")
 
         self.assertIsNone(summary["files"][0]["error"])
-        after = ExperimentReference.objects.get()
+        after = ReferenceSequence.objects.get()
         self.assertEqual(after.pk, before.pk)
         self.assertEqual(after.fasta_sha256, before.fasta_sha256)      # same genome
         self.assertNotEqual(after.gff3_sha256, before.gff3_sha256)     # new annotation
@@ -210,7 +210,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         """
         write_genbank(os.path.join(self.drop, "REL606.gbk"))
         self._run(import_type="reference")
-        before = ExperimentReference.objects.get()
+        before = ReferenceSequence.objects.get()
 
         os.remove(os.path.join(self.drop, "REL606.gbk"))
         self._write("other.gff3", breseq_fixture.gff3_text(
@@ -218,7 +218,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         summary = self._run(import_type="replace_annotation")
 
         self.assertIn("annotation can only be replaced", summary["files"][0]["error"])
-        after = ExperimentReference.objects.get()
+        after = ReferenceSequence.objects.get()
         self.assertEqual(after.fasta_sha256, before.fasta_sha256)
         self.assertEqual(after.gff3_sha256, before.gff3_sha256)
 
@@ -229,7 +229,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         annotation alone rather than replacing a gene table with nothing."""
         write_genbank(os.path.join(self.drop, "REL606.gbk"))
         self._run(import_type="reference")
-        before = ExperimentReference.objects.get().gff3_sha256
+        before = ReferenceSequence.objects.get().gff3_sha256
 
         os.remove(os.path.join(self.drop, "REL606.gbk"))
         self._write("same.fasta", breseq_fixture.fasta_text(
@@ -237,7 +237,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         summary = self._run(import_type="replace_annotation")
 
         self.assertIsNone(summary["files"][0]["error"])
-        self.assertEqual(before, ExperimentReference.objects.get().gff3_sha256)
+        self.assertEqual(before, ReferenceSequence.objects.get().gff3_sha256)
 
 
 class PluggableImportTypeTestCase(TestCase):

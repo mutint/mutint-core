@@ -18,7 +18,7 @@ from django.test import TestCase, override_settings
 
 from aledb_common import store
 from aledb_import import annotation, gd_import, reference, reference_store
-from aledb_sample.models import ExperimentReference, Mutation, MutationCall
+from aledb_sample.models import ReferenceSequence, Mutation, MutationCall
 
 ANNOTATE_FIXTURES = os.path.join(
     os.path.dirname(__file__), "..", "annotate", "tests", "fixtures")
@@ -76,7 +76,7 @@ class AnnotatedImportTestCase(TestCase):
             path, reference_store.annotation_reference_path(self.experiment.id))
 
     def test_the_stored_reference_still_hashes_as_expected(self):
-        stored = ExperimentReference.objects.get()
+        stored = ReferenceSequence.objects.get()
         expected_gff3, sequences = reference.normalize_reference(self.reference_path)
         self.assertEqual(reference_store.digest(expected_gff3), stored.gff3_sha256)
         self.assertEqual(

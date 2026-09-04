@@ -1319,7 +1319,7 @@ validation names the problem instead of silently discarding what was typed.
 
 **Validation is four stages and the order is load-bearing** (`validation.py`): shape, then the
 no-ops that need no sequence (an AMP to one copy — refused even with no reference stored, since
-nothing about it depends on one), then contig and bounds from `ExperimentReference.seq_ids`
+nothing about it depends on one), then contig and bounds from `ReferenceSequence.seq_ids`
 (which carries a `length` per contig, so no file is opened), then the sequence no-ops. Only
 that last stage loads the reference, which is why `load_references` is a *callable* and why
 `SEQUENCE_CHECKED_TYPES` exists: a DEL's validity never depends on which bases it removes, and
@@ -2941,7 +2941,7 @@ All apps use the `aledb_*` namespace. Key apps:
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}` --
     everything from the sample's `data/` folder, `output/` is not consulted;
     stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
-    records the shared reference as `ExperimentReference`. Samples whose reference does not
+    records the shared reference as `ReferenceSequence`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
     range support by `aledb_sample/views/alignments.py`, which resolves every path from a
     primary key rather than from anything the client sends.
@@ -2949,9 +2949,9 @@ All apps use the `aledb_*` namespace. Key apps:
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
     storing them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`).
-    The shared reference is recorded as `ExperimentReference`; a sample whose reference
+    The shared reference is recorded as `ReferenceSequence`; a sample whose reference
     *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the
-    sole invariant (`ExperimentReference.matches_sequence`) — differing annotation never
+    sole invariant (`ReferenceSequence.matches_sequence`) — differing annotation never
     rejects, and a folder import leaves the stored annotation alone so import order cannot
     redefine it; only the explicit `replace_annotation` import type refreshes it. A bare `.gd` is *skipped* here —
     it has no reference for that check to apply to.

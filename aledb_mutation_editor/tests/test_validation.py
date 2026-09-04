@@ -34,7 +34,7 @@ class FakeReference:
 
 
 class FakeReferenceRow:
-    """Stands in for `ExperimentReference`; only `seq_ids` is read."""
+    """Stands in for `ReferenceSequence`; only `seq_ids` is read."""
 
     def __init__(self, seq_ids):
         self.seq_ids = seq_ids
