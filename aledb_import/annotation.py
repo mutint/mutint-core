@@ -38,8 +38,10 @@ class ReferenceUnavailable(Exception):
 # They are also left in the `annotation` blob, so that blob stays self-describing
 # and rendering is a plain dict merge rather than a column-by-column rebuild.
 PROMOTED_COLUMNS = ('snp_type', 'mutation_category', 'gene_name', 'locus_tag')
-POSITION_COLUMNS = (('start_position', 'position_start'),
-                    ('end_position', 'position_end'))
+# `start_position` is deliberately absent: it is set at creation from the record's own
+# `position` and is part of `MUTATION_KEY_FIELDS`, so re-annotation must not rewrite it.
+# `mutation_interval` computes the identical value, which is what makes leaving it out safe.
+POSITION_COLUMNS = (('end_position', 'position_end'),)
 
 _reference_cache = {}
 

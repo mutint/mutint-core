@@ -34,7 +34,7 @@ class TableActionsTestCase(TestCase):
         self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.mutation = Mutation.objects.create(
-            mutation_type="SNP", position=1000, sequence_change="A>T",
+            mutation_type="SNP", start_position=1000, sequence_change="A>T",
             experiment=self.experiment)
 
         from aledb_import.gd_import import prepare_experiment_by_id
@@ -139,7 +139,7 @@ class TableActionsTestCase(TestCase):
 
     def test_a_mutation_with_no_experiment_is_superuser_only(self):
         """It cannot be scoped to a project, so there is nothing to grant against."""
-        loose = Mutation.objects.create(mutation_type="SNP", position=7,
+        loose = Mutation.objects.create(mutation_type="SNP", start_position=7,
                                         sequence_change="G>C", experiment=None)
 
         response = self._post(TAG_MUT, {"mut_id": loose.id, "tag_name": "contaminated"})

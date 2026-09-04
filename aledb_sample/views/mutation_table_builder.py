@@ -97,7 +97,7 @@ def get_mutation_table_body(user: User, mutation_calls: [], reseq_dict, experime
 
             table_row.append(_get_mutation_tags(mutation.tags))
             table_row.append(_refseq_cell(mutation, verified_contigs))
-            table_row.append(format(mutation.position, ',d'))
+            table_row.append(format(mutation.start_position, ',d'))
             table_row.append(mutation.mutation_type)
             table_row.append(mutation.sequence_change)
             table_row.append(get_gene_table_entry(mutation))

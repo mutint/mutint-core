@@ -65,7 +65,7 @@ def ncbi_view(request):
                              if experiment is not None and experiment.project else ""),
         "ale_project_id": experiment.project_id if experiment is not None else None,
         "title": "%s %s:%s" % (experiment.name if experiment is not None else "Mutation",
-                               mutation.seq_id, mutation.position),
+                               mutation.seq_id, mutation.start_position),
         "template_header": "Reference annotation",
         "mutation": mutation,
         "contig_name": mutation.seq_id or "",

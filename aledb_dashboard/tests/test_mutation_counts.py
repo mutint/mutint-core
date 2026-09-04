@@ -82,7 +82,7 @@ class MutationCountsTestCase(TestCase):
         the table's "Details" cell, so it stays available to the one test that proves it no
         longer decides anything."""
         return Mutation.objects.create(
-            experiment=self.experiment, mutation_type=mutation_type, position=position,
+            experiment=self.experiment, mutation_type=mutation_type, start_position=position,
             sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _observe(self, sample, mutation, frequency="1.0000"):

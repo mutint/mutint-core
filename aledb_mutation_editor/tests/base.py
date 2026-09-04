@@ -58,7 +58,7 @@ class EditorTestCase(TestCase):
         return Mutation.objects.create(
             experiment=experiment or self.experiment,
             mutation_type="SNP",
-            position=position,
+            start_position=position,
             seq_id="NC_000913",
             feature_length=None,
             sequence_change=sequence_change,

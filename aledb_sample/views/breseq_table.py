@@ -167,7 +167,7 @@ def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
         view_filter=view_filter)
     # filter_mutation_calls orders across samples; within one sample breseq
     # orders by reference then position.
-    call.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.position))
+    call.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.start_position))
     return build_rows(call, browse_url=_browse_url(reseq),
                       ancestral_mutation_ids=ancestral_ids,
                       refseq_url=_refseq_url())

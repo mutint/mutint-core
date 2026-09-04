@@ -90,7 +90,10 @@ def build_identity(mutation_type, gd_data, annotated_record):
     annotated.update(annotation.display_values(annotated_record))
 
     return {
-        "position": attributes.get("position"),
+        # The record's `position` is the mutation's start -- the `.gd` field keeps breseq's
+        # name, the column says which end it is. Both spellings appear in this dict on
+        # purpose: the keys are `MUTATION_KEY_FIELDS`, the values come from the record.
+        "start_position": attributes.get("position"),
         "seq_id": attributes.get("seq_id"),
         "mutation_type": mutation_type,
         "feature_length": attributes.get("size"),

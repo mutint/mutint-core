@@ -76,7 +76,7 @@ class ReannotateTestCase(TestCase):
         return set(Mutation.objects.values_list("mutation_category", flat=True))
 
     def mutation_at(self, position):
-        return Mutation.objects.get(experiment=self.experiment, position=position)
+        return Mutation.objects.get(experiment=self.experiment, start_position=position)
 
     def gene_names(self):
         return set(Mutation.objects.values_list("gene_name", flat=True))
@@ -124,11 +124,11 @@ class ReannotateTestCase(TestCase):
 
     def test_genbank_gives_the_same_result_as_gff3(self):
         self.run_command(reference_path=SYNTHETIC_GBK, skip_rebuilds=True)
-        from_genbank = {m.position: (m.gene_name, m.snp_type, m.annotation)
+        from_genbank = {m.start_position: (m.gene_name, m.snp_type, m.annotation)
                         for m in Mutation.objects.all()}
 
         self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
-        from_gff3 = {m.position: (m.gene_name, m.snp_type, m.annotation)
+        from_gff3 = {m.start_position: (m.gene_name, m.snp_type, m.annotation)
                      for m in Mutation.objects.all()}
 
         self.assertEqual(from_genbank, from_gff3)

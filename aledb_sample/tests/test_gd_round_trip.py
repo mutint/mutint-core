@@ -54,7 +54,7 @@ class GdRoundTripTestCase(TestCase):
         data["type"] = record.type
         mutation = Mutation.objects.create(
             mutation_type=record.type,
-            position=record.attributes.get("position", 1),
+            start_position=record.attributes.get("position", 1),
             seq_id=record.attributes.get("seq_id", ""),
             sequence_change="", gd_data=data)
         # Refetched, so what is asserted is what the database gave back rather than the dict

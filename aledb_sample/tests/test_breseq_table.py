@@ -230,7 +230,7 @@ class BreseqTablePageTestCase(TestCase):
     # --- rows with no annotation ---------------------------------------------
 
     def test_a_mutation_with_no_annotation_falls_back_to_the_flat_columns(self):
-        mutation = Mutation.objects.get(position=130)
+        mutation = Mutation.objects.get(start_position=130)
         mutation.annotation = None
         mutation.save()
 

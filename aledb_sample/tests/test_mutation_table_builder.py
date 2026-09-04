@@ -300,7 +300,7 @@ class ManuallyAddedMutationTestCase(TestCase):
 
         mutation = Mutation.objects.create(
             experiment=self.experiment,
-            position=4242,
+            start_position=4242,
             seq_id="test_ref",
             mutation_type="SNP",
             sequence_change="A->G",

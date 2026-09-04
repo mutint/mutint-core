@@ -218,7 +218,6 @@ class Mutation(models.Model):
                                      help_text="""Use breseq mutation codes, see the genome diff site
                                      on the barrick lab wiki (http://tinyurl.com/l3fvnap) for more
                                      information""")
-    position = models.IntegerField()
     feature_length = models.IntegerField(blank=True,
                                          null=True)
     sequence_change = models.CharField(max_length=200)
@@ -260,7 +259,22 @@ class Mutation(models.Model):
     mutation_category = models.CharField(max_length=100, db_index=True, **blank_field)
     gene_name = models.TextField(**blank_field)
     locus_tag = models.TextField(**blank_field)
-    start_position = models.IntegerField(**blank_field)
+    #: Where the mutation starts on `seq_id`, 1-based -- the `.gd` record's own `position`.
+    #:
+    #: **This was two columns.** `position` held the record's value and `start_position` held
+    #: what `annotate.annotator.mutation_interval` computed, and for everything ALEdb stores
+    #: those are the same number: that function returns `(position, ...)` for every type in
+    #: `MUTATION_TYPES`, and the only types whose start differs -- the MC/UN/CN evidence
+    #: entries -- are filtered out before annotation and are never stored as mutations.
+    #:
+    #: So one column, named for which end it is. `end_position` beside it is what actually
+    #: carries the extent, and stays nullable because an unannotated mutation has none.
+    #:
+    #: **Written once, at creation, and never afterwards.** It is one of the six
+    #: `MUTATION_KEY_FIELDS`, so it is part of a mutation's identity in `get_or_create` and in
+    #: the change log -- an annotator that rewrote it would fork the row on the next import.
+    #: That is why `annotation.POSITION_COLUMNS` no longer lists it.
+    start_position = models.IntegerField()
     end_position = models.IntegerField(**blank_field)
 
     # Everything else breseq annotates -- gene_position, gene_strand, the codon_*
@@ -281,7 +295,7 @@ class Mutation(models.Model):
     gd_data = models.JSONField(**blank_field)
 
     def __unicode__(self):
-        return u"%d %s" % (self.position,
+        return u"%d %s" % (self.start_position,
                            self.sequence_change)
 
     def to_gd_line(self) -> str:
@@ -302,7 +316,8 @@ class Mutation(models.Model):
 
         if self.mutation_type not in TYPE_SPECIFIC_FIELDS:
             return ""
-        attributes = {'seq_id': self.seq_id, 'position': self.position}
+        # The `.gd` field keeps breseq's name; only our column was ambiguous.
+        attributes = {'seq_id': self.seq_id, 'position': self.start_position}
         if self.feature_length is not None:
             attributes['size'] = self.feature_length
         return str(Record(self.mutation_type, self.id, parent_ids=None, **attributes))

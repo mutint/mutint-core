@@ -50,14 +50,14 @@ class AddTestCase(EditorTestCase):
         response = self.snp()
 
         self.assertEqual(200, response.status_code, response.content)
-        mutation = Mutation.objects.get(position=5000)
+        mutation = Mutation.objects.get(start_position=5000)
         self.assertEqual("SNP", mutation.mutation_type)
         self.assertEqual("NC_000913", mutation.seq_id)
         self.assertIn(mutation.id, self.call_ids(self.sample_a))
 
     def test_it_is_scoped_to_the_experiment(self):
         self.snp()
-        self.assertEqual(self.experiment, Mutation.objects.get(position=5000).experiment)
+        self.assertEqual(self.experiment, Mutation.objects.get(start_position=5000).experiment)
 
     def test_adding_to_three_samples_is_one_edit_set(self):
         third = self.make_sample(flask_number=3)
@@ -72,13 +72,13 @@ class AddTestCase(EditorTestCase):
     def test_one_mutation_row_serves_every_sample(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T",
                  targets=[self.sample_a, self.sample_b])
-        self.assertEqual(1, Mutation.objects.filter(position=5000).count())
+        self.assertEqual(1, Mutation.objects.filter(start_position=5000).count())
 
     def test_the_call_is_marked_manual(self):
         """Distinguishes a typed call from a called one everywhere `source` is read. Null
         would mean 'imported before the column existed', which is a different thing."""
         self.snp()
-        call = MutationCall.objects.get(mutation__position=5000)
+        call = MutationCall.objects.get(mutation__start_position=5000)
         self.assertEqual("manual", call.source)
         self.assertTrue(call.present,
                         "a typed mutation is in the sample, and every cross-sample table "
@@ -87,13 +87,13 @@ class AddTestCase(EditorTestCase):
     def test_the_frequency_is_applied_to_every_sample(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T", frequency="0.25",
                  targets=[self.sample_a, self.sample_b])
-        for call in MutationCall.objects.filter(mutation__position=5000):
+        for call in MutationCall.objects.filter(mutation__start_position=5000):
             self.assertEqual(Decimal("0.2500"), call.frequency)
 
     def test_frequency_defaults_to_one(self):
         self.snp()
         self.assertEqual(Decimal("1.0000"),
-                         MutationCall.objects.get(mutation__position=5000).frequency)
+                         MutationCall.objects.get(mutation__start_position=5000).frequency)
 
     def test_the_edit_set_says_what_was_added(self):
         note = MutationEditSet.objects.get().note if self.snp() else None
@@ -128,7 +128,7 @@ class AddTestCase(EditorTestCase):
                     Record(mutation_type, 1, parent_ids=None,
                            seq_id="NC_000913", position=position, **fields))
                 self.assertEqual(
-                    expected, Mutation.objects.get(position=position).sequence_change)
+                    expected, Mutation.objects.get(start_position=position).sequence_change)
 
     def test_an_existing_mutation_is_reused_not_duplicated(self):
         """Adding a call another sample already carries should link the row, as a re-import
@@ -136,8 +136,8 @@ class AddTestCase(EditorTestCase):
         self.add(seq_id="NC_000913", position=5000, new_seq="T", targets=[self.sample_a])
         self.add(seq_id="NC_000913", position=5000, new_seq="T", targets=[self.sample_b])
 
-        self.assertEqual(1, Mutation.objects.filter(position=5000).count())
-        self.assertEqual(2, MutationCall.objects.filter(mutation__position=5000).count())
+        self.assertEqual(1, Mutation.objects.filter(start_position=5000).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation__start_position=5000).count())
 
     def test_a_sample_that_already_has_it_is_skipped(self):
         self.snp()
@@ -146,7 +146,7 @@ class AddTestCase(EditorTestCase):
         self.assertEqual(0, response.json()["added"])
         self.assertEqual([self.sample_a.label],
                          response.json()["already"])
-        self.assertEqual(1, MutationCall.objects.filter(mutation__position=5000).count())
+        self.assertEqual(1, MutationCall.objects.filter(mutation__start_position=5000).count())
 
     def test_skipping_everything_writes_no_edit_set(self):
         self.snp()
@@ -159,7 +159,7 @@ class AddTestCase(EditorTestCase):
     def test_gd_data_is_the_verbatim_record(self):
         self.add("MOB", seq_id="NC_000913", position=5000,
                  repeat_name="IS150", strand=-1, duplication_size=9)
-        gd_data = Mutation.objects.get(position=5000).gd_data
+        gd_data = Mutation.objects.get(start_position=5000).gd_data
 
         self.assertEqual("MOB", gd_data["type"])
         self.assertEqual(-1, gd_data["strand"], "integers stay integers")
@@ -170,11 +170,11 @@ class AddTestCase(EditorTestCase):
         """`to_gd_line` falls back to the row's own pk, which exists and is unique. A record
         built before its row does not have one to give."""
         self.snp()
-        self.assertNotIn("id", Mutation.objects.get(position=5000).gd_data)
+        self.assertNotIn("id", Mutation.objects.get(start_position=5000).gd_data)
 
     def test_it_round_trips_to_a_gd_line(self):
         self.snp()
-        mutation = Mutation.objects.get(position=5000)
+        mutation = Mutation.objects.get(start_position=5000)
         line = mutation.to_gd_line().split("\t")
 
         self.assertEqual("SNP", line[0])
@@ -186,7 +186,7 @@ class AddTestCase(EditorTestCase):
         """gd_data lives on the Mutation, which every sample observing it shares; a frequency
         is one sample's."""
         self.add(seq_id="NC_000913", position=5000, new_seq="T", frequency="0.5")
-        self.assertNotIn("frequency", Mutation.objects.get(position=5000).gd_data)
+        self.assertNotIn("frequency", Mutation.objects.get(start_position=5000).gd_data)
 
     # --- refusals --------------------------------------------------------------------------
 
@@ -195,7 +195,7 @@ class AddTestCase(EditorTestCase):
 
         self.assertEqual(400, response.status_code)
         self.assertIn("size", response.json()["errors"])
-        self.assertEqual(0, Mutation.objects.filter(position=5000).count())
+        self.assertEqual(0, Mutation.objects.filter(start_position=5000).count())
 
     def test_several_bad_fields_all_come_back(self):
         response = self.add("MOB", seq_id="NC_000913", position=5000,
@@ -238,11 +238,11 @@ class AddTestCase(EditorTestCase):
     def test_an_addition_restores_away(self):
         self.add(seq_id="NC_000913", position=5000, new_seq="T",
                  targets=[self.sample_a, self.sample_b])
-        self.assertEqual(2, MutationCall.objects.filter(mutation__position=5000).count())
+        self.assertEqual(2, MutationCall.objects.filter(mutation__start_position=5000).count())
 
         history.restore(self.experiment, self.owner, None)
 
-        self.assertEqual(0, MutationCall.objects.filter(mutation__position=5000).count())
+        self.assertEqual(0, MutationCall.objects.filter(mutation__start_position=5000).count())
         self.assertEqual(4, self.call_count(), "the fixture's own rows are untouched")
 
 
@@ -337,7 +337,7 @@ class AnnotatedAddTestCase(EditorTestCase):
 
         self.assertEqual(400, response.status_code)
         self.assertIn("already %s" % current, response.json()["errors"]["new_seq"])
-        self.assertEqual(0, Mutation.objects.filter(position=150).count())
+        self.assertEqual(0, Mutation.objects.filter(start_position=150).count())
 
     def test_a_snp_to_a_different_base_is_accepted(self):
         current = self.base_at(150)
@@ -360,19 +360,19 @@ class AnnotatedAddTestCase(EditorTestCase):
         mutation imported before a reference existed looks like."""
         self.add(position=150, new_seq="A")
 
-        mutation = Mutation.objects.get(position=150)
+        mutation = Mutation.objects.get(start_position=150)
         self.assertEqual("thrA", mutation.gene_name)
         self.assertTrue(mutation.annotation, "the annotation blob is populated")
         self.assertTrue(mutation.snp_type, "a promoted column apply_to fills")
 
     def test_the_gene_column_is_the_gene_not_the_string_None(self):
         self.add(position=150, new_seq="A")
-        self.assertEqual("thrA", Mutation.objects.get(position=150).gene)
+        self.assertEqual("thrA", Mutation.objects.get(start_position=150).gene)
 
     def test_an_intergenic_position_still_annotates(self):
         """Position 450 sits between thrA (101-400) and thrB (501-800)."""
         self.add(position=450, new_seq="A")
-        self.assertTrue(Mutation.objects.get(position=450).gene_name)
+        self.assertTrue(Mutation.objects.get(start_position=450).gene_name)
 
     # --- the page ------------------------------------------------------------------------------
 
@@ -395,7 +395,7 @@ class RecordBuilderTestCase(EditorTestCase):
         self.assertFalse(annotated, "the fixture experiment has no reference")
 
         identity = record_builder.build_identity("SNP", gd_data, record)
-        self.assertEqual(42, identity["position"])
+        self.assertEqual(42, identity["start_position"])
         self.assertEqual("NC_000913", identity["seq_id"])
         self.assertEqual("G", identity["sequence_change"])
         self.assertIsNone(identity["annotation"])

@@ -37,7 +37,7 @@ class ExportViewTestCase(TestCase):
         sample = Sample.objects.create(
             population=ale, time_point=500, name="1-1", is_clonal=True, source_name="1-500-1-1")
         mutation = Mutation.objects.create(
-            experiment=self.experiment, mutation_type="SNP", position=150,
+            experiment=self.experiment, mutation_type="SNP", start_position=150,
             sequence_change="T", gene="thrA", seq_id="SYN001")
         MutationCall.objects.create(sample=sample, mutation=mutation,
                                         frequency=1.0)

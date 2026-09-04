@@ -77,21 +77,20 @@ SEG_PRESENT = -1.0
 DRAW_SAMPLE_TRACK = False
 
 
-def _interval(position, start_position, end_position):
+def _interval(start_position, end_position):
     """`(start, end)` for igv: 0-based, end-exclusive.
 
-    The promoted `start_position`/`end_position` columns are what the annotator wrote from
-    breseq's own rule, so they are preferred exactly as `locus.mutation_extent` prefers them.
-    A mutation imported before a reference was available has neither and is a point at
-    `position`. Deliberately not a call into `mutation_extent`: that takes a model instance
-    and this reads tuples, and re-deriving from `gd_data` here would mean fetching a JSONField
-    for every row to answer what two integer columns already say.
+    `start_position` is always set -- it is the record's own position, written at creation --
+    so only the extent can be missing. A mutation imported before a reference was available
+    has no `end_position` and is drawn as a point.
+
+    It took a third argument, `position`, which was the same number as `start_position` in
+    every row: the two columns merged. Deliberately still not a call into `mutation_extent`:
+    that takes a model instance and this reads tuples, and re-deriving from `gd_data` here
+    would mean fetching a JSONField for every row to answer what two integer columns say.
     """
-    if start_position and end_position:
-        start_1, end_1 = start_position, end_position
-    else:
-        start_1 = end_1 = position
-    return max(0, start_1 - 1), end_1
+    end_1 = end_position or start_position
+    return max(0, start_position - 1), end_1
 
 
 def _label(mutation_type, sequence_change, gene):
@@ -144,17 +143,17 @@ def mutation_features(experiment_id, contig=None):
     rows = (Mutation.objects
             .filter(id__in=calls.values("mutation_id"))
             .exclude(seq_id__isnull=True)
-            .order_by("seq_id", "position"))
+            .order_by("seq_id", "start_position"))
     if contig:
         rows = rows.filter(seq_id=contig)
 
     features = []
-    for (pk, seq_id, position, start_position, end_position, mutation_type,
+    for (pk, seq_id, start_position, end_position, mutation_type,
          sequence_change, snp_type, gene) in rows.values_list(
-            "id", "seq_id", "position", "start_position", "end_position",
+            "id", "seq_id", "start_position", "end_position",
             "mutation_type", "sequence_change", "snp_type", "gene"
     ).iterator(chunk_size=2000):
-        start, end = _interval(position, start_position, end_position)
+        start, end = _interval(start_position, end_position)
         bucket = functional_change_bucket(snp_type)
         features.append({
             "chr": seq_id,
@@ -203,9 +202,9 @@ def sample_features(experiment_id, contig=None):
         rows = rows.filter(mutation__seq_id=contig)
 
     features = []
-    for (seq_id, position, start_position, end_position, frequency,
+    for (seq_id, start_position, end_position, frequency,
          sample_id) in rows.order_by(*sample_order("sample__")).values_list(
-            "mutation__seq_id", "mutation__position", "mutation__start_position",
+            "mutation__seq_id", "mutation__start_position",
             "mutation__end_position", "frequency", "sample_id",
     ).iterator(chunk_size=2000):
         if not seq_id or sample_id not in labels:
@@ -213,7 +212,7 @@ def sample_features(experiment_id, contig=None):
             # type the listing excludes. Drawing it would put a row on the track that the
             # tables beside it do not show.
             continue
-        start, end = _interval(position, start_position, end_position)
+        start, end = _interval(start_position, end_position)
         features.append({
             "chr": seq_id,
             "start": start,

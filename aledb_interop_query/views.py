@@ -385,7 +385,7 @@ def _serialize_mutations(mutations, search_gene=None):
             'mutation_call_id': m.id,
             'mutation_id': m.mutation_id,
             'gene': gene,
-            'position': m.mutation.position,
+            'position': m.mutation.start_position,
             'mutation_type': m.mutation.mutation_type,
             'sequence_change': m.mutation.sequence_change,
             'details': m.mutation.protein_change,

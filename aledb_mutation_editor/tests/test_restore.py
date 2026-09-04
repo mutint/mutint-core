@@ -171,7 +171,7 @@ class SweptMutationTestCase(EditorTestCase):
         edit = edit_set.edits.get()
         edit.refresh_from_db()
         self.assertIsNone(edit.mutation_id)
-        self.assertEqual(200, edit.mutation_identity["position"])
+        self.assertEqual(200, edit.mutation_identity["start_position"])
 
     def test_restore_recreates_the_mutation_and_the_call(self):
         call = MutationCall.objects.get(sample=self.sample_a,
@@ -182,7 +182,7 @@ class SweptMutationTestCase(EditorTestCase):
 
         history.restore(self.experiment, self.owner, None)
 
-        recreated = Mutation.objects.get(experiment=self.experiment, position=200)
+        recreated = Mutation.objects.get(experiment=self.experiment, start_position=200)
         self.assertNotEqual(self.mut_2.pk, recreated.pk,
                             "a swept row cannot come back under its old id")
         self.assertEqual("C>G", recreated.sequence_change)
@@ -205,4 +205,4 @@ class SweptMutationTestCase(EditorTestCase):
         history.restore(self.experiment, self.owner, None)
 
         self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
-                                                    position=100).count())
+                                                    start_position=100).count())

@@ -137,7 +137,7 @@ def browse_mutation(request):
     context.update({
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
-        "title": "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.position),
+        "title": "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.start_position),
         "template_header": "Alignments",
         "mutation": mutation,
         "mutation_call": call,
@@ -202,7 +202,7 @@ def browse_at(request):
         "mutation_call_id": call.pk if call is not None else None,
         "url": browse_url_for(mutation, reseq, call),
         "title": "%s %s:%s" % (reseq.experiment.name,
-                               mutation.seq_id, mutation.position),
+                               mutation.seq_id, mutation.start_position),
         "calling": sorted(_samples_calling(mutation)),
         "table_html": table_html,
     })

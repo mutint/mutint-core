@@ -31,7 +31,7 @@ def mutation_extent(mutation):
         return mutation.start_position, mutation.end_position
     if mutation.gd_data:
         return mutation_interval(mutation.gd_data)
-    return mutation.position, mutation.position
+    return mutation.start_position, mutation.start_position
 
 
 def buffered_extent(mutation, contig_length=None, buffer_bases=LOCUS_BUFFER_BASES):

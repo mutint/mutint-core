@@ -93,7 +93,7 @@ class SummaryTestCase(TestCase):
 
     def _mutation(self, mutation_type, snp_type, gene, protein_change=""):
         return Mutation.objects.create(
-            experiment=self.experiment, mutation_type=mutation_type, position=1,
+            experiment=self.experiment, mutation_type=mutation_type, start_position=1,
             sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _filter(self, **fields):

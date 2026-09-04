@@ -40,7 +40,7 @@ class ApplyEditsTestCase(EditorTestCase):
         """
         self._delete(self.sample_a, self.mut_2)
         self.mut_2.refresh_from_db()
-        self.assertEqual(200, self.mut_2.position)
+        self.assertEqual(200, self.mut_2.start_position)
 
     def test_it_leaves_other_samples_alone(self):
         self._delete(self.sample_a, self.mut_1)
@@ -110,7 +110,7 @@ class SnapshotTestCase(EditorTestCase):
 
         for field in history.MUTATION_KEY_FIELDS:
             self.assertIn(field, identity)
-        self.assertEqual(100, identity["position"])
+        self.assertEqual(100, identity["start_position"])
         self.assertEqual("NC_000913", identity["seq_id"])
         # Carried so a recreated row renders and round-trips to a .gd line as before.
         self.assertEqual(self.mut_1.gd_data, identity["gd_data"])

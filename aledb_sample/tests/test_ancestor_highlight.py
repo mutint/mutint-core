@@ -42,7 +42,7 @@ class TestTheTint(BreseqAncestorTestCase):
     def test_the_rows_are_still_there(self):
         """Tinted, not hidden -- the whole point of the exception."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
-        self.assertContains(self.get(sample_id=self.sample_b.id), str(self.mut_1.position))
+        self.assertContains(self.get(sample_id=self.sample_b.id), str(self.mut_1.start_position))
 
 
 class TestReachingTheAncestor(BreseqAncestorTestCase):

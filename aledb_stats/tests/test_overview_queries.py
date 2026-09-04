@@ -50,7 +50,7 @@ class OverviewQueryCountTestCase(TestCase):
                 population=ale, time_point=100 + number, name="1-1", is_clonal=True,
                 source_name="1-%d-1-1" % (100 + number))
             mutation = Mutation.objects.create(
-                experiment=experiment, mutation_type="SNP", position=number,
+                experiment=experiment, mutation_type="SNP", start_position=number,
                 sequence_change="A>T", protein_change="nonsynonymous (A1T)", gene="thrA")
             MutationCall.objects.create(
                 sample=sample, mutation=mutation,

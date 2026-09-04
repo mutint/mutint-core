@@ -236,7 +236,7 @@ class BreseqFolderImportTestCase(TestCase):
         self._import()
 
         positions = set(
-            MutationCall.objects.values_list("mutation__position", flat=True))
+            MutationCall.objects.values_list("mutation__start_position", flat=True))
         self.assertEqual(positions, {100, 200},
                          "the surviving sample must be plate-a's, not plate-b's")
         self.assertEqual(Sample.objects.count(), 1)

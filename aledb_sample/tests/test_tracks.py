@@ -44,8 +44,8 @@ class CoordinateTestCase(_Fixture):
         features = tracks.mutation_features(self.experiment.id)
         feature = next(f for f in features if f["mutationId"] == mutation.id)
 
-        self.assertEqual(mutation.position - 1, feature["start"])
-        self.assertEqual(mutation.position, feature["end"])
+        self.assertEqual(mutation.start_position - 1, feature["start"])
+        self.assertEqual(mutation.start_position, feature["end"])
         self.assertEqual(mutation.seq_id, feature["chr"])
 
     def test_a_span_keeps_its_length(self):
@@ -59,7 +59,7 @@ class CoordinateTestCase(_Fixture):
 
     def test_position_one_does_not_go_negative(self):
         Mutation.objects.filter(pk=Mutation.objects.first().pk).update(
-            position=1, start_position=None, end_position=None)
+            start_position=1, end_position=None)
         self.assertTrue(all(f["start"] >= 0
                             for f in tracks.mutation_features(self.experiment.id)))
 

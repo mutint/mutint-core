@@ -155,7 +155,7 @@ def _is_storable(record):
     The parser is lenient now: a line missing positional columns is read as far as it goes,
     with the missing fields set to None, and the problem recorded in `document.parse_errors`.
     That is the right call for reading a file -- one bad line should not cost the other
-    hundred -- but such a record cannot be stored: `Mutation.position` is NOT NULL, so
+    hundred -- but such a record cannot be stored: `Mutation.start_position` is NOT NULL, so
     handing it on turns a reported bad line into an IntegrityError that rolls back the whole
     sample. Skipping it here is what makes leniency actually lenient.
 
@@ -439,7 +439,10 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
 
         mutation, created = Mutation.objects.get_or_create(
             experiment=experiment,
-            position=attributes.get("position"),
+            # The record's `position` is the mutation's start; `mutation_interval`
+            # returns exactly this for every type we store, so there is nothing to
+            # derive and the column can be NOT NULL from creation.
+            start_position=attributes.get("position"),
             seq_id=attributes.get("seq_id"),
             mutation_type=record.type,
             feature_length=attributes.get("size"),
@@ -516,7 +519,7 @@ def export_gd_text(seq_experiment):
     calls = (MutationCall.objects
                 .filter(sample=seq_experiment)
                 .select_related("mutation")
-                .order_by("mutation__position"))
+                .order_by("mutation__start_position"))
     for mutation_call in calls:
         gd_line = mutation_call.mutation.to_gd_line()
         if gd_line:

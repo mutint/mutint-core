@@ -615,16 +615,16 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         summary = self._import_text("SNP\t.\t.\tREL606\t100\tA\n")
 
         self.assertEqual(1, summary["total_mutations"])
-        self.assertIsNone(Mutation.objects.get(position=100).gd_data["id"])
+        self.assertIsNone(Mutation.objects.get(start_position=100).gd_data["id"])
 
     def test_it_writes_the_dot_back_rather_than_the_string_None(self):
         """The old version emitted `None` in the id column, producing a file breseq cannot
         read. Fixed by the bump, and worth pinning so it cannot come back."""
         self._import_text("SNP\t.\t.\tREL606\t100\tA\n")
-        line = Mutation.objects.get(position=100).to_gd_line().split("\t")
+        line = Mutation.objects.get(start_position=100).to_gd_line().split("\t")
 
         self.assertEqual(".", line[1])
-        self.assertNotIn("None", Mutation.objects.get(position=100).to_gd_line())
+        self.assertNotIn("None", Mutation.objects.get(start_position=100).to_gd_line())
 
     # --- numbers ------------------------------------------------------------------------------
 
@@ -633,7 +633,7 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         but the value must."""
         self._import_text("SNP\t1\t.\tREL606\t100\tA\tfrequency=8.39314286e-01\n")
 
-        stored = Mutation.objects.get(position=100).gd_data["frequency"]
+        stored = Mutation.objects.get(start_position=100).gd_data["frequency"]
         self.assertAlmostEqual(0.839314286, stored)
         self.assertIsInstance(stored, float)
         self.assertEqual(
@@ -651,6 +651,6 @@ class NewParserBehaviourTestCase(GdImportTestCase):
         self._import_text("DEL\t1\t.\tREL606\t100\t42\n", experiment="gd exp")
         self._import_text("DEL\t1\t.\tREL606\t100\t0042\n", experiment="gd exp")
 
-        rows = Mutation.objects.filter(position=100, mutation_type="DEL")
+        rows = Mutation.objects.filter(start_position=100, mutation_type="DEL")
         self.assertEqual(1, rows.count(), "one mutation, however the size was written")
         self.assertEqual("del 42 bp", rows.get().sequence_change)

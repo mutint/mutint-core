@@ -73,9 +73,9 @@ class BrowseMutationTestCase(TestCase):
         from aledb_sample.views.browse import LOCUS_BUFFER_BASES, _locus
 
         mutation = self.call.mutation
-        mutation.position = 5000          # clear of the contig start, so nothing is clamped
+        mutation.start_position = 5000          # clear of the contig start, so nothing is clamped
         mutation.start_position, mutation.end_position = 5000, 25000
-        mutation.save(update_fields=["position", "start_position", "end_position"])
+        mutation.save(update_fields=["start_position", "end_position"])
 
         contig, _, span = _locus(mutation).partition(":")
         start, _, end = span.partition("-")
@@ -85,12 +85,19 @@ class BrowseMutationTestCase(TestCase):
         self.assertEqual(int(end), 25000 + LOCUS_BUFFER_BASES)
 
     def test_an_unannotated_mutation_is_measured_from_its_gd_data(self):
-        """Imported before a reference arrived, it has no extent columns -- but the same
-        breseq rule applies to the raw record, or a DEL would collapse to a point."""
+        """Imported before a reference arrived, it has no *extent* -- but the same breseq
+        rule applies to the raw record, or a DEL would collapse to a point.
+
+        Only `end_position` is cleared. `start_position` used to be clearable too, when the
+        annotator owned it and `position` held the record's value beside it; the two columns
+        are one now, it is written at creation, and it is NOT NULL -- so "unannotated" means
+        the extent is unknown, never the start.
+        """
         from aledb_sample.views.browse import _extent
 
         mutation = self.call.mutation
-        mutation.start_position = mutation.end_position = None
+        mutation.start_position = 5000
+        mutation.end_position = None
         mutation.gd_data = {"type": "DEL", "seq_id": "ref", "position": 5000, "size": 20001}
         mutation.save(update_fields=["start_position", "end_position", "gd_data"])
 
@@ -98,8 +105,8 @@ class BrowseMutationTestCase(TestCase):
 
     def test_a_mutation_near_the_contig_start_does_not_go_below_one(self):
         mutation = self.call.mutation
-        mutation.start_position = mutation.end_position = mutation.position = 5
-        mutation.save(update_fields=["position", "start_position", "end_position"])
+        mutation.start_position = mutation.end_position = 5
+        mutation.save(update_fields=["start_position", "end_position"])
 
         from aledb_sample.views.browse import _locus
         self.assertIn(":1-", _locus(mutation))

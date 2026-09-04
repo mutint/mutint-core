@@ -131,7 +131,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(200, response.status_code, response.content)
         self.mut_1.refresh_from_db()
-        self.assertEqual(150, self.mut_1.position)
+        self.assertEqual(150, self.mut_1.start_position)
         self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     def test_the_mutation_keeps_its_primary_key(self):
@@ -164,7 +164,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.edit(mutation=self.mut_2, position=250, new_seq="G")
 
         self.mut_2.refresh_from_db()
-        self.assertEqual(250, self.mut_2.position)
+        self.assertEqual(250, self.mut_2.start_position)
         self.assertEqual(1, MutationCall.objects.filter(mutation=self.mut_2).count())
 
     def test_the_type_can_change_too(self):
@@ -202,15 +202,15 @@ class ChangeMutationTestCase(EditorTestCase):
         added = MutationEdit.objects.filter(operation="add")
         self.assertEqual(2, removed.count())
         self.assertEqual(2, added.count())
-        self.assertEqual({100}, {c.mutation_identity["position"] for c in removed})
-        self.assertEqual({150}, {c.mutation_identity["position"] for c in added})
+        self.assertEqual({100}, {c.mutation_identity["start_position"] for c in removed})
+        self.assertEqual({150}, {c.mutation_identity["start_position"] for c in added})
 
     def test_restoring_to_before_the_edit_undoes_it(self):
         self.edit(position=150)
 
         history.restore(self.experiment, self.owner, edit_set=None)
 
-        positions = {call.mutation.position
+        positions = {call.mutation.start_position
                      for call in MutationCall.objects.all()}
         self.assertIn(100, positions)
 
@@ -219,7 +219,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         history.restore(self.experiment, self.owner, edit_set=None)
 
-        at_100 = MutationCall.objects.filter(mutation__position=100)
+        at_100 = MutationCall.objects.filter(mutation__start_position=100)
         self.assertEqual(2, at_100.count())
 
     def test_a_restore_mints_a_new_row_rather_than_moving_the_edited_one_back(self):
@@ -237,7 +237,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         history.restore(self.experiment, self.owner, edit_set=None)
 
-        restored = MutationCall.objects.filter(mutation__position=100).first().mutation
+        restored = MutationCall.objects.filter(mutation__start_position=100).first().mutation
         self.assertNotEqual(original, restored.pk)
         self.assertFalse(
             MutationCall.objects.filter(mutation__pk=original).exists(),
@@ -252,7 +252,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(200, response.status_code, response.content)
         moved = MutationCall.objects.get(sample=self.sample_b,
-                                             mutation__position=150)
+                                             mutation__start_position=150)
         stayed = MutationCall.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1)
         self.assertNotEqual(self.mut_1.pk, moved.mutation_id)
@@ -264,13 +264,13 @@ class ChangeMutationTestCase(EditorTestCase):
         self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
         self.mut_1.refresh_from_db()
-        self.assertEqual(100, self.mut_1.position)
+        self.assertEqual(100, self.mut_1.start_position)
         self.assertEqual(1, MutationCall.objects.filter(mutation=self.mut_1).count())
 
     def test_a_subset_mints_a_row_when_the_values_are_new(self):
         self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
-        minted = Mutation.objects.get(experiment=self.experiment, position=150)
+        minted = Mutation.objects.get(experiment=self.experiment, start_position=150)
         self.assertNotEqual(self.mut_1.pk, minted.pk)
         self.assertEqual("SNP", minted.mutation_type)
         self.assertEqual("NC_000913", minted.seq_id)
@@ -288,7 +288,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
         self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_2).count())
         self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
-                                                    position=150).count())
+                                                    start_position=150).count())
 
     def test_the_minted_row_carries_the_new_record_and_the_old_one_keeps_its_own(self):
         """`gd_data` is what `to_gd_line()` round-trips for gdtools APPLY, so the two rows
@@ -296,7 +296,7 @@ class ChangeMutationTestCase(EditorTestCase):
         changed, and re-annotating it as though it had is the bug this pins."""
         self.edit(position=150, target_sample_ids=[self.sample_b.id])
 
-        minted = Mutation.objects.get(experiment=self.experiment, position=150)
+        minted = Mutation.objects.get(experiment=self.experiment, start_position=150)
         self.mut_1.refresh_from_db()
         self.assertEqual(150, minted.gd_data["position"])
         self.assertEqual(100, self.mut_1.gd_data["position"])
@@ -341,7 +341,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(
             {self.mut_1.pk},
-            set(MutationCall.objects.filter(mutation__position=100)
+            set(MutationCall.objects.filter(mutation__start_position=100)
                 .values_list("mutation_id", flat=True)))
         self.assertEqual(2, MutationCall.objects.filter(mutation=self.mut_1).count())
 
@@ -354,7 +354,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.mut_1.refresh_from_db()
         self.assertEqual(before, self.mut_1.pk)
-        self.assertEqual(150, self.mut_1.position)
+        self.assertEqual(150, self.mut_1.start_position)
 
     def test_naming_no_samples_still_means_all_of_them(self):
         """The endpoint's contract before it could take a subset, which callers that do not
@@ -379,7 +379,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(404, response.status_code)
         self.assertIn("do not carry", response.json()["error"])
         self.mut_2.refresh_from_db()
-        self.assertEqual(200, self.mut_2.position)
+        self.assertEqual(200, self.mut_2.start_position)
 
     def test_changing_nothing_is_refused(self):
         """Applied twice: the first is a real change, the second asks for what it already
@@ -417,10 +417,10 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertFalse(MutationCall.objects.filter(mutation=self.mut_1).exists())
         self.assertTrue(Mutation.objects.filter(pk=self.mut_1.pk).exists())
         self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
-                                                    position=150).count(),
+                                                    start_position=150).count(),
                          "joined the existing row rather than minting a second at 150")
         self.mut_1.refresh_from_db()
-        self.assertEqual(100, self.mut_1.position,
+        self.assertEqual(100, self.mut_1.start_position,
                          "the emptied row is left as it was, not moved as well")
 
     def test_a_value_breseq_would_reject_is_refused_per_field(self):
@@ -429,7 +429,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(400, response.status_code)
         self.assertIn("position", response.json()["errors"])
         self.mut_1.refresh_from_db()
-        self.assertEqual(100, self.mut_1.position)
+        self.assertEqual(100, self.mut_1.start_position)
 
     def test_a_locked_experiment_refuses_the_change(self):
         from django.utils import timezone
@@ -441,7 +441,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(403, response.status_code)
         self.mut_1.refresh_from_db()
-        self.assertEqual(100, self.mut_1.position)
+        self.assertEqual(100, self.mut_1.start_position)
 
     def test_a_reader_may_not_change_anything(self):
         from django.contrib.auth.models import User
@@ -453,7 +453,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(403, response.status_code)
         self.mut_1.refresh_from_db()
-        self.assertEqual(100, self.mut_1.position)
+        self.assertEqual(100, self.mut_1.start_position)
 
     def test_a_mutation_nothing_observes_is_not_edited_in_silence(self):
         """`apply_mutation_edit` answers None rather than moving a row with no state to log."""
@@ -465,4 +465,4 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertIsNone(result)
         orphan.refresh_from_db()
-        self.assertEqual(777, orphan.position)
+        self.assertEqual(777, orphan.start_position)

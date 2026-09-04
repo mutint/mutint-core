@@ -96,7 +96,7 @@ class ImportCommandTestCase(TestCase):
     def test_mutations_are_annotated(self):
         self.upload()
         # breseq_fixture's reference carries one gene, thrA, spanning 50..150.
-        mutation = Mutation.objects.get(position=100)
+        mutation = Mutation.objects.get(start_position=100)
         self.assertEqual("thrA", mutation.gene_name)
         self.assertTrue(mutation.mutation_category)
         self.assertIsNotNone(mutation.annotation)

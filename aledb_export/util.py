@@ -55,7 +55,7 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
 
     rows += ([
             "" if mutation.seq_id is None else mutation.seq_id,
-            format(mutation.position, ',d'),
+            format(mutation.start_position, ',d'),
             mutation.mutation_type,
             mutation.sequence_change,
             mutation.gene,
