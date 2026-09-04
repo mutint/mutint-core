@@ -52,7 +52,7 @@ class AddTestCase(EditorTestCase):
         self.assertEqual(200, response.status_code, response.content)
         mutation = Mutation.objects.get(position=5000)
         self.assertEqual("SNP", mutation.mutation_type)
-        self.assertEqual("NC_000913", mutation.reseq_reference)
+        self.assertEqual("NC_000913", mutation.seq_id)
         self.assertIn(mutation.id, self.call_ids(self.sample_a))
 
     def test_it_is_scoped_to_the_experiment(self):
@@ -396,7 +396,7 @@ class RecordBuilderTestCase(EditorTestCase):
 
         identity = record_builder.build_identity("SNP", gd_data, record)
         self.assertEqual(42, identity["position"])
-        self.assertEqual("NC_000913", identity["reseq_reference"])
+        self.assertEqual("NC_000913", identity["seq_id"])
         self.assertEqual("G", identity["sequence_change"])
         self.assertIsNone(identity["annotation"])
 

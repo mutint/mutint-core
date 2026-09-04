@@ -54,7 +54,7 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
                                                       reseq_ordered_dict]]
 
     rows += ([
-            "" if mutation.reseq_reference is None else mutation.reseq_reference,
+            "" if mutation.seq_id is None else mutation.seq_id,
             format(mutation.position, ',d'),
             mutation.mutation_type,
             mutation.sequence_change,

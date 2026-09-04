@@ -58,7 +58,7 @@ def _annotated_row(entry):
 def _plain_row(mutation):
     """A row for a mutation with no stored annotation."""
     return {
-        "seq_id": mutation.reseq_reference or "",
+        "seq_id": mutation.seq_id or "",
         "position": commify(str(mutation.position)),
         "mutation": mutation.sequence_change or "",
         "annotation": mutation.protein_change or "",

@@ -84,7 +84,7 @@ class Command(BaseCommand):
         for name in plan.unchanged:
             self.stdout.write("  %-30s    (unchanged)" % name)
         affected = Mutation.objects.filter(
-            experiment=experiment, reseq_reference__in=list(plan.mapping)).count()
+            experiment=experiment, seq_id__in=list(plan.mapping)).count()
         self.stdout.write("\n%d mutation(s) would be rewritten." % affected)
         self.stdout.write(
             "Stored alignments keep their current names and go on working; igv is given an "

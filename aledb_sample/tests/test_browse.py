@@ -53,7 +53,7 @@ class BrowseMutationTestCase(TestCase):
         html = response.content.decode("utf-8")
 
         mutation = self.call.mutation
-        self.assertIn("%s:" % mutation.reseq_reference, html)          # locus contig
+        self.assertIn("%s:" % mutation.seq_id, html)          # locus contig
         self.assertIn("/mutations/alignments/%d/bam" % self.reseq.id, html)
         self.assertIn("/mutations/alignments/%d/bai" % self.reseq.id, html)
         self.assertIn("/mutations/reference/%d/fasta" % self.experiment.id, html)
@@ -80,7 +80,7 @@ class BrowseMutationTestCase(TestCase):
         contig, _, span = _locus(mutation).partition(":")
         start, _, end = span.partition("-")
 
-        self.assertEqual(contig, mutation.reseq_reference)
+        self.assertEqual(contig, mutation.seq_id)
         self.assertEqual(int(start), 5000 - LOCUS_BUFFER_BASES)
         self.assertEqual(int(end), 25000 + LOCUS_BUFFER_BASES)
 

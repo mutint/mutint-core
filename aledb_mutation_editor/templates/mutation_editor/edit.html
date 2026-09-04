@@ -73,7 +73,7 @@
 
             <h4>Currently</h4>
             <table class="table">
-                <tr><th>Reference</th><td>{{ mutation.reseq_reference|default_if_none:"" }}</td></tr>
+                <tr><th>Reference</th><td>{{ mutation.seq_id|default_if_none:"" }}</td></tr>
                 <tr><th>Position</th><td>{{ mutation.position }}</td></tr>
                 <tr><th>Type</th><td>{{ mutation.mutation_type }}</td></tr>
                 <tr><th>Change</th><td>{{ mutation.sequence_change }}</td></tr>

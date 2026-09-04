@@ -139,19 +139,19 @@ def mutation_features(experiment_id, contig=None):
 
     calls = get_evolved_call_queryset(experiment_id)
     if contig:
-        calls = calls.filter(mutation__reseq_reference=contig)
+        calls = calls.filter(mutation__seq_id=contig)
 
     rows = (Mutation.objects
             .filter(id__in=calls.values("mutation_id"))
-            .exclude(reseq_reference__isnull=True)
-            .order_by("reseq_reference", "position"))
+            .exclude(seq_id__isnull=True)
+            .order_by("seq_id", "position"))
     if contig:
-        rows = rows.filter(reseq_reference=contig)
+        rows = rows.filter(seq_id=contig)
 
     features = []
     for (pk, seq_id, position, start_position, end_position, mutation_type,
          sequence_change, snp_type, gene) in rows.values_list(
-            "id", "reseq_reference", "position", "start_position", "end_position",
+            "id", "seq_id", "position", "start_position", "end_position",
             "mutation_type", "sequence_change", "snp_type", "gene"
     ).iterator(chunk_size=2000):
         start, end = _interval(position, start_position, end_position)
@@ -200,12 +200,12 @@ def sample_features(experiment_id, contig=None):
 
     rows = get_evolved_call_queryset(experiment_id).filter(present=True)
     if contig:
-        rows = rows.filter(mutation__reseq_reference=contig)
+        rows = rows.filter(mutation__seq_id=contig)
 
     features = []
     for (seq_id, position, start_position, end_position, frequency,
          sample_id) in rows.order_by(*sample_order("sample__")).values_list(
-            "mutation__reseq_reference", "mutation__position", "mutation__start_position",
+            "mutation__seq_id", "mutation__position", "mutation__start_position",
             "mutation__end_position", "frequency", "sample_id",
     ).iterator(chunk_size=2000):
         if not seq_id or sample_id not in labels:

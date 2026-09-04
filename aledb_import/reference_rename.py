@@ -7,7 +7,7 @@ it is a rename, and this module plans and applies it.
 
 Two things make it more than a column update.
 
-**The name is persisted in more places than the obvious one.** `Mutation.reseq_reference` is
+**The name is persisted in more places than the obvious one.** `Mutation.seq_id` is
 the visible one, but `to_gd_line()` reads the name out of the verbatim `gd_data` instead, and
 `gd_data` embeds names in more keys than `seq_id`: `region` on CON/INT and `mob_region` on an
 annotated MOB are both `seq:start-end`. `Mutation.sequence_change` duplicates the region
@@ -32,7 +32,7 @@ from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
 
-# `Mutation.reseq_reference` is CharField(max_length=200).
+# `Mutation.seq_id` is CharField(max_length=200).
 MAX_NAME_LENGTH = 200
 
 # A contig name is written into tab-separated files (.gd, the SAM header, the alias table)
@@ -356,30 +356,30 @@ def _rename_mutations(Mutation, experiment, mapping):
 
     Computed entirely from the original values before anything is written, which is what
     makes a *swap* (A→B, B→A) land correctly. Two sequential `UPDATE ... SET
-    reseq_reference` statements per pair would collapse one -- and `Mutation` has no unique
+    seq_id` statements per pair would collapse one -- and `Mutation` has no unique
     constraint, so the result would be silent duplicates rather than an IntegrityError.
     """
     queryset = Mutation.objects.filter(experiment=experiment).only(
-        "id", "reseq_reference", "gd_data", "sequence_change")
+        "id", "seq_id", "gd_data", "sequence_change")
     batch, total = [], 0
     for mutation in queryset.iterator(chunk_size=BATCH):
-        new_reference = mapping.get(mutation.reseq_reference, mutation.reseq_reference)
+        new_reference = mapping.get(mutation.seq_id, mutation.seq_id)
         new_gd_data, gd_changed = rewrite_gd_data(mutation.gd_data, mapping)
         new_change = rewrite_value(mutation.sequence_change, mapping)
-        if (new_reference == mutation.reseq_reference and not gd_changed
+        if (new_reference == mutation.seq_id and not gd_changed
                 and new_change == mutation.sequence_change):
             continue
-        mutation.reseq_reference = new_reference
+        mutation.seq_id = new_reference
         mutation.gd_data = new_gd_data
         mutation.sequence_change = new_change
         batch.append(mutation)
         if len(batch) >= BATCH:
             Mutation.objects.bulk_update(
-                batch, ["reseq_reference", "gd_data", "sequence_change"])
+                batch, ["seq_id", "gd_data", "sequence_change"])
             total += len(batch)
             batch = []
     if batch:
-        Mutation.objects.bulk_update(batch, ["reseq_reference", "gd_data", "sequence_change"])
+        Mutation.objects.bulk_update(batch, ["seq_id", "gd_data", "sequence_change"])
         total += len(batch)
     return total
 

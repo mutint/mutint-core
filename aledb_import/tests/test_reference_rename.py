@@ -227,12 +227,12 @@ class RenameApplicationTestCase(TestCase):
         return reference_rename.apply_rename(self.experiment, self.reference, plan)
 
     def test_mutations_carry_the_new_name_in_both_places(self):
-        """`to_gd_line()` takes the name from `gd_data`, not from `reseq_reference`, so
+        """`to_gd_line()` takes the name from `gd_data`, not from `seq_id`, so
         rewriting one and not the other makes exports silently disagree with the table."""
         self._rename()
 
         for mutation in Mutation.objects.filter(experiment=self.experiment):
-            self.assertEqual("NC_TEST.1", mutation.reseq_reference)
+            self.assertEqual("NC_TEST.1", mutation.seq_id)
             self.assertEqual("NC_TEST.1", mutation.gd_data["seq_id"])
             self.assertIn("NC_TEST.1", mutation.to_gd_line())
             self.assertNotIn("test_ref", mutation.to_gd_line())
@@ -266,23 +266,23 @@ class RenameApplicationTestCase(TestCase):
         mutations = list(Mutation.objects.filter(experiment=self.experiment))
         self.assertTrue(mutations)
         first = mutations[0]
-        first.reseq_reference = "other"
+        first.seq_id = "other"
         first.gd_data = dict(first.gd_data, seq_id="other")
-        first.save(update_fields=["reseq_reference", "gd_data"])
+        first.save(update_fields=["seq_id", "gd_data"])
 
         reference_rename._rename_mutations(
             Mutation, self.experiment, {"test_ref": "other", "other": "test_ref"})
 
         first.refresh_from_db()
-        self.assertEqual("test_ref", first.reseq_reference)
+        self.assertEqual("test_ref", first.seq_id)
         self.assertEqual("test_ref", first.gd_data["seq_id"])
         for other in Mutation.objects.filter(experiment=self.experiment).exclude(
                 pk=first.pk):
-            self.assertEqual("other", other.reseq_reference)
+            self.assertEqual("other", other.seq_id)
 
     def test_plugins_are_told_what_moved(self):
         """Derived data keyed on a contig name is core's blind spot -- aledb-phylogeny keys
-        its matrix columns on `reseq_reference` -- so the mapping is published."""
+        its matrix columns on `seq_id` -- so the mapping is published."""
         seen = []
         plugin_registry.register_sequence_rename_hook(
             lambda experiment_id, renames: seen.append((experiment_id, renames)))
@@ -304,7 +304,7 @@ class RenameApplicationTestCase(TestCase):
 
         self.assertEqual("NC_TEST.1",
                          Mutation.objects.filter(
-                             experiment=self.experiment).first().reseq_reference)
+                             experiment=self.experiment).first().seq_id)
 
 
 class EstablishOrCheckRenameTestCase(TestCase):
@@ -336,7 +336,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
         self.assertEqual([("test_ref", "NC_TEST.1")], caught.exception.plan.pairs)
         self.assertEqual("test_ref",
                          Mutation.objects.filter(
-                             experiment=self.experiment).first().reseq_reference)
+                             experiment=self.experiment).first().seq_id)
 
     def test_allowing_it_performs_the_rename(self):
         reference_store.establish_or_check(
@@ -345,7 +345,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
 
         self.assertEqual("NC_TEST.1",
                          Mutation.objects.filter(
-                             experiment=self.experiment).first().reseq_reference)
+                             experiment=self.experiment).first().seq_id)
 
     def test_the_stored_files_carry_the_new_name(self):
         reference_store.establish_or_check(

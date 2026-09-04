@@ -390,7 +390,7 @@ def _serialize_mutations(mutations, search_gene=None):
             'sequence_change': m.mutation.sequence_change,
             'details': m.mutation.protein_change,
             'frequency': m.frequency,
-            'ref_seq': m.mutation.reseq_reference,
+            'ref_seq': m.mutation.seq_id,
             'strain': strain,
             'project_id': m.sample.population.experiment.project_id,
             'url': f"{_BASE_SEARCH_URL}?hidden_columns=&gene={quote(url_gene)}&min_freq=&max_freq=&ref_seq=&min_pos=&max_pos=&mut_type=&project=&strain={quote(strain or '')}",

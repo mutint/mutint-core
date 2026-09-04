@@ -40,13 +40,13 @@ class _Fixture(TestCase):
 class CoordinateTestCase(_Fixture):
     def test_a_feature_starts_one_before_the_stored_position(self):
         """1-based inclusive in, 0-based end-exclusive out."""
-        mutation = Mutation.objects.filter(reseq_reference__isnull=False).first()
+        mutation = Mutation.objects.filter(seq_id__isnull=False).first()
         features = tracks.mutation_features(self.experiment.id)
         feature = next(f for f in features if f["mutationId"] == mutation.id)
 
         self.assertEqual(mutation.position - 1, feature["start"])
         self.assertEqual(mutation.position, feature["end"])
-        self.assertEqual(mutation.reseq_reference, feature["chr"])
+        self.assertEqual(mutation.seq_id, feature["chr"])
 
     def test_a_span_keeps_its_length(self):
         """end - start is the number of bases covered, which is what end-exclusive buys."""

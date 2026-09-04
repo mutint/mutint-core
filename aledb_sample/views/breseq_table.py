@@ -167,7 +167,7 @@ def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
         view_filter=view_filter)
     # filter_mutation_calls orders across samples; within one sample breseq
     # orders by reference then position.
-    call.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
+    call.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.position))
     return build_rows(call, browse_url=_browse_url(reseq),
                       ancestral_mutation_ids=ancestral_ids,
                       refseq_url=_refseq_url())
@@ -188,7 +188,7 @@ def _refseq_url():
     an NCBI record decides what that page *shows*, not whether it is worth opening.
     """
     def url_for(call):
-        if not call.mutation.reseq_reference:
+        if not call.mutation.seq_id:
             return None
         return "%s?mutation_id=%s&sample_id=%s" % (
             reverse("ncbi_view"), call.mutation_id, call.sample_id)

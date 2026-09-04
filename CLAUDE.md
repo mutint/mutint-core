@@ -2894,7 +2894,7 @@ knows both anyway. One endpoint, one contract.
    whether the row renders and `table_template.js` tests for it to colour a sample cell; the
    column count must not change, because everything in `table_template.js` is indexed
    relative to `REFSEQ_COLUMN_IN_MUT_TABLE`; and the CSV export is unaffected because
-   `aledb_export/util.py` re-derives `reseq_reference` itself rather than reusing this cell.
+   `aledb_export/util.py` re-derives `seq_id` itself rather than reusing this cell.
    `test_the_row_holds_the_reference_at_that_index` compares the cell's **text**, since the
    name is now wrapped in an anchor.
 2. **The per-sample breseq table**, through a `refseq_url=` callable on `build_rows`, in the

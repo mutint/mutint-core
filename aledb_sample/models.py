@@ -71,9 +71,13 @@ class Sample(models.Model):
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
     #: sample is labelled -- see `label`.
     description = models.CharField(max_length=300, **blank_field)
-    #: The reference genome this sample was called against, by name. It was
-    #: `reseq_reference`, which read like a contig and is not one -- `Mutation.reseq_reference`
-    #: beside it genuinely is a seq_id, and the two sharing a spelling is what this separates.
+    #: The reference genome this sample was called against, by name -- the `.gd`'s
+    #: `#=REFSEQ` header.
+    #:
+    #: **This and `Mutation.seq_id` were both called `reseq_reference`**, which is what the
+    #: two renames between them fixed. They are different things: this names the whole
+    #: genome, that names one contig within it, and a sample's calls all share this while
+    #: each carries its own of that.
     reference_genome = models.CharField(max_length=200, **blank_field)
     sequencing_date = models.CharField(max_length=200, **blank_field)
     breseq_version = models.CharField(max_length=200, **blank_field)
@@ -222,7 +226,20 @@ class Mutation(models.Model):
                                       default="")
     gene = models.CharField(max_length=19000, blank=True, null=True)  # TODO: use TextField for this.
     product = models.TextField(default="", null=True)
-    reseq_reference = models.CharField(max_length=200, **blank_field)
+    #: The contig this mutation sits on -- breseq's own `seq_id`, and what every other
+    #: spelling of it in the suite already said: the `.gd` attribute, `UncalledRegion.seq_id`,
+    #: `AnnotatedSequence.seq_id`, the add form's field, the mutation table's column.
+    #:
+    #: It was `reseq_reference`, which read like the *genome* and shared its spelling with
+    #: `Sample.reference_genome`, which genuinely is one. `to_gd_line` shows what the rename
+    #: bought: `{'seq_id': self.seq_id}` where it used to have to translate.
+    #:
+    #: **It is one of the six `MUTATION_KEY_FIELDS`**, so it is part of a mutation's
+    #: identity in the change log as well as in `get_or_create`. A `mutation_identity` blob
+    #: written before the rename carries the old key and would resolve to None; the database
+    #: is regenerated here, so there is nothing to migrate, but a deployment with a live log
+    #: would need those blobs rewritten.
+    seq_id = models.CharField(max_length=200, **blank_field)
     tags = models.CharField(max_length=500, **blank_field)
 
     # Mutations belong to one experiment. Two experiments that call the same
@@ -285,7 +302,7 @@ class Mutation(models.Model):
 
         if self.mutation_type not in TYPE_SPECIFIC_FIELDS:
             return ""
-        attributes = {'seq_id': self.reseq_reference, 'position': self.position}
+        attributes = {'seq_id': self.seq_id, 'position': self.position}
         if self.feature_length is not None:
             attributes['size'] = self.feature_length
         return str(Record(self.mutation_type, self.id, parent_ids=None, **attributes))
@@ -299,7 +316,7 @@ class Mutation(models.Model):
     ECOCYC_ACCESSION = 'NC_000913'
 
     def is_ecocyc_gene(self) -> bool:
-        name = self.reseq_reference or ''
+        name = self.seq_id or ''
         return name == self.ECOCYC_ACCESSION or name.startswith(self.ECOCYC_ACCESSION + '.')
 
     def ecocyc_gene_urls(self) -> str:

@@ -54,7 +54,7 @@ def ncbi_view(request):
             loader.get_template("403.html").render(get_user_context(request.user), request),
             status=403)
 
-    contig = ncbi.contig_entry(experiment, mutation.reseq_reference)
+    contig = ncbi.contig_entry(experiment, mutation.seq_id)
     record = ncbi.record_for(contig["sha256"]) if contig else None
 
     context = get_user_context(request.user)
@@ -65,10 +65,10 @@ def ncbi_view(request):
                              if experiment is not None and experiment.project else ""),
         "ale_project_id": experiment.project_id if experiment is not None else None,
         "title": "%s %s:%s" % (experiment.name if experiment is not None else "Mutation",
-                               mutation.reseq_reference, mutation.position),
+                               mutation.seq_id, mutation.position),
         "template_header": "Reference annotation",
         "mutation": mutation,
-        "contig_name": mutation.reseq_reference or "",
+        "contig_name": mutation.seq_id or "",
         # For the way back to the sample somebody arrived from, when they arrived from one.
         "sample_id": _sample_id(request),
         # breseq's own row, as browse does, so the page states which mutation it is showing

@@ -60,7 +60,7 @@ def build_identity(mutation_type, gd_data, annotated_record):
 
     The six `MUTATION_KEY_FIELDS` are the `get_or_create` key, so each has to be derived the
     way `gd_import` derives it. `feature_length` is `size`, which most types do not have;
-    `reseq_reference` is the contig. The remaining four ride along as creation defaults.
+    `seq_id` is the contig. The remaining four ride along as creation defaults.
     """
     attributes = {key: value for key, value in gd_data.items()
                   if key not in ("type", "parent_ids")}
@@ -91,7 +91,7 @@ def build_identity(mutation_type, gd_data, annotated_record):
 
     return {
         "position": attributes.get("position"),
-        "reseq_reference": attributes.get("seq_id"),
+        "seq_id": attributes.get("seq_id"),
         "mutation_type": mutation_type,
         "feature_length": attributes.get("size"),
         "sequence_change": synthesize_sequence_change(record)[:200],

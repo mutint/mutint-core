@@ -285,7 +285,10 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     experiment = context["experiment"]
     metadata = document.metadata
 
-    reseq_reference = metadata.get("REFSEQ", "") or ""
+    # The `.gd`'s REFSEQ header names the *genome*, and lands on `Sample.reference_genome`.
+    # It shares no spelling with `Mutation.seq_id`, which is a contig within that genome --
+    # both were called `seq_id` until the column was renamed.
+    reference_genome = metadata.get("REFSEQ", "") or ""
     sequencing_date = metadata.get("CREATED", "") or ""
     # breseq marks a polymorphism run with -p. That is the *mixed* case, so the stored
     # flag is its negation -- the one place in the suite that turns the .gd into polarity.
@@ -301,7 +304,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
             "source_name": sample_name,
             "person": person,
             "is_clonal": is_clonal,
-            "reference_genome": reseq_reference[:200],
+            "reference_genome": reference_genome[:200],
             "sequencing_date": sequencing_date[:200],
             # A label to read the sample by, on creation only: `label`
             # prefers it, so `Ara-2_500gen_763A` shows as itself rather than as
@@ -437,7 +440,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
         mutation, created = Mutation.objects.get_or_create(
             experiment=experiment,
             position=attributes.get("position"),
-            reseq_reference=attributes.get("seq_id"),
+            seq_id=attributes.get("seq_id"),
             mutation_type=record.type,
             feature_length=attributes.get("size"),
             sequence_change=sequence_change,
@@ -506,9 +509,9 @@ def export_gd_text(seq_experiment):
     ``repeat_name`` / CON/INT ``region`` still requires the reference genbank named
     in ``#=REFSEQ``)."""
     lines = ["#=GENOME_DIFF\t1.0"]
-    reseq_reference = seq_experiment.reference_genome or ""
-    if reseq_reference:
-        lines.append("#=REFSEQ\t%s" % reseq_reference)
+    reference_genome = seq_experiment.reference_genome or ""
+    if reference_genome:
+        lines.append("#=REFSEQ\t%s" % reference_genome)
 
     calls = (MutationCall.objects
                 .filter(sample=seq_experiment)

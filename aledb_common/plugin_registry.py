@@ -76,13 +76,13 @@ def register_sequence_rename_hook(fn):
     `renames` is `{old_name: new_name}`, covering only the names that changed.
 
     A rename replaces the contig names an experiment's mutations carry -- the same genome,
-    relabelled. Core rewrites everything it owns (`Mutation.reseq_reference`, the verbatim
+    relabelled. Core rewrites everything it owns (`Mutation.seq_id`, the verbatim
     `gd_data`, the missing-coverage evidence, the reference row), but anything an app
     *derived* from those names is core's blind spot, and a plugin's derived data keyed on
     the old name is silently wrong rather than visibly broken.
 
     aledb-phylogeny is the live example: its character-matrix columns are identified by
-    `(reseq_reference, position, ...)` and ordered by the same field, so a rename changes
+    `(seq_id, position, ...)` and ordered by the same field, so a rename changes
     both which column a mutation belongs to and where that column sits.
 
     Distinct from `register_post_experiment_hook`, which says "this experiment's data

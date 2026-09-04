@@ -126,7 +126,7 @@ rendering of it, and `draw` re-applies them.
                         href="/mutation-editor/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
                         title="Edit this mutation in every sample that carries it">edit</a></td>
                 {% endif %}
-                <td class="breseq-seq-id">{{ row.mutation.reseq_reference|default_if_none:"" }}</td>
+                <td class="breseq-seq-id">{{ row.mutation.seq_id|default_if_none:"" }}</td>
                 <td class="breseq-position">{{ row.mutation.position }}</td>
                 <td class="breseq-evidence">{{ row.mutation.mutation_type }}</td>
                 <td class="breseq-mutation">{{ row.mutation.sequence_change }}</td>

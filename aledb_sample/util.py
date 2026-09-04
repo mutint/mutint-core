@@ -183,8 +183,8 @@ def get_ecocyc_gene_list(gene_list, is_ecocyc_gene: bool = False):
 
 def get_ref_sequences():
     return sorted(
-        aledb_sample.models.Mutation.objects.exclude(reseq_reference__isnull=True).exclude(reseq_reference='')
-        .values_list('reseq_reference', flat=True).distinct()
+        aledb_sample.models.Mutation.objects.exclude(seq_id__isnull=True).exclude(seq_id='')
+        .values_list('seq_id', flat=True).distinct()
     )
 
 

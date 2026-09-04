@@ -238,7 +238,7 @@ class RenameTestCase(_Fixture):
         entry["aliases"] = [old_name]
         self.reference.seq_ids = [entry]
         self.reference.save()
-        Mutation.objects.filter(pk=self.mutation.pk).update(reseq_reference="renamed_contig")
+        Mutation.objects.filter(pk=self.mutation.pk).update(seq_id="renamed_contig")
 
         html = self._get().content.decode("utf-8")
         self.assertIn(SVIEWER_SCRIPT, html)

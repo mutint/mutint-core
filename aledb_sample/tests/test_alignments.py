@@ -176,7 +176,7 @@ class ChromAliasTestCase(TestCase):
 class EcocycAccessionTestCase(TestCase):
     """Renaming a contig must not silently switch EcoCyc links off.
 
-    `is_ecocyc_gene` compared `reseq_reference` to 'NC_000913' exactly, which was safe only
+    `is_ecocyc_gene` compared `seq_id` to 'NC_000913' exactly, which was safe only
     while a contig name could never change. Re-establishing a reference from a RefSeq
     download names it NC_000913.3, and every gene link would have gone quiet.
     """
@@ -184,7 +184,7 @@ class EcocycAccessionTestCase(TestCase):
     def _mutation(self, name):
         from aledb_sample.models import Mutation
 
-        return Mutation(reseq_reference=name)
+        return Mutation(seq_id=name)
 
     def test_the_bare_accession_is_ecocyc(self):
         self.assertTrue(self._mutation("NC_000913").is_ecocyc_gene())

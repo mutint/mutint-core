@@ -118,7 +118,7 @@ def _rows_for(reseq):
     calls = list(MutationCall.objects
                     .filter(sample=reseq)
                     .select_related("mutation"))
-    calls.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
+    calls.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.position))
     return build_rows(calls)
 
 
@@ -176,16 +176,16 @@ def _grid_mutations(experiment, reseq_dict, query):
                                         id__in=calls_here)
     query = (query or "").strip()
     if query:
-        terms = (Q(gene__icontains=query) | Q(reseq_reference__icontains=query)
+        terms = (Q(gene__icontains=query) | Q(seq_id__icontains=query)
                  | Q(mutation_type__iexact=query) | Q(sequence_change__icontains=query))
         if query.isdigit():
             terms = terms | Q(position=int(query))
         mutations = mutations.filter(terms)
-    # nulls_first, because reseq_reference is nullable and the two backends disagree about
+    # nulls_first, because seq_id is nullable and the two backends disagree about
     # where a NULL goes -- SQLite first, PostgreSQL last. This listing reaches the page, so
     # inheriting the backend's opinion means the editor's rows reorder on deployment with
     # nothing to say why. Same rule as aledb_experiment.ordering.sample_order().
-    return mutations.order_by(F("reseq_reference").asc(nulls_first=True), "position", "pk")
+    return mutations.order_by(F("seq_id").asc(nulls_first=True), "position", "pk")
 
 
 def _grid_for(experiment, reseq_dict, query=None):
@@ -882,7 +882,7 @@ def mutation_edit_apply(request):
                               "change.", status=404)
         chosen = _chosen_calls(request, carrying)
         note = "Changed %s at %s:%s to %s at %s:%s in %d of %d sample(s)." % (
-            mutation.mutation_type, mutation.reseq_reference, mutation.position,
+            mutation.mutation_type, mutation.seq_id, mutation.position,
             mutation_type, attributes.get("seq_id"), attributes.get("position"),
             len(chosen), len(carrying))
 

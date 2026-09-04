@@ -136,7 +136,7 @@ class AmplificationsRemovedTestCase(TestCase):
         call = get_all_calls_filtered(self.experiment.id)
         row = get_mutation_table_body(self.user, call, reseq_dict, self.experiment)[0]
 
-        references = {mutation.reseq_reference for mutation in Mutation.objects.all()}
+        references = {mutation.seq_id for mutation in Mutation.objects.all()}
         self.assertIn(strip_tags(row[REFSEQ_COLUMN_IN_MUT_TABLE]).strip(), references)
 
     def test_the_close_icon_column_is_gone(self):
@@ -301,7 +301,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         mutation = Mutation.objects.create(
             experiment=self.experiment,
             position=4242,
-            reseq_reference="test_ref",
+            seq_id="test_ref",
             mutation_type="SNP",
             sequence_change="A->G",
             gene="thrA")

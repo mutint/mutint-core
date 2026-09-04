@@ -59,7 +59,7 @@ class EditorTestCase(TestCase):
             experiment=experiment or self.experiment,
             mutation_type="SNP",
             position=position,
-            reseq_reference="NC_000913",
+            seq_id="NC_000913",
             feature_length=None,
             sequence_change=sequence_change,
             gene=gene,

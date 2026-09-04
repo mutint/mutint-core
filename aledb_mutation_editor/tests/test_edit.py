@@ -273,7 +273,7 @@ class ChangeMutationTestCase(EditorTestCase):
         minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.assertNotEqual(self.mut_1.pk, minted.pk)
         self.assertEqual("SNP", minted.mutation_type)
-        self.assertEqual("NC_000913", minted.reseq_reference)
+        self.assertEqual("NC_000913", minted.seq_id)
 
     def test_a_subset_joins_a_row_that_already_holds_the_values(self):
         """`mutation_for_identity` get_or_creates on the six fields `gd_import` keys on, so

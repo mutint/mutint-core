@@ -175,7 +175,7 @@ def _rename_payload(experiment, plan, filename):
     counts = {
         "mutations": Mutation.objects.filter(
             experiment=experiment,
-            reseq_reference__in=list(plan.mapping)).count(),
+            seq_id__in=list(plan.mapping)).count(),
         "samples": Sample.objects.filter(
             **{paths.to_experiment(): experiment}).count(),
         "alignments": Sample.objects.filter(

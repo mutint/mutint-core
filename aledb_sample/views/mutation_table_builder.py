@@ -335,7 +335,7 @@ def _refseq_cell(mutation, verified_contigs):
     `REFSEQ_COLUMN_IN_MUT_TABLE`, and `aledb_export.util` re-derives this value itself rather
     than reusing this cell, so the CSV is unaffected by the anchor.
     """
-    name = mutation.reseq_reference
+    name = mutation.seq_id
     if name is None:
         return ""
 

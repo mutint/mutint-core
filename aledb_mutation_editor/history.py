@@ -61,7 +61,7 @@ CALL_FIELDS = (
 #: Together with the experiment they are a mutation's identity, and they are what lets a
 #: swept Mutation row be recreated as the same mutation rather than as a new one.
 MUTATION_KEY_FIELDS = (
-    "position", "reseq_reference", "mutation_type", "feature_length",
+    "position", "seq_id", "mutation_type", "feature_length",
     "sequence_change", "gene",
 )
 

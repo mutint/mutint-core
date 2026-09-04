@@ -260,7 +260,7 @@ def _add_strain_to_query(request, include_argument_list):
 def _add_ref_seq_to_query(request, include_argument_list):
     ref_seq = request.GET['ref_seq']
     if ref_seq and len(ref_seq)>0:
-        include_argument_list.append(Q(mutation__reseq_reference=ref_seq))
+        include_argument_list.append(Q(mutation__seq_id=ref_seq))
         return True
     return False
 

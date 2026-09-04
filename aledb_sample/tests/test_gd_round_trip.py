@@ -55,7 +55,7 @@ class GdRoundTripTestCase(TestCase):
         mutation = Mutation.objects.create(
             mutation_type=record.type,
             position=record.attributes.get("position", 1),
-            reseq_reference=record.attributes.get("seq_id", ""),
+            seq_id=record.attributes.get("seq_id", ""),
             sequence_change="", gd_data=data)
         # Refetched, so what is asserted is what the database gave back rather than the dict
         # still in memory -- which is the whole point on a backend that reorders keys.

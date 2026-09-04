@@ -178,7 +178,7 @@ because a rename carries a *mapping*: rewriting a stored blob in place is as val
 as recomputing from scratch, and only you know which applies.
 
 This matters more than it sounds if you store anything positional. `aledb-phylogeny` rebuilds
-its whole tree here, because its character matrix is ordered by `reseq_reference` and its
+its whole tree here, because its character matrix is ordered by `seq_id` and its
 site list is positional — renaming one contig can move its columns relative to another's and
 leave every stored index off by some amount. A single-contig experiment is unaffected, which
 is exactly what makes it the kind of bug that ships.

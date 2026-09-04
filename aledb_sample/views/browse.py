@@ -137,7 +137,7 @@ def browse_mutation(request):
     context.update({
         "ale_project_name": experiment.project.name if experiment.project else "",
         "ale_project_id": experiment.project_id,
-        "title": "%s %s:%s" % (experiment.name, mutation.reseq_reference, mutation.position),
+        "title": "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.position),
         "template_header": "Alignments",
         "mutation": mutation,
         "mutation_call": call,
@@ -163,7 +163,7 @@ def browse_mutation(request):
         # this existed igv was handed `tracks: []` and the only thing the database
         # contributed was the locus string -- so the page drew the reads and the reference
         # but not the calls the reads were opened to look at.
-        "db_tracks": database_tracks(experiment.id, mutation.reseq_reference),
+        "db_tracks": database_tracks(experiment.id, mutation.seq_id),
         # Named here rather than written out in the template, so the click handler and the
         # track config cannot come to disagree about which track is the clickable one.
         "mutations_track_id": MUTATION_TRACK_ID,
@@ -202,7 +202,7 @@ def browse_at(request):
         "mutation_call_id": call.pk if call is not None else None,
         "url": browse_url_for(mutation, reseq, call),
         "title": "%s %s:%s" % (reseq.experiment.name,
-                               mutation.reseq_reference, mutation.position),
+                               mutation.seq_id, mutation.position),
         "calling": sorted(_samples_calling(mutation)),
         "table_html": table_html,
     })
@@ -217,7 +217,7 @@ def _ncbi_url():
     that one's destination is the page you are already on.
     """
     def url_for(call):
-        if not call.mutation.reseq_reference:
+        if not call.mutation.seq_id:
             return None
         return "%s?mutation_id=%s&sample_id=%s" % (
             reverse("ncbi_view"), call.mutation_id, call.sample_id)
@@ -239,13 +239,13 @@ def _locus(mutation):
     Bounded by the mutation's own extent rather than by its start position, so a 50 kb
     deletion opens showing the deletion rather than 200 bp of its left junction.
 
-    `Mutation.reseq_reference` is the GenomeDiff seq_id, i.e. the contig name -- not to be
-    confused with the sample's `reseq_reference`, which is the reference file's name. It matches
+    `Mutation.seq_id` is the GenomeDiff seq_id, i.e. the contig name -- not to be
+    confused with the sample's `seq_id`, which is the reference file's name. It matches
     the FASTA's sequence names because both take the first whitespace-delimited token of the
     header, the same rule samtools uses.
     """
     start, end = mutation_extent(mutation)
-    return "%s:%d-%d" % (mutation.reseq_reference,
+    return "%s:%d-%d" % (mutation.seq_id,
                          max(1, start - LOCUS_BUFFER_BASES),
                          end + LOCUS_BUFFER_BASES)
 
