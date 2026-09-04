@@ -6,7 +6,7 @@ from aledb_seq.util import get_ecocyc_gene_list
 from aledb_filter.util import filter_observed_mutations
 from aledb_common.util import GENE_LIST_LIMIT, get_gene_list
 from aledb_common.constants import TAGS, ROW_TAGS, COLUMN_TAGS, HTML_MUTATION_TABLE_HEADER
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_curate
 from aledb_seq.ncbi import verified_contig_names
 
@@ -37,7 +37,7 @@ _table_cell_dropdown_template = """<div class="dropdown">
 </div>"""
 
 
-def _build_table_cell_for_dropdown(mutation, ale_experiment):
+def _build_table_cell_for_dropdown(mutation, experiment):
     """Returns a <div> element containing the drop down menu for each row
     in the mutation table.
 
@@ -51,7 +51,7 @@ def _build_table_cell_for_dropdown(mutation, ale_experiment):
     return _table_cell_dropdown_template % _get_tag_filter_dropdown_entries(mutation.id)
 
 
-def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
+def get_table_header(user, reseq_dict, experiment: Experiment = None):
     base_table_header = HTML_MUTATION_TABLE_HEADER
     table_header_list = []
 
@@ -73,7 +73,7 @@ def get_table_header(user, reseq_dict, experiment: AleExperiment = None):
     return base_table_header + table_header_list
 
 
-def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, experiment: AleExperiment = None, is_gene_table: bool = False):
+def get_mutation_table_body(user: User, observed_mutations: [], reseq_dict, experiment: Experiment = None, is_gene_table: bool = False):
     mutations, table_entry_list, mutation_index_dict = get_mutation_table_data(reseq_dict, observed_mutations)
 
     # Resolved once for the whole table rather than per row: an experiment's table runs to
@@ -130,9 +130,9 @@ def get_mutation_table_data(reseq_dict, observed_mutations):
     table_entry_list = _initialize_table(experiment_id_idx_mapping_dict, mutation_index_dict)
     for observed_mutation in observed_mutations:
         new_entry = _get_table_mutation_entry(observed_mutation, reseq_dict)
-        if new_entry is not None and observed_mutation.sequencing_experiment_id in reseq_dict.keys():
+        if new_entry is not None and observed_mutation.sample_id in reseq_dict.keys():
             table_entry_list[mutation_index_dict[observed_mutation.mutation_id]][
-                experiment_id_idx_mapping_dict[observed_mutation.sequencing_experiment_id]] = new_entry
+                experiment_id_idx_mapping_dict[observed_mutation.sample_id]] = new_entry
     return mutation_map.values(), table_entry_list, mutation_index_dict
 
 
@@ -141,7 +141,7 @@ def get_mutation_table_data(reseq_dict, observed_mutations):
 def get_table_body(user: User,
                    reseq_dict,
                    observed_mutations_queryset,
-                   ale_experiment=None,
+                   experiment=None,
                    is_gene_table=False,
                    *,
                    view_filter=None):
@@ -161,7 +161,7 @@ def get_table_body(user: User,
     """
     observed_mutations = filter_observed_mutations(
         observed_mutations_queryset, filter_type='AMP', view_filter=view_filter)
-    return get_mutation_table_body(user, observed_mutations, reseq_dict, ale_experiment, is_gene_table)
+    return get_mutation_table_body(user, observed_mutations, reseq_dict, experiment, is_gene_table)
 
 
 def get_gene_table_entry(mutation):
@@ -244,7 +244,7 @@ def _cell_html(observed_mutation, reseq_dict, label):
     and gets no link -- linking would just send the user to a page explaining its absence.
     `reseq_dict` holds already-loaded rows, so `bam_stored` costs no query.
     """
-    reseq = reseq_dict.get(observed_mutation.sequencing_experiment_id)
+    reseq = reseq_dict.get(observed_mutation.sample_id)
     if reseq is None or not reseq.bam_stored:
         return """<span class="true">%s</span>""" % label
 

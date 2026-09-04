@@ -63,7 +63,7 @@ def search(request):
 
         hidden_columns = request.GET.get('hidden_columns', "")
         observed_mutations = _get_observed_mutations(search_include_param_list, search_exclude_param_list)
-        reseq_dict = collections.OrderedDict({obs_mut.sequencing_experiment.id: obs_mut.sequencing_experiment
+        reseq_dict = collections.OrderedDict({obs_mut.sample.id: obs_mut.sample
                                                   for obs_mut in observed_mutations})
 
         table_header = mutation_table_builder.get_table_header(request.user, reseq_dict)
@@ -252,7 +252,7 @@ def _add_project_to_query(request, include_argument_list, user_projects):
 def _add_strain_to_query(request, include_argument_list):
     strain = request.GET['strain']
     if strain and len(strain) > 0:
-        include_argument_list.append(Q(**{paths.to_ale(paths.FROM_OBSERVATION, 'strain'): strain}))
+        include_argument_list.append(Q(**{paths.to_population(paths.FROM_OBSERVATION, 'strain'): strain}))
         return True
     return False
 

@@ -232,11 +232,11 @@ def request_rebuild(experiment_id=None, only=None, reason=''):
             # Everything under this name, however many experiments that is.
             query = DerivedDataState.objects.filter(name=rebuilder['name'])
             if rebuilder['scope'] == SITE_SCOPE:
-                query = query.filter(ale_experiment=None)
+                query = query.filter(experiment=None)
             query.update(stale_since=now)
         else:
             DerivedDataState.objects.update_or_create(
-                name=rebuilder['name'], ale_experiment_id=experiment_id,
+                name=rebuilder['name'], experiment_id=experiment_id,
                 defaults={'stale_since': now})
 
     logger.info("rebuild requested for %s (%s)%s",
@@ -254,7 +254,7 @@ def is_stale(name, experiment_id=None):
     from aledb_common.models import DerivedDataState
 
     state = DerivedDataState.objects.filter(
-        name=name, ale_experiment_id=experiment_id).first()
+        name=name, experiment_id=experiment_id).first()
     return state is None or state.stale_since is not None
 
 
@@ -313,7 +313,7 @@ def run_rebuilds(experiment_id=None, only=None, force=False, scope=None):
             # a caller wanted the site-wide sweep and this rebuilder cannot answer it.
             continue
 
-        state = DerivedDataState.objects.filter(name=name, ale_experiment_id=target).first()
+        state = DerivedDataState.objects.filter(name=name, experiment_id=target).first()
         was_stale_since = state.stale_since if state else None
         if not force and state is not None and state.stale_since is None:
             continue
@@ -328,7 +328,7 @@ def run_rebuilds(experiment_id=None, only=None, force=False, scope=None):
             logger.exception("rebuild %r failed for %s", name,
                              "the site" if site_scoped else "experiment %s" % target)
             DerivedDataState.objects.update_or_create(
-                name=name, ale_experiment_id=target,
+                name=name, experiment_id=target,
                 defaults={'stale_since': was_stale_since or started,
                           'last_error': str(error)[:2000]})
             results[name] = False
@@ -342,7 +342,7 @@ def run_rebuilds(experiment_id=None, only=None, force=False, scope=None):
         # this run did not see, exactly as a moved `stale_since` is.
         if state is None:
             _, claimed = DerivedDataState.objects.get_or_create(
-                name=name, ale_experiment_id=target, defaults=fresh)
+                name=name, experiment_id=target, defaults=fresh)
         else:
             claimed = bool(DerivedDataState.objects.filter(
                 pk=state.pk, stale_since=was_stale_since).update(**fresh))

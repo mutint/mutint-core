@@ -76,7 +76,7 @@ queryset, ignored_genes = filtered_observed_mutation_queryset(queryset, view_fil
 ```
 
 That is the same two lines you already write, with the first one changed. Do not write
-`ObservedMutation.objects.filter(sequencing_experiment_id__in=...)` by hand — four repos did,
+`ObservedMutation.objects.filter(sample_id__in=...)` by hand — four repos did,
 which is why this helper exists.
 
 **Dropping the ancestor from your sample list is not enough**, and this is the mistake to avoid

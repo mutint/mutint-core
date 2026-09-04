@@ -5,10 +5,10 @@ Those differences are the starting line rather than evolution: convergence shoul
 them as convergent, fixation should not report them fixed in every flask because they were
 there before the first one, and the needle plot should not plot them.
 
-**One designation, one exclusion.** `AleExperiment.ancestor` names one sample. Everything
+**One designation, one exclusion.** `Experiment.ancestor` names one sample. Everything
 below derives from that column; there is nothing else to configure and nothing to keep in
 sync. It replaced four half-built spellings of the same idea, none of which subtracted
-anything: `AleId.starting_strain` (a FK no code path ever wrote), `filter_out_wt_reseq` and
+anything: `Population.starting_strain` (a FK no code path ever wrote), `filter_out_wt_reseq` and
 `get_wt_reseq_id` (helpers with no callers), `STARTING_STRAIN_ALE_ID = "0"` (which hid ALE 0
 from the ALE *picker* while its samples went on landing in every analysis), and
 `AleExperimentFilter.starting_strain_mutations` (a hand-curated list of mutation ids, since
@@ -52,7 +52,7 @@ aledb-phylogeny's cached trees -- is stored and does go stale.
 
 import logging
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ def get_ancestor(experiment_id):
     """
     if experiment_id in (None, "", "all"):
         return None
-    return (AleExperiment.objects.filter(pk=experiment_id)
+    return (Experiment.objects.filter(pk=experiment_id)
             .select_related("ancestor")
             .values_list("ancestor", flat=True)
             .first())
@@ -88,7 +88,7 @@ def ancestral_mutation_ids(experiment_id):
     if ancestor_id is None:
         return frozenset()
     return frozenset(ObservedMutation.objects
-                     .filter(sequencing_experiment_id=ancestor_id)
+                     .filter(sample_id=ancestor_id)
                      .values_list("mutation_id", flat=True))
 
 
@@ -111,10 +111,10 @@ def exclude_ancestry(observed_mutation_queryset, experiment_id):
         return observed_mutation_queryset
 
     ancestral = (ObservedMutation.objects
-                 .filter(sequencing_experiment_id=ancestor_id)
+                 .filter(sample_id=ancestor_id)
                  .values("mutation_id"))
     return (observed_mutation_queryset
-            .exclude(sequencing_experiment_id=ancestor_id)
+            .exclude(sample_id=ancestor_id)
             .exclude(mutation_id__in=ancestral))
 
 
@@ -132,26 +132,26 @@ def exclude_all_ancestry(observed_mutation_queryset):
     """
     from aledb_seq.models import ObservedMutation
 
-    ancestors = AleExperiment.objects.filter(ancestor__isnull=False).values("ancestor")
+    ancestors = Experiment.objects.filter(ancestor__isnull=False).values("ancestor")
     if not ancestors.exists():
         return observed_mutation_queryset
 
-    ancestral = (ObservedMutation.objects.filter(sequencing_experiment__in=ancestors)
+    ancestral = (ObservedMutation.objects.filter(sample__in=ancestors)
                  .values("mutation_id"))
     return (observed_mutation_queryset
-            .exclude(sequencing_experiment__in=ancestors)
+            .exclude(sample__in=ancestors)
             .exclude(mutation_id__in=ancestral))
 
 
 def exclude_ancestor_samples(reseq_queryset, experiment_id=None):
-    """Drop designated ancestors from a `ResequencingExperiment` queryset.
+    """Drop designated ancestors from a `Sample` queryset.
 
     With an `experiment_id`, drops that experiment's ancestor. Without one the queryset spans
     experiments -- the dashboard's site-wide counts -- so it drops every experiment's, which
     is one `exclude` against the set of designated samples rather than a query per experiment.
     """
     if experiment_id in (None, "", "all"):
-        designated = (AleExperiment.objects.filter(ancestor__isnull=False)
+        designated = (Experiment.objects.filter(ancestor__isnull=False)
                       .values("ancestor"))
         return reseq_queryset.exclude(pk__in=designated)
 
@@ -172,10 +172,10 @@ def describe_ancestor(experiment_id):
     if ancestor_id is None:
         return None
 
-    from aledb_seq.models import ResequencingExperiment
+    from aledb_seq.models import Sample
 
-    reseq = (ResequencingExperiment.objects
-             .select_related(paths.to_ale())
+    reseq = (Sample.objects
+             .select_related(paths.to_population())
              .filter(pk=ancestor_id).first())
     if reseq is None:
         # SET_NULL should make this unreachable; a page saying nothing beats a page 500ing.
@@ -201,7 +201,7 @@ def note_sample_deleted(sender, instance, **kwargs):
     middle of a cascade deleting a whole experiment; running the rebuilds here would mean
     recomputing derived data for rows that are in the process of being destroyed.
     """
-    experiment_ids = list(AleExperiment.objects
+    experiment_ids = list(Experiment.objects
                           .filter(ancestor=instance)
                           .values_list("pk", flat=True))
     if not experiment_ids:

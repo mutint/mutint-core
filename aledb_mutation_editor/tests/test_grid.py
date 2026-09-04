@@ -139,13 +139,13 @@ class GridPageTestCase(EditorTestCase):
 
     def test_a_selection_spanning_samples_and_mutations_deletes_exactly_it(self):
         """Not a whole row and not a whole column -- the arbitrary set a person clicks."""
-        keep = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        keep = ObservedMutation.objects.get(sample=self.sample_a,
                                             mutation=self.mut_2)
-        doomed = [ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        doomed = [ObservedMutation.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1).id,
-                  ObservedMutation.objects.get(sequencing_experiment=self.sample_b,
+                  ObservedMutation.objects.get(sample=self.sample_b,
                                                mutation=self.mut_1).id,
-                  ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+                  ObservedMutation.objects.get(sample=self.sample_a,
                                                mutation=self.mut_3).id]
 
         self.client.post("/mutation-editor/delete/apply", {
@@ -158,20 +158,20 @@ class GridPageTestCase(EditorTestCase):
     def test_an_observation_from_another_experiment_is_refused(self):
         """The endpoint scopes ids through the experiment, so a hand-built POST cannot reach
         across projects even with the grid handing it a longer list."""
-        from aledb_experiment.models import AleExperiment, AleId, Flask
+        from aledb_experiment.models import Experiment, Population, TimePoint
         from aledb_import.gd_import import prepare_experiment_by_id
-        from aledb_seq.models import ResequencingExperiment
+        from aledb_seq.models import Sample
 
         created = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        other = AleExperiment.objects.get(pk=created["experiment_id"])
+        other = Experiment.objects.get(pk=created["experiment_id"])
         context = prepare_experiment_by_id(other.id)
-        ale = AleId.objects.create(ale_experiment=other, ale_id=1)
-        flask = Flask.objects.create(ale_id=ale, flask_number=1, media=context["media"])
-        sample = ResequencingExperiment.objects.create(
-            flask=flask, isolate_number=1, is_population=False, sample_name="x")
+        ale = Population.objects.create(experiment=other, name=1)
+        flask = TimePoint.objects.create(population=ale, value=1, media=context["media"])
+        sample = Sample.objects.create(
+            time_point=flask, name=1, is_population=False, source_name="x")
         outside = ObservedMutation.objects.create(
-            sequencing_experiment=sample,
+            sample=sample,
             mutation=self.make_mutation(position=999, sequence_change="T>A",
                                         experiment=other),
             present=True)
@@ -188,9 +188,9 @@ class GridPageTestCase(EditorTestCase):
         appear as a selectable cell in the first place."""
         created = self.client.post(
             "/ale/projects/create/", {"name": "P3", "experiment": "E3"}).json()
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
 
-        other = AleExperiment.objects.get(pk=created["experiment_id"])
+        other = Experiment.objects.get(pk=created["experiment_id"])
         stranger = self.make_mutation(position=4242, sequence_change="G>C", experiment=other)
 
         html = self.grid().content.decode("utf-8")

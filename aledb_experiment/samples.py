@@ -1,19 +1,21 @@
 """Editing a sample's identity.
 
-A "sample" is an `aledb_seq.ResequencingExperiment`. Its identity is the A/F/I coordinate
+A "sample" is an `aledb_seq.Sample`. Its identity is the population / time point / label
+coordinate
 everything in the product labels it by, and **half of it is stored on the sample and half
-is not**. The label (I) is the sample's own column; the ALE (A) and the flask (F) live in
+is not**. The label is the sample's own column; the population and the time point live in
 two rows above it that it shares with its siblings.
 
-That split is what this module is about, and it used to be a four-row chain -- AleId,
-Flask, Isolate, TechnicalReplicate -- of which the last two are now the sample itself.
+That split is what this module is about, and it used to be a four-row chain -- Population,
+TimePoint, Isolate, TechnicalReplicate -- of which the last two are now the sample itself.
 
 **The shared rows must never be edited in place.** `gd_import._get_or_create_chain` reuses
-one AleId and one Flask across every sample under them, so `flask.flask_number = 30;
-flask.save()` renumbers every sample in that flask, not the one the user was looking at.
+one Population and one TimePoint across every sample under them, so `time_point.value = 30;
+time_point.save()` renumbers every sample at that time point, not the one the user was
+looking at.
 
 Everything here follows from doing the opposite: resolve (or create) the row for the
-*target* coordinate and re-point `ResequencingExperiment.flask` at it. That buys, in
+*target* coordinate and re-point `Sample.time_point` at it. That buys, in
 order of how much each one matters:
 
 - siblings are untouched, which is the whole point;
@@ -32,7 +34,7 @@ import logging
 
 from django.db import transaction
 
-from aledb_experiment.models import AleId, Flask
+from aledb_experiment.models import Population, TimePoint
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,8 @@ logger = logging.getLogger(__name__)
 # create a row, delete a row, or trigger a rebuild -- see `rows_are_structural`.
 DESCRIPTIVE_FIELDS = ("sample_name", "person", "isolate_description",
                       "rep_description", "rep_tags")
+# The form's field names, which are the query-string vocabulary and change with it rather
+# than with the columns behind them.
 STRUCTURAL_FIELDS = ("ale", "flask", "isolate", "is_population")
 
 MAX_ROWS = 2000
@@ -65,50 +69,51 @@ def sample_project(reseq):
 
     A sample knows its project only by traversal, so this is also the permission lookup:
     `can_edit_project(user, sample_project(reseq))`. Returns None for a sample whose
-    `flask` is null -- those are unreachable everywhere else too
+    `time_point` is null -- those are unreachable everywhere else too
     (`get_ordered_reseq_queryset` filters them out), and the views 404 rather than treat a
     sample with no project as one nobody needs permission for.
     """
-    if reseq.flask_id is None:
+    if reseq.time_point_id is None:
         return None
-    return reseq.flask.ale_id.ale_experiment.project
+    return reseq.time_point.population.experiment.project
 
 
 def sample_experiment(reseq):
-    if reseq.flask_id is None:
+    if reseq.time_point_id is None:
         return None
-    return reseq.flask.ale_id.ale_experiment
+    return reseq.time_point.population.experiment
 
 
 def sample_coordinate(reseq):
-    """`(ale, flask, isolate)`, or None for an unrooted sample.
+    """`(population, time_point, label)`, or None for an unrooted sample.
 
-    The ALE and the label are strings and the flask is an integer -- see `AleId`.
+    The population and the label are strings and the time point is an integer -- see
+    `Population`.
 
     **It was a 4-tuple** ending in the replicate number. The replicate is part of the label
     now (`1-2` rather than `1` with an `R2` beside it), so anything unpacking this into four
     names is a compile error rather than a silently short coordinate.
     """
-    if reseq.flask_id is None:
+    if reseq.time_point_id is None:
         return None
-    flask = reseq.flask
-    return (flask.ale_id.ale_id, flask.flask_number, reseq.isolate_number)
+    time_point = reseq.time_point
+    return (time_point.population.name, time_point.value, reseq.name)
 
 
 def coordinate_str(coordinate):
     return "A%s F%s I%s" % coordinate
 
 
-def resolve_flask(experiment, coordinate, *, media, species="", strain=""):
-    """The Flask at `coordinate` within `experiment`, creating what is missing.
+def resolve_time_point(experiment, coordinate, *, media, species="", strain=""):
+    """The TimePoint at `coordinate` within `experiment`, creating what is missing.
 
     It used to resolve four rows and return the last one. Two of those rows are the sample
-    itself now, so it resolves two and returns the flask -- the caller re-points
-    `reseq.flask` at it and writes the label straight onto the sample.
+    itself now, so it resolves two and returns the time point -- the caller re-points
+    `reseq.time_point` at it and writes the label straight onto the sample.
 
     **That deleted the subtlest paragraph in this module.** Isolate had no unique_together
     and gd_import get_or_created it on six fields including `reseq_date`, so real databases
-    held two Isolate rows at one (flask, isolate_number) and `get_or_create` raised
+    held two Isolate rows at one (time point, label) and `get_or_create` raised
     MultipleObjectsReturned on them. This resolved it with `filter().order_by("pk").first()`
     -- lowest pk wins, deterministic if arbitrary. There is no such row to be ambiguous
     about any more: the label is a column on the sample, and two samples sharing a
@@ -117,61 +122,62 @@ def resolve_flask(experiment, coordinate, *, media, species="", strain=""):
     Two differences from `gd_import._get_or_create_chain` remain, and each is a correction
     rather than a preference:
 
-    - **Flask keys on (ale_id, flask_number) with media in `defaults`.** gd_import passes
-      `media=` as a *lookup* kwarg, but Flask has `unique_together (ale_id, flask_number)`
-      -- so against an existing flask carrying different media that call raises
+    - **TimePoint keys on (population, value) with media in `defaults`.** gd_import passes
+      `media=` as a *lookup* kwarg, but TimePoint is unique on (population, value) -- so
+      against an existing time point carrying different media that call raises
       IntegrityError instead of returning the row. Keying on the unique tuple is the only
       form that can't.
-    - **AleId copies species/strain but not description.** The first two are facts about
+    - **Population copies species/strain but not description.** The first two are facts about
       the experiment's organism and hold across ALEs; a description is what makes *this*
       ALE different from the others, so copying it onto a new one would be a lie.
     """
-    ale_number, flask_number, _label = coordinate
+    population_name, time_point_value, _label = coordinate
 
-    ale_row, _ = AleId.objects.get_or_create(
-        ale_experiment=experiment, ale_id=ale_number,
+    population, _ = Population.objects.get_or_create(
+        experiment=experiment, name=population_name,
         defaults={"species": species, "strain": strain})
 
-    flask_row, _ = Flask.objects.get_or_create(
-        ale_id=ale_row, flask_number=flask_number,
+    time_point, _ = TimePoint.objects.get_or_create(
+        population=population, value=time_point_value,
         defaults={"media": media})
-    return flask_row
+    return time_point
 
 
-def prune_orphans(flasks):
+def prune_orphans(time_points):
     """Delete the rows a move emptied, bottom-up.
 
     Leaving them is not neutral. `aledb_dashboard.util.rebuild_sample_counts` counts
-    AleId/Flask *rows* rather than samples, so an emptied row inflates the dashboard's ALE
-    and flask counts permanently; and the ALE picker in `aledb_seq.views.common` is built
-    from AleId rows, so an emptied ALE would sit in the menu selecting nothing.
+    Population/TimePoint *rows* rather than samples, so an emptied row inflates the
+    dashboard's counts permanently; and the population picker in `aledb_seq.views.common`
+    is built from Population rows, so an emptied one would sit in the menu selecting
+    nothing.
 
     Emptiness is re-queried here rather than taken from a snapshot made before the move:
     a swap vacates and refills the same rows, and a stale snapshot would delete a row that
     had just been filled again -- taking its samples with it, since every downward FK
     cascades.
 
-    **Two of the four levels have gone**, so this walks flask then ALE rather than
-    replicate, isolate, flask, ALE. The two guards it dropped were the ones that could not
+    **Two of the four levels have gone**, so this walks time point then population rather
+    than replicate, isolate, flask, ALE. The two guards it dropped were the ones that could not
     be got wrong; the two left are the ones that share rows between samples.
 
     `Isolate.parent_isolate` was guarded here, and both are gone: nothing in the suite ever
     wrote that column, so the guard protected a state no import or edit could produce.
 
-    `AleId.starting_strain` was guarded here too. It is gone -- it was a second, never
+    `Population.starting_strain` was guarded here too. It is gone -- it was a second, never
     written spelling of the ancestor, which is now one designation on the experiment; see
     `aledb_experiment/ancestor.py`.
     """
-    for flask in flasks:
-        ale_row = flask.ale_id
+    for time_point in time_points:
+        population = time_point.population
 
-        if flask.resequencingexperiment_set.exists():
+        if time_point.sample_set.exists():
             continue
-        flask.delete()
+        time_point.delete()
 
-        if ale_row.flask_set.exists():
+        if population.timepoint_set.exists():
             continue
-        ale_row.delete()
+        population.delete()
 
 
 # --- parsing and validation ---------------------------------------------------------------
@@ -273,7 +279,7 @@ def parse_rows(rows, samples_by_id):
         try:
             coordinate = (
                 _label(row.get("ale"), "ALE", row_label),
-                # "time point", not "flask number": the column is flask_number and stays
+                # "time point" is what the form field is called; the column is
                 # so, but that is not what anyone calls it, and a refusal is the one place
                 # the internal name would surface to a user. Still the one member of the
                 # coordinate that must be a number -- fixation orders ALEs by it.
@@ -319,17 +325,17 @@ def _check_names(parsed, samples_by_id):
     an experiment that already had a pair -- including the save that was fixing it.
     """
     moving = {str(reseq.pk) for reseq, _, descriptive in parsed
-              if descriptive.get("sample_name", reseq.sample_name) != reseq.sample_name}
+              if descriptive.get("sample_name", reseq.source_name) != reseq.source_name}
     taken = {}
     for key, reseq in samples_by_id.items():
-        if key in moving or not reseq.sample_name:
+        if key in moving or not reseq.source_name:
             continue
-        taken[reseq.sample_name] = key
+        taken[reseq.source_name] = key
 
     errors = {}
     for reseq, _, descriptive in parsed:
         name = descriptive.get("sample_name")
-        if not name or name == (reseq.sample_name or ""):
+        if not name or name == (reseq.source_name or ""):
             continue
         if name in taken:
             errors[str(reseq.pk)] = (
@@ -348,7 +354,7 @@ def plan_moves(parsed, samples_by_id):
     batch at all, is a collision.
 
     Two samples cannot share a coordinate. There is no database constraint saying so, but
-    aledb-fixation builds `flask_isolate_mutation_dict[(flask, isolate)] = queryset` by
+    aledb-fixation builds `flask_isolate_mutation_dict[(time_point, label)] = queryset` by
     plain assignment, so the second sample at a coordinate overwrites the first and its
     mutations vanish from fixation with no error anywhere.
     """
@@ -380,7 +386,7 @@ def plan_moves(parsed, samples_by_id):
             errors[str(reseq.pk)] = (
                 '%s is already "%s". Two samples cannot share one identity -- move that '
                 'one first, or give this one a different label.'
-                % (label, occupant.sample_name or occupant.pk))
+                % (label, occupant.source_name or occupant.pk))
     if errors:
         raise SampleEditError(_summarise(errors, samples_by_id), errors)
 
@@ -399,7 +405,7 @@ def _summarise(errors, samples_by_id):
     lines = ["Nothing was saved."]
     for key, message in errors.items():
         reseq = samples_by_id.get(key)
-        name = (reseq.sample_name if reseq and reseq.sample_name else "sample %s" % key)
+        name = (reseq.source_name if reseq and reseq.source_name else "sample %s" % key)
         lines.append("%s: %s" % (name, message))
     return "\n".join(lines)
 
@@ -450,26 +456,27 @@ def apply_rows(experiment, parsed, *, media):
 
     for reseq, coordinate, descriptive in parsed:
         current = sample_coordinate(reseq)
-        source_flask = reseq.flask
+        source_time_point = reseq.time_point
         always = ["is_population"]
 
         if current != coordinate:
-            source_ale = source_flask.ale_id if source_flask else None
+            source_population = (source_time_point.population
+                                 if source_time_point else None)
 
             # A renumber re-labels a sample; it does not move it to different growth
             # conditions. Inheriting these is the only answer that does not silently reset
             # real data -- the placeholder is the fallback for a sample with nothing to
             # inherit from. (There was a freezer box here too; it was a required FK to a
             # singleton row nothing displayed, and it is gone.)
-            reseq.flask = resolve_flask(
+            reseq.time_point = resolve_time_point(
                 experiment, coordinate,
-                media=source_flask.media if source_flask else media,
-                species=source_ale.species if source_ale else "",
-                strain=source_ale.strain if source_ale else "")
-            reseq.isolate_number = coordinate[2]
-            always += ["flask", "isolate_number"]
-            if source_flask is not None:
-                vacated.append(source_flask)
+                media=source_time_point.media if source_time_point else media,
+                species=source_population.species if source_population else "",
+                strain=source_population.strain if source_population else "")
+            reseq.name = coordinate[2]
+            always += ["time_point", "name"]
+            if source_time_point is not None:
+                vacated.append(source_time_point)
 
         # One row written where there were three. The description and the tags used to
         # belong to the isolate and the replicate, which were *shared* -- so a move had to
@@ -478,7 +485,7 @@ def apply_rows(experiment, parsed, *, media):
         # paragraphs of comment. They are the sample's own columns now, so they simply move
         # with it and there is nothing left to decide.
         reseq.is_population = descriptive["is_population"]
-        _write(reseq, {"sample_name": "sample_name", "person": "person",
+        _write(reseq, {"source_name": "sample_name", "person": "person",
                        "description": "isolate_description",
                        "rep_description": "rep_description", "tags": "rep_tags"},
                descriptive, always)
@@ -492,9 +499,9 @@ def apply_rows(experiment, parsed, *, media):
 def rebuild_after_structural_change(experiment):
     """Recompute only what a renumber can actually have changed.
 
-    Fixation reads the numbers directly -- it sorts flask numbers and takes the last two to
+    Fixation reads the numbers directly -- it sorts time points and takes the last two to
     decide what counts as fixed -- so it has to rebuild. Sample counts are counts of
-    AleId/Flask *rows*, which this module creates and prunes.
+    Population/TimePoint *rows*, which this module creates and prunes.
 
     Deliberately not `gd_import.run_post_processing`: it lives in aledb_import, so calling
     it would point aledb_experiment at the import app, and it asks for every registered
@@ -510,7 +517,7 @@ def rebuild_after_structural_change(experiment):
     `aledb_fixation` were all named here, and none of them stores anything now -- the
     Overview's counts, the convergent set and the fixated set are each computed by the request
     that renders them, so a renumber has nothing of theirs to mark. What is left is
-    `sample_counts`, which counts the AleId/Flask rows this module creates and prunes.
+    `sample_counts`, which counts the Population/TimePoint rows this module creates and prunes.
 
     Naming a plugin from here was always safe in itself: `get_rebuilders` skips a name nothing
     registered, so a deployment without the plugin simply had less to do. That property still

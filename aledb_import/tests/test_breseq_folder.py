@@ -12,7 +12,7 @@ from aledb_seq.models import (
     ExperimentReference,
     Mutation,
     ObservedMutation,
-    ResequencingExperiment,
+    Sample,
 )
 
 OTHER_SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_B)]
@@ -48,7 +48,7 @@ class BreseqFolderImportTestCase(TestCase):
         self.assertEqual(summary["files"][0]["file"], "Ara-1_500gen_762B")
         self.assertGreater(summary["total_mutations"], 0)
 
-        reseq = ResequencingExperiment.objects.get()
+        reseq = Sample.objects.get()
         self.assertTrue(reseq.bam_stored)
         for artifact in (store.SAMPLE_GD, store.SAMPLE_BAM, store.SAMPLE_BAI):
             self.assertTrue(os.path.isfile(store.sample_path(reseq.id, artifact)),
@@ -60,14 +60,14 @@ class BreseqFolderImportTestCase(TestCase):
         for artifact in (store.REFERENCE_GFF3, store.REFERENCE_FASTA, store.REFERENCE_FAI):
             self.assertTrue(
                 os.path.isfile(
-                    store.experiment_reference_path(reference.ale_experiment_id, artifact)),
+                    store.experiment_reference_path(reference.experiment_id, artifact)),
                 "%s was not stored" % artifact)
 
     def test_stored_bam_is_byte_identical(self):
         sample = breseq_fixture.write_sample(self.drop, "s1")
         self._import()
 
-        reseq = ResequencingExperiment.objects.get()
+        reseq = Sample.objects.get()
         with open(os.path.join(sample, breseq_folder.BAM_RELATIVE_PATH), "rb") as handle:
             original = handle.read()
         with open(store.sample_path(reseq.id, store.SAMPLE_BAM), "rb") as handle:
@@ -79,7 +79,7 @@ class BreseqFolderImportTestCase(TestCase):
         summary = self._import()
 
         self.assertEqual([f["error"] for f in summary["files"]], [None, None])
-        self.assertEqual(ResequencingExperiment.objects.count(), 2)
+        self.assertEqual(Sample.objects.count(), 2)
         self.assertEqual(ExperimentReference.objects.count(), 1)
 
     def test_nested_collection_folder_is_walked(self):
@@ -104,7 +104,7 @@ class BreseqFolderImportTestCase(TestCase):
 
         summary = self._import()
         self.assertEqual([f["error"] for f in summary["files"]], [None, None])
-        self.assertEqual(ResequencingExperiment.objects.count(), 2)
+        self.assertEqual(Sample.objects.count(), 2)
         self.assertEqual(ExperimentReference.objects.count(), 1)
 
     def test_annotation_is_not_rewritten_by_import_order(self):
@@ -139,7 +139,7 @@ class BreseqFolderImportTestCase(TestCase):
         # The batch continued, and the experiment kept exactly one reference.
         self.assertGreater(summary["total_mutations"], 0)
         self.assertEqual(ExperimentReference.objects.count(), 1)
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     def test_gff3_and_fasta_disagreement_is_an_error(self):
         breseq_fixture.write_sample(
@@ -149,14 +149,14 @@ class BreseqFolderImportTestCase(TestCase):
 
         self.assertIn("disagree", summary["files"][0]["error"])
         self.assertEqual(ExperimentReference.objects.count(), 0)
-        self.assertEqual(ResequencingExperiment.objects.count(), 0)
+        self.assertEqual(Sample.objects.count(), 0)
 
     def test_missing_bai_is_a_per_sample_error(self):
         breseq_fixture.write_sample(self.drop, "s1", include_bai=False)
         summary = self._import()
 
         self.assertIn("reference.bam.bai", summary["files"][0]["error"])
-        self.assertEqual(ResequencingExperiment.objects.count(), 0)
+        self.assertEqual(Sample.objects.count(), 0)
 
     def test_gff3_without_inline_fasta_is_an_error(self):
         breseq_fixture.write_sample(
@@ -182,17 +182,17 @@ class BreseqFolderImportTestCase(TestCase):
         self.assertEqual(results["Ara-1_500gen_762B.gd"]["mutations"], 0)
 
         # Only the breseq sample was imported; the bare .gd created nothing.
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
         self.assertFalse(
-            ResequencingExperiment.objects.filter(
-                sample_name="Ara-1_500gen_762B").exists())
+            Sample.objects.filter(
+                source_name="Ara-1_500gen_762B").exists())
 
     def test_gd_inside_a_sample_folder_is_not_double_imported(self):
         """A sample's data/output.gd belongs to it, not to the loose-.gd sweep."""
         breseq_fixture.write_sample(self.drop, "s1")
         summary = self._import()
         self.assertEqual(len(summary["files"]), 1)
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     # --- two folders, one name --------------------------------------------------------
 
@@ -215,7 +215,7 @@ class BreseqFolderImportTestCase(TestCase):
 
         # One sample, from the first folder. Two would have been wrong; one silently
         # overwritten by the other is what this exists to prevent.
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     def test_the_first_folders_mutations_survive_the_duplicate(self):
         """The failure this fixes was silent and total: `_database_gd_mutations` deletes the
@@ -239,7 +239,7 @@ class BreseqFolderImportTestCase(TestCase):
             ObservedMutation.objects.values_list("mutation__position", flat=True))
         self.assertEqual(positions, {100, 200},
                          "the surviving sample must be plate-a's, not plate-b's")
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     def test_three_folders_of_a_name_skip_two(self):
         for parent in ("a", "b", "c"):
@@ -250,7 +250,7 @@ class BreseqFolderImportTestCase(TestCase):
         errors = [f["error"] for f in summary["files"]]
         self.assertIsNone(errors[0])
         self.assertEqual(sum(1 for e in errors[1:] if e), 2)
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     def test_distinct_names_under_one_parent_are_both_imported(self):
         """The guardrail: nesting is not what is refused, a repeated name is."""
@@ -260,7 +260,7 @@ class BreseqFolderImportTestCase(TestCase):
         summary = self._import()
 
         self.assertTrue(all(f["error"] is None for f in summary["files"]), summary["files"])
-        self.assertEqual(ResequencingExperiment.objects.count(), 2)
+        self.assertEqual(Sample.objects.count(), 2)
 
     # --- re-import, across drops ------------------------------------------------------
 
@@ -279,7 +279,7 @@ class BreseqFolderImportTestCase(TestCase):
 
         self.assertEqual(second["files"][0]["replaced"], observations)
         self.assertIsNone(second["files"][0]["error"], "a re-import is not a failure")
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     def test_the_replacement_notice_is_not_a_parse_warning(self):
         """They render under different headings and mean different things -- `warnings` is
@@ -299,7 +299,7 @@ class BreseqFolderImportTestCase(TestCase):
         mutations = Mutation.objects.count()
         self._import()
 
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
         self.assertEqual(ExperimentReference.objects.count(), 1)
         self.assertEqual(Mutation.objects.count(), mutations)
 

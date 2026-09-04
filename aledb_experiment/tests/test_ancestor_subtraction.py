@@ -54,7 +54,7 @@ class TestSubtraction(SubtractionTestCase):
     def test_the_ancestor_sample_leaves_the_observations(self):
         self.designate_a()
         remaining = set(get_evolved_observation_queryset(self.experiment.id)
-                        .values_list("sequencing_experiment_id", flat=True))
+                        .values_list("sample_id", flat=True))
         self.assertNotIn(self.sample_a.id, remaining)
 
     def test_the_raw_queryset_still_has_everything(self):
@@ -94,7 +94,7 @@ class TestListings(SubtractionTestCase):
     def test_the_edit_samples_page_still_shows_it(self):
         self.designate_a()
         response = self.client.get("/ale/experiment/%d/samples/" % self.experiment.id)
-        self.assertContains(response, self.sample_a.sample_name)
+        self.assertContains(response, self.sample_a.source_name)
 
     def test_the_mutation_editor_still_shows_it(self):
         self.designate_a()
@@ -130,8 +130,8 @@ class TestCrossExperiment(SubtractionTestCase):
         """Safe because `Mutation` rows are per experiment, so an id cannot cross."""
         other = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        from aledb_experiment.models import AleExperiment
-        foreign = AleExperiment.objects.get(pk=other["experiment_id"])
+        from aledb_experiment.models import Experiment
+        foreign = Experiment.objects.get(pk=other["experiment_id"])
         elsewhere = self.make_mutation(position=100, sequence_change="A>T",
                                        experiment=foreign)
         self.observe(self.sample_b, elsewhere)
@@ -167,10 +167,10 @@ class TestDeletingTheAncestorSample(SubtractionTestCase):
         self.assertTrue(is_stale("test.ancestor_delete", self.experiment.id))
 
     def test_the_designation_goes_with_the_sample(self):
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
         self.designate_a()
         self.sample_a.delete()
-        self.assertIsNone(AleExperiment.objects.get(pk=self.experiment.pk).ancestor_id)
+        self.assertIsNone(Experiment.objects.get(pk=self.experiment.pk).ancestor_id)
 
     def test_deleting_an_ordinary_sample_marks_nothing(self):
         """The signal has to be able to tell the difference, or every sample deletion in a

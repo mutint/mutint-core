@@ -18,5 +18,5 @@ class ExperimentConfig(AppConfig):
         # that would forget. See `aledb_experiment.ancestor.note_sample_deleted`.
         from django.db.models.signals import pre_delete
         from aledb_experiment.ancestor import note_sample_deleted
-        pre_delete.connect(note_sample_deleted, sender="aledb_seq.ResequencingExperiment",
+        pre_delete.connect(note_sample_deleted, sender="aledb_seq.Sample",
                            dispatch_uid="aledb_experiment.ancestor")

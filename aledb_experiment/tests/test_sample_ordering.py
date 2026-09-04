@@ -12,9 +12,9 @@ against `sample_order` rather than on its own, because the whole point is that t
 
 from django.test import TestCase
 
-from aledb_experiment.models import AleExperiment, AleId, Flask, Media
+from aledb_experiment.models import Experiment, Population, TimePoint, Media
 from aledb_experiment.ordering import sample_sort_key
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 from aledb_seq.util import get_ordered_reseq_queryset
 from aledb_experiment import paths
 
@@ -22,21 +22,21 @@ from aledb_experiment import paths
 class OrderingTestCase(TestCase):
 
     def setUp(self):
-        self.experiment = AleExperiment.objects.create(
+        self.experiment = Experiment.objects.create(
             name="E")
         self.media = Media.objects.create()
 
     def make(self, ale, flask, isolate="1"):
-        ale_row, _ = AleId.objects.get_or_create(ale_experiment=self.experiment,
-                                                 ale_id=str(ale))
-        flask_row, _ = Flask.objects.get_or_create(ale_id=ale_row, flask_number=flask,
+        ale_row, _ = Population.objects.get_or_create(experiment=self.experiment,
+                                                 name=str(ale))
+        flask_row, _ = TimePoint.objects.get_or_create(population=ale_row, value=flask,
                                                    defaults={"media": self.media})
-        return ResequencingExperiment.objects.create(
-            flask=flask_row, isolate_number=str(isolate), is_population=False,
-            sample_name="A%s F%s I%s" % (ale, flask, isolate))
+        return Sample.objects.create(
+            time_point=flask_row, name=str(isolate), is_population=False,
+            source_name="A%s F%s I%s" % (ale, flask, isolate))
 
     def order(self):
-        return [r.sample_name for r in
+        return [r.source_name for r in
                 get_ordered_reseq_queryset(self.experiment.id, include_ancestor=True)]
 
 
@@ -60,7 +60,7 @@ class TestTheRule(OrderingTestCase):
         self.assertEqual(self.order(), ["A1 F2 I1", "A1 F10 I1"])
 
     def test_ale_ten_comes_after_ale_two(self):
-        """`AleId.ale_id` is text since 0008. Without `natural()` this is A10 then A2."""
+        """`Population.name` is text since 0008. Without `natural()` this is A10 then A2."""
         self.make(2, 1)
         self.make(10, 1)
         self.assertEqual(self.order(), ["A2 F1 I1", "A10 F1 I1"])
@@ -101,16 +101,16 @@ class TestThePythonFormAgrees(OrderingTestCase):
     def test_it_matches_the_database_ordering(self):
         self.build()
         in_memory = sorted(
-            ResequencingExperiment.objects.filter(
+            Sample.objects.filter(
                 **{paths.to_experiment(): self.experiment}),
             key=sample_sort_key)
-        self.assertEqual([r.sample_name for r in in_memory], self.order())
+        self.assertEqual([r.source_name for r in in_memory], self.order())
 
     def test_it_beats_sorting_the_display_string(self):
         """The bug this replaced, stated as a test."""
         self.build()
         by_label = sorted(
-            ResequencingExperiment.objects.filter(
+            Sample.objects.filter(
                 **{paths.to_experiment(): self.experiment}),
             key=lambda r: r.ale_flask_isolate_str)
-        self.assertNotEqual([r.sample_name for r in by_label], self.order())
+        self.assertNotEqual([r.source_name for r in by_label], self.order())

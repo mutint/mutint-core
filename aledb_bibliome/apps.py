@@ -10,4 +10,4 @@ class BibliomeConfig(AppConfig):
 
         @register_experiment_context_provider
         def provide_publications(experiment):
-            return {'pub_qryset': Publication.objects.filter(ale_experiment=experiment)}
+            return {'pub_qryset': Publication.objects.filter(experiment=experiment)}

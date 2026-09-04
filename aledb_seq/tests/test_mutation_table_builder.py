@@ -46,8 +46,8 @@ class AmplificationsRemovedTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "1-1-1-1", gd_text=GD_WITH_AMP)
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
-        from aledb_experiment.models import AleExperiment
-        self.experiment = AleExperiment.objects.get()
+        from aledb_experiment.models import Experiment
+        self.experiment = Experiment.objects.get()
 
     # --- the page is gone --------------------------------------------------------------
 
@@ -161,7 +161,7 @@ class AmplificationsRemovedTestCase(TestCase):
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
         observed = sorted(get_all_observed_mutations_filtered(self.experiment.id),
                           key=lambda o: o.id)[0]
-        reseq_dict[observed.sequencing_experiment_id].bam_stored = True
+        reseq_dict[observed.sample_id].bam_stored = True
 
         cell = _get_table_mutation_entry(observed, reseq_dict)
 
@@ -178,7 +178,7 @@ class AmplificationsRemovedTestCase(TestCase):
         reseq_dict = get_reseq_ordered_dict(self.experiment.id, None, None, None)
         observed = sorted(get_all_observed_mutations_filtered(self.experiment.id),
                           key=lambda o: o.id)[0]
-        reseq_dict[observed.sequencing_experiment_id].bam_stored = False
+        reseq_dict[observed.sample_id].bam_stored = False
 
         cell = _get_table_mutation_entry(observed, reseq_dict)
 
@@ -229,8 +229,8 @@ class ManuallyAddedMutationTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "1-1-1-1", gd_text=GD_WITH_AMP)
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
-        from aledb_experiment.models import AleExperiment
-        self.experiment = AleExperiment.objects.get()
+        from aledb_experiment.models import Experiment
+        self.experiment = Experiment.objects.get()
 
     def _add_by_hand(self):
         """The rows `mutation_add_apply` produces, built by the code that produces them.
@@ -246,7 +246,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         from aledb_seq.util import get_reseq_ordered_dict
 
         mutation = Mutation.objects.create(
-            ale_experiment=self.experiment,
+            experiment=self.experiment,
             position=4242,
             reseq_reference="test_ref",
             mutation_type="SNP",
@@ -255,7 +255,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         sample = list(get_reseq_ordered_dict(self.experiment.id, None, None, None)
                       .values())[0]
         ObservedMutation.objects.create(
-            sequencing_experiment=sample,
+            sample=sample,
             mutation=mutation,
             **build_observation(Decimal("1.0")))
         return mutation

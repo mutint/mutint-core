@@ -234,7 +234,7 @@ def _duplicate_error(root, kept, skipped):
     """Why the second folder of a name was not imported.
 
     Two directories with the same basename resolve to the same sample -- an A-F-I-R name
-    parses to one coordinate, and an auto-numbered one reuses the ResequencingExperiment
+    parses to one coordinate, and an auto-numbered one reuses the Sample
     already matching that name. So the second folder does not arrive beside the first, it
     *replaces* it: `_database_gd_mutations` deletes the sample's observations and writes its
     own. The whole of the first folder's data would be gone, with nothing reported and both

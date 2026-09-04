@@ -216,7 +216,7 @@ def _stored_hashes(reference):
             "This experiment's reference was recorded before per-sequence hashes existed, "
             "so its contigs cannot be matched to the uploaded ones by sequence. Run "
             "`./aledb rename_contigs %s --repair` to recompute them from the stored FASTA "
-            "first." % (reference.ale_experiment_id,))
+            "first." % (reference.experiment_id,))
     return [(entry["id"], entry["sha256"]) for entry in entries]
 
 
@@ -359,7 +359,7 @@ def _rename_mutations(Mutation, experiment, mapping):
     reseq_reference` statements per pair would collapse one -- and `Mutation` has no unique
     constraint, so the result would be silent duplicates rather than an IntegrityError.
     """
-    queryset = Mutation.objects.filter(ale_experiment=experiment).only(
+    queryset = Mutation.objects.filter(experiment=experiment).only(
         "id", "reseq_reference", "gd_data", "sequence_change")
     batch, total = [], 0
     for mutation in queryset.iterator(chunk_size=BATCH):

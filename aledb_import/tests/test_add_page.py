@@ -27,8 +27,8 @@ class AddPageTestCase(TestCase):
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
-        from aledb_experiment.models import AleExperiment
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        from aledb_experiment.models import Experiment
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def test_page_renders_scoped_to_the_experiment(self):
         response = self.client.get(
@@ -266,8 +266,8 @@ class ImportTypesOfferedTestCase(TestCase):
         self.addCleanup(patcher.disable)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        from aledb_experiment.models import AleExperiment
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        from aledb_experiment.models import Experiment
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def _establish_reference(self):
         from aledb_import import reference_store

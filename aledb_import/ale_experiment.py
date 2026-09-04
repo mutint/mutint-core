@@ -10,7 +10,7 @@ import aledb_metadata.parser
 from aledb_dashboard.util import rebuild_dashboard_data
 import logging
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from django.contrib.auth.models import User
 from datetime import datetime
 from aledb_experiment.permissions import set_primary_owner
@@ -34,8 +34,8 @@ def remove_flask(flask_primary_key):
     """
     from aledb_common.rebuild_registry import request_rebuild
 
-    flask_to_delete = aledb_experiment.models.Flask.objects.get(pk=flask_primary_key)
-    experiment_id = flask_to_delete.ale_id.ale_experiment_id
+    flask_to_delete = aledb_experiment.models.TimePoint.objects.get(pk=flask_primary_key)
+    experiment_id = flask_to_delete.population.experiment_id
     flask_to_delete.delete()
     _delete_all_orphaned_mutations()
     # After the delete, not before: marking data stale that is about to change again would be
@@ -49,7 +49,7 @@ def delete_ale_experiments(ale_experiment_primary_key_list):
     Executed from Django ipython shell.
     """
     for exp_id in ale_experiment_primary_key_list:
-        ale_experiment_to_delete = aledb_experiment.models.AleExperiment.objects.get(pk=exp_id)
+        ale_experiment_to_delete = aledb_experiment.models.Experiment.objects.get(pk=exp_id)
         print("Deleting Experiment #" + str(exp_id) + ":", ale_experiment_to_delete.name)
         message = "Experiment %s was deleted" % ale_experiment_to_delete.name
         ale_experiment_to_delete.delete()
@@ -81,11 +81,11 @@ def delete_isolate(ale_experiment_primary_key, ale_number, flask_number, isolate
     There is one row now, so the cascade it relied on is the row itself -- and
     `isolate_number` is the whole label (`1-2`), not the isolate half of a pair.
     """
-    for sample in aledb_seq.models.ResequencingExperiment.objects.filter(
-            isolate_number=isolate_number):
-        if sample.flask.ale_id.ale_experiment_id == ale_experiment_primary_key and \
-                sample.flask.ale_id.ale_id == ale_number and \
-                sample.flask.flask_number == flask_number:
+    for sample in aledb_seq.models.Sample.objects.filter(
+            name=isolate_number):
+        if sample.time_point.population.experiment_id == ale_experiment_primary_key and \
+                sample.time_point.population.name == ale_number and \
+                sample.time_point.value == flask_number:
             sample.delete()
             print("Successfully removed: ", ale_number, flask_number, isolate_number)
     _delete_all_orphaned_mutations()

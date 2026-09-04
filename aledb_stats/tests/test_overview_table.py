@@ -9,9 +9,9 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Project,
+    Experiment, Population, TimePoint, Project,
 )
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 
 class OverviewTableTestCase(TestCase):
@@ -22,17 +22,17 @@ class OverviewTableTestCase(TestCase):
         # experiment's pages then 403.
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
         context = prepare_experiment_by_id(self.experiment.id)
 
-        ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
-        flask = Flask.objects.create(ale_id=ale, flask_number=30000,
+        ale = Population.objects.create(experiment=self.experiment, name=1)
+        flask = TimePoint.objects.create(population=ale, value=30000,
                                      media=context["media"])
-        self.sample = ResequencingExperiment.objects.create(
-            flask=flask, isolate_number="1-1", is_population=False,
-            sample_name="1-30000-1-1",
+        self.sample = Sample.objects.create(
+            time_point=flask, name="1-1", is_population=False,
+            source_name="1-30000-1-1",
             mean_coverage=68.0388108058057,
             percentage_mapped=95.5735575027531,
             average_read_length=139.540777568556,

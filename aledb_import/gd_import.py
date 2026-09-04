@@ -12,7 +12,7 @@ stored verbatim in ``Mutation.gd_data`` so it can be round-tripped back to a
 ``.gd`` line for ``gdtools APPLY`` (see ``Mutation.to_gd_line``).
 
 Imported mutations are attached to the normal experiment hierarchy
-(``AleExperiment -> AleId -> Flask -> ResequencingExperiment -> ObservedMutation``) so they appear in the existing
+(``Experiment -> Population -> TimePoint -> Sample -> ObservedMutation``) so they appear in the existing
 mutation tables, stats, and dashboards with no extra plumbing. The chain is
 synthesized the same way the CLI does it: a default Media
 placeholders, and the A-F-I-R identity parsed from each filename.
@@ -26,9 +26,9 @@ from django.db import transaction
 
 import aledb_metadata.parser as metadata_defaults
 from aledb_experiment.models import (
-    AleExperiment,
-    AleId,
-    Flask,
+    Experiment,
+    Population,
+    TimePoint,
     Media,
     Project,
 )
@@ -40,7 +40,7 @@ from aledb_import.sample_names import parse_sample_identity
 from aledb_seq.models import (
     Mutation,
     ObservedMutation,
-    ResequencingExperiment,
+    Sample,
     UnassignedMissingCoverageEvidence,
 )
 
@@ -69,7 +69,7 @@ class NotAGenomeDiff(Exception):
 
 def import_gd_files(uploaded_files, project_name, experiment_name, person, is_public=False,
                     require_reference=True):
-    """Import a batch of dropped ``.gd`` files into a single AleExperiment.
+    """Import a batch of dropped ``.gd`` files into a single Experiment.
 
     ``uploaded_files`` is an iterable of file-like objects each exposing ``.name``
     and ``.read()`` (e.g. Django ``UploadedFile``). Each file's A-F-I-R identity is
@@ -131,7 +131,7 @@ def _prepare_experiment(project_name, experiment_name, person, is_public):
     except Project.DoesNotExist:
         project = try_creating_project(project_name, person, is_public)
 
-    experiment, _ = AleExperiment.objects.get_or_create(
+    experiment, _ = Experiment.objects.get_or_create(
         name=experiment_name, person=person, project=project)
     media, _ = Media.objects.get_or_create(
         description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
@@ -151,7 +151,7 @@ def prepare_experiment_by_id(ale_experiment_id):
     It also avoids `try_creating_project` -> `find_user`, which prompts on stdin and therefore
     cannot run inside a web request.
     """
-    experiment = AleExperiment.objects.get(pk=ale_experiment_id)
+    experiment = Experiment.objects.get(pk=ale_experiment_id)
     media, _ = Media.objects.get_or_create(
         description=metadata_defaults.DEFAULT_MEDIA_DESCRIPTION,
         temperature=metadata_defaults.DEFAULT_TEMPERATURE)
@@ -233,7 +233,7 @@ def import_document_as_sample(document, sample_name, context, person):
 
     # Counted before the write, which is what clears them.
     replaced = ObservedMutation.objects.filter(
-        sequencing_experiment=seq_experiment).count()
+        sample=seq_experiment).count()
 
     return seq_experiment, _database_gd_mutations(
         seq_experiment, document, context.get("experiment")), replaced
@@ -279,7 +279,7 @@ def _parse_document(uploaded):
 def _get_or_create_chain(context, document, ale_number, flask_number,
                          isolate_number, tech_rep_number, person, sample_name,
                          isolate_description=""):
-    """Synthesize the experiment chain down to a ResequencingExperiment, reading
+    """Synthesize the experiment chain down to a Sample, reading
     reference/date/type hints from the GenomeDiff header (no breseq HTML).
 
     `ale_number` and `isolate_number` are text and the other two are integers, which is the
@@ -299,18 +299,18 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     # breseq marks population (polymorphism) runs with -p in the command line.
     is_population = " -p" in (metadata.get("COMMAND", "") or "")
 
-    ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id=ale_number)
-    flask, _ = Flask.objects.get_or_create(
-        flask_number=flask_number, ale_id=ale_id, media=context["media"])
+    ale_id, _ = Population.objects.get_or_create(experiment=experiment, name=ale_number)
+    flask, _ = TimePoint.objects.get_or_create(
+        value=flask_number, population=ale_id, media=context["media"])
     label = sample_names.sample_label(isolate_number, tech_rep_number)
-    seq_experiment, _ = ResequencingExperiment.objects.get_or_create(
-        flask=flask,
-        isolate_number=label,
+    seq_experiment, _ = Sample.objects.get_or_create(
+        time_point=flask,
+        name=label,
         defaults={
-            "sample_name": sample_name,
+            "source_name": sample_name,
             "person": person,
             "is_population": is_population,
-            "reseq_reference": reseq_reference[:200],
+            "reference_genome": reseq_reference[:200],
             "reseq_date": reseq_date[:200],
             # A label to read the sample by, on creation only: `ale_flask_isolate_str`
             # prefers it, so `Ara-2_500gen_763A` shows as itself rather than as
@@ -325,46 +325,46 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
 def _get_or_create_autonumbered_chain(context, document, person, sample_name):
     """Chain for a sample whose filename carries no identity at all.
 
-    Everything hangs off ALE 1 / Flask 1, but each distinct sample gets its own label so
+    Everything hangs off ALE 1 / TimePoint 1, but each distinct sample gets its own label so
     the samples stay individually addressable. Re-importing a sample must not allocate a
     second one, so an existing sample of this name is reused."""
     experiment = context["experiment"]
 
-    existing = ResequencingExperiment.objects.filter(
-        sample_name=sample_name,
+    existing = Sample.objects.filter(
+        source_name=sample_name,
         **{paths.to_experiment(): experiment}).first()
     if existing is not None:
         return existing
 
     metadata = document.metadata
-    ale_id, _ = AleId.objects.get_or_create(ale_experiment=experiment, ale_id="1")
-    flask, _ = Flask.objects.get_or_create(
-        flask_number=1, ale_id=ale_id, media=context["media"])
+    ale_id, _ = Population.objects.get_or_create(experiment=experiment, name="1")
+    flask, _ = TimePoint.objects.get_or_create(
+        value=1, population=ale_id, media=context["media"])
 
-    return ResequencingExperiment.objects.create(
-        flask=flask,
-        isolate_number=_next_isolate_number(flask),
+    return Sample.objects.create(
+        time_point=flask,
+        name=_next_isolate_number(flask),
         # ale_flask_isolate_str() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
         is_population=" -p" in (metadata.get("COMMAND", "") or ""),
-        reseq_reference=(metadata.get("REFSEQ", "") or "")[:200],
+        reference_genome=(metadata.get("REFSEQ", "") or "")[:200],
         reseq_date=(metadata.get("CREATED", "") or "")[:200],
-        sample_name=sample_name, person=person)
+        source_name=sample_name, person=person)
 
 
 def _next_isolate_number(flask):
     """The next free number in `flask`, as text.
 
-    Counted in Python rather than by `Max("isolate_number")`, which stopped meaning
+    Counted in Python rather than by `Max("name")`, which stopped meaning
     anything when the column became text (`aledb_experiment.0008`): `MAX` over strings
     answers `"9"` for a flask holding 1..10, and the next sample would collide with 10.
     Labels that are not numbers are skipped rather than counted -- a sample called `763A`,
     or one called `1-2`, says nothing about which numbers are free.
     """
     numbers = [int(value) for value
-               in ResequencingExperiment.objects.filter(flask=flask)
-                                                .values_list("isolate_number", flat=True)
+               in Sample.objects.filter(time_point=flask)
+                                                .values_list("name", flat=True)
                if str(value).isdigit()]
     return str(max(numbers, default=0) + 1)
 
@@ -409,14 +409,14 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
     """Create Mutation + ObservedMutation rows from the parsed mutations.
 
     Re-importing the same sample is idempotent: existing ObservedMutations for this
-    ResequencingExperiment are cleared first, and Mutations are deduplicated via
+    Sample are cleared first, and Mutations are deduplicated via
     get_or_create (per experiment).
 
     When the experiment has a reference, the records are annotated first, so gene,
     codon and amino-acid fields come from the reference rather than from whatever
     the .gd happened to carry. A .gd dropped before any reference simply imports
     unannotated; `./aledb reannotate` fills it in once one arrives."""
-    ObservedMutation.objects.filter(sequencing_experiment=seq_experiment).delete()
+    ObservedMutation.objects.filter(sample=seq_experiment).delete()
 
     records = [record for record in document.mutations if _is_storable(record)]
     verbatim = [{
@@ -442,7 +442,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
         sequence_change = synthesize_sequence_change(record)[:200]
 
         mutation, created = Mutation.objects.get_or_create(
-            ale_experiment=experiment,
+            experiment=experiment,
             position=attributes.get("position"),
             reseq_reference=attributes.get("seq_id"),
             mutation_type=record.type,
@@ -461,7 +461,7 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
         annotation.apply_to(mutation, annotated_record)
 
         observed_mutations.append(ObservedMutation(
-            sequencing_experiment=seq_experiment,
+            sample=seq_experiment,
             mutation=mutation,
             present=True,
             source=BRESEQ_SOURCE,
@@ -480,7 +480,7 @@ def _database_missing_coverage(seq_experiment, document):
     none; both paths go through here now.
     """
     UnassignedMissingCoverageEvidence.objects.filter(
-        sequencing_experiment=seq_experiment).delete()
+        sample=seq_experiment).delete()
     for record in document.evidence:
         if record.type != "MC":
             continue
@@ -489,22 +489,22 @@ def _database_missing_coverage(seq_experiment, document):
             seq_id=attributes.get("seq_id"),
             start=attributes.get("start"),
             end=attributes.get("end"),
-            sequencing_experiment=seq_experiment)
+            sample=seq_experiment)
 
 
 def export_gd_text(seq_experiment):
-    """Reconstruct a GenomeDiff (.gd) file for a ResequencingExperiment's mutations.
+    """Reconstruct a GenomeDiff (.gd) file for a Sample's mutations.
 
     The result is a valid ``.gd`` accepted by ``gdtools APPLY`` (resolution of MOB
     ``repeat_name`` / CON/INT ``region`` still requires the reference genbank named
     in ``#=REFSEQ``)."""
     lines = ["#=GENOME_DIFF\t1.0"]
-    reseq_reference = seq_experiment.reseq_reference or ""
+    reseq_reference = seq_experiment.reference_genome or ""
     if reseq_reference:
         lines.append("#=REFSEQ\t%s" % reseq_reference)
 
     observed = (ObservedMutation.objects
-                .filter(sequencing_experiment=seq_experiment)
+                .filter(sample=seq_experiment)
                 .select_related("mutation")
                 .order_by("mutation__position"))
     for observed_mutation in observed:

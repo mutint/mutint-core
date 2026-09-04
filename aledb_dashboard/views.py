@@ -4,7 +4,7 @@ from django.shortcuts import render
 from aledb_seq.views import common
 from django.utils.safestring import mark_safe
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment, Project, live
+from aledb_experiment.models import Experiment, Project, live
 from aledb_common.rebuild_registry import ensure_fresh
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts, SampleCounts
 from aledb_common.logger import user_extra, join_extras
@@ -55,7 +55,7 @@ def get_general_count_dict():
     # `live()`, not `.count()`. Deletion here is soft, so the unfiltered managers still
     # carry every project and experiment anybody has ever removed -- and this page was
     # counting them.
-    count_dict['ale_exp'] = live(AleExperiment.objects).count()
+    count_dict['ale_exp'] = live(Experiment.objects).count()
     count_dict['project'] = live(Project.objects).count()
 
     sample_counts = SampleCounts.objects.first()

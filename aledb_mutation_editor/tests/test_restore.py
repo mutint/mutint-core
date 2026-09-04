@@ -19,20 +19,20 @@ from aledb_seq.models import Mutation, ObservedMutation
 class RestoreTestCase(EditorTestCase):
 
     def _delete(self, sample, mutation, note="deleted"):
-        observed = ObservedMutation.objects.get(sequencing_experiment=sample,
+        observed = ObservedMutation.objects.get(sample=sample,
                                                 mutation=mutation)
         return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
                                      removals=[observed], note=note)
 
     def test_a_deleted_observation_comes_back_field_for_field(self):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         before = history.observation_snapshot(observed)
 
         self._delete(self.sample_a, self.mut_2)
         history.restore(self.experiment, self.owner, None)
 
-        restored = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        restored = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         self.assertEqual(before, history.observation_snapshot(restored))
         self.assertEqual(Decimal("0.7500"), restored.frequency)
@@ -111,8 +111,8 @@ class RestoreTestCase(EditorTestCase):
 class PerSampleRestoreTestCase(EditorTestCase):
 
     def test_restoring_one_sample_leaves_the_others_alone(self):
-        observed = list(ObservedMutation.objects.filter(sequencing_experiment=self.sample_a))
-        observed += list(ObservedMutation.objects.filter(sequencing_experiment=self.sample_b))
+        observed = list(ObservedMutation.objects.filter(sample=self.sample_a))
+        observed += list(ObservedMutation.objects.filter(sample=self.sample_b))
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=observed,
                               note="cleared both")
         self.assertEqual(0, self.observation_count())
@@ -131,7 +131,7 @@ class PerSampleRestoreTestCase(EditorTestCase):
         self.assertIn("sample(s)", restore.note)
 
     def _clear(self, sample):
-        observed = list(ObservedMutation.objects.filter(sequencing_experiment=sample))
+        observed = list(ObservedMutation.objects.filter(sample=sample))
         return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
                                      removals=observed, note="cleared")
 
@@ -148,7 +148,7 @@ class SweptMutationTestCase(EditorTestCase):
 
     def test_the_sweep_takes_a_mutation_whose_last_observation_was_deleted(self):
         """Establishes the precondition; if this stops being true the rest is moot."""
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed])
 
@@ -157,7 +157,7 @@ class SweptMutationTestCase(EditorTestCase):
         self.assertFalse(Mutation.objects.filter(pk=self.mut_2.pk).exists())
 
     def test_the_log_survives_the_sweep_with_its_foreign_key_nulled(self):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         change_set = history.apply_changes(self.experiment, self.owner, KIND_DELETE,
                                            removals=[observed])
@@ -169,7 +169,7 @@ class SweptMutationTestCase(EditorTestCase):
         self.assertEqual(200, change.mutation_identity["position"])
 
     def test_restore_recreates_the_mutation_and_the_observation(self):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         before = history.observation_snapshot(observed)
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed])
@@ -177,7 +177,7 @@ class SweptMutationTestCase(EditorTestCase):
 
         history.restore(self.experiment, self.owner, None)
 
-        recreated = Mutation.objects.get(ale_experiment=self.experiment, position=200)
+        recreated = Mutation.objects.get(experiment=self.experiment, position=200)
         self.assertNotEqual(self.mut_2.pk, recreated.pk,
                             "a swept row cannot come back under its old id")
         self.assertEqual("C>G", recreated.sequence_change)
@@ -186,18 +186,18 @@ class SweptMutationTestCase(EditorTestCase):
         self.assertEqual(self.mut_2.gd_data, recreated.gd_data)
         self.assertEqual(self.mut_2.annotation, recreated.annotation)
 
-        restored = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        restored = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=recreated)
         self.assertEqual(before, history.observation_snapshot(restored))
 
     def test_it_does_not_mint_a_second_row_for_a_mutation_that_survived(self):
         """mut_1 is observed in both samples, so deleting one observation does not orphan it."""
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_1)
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed])
         _delete_all_orphaned_mutations()
 
         history.restore(self.experiment, self.owner, None)
 
-        self.assertEqual(1, Mutation.objects.filter(ale_experiment=self.experiment,
+        self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
                                                     position=100).count())

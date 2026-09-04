@@ -8,7 +8,7 @@ a plain `.delete()` misses -- the sweep of mutations left orphaned
 once their observations go. It also removes the experiment's files from the managed store,
 which nothing else in the codebase does.
 
-Projects are purged after their experiments: `AleExperiment.project` is DO_NOTHING, so
+Projects are purged after their experiments: `Experiment.project` is DO_NOTHING, so
 deleting a project first would orphan its experiments into permanent invisibility.
 """
 
@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from aledb_common import store
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from aledb_experiment import paths
 
 DEFAULT_RETENTION_DAYS = 30
@@ -39,7 +39,7 @@ class Command(BaseCommand):
         cutoff = timezone.now() - timezone.timedelta(days=options["older_than"])
         dry_run = options["dry_run"]
 
-        experiments = list(AleExperiment.objects.filter(
+        experiments = list(Experiment.objects.filter(
             deleted_at__isnull=False, deleted_at__lt=cutoff))
         projects = list(Project.objects.filter(
             deleted_at__isnull=False, deleted_at__lt=cutoff))
@@ -47,7 +47,7 @@ class Command(BaseCommand):
         # An experiment inside a project being purged goes with it, even if the experiment
         # itself was never flagged.
         for project in projects:
-            for experiment in AleExperiment.objects.filter(project=project):
+            for experiment in Experiment.objects.filter(project=project):
                 if experiment not in experiments:
                     experiments.append(experiment)
 
@@ -74,7 +74,7 @@ class Command(BaseCommand):
 
         experiment_id = experiment.id
         sample_dirs = [store.sample_dir(reseq.id)
-                       for reseq in self._resequencing_experiments(experiment)]
+                       for reseq in self._samples(experiment)]
 
         delete_ale_experiments([experiment_id])
 
@@ -84,9 +84,9 @@ class Command(BaseCommand):
             shutil.rmtree(path, ignore_errors=True)
 
     @staticmethod
-    def _resequencing_experiments(experiment):
-        from aledb_seq.models import ResequencingExperiment
+    def _samples(experiment):
+        from aledb_seq.models import Sample
 
-        # Nothing below AleId carries an experiment id, so this is the four-hop traversal.
-        return ResequencingExperiment.objects.filter(
+        # Nothing below Population carries an experiment id, so this is the four-hop traversal.
+        return Sample.objects.filter(
             **{paths.to_experiment(): experiment})

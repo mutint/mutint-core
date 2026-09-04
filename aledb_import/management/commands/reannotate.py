@@ -19,7 +19,7 @@ import os
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_import import annotation, reference as reference_io, reference_store
 from aledb_import.gd_import import run_post_processing
 from aledb_seq.models import ExperimentReference, Mutation
@@ -32,7 +32,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", type=int,
-                            help="AleExperiment primary key (ale_id)")
+                            help="Experiment primary key (ale_id)")
         parser.add_argument("--ref", dest="reference_path", default=None,
                             help="GenBank, GFF3 or FASTA to establish before re-annotating")
         parser.add_argument("--replace", action="store_true",
@@ -52,7 +52,7 @@ class Command(BaseCommand):
         references = self._reference(experiment, options["reference_path"],
                                      options["replace"], dry_run)
 
-        mutations = list(Mutation.objects.filter(ale_experiment=experiment))
+        mutations = list(Mutation.objects.filter(experiment=experiment))
         if not mutations:
             self.stdout.write("Experiment %r has no mutations." % experiment.name)
             return
@@ -88,8 +88,8 @@ class Command(BaseCommand):
 
     def _experiment(self, experiment_id):
         try:
-            return AleExperiment.objects.get(pk=experiment_id)
-        except AleExperiment.DoesNotExist:
+            return Experiment.objects.get(pk=experiment_id)
+        except Experiment.DoesNotExist:
             raise CommandError("No experiment with ale_id=%s" % experiment_id)
 
     def _reference(self, experiment, reference_path, replace, dry_run):
@@ -116,7 +116,7 @@ class Command(BaseCommand):
             raise CommandError(str(error))
 
         before = ExperimentReference.objects.filter(
-            ale_experiment=experiment).values_list("gff3_sha256", flat=True).first()
+            experiment=experiment).values_list("gff3_sha256", flat=True).first()
 
         if dry_run:
             # Annotate against the file itself rather than establishing it, so a
@@ -134,7 +134,7 @@ class Command(BaseCommand):
                 "%s\nThis is a different genome, not a re-annotation of the same one. "
                 "Pass --replace if that is really what you mean." % error)
 
-        after = ExperimentReference.objects.get(ale_experiment=experiment).gff3_sha256
+        after = ExperimentReference.objects.get(experiment=experiment).gff3_sha256
         if before is None:
             self.stdout.write("Established %s as the reference for %r."
                               % (os.path.basename(reference_path), experiment.name))

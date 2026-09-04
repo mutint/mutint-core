@@ -175,7 +175,7 @@ def mutation_for_identity(experiment, identity):
     """
     lookup = {field: identity.get(field) for field in MUTATION_KEY_FIELDS}
     return Mutation.objects.get_or_create(
-        ale_experiment=experiment,
+        experiment=experiment,
         defaults={
             "gd_data": identity.get("gd_data"),
             "annotation": identity.get("annotation"),
@@ -235,7 +235,7 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
         return None
 
     change_set = MutationChangeSet.objects.create(
-        ale_experiment=experiment,
+        experiment=experiment,
         created_by=user if getattr(user, "is_authenticated", False) else None,
         kind=kind,
         note=note,
@@ -247,7 +247,7 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
         changes.append(MutationChange(
             change_set=change_set,
             operation=OP_REMOVE,
-            sample_id=observed.sequencing_experiment_id,
+            sample_id=observed.sample_id,
             mutation=observed.mutation,
             observation=observation_snapshot(observed),
             mutation_identity=mutation_identity(observed.mutation)))
@@ -256,7 +256,7 @@ def apply_changes(experiment, user, kind, removals=(), additions=(), note="",
         identity = entry["identity"]
         resolved = _resolve_mutation(experiment, entry.get("mutation"), identity)
         created = ObservedMutation.objects.create(
-            sequencing_experiment_id=entry["sample_id"],
+            sample_id=entry["sample_id"],
             mutation=resolved,
             **_observation_kwargs(entry["observation"]))
         changes.append(MutationChange(
@@ -310,7 +310,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
 
     before = mutation_identity(mutation)
     change_set = MutationChangeSet.objects.create(
-        ale_experiment=experiment,
+        experiment=experiment,
         created_by=user if getattr(user, "is_authenticated", False) else None,
         kind=KIND_EDIT,
         note=note)
@@ -319,7 +319,7 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
         MutationChange(
             change_set=change_set,
             operation=OP_REMOVE,
-            sample_id=observed.sequencing_experiment_id,
+            sample_id=observed.sample_id,
             mutation=mutation,
             observation=observation_snapshot(observed),
             mutation_identity=before)
@@ -336,13 +336,13 @@ def apply_mutation_edit(experiment, user, mutation, identity, note=""):
 
     for observed in observations:
         created = ObservedMutation.objects.create(
-            sequencing_experiment_id=observed.sequencing_experiment_id,
+            sample_id=observed.sample_id,
             mutation=mutation,
             **_observation_kwargs(observation_snapshot(observed)))
         changes.append(MutationChange(
             change_set=change_set,
             operation=OP_ADD,
-            sample_id=observed.sequencing_experiment_id,
+            sample_id=observed.sample_id,
             mutation=mutation,
             observation=observation_snapshot(created),
             mutation_identity=identity))
@@ -402,7 +402,7 @@ def observations_for(experiment, sample_ids=None):
                 .filter(**{_EXPERIMENT_PATH: experiment})
                 .select_related("mutation"))
     if sample_ids is not None:
-        queryset = queryset.filter(sequencing_experiment_id__in=list(sample_ids))
+        queryset = queryset.filter(sample_id__in=list(sample_ids))
     return queryset
 
 
@@ -410,7 +410,7 @@ def live_state(experiment, sample_ids=None):
     """The current observations, as {key: [entry, ...]}."""
     state = {}
     for observed in observations_for(experiment, sample_ids):
-        entry = _entry(observed.sequencing_experiment_id,
+        entry = _entry(observed.sample_id,
                        mutation_identity(observed.mutation),
                        observation_snapshot(observed),
                        mutation=observed.mutation,
@@ -432,7 +432,7 @@ def state_after(experiment, change_set=None, sample_ids=None):
     state = live_state(experiment, sample_ids)
 
     changes = (MutationChange.objects
-               .filter(change_set__ale_experiment=experiment)
+               .filter(change_set__experiment=experiment)
                .select_related("mutation"))
     if change_set is not None:
         changes = changes.filter(change_set__pk__gt=change_set.pk)

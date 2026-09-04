@@ -4,7 +4,7 @@ import csv
 import json
 
 from aledb_import.sample_names import sample_label
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 from aledb_experiment.models import Media
 from aledb_metadata.xpmdvalidator.validate import SCHEMA_PATH, is_valid
 from aledb_experiment import paths
@@ -144,11 +144,11 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
                 # the on-disk format and do not change -- but they name one sample now, so
                 # they are joined the same way an imported filename is. See
                 # `aledb_import.sample_names.sample_label`.
-                tech_rep = ResequencingExperiment.objects.get(
+                tech_rep = Sample.objects.get(
                     **{paths.to_sample_label(): sample_label(
                            metadata_dict[ISOLATE_NUMBER], metadata_dict[TECH_REP_NUMBER]),
-                       paths.to_flask_ordinal(): metadata_dict[FLASK_NUMBER],
-                       paths.to_ale_label(): metadata_dict[ALE_NUMBER],
+                       paths.to_time_point_value(): metadata_dict[FLASK_NUMBER],
+                       paths.to_population_label(): metadata_dict[ALE_NUMBER],
                        paths.to_experiment_id(): ale_experiment_primary_key})
             except Exception as e:
                 print("Error for " + metadata_dict[ALE_NUMBER] + "-" + metadata_dict[FLASK_NUMBER] + "-" + metadata_dict[ISOLATE_NUMBER] + '-' + metadata_dict[TECH_REP_NUMBER] + ": ", e)
@@ -207,12 +207,12 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
                 supplement_values.append(media_components_dict[supplement_key])
             supplement = ",".join(supplement_values)
 
-            ale_id = tech_rep.flask.ale_id
-            ale_id.description = ale_id_description
-            ale_id.strain = strain
-            if ale_id.species is None:
-                ale_id.species = ""
-            ale_id.save()
+            population = tech_rep.time_point.population
+            population.description = ale_id_description
+            population.strain = strain
+            if population.species is None:
+                population.species = ""
+            population.save()
 
             media, created = Media.objects.get_or_create(description=media_description,
                                                          temperature=media_temperature,
@@ -231,7 +231,7 @@ def parse_metadata_post_experiment_upload(metadata_path, ale_experiment_primary_
 
             media.save()
 
-            flask = tech_rep.flask
+            flask = tech_rep.time_point
             flask.media = media
             flask.save()
 

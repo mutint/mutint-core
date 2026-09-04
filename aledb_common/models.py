@@ -20,16 +20,16 @@ class DerivedDataState(models.Model):
     to every caller -- "does this need recomputing" -- and answering them the same way means a
     newly registered rebuilder needs no backfill and a new experiment needs no seeding.
 
-    `ale_experiment` is NULL for a SITE_SCOPE rebuild, and that is why there are two constraints
+    `experiment` is NULL for a SITE_SCOPE rebuild, and that is why there are two constraints
     below rather than one `unique_together`. In SQL a NULL is not equal to another NULL, so a
-    unique index over (name, ale_experiment) does not constrain the site-scoped rows at all --
+    unique index over (name, experiment) does not constrain the site-scoped rows at all --
     it would happily hold a dozen rows saying different things about the same rebuild, and
     whichever `is_stale` read first would win. The partial index says the thing the pair cannot.
     """
 
     name = models.CharField(max_length=100, db_index=True,
                             help_text="the name the rebuilder is registered under")
-    ale_experiment = models.ForeignKey("aledb_experiment.AleExperiment", null=True, blank=True,
+    experiment = models.ForeignKey("aledb_experiment.Experiment", null=True, blank=True,
                                        on_delete=models.CASCADE,
                                        help_text="NULL for a site-scoped rebuild")
     stale_since = models.DateTimeField(null=True, blank=True, db_index=True,
@@ -41,14 +41,14 @@ class DerivedDataState(models.Model):
 
     class Meta:
         constraints = [
-            UniqueConstraint(fields=["name", "ale_experiment"],
+            UniqueConstraint(fields=["name", "experiment"],
                              name="one_state_per_rebuild_per_experiment"),
-            UniqueConstraint(fields=["name"], condition=Q(ale_experiment__isnull=True),
+            UniqueConstraint(fields=["name"], condition=Q(experiment__isnull=True),
                              name="one_state_per_site_scoped_rebuild"),
         ]
         verbose_name = "derived data state"
         verbose_name_plural = "derived data states"
 
     def __str__(self):
-        where = "site" if self.ale_experiment_id is None else "experiment %s" % self.ale_experiment_id
+        where = "site" if self.experiment_id is None else "experiment %s" % self.experiment_id
         return "%s (%s): %s" % (self.name, where, "stale" if self.stale_since else "current")

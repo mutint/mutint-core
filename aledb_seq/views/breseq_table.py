@@ -21,7 +21,7 @@ from django.urls import reverse
 import aledb_seq.views.common
 from aledb_common.logger import join_extras, user_extra
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_project
 from aledb_filter.util import filter_observed_mutations
 from aledb_filter.view_filter import get_view_filter
@@ -90,7 +90,7 @@ def breseq_table(request):
                                       {"time taken": time.time() - started, "rows": len(rows)}))
         template = loader.get_template("breseq_table/breseq_table.html")
         return HttpResponse(template.render(context, request), content_type="text/html")
-    except AleExperiment.DoesNotExist:
+    except Experiment.DoesNotExist:
         return aledb_seq.views.common.no_experiment_selected(
             request, context, logger, "samples")
     except Exception as error:
@@ -163,7 +163,7 @@ def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
     breseq called in one sample rather than a conclusion drawn from it.
     """
     observed = filter_observed_mutations(
-        ObservedMutation.objects.filter(sequencing_experiment=reseq).select_related("mutation"),
+        ObservedMutation.objects.filter(sample=reseq).select_related("mutation"),
         view_filter=view_filter)
     # filter_observed_mutations orders across samples; within one sample breseq
     # orders by reference then position.
@@ -191,10 +191,10 @@ def _refseq_url():
         if not observed.mutation.reseq_reference:
             return None
         return "%s?mutation_id=%s&reseq_id=%s" % (
-            reverse("ncbi_view"), observed.mutation_id, observed.sequencing_experiment_id)
+            reverse("ncbi_view"), observed.mutation_id, observed.sample_id)
 
     return url_for
 
 
 def _reference(experiment):
-    return ExperimentReference.objects.filter(ale_experiment=experiment).first()
+    return ExperimentReference.objects.filter(experiment=experiment).first()

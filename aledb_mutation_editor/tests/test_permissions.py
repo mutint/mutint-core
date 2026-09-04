@@ -31,7 +31,7 @@ PAGES = ("/mutation-editor/", "/mutation-editor/add", "/mutation-editor/copy",
 class WriteEndpointPermissionTestCase(EditorTestCase):
 
     def _delete_one(self):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         return self.client.post(DELETE, {
             "experiment_id": self.experiment.id,

@@ -22,7 +22,7 @@ this output is the only way to tell a normalized track from one that predates th
 from django.core.management.base import BaseCommand
 
 from aledb_import import coverage
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 from aledb_experiment import paths
 
 
@@ -31,14 +31,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", type=int, nargs="?", default=None,
-                            help="AleExperiment primary key; omit for every experiment")
+                            help="Experiment primary key; omit for every experiment")
         parser.add_argument("-n", "--dry-run", action="store_true",
                             help="Report what would be built without writing anything")
         parser.add_argument("--force", action="store_true",
                             help="Rebuild samples that already have a coverage track")
 
     def handle(self, *args, **options):
-        samples = ResequencingExperiment.objects.filter(bam_stored=True).select_related(
+        samples = Sample.objects.filter(bam_stored=True).select_related(
             paths.to_experiment())
         if options["experiment_id"] is not None:
             samples = samples.filter(

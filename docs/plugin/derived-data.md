@@ -68,7 +68,7 @@ from aledb_common.rebuild_registry import ensure_fresh
 
 def get_your_table(experiment_id):
     ensure_fresh(REBUILD_NAME, experiment_id)
-    return YourTable.objects.filter(ale_experiment_id=experiment_id)
+    return YourTable.objects.filter(experiment_id=experiment_id)
 ```
 
 `ensure_fresh` no-ops when the data is current, and **cannot raise** — a rebuild that fails

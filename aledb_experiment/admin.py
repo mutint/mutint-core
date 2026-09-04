@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django import forms
 from aledb_experiment.models import (
-    AleExperiment, AleGroup, AleGroupMembership, Media, Project, ProjectAccess,
+    Experiment, AleGroup, AleGroupMembership, Media, Project, ProjectAccess,
 )
 from aledb_experiment.permissions import (
     AccessError, grant_project_access, revoke_project_access, set_primary_owner,
@@ -9,13 +9,13 @@ from aledb_experiment.permissions import (
 
 
 class ExperimentInline(admin.TabularInline):
-    model = AleExperiment
+    model = Experiment
     extra = 0
     fields = ('name', 'person')
 
 
-@admin.register(AleExperiment)
-class AleExperimentAdmin(admin.ModelAdmin):
+@admin.register(Experiment)
+class ExperimentAdmin(admin.ModelAdmin):
     # fetch project
     list_select_related = ('project',)
     list_display = ('id', 'name', 'project', 'person', 'date')

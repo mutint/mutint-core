@@ -984,10 +984,10 @@ effect was that adding a token silently reshuffled a colour list nobody rendered
 #### The dashboard counted what had been deleted
 
 `rebuild_mutation_counts` read `ObservedMutation.objects.all()` and `rebuild_sample_counts`
-counted every `AleId`/`Flask`/`Isolate`, neither excluding soft-deleted rows -- and nothing
+counted every `Population`/`TimePoint`/`Isolate`, neither excluding soft-deleted rows -- and nothing
 marked the totals stale when a project or experiment was removed, so even a rebuild would have
 produced the same numbers. Both halves are fixed. Both conditions are needed: **deleting a
-project does not stamp its experiments**, so a check on `AleExperiment.deleted_at` alone would
+project does not stamp its experiments**, so a check on `Experiment.deleted_at` alone would
 go on counting everything underneath it. `get_general_count_dict` counted deleted projects and
 experiments outright, behind a comment saying no filtering was needed.
 
@@ -1052,7 +1052,7 @@ means.
 
 **Only mutations something observes are listed.** A `Mutation` is never deleted here, so
 removing its last observation leaves the row behind -- and a grid keyed on
-`Mutation.objects.filter(ale_experiment=...)` went on rendering it with every cell empty, which
+`Mutation.objects.filter(experiment=...)` went on rendering it with every cell empty, which
 is what "the page does not update when I delete" turned out to be. The page reloads; the row was
 genuinely still there. Restricted to the *shown* samples rather than to the experiment, because
 `get_reseq_ordered_dict` applies the sample tag filters and a mutation observed only in a hidden
@@ -1440,7 +1440,7 @@ reason either existed.
 
 An ALE starts from an ancestor, and that ancestor already differs from the reference genome.
 Those differences are the starting line rather than evolution, so
-`AleExperiment.ancestor` names one sample and everything follows from that column:
+`Experiment.ancestor` names one sample and everything follows from that column:
 its mutations are subtracted from every other sample before anything is computed, and the
 sample itself leaves every listing. `aledb_experiment/ancestor.py` is the whole mechanism.
 
@@ -1451,7 +1451,7 @@ aledb-phylogeny, which never touches the filter layer. Putting an unconditional 
 that package would undo the distinction it exists to draw.
 
 **The idea was already here four times, and none of them subtracted anything.**
-`AleId.starting_strain`, a FK to `Isolate` that no code path ever wrote. `filter_out_wt_reseq`
+`Population.starting_strain`, a FK to `Isolate` that no code path ever wrote. `filter_out_wt_reseq`
 and `get_wt_reseq_id`, helpers with no callers -- the subtraction that was meant to happen and
 never did. `STARTING_STRAIN_ALE_ID = "0"`, which kept ALE 0 out of four pickers and three
 dashboard counts while its samples went on landing in every analysis the moment no ALE was
@@ -1613,9 +1613,9 @@ back into it. It now shows `description` and `status` as well, which were editab
 displayed before: a save has to be visible somewhere or it reads as having done nothing.
 
 **Changing a sample's identity never writes a number.** `aledb_experiment/samples.py`
-resolves (or creates) the `AleId`/`Flask`/`Isolate`/`TechnicalReplicate` row for the *target*
-A/F/I/R and re-points `ResequencingExperiment.tech_rep` at it. Those four rows are shared --
-`gd_import._get_or_create_chain` reuses one `AleId` and one `Flask` across every sample under
+resolves (or creates) the `Population`/`TimePoint`/`Isolate`/`TechnicalReplicate` row for the *target*
+A/F/I/R and re-points `Sample.tech_rep` at it. Those four rows are shared --
+`gd_import._get_or_create_chain` reuses one `Population` and one `TimePoint` across every sample under
 them -- so `flask.flask_number = 30; flask.save()` renumbers every sibling in that flask. The
 FK re-point also keeps `reseq.pk` fixed, which the store paths (`samples/<pk>/aligned.bam`)
 depend on, and makes a swap need no ordering logic: both samples move to freshly resolved
@@ -1623,8 +1623,8 @@ targets and the rows they vacated are pruned afterwards.
 
 Three lookups there deliberately differ from `gd_import`, and each is a correction:
 
-- `Flask` keys on `(ale_id, flask_number)` with `media` in `defaults`. `gd_import` passes
-  `media=` as a *lookup* kwarg while `Flask` is unique on that pair, so it raises
+- `TimePoint` keys on `(ale_id, flask_number)` with `media` in `defaults`. `gd_import` passes
+  `media=` as a *lookup* kwarg while `TimePoint` is unique on that pair, so it raises
   `IntegrityError` against an existing flask carrying different media.
 - `Isolate` is `filter().order_by("pk").first()`, not `get_or_create`. `Isolate` has no
   `unique_together` and `gd_import` get_or_creates it on six fields including `reseq_date`, so
@@ -1639,9 +1639,9 @@ Two samples may not share a coordinate, and the save refuses it. There is no con
 saying so, but `aledb-fixation` builds `flask_isolate_mutation_dict[(flask, isolate)] = qs` by
 plain assignment, so the second sample at a coordinate silently overwrites the first and its
 mutations vanish from fixation with no error. Emptied rows are pruned bottom-up for the
-opposite reason: `rebuild_sample_counts` counts `AleId`/`Flask`/`Isolate` **rows**, and the
-ALE picker is built from `AleId` rows. An `Isolate` still referenced by another isolate's
-`parent_isolate` or an `AleId.starting_strain` is kept instead -- both are `DO_NOTHING`, so
+opposite reason: `rebuild_sample_counts` counts `Population`/`TimePoint`/`Isolate` **rows**, and the
+ALE picker is built from `Population` rows. An `Isolate` still referenced by another isolate's
+`parent_isolate` or an `Population.starting_strain` is kept instead -- both are `DO_NOTHING`, so
 the database would reject the delete, and nothing in the product writes either column.
 
 A structural save calls `run_post_experiment_hooks` and `rebuild_sample_counts`, once per
@@ -1650,7 +1650,7 @@ POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls ev
 count, and paying for the whole database on every rename is what would make this feel broken
 in production. A descriptive-only save rebuilds nothing.
 
-**`Flask.flask_number` is labelled "Time point" on the edit pages.** It is the only ordinal
+**`TimePoint.flask_number` is labelled "Time point" on the edit pages.** It is the only ordinal
 in the schema that places a sample along an ALE -- fixation sorts by it and takes the last two
 to decide what has fixed -- and real data carries values like 30000, so it is plainly being
 used to record cumulative divisions rather than a count of flasks. The column keeps its name;
@@ -1833,7 +1833,7 @@ and names the one it refused.
 
 ### Locking an experiment
 
-`AleExperiment.locked_at` / `locked_by`, shaped like `SoftDeleteMixin` above — the timestamp
+`Experiment.locked_at` / `locked_by`, shaped like `SoftDeleteMixin` above — the timestamp
 is the flag, with no boolean beside it to disagree. `/ale/experiment/<pk>/lock/` sets it,
 gated on `can_admin_project`.
 
@@ -1973,7 +1973,7 @@ unnoticed.
 **Two breseq folders of one name are one sample, and the second is refused.**
 `find_sample_dirs` walks, so `a/s1` and `b/s1` are both samples called `s1` -- and a sample is
 named by its directory's basename. That name is its identity: an A-F-I-R name parses to one
-coordinate, and an auto-numbered one reuses the `ResequencingExperiment` already matching it.
+coordinate, and an auto-numbered one reuses the `Sample` already matching it.
 So the second folder never arrived *beside* the first, it **replaced** it --
 `_database_gd_mutations` deletes the sample's observations before writing its own -- and both
 folders were reported as imported. Measured: two folders of two mutations each left two
@@ -1995,7 +1995,7 @@ sample cannot answer differently. Two shapes are read and anything else is auto-
 | `3-30000-1-1` | `3` | 30000 | `1` | 1 |
 | `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | 1 |
 
-**`AleId.ale_id` and `Isolate.isolate_number` are `CharField`s** (`aledb_experiment.0008`),
+**`Population.ale_id` and `Isolate.isolate_number` are `CharField`s** (`aledb_experiment.0008`),
 which is what makes the second row expressible at all: `Ara-1` and `Ara+1` are two LTEE
 populations that both end in 1, and `763A` and `763B` are two clones from one flask that
 differ only in the trailer. Any rule reducing either to an integer merges rows that are not
@@ -2003,7 +2003,7 @@ the same sample -- and a merge is invisible, because `aledb-fixation` builds a d
 `(flask_number, isolate_number)` by plain assignment, so the second sample's mutations simply
 vanish.
 
-**`Flask.flask_number` stays an `IntegerField`**, and is the reason the middle field is the
+**`TimePoint.flask_number` stays an `IntegerField`**, and is the reason the middle field is the
 only one whose trailing text is stripped: `500gen` is 500 because a time point is a genuine
 ordinal that fixation sorts by. A middle field with no leading digit (`t0`) is not a time
 point, so the whole name falls through rather than being half-read.
@@ -2154,7 +2154,7 @@ section is the history of a SQLite failure, and the suite is on PostgreSQL now; 
   MVCC produces serialisation failures a single-writer database structurally cannot.
 - **`import_lock` stays, and its stated reason is now the wrong one.** It was justified by
   "SQLite permits exactly one writer". What it actually buys, and buys more dearly now, is that
-  it makes the suite's unconstrained `get_or_create` calls -- `Instrument`, `AleExperiment`,
+  it makes the suite's unconstrained `get_or_create` calls -- `Instrument`, `Experiment`,
   `Media`, `FreezerBox`, `Isolate` -- and `_next_isolate_number`'s unlocked read-then-write
   **unreachable by two importers at once**. SQLite's whole-database lock hid that; MVCC does
   not. Do not remove it on the grounds that its original justification expired.
@@ -2437,7 +2437,7 @@ clickable track without matching on the label a reader might reword.
 1-based inclusive. `start = start_1 - 1`, `end = end_1`. Wrong, it draws every mutation one
 base from where it is, beside the gene it is actually in, and nothing looks broken.
 
-**Both are reached through the observations, not through `Mutation.ale_experiment`.**
+**Both are reached through the observations, not through `Mutation.experiment`.**
 That column can be null -- the unscoped-mutation case `can_curate` exists for -- and two such
 rows in the dev database were observed in an experiment while owned by none, so filtering on
 it drew an empty Mutations track beside a populated per-sample one. Going through the
@@ -2918,7 +2918,7 @@ through earlier versions is a non-goal for now.
 
 All apps use the `aledb_*` namespace. Key apps:
 
-- **`aledb_experiment/`** — Core data models: `AleExperiment`, `Project`, `AleId`, `Flask`, `Isolate`, `Media`, `FreezerBox`. Central schema everything else references.
+- **`aledb_experiment/`** — Core data models: `Experiment`, `Project`, `Population`, `TimePoint`, `Isolate`, `Media`, `FreezerBox`. Central schema everything else references.
 - **`aledb_import/`** — Experiment upload pipeline. **Every path ends in `gd_import`**, so a
   CLI upload and a web drop produce identical rows:
   - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
@@ -3063,7 +3063,7 @@ Creation and deletion are nested under the objects they act on:
   go to — having just removed one experiment out of a project, the project is where the rest
   of them are. The destination rides on the button as `data-after-delete` rather than being
   rebuilt in the handler, so it is decided where the template can see whether there is a
-  project at all. Its else-branch is a guard and not a live path: `AleExperiment.project` is
+  project at all. Its else-branch is a guard and not a live path: `Experiment.project` is
   nullable, but `effective_role` answers `None` for a null project before it reaches its
   superuser branch, so a projectless experiment is viewable by nobody and this page does not
   render for one — superuser included. There is a test pinning that, so the branch is not
@@ -3086,7 +3086,7 @@ Creation and deletion are nested under the objects they act on:
   used to render for everyone, which was a dead end dressed up as an action rather than a
   hole, since the endpoints refused anyway.
 
-**Deletion is soft.** `Project` and `AleExperiment` carry `deleted_at`/`deleted_by`
+**Deletion is soft.** `Project` and `Experiment` carry `deleted_at`/`deleted_by`
 (`SoftDeleteMixin`); only those two are flagged, and children are reached by traversal when
 `./aledb purge_deleted --older-than <days>` finally removes them. `objects` is deliberately
 unfiltered — a filtered default manager would silence the import paths' `get_or_create` — so

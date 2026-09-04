@@ -27,7 +27,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", nargs="?", type=int, default=None,
-                            help="AleExperiment primary key; omit for --all or --list")
+                            help="Experiment primary key; omit for --all or --list")
         parser.add_argument("--all", action="store_true", dest="rebuild_all",
                             help="every live experiment, then the site-wide totals")
         parser.add_argument("--only", action="append", dest="only", metavar="NAME",
@@ -38,7 +38,7 @@ class Command(BaseCommand):
                             help="show what is registered and what is stale, and do nothing")
 
     def handle(self, *args, **options):
-        from aledb_experiment.models import AleExperiment, live
+        from aledb_experiment.models import Experiment, live
 
         only = options.get("only")
         if only:
@@ -66,11 +66,11 @@ class Command(BaseCommand):
         if rebuild_all:
             # live(), not objects.all(): rebuilding a soft-deleted experiment is work whose
             # result nobody can see.
-            experiments = list(live(AleExperiment.objects.all()))
+            experiments = list(live(Experiment.objects.all()))
         else:
             try:
-                experiments = [AleExperiment.objects.get(pk=experiment_id)]
-            except AleExperiment.DoesNotExist:
+                experiments = [Experiment.objects.get(pk=experiment_id)]
+            except Experiment.DoesNotExist:
                 raise CommandError("no such experiment: %s" % experiment_id)
 
         force = options.get("force")

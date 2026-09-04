@@ -15,11 +15,11 @@ from datetime import datetime
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_import import annotation, gd_import, reference, reference_store
 from aledb_import.tests.test_annotation import _uploaded_as
 from aledb_seq.breseq_report import build_rows, gd_entry
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), "aledb_import", "annotate", "tests", "fixtures")
@@ -52,7 +52,7 @@ class BreseqTablePageTestCase(TestCase):
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
             project_name="syn project", experiment_name="syn exp", person="tester")
 
-        self.reseq = ResequencingExperiment.objects.get()
+        self.reseq = Sample.objects.get()
         self.client.force_login(self.user)
 
     def get_page(self, **params):

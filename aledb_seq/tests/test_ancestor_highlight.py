@@ -103,8 +103,8 @@ class TestReachingTheAncestor(BreseqAncestorTestCase):
         """The fallback is scoped to the experiment, so it is not a way around anything."""
         other = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        from aledb_experiment.models import AleExperiment
-        foreign = AleExperiment.objects.get(pk=other["experiment_id"])
+        from aledb_experiment.models import Experiment
+        foreign = Experiment.objects.get(pk=other["experiment_id"])
         response = self.client.get(BRESEQ, {"ale_experiment_id": foreign.id,
                                             "reseq_id": self.sample_a.id})
         self.assertNotEqual(getattr(response.context.get("selected_reseq"), "id", None),

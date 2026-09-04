@@ -16,7 +16,7 @@ from django.test import TestCase, override_settings
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
 from aledb_seq import tracks
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 
 
 class _Fixture(TestCase):
@@ -33,8 +33,8 @@ class _Fixture(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="t")
-        self.reseq = ResequencingExperiment.objects.get()
-        self.experiment = self.reseq.ale_experiment
+        self.reseq = Sample.objects.get()
+        self.experiment = self.reseq.experiment
 
 
 class CoordinateTestCase(_Fixture):
@@ -67,10 +67,10 @@ class CoordinateTestCase(_Fixture):
 class MutationTrackTestCase(_Fixture):
     def test_it_finds_a_mutation_owned_by_no_experiment(self):
         """The reason this reads through the observations rather than through
-        `Mutation.ale_experiment`. Two rows in the dev database were observed in an
+        `Mutation.experiment`. Two rows in the dev database were observed in an
         experiment while owned by none, so filtering on the column drew an empty Mutations
         track beside a populated per-sample one."""
-        Mutation.objects.all().update(ale_experiment=None)
+        Mutation.objects.all().update(experiment=None)
         self.assertTrue(tracks.mutation_features(self.experiment.id))
 
     def test_both_feature_sets_describe_the_same_mutations(self):

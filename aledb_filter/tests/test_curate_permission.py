@@ -14,7 +14,7 @@ before the experiment lock on the right was ever consulted.
 
 from django.test import TestCase
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 
 
 class NoSharedFilterRemainsTestCase(TestCase):
@@ -102,7 +102,7 @@ class CuratePermissionTestCase(TestCase):
         self.client.force_login(self.superuser)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        experiment = Experiment.objects.get(pk=created["experiment_id"])
         self.assertTrue(can_curate(self.superuser, experiment))
 
         experiment.locked_at = timezone.now()

@@ -34,7 +34,7 @@ class FrequencyCutoffTestCase(EditorTestCase):
         self.high = self._at(self.mut_3, "0.9900")
 
     def _at(self, mutation, frequency):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=mutation)
         observed.frequency = Decimal(frequency)
         observed.save()
@@ -81,7 +81,7 @@ class FrequencyCutoffTestCase(EditorTestCase):
         """The other half: an exclusion that hid everything would pass the two above."""
         self._cutoffs(min_cutoff=20, max_cutoff=90)
 
-        middle = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        middle = ObservedMutation.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1)
         self.assertEqual(Decimal("0.7500"), middle.frequency)
         self.assertIn(middle.id, self._kept())

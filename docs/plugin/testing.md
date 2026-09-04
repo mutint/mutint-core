@@ -127,7 +127,7 @@ the symptom is a suite that grows by more tests than you wrote.
 
 Building an experiment from models is faster and clearer than driving an import, and every
 plugin's tests do it. The chain is
-`AleId → Flask → Isolate → TechnicalReplicate → ResequencingExperiment`; mutations are
+`Population → TimePoint → Isolate → TechnicalReplicate → Sample`; mutations are
 `Mutation` rows joined to samples by `ObservedMutation`.
 
 Two things that are easy to miss:

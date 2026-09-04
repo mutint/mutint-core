@@ -1,5 +1,5 @@
 import pandas as pd
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from aledb_experiment.permissions import set_primary_owner
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand
@@ -19,7 +19,7 @@ class Command(BaseCommand):
         df = pd.read_excel(filename)
         print(df.columns)
 
-        experiment_name_map = {exp.name.strip().lower(): exp for exp in AleExperiment.objects.all()}
+        experiment_name_map = {exp.name.strip().lower(): exp for exp in Experiment.objects.all()}
         project_name_map = {proj.name.lower(): proj for proj in Project.objects.all()}
         user_name_map = {user.get_full_name(): user for user in User.objects.filter(first_name__isnull=False)}
 

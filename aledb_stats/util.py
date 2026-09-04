@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 def get_ale_flask_isolate_count_list(reseq_queryset):
     ale_flask_isolate_count_dict = {}
     for reseq in reseq_queryset:
-        if reseq.ale_id not in ale_flask_isolate_count_dict.keys():
-            ale_flask_isolate_count_dict[reseq.ale_id] = {reseq.flask_number: 1}
+        if reseq.population_name not in ale_flask_isolate_count_dict.keys():
+            ale_flask_isolate_count_dict[reseq.population_name] = {reseq.time_point_value: 1}
         else:
-            if reseq.flask_number not in ale_flask_isolate_count_dict[reseq.ale_id].keys():
-                ale_flask_isolate_count_dict[reseq.ale_id][reseq.flask_number] = 1
+            if reseq.time_point_value not in ale_flask_isolate_count_dict[reseq.population_name].keys():
+                ale_flask_isolate_count_dict[reseq.population_name][reseq.time_point_value] = 1
             else:
-                ale_flask_isolate_count_dict[reseq.ale_id][reseq.flask_number] += 1
+                ale_flask_isolate_count_dict[reseq.population_name][reseq.time_point_value] += 1
 
     ale_flask_isolate_count_list = []
     for ale_id, flask_isolate_count_dict in ale_flask_isolate_count_dict.items():
@@ -48,7 +48,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
     `Count('id')` on ObservedMutation rather than a `distinct` count of mutations, because that
     is what `reseq.mutations.count()` did: the M2M goes through ObservedMutation, so its count
     is of join rows, and ObservedMutation has no unique constraint on
-    (sequencing_experiment, mutation). Counting distinct mutations would quietly differ for a
+    (sample, mutation). Counting distinct mutations would quietly differ for a
     sample that observed one twice.
 
     They are two queries rather than two annotations on one, for the standard reason: two
@@ -65,34 +65,34 @@ def get_reseq_experiment_info_list(reseq_experiments):
 
     reseq_experiments = list(reseq_experiments)
     reseq_ids = [reseq.id for reseq in reseq_experiments]
-    experiment_id = (reseq_experiments[0].ale_experiment.id
+    experiment_id = (reseq_experiments[0].experiment.id
                      if reseq_experiments else None)
 
     missing_coverage_counts = dict(
         UnassignedMissingCoverageEvidence.objects
-        .filter(sequencing_experiment_id__in=reseq_ids)
-        .values_list('sequencing_experiment_id')
+        .filter(sample_id__in=reseq_ids)
+        .values_list('sample_id')
         .annotate(total=Count('id')))
     mutation_counts = dict(
         exclude_ancestry(
-            ObservedMutation.objects.filter(sequencing_experiment_id__in=reseq_ids),
+            ObservedMutation.objects.filter(sample_id__in=reseq_ids),
             experiment_id)
-        .values_list('sequencing_experiment_id')
+        .values_list('sample_id')
         .annotate(total=Count('id')))
 
     reseq_experiments_info_list = []
     for reseq in reseq_experiments:
-        species = reseq.flask.ale_id.species
-        strain = reseq.flask.ale_id.strain
-        knockouts = reseq.flask.ale_id.description
+        species = reseq.time_point.population.species
+        strain = reseq.time_point.population.strain
+        knockouts = reseq.time_point.population.description
         clonal_or_population = (SAMPLE_TYPE_MIXED if reseq.is_population
                                 else SAMPLE_TYPE_CLONAL)
-        media_temperature = reseq.flask.media.temperature
-        media_description = reseq.flask.media.description
+        media_temperature = reseq.time_point.media.temperature
+        media_description = reseq.time_point.media.description
         # carbon_source, not substrate: the metadata parser stopped writing `substrate`
         # in 2019 when media moved to per-component columns, so it is None for anything
         # imported with metadata.
-        substrate = reseq.flask.media.carbon_source
+        substrate = reseq.time_point.media.carbon_source
 
         # Using tuple because immutable; the counts must remain associated with particular
         # experiment. Position 1 holds the missing-coverage *count* -- it held the queryset
@@ -207,7 +207,7 @@ def compute_experiment_counts(ale_experiment_id):
     """
     from aledb_seq.util import get_evolved_observation_queryset
 
-    # The join, not `sequencing_experiment_id__in=[every sample]`: the same rows, without an
+    # The join, not `sample_id__in=[every sample]`: the same rows, without an
     # IN clause carrying one literal per sample.
     return _count_in_sql(get_evolved_observation_queryset(ale_experiment_id))
 

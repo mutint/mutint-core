@@ -2,7 +2,7 @@
 
 Reached from a frequency cell in the mutation table, which is exactly that pair -- so an
 `ObservedMutation` carries both the locus (via `mutation`) and the alignment (via
-`sequencing_experiment`), and `?observed_mut_id=` is how every link here is written.
+`sample`), and `?observed_mut_id=` is how every link here is written.
 
 It is not the only way in any more. Clicking a mutation on the Mutations track switches the
 page to it, and that track draws every mutation in the *experiment* -- including ones the
@@ -27,7 +27,7 @@ from aledb_seq.breseq_report import build_rows, is_population
 from aledb_seq.locus import LOCUS_BUFFER_BASES, mutation_extent
 from aledb_seq.tracks import MUTATION_TRACK_ID, database_tracks
 from aledb_seq.models import (ExperimentReference, Mutation, ObservedMutation,
-                              ResequencingExperiment)
+                              Sample)
 from aledb_seq.util import get_observed_mutation_queryset, get_ordered_reseq_queryset
 from aledb_experiment import paths
 
@@ -57,25 +57,25 @@ def _resolve(request):
     if observed_id:
         try:
             observed = (ObservedMutation.objects
-                        .select_related("mutation", "sequencing_experiment")
+                        .select_related("mutation", "sample")
                         .get(pk=observed_id))
         except (ObservedMutation.DoesNotExist, ValueError, TypeError):
             raise Http404("No such observed mutation.")
-        if observed.sequencing_experiment is None:
+        if observed.sample is None:
             raise Http404("This mutation is not attached to a sample.")
-        return observed.sequencing_experiment, observed.mutation, observed
+        return observed.sample, observed.mutation, observed
 
     try:
-        # `ale_experiment` is a property over flask -> ale_id, not a
+        # `experiment` is a property over time_point -> population, not a
         # column, so the chain is named the way `aledb_seq.util` names it.
-        reseq = (ResequencingExperiment.objects
+        reseq = (Sample.objects
                  .select_related(paths.to_experiment())
                  .get(pk=request.GET.get("reseq_id")))
         mutation = Mutation.objects.get(pk=request.GET.get("mutation_id"))
-    except (ResequencingExperiment.DoesNotExist, Mutation.DoesNotExist, ValueError, TypeError):
+    except (Sample.DoesNotExist, Mutation.DoesNotExist, ValueError, TypeError):
         raise Http404("No such mutation or sample.")
 
-    # Reached through the observations rather than through `Mutation.ale_experiment`, which
+    # Reached through the observations rather than through `Mutation.experiment`, which
     # may be null -- the unscoped case `permissions.can_curate` exists for -- and would refuse
     # a mutation this experiment plainly observes. `get_observed_mutation_queryset` is the
     # shared spelling of "observed in this experiment".
@@ -85,11 +85,11 @@ def _resolve(request):
     # mutation quite happily when a table links to one. Being stricter here would refuse an
     # address the rest of the product hands out.
     if not get_observed_mutation_queryset(
-            reseq.ale_experiment.id).filter(mutation=mutation).exists():
+            reseq.experiment.id).filter(mutation=mutation).exists():
         raise Http404("That mutation is not in this sample's experiment.")
 
     observed = (ObservedMutation.objects
-                .filter(mutation=mutation, sequencing_experiment=reseq).first())
+                .filter(mutation=mutation, sample=reseq).first())
     return reseq, mutation, observed
 
 
@@ -99,14 +99,14 @@ def _row_observation(reseq, mutation, observed):
     A mutation the sample does not call has no row to show, and an **unsaved**
     `ObservedMutation` renders correctly with no change to `breseq_report`: `_frequency`
     already answers `("", False)` for a null frequency, so the Freq cell comes out empty, and
-    `_ncbi_url` reads `mutation_id` and `sequencing_experiment_id`, which are both set on it.
+    `_ncbi_url` reads `mutation_id` and `sample_id`, which are both set on it.
 
     Nothing says "not called here" beside it. The Samples menu already answers that -- the
     `*` flags follow the mutation, so the current sample simply appears without one.
     """
     if observed is not None:
         return observed
-    return ObservedMutation(mutation=mutation, sequencing_experiment=reseq)
+    return ObservedMutation(mutation=mutation, sample=reseq)
 
 
 def browse_url_for(mutation, reseq, observed):
@@ -126,7 +126,7 @@ def browse_mutation(request):
     """igv.js at one mutation's position, starting with the sample that was clicked."""
     reseq, mutation, observed = _resolve(request)
 
-    experiment = reseq.ale_experiment
+    experiment = reseq.experiment
     if not _may_view(request.user, experiment):
         return HttpResponse(
             loader.get_template("403.html").render(get_user_context(request.user), request),
@@ -190,7 +190,7 @@ def browse_at(request):
     """
     reseq, mutation, observed = _resolve(request)
 
-    if not _may_view(request.user, reseq.ale_experiment):
+    if not _may_view(request.user, reseq.experiment):
         return JsonResponse({"error": "You do not have access to this experiment."}, status=403)
 
     rows = build_rows([_row_observation(reseq, mutation, observed)], refseq_url=_ncbi_url())
@@ -201,7 +201,7 @@ def browse_at(request):
         "mutation_id": mutation.pk,
         "observed_mut_id": observed.pk if observed is not None else None,
         "url": browse_url_for(mutation, reseq, observed),
-        "title": "%s %s:%s" % (reseq.ale_experiment.name,
+        "title": "%s %s:%s" % (reseq.experiment.name,
                                mutation.reseq_reference, mutation.position),
         "calling": sorted(_samples_calling(mutation)),
         "table_html": table_html,
@@ -220,7 +220,7 @@ def _ncbi_url():
         if not observed.mutation.reseq_reference:
             return None
         return "%s?mutation_id=%s&reseq_id=%s" % (
-            reverse("ncbi_view"), observed.mutation_id, observed.sequencing_experiment_id)
+            reverse("ncbi_view"), observed.mutation_id, observed.sample_id)
 
     return url_for
 
@@ -341,4 +341,4 @@ def _samples_calling(mutation):
     """
     return set(ObservedMutation.objects
                .filter(mutation=mutation, present=True)
-               .values_list("sequencing_experiment_id", flat=True))
+               .values_list("sample_id", flat=True))

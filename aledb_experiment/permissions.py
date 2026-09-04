@@ -45,7 +45,7 @@ class ExperimentLocked(Exception):
 
     Lives here rather than with any one write path because the lock is policy, and because
     both `aledb_common.import_registry` and `aledb_mutation_editor.history` raise it -- two
-    layers that share nothing else. Its message is `AleExperiment.lock_message()`, written
+    layers that share nothing else. Its message is `Experiment.lock_message()`, written
     for a person and safe to show verbatim.
     """
 

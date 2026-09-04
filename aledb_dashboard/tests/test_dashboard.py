@@ -3,7 +3,7 @@
 These three tests used to pin the `STARTING_STRAIN_ALE_ID` rule: an ALE labelled `"0"` was
 dropped from the ALE, flask and isolate counts. That label no longer means anything -- it was
 one of four half-built spellings of "the ancestor", none of which subtracted a single mutation
--- and `AleExperiment.ancestor` replaced all of them.
+-- and `Experiment.ancestor` replaced all of them.
 
 So they pin the replacement instead, and the two halves worth keeping apart:
 
@@ -18,25 +18,25 @@ from django.test import TestCase
 
 from aledb_dashboard.models import SampleCounts
 from aledb_dashboard.util import rebuild_sample_counts
-from aledb_experiment.models import (AleExperiment, AleId, Flask,
+from aledb_experiment.models import (Experiment, Population, TimePoint,
                                      Media)
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 
 class DashboardCountTestCase(TestCase):
 
     def setUp(self):
-        self.experiment = AleExperiment.objects.create(
+        self.experiment = Experiment.objects.create(
 )
 
     def make_sample(self, ale_label, flask_number=1, isolate_number=1):
         """The full A/F/I chain, built by hand -- `gd_import` needs a reference and a store."""
-        ale, _ = AleId.objects.get_or_create(ale_experiment=self.experiment,
-                                             ale_id=str(ale_label))
-        flask, _ = Flask.objects.get_or_create(ale_id=ale, flask_number=flask_number,
+        ale, _ = Population.objects.get_or_create(experiment=self.experiment,
+                                             name=str(ale_label))
+        flask, _ = TimePoint.objects.get_or_create(population=ale, value=flask_number,
                                                defaults={"media": Media.objects.create()})
-        return ResequencingExperiment.objects.create(
-            flask=flask, is_population=False, isolate_number=str(isolate_number))
+        return Sample.objects.create(
+            time_point=flask, is_population=False, name=str(isolate_number))
 
     def counts(self):
         rebuild_sample_counts()
@@ -49,13 +49,13 @@ class TestEmptyRowsStillCount(DashboardCountTestCase):
 
     def test_bare_ale_rows_are_all_counted(self):
         for label in ("0", "9", "24", "1"):
-            AleId.objects.create(ale_experiment=self.experiment, ale_id=label)
+            Population.objects.create(experiment=self.experiment, name=label)
         self.assertEqual(self.counts()[0], 4)
 
     def test_a_flask_under_ale_zero_is_counted(self):
         for label in ("0", "9"):
-            ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=label)
-            Flask.objects.create(media=Media.objects.create(), ale_id=ale)
+            ale = Population.objects.create(experiment=self.experiment, name=label)
+            TimePoint.objects.create(media=Media.objects.create(), population=ale)
         ale_count, flask_count, _ = self.counts()
         self.assertEqual((ale_count, flask_count), (2, 2))
 

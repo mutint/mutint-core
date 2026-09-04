@@ -2,7 +2,7 @@
 
 Deletion here is soft -- `SoftDeleteMixin` stamps `deleted_at` and leaves everything below the
 experiment in place -- and this codebase's managers are deliberately unfiltered, so
-`ObservedMutation.objects.all()` and `AleId.objects.count()` still see every project and
+`ObservedMutation.objects.all()` and `Population.objects.count()` still see every project and
 experiment anybody has ever removed. Nothing marked the totals stale on a delete either, so
 even a rebuild would have produced the same numbers.
 """
@@ -41,7 +41,7 @@ class DeletedExperimentTestCase(EditorTestCase):
 
     def test_deleting_the_project_counts_too(self):
         """Deleting a project does not stamp its experiments, so a check that looked only at
-        `AleExperiment.deleted_at` would go on counting everything underneath it."""
+        `Experiment.deleted_at` would go on counting everything underneath it."""
         self._totals()
 
         self.experiment.project.soft_delete(self.owner)
@@ -100,8 +100,8 @@ class DeletedExperimentTestCase(EditorTestCase):
                          "deleting one experiment marked another's derived data stale")
 
     def _second_experiment(self):
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
 
         created = self.client.post(
             "/ale/projects/create/", {"name": "Other", "experiment": "Other"}).json()
-        return AleExperiment.objects.get(pk=created["experiment_id"])
+        return Experiment.objects.get(pk=created["experiment_id"])

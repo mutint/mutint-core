@@ -12,7 +12,7 @@ endpoint.
 
 from django.contrib.auth.models import User
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_mutation_editor.tests.base import EditorTestCase
 
 PAGE = "/ale/experiment/%d/ancestor/"
@@ -28,7 +28,7 @@ class AncestorPageTestCase(EditorTestCase):
         return self.client.post(APPLY % self.experiment.id, data)
 
     def reloaded(self):
-        return AleExperiment.objects.get(pk=self.experiment.pk)
+        return Experiment.objects.get(pk=self.experiment.pk)
 
 
 class TestThePage(AncestorPageTestCase):
@@ -107,10 +107,10 @@ class TestTheWrite(AncestorPageTestCase):
         has to: a mutation belongs to one experiment's reference genome."""
         other = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        foreign = AleExperiment.objects.get(pk=other["experiment_id"])
+        foreign = Experiment.objects.get(pk=other["experiment_id"])
         response = self.client.post(APPLY % foreign.id, {"reseq_id": self.sample_a.id})
         self.assertEqual(404, response.status_code)
-        self.assertIsNone(AleExperiment.objects.get(pk=foreign.pk).ancestor_id)
+        self.assertIsNone(Experiment.objects.get(pk=foreign.pk).ancestor_id)
 
     def test_a_nonsense_id_is_refused(self):
         response = self.apply(reseq_id="banana")

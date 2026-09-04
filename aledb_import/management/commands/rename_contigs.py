@@ -16,7 +16,7 @@ import os
 
 from django.core.management.base import BaseCommand, CommandError
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_import import reference as reference_io
 from aledb_import import reference_rename, reference_store
 from aledb_seq.models import ExperimentReference, Mutation
@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         experiment = self._experiment(options["experiment_id"])
-        reference = ExperimentReference.objects.filter(ale_experiment=experiment).first()
+        reference = ExperimentReference.objects.filter(experiment=experiment).first()
         if reference is None:
             raise CommandError("Experiment %s has no reference genome."
                                % experiment.id)
@@ -73,8 +73,8 @@ class Command(BaseCommand):
 
     def _experiment(self, experiment_id):
         try:
-            return AleExperiment.objects.get(pk=experiment_id)
-        except AleExperiment.DoesNotExist:
+            return Experiment.objects.get(pk=experiment_id)
+        except Experiment.DoesNotExist:
             raise CommandError("No experiment with id %s." % experiment_id)
 
     def _describe(self, experiment, plan):
@@ -84,7 +84,7 @@ class Command(BaseCommand):
         for name in plan.unchanged:
             self.stdout.write("  %-30s    (unchanged)" % name)
         affected = Mutation.objects.filter(
-            ale_experiment=experiment, reseq_reference__in=list(plan.mapping)).count()
+            experiment=experiment, reseq_reference__in=list(plan.mapping)).count()
         self.stdout.write("\n%d mutation(s) would be rewritten." % affected)
         self.stdout.write(
             "Stored alignments keep their current names and go on working; igv is given an "
@@ -99,8 +99,8 @@ class Command(BaseCommand):
             raise CommandError(
                 "Could not read the stored FASTA for experiment %s, so its identity cannot "
                 "be recomputed. Re-establish the reference instead."
-                % reference.ale_experiment_id)
+                % reference.experiment_id)
         self.stdout.write(
             "Identity %s for experiment %s: %s"
             % ("recomputed" if before else "computed",
-               reference.ale_experiment_id, reference.sequence_sha256[:12]))
+               reference.experiment_id, reference.sequence_sha256[:12]))

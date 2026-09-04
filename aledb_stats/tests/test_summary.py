@@ -35,9 +35,9 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask,
+    Experiment, Population, TimePoint,
 )
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 from aledb_stats.util import compute_experiment_counts
 
 
@@ -49,7 +49,7 @@ class SummaryTestCase(TestCase):
         self.client.force_login(self.user)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
         self.context = prepare_experiment_by_id(self.experiment.id)
@@ -85,18 +85,18 @@ class SummaryTestCase(TestCase):
 
     # ---- fixture helpers ------------------------------------------------------------
     def _sample(self, ale, flask, isolate):
-        ale_row, _ = AleId.objects.get_or_create(
-            ale_experiment=self.experiment, ale_id=ale)
-        flask_row, _ = Flask.objects.get_or_create(
-            ale_id=ale_row, flask_number=flask,
+        ale_row, _ = Population.objects.get_or_create(
+            experiment=self.experiment, name=ale)
+        flask_row, _ = TimePoint.objects.get_or_create(
+            population=ale_row, value=flask,
             defaults={"media": self.context["media"]})
-        return ResequencingExperiment.objects.create(
-            flask=flask_row, isolate_number="%d-1" % isolate, is_population=False,
-            sample_name="%d-%d-%d-1" % (ale, flask, isolate))
+        return Sample.objects.create(
+            time_point=flask_row, name="%d-1" % isolate, is_population=False,
+            source_name="%d-%d-%d-1" % (ale, flask, isolate))
 
     def _mutation(self, mutation_type, snp_type, gene, protein_change=""):
         return Mutation.objects.create(
-            ale_experiment=self.experiment, mutation_type=mutation_type, position=1,
+            experiment=self.experiment, mutation_type=mutation_type, position=1,
             sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _filter(self, **fields):
@@ -114,7 +114,7 @@ class SummaryTestCase(TestCase):
 
     def _observe(self, sample, mutation):
         return ObservedMutation.objects.create(
-            sequencing_experiment=sample, mutation=mutation,
+            sample=sample, mutation=mutation,
             present=True, frequency="1.0000")
 
     def _counts(self):

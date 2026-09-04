@@ -18,9 +18,9 @@ from aledb_common.constants import (
     REQUEST_ALL, SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED,
 )
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Media, Project,
+    Experiment, Population, TimePoint, Media, Project,
 )
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 from aledb_seq.util import get_ordered_reseq_queryset
 from aledb_seq.views.common import get_sample_type
 
@@ -50,17 +50,17 @@ class SampleTypeFilterTestCase(TestCase):
     def setUp(self):
         user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         project = Project.objects.create(name="P", user=user)
-        self.experiment = AleExperiment.objects.create(name="E", project=project)
+        self.experiment = Experiment.objects.create(name="E", project=project)
         media = Media.objects.create(description="M9")
-        ale = AleId.objects.create(ale_experiment=self.experiment, ale_id="1")
-        flask = Flask.objects.create(ale_id=ale, flask_number=1000, media=media)
+        ale = Population.objects.create(experiment=self.experiment, name="1")
+        flask = TimePoint.objects.create(population=ale, value=1000, media=media)
         self.clonal = self.make_sample(flask, 1, is_population=False)
         self.mixed = self.make_sample(flask, 2, is_population=True)
 
     def make_sample(self, flask, number, *, is_population):
-        return ResequencingExperiment.objects.create(
-            flask=flask, isolate_number=number, is_population=is_population,
-            sample_name="s%d" % number)
+        return Sample.objects.create(
+            time_point=flask, name=number, is_population=is_population,
+            source_name="s%d" % number)
 
     def selected(self, sample_type):
         return set(get_ordered_reseq_queryset(

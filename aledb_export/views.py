@@ -31,7 +31,7 @@ def export(request):
         if project_id != 'null':
             project = get_object_or_404(Project, pk=int(project_id))
             if project and can_view_project(request.user, project):
-                experiments = live(project.aleexperiment_set.all())
+                experiments = live(project.experiment_set.all())
             else:
                 return HttpResponse(status=403)
         else:
@@ -39,8 +39,8 @@ def export(request):
 
         if mut_type_str and exp_id_str:
             exp_id_set = set(exp_id_str.split(','))
-            # `exp.id`, not `exp.ale_id`. `AleExperiment`'s primary key was called
-            # `ale_id` -- the same word as `AleId.ale_id`, which is a lineage label on
+            # `exp.id`, not `exp.ale_id`. `Experiment`'s primary key was called
+            # `ale_id` -- the same word as `Population.ale_id`, which is a lineage label on
             # a different table -- and was renamed to the implicit `id` like every
             # other table's. These two lines were missed, so both export paths have
             # been raising AttributeError on every request since. `paths.EXPERIMENT_PK`
@@ -97,7 +97,7 @@ def export_experiment_index(request):
         if project_id != 'null':
             project = get_object_or_404(Project, pk=int(project_id))
             if project and can_view_project(request.user, project):
-                experiments = live(project.aleexperiment_set.all())
+                experiments = live(project.experiment_set.all())
             else:
                 return HttpResponse(status=403)
         else:

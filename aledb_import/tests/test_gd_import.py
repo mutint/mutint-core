@@ -8,11 +8,11 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask,
+    Experiment, Population, TimePoint,
 )
 from aledb_import import gd_import, reference_store
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 
 from genomediff import GenomeDiff
 
@@ -82,25 +82,25 @@ class GdImportTestCase(TestCase):
         self.assertEqual(ObservedMutation.objects.count(), len(expected))
 
         # Experiment chain synthesized from the filename 3-30000-1-1.
-        self.assertEqual(AleExperiment.objects.count(), 1)
-        ale_id = AleId.objects.get()
-        self.assertEqual(ale_id.ale_id, "3")
-        self.assertEqual(Flask.objects.get().flask_number, 30000)
+        self.assertEqual(Experiment.objects.count(), 1)
+        ale_id = Population.objects.get()
+        self.assertEqual(ale_id.name, "3")
+        self.assertEqual(TimePoint.objects.get().value, 30000)
         # `1-1`, not `1`: the replicate field is part of the label, kept even when it is
         # 1 so that `3-30000-1-1` and `3-30000-1-2` are siblings rather than a bare `1`
         # beside a `1-2`.
-        self.assertEqual(ResequencingExperiment.objects.get().isolate_number, "1-1")
+        self.assertEqual(Sample.objects.get().name, "1-1")
 
         # gd_data captured on every row; REFSEQ propagated to the sample.
         self.assertFalse(Mutation.objects.filter(gd_data__isnull=True).exists())
-        self.assertTrue(ResequencingExperiment.objects.get().reseq_reference)
+        self.assertTrue(Sample.objects.get().reference_genome)
 
     def test_round_trip_is_apply_compatible(self):
         """Import -> export .gd -> re-parse yields the original mutations."""
         original = self._expected_mutations(CLEAN_GD)
         self._import(CLEAN_GD)
 
-        seq_experiment = ResequencingExperiment.objects.get()
+        seq_experiment = Sample.objects.get()
         gd_text = gd_import.export_gd_text(seq_experiment)
         reparsed = GenomeDiff.read(iter(gd_text.splitlines())).mutations
 
@@ -116,16 +116,16 @@ class GdImportTestCase(TestCase):
 
         self._import(CLEAN_GD, experiment="exp two")
 
-        self.assertEqual(AleExperiment.objects.count(), 2)
-        self.assertEqual(ResequencingExperiment.objects.count(), 2)
+        self.assertEqual(Experiment.objects.count(), 2)
+        self.assertEqual(Sample.objects.count(), 2)
         self.assertEqual(ObservedMutation.objects.count(), per_experiment * 2)
 
         # Each experiment has its own copies, and no row is shared.
         self.assertEqual(Mutation.objects.count(), per_experiment * 2)
-        for experiment in AleExperiment.objects.all():
+        for experiment in Experiment.objects.all():
             self.assertEqual(
                 per_experiment,
-                Mutation.objects.filter(ale_experiment=experiment).count())
+                Mutation.objects.filter(experiment=experiment).count())
 
     def test_mutations_are_still_deduplicated_within_an_experiment(self):
         self._import(CLEAN_GD, experiment="exp one")
@@ -141,7 +141,7 @@ class GdImportTestCase(TestCase):
         self._import(CLEAN_GD)
         self._import(CLEAN_GD)  # same experiment + filename
 
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
         self.assertEqual(ObservedMutation.objects.count(), Mutation.objects.count())
 
     def test_web_upload_through_the_chunked_session(self):
@@ -188,7 +188,7 @@ class GdImportTestCase(TestCase):
             [_uploaded(CLEAN_GD)], project_name="export project",
             experiment_name="export exp", person="tester")
 
-        reseq = ResequencingExperiment.objects.get()
+        reseq = Sample.objects.get()
         export = self.client.get("/import/gd/%d/export" % reseq.id)
         self.assertEqual(export.status_code, 200)
         self.assertIn("#=GENOME_DIFF", export.content.decode("utf-8"))
@@ -222,54 +222,54 @@ class GdImportTestCase(TestCase):
         self.assertIsNone(summary["files"][0]["error"])
 
         # One sample per file, each individually addressable.
-        self.assertEqual(ResequencingExperiment.objects.count(), len(self.TRIPLE_NAMES))
+        self.assertEqual(Sample.objects.count(), len(self.TRIPLE_NAMES))
         self.assertEqual(
-            sorted(ResequencingExperiment.objects.values_list("sample_name", flat=True)),
+            sorted(Sample.objects.values_list("source_name", flat=True)),
             sorted(name[:-3] for name in self.TRIPLE_NAMES))
 
         # One ALE, named rather than numbered, sampled at three time points -- which is what
         # makes an experiment like this fixation-shaped at all: an ALE of one flask can
         # never fix anything, and these three used to be one flask.
-        self.assertEqual(AleId.objects.count(), 1)
-        self.assertEqual(AleId.objects.get().ale_id, "Ara-1")
+        self.assertEqual(Population.objects.count(), 1)
+        self.assertEqual(Population.objects.get().name, "Ara-1")
         self.assertEqual(
-            sorted(Flask.objects.values_list("flask_number", flat=True)),
+            sorted(TimePoint.objects.values_list("value", flat=True)),
             [500, 1000, 50000])
         self.assertEqual(
-            sorted(ResequencingExperiment.objects.values_list("isolate_number", flat=True)),
+            sorted(Sample.objects.values_list("name", flat=True)),
             sorted(["762B", "964C", "11331"]))
 
     def test_the_trailer_comes_off_the_time_point_only(self):
         """`500gen` is flask 500; the ALE and the isolate keep every character."""
         self._import_named(["Ara+3_500gen_763A.gd"])
 
-        self.assertEqual(AleId.objects.get().ale_id, "Ara+3")
-        self.assertEqual(Flask.objects.get().flask_number, 500)
-        self.assertEqual(ResequencingExperiment.objects.get().isolate_number, "763A")
+        self.assertEqual(Population.objects.get().name, "Ara+3")
+        self.assertEqual(TimePoint.objects.get().value, 500)
+        self.assertEqual(Sample.objects.get().name, "763A")
 
     def test_two_lineages_differing_only_in_sign_stay_apart(self):
         """The case that makes these columns text: `Ara-1` and `Ara+1` both end in 1."""
         self._import_named(["Ara-1_500gen_762B.gd", "Ara+1_500gen_763A.gd"])
 
         self.assertEqual(
-            sorted(AleId.objects.values_list("ale_id", flat=True)), ["Ara+1", "Ara-1"])
-        self.assertEqual(Flask.objects.count(), 2, "one flask 500 per ALE")
+            sorted(Population.objects.values_list("name", flat=True)), ["Ara+1", "Ara-1"])
+        self.assertEqual(TimePoint.objects.count(), 2, "one flask 500 per ALE")
 
     def test_two_clones_from_one_flask_are_two_samples(self):
         """`763A` and `763B` differ only in the trailer, which is why it is not stripped."""
         self._import_named(["Ara-1_500gen_763A.gd", "Ara-1_500gen_763B.gd"])
 
-        self.assertEqual(AleId.objects.count(), 1)
-        self.assertEqual(Flask.objects.count(), 1)
+        self.assertEqual(Population.objects.count(), 1)
+        self.assertEqual(TimePoint.objects.count(), 1)
         self.assertEqual(
-            sorted(ResequencingExperiment.objects.values_list("isolate_number", flat=True)),
+            sorted(Sample.objects.values_list("name", flat=True)),
             ["763A", "763B"])
 
     def test_a_read_name_displays_as_itself(self):
         """`ale_flask_isolate_str` prefers the sample's description, so the label survives."""
         self._import_named(["Ara-1_500gen_762B.gd"])
 
-        reseq = ResequencingExperiment.objects.get()
+        reseq = Sample.objects.get()
         self.assertEqual(reseq.ale_flask_isolate_str, "Ara-1_500gen_762B")
 
     def test_an_afir_name_still_displays_as_its_coordinate(self):
@@ -277,14 +277,14 @@ class GdImportTestCase(TestCase):
         relabel every table column with a filename."""
         self._import_named(["3-30000-1-1.gd"])
 
-        reseq = ResequencingExperiment.objects.get()
+        reseq = Sample.objects.get()
         self.assertEqual(reseq.ale_flask_isolate_str, "A3 F30000 I1-1")
 
     def test_underscore_triple_reimport_is_idempotent(self):
         self._import_named(self.TRIPLE_NAMES)
         self._import_named(self.TRIPLE_NAMES)
 
-        self.assertEqual(ResequencingExperiment.objects.count(), len(self.TRIPLE_NAMES))
+        self.assertEqual(Sample.objects.count(), len(self.TRIPLE_NAMES))
         self.assertEqual(ObservedMutation.objects.count(),
                          Mutation.objects.count() * len(self.TRIPLE_NAMES))
 
@@ -293,13 +293,13 @@ class GdImportTestCase(TestCase):
         self.assertIsNone(summary["files"][0]["error"])
 
         # One sample per file, each its own label, all under ALE 1 / flask 1.
-        self.assertEqual(ResequencingExperiment.objects.count(), len(self.UNPARSEABLE_NAMES))
-        self.assertEqual(AleId.objects.count(), 1)
-        self.assertEqual(AleId.objects.get().ale_id, "1")
-        self.assertEqual(Flask.objects.count(), 1)
-        self.assertEqual(Flask.objects.get().flask_number, 1)
+        self.assertEqual(Sample.objects.count(), len(self.UNPARSEABLE_NAMES))
+        self.assertEqual(Population.objects.count(), 1)
+        self.assertEqual(Population.objects.get().name, "1")
+        self.assertEqual(TimePoint.objects.count(), 1)
+        self.assertEqual(TimePoint.objects.get().value, 1)
         self.assertEqual(
-            sorted(ResequencingExperiment.objects.values_list("isolate_number", flat=True)),
+            sorted(Sample.objects.values_list("name", flat=True)),
             ["1", "2"])
 
     def test_auto_numbering_counts_past_nine(self):
@@ -307,7 +307,7 @@ class GdImportTestCase(TestCase):
         self._import_named(["sample%d.gd" % index for index in range(1, 12)])
 
         numbers = sorted(int(value) for value
-                         in ResequencingExperiment.objects.values_list("isolate_number",
+                         in Sample.objects.values_list("name",
                                                                       flat=True))
         self.assertEqual(numbers, list(range(1, 12)))
 
@@ -316,21 +316,21 @@ class GdImportTestCase(TestCase):
         self._import_named(self.UNPARSEABLE_NAMES)
 
         # Auto-numbering must reuse the existing chain, not allocate a second sample.
-        self.assertEqual(ResequencingExperiment.objects.count(), len(self.UNPARSEABLE_NAMES))
+        self.assertEqual(Sample.objects.count(), len(self.UNPARSEABLE_NAMES))
 
     def test_afir_filename_still_uses_filename_numbering(self):
         """The strict parser must not regress names that genuinely are A-F-I-R."""
         self._import_named(["3-30000-1-1.gd"])
 
-        self.assertEqual(AleId.objects.get().ale_id, "3")
-        self.assertEqual(Flask.objects.get().flask_number, 30000)
-        self.assertEqual(ResequencingExperiment.objects.get().isolate_number, "1-1")
+        self.assertEqual(Population.objects.get().name, "3")
+        self.assertEqual(TimePoint.objects.get().value, 30000)
+        self.assertEqual(Sample.objects.get().name, "1-1")
 
     def test_summary_reports_the_real_experiment_pk(self):
         """The post-import "View mutations" link is built from this id."""
         summary = self._import_named(self.TRIPLE_NAMES[:1])
 
-        experiment = AleExperiment.objects.get()
+        experiment = Experiment.objects.get()
         self.assertEqual(summary["experiment_id"], experiment.id)
         self.assertEqual(summary["experiment"], experiment.name)
 

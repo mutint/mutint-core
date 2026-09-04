@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from aledb_common import store
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from aledb_experiment.permissions import grant_project_access, set_primary_owner
 from aledb_experiment.roles import ROLE_READ
 from aledb_experiment.utils import get_all_user_exps, get_user_projects
@@ -32,7 +32,7 @@ class ProjectExperimentCreateTestCase(TestCase):
 
         project = Project.objects.get(pk=body["project_id"])
         self.assertEqual(project.user_id, self.user.id)   # created by the current user
-        self.assertEqual(AleExperiment.objects.count(), 0)
+        self.assertEqual(Experiment.objects.count(), 0)
 
     def test_create_project_with_an_experiment_in_one_step(self):
         response = self.client.post("/ale/projects/create/",
@@ -42,7 +42,7 @@ class ProjectExperimentCreateTestCase(TestCase):
         body = response.json()
         self.assertIsNotNone(body["experiment_id"])
 
-        experiment = AleExperiment.objects.get(pk=body["experiment_id"])
+        experiment = Experiment.objects.get(pk=body["experiment_id"])
         self.assertEqual(experiment.project_id, body["project_id"])
         self.assertEqual(experiment.person, "owner")
 
@@ -61,7 +61,7 @@ class ProjectExperimentCreateTestCase(TestCase):
                                   {"name": "Ara-1", "project": project_id}).json()
 
         self.assertNotEqual(first["experiment_id"], second["experiment_id"])
-        self.assertEqual(AleExperiment.objects.filter(name="Ara-1").count(), 2)
+        self.assertEqual(Experiment.objects.filter(name="Ara-1").count(), 2)
 
     def test_cannot_add_an_experiment_to_someone_elses_project(self):
         project = Project.objects.create(name="Theirs", user=self.user)
@@ -100,7 +100,7 @@ class SoftDeleteTestCase(TestCase):
         self.assertIsNotNone(self.experiment.deleted_at)
         self.assertEqual(self.experiment.deleted_by_id, self.user.id)
         # The row is still there -- that is the whole point.
-        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.id).exists())
+        self.assertTrue(Experiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_deleted_experiment_disappears_from_the_list(self):
         self.assertIn(self.experiment, list(get_all_user_exps(self.user)))
@@ -178,7 +178,7 @@ class DeleteControlsTestCase(TestCase):
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
-        self.experiment = AleExperiment.objects.get(project=self.project)
+        self.experiment = Experiment.objects.get(project=self.project)
 
     def _html(self, url):
         return self.client.get(url).content.decode()
@@ -266,7 +266,7 @@ class DeleteControlsTestCase(TestCase):
     def test_an_experiment_with_no_project_has_no_delete_button_to_aim(self):
         """Which is why the button's fallback destination is a guard, not a live path.
 
-        `AleExperiment.project` is nullable, so the template has an else-branch pointing
+        `Experiment.project` is nullable, so the template has an else-branch pointing
         at the flat list. Nothing can reach it: `effective_role` answers None for a null
         project before it reaches its superuser branch, so a projectless experiment is
         viewable by nobody and this page does not render for one -- superuser included.
@@ -377,7 +377,7 @@ class NewExperimentControlTestCase(TestCase):
         self.assertEqual(body["experiment"], "second")
         self.assertEqual(body["project_id"], self.project.id)
 
-        experiment = AleExperiment.objects.get(pk=body["experiment_id"])
+        experiment = Experiment.objects.get(pk=body["experiment_id"])
         self.assertEqual(experiment.project_id, self.project.id)
         self.assertEqual(experiment.person, "owner")
         self.assertIn(experiment, list(self.project.experiments()))
@@ -389,7 +389,7 @@ class NewExperimentControlTestCase(TestCase):
                 "/ale/experiments/create/", {"project": self.project.id, "name": "dup"})
             self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(
-            AleExperiment.objects.filter(name="dup").count(), 2)
+            Experiment.objects.filter(name="dup").count(), 2)
 
     def test_a_nameless_experiment_is_refused(self):
         response = self.client.post(
@@ -516,13 +516,13 @@ class PurgeDeletedTestCase(TestCase):
     def test_recently_deleted_rows_survive(self):
         self.experiment.soft_delete(self.user)
         self._purge("--older-than", "30")
-        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.id).exists())
+        self.assertTrue(Experiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_expired_rows_are_removed(self):
         self.experiment.soft_delete(
             self.user, when=timezone.now() - timezone.timedelta(days=40))
         self._purge("--older-than", "30")
-        self.assertFalse(AleExperiment.objects.filter(pk=self.experiment.id).exists())
+        self.assertFalse(Experiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_dry_run_changes_nothing(self):
         self.experiment.soft_delete(
@@ -530,16 +530,16 @@ class PurgeDeletedTestCase(TestCase):
         output = self._purge("--older-than", "30", "--dry-run")
 
         self.assertIn("Would purge", output)
-        self.assertTrue(AleExperiment.objects.filter(pk=self.experiment.id).exists())
+        self.assertTrue(Experiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_purging_a_project_takes_its_experiments(self):
-        """AleExperiment.project is DO_NOTHING, so the experiments must go first."""
+        """Experiment.project is DO_NOTHING, so the experiments must go first."""
         self.project.soft_delete(
             self.user, when=timezone.now() - timezone.timedelta(days=40))
         self._purge("--older-than", "30")
 
         self.assertFalse(Project.objects.filter(pk=self.project.id).exists())
-        self.assertFalse(AleExperiment.objects.filter(pk=self.experiment.id).exists())
+        self.assertFalse(Experiment.objects.filter(pk=self.experiment.id).exists())
 
     def test_purge_removes_the_stored_reference_files(self):
         reference_dir = store.ensure_dir(
@@ -809,7 +809,7 @@ class ExperimentEditTestCase(TestCase):
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "first"}).json()
         self.project = Project.objects.get(pk=created["project_id"])
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def test_the_page_renders_with_the_current_values(self):
         response = self.client.get("/ale/experiment/%d/edit/" % self.experiment.id)

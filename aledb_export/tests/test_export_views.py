@@ -1,7 +1,7 @@
 """Both export endpoints answer with a zip.
 
 `aledb_export` had no tests, and both of its views were raising AttributeError on every
-request: they selected experiments with `str(exp.ale_id)`, and `AleExperiment`'s primary key
+request: they selected experiments with `str(exp.ale_id)`, and `Experiment`'s primary key
 stopped being called `ale_id` when it was renamed to the implicit `id`. `paths.EXPERIMENT_PK`
 exists so that a rename of that column survives in lookup *strings*; an attribute access is
 exactly what it cannot reach, which is why the rename swept the queries and left these four.
@@ -18,9 +18,9 @@ import zipfile
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import AleExperiment, AleId, Flask, Media, Project
+from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
 from aledb_experiment.roles import ROLE_OWNER
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 
 
 class ExportViewTestCase(TestCase):
@@ -31,17 +31,17 @@ class ExportViewTestCase(TestCase):
         self.project = Project.objects.create(name="P", user=self.user)
         from aledb_experiment.models import ProjectAccess
         ProjectAccess.objects.create(project=self.project, user=self.user, role=ROLE_OWNER)
-        self.experiment = AleExperiment.objects.create(name="E", project=self.project)
+        self.experiment = Experiment.objects.create(name="E", project=self.project)
 
-        ale = AleId.objects.create(ale_experiment=self.experiment, ale_id="1")
-        flask = Flask.objects.create(ale_id=ale, flask_number=500,
+        ale = Population.objects.create(experiment=self.experiment, name="1")
+        flask = TimePoint.objects.create(population=ale, value=500,
                                      media=Media.objects.create(description="M9"))
-        sample = ResequencingExperiment.objects.create(
-            flask=flask, isolate_number="1-1", is_population=False, sample_name="1-500-1-1")
+        sample = Sample.objects.create(
+            time_point=flask, name="1-1", is_population=False, source_name="1-500-1-1")
         mutation = Mutation.objects.create(
-            ale_experiment=self.experiment, mutation_type="SNP", position=150,
+            experiment=self.experiment, mutation_type="SNP", position=150,
             sequence_change="T", gene="thrA", reseq_reference="SYN001")
-        ObservedMutation.objects.create(sequencing_experiment=sample, mutation=mutation,
+        ObservedMutation.objects.create(sample=sample, mutation=mutation,
                                         frequency=1.0)
 
     def _zip(self, response):
@@ -78,7 +78,7 @@ class ExportViewTestCase(TestCase):
 
     def test_an_experiment_id_that_matches_nothing_is_refused_not_raised(self):
         """The failure mode this whole file exists for: selection is by
-        `AleExperiment.id`, and getting the attribute wrong made every request a 500
+        `Experiment.id`, and getting the attribute wrong made every request a 500
         rather than a refusal."""
         for path in ("/export/", "/export/experiment_index"):
             with self.subTest(path=path):

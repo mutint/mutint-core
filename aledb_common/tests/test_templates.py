@@ -176,7 +176,7 @@ class ButtonsAreNotFloatedTestCase(unittest.TestCase):
 class ExperimentSidebarLabelTestCase(TestCase):
     """base.html joins the two names itself: `{{ ale_project_name }}: {{ ale_experiment_name }}`.
 
-    `AleExperiment.experiment_context()` used to return a *composed* "project: experiment"
+    `Experiment.experiment_context()` used to return a *composed* "project: experiment"
     under the experiment key and no project key at all, so a view that simply trusted it
     rendered a stray leading colon, and one that added the project name without also
     overriding the composed one rendered the project twice. Every experiment-scoped view
@@ -191,9 +191,9 @@ class ExperimentSidebarLabelTestCase(TestCase):
         self.client.force_login(self.user)
         created = self.client.post(
             "/ale/projects/create/", {"name": "Proj", "experiment": "Exp"}).json()
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
 
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
     def test_the_context_keeps_the_names_apart(self):
         context = self.experiment.experiment_context()
@@ -203,7 +203,7 @@ class ExperimentSidebarLabelTestCase(TestCase):
         self.assertEqual(self.experiment.project_id, context["ale_project_id"])
 
     def test_a_project_less_experiment_gives_an_empty_name_rather_than_raising(self):
-        """`AleExperiment.project` is nullable, and this used to be `self.project.name`."""
+        """`Experiment.project` is nullable, and this used to be `self.project.name`."""
         self.experiment.project = None
         self.experiment.save()
 

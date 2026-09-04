@@ -18,7 +18,7 @@ from aledb_common.rebuild_registry import (
     ensure_fresh, get_rebuilder, get_rebuilders, is_stale, register_rebuilder,
     request_rebuild, run_rebuilds, unregister_rebuilder,
 )
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 
 
 class RebuildRegistryTestCase(TestCase):
@@ -27,7 +27,7 @@ class RebuildRegistryTestCase(TestCase):
         self.client.force_login(self.user)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
         self.calls = []
 
     def _register(self, name, fn=None, **kwargs):
@@ -108,7 +108,7 @@ class RebuildRegistryTestCase(TestCase):
         """The global-filter case: every experiment's counts are computed through it."""
         second = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        other = AleExperiment.objects.get(pk=second["experiment_id"])
+        other = Experiment.objects.get(pk=second["experiment_id"])
 
         self._register("test.global")
         run_rebuilds(self.experiment.id, only=["test.global"])
@@ -269,7 +269,7 @@ class RebuildCommandTestCase(TestCase):
         self.client.force_login(self.user)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.rebuilt = []
         register_rebuilder("test.watched",
@@ -319,7 +319,7 @@ class RebuildCommandTestCase(TestCase):
     def test_all_rebuilds_every_live_experiment(self):
         second = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        other = AleExperiment.objects.get(pk=second["experiment_id"])
+        other = Experiment.objects.get(pk=second["experiment_id"])
 
         self._run("--all", only=["test.watched"])
 
@@ -330,7 +330,7 @@ class RebuildCommandTestCase(TestCase):
         """Rebuilding one is work whose result nobody can see."""
         from django.utils import timezone
 
-        AleExperiment.objects.filter(pk=self.experiment.pk).update(
+        Experiment.objects.filter(pk=self.experiment.pk).update(
             deleted_at=timezone.now())
         self._run("--all", only=["test.watched"])
 

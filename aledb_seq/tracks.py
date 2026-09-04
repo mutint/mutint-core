@@ -123,9 +123,9 @@ def mutation_features(experiment_id, contig=None):
     pattern, and for the same reason: a `Mutation` carries two JSONFields and a gene column of
     up to 19,000 characters, and this needs eight columns.
 
-    **Reached through the observations, not through `Mutation.ale_experiment`**, so this track
+    **Reached through the observations, not through `Mutation.experiment`**, so this track
     and `frequency_features` can never disagree about what belongs to the experiment. Filtering
-    on the column looks equivalent and is not: a `Mutation` may carry a null `ale_experiment`
+    on the column looks equivalent and is not: a `Mutation` may carry a null `experiment`
     -- the unscoped case `permissions.can_curate` exists to handle -- and two such rows in the
     dev database were observed in an experiment while being owned by none, so the Mutations
     track came up empty beside a Frequency track with features in it.
@@ -204,9 +204,9 @@ def sample_features(experiment_id, contig=None):
 
     features = []
     for (seq_id, position, start_position, end_position, frequency,
-         reseq_id) in rows.order_by(*sample_order("sequencing_experiment__")).values_list(
+         reseq_id) in rows.order_by(*sample_order("sample__")).values_list(
             "mutation__reseq_reference", "mutation__position", "mutation__start_position",
-            "mutation__end_position", "frequency", "sequencing_experiment_id",
+            "mutation__end_position", "frequency", "sample_id",
     ).iterator(chunk_size=2000):
         if not seq_id or reseq_id not in labels:
             # Not in the ordered list means filtered out of it -- the ancestor, or a sample

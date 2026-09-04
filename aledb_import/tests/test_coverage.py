@@ -18,7 +18,7 @@ from aledb_common import store
 from aledb_common.tools import ToolMissing
 from aledb_import import breseq_folder, coverage
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 
 class ChromSizesTestCase(TestCase):
@@ -64,7 +64,7 @@ class BuildPreconditionsTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
-        self.reseq = ResequencingExperiment.objects.get()
+        self.reseq = Sample.objects.get()
 
     def test_a_sample_with_no_alignment_says_so(self):
         self.reseq.bam_stored = False
@@ -83,7 +83,7 @@ class BuildPreconditionsTestCase(TestCase):
 
     def test_a_missing_reference_index_says_what_it_was_for(self):
         os.remove(store.experiment_reference_path(
-            self.reseq.ale_experiment.id, store.REFERENCE_FAI))
+            self.reseq.experiment.id, store.REFERENCE_FAI))
 
         with self.assertRaises(coverage.CoverageError) as caught:
             coverage.build_for(self.reseq)

@@ -101,6 +101,6 @@ class LazyRebuildTestCase(EditorTestCase):
         response = self.client.get("/dashboard")
 
         self.assertEqual(200, response.status_code)
-        state = DerivedDataState.objects.get(name="mutation_counts", ale_experiment=None)
+        state = DerivedDataState.objects.get(name="mutation_counts", experiment=None)
         self.assertIn("no", state.last_error)
         self.assertIsNotNone(state.stale_since, "left stale so the next reader tries again")

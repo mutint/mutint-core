@@ -60,7 +60,7 @@ def observations_for_samples(reseq_id_list, experiment_id):
     """
     from aledb_experiment.ancestor import exclude_ancestry
     queryset = aledb_seq.models.ObservedMutation.objects.filter(
-        sequencing_experiment_id__in=reseq_id_list)
+        sample_id__in=reseq_id_list)
     return exclude_ancestry(queryset, experiment_id)
 
 
@@ -83,8 +83,8 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
     called with a `request` in the `sample_type` slot, which silently dropped every
     population sample from two plugin pages.
     """
-    reseq_qryset = aledb_seq.models.ResequencingExperiment.objects.select_related(
-        paths.to_experiment(), paths.to_flask(field='media')
+    reseq_qryset = aledb_seq.models.Sample.objects.select_related(
+        paths.to_experiment(), paths.to_time_point(field='media')
     ).order_by(*sample_order())
     if ale_experiment_id:
         reseq_qryset = reseq_qryset.filter(**{paths.to_experiment_id(): ale_experiment_id})
@@ -92,7 +92,7 @@ def get_ordered_reseq_queryset(ale_experiment_id, ale_id=None, sample_type=None,
     # (`common.STARTING_STRAIN_ALE_ID`), which was falsy while this column held integers and
     # so quietly selected every ALE instead of that one.
     if ale_id is not None and ale_id != "":
-        reseq_qryset = reseq_qryset.filter(**{paths.to_ale_label(): ale_id})
+        reseq_qryset = reseq_qryset.filter(**{paths.to_population_label(): ale_id})
     if sample_type:
         # Compared against the constant, not the literal: `get_sample_type` has already
         # refused anything that is not one of them, so this is a two-way choice rather than
@@ -163,7 +163,7 @@ def get_ordered_reseq_dict(observed_mutations):
     keeps an empty one. That difference is left alone -- a CSV of the rows it contains is a
     defensible thing for an export to be -- but it is a difference, not an oversight.
     """
-    by_id = {observed.sequencing_experiment.id: observed.sequencing_experiment
+    by_id = {observed.sample.id: observed.sample
              for observed in observed_mutations}
     return collections.OrderedDict(
         (reseq.id, reseq) for reseq in sorted(by_id.values(), key=sample_sort_key))
@@ -191,7 +191,7 @@ def get_ref_sequences():
 def get_matching_observed_mutation_ids(mutation_id, experiment_id):
     local_observed_mutations = aledb_seq.models.ObservedMutation.objects.filter(
         **{paths.to_experiment_id(paths.FROM_OBSERVATION): experiment_id},
-        mutation__id=mutation_id).order_by(*sample_order("sequencing_experiment__"))
+        mutation__id=mutation_id).order_by(*sample_order("sample__"))
     matching_observed_mutation_ids = []
     for local_observed_mutation in local_observed_mutations:
         matching_observed_mutation_ids.append(local_observed_mutation.id)

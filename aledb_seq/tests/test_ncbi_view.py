@@ -16,7 +16,7 @@ from django.utils import timezone
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
 from aledb_seq.models import (ExperimentReference, Mutation, NcbiSequence, ObservedMutation,
-                              ResequencingExperiment)
+                              Sample)
 
 SVIEWER_SCRIPT = "sviewer/js/sviewer.js"
 
@@ -43,12 +43,12 @@ class _Fixture(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
 
-        self.reseq = ResequencingExperiment.objects.get()
+        self.reseq = Sample.objects.get()
         self.observed = ObservedMutation.objects.filter(
-            sequencing_experiment=self.reseq).first()
+            sample=self.reseq).first()
         self.mutation = self.observed.mutation
-        self.experiment = self.reseq.ale_experiment
-        self.reference = ExperimentReference.objects.get(ale_experiment=self.experiment)
+        self.experiment = self.reseq.experiment
+        self.reference = ExperimentReference.objects.get(experiment=self.experiment)
         self.entry = self.reference.seq_ids[0]
 
     def _verify_contig(self, accession="NC_000913.3"):
@@ -253,7 +253,7 @@ class TableLinkTestCase(_Fixture):
         from aledb_seq.util import get_reseq_ordered_dict
         reseq_dict = get_reseq_ordered_dict(self.experiment.id)
         observed = list(ObservedMutation.objects.filter(
-            sequencing_experiment__in=reseq_dict.keys()).select_related("mutation"))
+            sample__in=reseq_dict.keys()).select_related("mutation"))
         return get_mutation_table_body(self.user, observed, reseq_dict, self.experiment)
 
     def test_an_unverified_contig_is_still_linked(self):
@@ -296,7 +296,7 @@ class TableLinkTestCase(_Fixture):
         self._verify_contig()
         rows = self._cells()
         expected = len(HTML_MUTATION_TABLE_HEADER) + len(
-            {o.sequencing_experiment_id for o in ObservedMutation.objects.all()}) - 1
+            {o.sample_id for o in ObservedMutation.objects.all()}) - 1
         for row in rows:
             self.assertEqual(len(row), len(rows[0]))
             self.assertGreaterEqual(len(row), len(HTML_MUTATION_TABLE_HEADER) - 1)

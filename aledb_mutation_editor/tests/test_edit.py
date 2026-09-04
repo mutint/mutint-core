@@ -114,9 +114,9 @@ class ChangeMutationTestCase(EditorTestCase):
         mutation belongs to one experiment's reference genome."""
         created = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
 
-        other = AleExperiment.objects.get(pk=created["experiment_id"])
+        other = Experiment.objects.get(pk=created["experiment_id"])
         stranger = self.make_mutation(position=1, sequence_change="A>C", experiment=other)
 
         response = self.client.get(PAGE, {"ale_experiment_id": self.experiment.id,
@@ -149,12 +149,12 @@ class ChangeMutationTestCase(EditorTestCase):
 
     def test_each_sample_keeps_its_own_observation(self):
         """What moves is what the mutation *is*. A frequency belongs to the sample."""
-        ObservedMutation.objects.filter(sequencing_experiment=self.sample_b,
+        ObservedMutation.objects.filter(sample=self.sample_b,
                                         mutation=self.mut_1).update(frequency=Decimal("0.25"))
 
         self.change(position=150)
 
-        frequencies = {observed.sequencing_experiment_id: observed.frequency
+        frequencies = {observed.sample_id: observed.frequency
                        for observed in
                        ObservedMutation.objects.filter(mutation=self.mut_1)}
         self.assertEqual(Decimal("0.7500"), frequencies[self.sample_a.id])
@@ -251,9 +251,9 @@ class ChangeMutationTestCase(EditorTestCase):
         response = self.change(position=150, target_reseq_ids=[self.sample_b.id])
 
         self.assertEqual(200, response.status_code, response.content)
-        moved = ObservedMutation.objects.get(sequencing_experiment=self.sample_b,
+        moved = ObservedMutation.objects.get(sample=self.sample_b,
                                              mutation__position=150)
-        stayed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        stayed = ObservedMutation.objects.get(sample=self.sample_a,
                                               mutation=self.mut_1)
         self.assertNotEqual(self.mut_1.pk, moved.mutation_id)
         self.assertEqual(self.mut_1.pk, stayed.mutation_id)
@@ -270,7 +270,7 @@ class ChangeMutationTestCase(EditorTestCase):
     def test_a_subset_mints_a_row_when_the_values_are_new(self):
         self.change(position=150, target_reseq_ids=[self.sample_b.id])
 
-        minted = Mutation.objects.get(ale_experiment=self.experiment, position=150)
+        minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.assertNotEqual(self.mut_1.pk, minted.pk)
         self.assertEqual("SNP", minted.mutation_type)
         self.assertEqual("NC_000913", minted.reseq_reference)
@@ -287,7 +287,7 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(self.mut_2.pk, response.json()["mutation_id"])
         self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
-        self.assertEqual(1, Mutation.objects.filter(ale_experiment=self.experiment,
+        self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
                                                     position=150).count())
 
     def test_the_minted_row_carries_the_new_record_and_the_old_one_keeps_its_own(self):
@@ -296,7 +296,7 @@ class ChangeMutationTestCase(EditorTestCase):
         changed, and re-annotating it as though it had is the bug this pins."""
         self.change(position=150, target_reseq_ids=[self.sample_b.id])
 
-        minted = Mutation.objects.get(ale_experiment=self.experiment, position=150)
+        minted = Mutation.objects.get(experiment=self.experiment, position=150)
         self.mut_1.refresh_from_db()
         self.assertEqual(150, minted.gd_data["position"])
         self.assertEqual(100, self.mut_1.gd_data["position"])
@@ -316,12 +316,12 @@ class ChangeMutationTestCase(EditorTestCase):
 
         self.assertEqual(200, response.status_code, response.content)
         self.assertEqual([self.sample_b.ale_flask_isolate_str], response.json()["already"])
-        observations = ObservedMutation.objects.filter(sequencing_experiment=self.sample_b,
+        observations = ObservedMutation.objects.filter(sample=self.sample_b,
                                                        mutation=self.mut_2)
         self.assertEqual(1, observations.count())
         self.assertEqual(Decimal("0.1000"), observations.first().frequency)
         self.assertFalse(ObservedMutation.objects.filter(
-            sequencing_experiment=self.sample_b, mutation=self.mut_1).exists())
+            sample=self.sample_b, mutation=self.mut_1).exists())
 
     def test_a_subset_is_one_changeset_of_removals_and_additions(self):
         self.change(position=150, target_reseq_ids=[self.sample_b.id])
@@ -416,7 +416,7 @@ class ChangeMutationTestCase(EditorTestCase):
         self.assertEqual(2, ObservedMutation.objects.filter(mutation=self.mut_2).count())
         self.assertFalse(ObservedMutation.objects.filter(mutation=self.mut_1).exists())
         self.assertTrue(Mutation.objects.filter(pk=self.mut_1.pk).exists())
-        self.assertEqual(1, Mutation.objects.filter(ale_experiment=self.experiment,
+        self.assertEqual(1, Mutation.objects.filter(experiment=self.experiment,
                                                     position=150).count(),
                          "joined the existing row rather than minting a second at 150")
         self.mut_1.refresh_from_db()

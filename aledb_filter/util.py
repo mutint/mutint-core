@@ -97,7 +97,7 @@ def filter_observed_mutations(observed_mutation_queryset, *, filter_type=None, v
 
     queryset = queryset.select_related(
         paths.to_experiment(paths.FROM_OBSERVATION), 'mutation'
-    ).order_by(*sample_order("sequencing_experiment__"))
+    ).order_by(*sample_order("sample__"))
     if not filter_type and not ignored_genes:
         return list(queryset)
 

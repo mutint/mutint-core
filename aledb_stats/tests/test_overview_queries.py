@@ -22,9 +22,9 @@ from django.test.utils import CaptureQueriesContext
 from django.db import connection
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask,
+    Experiment, Population, TimePoint,
 )
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 
 
 class OverviewQueryCountTestCase(TestCase):
@@ -39,23 +39,23 @@ class OverviewQueryCountTestCase(TestCase):
     def _experiment(self, name, samples):
         created = self.client.post(
             "/ale/projects/create/", {"name": name, "experiment": name}).json()
-        experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         from aledb_import.gd_import import prepare_experiment_by_id
         context = prepare_experiment_by_id(experiment.id)
 
-        ale = AleId.objects.create(ale_experiment=experiment, ale_id=1)
+        ale = Population.objects.create(experiment=experiment, name=1)
         for number in range(samples):
-            flask = Flask.objects.create(ale_id=ale, flask_number=100 + number,
+            flask = TimePoint.objects.create(population=ale, value=100 + number,
                                          media=context["media"])
-            sample = ResequencingExperiment.objects.create(
-                flask=flask, isolate_number="1-1", is_population=False,
-                sample_name="1-%d-1-1" % (100 + number))
+            sample = Sample.objects.create(
+                time_point=flask, name="1-1", is_population=False,
+                source_name="1-%d-1-1" % (100 + number))
             mutation = Mutation.objects.create(
-                ale_experiment=experiment, mutation_type="SNP", position=number,
+                experiment=experiment, mutation_type="SNP", position=number,
                 sequence_change="A>T", protein_change="nonsynonymous (A1T)", gene="thrA")
             ObservedMutation.objects.create(
-                sequencing_experiment=sample, mutation=mutation,
+                sample=sample, mutation=mutation,
                 present=True, frequency="1.0000")
         return experiment
 

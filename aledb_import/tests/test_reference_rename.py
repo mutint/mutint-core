@@ -121,7 +121,7 @@ class RenamePlanningTestCase(TestCase):
 
     def _reference(self, entries):
         reference = ExperimentReference(seq_ids=entries)
-        reference.ale_experiment_id = 1
+        reference.experiment_id = 1
         return reference
 
     def _entry(self, name, sequence):
@@ -219,7 +219,7 @@ class RenameApplicationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name="e", person="tester")
         self.reference = ExperimentReference.objects.get()
-        self.experiment = self.reference.ale_experiment
+        self.experiment = self.reference.experiment
         self.sequences = [("NC_TEST.1", breseq_fixture.SEQUENCE_A)]
 
     def _rename(self):
@@ -231,7 +231,7 @@ class RenameApplicationTestCase(TestCase):
         rewriting one and not the other makes exports silently disagree with the table."""
         self._rename()
 
-        for mutation in Mutation.objects.filter(ale_experiment=self.experiment):
+        for mutation in Mutation.objects.filter(experiment=self.experiment):
             self.assertEqual("NC_TEST.1", mutation.reseq_reference)
             self.assertEqual("NC_TEST.1", mutation.gd_data["seq_id"])
             self.assertIn("NC_TEST.1", mutation.to_gd_line())
@@ -263,7 +263,7 @@ class RenameApplicationTestCase(TestCase):
         """A→B, B→A is safe only because the rewrite is computed in memory from the original
         values. Two sequential UPDATEs per pair would collapse it -- and `Mutation` has no
         unique constraint, so the result would be silent duplicates, not an IntegrityError."""
-        mutations = list(Mutation.objects.filter(ale_experiment=self.experiment))
+        mutations = list(Mutation.objects.filter(experiment=self.experiment))
         self.assertTrue(mutations)
         first = mutations[0]
         first.reseq_reference = "other"
@@ -276,7 +276,7 @@ class RenameApplicationTestCase(TestCase):
         first.refresh_from_db()
         self.assertEqual("test_ref", first.reseq_reference)
         self.assertEqual("test_ref", first.gd_data["seq_id"])
-        for other in Mutation.objects.filter(ale_experiment=self.experiment).exclude(
+        for other in Mutation.objects.filter(experiment=self.experiment).exclude(
                 pk=first.pk):
             self.assertEqual("other", other.reseq_reference)
 
@@ -304,7 +304,7 @@ class RenameApplicationTestCase(TestCase):
 
         self.assertEqual("NC_TEST.1",
                          Mutation.objects.filter(
-                             ale_experiment=self.experiment).first().reseq_reference)
+                             experiment=self.experiment).first().reseq_reference)
 
 
 class EstablishOrCheckRenameTestCase(TestCase):
@@ -324,7 +324,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name="e", person="tester")
-        self.experiment = ExperimentReference.objects.get().ale_experiment
+        self.experiment = ExperimentReference.objects.get().experiment
         self.renamed = [("NC_TEST.1", breseq_fixture.SEQUENCE_A)]
         self.gff3 = breseq_fixture.gff3_text(self.renamed)
 
@@ -336,7 +336,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
         self.assertEqual([("test_ref", "NC_TEST.1")], caught.exception.plan.pairs)
         self.assertEqual("test_ref",
                          Mutation.objects.filter(
-                             ale_experiment=self.experiment).first().reseq_reference)
+                             experiment=self.experiment).first().reseq_reference)
 
     def test_allowing_it_performs_the_rename(self):
         reference_store.establish_or_check(
@@ -345,7 +345,7 @@ class EstablishOrCheckRenameTestCase(TestCase):
 
         self.assertEqual("NC_TEST.1",
                          Mutation.objects.filter(
-                             ale_experiment=self.experiment).first().reseq_reference)
+                             experiment=self.experiment).first().reseq_reference)
 
     def test_the_stored_files_carry_the_new_name(self):
         reference_store.establish_or_check(

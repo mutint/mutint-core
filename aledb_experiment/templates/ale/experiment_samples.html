@@ -25,8 +25,8 @@
                 <th>Shown as</th>
                 <th>Sample name</th>
                 <th width="70">ALE</th>
-                {% comment %} The column behind this is Flask.flask_number and stays so;
-                   "Time point" is what it is used for -- fixation orders samples by it. {% endcomment %}
+                {% comment %} The column is `TimePoint.value` and the label has always said "Time
+                   point" -- the two agree now. Fixation orders samples by it. {% endcomment %}
                 <th width="90">Time point</th>
                 <th width="70">Sample</th>
                 <th width="50">Pop.</th>
@@ -43,7 +43,7 @@
                     </td>
                     <td><input type="text" class="form-control input-sm" maxlength="200"
                                id="sb-name-{{ sample.id }}"
-                               value="{{ sample.reseq.sample_name|default_if_none:'' }}"></td>
+                               value="{{ sample.reseq.source_name|default_if_none:'' }}"></td>
                     {% comment %} ALE and sample label are text: a lineage is called `Ara-1`,
                        a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
                        three -- silently, by sending an empty value. The time point is text

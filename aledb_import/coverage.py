@@ -227,7 +227,7 @@ def _sizes_map(sizes_path):
 
 
 def build_for(reseq):
-    """Derive and store the BigWig for one ResequencingExperiment; set `coverage_stored`.
+    """Derive and store the BigWig for one Sample; set `coverage_stored`.
 
     Returns a `CoverageTally` describing what the BAM turned out to hold -- how much of it was
     redundantly mapped, and whether it carried X1 at all. It returned the output path before,
@@ -244,7 +244,7 @@ def build_for(reseq):
         raise CoverageError("sample %s is flagged bam_stored but %s is missing"
                             % (reseq.id, bam_path))
 
-    experiment = reseq.ale_experiment
+    experiment = reseq.experiment
     fai_path = store.experiment_reference_path(experiment.id, store.REFERENCE_FAI)
     if not os.path.isfile(fai_path):
         raise CoverageError(

@@ -1,7 +1,7 @@
 """Every registered admin changelist renders.
 
-`MediaAdmin.list_display` names `experiments`, a method that filtered `Flask` on a `project`
-field `Flask` does not have. It raised `FieldError` on every render, so /admin/…/media/ had
+`MediaAdmin.list_display` names `experiments`, a method that filtered `TimePoint` on a `project`
+field `TimePoint` does not have. It raised `FieldError` on every render, so /admin/…/media/ had
 been a 500 rather than a page -- and nothing noticed, because a `list_display` callable is
 only ever called by the admin's own rendering and no test rendered it.
 
@@ -16,7 +16,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from aledb_experiment.models import (
-    AleExperiment, AleGroup, AleId, Flask, Media, Project, ProjectAccess,
+    Experiment, AleGroup, Population, TimePoint, Media, Project, ProjectAccess,
 )
 from aledb_experiment.roles import ROLE_OWNER
 
@@ -38,10 +38,10 @@ class AdminChangelistTestCase(TestCase):
         self.project = Project.objects.create(name="P", user=self.superuser)
         ProjectAccess.objects.create(
             project=self.project, user=self.superuser, role=ROLE_OWNER)
-        experiment = AleExperiment.objects.create(name="E", project=self.project)
+        experiment = Experiment.objects.create(name="E", project=self.project)
         media = Media.objects.create(description="M9")
-        ale = AleId.objects.create(ale_experiment=experiment, ale_id="1")
-        Flask.objects.create(ale_id=ale, flask_number=1000, media=media)
+        ale = Population.objects.create(experiment=experiment, name="1")
+        TimePoint.objects.create(population=ale, value=1000, media=media)
         AleGroup.objects.create(name="G", owner=self.superuser)
 
     def test_fixture_covers_every_registered_model(self):

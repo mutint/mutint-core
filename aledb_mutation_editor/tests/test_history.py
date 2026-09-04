@@ -19,7 +19,7 @@ from aledb_seq.models import ObservedMutation
 class ApplyChangesTestCase(EditorTestCase):
 
     def _delete(self, sample, mutation):
-        observed = ObservedMutation.objects.get(sequencing_experiment=sample,
+        observed = ObservedMutation.objects.get(sample=sample,
                                                 mutation=mutation)
         return history.apply_changes(self.experiment, self.owner, KIND_DELETE,
                                      removals=[observed], note="test delete")
@@ -28,7 +28,7 @@ class ApplyChangesTestCase(EditorTestCase):
         self._delete(self.sample_a, self.mut_2)
 
         self.assertFalse(ObservedMutation.objects.filter(
-            sequencing_experiment=self.sample_a, mutation=self.mut_2).exists())
+            sample=self.sample_a, mutation=self.mut_2).exists())
         self.assertEqual({self.mut_1.id, self.mut_3.id}, self.observed_ids(self.sample_a))
 
     def test_it_leaves_the_mutation_row_alone(self):
@@ -47,7 +47,7 @@ class ApplyChangesTestCase(EditorTestCase):
         self.assertEqual({self.mut_1.id}, self.observed_ids(self.sample_b))
 
     def test_one_changeset_per_call_however_many_rows(self):
-        observed = list(ObservedMutation.objects.filter(sequencing_experiment=self.sample_a))
+        observed = list(ObservedMutation.objects.filter(sample=self.sample_a))
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=observed,
                               note="all three")
 
@@ -83,7 +83,7 @@ class SnapshotTestCase(EditorTestCase):
 
     def test_every_observed_mutation_column_is_captured(self):
         """A removal has to be undoable exactly, not approximately."""
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_1)
         snapshot = history.observation_snapshot(observed)
 
@@ -141,7 +141,7 @@ class RebuildTestCase(EditorTestCase):
         history.rebuild_after_edit(self.experiment)
 
         self.assertTrue(DerivedDataState.objects.filter(
-            name="test.derived", ale_experiment=self.experiment).exists())
+            name="test.derived", experiment=self.experiment).exists())
 
     def test_the_dashboard_totals_are_marked_stale_but_not_rebuilt(self):
         """Site-scoped, and deliberately not narrowed away -- but not run here either.
@@ -159,14 +159,14 @@ class RebuildTestCase(EditorTestCase):
         from aledb_common.rebuild_registry import is_stale
 
         DerivedDataState.objects.update_or_create(
-            name="mutation_counts", ale_experiment=None,
+            name="mutation_counts", experiment=None,
             defaults={"stale_since": None})
 
         history.rebuild_after_edit(self.experiment)
 
         self.assertTrue(is_stale("mutation_counts"),
                         "a mutation edit invalidates the installation-wide totals")
-        state = DerivedDataState.objects.get(name="mutation_counts", ale_experiment=None)
+        state = DerivedDataState.objects.get(name="mutation_counts", experiment=None)
         self.assertIsNotNone(state.stale_since, "marked, and left for the dashboard to run")
 
     def test_the_experiments_own_derived_data_is_rebuilt_here(self):

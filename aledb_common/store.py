@@ -9,7 +9,7 @@ Layout::
     <store>/experiments/<ale_experiment_pk>/reference/reference.gff3
                                             reference/reference.fasta
                                             reference/reference.fasta.fai
-    <store>/samples/<resequencing_experiment_pk>/sample.gd
+    <store>/samples/<sample_pk>/sample.gd
                                                  aligned.bam
                                                  aligned.bam.bai
     <store>/staging/<upload_session_id>/...      (transient; removed on finalize)
@@ -54,15 +54,15 @@ def experiment_reference_path(ale_experiment_id, filename):
     return os.path.join(experiment_reference_dir(ale_experiment_id), filename)
 
 
-def sample_dir(resequencing_experiment_id):
-    return os.path.join(store_root(), "samples", str(int(resequencing_experiment_id)))
+def sample_dir(sample_id):
+    return os.path.join(store_root(), "samples", str(int(sample_id)))
 
 
-def sample_path(resequencing_experiment_id, filename):
+def sample_path(sample_id, filename):
     """Path to one sample artifact. ``filename`` must be one of the module constants."""
     if filename not in (SAMPLE_GD, SAMPLE_BAM, SAMPLE_BAI, SAMPLE_BIGWIG):
         raise ValueError("unknown sample artifact: %r" % (filename,))
-    return os.path.join(sample_dir(resequencing_experiment_id), filename)
+    return os.path.join(sample_dir(sample_id), filename)
 
 
 def staging_dir(upload_session_id):

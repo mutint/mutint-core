@@ -15,7 +15,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Project,
+    Experiment, Population, TimePoint, Project,
 )
 from aledb_seq.models import Mutation
 
@@ -31,21 +31,21 @@ class TableActionsTestCase(TestCase):
         # consults. Project.objects.create leaves the owner without it.
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.mutation = Mutation.objects.create(
             mutation_type="SNP", position=1000, sequence_change="A>T",
-            ale_experiment=self.experiment)
+            experiment=self.experiment)
 
         from aledb_import.gd_import import prepare_experiment_by_id
         context = prepare_experiment_by_id(self.experiment.id)
-        ale = AleId.objects.create(ale_experiment=self.experiment, ale_id=1)
-        flask = Flask.objects.create(ale_id=ale, flask_number=1, media=context["media"])
+        ale = Population.objects.create(experiment=self.experiment, name=1)
+        flask = TimePoint.objects.create(population=ale, value=1, media=context["media"])
         # The tag endpoint takes a sample id now: the tags moved onto the sample with the
         # replicate row they used to live on.
-        from aledb_seq.models import ResequencingExperiment
-        self.replicate = ResequencingExperiment.objects.create(
-            flask=flask, isolate_number=1, is_population=False)
+        from aledb_seq.models import Sample
+        self.replicate = Sample.objects.create(
+            time_point=flask, name=1, is_population=False)
 
     # @ajax(mandatory=True) answers a plain POST with a bare 400 -- it requires the header
     # jQuery's $.ajax sets. Every call below goes through here so that is not re-learned.
@@ -141,7 +141,7 @@ class TableActionsTestCase(TestCase):
     def test_a_mutation_with_no_experiment_is_superuser_only(self):
         """It cannot be scoped to a project, so there is nothing to grant against."""
         loose = Mutation.objects.create(mutation_type="SNP", position=7,
-                                        sequence_change="G>C", ale_experiment=None)
+                                        sequence_change="G>C", experiment=None)
 
         response = self._post(TAG_MUT, {"mut_id": loose.id, "tag_name": "contaminated"})
         self.assertEqual(403, self._status(response))

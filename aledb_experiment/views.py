@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404, render
 from aledb_experiment.models import live
 from django.shortcuts import redirect
-from .models import Project, AleExperiment
+from .models import Project, Experiment
 from .utils import get_user_projects, get_all_user_exps
 from .permissions import (
     accessible_projects, can_admin_project, can_edit_experiment, can_edit_project,
@@ -20,7 +20,7 @@ def projects(request):
     template_name = "ale/projects.html"
     project_dic = {}
     for project in project_list:
-        project_experiments = live(project.aleexperiment_set.all())
+        project_experiments = live(project.experiment_set.all())
         dois = []
         for project_experiment in project_experiments:
             if project_experiment.doi is not None:
@@ -55,7 +55,7 @@ def experiments(request):
 def project_detail(request, pk):
     project = get_object_or_404(Project, pk=pk)
     if can_view_project(request.user, project):
-        experiments = live(project.aleexperiment_set.all())
+        experiments = live(project.experiment_set.all())
         return render(request, "ale/project_detail.html", {
             "project": project,
             "experiments": experiments,
@@ -69,7 +69,7 @@ def project_detail(request, pk):
 
 
 def experiment_detail(request, pk):
-    # experiment = get_object_or_404(AleExperiment, pk=pk)
+    # experiment = get_object_or_404(Experiment, pk=pk)
     # context = {
     #     "ale_experiment_id": experiment.id,
     #     "ale_experiment_name": experiment.name,
@@ -184,7 +184,7 @@ def experiment_create(request):
 
 def _create_experiment(project, name, user):
     """Experiments are identified by primary key, so a duplicate name is allowed."""
-    return AleExperiment.objects.create(
+    return Experiment.objects.create(
         name=name, project=project, person=user.get_username())
 
 
@@ -209,7 +209,7 @@ def project_delete(request, pk):
     # take it away just the same -- so the lock has to reach one button sideways or it is
     # sidestepped by the most obvious route there is. Named rather than counted: the person
     # has to know which one to go and unlock.
-    locked = list(live(project.aleexperiment_set.all())
+    locked = list(live(project.experiment_set.all())
                   .filter(locked_at__isnull=False).values_list("name", flat=True))
     if locked:
         return JsonResponse(
@@ -233,7 +233,7 @@ def experiment_ancestor(request, pk):
     access, and `experiment_ancestor_apply` refuses the write regardless -- the button being
     hidden is not a permission check.
     """
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     context = get_user_context(request.user)
     if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", context, status=403)
@@ -267,7 +267,7 @@ def experiment_ancestor_apply(request, pk):
     experiment cannot have its ancestor *cleared* either, which is correct -- an admin
     unlocks, changes it, and locks it again.
     """
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     if not can_edit_experiment(request.user, experiment):
         return JsonResponse(
             {"error": (experiment_lock_refusal(experiment)
@@ -325,7 +325,7 @@ def experiment_lock(request, pk):
     Idempotent, like `project_delete`: locking a locked experiment is not an error, it just
     does not move the timestamp.
     """
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     if not can_lock_experiment(request.user, experiment):
         return JsonResponse(
             {"error": "Only an administrator of this project can lock or unlock it."},
@@ -346,7 +346,7 @@ def experiment_lock(request, pk):
 
 @require_POST
 def experiment_delete(request, pk):
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     if not can_delete_experiment(request.user, experiment):
         return JsonResponse(
             {"error": experiment_lock_refusal(experiment)
@@ -400,7 +400,7 @@ def experiment_edit(request, pk):
     page as well as the endpoint behind it, so there is no form to fill in and be refused at
     the end of.
     """
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     context = get_user_context(request.user)
     if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
@@ -451,7 +451,7 @@ def experiment_update(request, pk):
     take an experiment out of a project you have no say over; checking only the source
     would let you push your experiment into someone else's.
     """
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     if not can_edit_experiment(request.user, experiment):
         # Refuses a locked experiment too, which stops the *move* as well as the rename --
         # the destination check below is about the other end and would not catch it.

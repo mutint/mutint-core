@@ -64,7 +64,7 @@ class AnnotatedImportTestCase(TestCase):
         return context["experiment"]
 
     def mutation_at(self, position):
-        return Mutation.objects.get(ale_experiment=self.experiment, position=position)
+        return Mutation.objects.get(experiment=self.experiment, position=position)
 
     def test_annotation_reads_the_one_stored_reference(self):
         # The same file the store hashes and igv.js draws -- there is no second

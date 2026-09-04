@@ -25,25 +25,25 @@ from django.test import TestCase
 from aledb_dashboard.models import ObservedMutationCounts, UniqueMutationCounts
 from aledb_dashboard.util import rebuild_mutation_counts
 from aledb_experiment.models import (
-    AleExperiment, AleId, Flask, Media,
+    Experiment, Population, TimePoint, Media,
 )
-from aledb_seq.models import Mutation, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import Mutation, ObservedMutation, Sample
 
 
 class MutationCountsTestCase(TestCase):
 
     def setUp(self):
-        self.experiment = AleExperiment.objects.create(
+        self.experiment = Experiment.objects.create(
 )
         self.media = Media.objects.create()
         self.sample = self._sample(ale=1)
         self.other_sample = self._sample(ale=2)
 
     def _sample(self, ale):
-        ale_row = AleId.objects.create(ale_experiment=self.experiment, ale_id=ale)
-        flask = Flask.objects.create(ale_id=ale_row, flask_number=100, media=self.media)
-        return ResequencingExperiment.objects.create(
-            flask=flask, isolate_number=1, is_population=False)
+        ale_row = Population.objects.create(experiment=self.experiment, name=ale)
+        flask = TimePoint.objects.create(population=ale_row, value=100, media=self.media)
+        return Sample.objects.create(
+            time_point=flask, name=1, is_population=False)
 
     def _mutation(self, mutation_type="SNP", position=100, snp_type="", gene="thrA",
                   protein_change=""):
@@ -51,12 +51,12 @@ class MutationCountsTestCase(TestCase):
         the table's "Details" cell, so it stays available to the one test that proves it no
         longer decides anything."""
         return Mutation.objects.create(
-            ale_experiment=self.experiment, mutation_type=mutation_type, position=position,
+            experiment=self.experiment, mutation_type=mutation_type, position=position,
             sequence_change="A>T", snp_type=snp_type, protein_change=protein_change, gene=gene)
 
     def _observe(self, sample, mutation, frequency="1.0000"):
         return ObservedMutation.objects.create(
-            sequencing_experiment=sample, mutation=mutation,
+            sample=sample, mutation=mutation,
             present=True, frequency=frequency)
 
     def _filter(self, **fields):

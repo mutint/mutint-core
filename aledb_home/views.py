@@ -13,7 +13,7 @@ from aledb_experiment.utils import get_user_projects
 
 import logging
 
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.views import projects
 
 
@@ -25,7 +25,7 @@ SPLASH_TEMPLATE = "home/splash.html"
 
 
 def get_unique_publication_count():
-    return AleExperiment.objects.order_by().values('doi').distinct().count()
+    return Experiment.objects.order_by().values('doi').distinct().count()
 
 
 def home(request):

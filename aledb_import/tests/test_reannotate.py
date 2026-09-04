@@ -76,7 +76,7 @@ class ReannotateTestCase(TestCase):
         return set(Mutation.objects.values_list("mutation_category", flat=True))
 
     def mutation_at(self, position):
-        return Mutation.objects.get(ale_experiment=self.experiment, position=position)
+        return Mutation.objects.get(experiment=self.experiment, position=position)
 
     def gene_names(self):
         return set(Mutation.objects.values_list("gene_name", flat=True))
@@ -237,7 +237,7 @@ class ReannotateOtherExperimentsTestCase(TestCase):
 
     def test_the_other_experiment_is_untouched(self):
         untouched = {m.pk: (m.gene_name, m.snp_type)
-                     for m in Mutation.objects.filter(ale_experiment=self.second)}
+                     for m in Mutation.objects.filter(experiment=self.second)}
         self.assertEqual(36, len(untouched))
 
         other = os.path.join(self.store, "other.fasta")

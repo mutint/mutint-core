@@ -23,7 +23,7 @@ from django.template import loader
 from django.views.decorators.http import require_POST
 
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_experiment, can_view_project
 from aledb_seq import ncbi
 from aledb_seq.breseq_report import build_rows, is_population
@@ -43,12 +43,12 @@ def ncbi_view(request):
     """The NCBI Sequence Viewer at one mutation's locus."""
     try:
         mutation = (Mutation.objects
-                    .select_related("ale_experiment")
+                    .select_related("experiment")
                     .get(pk=request.GET.get("mutation_id")))
     except (Mutation.DoesNotExist, ValueError, TypeError):
         raise Http404("No such mutation.")
 
-    experiment = mutation.ale_experiment
+    experiment = mutation.experiment
     if not _may_view(request.user, experiment):
         return HttpResponse(
             loader.get_template("403.html").render(get_user_context(request.user), request),
@@ -103,8 +103,8 @@ def ncbi_check(request):
     handed the project cannot see the lock that lives on the experiment.
     """
     try:
-        experiment = AleExperiment.objects.get(pk=request.POST.get("ale_experiment_id"))
-    except (AleExperiment.DoesNotExist, ValueError, TypeError):
+        experiment = Experiment.objects.get(pk=request.POST.get("ale_experiment_id"))
+    except (Experiment.DoesNotExist, ValueError, TypeError):
         raise Http404("No such experiment.")
 
     if not _may_view(request.user, experiment):
@@ -166,7 +166,7 @@ def _any_observation(mutation):
     the sample from `reseq_id`: the row must read identically however the page was reached.
     """
     return (ObservedMutation.objects
-            .select_related("mutation", "sequencing_experiment")
+            .select_related("mutation", "sample")
             .filter(mutation=mutation).order_by("pk").first())
 
 
@@ -229,7 +229,7 @@ def reference_view(request):
     context = get_user_context(request.user)
     try:
         experiment = get_ale_experiment(request)
-    except AleExperiment.DoesNotExist:
+    except Experiment.DoesNotExist:
         return no_experiment_selected(request, context, logger, "reference genome")
 
     contigs = ncbi.contig_states(experiment)

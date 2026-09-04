@@ -59,7 +59,7 @@ def known_seq_ids(experiment):
     those as one reference would attribute a mutation to the wrong genome, which is
     a quieter and worse failure than refusing the import.
     """
-    reference = ExperimentReference.objects.filter(ale_experiment=experiment).first()
+    reference = ExperimentReference.objects.filter(experiment=experiment).first()
     if reference is None:
         return None
     return {entry["id"] for entry in (reference.seq_ids or []) if entry.get("id")}
@@ -89,7 +89,7 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
     fasta_sha = digest(fasta_text)
     sequence_sha = reference_io.sequence_set_digest(sequences)
 
-    existing = ExperimentReference.objects.filter(ale_experiment=experiment).first()
+    existing = ExperimentReference.objects.filter(experiment=experiment).first()
     if existing is not None and not replace:
         _ensure_sequence_identity(existing)
         if not existing.matches_sequence(sequence_sha, fasta_sha):
@@ -140,7 +140,7 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
     defaults = dict(_sequence_fields(sequences, fasta_sha, sequence_sha),
                     gff3_sha256=gff3_sha)
     reference, created = ExperimentReference.objects.update_or_create(
-        ale_experiment=experiment, defaults=defaults)
+        experiment=experiment, defaults=defaults)
     return reference, created
 
 
@@ -193,7 +193,7 @@ def _ensure_sequence_identity(reference):
     if reference.sequence_sha256 and all(
             entry.get("sha256") for entry in (reference.seq_ids or [])):
         return
-    path = store.experiment_reference_path(reference.ale_experiment_id, store.REFERENCE_FASTA)
+    path = store.experiment_reference_path(reference.experiment_id, store.REFERENCE_FASTA)
     try:
         with open(path, "r", encoding="utf-8") as handle:
             sequences = list(reference_io.parse_fasta(handle))
@@ -232,4 +232,4 @@ def annotation_reference_path(ale_experiment_id):
 
 
 def has_reference(experiment):
-    return ExperimentReference.objects.filter(ale_experiment=experiment).exists()
+    return ExperimentReference.objects.filter(experiment=experiment).exists()

@@ -20,7 +20,7 @@ isolate `763A`. What makes this expressible at all is that the ALE and the isola
 (`aledb_experiment.0008`): `Ara-1` and `Ara+1` are two different LTEE populations and any
 rule reducing them to an integer merges them.
 
-The middle field is the exception, because `Flask.flask_number` is genuinely a number --
+The middle field is the exception, because `TimePoint.flask_number` is genuinely a number --
 aledb-fixation sorts by it and takes an ALE's last two flasks. So its **trailing text is
 stripped**: `500gen` is 500, and a field with no leading digits (`t0`) is not a time point,
 so the whole name falls through to auto-numbering rather than being half-read.

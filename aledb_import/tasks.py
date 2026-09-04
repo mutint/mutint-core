@@ -33,7 +33,7 @@ import logging
 from django.tasks import task
 
 from aledb_import import coverage
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ def build_coverage(reseq_id):
     likely to hit: a `db_worker` started outside `./aledb` has no `ALEDB_TOOLS_DIR`, so
     `bedGraphToBigWig` is not found and every sample would silently get no coverage.
     """
-    reseq = ResequencingExperiment.objects.filter(pk=reseq_id).first()
+    reseq = Sample.objects.filter(pk=reseq_id).first()
     if reseq is None:
         # Deleted between enqueue and execution. Not an error: there is nothing to derive.
         logger.info("sample %s is gone; no coverage to build", reseq_id)

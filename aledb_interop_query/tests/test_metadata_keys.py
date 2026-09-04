@@ -3,7 +3,7 @@
 **This app had no tests at all, and that is how the bug it now pins survived.**
 `aledb_metadata.views.get_reseq_info_list` built an eighteen-value positional tuple; this
 app unpacked it *by index* against a hand-written list of names, in a different app. The two
-agreed only by position and had drifted: the API published `AleId.description` as
+agreed only by position and had drifted: the API published `Population.description` as
 ``knockouts`` and the sample's ``library_prep`` as ``taxonomy_id``, and the Metadata page rendered
 the library prep under a column headed *Taxonomy ID*.
 
@@ -18,15 +18,15 @@ the wrong sentence rather than as a subtly wrong value.
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import AleExperiment, AleId, Flask, Media, Project
+from aledb_experiment.models import Experiment, Population, TimePoint, Media, Project
 from aledb_interop_query.views import _serialize_metadata
 from aledb_metadata.views import get_reseq_info_list
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 #: What each column is set to, and what the key naming it must therefore hold.
 VALUES = {
-    "strain": "from AleId.strain",
-    "ale_description": "from AleId.description",
+    "strain": "from Population.strain",
+    "ale_description": "from Population.description",
     "library_prep": "from the sample's library_prep",
     "reseq_reference": "from the sample's reseq_reference",
     "breseq_version": "from the sample's breseq_version",
@@ -42,25 +42,25 @@ class MetadataKeyTestCase(TestCase):
     def setUp(self):
         user = User.objects.create(username="tester")
         project = Project.objects.create(name="P", user=user)
-        self.experiment = AleExperiment.objects.create(name="E", project=project)
-        ale = AleId.objects.create(ale_experiment=self.experiment, ale_id="1",
+        self.experiment = Experiment.objects.create(name="E", project=project)
+        ale = Population.objects.create(experiment=self.experiment, name="1",
                                    strain=VALUES["strain"],
                                    description=VALUES["ale_description"])
         media = Media.objects.create(description="M9",
                                      carbon_source=VALUES["carbon_source"],
                                      supplement=VALUES["supplement"])
-        flask = Flask.objects.create(ale_id=ale, flask_number=1, media=media)
-        self.sample = ResequencingExperiment.objects.create(
-            flask=flask, isolate_number="1", is_population=False,
+        flask = TimePoint.objects.create(population=ale, value=1, media=media)
+        self.sample = Sample.objects.create(
+            time_point=flask, name="1", is_population=False,
             library_prep=VALUES["library_prep"],
-            reseq_reference=VALUES["reseq_reference"],
+            reference_genome=VALUES["reseq_reference"],
             breseq_version=VALUES["breseq_version"],
             reseq_date=VALUES["reseq_date"],
             rep_description=VALUES["tech_rep_description"],
-            sample_name="s1")
+            source_name="s1")
 
     def rows(self):
-        return get_reseq_info_list(ResequencingExperiment.objects.filter(pk=self.sample.pk))
+        return get_reseq_info_list(Sample.objects.filter(pk=self.sample.pk))
 
     def serialized(self):
         payload = _serialize_metadata([{

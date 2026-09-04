@@ -6,7 +6,7 @@ from aledb_seq.functional_change import (
 from aledb_seq.views.common import MUTATION_TYPE_LIST, UNANNOTATED
 from aledb_experiment.ancestor import (exclude_all_ancestry,
                                        exclude_ancestor_samples)
-from aledb_experiment.models import AleExperiment, AleId, Flask
+from aledb_experiment.models import Experiment, Population, TimePoint
 from django.db.models import Q
 from aledb_experiment import paths
 
@@ -27,8 +27,8 @@ _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_OBSERVATION)
 
 
 def _evolved_samples():
-    from aledb_seq.models import ResequencingExperiment
-    return exclude_ancestor_samples(ResequencingExperiment.objects.all())
+    from aledb_seq.models import Sample
+    return exclude_ancestor_samples(Sample.objects.all())
 
 
 def _purely_ancestral(model, sample_path):
@@ -38,16 +38,16 @@ def _purely_ancestral(model, sample_path):
     count the ancestor" from an ALE label. This asks the real question instead, and an ALE
     genuinely labelled "0" is counted like any other.
 
-    **It still counts rows, not samples.** An AleId or Flask carrying no samples at
+    **It still counts rows, not samples.** An Population or TimePoint carrying no samples at
     all has always been counted here and still is -- dropping those would move the published
     totals for a reason that has nothing to do with ancestors. What is dropped is only a row
     that has samples and whose samples are *all* ancestral, which is the case the ALE-0 rule
     was really reaching for. A flask holding the ancestor alongside other samples still counts.
 
     Two of the three original clauses were also redundant: the flask and sample counts
-    already filtered `ale_id__in=live_ales`, which had excluded ALE 0 once over.
+    already filtered `population__in=live_ales`, which had excluded ALE 0 once over.
     """
-    ancestors = AleExperiment.objects.filter(ancestor__isnull=False).values("ancestor")
+    ancestors = Experiment.objects.filter(ancestor__isnull=False).values("ancestor")
     if not ancestors.exists():
         return model.objects.none()
     return (model.objects.filter(**{"%s__in" % sample_path: ancestors})
@@ -58,28 +58,28 @@ def _purely_ancestral(model, sample_path):
 #: Where a sample sits, seen from each of the rows counted below. The third row *is* the
 #: sample now -- `Isolate` was folded into it -- so its path down to a sample is empty, and
 #: the count below asks its question directly rather than through `_purely_ancestral`.
-_SAMPLE_FROM_ALE = paths.down_chain("ale")
-_SAMPLE_FROM_FLASK = paths.down_chain("flask")
+_SAMPLE_FROM_ALE = paths.down_chain("population")
+_SAMPLE_FROM_FLASK = paths.down_chain("time_point")
 
 
 def rebuild_sample_counts():
     if SampleCounts.objects.all().count() == 0:
         SampleCounts.objects.create()
-    live_ales = AleId.objects.filter(
-        Q(ale_experiment__deleted_at__isnull=True)
-        & Q(ale_experiment__project__deleted_at__isnull=True))
+    live_ales = Population.objects.filter(
+        Q(experiment__deleted_at__isnull=True)
+        & Q(experiment__project__deleted_at__isnull=True))
 
     ale_count = live_ales.exclude(
-        pk__in=_purely_ancestral(AleId, _SAMPLE_FROM_ALE)).distinct().count()
-    flask_count = Flask.objects.filter(ale_id__in=live_ales).exclude(
-        pk__in=_purely_ancestral(Flask, _SAMPLE_FROM_FLASK)).distinct().count()
+        pk__in=_purely_ancestral(Population, _SAMPLE_FROM_ALE)).distinct().count()
+    flask_count = TimePoint.objects.filter(population__in=live_ales).exclude(
+        pk__in=_purely_ancestral(TimePoint, _SAMPLE_FROM_FLASK)).distinct().count()
     # The third number counted `Isolate` rows and counts samples now, which is the same
     # number: a sample was one run under one replicate under one isolate, and only the
     # import created any of them. What changes is that "a row whose every sample is
     # ancestral" is simply "an ancestral sample", so this drops out of `_purely_ancestral`
     # and excludes the designated ancestors directly.
     isolate_count = (_evolved_samples()
-                     .filter(**{paths.to_ale() + "__in": live_ales})
+                     .filter(**{paths.to_population() + "__in": live_ales})
                      .distinct().count())
 
     SampleCounts.objects.all().update(ale_count=ale_count, flask_count=flask_count,

@@ -14,7 +14,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from aledb_common.import_registry import get_import_types, get_import_types_for
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_experiment
 
 logger = logging.getLogger("aledb_import.add_views")
@@ -32,8 +32,8 @@ def add_view(request):
     """
     experiment_id = request.GET.get("ale_experiment_id")
     try:
-        experiment = AleExperiment.objects.get(pk=experiment_id)
-    except (AleExperiment.DoesNotExist, ValueError, TypeError):
+        experiment = Experiment.objects.get(pk=experiment_id)
+    except (Experiment.DoesNotExist, ValueError, TypeError):
         # There used to be an explanatory page here, reached from an "Add data" sidebar
         # entry. Both are gone: the only way in is an experiment's own Add data button, so
         # arriving without a usable id now means a stale link, not a user who took a wrong

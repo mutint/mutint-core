@@ -8,7 +8,7 @@
         <div class="form-group">
             <label for="se-name">Sample name</label>
             <input type="text" class="form-control" id="se-name" maxlength="200"
-                   value="{{ sample.reseq.sample_name|default_if_none:'' }}" autofocus>
+                   value="{{ sample.reseq.source_name|default_if_none:'' }}" autofocus>
             <small class="help-block">
                 Must be unique within the experiment: re-importing finds an existing sample
                 by this name, so two samples sharing one can be merged by a later upload.
@@ -37,8 +37,8 @@
                        value="{{ sample.ale }}">
             </div>
             <div class="col-sm-3 form-group">
-                {% comment %} The column is Flask.flask_number and stays that way; "Time
-                   point" is what it is actually used for. It is the only ordinal in the
+                {% comment %} The column is `TimePoint.value`, and "Time point" is what every
+                   label here has always called it. It is the only ordinal in the
                    schema that places a sample along an ALE, and fixation orders by it --
                    it sorts flask numbers and takes the last two to decide what has fixed.
                    Plain text rather than type="number": the steppers are meaningless on a

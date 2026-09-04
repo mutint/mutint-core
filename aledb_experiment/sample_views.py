@@ -24,7 +24,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_experiment
 from aledb_experiment.samples import (
     SampleEditError, apply_rows, coordinate_str, parse_rows, plan_moves,
@@ -40,7 +40,7 @@ def _experiment_samples(experiment):
 
     Imported here rather than at module scope: aledb_experiment must not import aledb_seq
     at load time -- the dependency runs the other way, which is why
-    `ResequencingExperiment.flask` names its target by string.
+    `Sample.time_point` names its target by string.
     """
     from aledb_seq.util import get_ordered_reseq_queryset
     # `include_ancestor=True`: this is the page that edits and deletes samples, so it has to
@@ -56,10 +56,10 @@ def _get_sample(pk):
     the check, those 404: they are filtered out of every list already, and repairing them
     belongs in a management command.
     """
-    from aledb_seq.models import ResequencingExperiment
+    from aledb_seq.models import Sample
     from django.http import Http404
 
-    reseq = get_object_or_404(ResequencingExperiment, pk=pk)
+    reseq = get_object_or_404(Sample, pk=pk)
     experiment = sample_experiment(reseq)
     if experiment is None:
         raise Http404("This sample is not attached to an experiment.")
@@ -114,7 +114,7 @@ def sample_edit(request, pk):
 @ensure_csrf_cookie
 def experiment_samples(request, pk):
     """Every sample of one experiment, editable in a single save."""
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     context = get_user_context(request.user)
     if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
@@ -210,7 +210,7 @@ def experiment_samples_update(request, pk):
     `sb-ale-37`, needs a hand-written key parser in which a typo drops a field silently
     instead of erroring.
     """
-    experiment = get_object_or_404(AleExperiment, pk=pk)
+    experiment = get_object_or_404(Experiment, pk=pk)
     if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "You cannot edit this experiment's samples."},
                             status=403)

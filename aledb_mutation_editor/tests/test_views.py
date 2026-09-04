@@ -31,11 +31,11 @@ class PageTestCase(EditorTestCase):
         response = self.get(EDIT, reseq_id=self.sample_a.id)
 
         self.assertEqual(200, response.status_code)
-        for observed in ObservedMutation.objects.filter(sequencing_experiment=self.sample_a):
+        for observed in ObservedMutation.objects.filter(sample=self.sample_a):
             self.assertContains(response, 'data-observed-id="%d"' % observed.id)
 
     def test_it_does_not_list_another_samples_mutations(self):
-        only_b = ObservedMutation.objects.get(sequencing_experiment=self.sample_b)
+        only_b = ObservedMutation.objects.get(sample=self.sample_b)
         response = self.get(EDIT, reseq_id=self.sample_a.id)
         self.assertNotContains(response, 'data-observed-id="%d"' % only_b.id)
 
@@ -182,7 +182,7 @@ class PageTestCase(EditorTestCase):
         self.assertContains(response, "No mutation edits have been recorded")
 
     def test_a_change_appears_on_the_history_page(self):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed],
                               note="a note worth reading")
@@ -193,7 +193,7 @@ class PageTestCase(EditorTestCase):
         self.assertContains(response, self.sample_a.ale_flask_isolate_str)
 
     def test_a_system_change_is_labelled_system_not_left_blank(self):
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         history.apply_changes(self.experiment, None, KIND_DELETE, removals=[observed],
                               note="migrated")
@@ -206,7 +206,7 @@ class PageTestCase(EditorTestCase):
         nothing."""
         self.assertNotContains(self.get(HISTORY), 'data-change-set-id=""')
 
-        observed = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        observed = ObservedMutation.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         history.apply_changes(self.experiment, self.owner, KIND_DELETE, removals=[observed])
 

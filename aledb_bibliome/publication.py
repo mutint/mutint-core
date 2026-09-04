@@ -1,10 +1,10 @@
 from aledb_bibliome.models import Publication
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 
 
 def create_publication(title_str, url_str, ale_exp_pk):
-    exp = AleExperiment.objects.get(pk=ale_exp_pk)
-    pub = Publication.objects.create(title=title_str, url=url_str, ale_experiment=exp)
+    exp = Experiment.objects.get(pk=ale_exp_pk)
+    pub = Publication.objects.create(title=title_str, url=url_str, experiment=exp)
 
 
 def create_publications(title_str, url_str, ale_exp_pk_list):
@@ -16,7 +16,7 @@ def add_publication_to_experiment(experiment_ids, doi, replace=False):
     for id in experiment_ids:
 
         try:
-            curr_experiment = AleExperiment.objects.get(pk=id)
+            curr_experiment = Experiment.objects.get(pk=id)
             curr_doi = curr_experiment.doi
             if replace:
                 curr_experiment.doi = doi
@@ -28,6 +28,6 @@ def add_publication_to_experiment(experiment_ids, doi, replace=False):
 
             for bib in curr_experiment.doi_as_list():
                 create_publication(bib, "https://doi.org/" + bib, id)
-        except AleExperiment.DoesNotExist:
+        except Experiment.DoesNotExist:
             continue
 

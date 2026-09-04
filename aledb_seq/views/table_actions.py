@@ -28,7 +28,7 @@ from django.http import HttpResponseForbidden
 from aledb_common.ajax import ajax
 
 from aledb_experiment import permissions
-from aledb_seq.models import Mutation, ResequencingExperiment
+from aledb_seq.models import Mutation, Sample
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ def save_mut_tag(request):
     mutation = Mutation.objects.get(id=mut_id)
     # A mutation with no experiment cannot be scoped to a project, so only a superuser
     # passes -- can_add_experiment_filter answers False for a null experiment.
-    if not _may_curate(request.user, mutation.ale_experiment):
+    if not _may_curate(request.user, mutation.experiment):
         return HttpResponseForbidden(_REFUSED)
     mutation.tags = _toggle(mutation.tags, selected_tag)
     mutation.save()
@@ -95,8 +95,8 @@ def save_mut_tag(request):
 def save_rep_tag(request):
     rep_id = request.POST.get('rep_id')
     selected_tag = request.POST.get('tag_name')
-    replicate = ResequencingExperiment.objects.get(id=rep_id)
-    experiment = replicate.ale_experiment
+    replicate = Sample.objects.get(id=rep_id)
+    experiment = replicate.experiment
     if not _may_curate(request.user, experiment):
         return HttpResponseForbidden(_REFUSED)
     replicate.tags = _toggle(replicate.tags, selected_tag)

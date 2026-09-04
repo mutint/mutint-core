@@ -14,7 +14,7 @@ import json
 
 from django.contrib.auth.models import User
 
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from aledb_experiment.permissions import (
     ExperimentLocked, can_edit_experiment, can_lock_experiment, grant_project_access,
 )
@@ -185,7 +185,7 @@ class EveryWritePathTestCase(LockTestCase):
     def setUp(self):
         super().setUp()
         self.observed = ObservedMutation.objects.filter(
-            sequencing_experiment=self.sample_a).first()
+            sample=self.sample_a).first()
         self.lock()
 
     @staticmethod
@@ -369,7 +369,7 @@ class StillAllowedTestCase(LockTestCase):
         history.rebuild_after_edit(self.experiment)
 
         self.assertTrue(DerivedDataState.objects.filter(
-            name="test.locked", ale_experiment=self.experiment).exists())
+            name="test.locked", experiment=self.experiment).exists())
 
     def test_access_can_still_be_changed(self):
         """Locking is per experiment, access is per project; freezing one must not freeze
@@ -389,7 +389,7 @@ class StillAllowedTestCase(LockTestCase):
         self.post_lock()
 
         observed = ObservedMutation.objects.filter(
-            sequencing_experiment=self.sample_a).first()
+            sample=self.sample_a).first()
         response = self.client.post("/mutation-editor/delete/apply", {
             "experiment_id": self.experiment.id,
             "observed_ids": json.dumps([observed.id])})

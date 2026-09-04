@@ -2,7 +2,7 @@ import os
 from django.test import TestCase
 
 from django.contrib.auth.models import User
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from datetime import datetime
 from aledb_bibliome.models import Publication
 from aledb_bibliome.publication import create_publication
@@ -22,7 +22,7 @@ class TestBibliome(TestCase):
             status="In progress", is_public=False)
         # A publication only needs an experiment to hang off; this used to run a
         # whole breseq import to get one.
-        experiment = AleExperiment.objects.create(
+        experiment = Experiment.objects.create(
             name="test", person="Patrick", project=project)
         expected_publication_count = 1
         # The experiment's own pk, not the literal 1 this used to pass. PostgreSQL does not

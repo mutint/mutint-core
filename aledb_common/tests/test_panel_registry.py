@@ -28,7 +28,7 @@ from aledb_common.panel_registry import (
 )
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 
 class PanelRegistryTestCase(TestCase):
@@ -73,7 +73,7 @@ class RenderedPanelTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="panel")
-        self.experiment = ResequencingExperiment.objects.get().ale_experiment
+        self.experiment = Sample.objects.get().experiment
         self.experiment.project.user = self.user
         self.experiment.project.save()
 

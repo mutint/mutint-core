@@ -18,7 +18,7 @@ from datetime import datetime
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from aledb_import import annotation
 from aledb_import.ale_experiment import (
     delete_ale_experiments,
@@ -32,7 +32,7 @@ from aledb_seq.models import (
     ExperimentReference,
     Mutation,
     ObservedMutation,
-    ResequencingExperiment,
+    Sample,
 )
 
 METADATA_FIXTURE = os.path.join(
@@ -69,8 +69,8 @@ class UploadCommandTestCase(TestCase):
 
     def test_it_finds_the_experiment_and_imports_it(self):
         self.upload()
-        self.assertEqual(1, AleExperiment.objects.count())
-        self.assertEqual(1, ResequencingExperiment.objects.count())
+        self.assertEqual(1, Experiment.objects.count())
+        self.assertEqual(1, Sample.objects.count())
         self.assertEqual(2, Mutation.objects.count())
 
     def test_mutations_land_the_same_way_a_web_upload_leaves_them(self):
@@ -78,15 +78,15 @@ class UploadCommandTestCase(TestCase):
 
         # Owned by the experiment, attributed to breseq, and carrying the .gd
         # record -- none of which the old CLI importer produced.
-        experiment = AleExperiment.objects.get()
-        self.assertEqual(2, Mutation.objects.filter(ale_experiment=experiment).count())
+        experiment = Experiment.objects.get()
+        self.assertEqual(2, Mutation.objects.filter(experiment=experiment).count())
         self.assertEqual(2, ObservedMutation.objects.filter(source="breseq").count())
         self.assertFalse(Mutation.objects.filter(gd_data__isnull=True).exists())
 
     def test_the_reference_is_established_from_the_sample(self):
         self.upload()
         reference = ExperimentReference.objects.get()
-        self.assertEqual(AleExperiment.objects.get(), reference.ale_experiment)
+        self.assertEqual(Experiment.objects.get(), reference.experiment)
         self.assertTrue(reference.fasta_sha256)
 
     def test_mutations_are_annotated(self):
@@ -99,12 +99,12 @@ class UploadCommandTestCase(TestCase):
 
     def test_the_alignment_is_stored(self):
         self.upload()
-        self.assertTrue(ResequencingExperiment.objects.get().bam_stored)
+        self.assertTrue(Sample.objects.get().bam_stored)
 
     def test_metadata_is_applied_after_the_import(self):
         self.upload()
-        sample = ResequencingExperiment.objects.get()
-        self.assertTrue(sample.flask.ale_id.ale_experiment.project)
+        sample = Sample.objects.get()
+        self.assertTrue(sample.time_point.population.experiment.project)
 
     def test_derived_data_is_available_after_the_import(self):
         """This asserted that `StaticData` had a row. Nothing is stored now, so what the
@@ -117,7 +117,7 @@ class UploadCommandTestCase(TestCase):
         from aledb_stats.util import get_experiment_summary
 
         self.upload()
-        experiment = AleExperiment.objects.get()
+        experiment = Experiment.objects.get()
 
         summary = get_experiment_summary(experiment.id)
         self.assertTrue(sum(summary.mutation_type_counts.values()))
@@ -152,11 +152,11 @@ class DeleteExperimentsTestCase(TestCase):
 
     def test_deleting_an_experiment_takes_its_mutations_with_it(self):
         self.assertEqual(2, Mutation.objects.count())
-        experiment = AleExperiment.objects.get()
+        experiment = Experiment.objects.get()
 
         delete_ale_experiments([experiment.id])
 
-        self.assertEqual(0, AleExperiment.objects.count())
+        self.assertEqual(0, Experiment.objects.count())
         self.assertEqual(0, ObservedMutation.objects.count())
         self.assertEqual(0, Mutation.objects.count())
 

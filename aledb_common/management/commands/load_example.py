@@ -97,14 +97,14 @@ class Command(BaseCommand):
 
     def _load(self, dataset, options):
         from aledb_common.import_registry import run_import
-        from aledb_experiment.models import AleExperiment, Project, live
+        from aledb_experiment.models import Experiment, Project, live
         from aledb_experiment.permissions import set_primary_owner
         from aledb_experiment.views import _create_experiment
 
         user = self._resolve_user(options.get("username"))
         name = dataset["name"]
 
-        existing = live(AleExperiment.objects.filter(name=name)).first()
+        existing = live(Experiment.objects.filter(name=name)).first()
         if existing is not None:
             if not options.get("replace"):
                 raise CommandError(

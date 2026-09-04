@@ -4,7 +4,7 @@ import logging
 import re
 from urllib.parse import quote
 
-from aledb_experiment.models import AleExperiment, Project
+from aledb_experiment.models import Experiment, Project
 from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -152,7 +152,7 @@ def strains(request):
         view_filter = _requested_filter(request)
         mut_qryset = _public_queryset(view_filter)
         strain_values = mut_qryset.values_list(
-            paths.to_ale(paths.FROM_OBSERVATION, 'strain'), flat=True
+            paths.to_population(paths.FROM_OBSERVATION, 'strain'), flat=True
         ).distinct()
         strains = sorted([s for s in strain_values if s and s != " N/A"])
 
@@ -180,7 +180,7 @@ def gene_strain_pairs(request):
         view_filter = _requested_filter(request)
         pairs_qs = _public_queryset(view_filter).values_list(
             'mutation__gene',
-            paths.to_ale(paths.FROM_OBSERVATION, 'strain'),
+            paths.to_population(paths.FROM_OBSERVATION, 'strain'),
         ).distinct()
 
         # Expand comma-separated genes, strip HTML tags, into individual pairs
@@ -237,7 +237,7 @@ def query_by_pair(request):
             request,
             pairs,
             q_builder=lambda p: (
-                Q(**{paths.to_ale(paths.FROM_OBSERVATION, 'strain'): p.get("strain", "").strip()}) &
+                Q(**{paths.to_population(paths.FROM_OBSERVATION, 'strain'): p.get("strain", "").strip()}) &
                 Q(mutation__gene__icontains=p.get("gene", "").strip())
             ) if p.get("gene") and p.get("strain") else None,
             empty_msg="No gene/strain pairs provided",
@@ -269,7 +269,7 @@ def query_by_strain(request):
         return _run_query(
             request,
             ids,
-            q_builder=lambda strain: Q(**{paths.to_ale(paths.FROM_OBSERVATION, 'strain'): strain}),
+            q_builder=lambda strain: Q(**{paths.to_population(paths.FROM_OBSERVATION, 'strain'): strain}),
             empty_msg='No strains provided',
             invalid_msg='No valid strains provided'
         )
@@ -323,7 +323,7 @@ def _serialize_metadata(metadata_list):
         # tuple this unpacked by index. Three keys change with that, and all three were
         # wrong rather than merely differently spelled:
         #
-        #   knockouts          -> ale_description   it was always AleId.description
+        #   knockouts          -> ale_description   it was always Population.description
         #   taxonomy_id        -> library_prep      it was always the isolate's library_prep
         #   phosphorous_source -> phosphorus_source the column has never had that o
         #
@@ -379,7 +379,7 @@ def _serialize_mutations(mutations, search_gene=None):
     out = []
     for m in mutations:
         gene = m.mutation.gene
-        strain = m.sequencing_experiment.flask.ale_id.strain
+        strain = m.sample.time_point.population.strain
         url_gene = _extract_url_gene(gene, search_gene)
         item = {
             'observed_mutation_id': m.id,
@@ -392,15 +392,15 @@ def _serialize_mutations(mutations, search_gene=None):
             'frequency': m.frequency,
             'ref_seq': m.mutation.reseq_reference,
             'strain': strain,
-            'project_id': m.sequencing_experiment.flask.ale_id.ale_experiment.project_id,
+            'project_id': m.sample.time_point.population.experiment.project_id,
             'url': f"{_BASE_SEARCH_URL}?hidden_columns=&gene={quote(url_gene)}&min_freq=&max_freq=&ref_seq=&min_pos=&max_pos=&mut_type=&project=&strain={quote(strain or '')}",
         }
 
         exp = getattr(m, 'experiment', None)
         if isinstance(exp, dict):
             item['experiment'] = {
-                'ale_experiment_id': exp.get('ale_experiment_id', m.sequencing_experiment.ale_experiment.id),
-                'sequencing_experiment_id': exp.get('sequencing_experiment_id', m.sequencing_experiment.id),
+                'ale_experiment_id': exp.get('ale_experiment_id', m.sample.experiment.id),
+                'sample_id': exp.get('sample_id', m.sample.id),
                 'sample_name': exp.get('name'),
                 'genotype': exp.get('type'),
             }
@@ -460,12 +460,12 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
     ale_experiment_ids = []
 
     for observed_mutation in observed_mutations:
-        ale_experiment_id = observed_mutation.sequencing_experiment.ale_experiment.id
+        ale_experiment_id = observed_mutation.sample.experiment.id
         logging.info("Processing mutation with ID: %s", ale_experiment_id, extra=user_extra(request))
         if ale_experiment_id not in ale_experiment_ids:
             ale_experiment_ids.append(ale_experiment_id)
-        if observed_mutation.sequencing_experiment_id in reseq_dict.keys():
-            sample_name = reseq_dict[observed_mutation.sequencing_experiment_id].exp_ale_flask_isolate_str
+        if observed_mutation.sample_id in reseq_dict.keys():
+            sample_name = reseq_dict[observed_mutation.sample_id].exp_ale_flask_isolate_str
             # Initialised here, and not only inside the branch below: it used to be assigned
             # nowhere else, so a row that failed the test either raised NameError or silently
             # reported the *previous* row's frequency.
@@ -474,8 +474,8 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
                 sample_type = ("%2f" % float(observed_mutation.frequency)
                                if observed_mutation.frequency is not None else "")
             observed_mutation.experiment = {
-                'ale_experiment_id': observed_mutation.sequencing_experiment.ale_experiment.id,
-                'sequencing_experiment_id': observed_mutation.sequencing_experiment.id,
+                'ale_experiment_id': observed_mutation.sample.experiment.id,
+                'sample_id': observed_mutation.sample.id,
                 'name': sample_name,
                 'type': sample_type
             }
@@ -484,7 +484,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
 
     for ale_experiment_id in sorted(ale_experiment_ids):
         logging.info("Processing reseq experiment with ID: %s", ale_experiment_id, extra=user_extra(request))
-        experiment = AleExperiment.objects.get(pk=ale_experiment_id)
+        experiment = Experiment.objects.get(pk=ale_experiment_id)
         if experiment:
             reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, None)
             reseq_info_list = get_reseq_info_list(reseq_queryset)

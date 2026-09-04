@@ -64,7 +64,7 @@ class MutationChangeSet(models.Model):
     unattributed user action.
     """
 
-    ale_experiment = models.ForeignKey("aledb_experiment.AleExperiment",
+    experiment = models.ForeignKey("aledb_experiment.Experiment",
                                        on_delete=models.CASCADE,
                                        related_name="mutation_changesets",
                                        db_index=True)
@@ -84,7 +84,7 @@ class MutationChangeSet(models.Model):
         ordering = ["-created_at", "-pk"]
 
     def __str__(self):
-        return "%s on experiment %s at %s" % (self.kind, self.ale_experiment_id,
+        return "%s on experiment %s at %s" % (self.kind, self.experiment_id,
                                               self.created_at)
 
     @property
@@ -112,12 +112,12 @@ class MutationChange(models.Model):
     change_set = models.ForeignKey(MutationChangeSet, on_delete=models.CASCADE,
                                    related_name="changes")
     operation = models.CharField(max_length=10, choices=OPERATION_CHOICES)
-    sample = models.ForeignKey("aledb_seq.ResequencingExperiment", on_delete=models.CASCADE,
+    sample = models.ForeignKey("aledb_seq.Sample", on_delete=models.CASCADE,
                                related_name="+")
     mutation = models.ForeignKey("aledb_seq.Mutation", on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name="+")
     # Where a copy came from. Null for a delete, and for a restore that re-adds a row.
-    source_sample = models.ForeignKey("aledb_seq.ResequencingExperiment",
+    source_sample = models.ForeignKey("aledb_seq.Sample",
                                       on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name="+")
 

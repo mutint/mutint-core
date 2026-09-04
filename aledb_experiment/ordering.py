@@ -1,6 +1,6 @@
 """How a list of samples is ordered, now that two thirds of a coordinate are text.
 
-`AleId.ale_id` and the sample's `isolate_number` are `CharField`s
+`Population.name` and the sample's `name` are `CharField`s
 (`aledb_experiment.0008`), so
 the database orders them the way it orders any string: `10` before `2`, and `A1 F1 I10`
 above `A1 F1 I2` in every mutation table. That is not a cosmetic difference on real data --
@@ -45,7 +45,7 @@ def natural(field_path):
 def sample_order(prefix=""):
     """The four keys a sample list is ordered by: experiment, ALE, flask, sample label.
 
-    Pass `prefix="sequencing_experiment__"` from a queryset of `ObservedMutation`. Returns
+    Pass `prefix="sample__"` from a queryset of `ObservedMutation`. Returns
     a tuple for `order_by(*sample_order())` -- expressions rather than field names, because
     two of the five need the padding above.
 
@@ -58,8 +58,8 @@ def sample_order(prefix=""):
     """
     return (
         F(paths.to_experiment(prefix, "name")),
-        natural(paths.to_ale_label(prefix)),
-        F(paths.to_flask_ordinal(prefix)).asc(nulls_first=True),
+        natural(paths.to_population_label(prefix)),
+        F(paths.to_time_point_value(prefix)).asc(nulls_first=True),
         natural(paths.to_sample_label(prefix)),
     )
 
@@ -78,10 +78,10 @@ def sample_sort_key(reseq):
     a *display* string and gets both the numbers and, wherever an isolate description is set,
     the field itself wrong.
 
-    A null flask sorts first, as it does in the SQL form.
+    A null time point sorts first, as it does in the SQL form.
     """
-    flask = reseq.flask
-    return (flask.ale_id.ale_experiment.name,
-            str(flask.ale_id.ale_id).rjust(PAD, "0"),
-            flask.flask_number if flask.flask_number is not None else -1,
-            str(reseq.isolate_number).rjust(PAD, "0"))
+    time_point = reseq.time_point
+    return (time_point.population.experiment.name,
+            str(time_point.population.name).rjust(PAD, "0"),
+            time_point.value if time_point.value is not None else -1,
+            str(reseq.name).rjust(PAD, "0"))

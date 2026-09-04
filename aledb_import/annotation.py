@@ -158,9 +158,9 @@ def sample_groups(experiment, mutations):
 
     by_id = {mutation.pk: mutation for mutation in mutations}
     observed = (ObservedMutation.objects
-                .filter(mutation__ale_experiment=experiment)
-                .values_list("sequencing_experiment_id", "mutation_id")
-                .order_by("sequencing_experiment_id", "mutation_id"))
+                .filter(mutation__experiment=experiment)
+                .values_list("sample_id", "mutation_id")
+                .order_by("sample_id", "mutation_id"))
 
     groups, assigned = {}, set()
     for sample_id, mutation_id in observed.iterator():
@@ -221,7 +221,7 @@ def reannotate_experiment(experiment, mutations=None, references=None, dry_run=F
     from aledb_seq.models import Mutation
 
     if mutations is None:
-        mutations = list(Mutation.objects.filter(ale_experiment=experiment))
+        mutations = list(Mutation.objects.filter(experiment=experiment))
     if references is None:
         references = reference_sequences_for(experiment)
     if references is None:

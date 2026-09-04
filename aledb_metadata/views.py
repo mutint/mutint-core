@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from django.template import loader
 
 from django.conf import settings
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_seq.views import common
 from aledb_common.util import get_user_context
 from aledb_seq.util import get_ordered_reseq_queryset
@@ -33,10 +33,10 @@ def metadata(request):
         start_time = time.time()
         context = get_user_context(request.user)
         experiment = common.get_ale_experiment(request)
-        ale_experiment_id = experiment.id
+        experiment_id=experiment.id
         ale_id = request.GET.get(REQUEST_ALE_ID)
 
-        reseq_queryset = get_ordered_reseq_queryset(ale_experiment_id, ale_id)
+        reseq_queryset = get_ordered_reseq_queryset(experiment_id, ale_id)
 
         reseq_info_list = get_reseq_info_list(reseq_queryset)
 
@@ -46,13 +46,13 @@ def metadata(request):
                         "ale_project_name": experiment.project.name,
                         "ale_project_id": experiment.project.id,
                         "multiple": False,
-                        "ale_experiment_id": ale_experiment_id
+                        "ale_experiment_id": experiment_id
                         })
 
         template = loader.get_template(META_DATA_TEMPLATE)
         logger.info("metadata performance", extra=join_extras(user_extra(request), {"time taken": time.time() - start_time}))
         return HttpResponse(template.render(context, request), content_type="text/html")
-    except AleExperiment.DoesNotExist:
+    except Experiment.DoesNotExist:
         return common.no_experiment_selected(request, context, logger, "metadata")
     except Exception as e:
         logger.exception("metadata broke", extra=user_extra(request))
@@ -89,9 +89,9 @@ def get_reseq_info_list(reseq_queryset):
         # local names stay for now; the keys below are what /metadata and the interop API
         # publish, and renaming those is its own commit.
         tech_rep = isolate = reseq
-        flask = isolate.flask
+        flask = isolate.time_point
         media = flask.media
-        ale = flask.ale_id
+        ale = flask.population
 
         rows.append({
             "sample": reseq,
@@ -109,10 +109,12 @@ def get_reseq_info_list(reseq_queryset):
             "strain": ale.strain,
             "ale_description": ale.description,
             "library_prep": isolate.library_prep,
-            "reseq_reference": isolate.reseq_reference,
+            # The key is what /metadata and the interop API publish; the column behind it
+            # is `reference_genome` now.
+            "reseq_reference": isolate.reference_genome,
             "breseq_version": isolate.breseq_version,
             "reseq_date": isolate.reseq_date,
-            "experiment_name": ale.ale_experiment.name,
+            "experiment_name": ale.experiment.name,
         })
 
     return rows

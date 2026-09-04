@@ -8,8 +8,8 @@ from django.test import TestCase, override_settings
 from aledb_common import import_registry
 from aledb_import.tests import breseq_fixture
 from aledb_import.tests.test_reference_upload import write_genbank
-from aledb_experiment.models import AleExperiment
-from aledb_seq.models import ExperimentReference, ResequencingExperiment
+from aledb_experiment.models import Experiment
+from aledb_seq.models import ExperimentReference, Sample
 
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 
@@ -68,7 +68,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertIsNone(results["s1"]["error"])
         self.assertIsNone(results["Ara-1_500gen_762B.gd"]["error"])
         self.assertEqual(ExperimentReference.objects.count(), 1)
-        self.assertEqual(ResequencingExperiment.objects.count(), 2)
+        self.assertEqual(Sample.objects.count(), 2)
 
     def test_reference_is_established_before_a_bare_gd_even_though_listed_later(self):
         """Priority, not drop order, decides. A .gd alone would otherwise be rejected."""
@@ -85,7 +85,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         summary = self._run()
 
         self.assertIn("no reference genome", summary["files"][0]["error"])
-        self.assertEqual(ResequencingExperiment.objects.count(), 0)
+        self.assertEqual(Sample.objects.count(), 0)
 
     def test_breseq_sample_gd_is_not_also_claimed_as_a_bare_gd(self):
         """data/output.gd belongs to its sample; claiming it twice would double-import."""
@@ -94,7 +94,7 @@ class ImportRegistryRoutingTestCase(TestCase):
 
         self.assertEqual(len(summary["files"]), 1)
         self.assertEqual(summary["files"][0]["file"], "s1")
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
 
     def test_unrecognised_files_are_reported(self):
         self._write("notes.txt", "just notes\n")
@@ -120,7 +120,7 @@ class ImportRegistryRoutingTestCase(TestCase):
 
         self.assertIsNone(results["REL606.gbk"]["error"])
         self.assertIn("not recognised as", results["sample.gd"]["error"])
-        self.assertEqual(ResequencingExperiment.objects.count(), 0)
+        self.assertEqual(Sample.objects.count(), 0)
 
     def test_the_rejection_names_the_type_the_file_belongs_to(self):
         """"Not recognised" alone leaves someone to work out which of four types to pick;
@@ -317,7 +317,7 @@ class PostProcessingTestCase(TestCase):
         self.client.force_login(self.user)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.staged = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.staged, True)
@@ -410,7 +410,7 @@ class ReferenceResultKindTestCase(TestCase):
         self.client.force_login(self.user)
         created = self.client.post(
             "/ale/projects/create/", {"name": "P", "experiment": "E"}).json()
-        self.experiment = AleExperiment.objects.get(pk=created["experiment_id"])
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
 
         self.staged = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.staged, True)

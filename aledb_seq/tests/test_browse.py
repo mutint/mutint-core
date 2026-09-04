@@ -12,7 +12,7 @@ from django.test import TestCase, override_settings
 
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ExperimentReference, ObservedMutation, ResequencingExperiment
+from aledb_seq.models import ExperimentReference, ObservedMutation, Sample
 from aledb_seq.views.browse import _sample_tracks
 
 
@@ -36,10 +36,10 @@ class BrowseMutationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
 
-        self.reseq = ResequencingExperiment.objects.get()
+        self.reseq = Sample.objects.get()
         self.observed = ObservedMutation.objects.filter(
-            sequencing_experiment=self.reseq).first()
-        self.experiment = self.reseq.ale_experiment
+            sample=self.reseq).first()
+        self.experiment = self.reseq.experiment
 
     def _get(self, observed_mut_id=None):
         return self.client.get("/mutations/browse", {
@@ -184,7 +184,7 @@ class BrowseMutationTestCase(TestCase):
         breseq_fixture.write_sample(second, "s2")
         breseq_folder.import_breseq_folders(
             second, project_name="P", experiment_name="e", person="tester")
-        other = ResequencingExperiment.objects.exclude(id=self.reseq.id).first()
+        other = Sample.objects.exclude(id=self.reseq.id).first()
         self.assertIsNotNone(other)
         return other
 
@@ -212,9 +212,9 @@ class BrowseMutationTestCase(TestCase):
         for and found absent must not earn a star."""
         other = self._second_sample()
         mutation = self.observed.mutation
-        ObservedMutation.objects.filter(sequencing_experiment=other,
+        ObservedMutation.objects.filter(sample=other,
                                         mutation=mutation).delete()
-        ObservedMutation.objects.create(sequencing_experiment=other, mutation=mutation,
+        ObservedMutation.objects.create(sample=other, mutation=mutation,
                                         present=False)
 
         marked = {s["id"]: s["has_mutation"]
@@ -237,9 +237,9 @@ class BrowseMutationTestCase(TestCase):
 
         other = self._second_sample()
         mutation = self.observed.mutation
-        ObservedMutation.objects.filter(sequencing_experiment=other,
+        ObservedMutation.objects.filter(sample=other,
                                         mutation=mutation).delete()
-        ObservedMutation.objects.create(sequencing_experiment=other, mutation=mutation,
+        ObservedMutation.objects.create(sample=other, mutation=mutation,
                                         **build_observation(Decimal("1.0")))
 
         marked = {s["id"]: s["has_mutation"]
@@ -273,10 +273,10 @@ class SwitchingMutationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
 
-        self.reseq = ResequencingExperiment.objects.get()
+        self.reseq = Sample.objects.get()
         self.observed = ObservedMutation.objects.filter(
-            sequencing_experiment=self.reseq).first()
-        self.experiment = self.reseq.ale_experiment
+            sample=self.reseq).first()
+        self.experiment = self.reseq.experiment
 
     # --- the second spelling of the page's address --------------------------------------
 
@@ -303,14 +303,14 @@ class SwitchingMutationTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s2")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", person="tester")
-        return ResequencingExperiment.objects.exclude(pk=self.reseq.pk).get()
+        return Sample.objects.exclude(pk=self.reseq.pk).get()
 
     def test_a_mutation_this_sample_does_not_call_still_renders(self):
         """The case the pair spelling exists for. An unsaved ObservedMutation carries it, so
         `build_rows` needed no change -- the Freq cell simply comes out empty."""
         self._sibling_sample()
         ObservedMutation.objects.filter(
-            mutation=self.observed.mutation, sequencing_experiment=self.reseq).delete()
+            mutation=self.observed.mutation, sample=self.reseq).delete()
         response = self.client.get("/mutations/browse", {
             "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id})
         self.assertEqual(200, response.status_code)
@@ -328,7 +328,7 @@ class SwitchingMutationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             other, project_name="P2", experiment_name="e2", person="tester")
         stranger = ObservedMutation.objects.exclude(
-            sequencing_experiment=self.reseq).first()
+            sample=self.reseq).first()
 
         response = self.client.get("/mutations/browse", {
             "mutation_id": stranger.mutation_id, "reseq_id": self.reseq.id})
@@ -361,7 +361,7 @@ class SwitchingMutationTestCase(TestCase):
         from, and the sample's absence from it *is* the answer."""
         sibling = self._sibling_sample()
         ObservedMutation.objects.filter(
-            mutation=self.observed.mutation, sequencing_experiment=self.reseq).delete()
+            mutation=self.observed.mutation, sample=self.reseq).delete()
         body = self.client.get("/mutations/browse/at", {
             "mutation_id": self.observed.mutation_id, "reseq_id": self.reseq.id}).json()
         self.assertNotIn(self.reseq.id, body["calling"])

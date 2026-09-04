@@ -247,7 +247,7 @@ class ReferenceStoreTestCase(TestCase):
 
     def _stored_gff3(self, reference):
         with open(store.experiment_reference_path(
-                reference.ale_experiment_id, store.REFERENCE_GFF3), encoding="utf-8") as handle:
+                reference.experiment_id, store.REFERENCE_GFF3), encoding="utf-8") as handle:
             return handle.read()
 
     def test_genbank_sets_the_reference(self):
@@ -261,7 +261,7 @@ class ReferenceStoreTestCase(TestCase):
 
         for artifact in (store.REFERENCE_GFF3, store.REFERENCE_FASTA, store.REFERENCE_FAI):
             self.assertTrue(os.path.isfile(store.experiment_reference_path(
-                reference.ale_experiment_id, artifact)), artifact)
+                reference.experiment_id, artifact)), artifact)
 
     def test_fasta_sets_a_reference_with_no_genes(self):
         reference, _ = self._establish(

@@ -114,7 +114,7 @@
                that was being worked on.
 
                The {% templatetag openblock %} else {% templatetag closeblock %} branch is a
-               guard rather than a live path. `AleExperiment.project` is nullable, but
+               guard rather than a live path. `Experiment.project` is nullable, but
                `effective_role` answers None for a null project before it reaches its
                superuser branch -- so nobody can view a projectless experiment and this page
                refuses to render for one at all. It stays because the alternative is
@@ -174,9 +174,9 @@
                 <table class="table">
                     <thead>
                     <tr>
-                        <th>ALE replicate</th>
-                        <th>Flask count</th>
-                        <th>Sample count</th>
+                        <th>Population</th>
+                        <th>Time points</th>
+                        <th>Samples</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -344,7 +344,7 @@
         <table id="runs" class="table">
             <thead>
             <tr>
-                <th>ALE, Flask, Sample</th>
+                <th>Population, Time point, Sample</th>
                 <th>Predicted Mutations</th>
                 <th>Unassigned Missing Coverage Evidence</th>
                 <th>Coverage</th>

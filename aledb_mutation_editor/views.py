@@ -33,7 +33,7 @@ from django.views.decorators.http import require_POST
 import aledb_seq.views.common as seq_common
 from aledb_common.logger import user_extra
 from aledb_common.util import get_user_context
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.ordering import sample_sort_key
 from aledb_experiment.permissions import (
     can_add_experiment_filter, experiment_lock_refusal,
@@ -116,7 +116,7 @@ def _rows_for(reseq):
     shared between those two and must not grow a third caller's checkbox column.
     """
     observed = list(ObservedMutation.objects
-                    .filter(sequencing_experiment=reseq)
+                    .filter(sample=reseq)
                     .select_related("mutation"))
     observed.sort(key=lambda o: (o.mutation.reseq_reference or "", o.mutation.position))
     return build_rows(observed)
@@ -157,7 +157,7 @@ def _grid_mutations(experiment, reseq_dict, query):
     **Only mutations something in `reseq_dict` observes.** A `Mutation` is never deleted here
     -- its id is stored as a bare integer in aledb-converge, in aledb-phylogeny's JSON and in
     every exported CSV -- so removing a mutation's last observation leaves the row behind, and
-    a grid keyed on `Mutation.objects.filter(ale_experiment=...)` went on rendering it with
+    a grid keyed on `Mutation.objects.filter(experiment=...)` went on rendering it with
     every cell empty. That is what "the page does not update when I delete" was: the page
     reloads, and the row is genuinely still there.
 
@@ -170,9 +170,9 @@ def _grid_mutations(experiment, reseq_dict, query):
     hidden, it is not there.
     """
     observed_here = (history.observations_for(experiment)
-                     .filter(sequencing_experiment_id__in=list(reseq_dict))
+                     .filter(sample_id__in=list(reseq_dict))
                      .values("mutation_id"))
-    mutations = Mutation.objects.filter(ale_experiment=experiment,
+    mutations = Mutation.objects.filter(experiment=experiment,
                                         id__in=observed_here)
     query = (query or "").strip()
     if query:
@@ -221,7 +221,7 @@ def _grid_for(experiment, reseq_dict, query=None):
                 .filter(mutation_id__in=list(rows))
                 .order_by("pk"))
     for entry in observed:
-        position = column_of.get(entry.sequencing_experiment_id)
+        position = column_of.get(entry.sample_id)
         if position is None:
             # A sample the picker is not showing -- `get_reseq_ordered_dict` applies the
             # experiment's sample tag filters. Its observations are not selectable here
@@ -229,7 +229,7 @@ def _grid_for(experiment, reseq_dict, query=None):
             continue
         rows[entry.mutation_id]["cells"][position] = _cell_for(entry)
         by_mutation.setdefault(entry.mutation_id, []).append(entry.id)
-        by_sample.setdefault(entry.sequencing_experiment_id, []).append(entry.id)
+        by_sample.setdefault(entry.sample_id, []).append(entry.id)
 
     ordered = [rows[mutation.id] for mutation in page]
     # The column headers double as selectors, so each carries how much it would select. A
@@ -264,7 +264,7 @@ def _experiment_for_page(request, context):
     """The experiment a page is scoped to, or a refusal to render instead.
 
     `seq_common.get_ale_experiment` signals two different things and neither is an exception
-    type of its own: `AleExperiment.DoesNotExist` for "no experiment selected", which is how
+    type of its own: `Experiment.DoesNotExist` for "no experiment selected", which is how
     these pages open and is not an error, and a bare `ValueError` for "you may not view this".
     The pages next door catch the second with a blanket `except Exception` and render
     `500.html`, which tells a reader the site broke when in fact they were refused. Here it is
@@ -273,7 +273,7 @@ def _experiment_for_page(request, context):
     """
     try:
         return seq_common.get_ale_experiment(request)
-    except AleExperiment.DoesNotExist:
+    except Experiment.DoesNotExist:
         raise _NotForYou(seq_common.no_experiment_selected(
             request, context, logger, "mutation editor"))
     except ValueError:
@@ -289,8 +289,8 @@ def _experiment_for_write(request):
     """
     raw = request.POST.get("experiment_id")
     try:
-        experiment = AleExperiment.objects.get(pk=raw)
-    except (AleExperiment.DoesNotExist, ValueError, TypeError):
+        experiment = Experiment.objects.get(pk=raw)
+    except (Experiment.DoesNotExist, ValueError, TypeError):
         raise EditorError("No such experiment.", status=404)
     if not can_add_experiment_filter(request.user, experiment):
         # "you may not edit this" and "nobody may edit this at the moment" are different
@@ -491,7 +491,7 @@ def _carrying_samples(experiment, mutation):
     """
     observing = set(history.observations_for(experiment)
                     .filter(mutation=mutation)
-                    .values_list("sequencing_experiment_id", flat=True))
+                    .values_list("sample_id", flat=True))
     return [reseq for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
             if reseq.id in observing]
 
@@ -504,7 +504,7 @@ def _mutation_for_page(request, experiment):
     must not resolve here.
     """
     try:
-        return Mutation.objects.get(ale_experiment=experiment,
+        return Mutation.objects.get(experiment=experiment,
                                     pk=request.GET.get("mutation_id"))
     except (Mutation.DoesNotExist, ValueError, TypeError):
         raise _NotForYou(render(request, "404.html", get_user_context(request.user),
@@ -528,7 +528,7 @@ def _reference_row(experiment):
     """The experiment's `ExperimentReference`, or None. Reads no files."""
     from aledb_seq.models import ExperimentReference
 
-    return ExperimentReference.objects.filter(ale_experiment=experiment).first()
+    return ExperimentReference.objects.filter(experiment=experiment).first()
 
 
 @ensure_csrf_cookie
@@ -574,9 +574,9 @@ def mutation_history(request):
 
 def _changesets(experiment, limit=None):
     queryset = (MutationChangeSet.objects
-                .filter(ale_experiment=experiment)
+                .filter(experiment=experiment)
                 .select_related("created_by")
-                .prefetch_related(paths.to_ale("changes__" + paths.FROM_CHANGE)))
+                .prefetch_related(paths.to_population("changes__" + paths.FROM_CHANGE)))
     if limit is not None:
         queryset = queryset[:limit]
     return [_changeset_context(change_set) for change_set in queryset]
@@ -596,7 +596,7 @@ def _changeset_context(change_set):
     added = removed = 0
     samples = {}
     for change in change_set.changes.select_related(
-            paths.to_ale(paths.FROM_CHANGE)).all():
+            paths.to_population(paths.FROM_CHANGE)).all():
         # A deleted sample sorts last: it has no coordinate, and keeping the rows nobody can
         # act on together at the end beats interleaving them.
         order = (0, sample_sort_key(change.sample)) if change.sample_id else (1, ())
@@ -673,7 +673,7 @@ def mutation_copy_apply(request):
 
         source_id = request.POST.get(REQUEST_SOURCE_RESEQ_ID)
         sources = list(history.observations_for(experiment)
-                       .filter(sequencing_experiment_id=source_id,
+                       .filter(sample_id=source_id,
                                mutation_id__in=mutation_ids))
         if not sources:
             raise EditorError("Those mutations are not in the source sample.", status=404)
@@ -724,7 +724,7 @@ def _plan_copy(experiment, sources, targets):
                 "observation": snapshot,
                 "mutation": observed.mutation,
                 "observed": None,
-                "source_sample_id": observed.sequencing_experiment_id,
+                "source_sample_id": observed.sample_id,
             })
             # Keep the map current so copying two source rows that collapse to the same key
             # onto one target adds it once rather than twice.
@@ -928,13 +928,13 @@ def _chosen_observations(request, carrying):
         return list(carrying)
 
     wanted = set(wanted)
-    if wanted - {observed.sequencing_experiment_id for observed in carrying}:
+    if wanted - {observed.sample_id for observed in carrying}:
         # Scoped to the samples carrying it for the reason `_mutation_for_page` scopes the
         # mutation to the experiment: a hand-typed id must not reach past what the page
         # offered. There is also nothing to change in a sample that does not carry it.
         raise EditorError("Those samples do not carry this mutation.", status=404)
     return [observed for observed in carrying
-            if observed.sequencing_experiment_id in wanted]
+            if observed.sample_id in wanted]
 
 
 def _move_observations(experiment, user, target, identity, chosen, note):
@@ -948,7 +948,7 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     `_plan_copy` make about a target that already has what is being put on it, and it is the
     one part of the result a person cannot read off the page, so it is named back to them.
     """
-    sample_ids = [observed.sequencing_experiment_id for observed in chosen]
+    sample_ids = [observed.sample_id for observed in chosen]
     present = history.live_state(experiment, sample_ids=sample_ids)
     names = {reseq.id: reseq.ale_flask_isolate_str
              for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()}
@@ -957,13 +957,13 @@ def _move_observations(experiment, user, target, identity, chosen, note):
     already = []
     for observed in chosen:
         snapshot = history.observation_snapshot(observed)
-        key = (observed.sequencing_experiment_id, history.key_from_identity(identity),
+        key = (observed.sample_id, history.key_from_identity(identity),
                snapshot.get("source"))
         if present.get(key):
-            already.append(observed.sequencing_experiment_id)
+            already.append(observed.sample_id)
             continue
         additions.append({
-            "sample_id": observed.sequencing_experiment_id,
+            "sample_id": observed.sample_id,
             "identity": identity,
             "observation": snapshot,
             "mutation": target,
@@ -983,7 +983,7 @@ def _move_observations(experiment, user, target, identity, chosen, note):
 
 def _mutation_for_write(request, experiment):
     try:
-        return Mutation.objects.get(ale_experiment=experiment,
+        return Mutation.objects.get(experiment=experiment,
                                     pk=request.POST.get("mutation_id"))
     except (Mutation.DoesNotExist, ValueError, TypeError):
         raise EditorError("That mutation is not in this experiment.", status=404)
@@ -1010,7 +1010,7 @@ def _existing_mutation(experiment, mutation, identity):
     already ruled that out by the time this runs.
     """
     key = {field: identity.get(field) for field in history.MUTATION_KEY_FIELDS}
-    return (Mutation.objects.filter(ale_experiment=experiment, **key)
+    return (Mutation.objects.filter(experiment=experiment, **key)
             .exclude(pk=mutation.pk).first())
 
 
@@ -1024,7 +1024,7 @@ def mutation_restore(request):
         change_set = None
         if raw:
             change_set = MutationChangeSet.objects.filter(
-                pk=raw, ale_experiment=experiment).first()
+                pk=raw, experiment=experiment).first()
             if change_set is None:
                 raise EditorError("That point is not in this experiment's history.",
                                   status=404)

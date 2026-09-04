@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User, Group
-from aledb_experiment.models import Project, AleExperiment, AleId, live
+from aledb_experiment.models import Project, Experiment, Population, live
 from django.core.exceptions import ObjectDoesNotExist
 from aledb_experiment.permissions import accessible_projects
 
@@ -20,13 +20,13 @@ def get_all_user_exps(user):
     :param user: given login user
     :return: experiment queryset
     """
-    return live(AleExperiment.objects.filter(
+    return live(Experiment.objects.filter(
         project__in=get_user_projects(user))).order_by('name')
 
 
 def _ale_exp_exists(ale_id, recent_experiments):
     try:
-        recent_experiments.append(AleExperiment.objects.get(pk=ale_id))
+        recent_experiments.append(Experiment.objects.get(pk=ale_id))
     except ObjectDoesNotExist:
         pass
     return recent_experiments
@@ -35,7 +35,7 @@ def _ale_exp_exists(ale_id, recent_experiments):
 def get_strains():
     """return list of sorted strains"""
     return sorted(
-        AleId.objects.exclude(strain__isnull=True).exclude(strain='')
+        Population.objects.exclude(strain__isnull=True).exclude(strain='')
         .values_list('strain', flat=True).distinct()
     )
 

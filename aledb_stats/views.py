@@ -12,7 +12,7 @@ from aledb_common.util import get_user_context
 import logging
 from aledb_common.context_registry import get_experiment_context
 from aledb_common.panel_registry import render_overview_panels
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_experiment, can_lock_experiment
 from aledb_common.logger import user_extra, join_extras
 
@@ -38,11 +38,11 @@ def stats(request):
         # This used to fetch the experiment a second time here. The file imported the same
         # module twice under two names -- `import aledb_seq.views.common` alongside
         # `from aledb_seq.views import common` -- which made the second call look like a
-        # different one, so every view of this page paid for a second AleExperiment query, a
+        # different one, so every view of this page paid for a second Experiment query, a
         # second project FK query and a second permission check, then discarded the object
         # the lines above had already fetched. The duplicate import is gone with it.
         exp_name = experiment.name
-        ale_experiment_id = experiment.id
+        experiment_id=experiment.id
         ale_number = common.get_ale_id(request)
 
         ale_id = ale_number
@@ -75,7 +75,7 @@ def stats(request):
         panels = render_overview_panels(experiment, request)
         context.update({"ale_experiment_name": exp_name,
                         "ale_no": ale_number,
-                        "ale_experiment_id": ale_experiment_id,
+                        "ale_experiment_id": experiment_id,
                         "ale_project_name": experiment.project.name,
                         "ale_project_id": experiment.project.id,
                         "protein_change_type_count_dict": protein_change_type_count_dict,
@@ -123,7 +123,7 @@ def stats(request):
 
         return HttpResponse(rendered, content_type="text/html")
 
-    except AleExperiment.DoesNotExist:
+    except Experiment.DoesNotExist:
         return common.no_experiment_selected(
             request, get_user_context(request.user), logger, "statistics")
     except Exception as e:

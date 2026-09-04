@@ -13,7 +13,7 @@ from aledb_import.models import STATE_FINALIZED, UploadSession
 from aledb_import.tests import breseq_fixture
 from aledb_import.upload_session import UploadError, sanitize_relative_path
 from aledb_experiment.models import Project
-from aledb_seq.models import ExperimentReference, ResequencingExperiment
+from aledb_seq.models import ExperimentReference, Sample
 
 
 class SanitizePathTestCase(TestCase):
@@ -214,7 +214,7 @@ class UploadSessionEndpointTestCase(TestCase):
         self.assertIsNone(summary["files"][0]["error"])
         self.assertGreater(summary["total_mutations"], 0)
 
-        reseq = ResequencingExperiment.objects.get()
+        reseq = Sample.objects.get()
         self.assertTrue(reseq.bam_stored)
         self.assertTrue(os.path.isfile(store.sample_path(reseq.id, store.SAMPLE_BAM)))
         self.assertEqual(ExperimentReference.objects.count(), 1)

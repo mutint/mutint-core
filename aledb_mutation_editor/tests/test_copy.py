@@ -31,11 +31,11 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual({self.mut_1.id, self.mut_2.id}, self.observed_ids(self.sample_b))
 
     def test_the_copy_carries_the_sources_values(self):
-        source = ObservedMutation.objects.get(sequencing_experiment=self.sample_a,
+        source = ObservedMutation.objects.get(sample=self.sample_a,
                                               mutation=self.mut_2)
         self._copy([self.mut_2], [self.sample_b])
 
-        copied = ObservedMutation.objects.get(sequencing_experiment=self.sample_b,
+        copied = ObservedMutation.objects.get(sample=self.sample_b,
                                               mutation=self.mut_2)
         self.assertEqual(source.frequency, copied.frequency)
         self.assertEqual(source.wt_reads, copied.wt_reads)
@@ -63,7 +63,7 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual(0, body["added"])
         self.assertEqual([self.sample_b.ale_flask_isolate_str], body["already"])
         self.assertEqual(1, ObservedMutation.objects.filter(
-            sequencing_experiment=self.sample_b, mutation=self.mut_1).count())
+            sample=self.sample_b, mutation=self.mut_1).count())
 
     def test_skipping_everything_writes_no_changeset(self):
         self._copy([self.mut_1], [self.sample_b])
@@ -84,8 +84,8 @@ class CopyTestCase(EditorTestCase):
         cannot reach across projects."""
         created = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        from aledb_experiment.models import AleExperiment
-        other = AleExperiment.objects.get(pk=created["experiment_id"])
+        from aledb_experiment.models import Experiment
+        other = Experiment.objects.get(pk=created["experiment_id"])
         stranger = self.make_mutation(position=999, sequence_change="T>A", experiment=other)
 
         response = self._copy([stranger], [self.sample_b])

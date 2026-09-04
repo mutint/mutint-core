@@ -57,7 +57,7 @@ class AddTestCase(EditorTestCase):
 
     def test_it_is_scoped_to_the_experiment(self):
         self.snp()
-        self.assertEqual(self.experiment, Mutation.objects.get(position=5000).ale_experiment)
+        self.assertEqual(self.experiment, Mutation.objects.get(position=5000).experiment)
 
     def test_adding_to_three_samples_is_one_changeset(self):
         third = self.make_sample(flask_number=3)
@@ -216,23 +216,23 @@ class AddTestCase(EditorTestCase):
     def test_a_sample_from_another_experiment_is_refused(self):
         """Targets are resolved through this experiment's own sample list, so an id from
         elsewhere matches nothing and a hand-built POST cannot reach across projects."""
-        from aledb_experiment.models import AleExperiment, AleId, Flask
-        from aledb_seq.models import ResequencingExperiment
+        from aledb_experiment.models import Experiment, Population, TimePoint
+        from aledb_seq.models import Sample
 
         created = self.client.post(
             "/ale/projects/create/", {"name": "P2", "experiment": "E2"}).json()
-        other = AleExperiment.objects.get(pk=created["experiment_id"])
-        ale = AleId.objects.create(ale_experiment=other, ale_id=1)
-        flask = Flask.objects.create(ale_id=ale, flask_number=1, media=self.context["media"])
-        stranger = ResequencingExperiment.objects.create(
-            flask=flask, isolate_number=1, is_population=False)
+        other = Experiment.objects.get(pk=created["experiment_id"])
+        ale = Population.objects.create(experiment=other, name=1)
+        flask = TimePoint.objects.create(population=ale, value=1, media=self.context["media"])
+        stranger = Sample.objects.create(
+            time_point=flask, name=1, is_population=False)
 
         response = self.add(seq_id="NC_000913", position=5000, new_seq="T",
                             targets=[stranger])
 
         self.assertEqual(404, response.status_code)
         self.assertEqual(0, ObservedMutation.objects.filter(
-            sequencing_experiment=stranger).count())
+            sample=stranger).count())
 
     # --- it undoes ---------------------------------------------------------------------------
 

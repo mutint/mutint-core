@@ -460,7 +460,7 @@ class ExperimentFilterTestCase(TestCase):
     """`can_add_experiment_filter` moved from the view permission to write."""
 
     def setUp(self):
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
         self.owner = make_user("owner")
         self.reader = make_user("reader")
         self.writer = make_user("writer")
@@ -468,7 +468,7 @@ class ExperimentFilterTestCase(TestCase):
         set_primary_owner(self.project, self.owner)
         grant_project_access(self.project, self.reader, ROLE_READ)
         grant_project_access(self.project, self.writer, ROLE_WRITE)
-        self.experiment = AleExperiment.objects.create(
+        self.experiment = Experiment.objects.create(
             name="E", project=self.project, person="owner")
 
     def test_a_reader_may_not_curate(self):

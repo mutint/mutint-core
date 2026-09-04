@@ -31,7 +31,7 @@ from aledb_common.import_registry import (
     get_import_handler,
     run_import,
 )
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_edit_experiment, experiment_lock_refusal
 from aledb_import import import_lock, reference_store
 from aledb_import.import_lock import ImportInProgress
@@ -108,8 +108,8 @@ def create_upload_session(request):
         return JsonResponse({"error": "Body must be JSON."}, status=400)
 
     try:
-        experiment = AleExperiment.objects.get(pk=payload.get("ale_experiment_id"))
-    except (AleExperiment.DoesNotExist, ValueError, TypeError):
+        experiment = Experiment.objects.get(pk=payload.get("ale_experiment_id"))
+    except (Experiment.DoesNotExist, ValueError, TypeError):
         return JsonResponse({"error": "Unknown experiment."}, status=404)
     if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "You cannot add to this experiment."}, status=403)
@@ -150,7 +150,7 @@ def create_upload_session(request):
 
     session = UploadSession.objects.create(
         user=request.user if request.user.is_authenticated else None,
-        ale_experiment=experiment,
+        experiment=experiment,
         import_type=import_type,
         manifest=manifest,
         declared_bytes=declared)
@@ -260,9 +260,9 @@ def finalize_upload(request, upload_id):
     # the experiment was locked would otherwise finalize straight through it. `run_import`
     # refuses as well -- this one exists so the answer arrives as a clean JSON refusal rather
     # than an exception surfacing from three layers down.
-    if not can_edit_experiment(request.user, session.ale_experiment):
+    if not can_edit_experiment(request.user, session.experiment):
         return JsonResponse(
-            {"error": experiment_lock_refusal(session.ale_experiment)
+            {"error": experiment_lock_refusal(session.experiment)
                       or "You cannot add data to this experiment."}, status=403)
 
     root = store.staging_dir(session.id)
@@ -293,7 +293,7 @@ def _finalize_holding_lock(session, request, root, options, progress):
         # The registry decides what each file is and which handler takes it, so a plugin's
         # import type is reachable here with no change to this view.
         with import_progress.reporting(progress):
-            summary = run_import(session.ale_experiment, root, request.user,
+            summary = run_import(session.experiment, root, request.user,
                                  import_type=session.import_type, options=options)
     except ConfirmationRequired as ask:
         # Deliberately before the blanket handler, and deliberately without the cleanup: the
@@ -328,7 +328,7 @@ def _finalize_holding_lock(session, request, root, options, progress):
     # establishes a reference -- a genome on its own, or a breseq folder bringing its own --
     # changes it underneath a page already rendered. Reporting it is what lets the page know
     # to go and get itself re-rendered rather than keep offering the pre-reference choices.
-    summary["has_reference"] = reference_store.has_reference(session.ale_experiment)
+    summary["has_reference"] = reference_store.has_reference(session.experiment)
     return JsonResponse(summary)
 
 

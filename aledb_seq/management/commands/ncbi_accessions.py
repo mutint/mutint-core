@@ -32,7 +32,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", type=int, nargs="?", default=None,
-                            help="AleExperiment primary key; omit for every experiment")
+                            help="Experiment primary key; omit for every experiment")
         parser.add_argument("--list", action="store_true", dest="list_only",
                             help="Show what is recorded and stop; makes no requests")
         parser.add_argument("--seq-id", default=None,
@@ -69,9 +69,9 @@ class Command(BaseCommand):
         Read from `ExperimentReference.seq_ids`, which already carries the per-contig digest
         the whole check compares against -- no reference file is opened here or anywhere.
         """
-        references = ExperimentReference.objects.select_related("ale_experiment")
+        references = ExperimentReference.objects.select_related("experiment")
         if experiment_id is not None:
-            references = references.filter(ale_experiment_id=experiment_id)
+            references = references.filter(experiment_id=experiment_id)
             if not references.exists():
                 raise CommandError("No stored reference for experiment %s." % experiment_id)
 
@@ -79,7 +79,7 @@ class Command(BaseCommand):
         for reference in references:
             for entry in reference.seq_ids or []:
                 if entry.get("sha256") and entry.get("length") and entry.get("id"):
-                    rows.append((reference.ale_experiment, entry["id"],
+                    rows.append((reference.experiment, entry["id"],
                                  entry["length"], entry["sha256"]))
         return rows
 

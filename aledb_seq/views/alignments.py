@@ -11,9 +11,9 @@ from django.http import Http404, HttpResponse, HttpResponseForbidden
 
 from aledb_common import store
 from aledb_common.fileserve import serve_file
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_view_project
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 
 def sample_bam(request, reseq_id):
@@ -58,8 +58,8 @@ def reference_chromalias(request, experiment_id):
     genome's chromosomeNames, so the current name must come first.
     """
     try:
-        experiment = AleExperiment.objects.get(pk=experiment_id)
-    except AleExperiment.DoesNotExist:
+        experiment = Experiment.objects.get(pk=experiment_id)
+    except Experiment.DoesNotExist:
         raise Http404("No such experiment.")
 
     if not _may_view(request.user, experiment):
@@ -92,11 +92,11 @@ def chromalias_text(seq_ids):
 
 def _serve_sample(request, reseq_id, filename):
     try:
-        reseq = ResequencingExperiment.objects.get(pk=reseq_id)
-    except ResequencingExperiment.DoesNotExist:
+        reseq = Sample.objects.get(pk=reseq_id)
+    except Sample.DoesNotExist:
         raise Http404("No such resequencing experiment.")
 
-    experiment = reseq.ale_experiment
+    experiment = reseq.experiment
     if not _may_view(request.user, experiment):
         return HttpResponseForbidden("You do not have access to this experiment.")
 
@@ -105,8 +105,8 @@ def _serve_sample(request, reseq_id, filename):
 
 def _serve_reference(request, experiment_id, filename):
     try:
-        experiment = AleExperiment.objects.get(pk=experiment_id)
-    except AleExperiment.DoesNotExist:
+        experiment = Experiment.objects.get(pk=experiment_id)
+    except Experiment.DoesNotExist:
         raise Http404("No such experiment.")
 
     if not _may_view(request.user, experiment):

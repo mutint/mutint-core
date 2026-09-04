@@ -1,5 +1,5 @@
 import aledb_experiment.models
-from aledb_experiment.models import AleExperiment
+from aledb_experiment.models import Experiment
 from aledb_experiment.permissions import can_view_project
 from aledb_common.constants import (REQUEST_ALE_EXPERIMENT_ID, REQUEST_ALE_ID,
                                     REQUEST_ALL, REQUEST_SAMPLE_TYPE, SAMPLE_TYPES)
@@ -61,20 +61,20 @@ def get_aleid_ale_id_list(experiment_id):
     from aledb_experiment.ordering import natural
 
     visible = get_ordered_reseq_queryset(experiment_id).order_by().values("pk")
-    # Ordered by the same natural sort a sample list uses. `AleId.ale_id` is text, so the
+    # Ordered by the same natural sort a sample list uses. `Population.name` is text, so the
     # database's own order puts ALE 10 above ALE 2 -- and this dropdown had no `order_by` at
     # all, so it was whatever the join happened to produce.
-    return (aledb_experiment.models.AleId.objects
-            .filter(**{paths.down_chain("ale") + "__in": visible})
+    return (aledb_experiment.models.Population.objects
+            .filter(**{paths.down_chain("population") + "__in": visible})
             .distinct()
-            .order_by(natural("ale_id"))
-            .values_list("ale_id", flat=True))
+            .order_by(natural("name"))
+            .values_list("name", flat=True))
 
 
 def get_ale_id(request):
     """The ALE picked in the query string, or None for "all".
 
-    No `int()` any more: `AleId.ale_id` is text (`aledb_experiment.0008`), and coercing
+    No `int()` any more: `Population.name` is text (`aledb_experiment.0008`), and coercing
     would have raised a ValueError on the first lineage called `Ara-1`. An empty parameter
     reads as "all" too, so a cleared picker cannot filter to a nonexistent ALE.
     """
@@ -113,7 +113,7 @@ def get_ale_experiment(request):
     :return: experiment or raise exception
     """
     exp_id = request.GET.get(REQUEST_ALE_EXPERIMENT_ID)
-    experiment = AleExperiment.objects.get(pk=exp_id)
+    experiment = Experiment.objects.get(pk=exp_id)
     if experiment:
         if can_view_project(request.user, experiment.project):
             return experiment
@@ -126,7 +126,7 @@ def no_experiment_selected(request, context, logger, what):
     Every experiment-scoped page reaches `get_ale_experiment` with whatever is in
     `?ale_experiment_id`, so opening one without a usable id raises DoesNotExist.
     That is how these pages open, not a breakage: caught by a view's catch-all it
-    logs an ERROR-level traceback and shows the reader Django's raw "AleExperiment
+    logs an ERROR-level traceback and shows the reader Django's raw "Experiment
     matching query does not exist". Catch it ahead of the catch-all instead and
     hand it here, so a genuine ERROR in the log still means something is wrong.
 
@@ -146,10 +146,10 @@ def get_ale_experiment_name(request):
 
     if ale_experiment_id is not None and ale_experiment_id != "all":
 
-        ale_experiment = aledb_experiment.models.AleExperiment.objects.filter(pk=ale_experiment_id)
+        experiment = aledb_experiment.models.Experiment.objects.filter(pk=ale_experiment_id)
 
         # TODO: should only ever be returning 1 experiment. Implement error handling for more than one returned.
-        ale_experiment_name = ale_experiment[0].name
+        ale_experiment_name = experiment[0].name
 
     return ale_experiment_name
 

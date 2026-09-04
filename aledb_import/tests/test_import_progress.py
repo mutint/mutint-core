@@ -22,7 +22,7 @@ from aledb_common.import_registry import run_import
 from aledb_experiment.models import Project
 from aledb_import import breseq_folder
 from aledb_import.models import STATE_FAILED, STATE_FINALIZED, UploadSession
-from aledb_seq.models import ObservedMutation, ResequencingExperiment
+from aledb_seq.models import ObservedMutation, Sample
 from aledb_import.tests import breseq_fixture
 
 
@@ -516,7 +516,7 @@ class ProgressEndpointTestCase(TestCase):
         self.assertEqual(polled["units"][0]["replaced"], observations)
 
         # Still one sample: it superseded, it did not accumulate.
-        self.assertEqual(ResequencingExperiment.objects.count(), 1)
+        self.assertEqual(Sample.objects.count(), 1)
         self.assertEqual(ObservedMutation.objects.count(), observations)
 
     def test_a_first_upload_reports_nothing_replaced(self):

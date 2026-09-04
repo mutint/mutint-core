@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from aledb_common import store
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
-from aledb_seq.models import ResequencingExperiment
+from aledb_seq.models import Sample
 
 PAYLOAD = bytes(range(256)) * 8  # 2048 bytes, non-repeating within each 256-byte block
 
@@ -32,8 +32,8 @@ class AlignmentServingTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1", bam_bytes=PAYLOAD)
         breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name="e", person="tester")
-        self.reseq = ResequencingExperiment.objects.get()
-        self.experiment = self.reseq.ale_experiment
+        self.reseq = Sample.objects.get()
+        self.experiment = self.reseq.experiment
         self.bam_url = "/mutations/alignments/%d/bam" % self.reseq.id
 
     def _body(self, response):
@@ -119,8 +119,8 @@ class AlignmentServingTestCase(TestCase):
 
     def test_sample_without_a_stored_bam_is_404(self):
         """A bare-.gd import has no alignment; the route must 404, not 500."""
-        reseq = ResequencingExperiment.objects.create(
-            flask=self.reseq.flask, sample_name="no-bam", person="tester")
+        reseq = Sample.objects.create(
+            time_point=self.reseq.time_point, source_name="no-bam", person="tester")
         response = self.client.get("/mutations/alignments/%d/bam" % reseq.id)
         self.assertEqual(response.status_code, 404)
 

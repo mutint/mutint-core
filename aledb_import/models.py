@@ -82,7 +82,7 @@ class UploadSession(models.Model):
     # The target is the experiment itself, by primary key. Earlier versions carried
     # project/experiment/person as free text and resolved by name, which forked an experiment
     # whenever the person differed -- see gd_import.prepare_experiment_by_id.
-    ale_experiment = models.ForeignKey("aledb_experiment.AleExperiment", null=True, blank=True,
+    experiment = models.ForeignKey("aledb_experiment.Experiment", null=True, blank=True,
                                        on_delete=models.CASCADE)
     # Empty means auto-detect; otherwise the name of a registered import handler.
     import_type = models.CharField(max_length=64, blank=True)

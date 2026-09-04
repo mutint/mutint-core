@@ -59,10 +59,10 @@ class DatabaseBackendTestCase(TestCase):
         Passing one fails at enqueue -- loudly here, and invisibly in an import, where the
         exception would be swallowed along with the rest of coverage's best-effort contract.
         """
-        from aledb_seq.models import ResequencingExperiment
+        from aledb_seq.models import Sample
 
         with self.assertRaises(Exception):
-            tasks.build_coverage.enqueue(ResequencingExperiment())
+            tasks.build_coverage.enqueue(Sample())
 
     def test_the_worker_runs_a_stored_task(self):
         """End to end through `db_worker`'s own execution path, rather than by calling the

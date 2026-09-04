@@ -13,7 +13,7 @@ blank_field = {"blank": True, "null": True}
 class SoftDeleteMixin(models.Model):
     """Deletion marks a row rather than destroying it.
 
-    Only the top objects -- Project and AleExperiment -- carry the flag. Children are reached
+    Only the top objects -- Project and Experiment -- carry the flag. Children are reached
     by traversing the FK chain when the purge command finally removes them, so a deletion is
     one row written rather than a cascade of them.
 
@@ -71,7 +71,7 @@ class Project(SoftDeleteMixin):
         return self.user.get_full_name()
 
     def experiments(self):
-        return live(AleExperiment.objects.filter(project=self))
+        return live(Experiment.objects.filter(project=self))
 
     def __str__(self):
         return self.name
@@ -85,13 +85,13 @@ class Project(SoftDeleteMixin):
         return ''
 
 
-class AleExperiment(SoftDeleteMixin):
+class Experiment(SoftDeleteMixin):
     # The primary key is Django's implicit `id`, and used to be an explicit
     # `ale_id = AutoField(primary_key=True)`. Two things were wrong with that.
     #
     # It made `ale_id` mean three different things depending on what you were holding: this
-    # experiment's pk, `AleId.ale_id`'s text label, and `Flask.ale_id`'s foreign key to an
-    # AleId row. Every query in the suite traverses that chain, so "the path ending in
+    # experiment's pk, the population's text label, and the time point's foreign key to a
+    # population row. Every query in the suite traverses that chain, so "the path ending in
     # ale_id" was two destinations and a reader could not tell which.
     #
     # And being explicit meant DEFAULT_AUTO_FIELD did not reach it: this was the only
@@ -135,8 +135,8 @@ class AleExperiment(SoftDeleteMixin):
     # prior flag left to clear and no way to end up with two.
     #
     # Named by string because `aledb_experiment` must not import `aledb_seq` at load time;
-    # the dependency runs the other way, which is why `ResequencingExperiment.flask`
-    # names its own target the same way.
+    # the dependency runs the other way, which is why `Sample.time_point` names its own
+    # target the same way.
     #
     # SET_NULL: deleting the sample leaves the experiment simply without an ancestor.
     # That the sample belongs to *this* experiment cannot be a database constraint, so
@@ -146,7 +146,7 @@ class AleExperiment(SoftDeleteMixin):
     # everyone sees, which is exactly what `AleExperimentFilter` got wrong -- one row per
     # experiment that anybody with write access could change silently, with no record of
     # who did it. Attribution is the difference between that and this.
-    ancestor = models.ForeignKey("aledb_seq.ResequencingExperiment",
+    ancestor = models.ForeignKey("aledb_seq.Sample",
                                  on_delete=models.SET_NULL, related_name="ancestor_of",
                                  **blank_field)
     ancestor_set_at = models.DateTimeField(**blank_field)
@@ -259,33 +259,37 @@ class AleExperiment(SoftDeleteMixin):
 
 
 # TODO: this model should be called "Ale".
-class AleId(models.Model):
-    """Parallel ALE's run within an ALE experiment.
+class Population(models.Model):
+    """One evolving lineage within an experiment.
 
-    `ale_id` is **text**, not a number (`0008`), and so is the sample's `isolate_number`. Real
-    lineage names are labels -- `Ara-1` and `Ara+1` are two different LTEE populations that
-    both end in 1, so any rule that reduced them to an integer merged them. `Flask` is the
-    one member of the chain that stays an `IntegerField`, because a time point is a genuine
-    ordinal: aledb-fixation sorts by it and takes the last two.
+    **This was `Population`, and its own docstring already called these populations.** The model
+    carried `# TODO: this model should be called "Ale"` while describing `Ara-1` and `Ara+1`
+    as "two different LTEE populations" -- the biology had the word all along and the schema
+    did not.
+
+    `name` is **text**, not a number (`0008`), and so is the sample's. Real lineage names are
+    labels: `Ara-1` and `Ara+1` both end in 1, so any rule reducing them to an integer merges
+    them. `TimePoint.value` is the one member of the chain that stays an `IntegerField`,
+    because a time point is a genuine ordinal -- aledb-fixation sorts by it and takes a
+    population's last two.
 
     Ordering is therefore lexicographic unless asked otherwise, which puts `10` before `2`.
     `aledb_experiment.ordering.sample_order()` is what every sample listing orders by
     instead; see its docstring.
     """
-    ale_id = models.CharField(max_length=100)
+    name = models.CharField(max_length=100)
     description = models.CharField(max_length=300, **blank_field)
     species = models.CharField(max_length=300, **blank_field)
     strain = models.CharField(max_length=300, **blank_field)
-    ale_experiment = models.ForeignKey(AleExperiment, on_delete=models.CASCADE)
+    experiment = models.ForeignKey(Experiment, on_delete=models.CASCADE)
 
     def __unicode__(self):
-        # return "ALE #%s < %s" % (self.ale_id, self.ale_experiment.name)
-        return "ALE #%s < %s" % (self.ale_id, self.ale_experiment)
+        return "Population %s < %s" % (self.name, self.experiment)
 
     class Meta:
-        unique_together = (("ale_experiment", "ale_id"),)
+        unique_together = (("experiment", "name"),)
 
-        verbose_name_plural = "ALEs"
+        verbose_name_plural = "populations"
 
 
 class Media(models.Model):
@@ -314,14 +318,14 @@ class Media(models.Model):
     # TODO: figure out components
     # maybe carbon source, etc.? or track individual chemicals
     def experiments(self):
-        """The experiments that have a flask grown in this medium.
+        """The experiments with a time point grown in this medium.
 
-        It read `Flask.objects.filter(project=self)` and `Flask` has no `project`, so this
+        It read `TimePoint.objects.filter(project=self)` and that model had no `project`, so this
         raised FieldError every time it ran -- and `MediaAdmin.list_display` calls it, which
         makes /admin/aledb_experiment/media/ a 500 rather than a page.
         """
-        return live(AleExperiment.objects.filter(
-            **{paths.down_chain("experiment", upto="flask") + "__media": self}
+        return live(Experiment.objects.filter(
+            **{paths.down_chain("experiment", upto="timepoint") + "__media": self}
         )).distinct()
 
     experiments.short_description = 'Experiment'
@@ -330,37 +334,40 @@ class Media(models.Model):
         verbose_name_plural = "Media"
 
 
-class Flask(models.Model):
-    ale_id = models.ForeignKey(AleId, on_delete=models.CASCADE)
-    flask_number = models.IntegerField(**blank_field)
+class TimePoint(models.Model):
+    """When along a population's history a sample was taken.
+
+    **This was `TimePoint`**, and every label a person could see already said "Time point" --
+    the form field, its validation message, and a test class named for it. A flask is the
+    vessel one kind of experiment happens to use; what the column means is the point in
+    time.
+
+    `value` is the one member of the chain that is genuinely a number: aledb-fixation orders
+    by it and takes a population's last two.
+    """
+    population = models.ForeignKey(Population, on_delete=models.CASCADE)
+    value = models.IntegerField(**blank_field)
     media = models.ForeignKey(Media, on_delete=models.DO_NOTHING)
 
     def __unicode__(self):
-        if self.ale_id.description is not None:
-            if self.ale_id.description.lower() == ('Not from ALE').lower():
-                return 'Not from ALE'
-            else:
-                return "Flask#%s < %s" % (self.flask_number,
-                                          self.ale_id)
-        else:
-            return "Flask#%s < %s" % (self.flask_number,
-                                      self.ale_id)
+        return "Time point %s < %s" % (self.value, self.population)
 
-    def ale_experiment(self):
-        return self.ale_id.ale_experiment.id
+    def experiment(self):
+        return self.population.experiment.id
+
     class Meta:
-        unique_together = (("ale_id",
-                            "flask_number"),)
+        unique_together = (("population", "value"),)
 
-        verbose_name_plural = "Flasks"
+        verbose_name_plural = "time points"
 
 
-#TODO: Change 'reseq_reference' field to 'reseq_ref_name'
+# The TODO that stood here asked for `reseq_reference` to be called `reseq_ref_name`. It
+# is `Sample.reference_genome` now, which says the same thing without the abbreviation.
 #TODO: Change 'library_prep' field to 'wgs_kit'
 # `Isolate` and `TechnicalReplicate` stood here. Both are gone, folded into
-# `aledb_seq.ResequencingExperiment` -- the sample row itself -- along with everything they
-# held. See that model's docstring for why the merge went that way round rather than the
-# other. The chain is `AleExperiment -> AleId -> Flask -> ResequencingExperiment` now.
+# `aledb_seq.Sample` -- the sample row itself -- along with everything they held. See that
+# model's docstring for why the merge went that way round rather than the other. The chain
+# is `Experiment -> Population -> TimePoint -> Sample` now.
 
 
 # --- sharing: groups and project access ---------------------------------------------------

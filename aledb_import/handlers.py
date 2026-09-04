@@ -170,15 +170,15 @@ def _rename_payload(experiment, plan, filename):
     `gd_import._check_seq_ids` refuses a `.gd` whose seq_ids are not the reference's, so the
     original breseq folders stop being re-importable the moment their contigs are renamed.
     """
-    from aledb_seq.models import Mutation, ResequencingExperiment
+    from aledb_seq.models import Mutation, Sample
 
     counts = {
         "mutations": Mutation.objects.filter(
-            ale_experiment=experiment,
+            experiment=experiment,
             reseq_reference__in=list(plan.mapping)).count(),
-        "samples": ResequencingExperiment.objects.filter(
+        "samples": Sample.objects.filter(
             **{paths.to_experiment(): experiment}).count(),
-        "alignments": ResequencingExperiment.objects.filter(
+        "alignments": Sample.objects.filter(
             **{paths.to_experiment(): experiment},
             bam_stored=True).count(),
     }

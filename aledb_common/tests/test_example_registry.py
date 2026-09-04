@@ -166,17 +166,17 @@ class LoadExampleCommandTestCase(TestCase):
         self.assertIn("Examples", [p.name for p in get_user_projects(self.admin)])
 
     def test_loading_imports_the_data(self):
-        from aledb_experiment.models import AleExperiment, Flask
+        from aledb_experiment.models import Experiment, TimePoint
         from aledb_seq.models import Mutation
 
         self._load("test-example")
 
-        experiment = AleExperiment.objects.get(name="test-example")
+        experiment = Experiment.objects.get(name="test-example")
         self.assertEqual(
             {100, 200},
-            {f.flask_number for f in Flask.objects.filter(
-                **{paths.to_experiment(root="flask"): experiment})})
-        self.assertTrue(Mutation.objects.filter(ale_experiment=experiment).exists())
+            {f.value for f in TimePoint.objects.filter(
+                **{paths.to_experiment(root="time_point"): experiment})})
+        self.assertTrue(Mutation.objects.filter(experiment=experiment).exists())
 
     def test_prose_beside_the_data_is_not_treated_as_a_failed_import(self):
         """A dataset wants its README next to the files that produce its answer."""
@@ -194,27 +194,27 @@ class LoadExampleCommandTestCase(TestCase):
         self.assertIn("--replace", str(caught.exception))
 
     def test_replace_rebuilds_rather_than_duplicating(self):
-        from aledb_experiment.models import AleExperiment, live
+        from aledb_experiment.models import Experiment, live
 
         self._load("test-example")
-        first = AleExperiment.objects.get(name="test-example")
+        first = Experiment.objects.get(name="test-example")
 
         self._load("test-example", "--replace")
 
-        alive = live(AleExperiment.objects.filter(name="test-example"))
+        alive = live(Experiment.objects.filter(name="test-example"))
         self.assertEqual(1, alive.count(), "exactly one live copy")
         self.assertNotEqual(first.id, alive.first().id, "a fresh experiment")
         first.refresh_from_db()
         self.assertIsNotNone(first.deleted_at, "the old one is soft-deleted, not destroyed")
 
     def test_a_named_user_owns_it(self):
-        from aledb_experiment.models import AleExperiment
+        from aledb_experiment.models import Experiment
 
         other = User.objects.create(username="someone", email="s@e.com", is_active=True)
 
         self._load("test-example", "--user", "someone")
 
-        experiment = AleExperiment.objects.get(name="test-example")
+        experiment = Experiment.objects.get(name="test-example")
         self.assertEqual(other.id, experiment.project.user_id)
 
     def test_an_unknown_user_is_refused(self):
