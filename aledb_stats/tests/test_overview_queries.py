@@ -99,4 +99,4 @@ class OverviewQueryCountTestCase(TestCase):
         html = self.client.get("/stats?experiment_id=%d" % experiment.id,
                                follow=True).content.decode()
         self.assertIn('<td class="mutation_count">1</td>', html)
-        self.assertIn('<td class="missing_coverage_count">0</td>', html)
+        self.assertIn('<td class="uncalled_region_count">0</td>', html)

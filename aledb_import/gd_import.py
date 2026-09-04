@@ -469,15 +469,18 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
             frequency=_coerce_frequency(attributes.get("frequency"))))
 
     ObservedMutation.objects.bulk_create(observed_mutations)
-    _database_missing_coverage(seq_experiment, document)
+    _database_uncalled_regions(seq_experiment, document)
     return len(observed_mutations)
 
 
-def _database_missing_coverage(seq_experiment, document):
-    """Record MC (missing coverage) evidence from the .gd.
+def _database_uncalled_regions(seq_experiment, document):
+    """Record the regions a .gd's MC (missing coverage) evidence says were not called.
 
-    aledb_stats reads these to report uncovered regions per sample. Only the
-    breseq-directory CLI path used to write them, so a web-imported sample had
+    aledb_stats counts them per sample, and aledb-phylogeny reads them to mark a site
+    *ambiguous* rather than ancestral -- so a sample missing these does not merely lose a
+    number on a page, it starts asserting that mutations are absent where nothing is known.
+
+    Only the breseq-directory CLI path used to write them, so a web-imported sample had
     none; both paths go through here now.
     """
     UncalledRegions.objects.filter(sample=seq_experiment).delete()

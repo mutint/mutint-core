@@ -61,7 +61,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
     experiment_id = (reseq_experiments[0].experiment.id
                      if reseq_experiments else None)
 
-    missing_coverage_counts = dict(
+    uncalled_region_counts = dict(
         UncalledRegions.objects
         .filter(sample_id__in=sample_ids)
         .values_list('sample_id')
@@ -91,7 +91,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
         # experiment. Position 1 holds the missing-coverage *count* -- it held the queryset
         # itself until the template's `|length` on it turned out to be a per-row query.
         experiment_info_tuple = (reseq,
-                                 missing_coverage_counts.get(reseq.id, 0),
+                                 uncalled_region_counts.get(reseq.id, 0),
                                  clonal_or_population,
                                  media_temperature,
                                  media_description,
