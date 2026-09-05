@@ -13,6 +13,7 @@ Layout::
                                                  aligned.bam
                                                  aligned.bam.bai
     <store>/staging/<upload_session_id>/...      (transient; removed on finalize)
+    <store>/components/<component>/<key>/...     (a component's own durable work area)
 
 Paths are never stored per row: three such columns used to exist and were removed with the
 breseq HTML report support, because a stored path travels with
@@ -20,6 +21,7 @@ each breseq result. Nothing here is stored in the database.
 """
 
 import os
+import re
 
 from django.conf import settings
 
@@ -71,6 +73,27 @@ def staging_dir(upload_session_id):
     ``upload_session_id`` is a UUID generated server-side, never supplied by the client.
     """
     return os.path.join(store_root(), "staging", str(upload_session_id))
+
+
+_COMPONENT_NAME = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def component_dir(component, key):
+    """A component's own durable work area, at ``<store>/components/<component>/<key>/``.
+
+    The one function here that does not name an artifact core owns, because core cannot know
+    what a component keeps. What it still owns is the *shape*: ``component`` is an app label
+    and ``key`` a primary key, both checked against a pattern with no separator in it, so the
+    "no client-supplied path component reaches the filesystem" rule above still holds -- a
+    caller cannot reach out of the store by passing a crafted key any more than it can by
+    passing one to ``sample_dir``.
+
+    Unlike ``staging_dir``, nothing here reaps this. A component that creates one owns
+    deleting it, which for a row-keyed directory means a ``post_delete`` receiver on the row.
+    """
+    if not _COMPONENT_NAME.match(str(component)):
+        raise ValueError("component must be an app label: %r" % (component,))
+    return os.path.join(store_root(), "components", str(component), str(int(key)))
 
 
 def ensure_dir(path):

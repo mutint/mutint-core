@@ -96,8 +96,6 @@
     var HAD_REFERENCE = document.getElementById("add-had-reference").value === "1";
     // Where the summary waits out the reload below. Per experiment, and cleared on read.
     var SUMMARY_KEY = "aledb-add-summary-" + EXPERIMENT_ID;
-    var CHUNK_BYTES = 8 * 1024 * 1024;
-    var MAX_CHUNK_RETRIES = 3;
     // Fast enough to feel live. It was 1000ms out of caution over SQLite write contention
     // -- SESSION_SAVE_EVERY_REQUEST is on, so every poll is also a session write -- but the
     // answer to that was WAL and a busy timeout on the connection, not a slow page. See
@@ -261,21 +259,13 @@
     typeSelect.addEventListener("change", renderList);
 
     // --- pickers and drop ---
-    function fromInput(fileList) {
-        var out = [];
-        for (var i = 0; i < fileList.length; i++) {
-            var f = fileList[i];
-            out.push({ file: f, path: f.webkitRelativePath || f.name });
-        }
-        return out;
-    }
     document.getElementById("pick-folder").addEventListener("click", function () { dirInput.click(); });
     document.getElementById("pick-files").addEventListener("click", function () { fileInput.click(); });
     dropzone.addEventListener("click", function (e) {
         if (e.target === dropzone || e.target.tagName === "P") { dirInput.click(); }
     });
-    dirInput.addEventListener("change", function () { addEntries(fromInput(dirInput.files)); });
-    fileInput.addEventListener("change", function () { addEntries(fromInput(fileInput.files)); });
+    dirInput.addEventListener("change", function () { addEntries(aledbFromFileList(dirInput.files)); });
+    fileInput.addEventListener("change", function () { addEntries(aledbFromFileList(fileInput.files)); });
 
     ["dragenter", "dragover"].forEach(function (evt) {
         dropzone.addEventListener(evt, function (e) {
@@ -288,51 +278,11 @@
         });
     });
 
-    // entry.fullPath is what lets the server reconstruct sample folders.
-    function readEntry(entry, collected) {
-        return new Promise(function (resolve) {
-            if (entry.isFile) {
-                entry.file(function (file) {
-                    collected.push({ file: file,
-                                     path: (entry.fullPath || file.name).replace(/^\//, "") });
-                    resolve();
-                }, function () { resolve(); });
-            } else if (entry.isDirectory) {
-                var reader = entry.createReader();
-                var readBatch = function () {
-                    reader.readEntries(function (entries) {
-                        if (!entries.length) { resolve(); return; }
-                        Promise.all(entries.map(function (en) {
-                            return readEntry(en, collected);
-                        })).then(readBatch);
-                    }, function () { resolve(); });
-                };
-                readBatch();
-            } else { resolve(); }
-        });
-    }
-
     dropzone.addEventListener("drop", function (e) {
-        var items = e.dataTransfer.items;
-        if (items && items.length && items[0].webkitGetAsEntry) {
-            var collected = [];
-            var promises = [];
-            for (var i = 0; i < items.length; i++) {
-                var entry = items[i].webkitGetAsEntry();
-                if (entry) { promises.push(readEntry(entry, collected)); }
-            }
-            Promise.all(promises).then(function () { addEntries(collected); });
-        } else {
-            addEntries(fromInput(e.dataTransfer.files));
-        }
+        aledbCollectDropped(e.dataTransfer).then(addEntries);
     });
 
     // --- upload ---
-    function getCookie(name) {
-        var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
-        return match ? decodeURIComponent(match[2]) : "";
-    }
-
     function setProgress(done, total, label) {
         progressEl.style.display = "block";
         var pct = total ? Math.floor((done / total) * 100) : 0;
@@ -454,90 +404,6 @@
         renderList();
     }
 
-    // XHR rather than fetch: fetch reports no upload progress at all.
-    function postChunk(uploadId, path, offset, blob, onProgress) {
-        return new Promise(function (resolve, reject) {
-            var form = new FormData();
-            form.append("path", path);
-            form.append("offset", String(offset));
-            form.append("chunk", blob, "chunk");
-
-            var xhr = new XMLHttpRequest();
-            xhr.open("POST", "/import/uploads/" + uploadId + "/chunk");
-            xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
-            if (onProgress) {
-                xhr.upload.onprogress = function (e) {
-                    if (e.lengthComputable) { onProgress(e.loaded); }
-                };
-            }
-            xhr.onload = function () {
-                var body = {};
-                try { body = JSON.parse(xhr.responseText || "{}"); } catch (err) { body = {}; }
-                if (xhr.status >= 200 && xhr.status < 300) { resolve(body); }
-                else {
-                    var error = new Error(body.error || ("HTTP " + xhr.status));
-                    error.status = xhr.status;
-                    error.expectedOffset = body.expected_offset;
-                    reject(error);
-                }
-            };
-            xhr.onerror = function () { reject(new Error("Network error")); };
-            xhr.send(form);
-        });
-    }
-
-    function postJson(url, payload) {
-        return fetch(url, {
-            method: "POST",
-            headers: { "X-CSRFToken": getCookie("csrftoken"),
-                       "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).then(function (resp) {
-            return resp.json().then(function (body) {
-                if (!resp.ok) { throw new Error(body.error || ("HTTP " + resp.status)); }
-                return body;
-            });
-        });
-    }
-
-    function uploadAll(uploadId, entries) {
-        var totalBytes = entries.reduce(function (s, e) { return s + e.file.size; }, 0);
-        var doneBytes = 0;
-
-        return entries.reduce(function (chain, entry) {
-            return chain.then(function () {
-                var offset = 0;
-                var settled = doneBytes;
-
-                function nextChunk(attempt) {
-                    if (offset >= entry.file.size) {
-                        doneBytes = settled + entry.file.size;
-                        return Promise.resolve();
-                    }
-                    var end = Math.min(offset + CHUNK_BYTES, entry.file.size);
-                    var blob = entry.file.slice(offset, end);
-                    var base = offset;
-                    return postChunk(uploadId, entry.path, offset, blob, function (loaded) {
-                        setProgress(settled + base + loaded, totalBytes, "Uploading " + entry.path);
-                    }).then(function () {
-                        offset = end;
-                        doneBytes = settled + offset;
-                        setProgress(doneBytes, totalBytes, "Uploading " + entry.path);
-                        return nextChunk(0);
-                    }).catch(function (err) {
-                        if (err.status === 409 && typeof err.expectedOffset === "number") {
-                            offset = err.expectedOffset;
-                            return nextChunk(0);
-                        }
-                        if (attempt < MAX_CHUNK_RETRIES) { return nextChunk(attempt + 1); }
-                        throw new Error(entry.path + ": " + err.message);
-                    });
-                }
-                return nextChunk(0);
-            });
-        }, Promise.resolve());
-    }
-
     document.getElementById("add-form").addEventListener("submit", function (e) {
         e.preventDefault();
         if (!selected.length) { return; }
@@ -555,23 +421,19 @@
         if (!toUpload.length) { submitBtn.disabled = false; return; }
 
         var uploadId = null;
-        postJson("/import/uploads/", {
-            experiment_id: EXPERIMENT_ID,
-            import_type: typeSelect.value,
-            files: toUpload.map(function (entry) {
-                return { path: entry.path, size: entry.file.size };
-            })
-        }).then(function (session) {
-            uploadId = session.upload_id;
-            return uploadAll(uploadId, toUpload);
-        }).then(function () {
+        aledbUpload(toUpload, {
+            experimentId: EXPERIMENT_ID,
+            importType: typeSelect.value,
+            onProgress: setProgress
+        }).then(function (id) {
+            uploadId = id;
             // The bytes are in. Everything from here is samples, so the bar changes what it
             // is counting rather than sitting at 100% for the length of the import. How many
             // samples there are is the server's answer, and it arrives with the first poll --
             // until then the bar says what it is doing rather than inventing a denominator.
             setScanningProgress();
             startPolling(uploadId);
-            return postJson("/import/uploads/" + uploadId + "/finalize", {});
+            return aledbPostJson("/import/uploads/" + uploadId + "/finalize", {});
         }).then(function (summary) {
             stopPolling();
             progressEl.style.display = "none";
@@ -686,7 +548,7 @@
             setScanningProgress();
             progressText.textContent = "Renaming and re-annotating\u2026";
             startPolling(uploadId);
-            postJson("/import/uploads/" + uploadId + "/finalize",
+            aledbPostJson("/import/uploads/" + uploadId + "/finalize",
                      {confirm_rename: true}).then(function (summary) {
                 stopPolling();
                 progressEl.style.display = "none";
@@ -699,7 +561,7 @@
         });
         stop.addEventListener("click", function () {
             go.disabled = stop.disabled = true;
-            postJson("/import/uploads/" + uploadId + "/cancel", {}).then(function () {
+            aledbPostJson("/import/uploads/" + uploadId + "/cancel", {}).then(function () {
                 resultEl.innerHTML = "";
             }).catch(function () { resultEl.innerHTML = ""; });
         });

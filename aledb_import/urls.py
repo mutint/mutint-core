@@ -1,6 +1,6 @@
 from django.urls import re_path
 
-from aledb_import import add_views, upload_session, views
+from aledb_import import add_views, staging, upload_session, views
 
 urlpatterns = [
     re_path(r'^gd/(?P<sample_id>\d+)/export$', views.gd_export_view, name='gd_export'),
@@ -14,6 +14,11 @@ urlpatterns = [
     # multi-GB drop never depends on a single long-lived POST.
     re_path(r'^uploads/$',
             upload_session.create_upload_session, name='upload_create'),
+    # The same staging area opened for a component instead of for the import registry. The
+    # chunk endpoint below serves both; there is deliberately no `staging/<id>/finalize`,
+    # because what happens next is exactly what core does not know. See aledb_import/staging.py.
+    re_path(r'^staging/$',
+            staging.create_staging_session, name='staging_create'),
     re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/chunk$',
             upload_session.upload_chunk, name='upload_chunk'),
     re_path(r'^uploads/(?P<upload_id>[0-9a-fA-F-]{36})/finalize$',

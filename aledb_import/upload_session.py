@@ -99,6 +99,30 @@ def staged_path(session, raw_path):
     return candidate
 
 
+def build_manifest(files):
+    """``[{path, size}, ...]`` from what the client declared, sanitized. Raises UploadError.
+
+    Shared with ``aledb_import.staging``, which opens sessions for components rather than for
+    the import registry: the two differ in what they route to and in nothing else, and a
+    second copy of this is a second opinion about which paths are acceptable.
+    """
+    if not isinstance(files, list) or not files:
+        raise UploadError("No files were declared.")
+    if len(files) > MAX_MANIFEST_ENTRIES:
+        raise UploadError("Too many files (%d)." % len(files))
+
+    manifest = []
+    declared = 0
+    for entry in files:
+        relative = sanitize_relative_path((entry or {}).get("path"))
+        size = int((entry or {}).get("size") or 0)
+        if size < 0:
+            raise UploadError("negative size for %r" % (relative,))
+        manifest.append({"path": relative, "size": size})
+        declared += size
+    return manifest, declared
+
+
 @require_POST
 def create_upload_session(request):
     """Open a session. Body: {experiment_id, import_type, files:[{path,size}]}."""
@@ -128,23 +152,8 @@ def create_upload_session(request):
         return JsonResponse(
             {"error": "Unknown import type: %s" % import_type}, status=400)
 
-    files = payload.get("files") or []
-    if not isinstance(files, list) or not files:
-        return JsonResponse({"error": "No files were declared."}, status=400)
-    if len(files) > MAX_MANIFEST_ENTRIES:
-        return JsonResponse(
-            {"error": "Too many files (%d)." % len(files)}, status=400)
-
-    manifest = []
-    declared = 0
     try:
-        for entry in files:
-            relative = sanitize_relative_path((entry or {}).get("path"))
-            size = int((entry or {}).get("size") or 0)
-            if size < 0:
-                raise UploadError("negative size for %r" % (relative,))
-            manifest.append({"path": relative, "size": size})
-            declared += size
+        manifest, declared = build_manifest(payload.get("files") or [])
     except (UploadError, TypeError, ValueError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
@@ -254,6 +263,15 @@ def finalize_upload(request, upload_id):
     session, error = _open_session(request, upload_id)
     if error:
         return error
+
+    # A component's session is not ours to ingest. It carries no `import_type`, so `run_import`
+    # would fall through to auto-detect and hand the files to whichever registered handler
+    # claimed the suffix -- FASTQ reads staged for breseq becoming an attempted reference
+    # import, say. Refusing by name is the difference between a clear error and a wrong import.
+    if session.consumer:
+        return JsonResponse(
+            {"error": "This upload belongs to %s and is finalized by it, not here."
+                      % session.consumer}, status=409)
 
     # Re-checked here, and not only when the session was created. Permission was asked once
     # at `create_upload_session` and the session then carries itself; a session opened before

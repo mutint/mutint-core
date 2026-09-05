@@ -87,6 +87,7 @@ nav:
           - Fitting into core's pages: plugin/integrating.md
           - The data model: plugin/data-model.md
           - Showing filtered data: plugin/filtering.md
+          - Taking a file upload: plugin/staging.md
           - Templates and static files: plugin/templates.md
           - Models and derived data: plugin/derived-data.md
           - Testing: plugin/testing.md

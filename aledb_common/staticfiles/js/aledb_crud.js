@@ -16,7 +16,13 @@
  * destroy data.
  *
  * aledbPost sends the CSRF token from the cookie. A page using it must render
- * {% csrf_token %} somewhere, which is what sets that cookie.
+ * {% csrf_token %} somewhere, which is what sets that cookie. aledbPostJson is the same
+ * request with a JSON body instead of FormData, for the endpoints that take a structure --
+ * aledbPost stringifies every value, so a list or a nested object cannot survive it.
+ *
+ * Both live here because reading that cookie should have one definition. aledb_upload.js and
+ * import/add.html each grew their own for want of one, which is three regexes that have to
+ * agree about the same string.
  */
 (function () {
     "use strict";
@@ -25,6 +31,29 @@
         var match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
         return match ? decodeURIComponent(match[2]) : "";
     }
+
+    window.aledbPostJson = function (url, payload) {
+        return fetch(url, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCookie("csrftoken"),
+                       "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (resp) {
+            return resp.json().then(function (body) {
+                if (!resp.ok) {
+                    var failure = new Error(body.error || ("HTTP " + resp.status));
+                    failure.body = body;
+                    throw failure;
+                }
+                return body;
+            });
+        });
+    };
+
+    /* The CSRF header every hand-rolled request here needs, so an XHR can set it too. */
+    window.aledbCsrfHeader = function () {
+        return getCookie("csrftoken");
+    };
 
     window.aledbPost = function (url, data) {
         var form = new FormData();

@@ -103,8 +103,21 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1636 run, 0 failures** standalone; **1817** in an assembled project, where the
-plugins' own tests join them. They were 1646 and 1827 before the platform move, which deleted
+**Baseline: 1716 run, 0 failures** standalone. They were **1696** before
+`aledb_import/tests/test_staging.py`, whose 20 tests cover the staging a component opens for
+itself -- **measured by running the suite with that module moved aside and again with it
+back**, not by subtraction.
+
+**And the number this replaces was wrong by sixty.** It said 1636 while the suite actually ran
+1696, which is the drift the paragraph below warns about, sprung again in the figure right
+beside it: sixty tests had been added without anybody re-counting. Every figure earlier in
+this list is therefore suspect by an unknown amount and is worth reading as history rather
+than as a measurement.
+
+Assembled, **1903** -- also measured, with `PYTHONPATH` pointed at this checkout, and **also
+sixty-odd above the 1817 recorded here before**. It does not yet include `mutint-breseq`,
+whose 52 tests join once that submodule is added; re-run rather than adding them on.
+They were 1646 and 1827 before the platform move, which deleted
 six test modules that drove named migrations through the real executor and added the lifecycle,
 task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
 page's normalisation, the local change-password page and the sidebar's admin link -- which
@@ -3151,6 +3164,58 @@ exclude files that live inside one.
 to, and the Add page serialises it to name the type a file in the drop belongs to before
 anything uploads — so a plugin gets both of those by registering, with no edit to core.
 
+### Staging a drop that is not an import
+
+`aledb_import/staging.py` is the same upload machinery opened for a **component** rather than
+for the import registry. It exists because `mutint-breseq` takes FASTQ reads, which are not a
+mutation file at all: they are the input to a job whose *output* is imported hours later, and
+which needs a sample name and a command line beside them. `handle(experiment, staged_root,
+paths, user)` can carry neither, and the Add page has no box to put either in.
+
+Registering an import handler anyway would have been the smaller change and is the wrong one
+— a dropdown entry that cannot carry what the entry needs. So the split is made one level
+down, and core keeps only the half that is about **bytes arriving safely**: the permission
+check, the manifest, path containment, the chunk endpoint and the TTL reaper. What the bytes
+are *for* belongs to the component.
+
+Three things about it are load-bearing:
+
+- **`claim` is the handover, and after it nothing in core deletes that directory.** Before it,
+  an abandoned session is reaped on the TTL like any other. The asymmetry is the whole reason
+  `claimed` is a fourth state: a breseq run is hours, so a component's work legitimately
+  outlives the TTL, and a reaper deleting the files out from under it would be a failure
+  nobody could reproduce. The cost is that a claim nobody finishes leaks a directory — which
+  is why the documented shape is claim, move the files somewhere the component reaps itself,
+  `close`.
+- **`finalize_upload` refuses a session with a `consumer`**, with a 409 naming it. Not
+  tidiness: such a session carries no `import_type`, so `run_import` would fall through to
+  auto-detect and hand the files to whichever registered handler claimed the suffix. FASTQ
+  reads becoming an attempted reference import is a *wrong import* rather than an error, which
+  is the failure mode worth spending a branch on. There is deliberately no
+  `staging/<id>/finalize` for the same reason.
+- **It is not a ninth registry**, because there is nothing for an app to contribute. Nobody
+  enumerates staging sessions by component; a component calls a function. A registry whose
+  entries are never iterated is a dictionary with ceremony.
+
+`store.component_dir(component, key)` is the durable half — `<store>/components/<app>/<pk>/`,
+the one function in `store.py` that does not name an artifact core owns, because core cannot
+know what a component keeps. It still owns the *shape*, checking the component against an
+app-label pattern and the key against an integer, so "no client-supplied path component
+reaches the filesystem" still holds. Nothing reaps it; a `post_delete` receiver on the row it
+is keyed by is the intended lifecycle, which for a row hanging off `Experiment` with `CASCADE`
+means deleting the experiment reaches the files with nothing further written.
+
+`docs/plugin/staging.md` is the guide; `aledb_import/tests/test_staging.py` pins the boundary.
+
+**The uploader is shared JS now**, in `aledb_common/staticfiles/js/aledb_upload.js` and loaded
+from `base.html`: `aledbUpload(entries, {experimentId, importType|consumer, onProgress})`,
+plus `aledbCollectDropped` and `aledbFromFileList`. It was inline in `import/add.html`, which
+was the right place for it while there was one caller. `aledbPostJson` and `aledbCsrfHeader`
+moved into `aledb_crud.js` at the same time, so **reading the CSRF cookie has one definition**
+rather than the three it was about to have — `aledbPost` sends FormData and stringifies every
+value, so an endpoint taking a structure needs the JSON sibling rather than a fourth
+hand-rolled `fetch`.
+
 ### Pluggable App Slots
 
 Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
@@ -3217,9 +3282,12 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 - File storage: `ALEDB_STORE_DIR`, keyed by database id (`aledb_common/store.py`)
 - Background work: **a worker, and it has to be run.** `TASKS` names
   `django_tasks_db.DatabaseBackend`, and `./aledb db_worker` is what executes what has been
-  enqueued. Nothing spawns one for you. Today exactly one thing is enqueued -- coverage
-  derivation -- and its degraded state is benign, so an installation with no worker running
-  imports correctly and simply has no coverage tracks until `./aledb coverage` is run.
+  enqueued. Nothing spawns one for you. The only thing *this repo* enqueues is coverage
+  derivation, whose degraded state is benign: an installation with no worker running imports
+  correctly and simply has no coverage tracks until `./aledb coverage` is run. **A plugin's
+  task need not be so forgiving** -- `mutint-breseq` enqueues an hours-long breseq run that
+  nothing backfills, so with no worker it never happens at all. See **Background work** in the
+  suite `CLAUDE.md`.
 
 There is still **no broker and no scheduler**; `./aledb reap_uploads` is still cron's job.
 

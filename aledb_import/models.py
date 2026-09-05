@@ -20,11 +20,17 @@ from django.utils import timezone
 STATE_OPEN = "open"
 STATE_FINALIZED = "finalized"
 STATE_FAILED = "failed"
+# Handed to a component, which now owns the staged directory. Distinct from `finalized`
+# because the two say opposite things about the files: finalized means the ingest is done and
+# the directory is gone, claimed means somebody else is still using it and the reaper must
+# keep its hands off. See aledb_import/staging.py.
+STATE_CLAIMED = "claimed"
 
 STATE_CHOICES = [
     (STATE_OPEN, "Open"),
     (STATE_FINALIZED, "Finalized"),
     (STATE_FAILED, "Failed"),
+    (STATE_CLAIMED, "Claimed"),
 ]
 
 
@@ -86,6 +92,12 @@ class UploadSession(models.Model):
                                        on_delete=models.CASCADE)
     # Empty means auto-detect; otherwise the name of a registered import handler.
     import_type = models.CharField(max_length=64, blank=True)
+    # Set when the session belongs to a component rather than to the import registry -- the
+    # app label that opened it. Such a session carries no `import_type`, is never finalized by
+    # `finalize_upload` (there is no handler for it), and is claimed by the component through
+    # `aledb_import.staging`. Blank is the ordinary import case, which is every session that
+    # existed before this field.
+    consumer = models.CharField(max_length=64, blank=True)
 
     # [{"path": "<sample>/data/reference.bam", "size": 123}, ...] as declared by the client.
     # Paths are sanitized before use; this is a record of what was promised, not a trusted map.
