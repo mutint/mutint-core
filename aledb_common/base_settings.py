@@ -127,10 +127,12 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             # Order is load-bearing: sidebar entries render in INSTALLED_APPS
             # order (see aledb_common/nav_registry.py). To move a nav entry,
             # move its app here. Apps contributing no nav follow.
-            'aledb_about',           # nav: About
-            'aledb_dashboard',       # nav: Dashboard
+            # aledb_about is last of these, not first: About sits at the foot of the
+            # sidebar, under the things somebody actually came to use. Moved by moving the
+            # app, which is the only way nav order is expressed -- see nav_registry.
+            'aledb_dashboard',       # nav: none (the sidebar's brand links to it)
             'aledb_search',          # nav: Search
-            'aledb_experiment',      # nav: Projects, Experiments
+            'aledb_experiment',      # nav: Projects, Experiments (Groups is an account entry)
             'aledb_sample',             # nav: Mutations
             'aledb_mutation_editor', # nav: Edit Mutations
             'aledb_filter',          # nav: Filter
@@ -146,6 +148,7 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_bibliome',
             'aledb_home',
             'aledb_interop_query',
+            'aledb_about',           # nav: About -- last, so it renders at the foot
         ],
 
         # PostgreSQL, and only PostgreSQL. The SQLite backend, its BEGIN IMMEDIATE

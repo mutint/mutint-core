@@ -602,6 +602,25 @@ a:hover {
     background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
 }
 
+/* The account submenu, which is sb-admin-2's own sidebar idiom -- see base.html. Two
+   rules, both because this sidebar is `width: max-content` and the theme's were written
+   for a fixed 250px one. */
+
+/* The chevron is `float: right` in the theme, which contributes nothing to a shrink-to-fit
+   box: the sidebar sizes itself to the username and the arrow is then laid over the last
+   letter of it. In flow with a margin instead, so the box is as wide as its contents say. */
+.sidebar .arrow {
+    float: none;
+    margin-left: 8px;
+}
+
+/* The theme indents second-level links with `padding-left: 37px`, which reaches an <a> and
+   not the Logout <button>. It borrows `.nav > li > a`'s box a few rules up, so the indent
+   has to be added here or Logout sits a level out from the four entries beside it. */
+.sidebar .nav-second-level .aledb-logout button {
+    padding-left: 37px;
+}
+
 /* aledb-core's attribution, closing the sidebar menu. Muted and small: it is a
    watermark, not a nav entry, and must not compete with the links above it. */
 .aledb-watermark {

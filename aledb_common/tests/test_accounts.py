@@ -348,11 +348,78 @@ class SidebarAccountBlockTestCase(TestCase):
         self.assertIn("/accounts/password/", html)
         self.assertNotIn("/admin/password_change/", html)
 
-    def test_the_account_block_is_balanced_markup(self):
-        """The username's <li> was left open and a stray </li> closed it two entries later; a
-        new entry added to that block would have inherited it."""
-        html = self.sidebar(self.superuser)
-        menu = html[html.index('id="side-menu"'):]
-        menu = menu[:menu.index("</ul>")]
+    def test_jobs_and_groups_are_account_entries(self):
+        """Both are about *you*: the jobs you asked for, the groups you belong to.
 
+        Neither is registered with `nav_registry`, which has no notion of an entry only some
+        people see -- a registered one renders for an anonymous visitor and leads to a 403 or
+        a login page. Groups was such an entry, sitting in MAIN_SECTION among Projects and
+        Experiments as though it were data.
+        """
+        html = self.sidebar(self.user)
+
+        self.assertIn("/group/", html)
+        self.assertIn("Jobs", html)
+
+    def test_an_anonymous_visitor_is_offered_none_of_them(self):
+        """The other half of the reason they are not nav entries."""
+        html = self.client.get("/accounts/login/").content.decode()
+
+        self.assertNotIn("/group/", html)
+        self.assertNotIn("/jobs/", html)
+        self.assertNotIn("Change Password", html)
+
+    def test_the_entries_are_a_submenu_of_the_username(self):
+        """metisMenu collapses a nested <ul> and binds the <a> beside it -- see base.html.
+
+        Asserted on the shape rather than on the collapsing, which is the plugin's and is
+        already initialized on `#side-menu` by sb-admin-2. What can break here is the markup:
+        move the <ul> out of that <li>, or into a second one, and the theme's mechanism
+        silently stops applying while every link still renders.
+        """
+        html = self.sidebar(self.user)
+        block = html[html.index("side-menu"):]
+        block = block[block.index("reader"):]
+
+        self.assertLess(block.index('class="nav nav-second-level"'), block.index("</li>"))
+
+    def test_the_sidebar_is_balanced_markup(self):
+        """The username's <li> was left open and a stray </li> closed it two entries later; a
+        new entry added to that block would have inherited it.
+
+        It counts to the <ul> that *matches* `#side-menu` rather than to the first `</ul>`
+        after it, which the account submenu now closes first -- the older form of this test
+        stopped at the submenu and read the outer <li> as unclosed.
+        """
+        html = self.sidebar(self.superuser)
+        # From the opening `<ul` itself, not from the id attribute inside it, or the first
+        # token seen is a `</ul>` and the depth starts at -1.
+        menu = html[html.rindex("<ul", 0, html.index('id="side-menu"')):]
+
+        depth, end = 0, None
+        for index, token in _tags(menu):
+            depth += 1 if token == "<ul" else -1
+            if depth == 0:
+                end = index
+                break
+        self.assertIsNotNone(end, "#side-menu is never closed")
+
+        menu = menu[:end]
         self.assertEqual(menu.count("<li"), menu.count("</li>"))
+        self.assertEqual(menu.count("<ul"), menu.count("</ul>") + 1)
+
+
+def _tags(html):
+    """(index, "<ul"|"</ul>") for each in document order."""
+    found = []
+    for token in ("<ul", "</ul>"):
+        start = 0
+        while True:
+            at = html.find(token, start)
+            if at == -1:
+                break
+            found.append((at, token))
+            start = at + 1
+    # "</ul>" also matches "<ul" at the opening angle of nothing, but "<ul" cannot match
+    # inside "</ul>" -- the slash sits between -- so the two lists are disjoint.
+    return sorted(found)

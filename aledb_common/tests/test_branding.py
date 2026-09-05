@@ -67,8 +67,40 @@ class BrandingTestCase(TestCase):
     @override_settings(ALEDB_BRANDING={})
     def test_no_deployment_name_by_default(self):
         content = self.client.get(INTERNAL_PAGE).content.decode()
-        self.assertNotIn("navbar-brand", content)
         self.assertNotIn("ALEdb 1.1.0", content)
+
+    @override_settings(ALEDB_BRANDING={})
+    def test_the_brand_slot_still_links_to_the_dashboard(self):
+        """`navbar-brand` renders unbranded, and this asserts it deliberately.
+
+        It used to be inside the `{% if branding %}`, and this test used to say
+        `assertNotIn("navbar-brand", ...)`. What changed is that the brand is now the only
+        route to `/dashboard` -- the app registers no nav entry, because an inventory of the
+        whole installation is what clicking the site's own name asks for and two entries
+        three rows apart said the same thing twice.
+
+        Unbranded, the element renders with the word **Dashboard** in it. That is not a name
+        this deployment has acquired: it is the label of a link, and the four things
+        `CLAUDE.md` says a deployment adds -- a name, a version, a logo, an institution --
+        are each still absent. What is not acceptable is the third option, where an unbranded
+        checkout renders no brand and the dashboard is reachable from nowhere.
+        """
+        content = self.client.get(INTERNAL_PAGE).content.decode()
+
+        self.assertIn("navbar-brand", content)
+        self.assertIn("/dashboard", content)
+        self.assertIn("Dashboard", content)
+
+    @override_settings(ALEDB_BRANDING=BRANDED)
+    def test_a_branded_deployment_puts_its_own_name_in_that_link(self):
+        """The fallback is a fallback: branded, the word Dashboard does not appear."""
+        content = self.client.get(INTERNAL_PAGE).content.decode()
+        brand = content[content.index("navbar-brand"):]
+        brand = brand[:brand.index("</a>")]
+
+        self.assertIn("/dashboard", content)
+        self.assertIn("ALEdb", brand)
+        self.assertNotIn("Dashboard", brand)
 
     @override_settings(ALEDB_BRANDING={})
     def test_no_deployment_logo_by_default(self):
@@ -109,20 +141,27 @@ class BrandingTestCase(TestCase):
 
     def test_the_watermark_is_present_unbranded(self):
         content = self.client.get(INTERNAL_PAGE).content.decode()
-        self.assertIn("Powered by ALEdb v%s" % __version__, content)
+        self.assertIn("Powered by ALEdb", content)
         self.assertIn("aledb-watermark", content)
 
     @override_settings(ALEDB_BRANDING=BRANDED)
     def test_the_watermark_survives_being_branded_over(self):
         """A deployment names itself; it does not get to drop the attribution."""
-        self.assertIn("Powered by ALEdb v%s" % __version__,
+        self.assertIn("Powered by ALEdb",
                       self.client.get(INTERNAL_PAGE).content.decode())
 
-    def test_the_watermark_reports_the_real_version(self):
-        """Asserted against version.py, so a bump cannot rot this test."""
-        self.assertIn("Powered by ALEdb v%s" % __version__,
-                      self.client.get(INTERNAL_PAGE).content.decode())
-        self.assertNotIn("Powered by ALEdb v{{", self.client.get(INTERNAL_PAGE).content.decode())
+    def test_the_watermark_carries_no_version(self):
+        """It is an attribution, not a status line.
+
+        This used to assert the opposite -- that the mark read `Powered by ALEdb v<version>`,
+        against `version.py` so a bump could not rot it. The version is gone from the foot of
+        every page deliberately, so the test is inverted rather than deleted: putting it back
+        should have to be a decision, not a tidy-up. `./aledb version` and `/about`, which
+        lists every installed component's version and revision, are where it lives now.
+        """
+        content = self.client.get(INTERNAL_PAGE).content.decode()
+        self.assertIn("Powered by ALEdb", content)
+        self.assertNotIn("Powered by ALEdb v", content)
 
 
 class LandingPageTestCase(TestCase):

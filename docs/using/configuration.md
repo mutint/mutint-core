@@ -123,4 +123,10 @@ known paths, because an assembled project's `templates/` directory is searched a
 app's.
 
 The `Powered by ALEdb` line at the foot of the sidebar is not branding and has no setting. It
-is aledb-core's attribution and renders on every deployment.
+is aledb-core's attribution and renders on every deployment. It carries no version number:
+`./aledb version` reports the platform's, and `/about` lists the version and git revision of
+every installed component.
+
+The name at the top of the sidebar — whatever `ALEDB_BRANDING['name']` says, or the word
+**Dashboard** when there is no branding — links to `/dashboard`, the installation's inventory
+of projects, experiments, samples and mutations. There is no separate sidebar entry for it.

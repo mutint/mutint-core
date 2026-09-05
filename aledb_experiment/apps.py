@@ -10,7 +10,11 @@ class ExperimentConfig(AppConfig):
         )
         register_nav_item('Projects', url='/project/', section=MAIN_SECTION)
         register_nav_item('Experiments', url='/experiment/', section=MAIN_SECTION)
-        register_nav_item('Groups', url='/group/', section=MAIN_SECTION)
+        # Groups is deliberately not registered. It is a per-user thing -- the groups you own
+        # or belong to -- so it lives in base.html's account block beside Jobs and Change
+        # Password, where `{% if user.is_authenticated %}` already governs it. Registered here
+        # it would render for anonymous visitors and lead to a 403, which is the dead end
+        # nav_registry has no way to express around.
 
         # Deleting the designated ancestor un-subtracts its mutations everywhere. A signal
         # rather than a call in each delete path, because there are several --

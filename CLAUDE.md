@@ -103,7 +103,11 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1823 run, 0 failures** standalone. They were **1799** before the breseq report
+**Baseline: 1839 run, 0 failures** standalone. They were **1834** before the sidebar rework --
+**measured at HEAD by stashing the change and running it**, because the figure recorded here
+was 1823 and the suite was really doing 1834. Eleven tests had been added without anybody
+re-counting, which is the drift the paragraph below warns about, sprung again in the figure
+directly above it. Read every number before this point as history. They were **1799** before the breseq report
 viewer, **1743** before the VCF importer,
 **1716** before `aledb_jobs`, and **1696** before `aledb_import/tests/test_staging.py` -- each
 figure run, not subtracted.
@@ -114,7 +118,11 @@ beside it: sixty tests had been added without anybody re-counting. Every figure 
 this list is therefore suspect by an unknown amount and is worth reading as history rather
 than as a measurement.
 
-Assembled, **2069** -- also measured. It was **2048** before the breseq report viewer (which
+Assembled, **2085** -- also measured, with `PYTHONPATH` pointed at the root checkouts of
+aledb-core and aledb-needle, since `mutint/`'s copies are submodule clones of the last commit.
+The figure recorded here before it was **2069**, and that is 16 short rather than 5 -- the same
+eleven uncounted tests as the standalone line above, which is what says the two numbers had
+drifted together rather than one of them being wrong on its own. It was **2048** before the breseq report viewer (which
 adds 24 in core and removes 3 from the plugin), **1992** before the VCF importer, **1955**
 before the jobs page and the sign-in rule, and 1903 before `mutint-breseq` became a submodule at all; every one of those was run.
 (The 1817 recorded here before any of it was sixty-odd short of what the suite was really
@@ -437,11 +445,41 @@ inert is exactly why it had no space between its two inputs: nothing supplied a 
 replacement is `ale/group_new.html`'s shape. A test names each dead class, because "it looks
 like every other page" is a claim that rots quietly.
 
-**The sidebar's account block is the shell's own, not a nav entry.** Username, Logout, Change
-Password and -- for a superuser -- Django admin, indented under the username with `class="small"`
-and three `&nbsp;`. It is written into `base.html` rather than registered, because
-`nav_registry` has no per-user visibility concept and `base.html` already has `user`; adding a
-`visible_to=` predicate for one entry would be a mechanism with a single producer.
+**The sidebar's account block is the shell's own, not a nav entry.** Username, and under it
+Logout, Change Password, Jobs, Groups and -- for a superuser -- Django admin. It is written into
+`base.html` rather than registered, because `nav_registry` has no per-user visibility concept
+and `base.html` already has `user`; adding a `visible_to=` predicate for one entry would be a
+mechanism with a single producer.
+
+**Groups joined it from `MAIN_SECTION`**, where it had been registered by
+`aledb_experiment.apps` beside Projects and Experiments as though it were data. What `/group/`
+lists is `visible_groups(user)` -- the groups you own or belong to, the way this is the password
+*you* change -- and registered it rendered for anonymous visitors too, who can see none.
+
+**It collapses behind the username, and the mechanism is metisMenu's, not ours.** A nested
+`<ul class="nav nav-second-level">` inside the username's `<li>` is sb-admin-2's own sidebar
+submenu shape, and `sb-admin-2.min.js` already calls `$("#side-menu").metisMenu()` -- so the
+collapsing, the `active` class that flips the chevron (`.sidebar .active > a > .fa.arrow`) and
+the 37px indent on the nested links are all borrowed. Written by hand first, and that version
+is what the comment in `base.html` warns against: a toggle setting `hidden` beside a plugin
+that sets `collapse` on the same `<ul>` is two mechanisms with one opinion each.
+
+Three consequences worth knowing before moving anything in that block:
+
+- **The markup renders open and the plugin closes it**, so a reader with no JavaScript gets the
+  sidebar as it was before there was a toggle. Marking it `hidden` in the template would leave
+  such a reader looking at a name that does nothing, with Logout behind it.
+- **`sb-admin-2.min.js` opens the block when you are on one of its pages**, by walking up from
+  the link whose href matches the location and adding `in`. Nothing here arranges that.
+- **The `<ul>` must stay inside that `<li>`.** metisMenu binds `li:has(ul) > a`; move it into a
+  second `<li>` and every link still renders while the mechanism silently stops applying.
+  `test_accounts.test_the_entries_are_a_submenu_of_the_username` is what notices.
+
+Two smaller things went with it: the three `&nbsp;` that used to indent each entry (the
+theme's `padding-left` does it, and the Logout `<button>` gets that padding from a rule in
+`common.css` because it borrows `.nav > li > a`'s box rather than being an `<a>`), and the
+`.sidebar .arrow` float -- `float: right` contributes nothing to a `width: max-content` box, so
+the sidebar sized itself to the username and laid the chevron over its last letter.
 
 **The admin link is gated on `is_superuser`, not `is_staff`, and the difference is not
 pedantic.** Django's admin admits anyone with `is_staff`, so a staff gate would be the one that
@@ -476,8 +514,22 @@ by path. The source dir is `staticfiles/`, not `static/` — `static/` is `STATI
 Django raises `ImproperlyConfigured` if it appears in `STATICFILES_DIRS`. The entry is also
 omitted when the directory is absent, or every `./aledb check` reports `staticfiles.W004`.
 
-**The `Powered by ALEdb vX.Y.Z` watermark is not part of this** and has no setting. It is
-aledb-core's attribution and renders on every deployment, branded or not.
+**The `Powered by ALEdb` watermark is not part of this** and has no setting. It is
+aledb-core's attribution and renders on every deployment, branded or not. **It carries no
+version**, and used to read `Powered by ALEdb vX.Y.Z` -- which made an attribution read as a
+status line, at the foot of every page of a site people come to for the science. `./aledb
+version` and `/about` are where a version belongs, and About gives every installed component's
+rather than the platform's alone. `test_branding.test_the_watermark_carries_no_version` is the
+old test inverted rather than deleted, so putting it back has to be a decision.
+
+**`navbar-brand` renders unbranded too, and links to `/dashboard`.** It used to be inside the
+`{% if branding %}`, which was right while it was only a name. It is now the only route to the
+dashboard -- `aledb_dashboard` registers no nav entry, because an inventory of the whole
+installation is what clicking a site's own name asks for and a second entry three rows below
+said the same thing twice. Unbranded the element carries the word **Dashboard**: the label of a
+link rather than a name this deployment has acquired, and the four things a deployment adds -- a
+name, a version, a logo, an institution -- are each still absent. The third option, where an
+unbranded checkout renders no brand at all, leaves the dashboard reachable from nowhere.
 
 ### Versioning
 

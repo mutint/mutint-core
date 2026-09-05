@@ -95,53 +95,98 @@
     <div class="navbar-default sidebar-panel" role="navigation" style="z-index:999;">
         <div class="sidebar" style="width: max-content" id="sidebar">
             <div class="navbar-header">
-                {% if branding.name or branding.version %}
-                    <a class="navbar-brand" href="/">{{ branding.name }} {{ branding.version }}</a>
-                {% endif %}
+                {% comment %} The deployment's name, and the link to the dashboard -- which is
+                   an inventory of the whole installation, and so is what clicking the site's
+                   own name is asking for. It had a sidebar entry three rows below this as
+                   well, saying the same thing twice.
+
+                   The fallback matters: aledb-core carries no branding, so on an unbranded
+                   deployment this element does not render at all, and without something here
+                   the dashboard would be reachable from nowhere. `Dashboard` is the label
+                   then -- not an invented product name, which is the thing aledb-core is
+                   careful not to have. {% endcomment %}
+                <a class="navbar-brand" href="/dashboard">
+                    {% if branding.name or branding.version %}
+                        {{ branding.name }} {{ branding.version }}
+                    {% else %}Dashboard{% endif %}
+                </a>
             </div>
             <ul class="nav in" id="side-menu">
                 {% if user.is_authenticated %}
                     {% comment %} The account block: who you are, and the things you can do
-                       about that. Indented with three &nbsp; and `class="small"`, which is
-                       what makes them read as nested under the username rather than as peers
-                       of the nav entries below. The username's own <li> used to be left open
-                       and a stray </li> closed it two entries later. {% endcomment %}
-                    <li><a href="#"><b>{{ user.username }}</b></a></li>
-                    <li>
-                        {% comment %} A posting form, not a link: LogoutView has been POST-only
-                           since Django 5.0 and answers a GET with 405. It is styled to read as
-                           the entries either side of it -- see .aledb-logout in common.css --
-                           because a sign-out control that looks like a button in a list of
-                           links reads as something else entirely. {% endcomment %}
-                        <form method="post" action="{% url 'accounts:logout' %}" class="aledb-logout">
-                            {% csrf_token %}
-                            <button type="submit" class="small">&nbsp;&nbsp;&nbsp;Logout</button>
-                        </form>
-                    </li>
-                    <li>
-                        {% comment %} Local, and it did not used to be: this linked
-                           /admin/password_change/, which is wrapped in admin_view and so
-                           bounced every non-staff user to the admin login. {% endcomment %}
-                        <a href="{% url 'accounts:password_change' %}" class="small">&nbsp;&nbsp;&nbsp;Change Password</a>
-                    </li>
-                    {% comment %} Here rather than in nav_registry, which has no notion of an
-                       entry only some people see -- a registered one would render for
-                       anonymous visitors and lead straight to a 403. It reads as an account
-                       entry anyway: these are the jobs *you* asked for, the way this is the
-                       password *you* change. A superuser sees everyone's on the same page.
+                       about that -- sign out, change a password, your jobs, your groups.
+                       Written into base.html rather than registered, because `nav_registry`
+                       has no per-user visibility concept and every one of these leads to a
+                       403, or to a login page, for an anonymous visitor.
+
+                       **It is a metisMenu submenu, and nothing here drives it.** The
+                       theme's own sidebar idiom is exactly this shape -- a nested <ul> inside
+                       the <li> whose <a> opens it -- and `sb-admin-2.min.js` already calls
+                       `$("#side-menu").metisMenu()`. So the collapsing, the `active` class
+                       that flips the chevron, and the padding on the nested links are all
+                       borrowed rather than written. A hand-rolled toggle beside a menu plugin
+                       that was already initialized on this element is two mechanisms
+                       disagreeing about one <ul>.
+
+                       Two things fall out of using it that a hand-rolled one would have had
+                       to arrange. The block is closed on load because metisMenu collapses
+                       every submenu whose <li> is not `active` -- and a reader with no
+                       JavaScript sees it **open**, since nothing then adds `collapse`, which
+                       is the right way round: the alternative is a name that does nothing
+                       with Logout behind it. And `sb-admin-2.min.js` opens the block when the
+                       current page is one of these, by walking up from the matching link.
                        {% endcomment %}
                     <li>
-                        <a href="{% url 'jobs' %}" class="small">&nbsp;&nbsp;&nbsp;Jobs</a>
+                        <a href="#">
+                            <b>{{ user.username }}</b>
+                            <span class="fa arrow"></span>
+                        </a>
+                        <ul class="nav nav-second-level">
+                            <li>
+                                {% comment %} A posting form, not a link: LogoutView has been
+                                   POST-only since Django 5.0 and answers a GET with 405. It is
+                                   styled to read as the entries either side of it -- see
+                                   .aledb-logout in common.css -- because a sign-out control
+                                   that looks like a button in a list of links reads as
+                                   something else entirely. {% endcomment %}
+                                <form method="post" action="{% url 'accounts:logout' %}" class="aledb-logout">
+                                    {% csrf_token %}
+                                    <button type="submit" class="small">Logout</button>
+                                </form>
+                            </li>
+                            <li>
+                                {% comment %} Local, and it did not used to be: this linked
+                                   /admin/password_change/, which is wrapped in admin_view and
+                                   so bounced every non-staff user to the admin login.
+                                   {% endcomment %}
+                                <a href="{% url 'accounts:password_change' %}" class="small">Change Password</a>
+                            </li>
+                            <li>
+                                {% comment %} These are the jobs *you* asked for, the way this
+                                   is the password *you* change. A superuser sees everyone's on
+                                   the same page. {% endcomment %}
+                                <a href="{% url 'jobs' %}" class="small">Jobs</a>
+                            </li>
+                            <li>
+                                {% comment %} And these are the groups you own or belong to.
+                                   It was a MAIN_SECTION nav entry, sitting among Projects and
+                                   Experiments as though it were data -- while what the page
+                                   lists is `visible_groups(user)`, and it rendered for
+                                   anonymous visitors who could see none. {% endcomment %}
+                                <a href="/group/" class="small">Groups</a>
+                            </li>
+                            {% comment %} Superusers, not staff. Django's admin admits anyone
+                               with is_staff -- but `load_projects` creates every imported user
+                               with is_staff=True, so a staff gate would offer this to nearly
+                               everyone on a real deployment and land most of them in an empty
+                               admin. {% endcomment %}
+                            {% if user.is_superuser %}
+                                <li>
+                                    <a href="{% url 'admin:index' %}" class="small">Django admin</a>
+                                </li>
+                            {% endif %}
+                        </ul>
                     </li>
-                    {% comment %} Superusers, not staff. Django's admin admits anyone with
-                       is_staff -- but `load_projects` creates every imported user with
-                       is_staff=True, so a staff gate would offer this to nearly everyone on a
-                       real deployment and land most of them in an empty admin. {% endcomment %}
-                    {% if user.is_superuser %}
-                        <li>
-                            <a href="{% url 'admin:index' %}" class="small">&nbsp;&nbsp;&nbsp;Django admin</a>
-                        </li>
-                    {% endif %}
                 {% else %}
                     <li><a href="{% url 'accounts:login' %}">Login</a></li>
                 {% endif %}
@@ -165,7 +210,12 @@
                     {% endfor %}
                 {% endif %}
                 <li class="aledb-watermark">
-                    <img src="{% static "img/fav.png" %}" alt="">Powered by ALEdb v{{ aledb_version }}
+                    {% comment %} No version. It is an attribution rather than a status line,
+                       and a version number at the foot of every page is a detail nobody
+                       reading the science needs. `./aledb version` and the About page, which
+                       lists every component's version and revision, are where it belongs.
+                       {% endcomment %}
+                    <img src="{% static "img/fav.png" %}" alt="">Powered by ALEdb
                 </li>
             </ul>
         </div>

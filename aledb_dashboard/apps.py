@@ -5,15 +5,15 @@ class DashboardConfig(AppConfig):
     name = "aledb_dashboard"
 
     def ready(self):
-        from aledb_common.nav_registry import (
-            MAIN_SECTION, register_nav_item,
-        )
         from aledb_common.rebuild_registry import (
             PRIORITY_AGGREGATE, SITE_SCOPE, register_rebuilder,
         )
         from aledb_dashboard.util import rebuild_mutation_counts, rebuild_sample_counts
 
-        register_nav_item('Dashboard', url='/dashboard', section=MAIN_SECTION)
+        # No nav entry. The dashboard is what the sidebar's own brand links to -- it is an
+        # inventory of the whole installation, which is what somebody clicking the site's name
+        # is asking for, and a second entry three rows below it said the same thing twice.
+        # See `navbar-brand` in aledb_common/templates/base.html.
 
         # Site-scoped and last: both count rows across every experiment, so they are only
         # right once each experiment's own derived data is. Registered separately rather than
