@@ -114,9 +114,10 @@ beside it: sixty tests had been added without anybody re-counting. Every figure 
 this list is therefore suspect by an unknown amount and is worth reading as history rather
 than as a measurement.
 
-Assembled, **1903** -- also measured, with `PYTHONPATH` pointed at this checkout, and **also
-sixty-odd above the 1817 recorded here before**. It does not yet include `mutint-breseq`,
-whose 52 tests join once that submodule is added; re-run rather than adding them on.
+Assembled, **1955** -- also measured, and **also sixty-odd above the 1817 recorded here
+before**. It was 1903 before `mutint-breseq` became a submodule, which is the one place in
+this paragraph where the arithmetic happens to agree with the measurement; both numbers were
+run.
 They were 1646 and 1827 before the platform move, which deleted
 six test modules that drove named migrations through the real executor and added the lifecycle,
 task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
