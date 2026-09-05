@@ -37,11 +37,11 @@ class TestUtil(unittest.TestCase):
         from mutint_common.util import _github_commit_url
 
         sha = "a" * 40
-        expected = "https://github.com/barricklab/mutint-core/commit/" + sha
+        expected = "https://github.com/mutint/mutint-core/commit/" + sha
         self.assertEqual(
-            _github_commit_url("https://github.com/barricklab/mutint-core.git", sha), expected)
+            _github_commit_url("https://github.com/mutint/mutint-core.git", sha), expected)
         self.assertEqual(
-            _github_commit_url("git@github.com:barricklab/mutint-core.git", sha), expected)
+            _github_commit_url("git@github.com:mutint/mutint-core.git", sha), expected)
 
     def test_a_remote_that_is_not_github_gets_no_link(self):
         """This suite's submodules point at relative local paths, so they render plain."""

@@ -6,7 +6,7 @@
 site_name: MutInt
 site_description: Using and extending MutInt
 # No site_url: nothing is hosted yet, and a wrong one makes the canonical links wrong.
-repo_url: https://github.com/barricklab/mutint-core
+repo_url: https://github.com/mutint/mutint-core
 edit_uri: ""
 
 docs_dir: docs
