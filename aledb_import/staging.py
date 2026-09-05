@@ -133,7 +133,17 @@ def create_staging_session(request):
     instead of `import_type` naming a registered handler. Same gate: `can_edit_experiment`, not
     `can_edit_project` -- what a component does with a drop is a write to the experiment, and a
     predicate handed the project cannot see the lock.
+
+    **Signed in as well as permitted**, and the check is not redundant even though
+    `can_edit_experiment` already refuses anonymous (`effective_role` caps them at `read`). It
+    states the rule where somebody editing this file will read it, the way `project_create`
+    does -- and the shape that has bitten this codebase before is exactly a new endpoint whose
+    author had no object to run a predicate against. `aledb_sample/views/table_actions.py`
+    carries the note; its two tag endpoints were anonymously writable until it was added.
     """
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "You must be signed in."}, status=403)
+
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
     except ValueError:

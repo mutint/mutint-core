@@ -88,6 +88,7 @@ nav:
           - The data model: plugin/data-model.md
           - Showing filtered data: plugin/filtering.md
           - Taking a file upload: plugin/staging.md
+          - Work that takes minutes, or hours: plugin/background-jobs.md
           - Templates and static files: plugin/templates.md
           - Models and derived data: plugin/derived-data.md
           - Testing: plugin/testing.md

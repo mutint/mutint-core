@@ -124,6 +124,15 @@
                            bounced every non-staff user to the admin login. {% endcomment %}
                         <a href="{% url 'accounts:password_change' %}" class="small">&nbsp;&nbsp;&nbsp;Change Password</a>
                     </li>
+                    {% comment %} Here rather than in nav_registry, which has no notion of an
+                       entry only some people see -- a registered one would render for
+                       anonymous visitors and lead straight to a 403. It reads as an account
+                       entry anyway: these are the jobs *you* asked for, the way this is the
+                       password *you* change. A superuser sees everyone's on the same page.
+                       {% endcomment %}
+                    <li>
+                        <a href="{% url 'jobs' %}" class="small">&nbsp;&nbsp;&nbsp;Jobs</a>
+                    </li>
                     {% comment %} Superusers, not staff. Django's admin admits anyone with
                        is_staff -- but `load_projects` creates every imported user with
                        is_staff=True, so a staff gate would offer this to nearly everyone on a

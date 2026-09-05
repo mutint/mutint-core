@@ -103,10 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1716 run, 0 failures** standalone. They were **1696** before
-`aledb_import/tests/test_staging.py`, whose 20 tests cover the staging a component opens for
-itself -- **measured by running the suite with that module moved aside and again with it
-back**, not by subtraction.
+**Baseline: 1743 run, 0 failures** standalone. They were **1716** before `aledb_jobs`, and
+**1696** before `aledb_import/tests/test_staging.py` -- each figure run, not subtracted.
 
 **And the number this replaces was wrong by sixty.** It said 1636 while the suite actually ran
 1696, which is the drift the paragraph below warns about, sprung again in the figure right
@@ -114,10 +112,10 @@ beside it: sixty tests had been added without anybody re-counting. Every figure 
 this list is therefore suspect by an unknown amount and is worth reading as history rather
 than as a measurement.
 
-Assembled, **1955** -- also measured, and **also sixty-odd above the 1817 recorded here
-before**. It was 1903 before `mutint-breseq` became a submodule, which is the one place in
-this paragraph where the arithmetic happens to agree with the measurement; both numbers were
-run.
+Assembled, **1992** -- also measured. It was **1955** before the jobs page and the sign-in
+rule, and 1903 before `mutint-breseq` became a submodule at all; every one of those was run.
+(The 1817 recorded here before any of it was sixty-odd short of what the suite was really
+doing at the time -- see the paragraph above.)
 They were 1646 and 1827 before the platform move, which deleted
 six test modules that drove named migrations through the real executor and added the lifecycle,
 task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
@@ -3056,6 +3054,9 @@ All apps use the `aledb_*` namespace. Key apps:
 - **`aledb_bibliome/`** — Publication/bibliography management.
 - **`aledb_dashboard/`** — Dashboard views and timeline events.
 - **`aledb_accounts_noauth/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
+- **`aledb_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
+  model, `Job`, which stores no status of its own. See **Seeing and stopping background
+  work** above.
 - **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eight
   registries (context, import, plugin, nav, about, example, **panel** and **rebuild**), and
   global static files. `DerivedDataState` is its only model.
@@ -3216,6 +3217,73 @@ moved into `aledb_crud.js` at the same time, so **reading the CSRF cookie has on
 rather than the three it was about to have — `aledbPost` sends FormData and stringifies every
 value, so an endpoint taking a structure needs the JSON sibling rather than a fourth
 hand-rolled `fetch`.
+
+### Seeing and stopping background work
+
+`aledb_jobs` is `/jobs/`: your queued and running work, everyone's if you are a superuser, with
+a Cancel button on anything that can take one. It exists because `django_tasks_db` records a
+status against a UUID nobody sees — no user column, no label, and no metadata field to put
+either in (one was added in its migration 0017 and removed again in 0019). That is enough for a
+worker and not for a person, and it stopped being tolerable when `mutint-breseq` put a
+twelve-hour job on the queue whose only remedy was killing the worker.
+
+**`Job` is a side record, not a second queue**, and the distinction is the design:
+
+- **It stores no status.** Status is asked of the queue every time a row renders, through the
+  *standard* API (`task.get_result(id).status`), so the two cannot drift and the page survives
+  `TASKS` being pointed at Redis or Celery. A row here claiming `running` an hour after the
+  worker finished is exactly the failure that makes a jobs page worse than none.
+- **It stores the one thing the queue has no opinion about**: that somebody asked this to stop.
+
+**Cancelling a running task can only be cooperative, and that is the library's property rather
+than a choice.** There is no cancel API and no cancelled status — `TaskResultStatus` is READY,
+RUNNING, SUCCESSFUL, FAILED — and the worker calls `task.call(...)` and looks at nothing again
+until it returns. `TaskContext` hands the task no cancellation token either. So core supplies a
+flag and the task polls it.
+
+**The queue row is never touched, and this is the trap worth knowing.** The tempting
+optimisation is that a job which has not started could have its row deleted so it never runs.
+Two independent reasons not to:
+
+- **Deleting a claimed row kills the worker.** Django 6.1 raises `Model.NotUpdated` on a
+  zero-row `save(update_fields=...)`; `set_successful` retries three times and re-raises,
+  `set_failed` raises again from inside the except block, and that escapes `run_task`, escapes
+  the run loop, and takes the process down along with every other job it would have run. The
+  race is real: the worker claims inside `SELECT ... FOR UPDATE SKIP LOCKED`, so a delete can
+  read READY, block on the lock, and delete a row that has since become RUNNING.
+- **Writing a status instead is silently undone**, because `set_successful` / `set_failed`
+  write `status` back blindly when the task finishes.
+
+So the flag is the whole mechanism, and it behaves the same whether the job had been claimed or
+not. The honest cost: a job cancelled before a worker reaches it is still picked up later and
+returns having done nothing, and with no worker running it stays on the queue indefinitely. The
+`Job` says cancelled either way, which is the question that was actually asked.
+
+**`cancellable` is a promise the task makes**, defaulting to False. A task that does not poll
+cannot be stopped, and the page renders a button only where pressing it would do something.
+`/jobs/<pk>/cancel` refuses a non-cancellable job with a 409 rather than accepting and quietly
+ignoring it, and answers **404 rather than 403** for a job the caller may not touch, so the
+endpoint cannot be used to discover which job ids exist.
+
+**Two places the backend is named, and both are deliberate.** `queue.unattributed()` reads
+`DBTaskResult` directly because *"what else is on the queue"* is not expressible in the standard
+API — which can only answer about a result id you already hold — and it returns `[]` rather than
+raising under any other backend. Everything else goes through `get_result`. The unattributed
+section is superusers-only (with no owner and no label there is nothing to tell anybody else)
+and capped, because the only index on `status` is partial on READY and there is none on
+`enqueued_at`.
+
+**The sidebar link is in `base.html`'s account block, not `nav_registry`.** That registry has no
+per-user visibility concept, so a registered entry renders for anonymous visitors and leads to a
+403 — the dead end `project/list.html`'s comment refuses. It reads as an account entry anyway:
+these are the jobs *you* asked for, beside the password *you* change. Adding `visible_to=` for
+one entry would be a mechanism with a single producer, which is the reasoning already recorded
+for the account block itself.
+
+**A trap when testing:** `ImmediateBackend.supports_get_result` is False, so under the suite's
+own settings every job's status reads as unknown and the page shows "no longer on the queue".
+That is correct — an immediate backend keeps no results — and it is why every test about
+queueing overrides `TASKS` to the database backend. `aledb_jobs/tests/test_jobs.py` pins both.
 
 ### Pluggable App Slots
 

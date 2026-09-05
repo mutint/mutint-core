@@ -136,6 +136,10 @@ def get_base_settings(base_dir, aledb_core_dir=None):
             'aledb_filter',          # nav: Filter
             'aledb_import',          # nav: none (Add data is reached from an experiment)
             'aledb_stats',
+            # nav: none. /jobs/ is reached from the sidebar's account block, which is written
+            # into base.html rather than registered -- nav_registry cannot express "only when
+            # signed in". See aledb_jobs/apps.py.
+            'aledb_jobs',
             'aledb_accounts_noauth',
             'aledb_export',
             'aledb_common',

@@ -77,6 +77,16 @@ class StagingTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Unknown consumer", response.json()["error"])
 
+    def test_opening_needs_signing_in(self):
+        # Not redundant with the permission check below, which anonymous also fails: this
+        # states the rule where somebody editing the file will read it, the way
+        # `project_create` does. The shape that has bitten this codebase is a new endpoint
+        # whose author had no object to run a predicate against.
+        self.client.logout()
+        response = self._create()
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("signed in", response.json()["error"])
+
     def test_opening_needs_edit_access(self):
         other = User.objects.create(username="reader", email="r@e.com", is_active=True)
         other.set_password("pw")
