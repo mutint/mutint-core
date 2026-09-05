@@ -34,6 +34,10 @@ Large folders upload in chunks with progress, so a multi-gigabyte drop never rid
 request. A bare `.gd` works too — it just carries no reads, so that sample has mutation calls
 and no alignment to look at.
 
+Each drop is listed as you add it, with a **Remove** beside it, so a folder dragged by mistake
+comes back out without touching the rest. **Reset** clears the whole page — every drop and the
+chosen type — to how it loaded.
+
 **Sample statistics come from `data/summary.json`** — total reads, average read length, percent
 mapped, mean coverage. A sample without that file still imports with those left at zero.
 

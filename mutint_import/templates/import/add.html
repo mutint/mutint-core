@@ -58,7 +58,8 @@
             </p>
         </div>
 
-        <ul id="file-list" style="margin-top: 1em;"></ul>
+        <ul id="drop-list" class="list-unstyled" style="margin-top: 1em;"></ul>
+        <ul id="file-list"></ul>
 
         <div id="add-progress" style="display: none; margin-top: 1em;">
             <div class="progress" style="margin-bottom: 0.4em;">
@@ -69,6 +70,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary" id="add-submit" disabled>Add</button>
+        <button type="button" class="btn btn-default" id="add-reset" disabled>Reset</button>
         <a class="btn btn-default" href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
     </form>
 
@@ -109,12 +111,22 @@
     // whatever the finalize request is doing.
     var TERMINAL_STATES = {finalized: true, failed: true};
 
+    // One per drop or pick, in the order they happened. A drop is the unit somebody can take
+    // back: a breseq folder is hundreds of files and nobody wants to unpick those one at a
+    // time, while "the thing I just dragged" is exactly what they mean to remove.
+    var batches = [];
+    // Every entry of every batch, flattened -- what the rest of the page reads.
     var selected = [];
+    // Set for the length of an upload. Removing a drop then would change nothing (the
+    // upload already holds its own list) and would make the page lie about what is going up.
+    var uploading = false;
     var dropzone = document.getElementById("dropzone");
     var dirInput = document.getElementById("dir-input");
     var fileInput = document.getElementById("file-input");
     var typeSelect = document.getElementById("add-type");
     var fileListEl = document.getElementById("file-list");
+    var dropListEl = document.getElementById("drop-list");
+    var resetBtn = document.getElementById("add-reset");
     var submitBtn = document.getElementById("add-submit");
     var resultEl = document.getElementById("add-result");
     var progressEl = document.getElementById("add-progress");
@@ -205,12 +217,60 @@
         return (i === 0 ? n : n.toFixed(1)) + " " + units[i];
     }
 
+    // What to call a drop in the list: the folder, when everything came from one; otherwise
+    // the files' own names, the first few of them.
+    function batchLabel(entries) {
+        var first = entries[0].path.split("/")[0];
+        var oneFolder = entries.length > 1 && entries.every(function (entry) {
+            return entry.path.indexOf("/") !== -1 && entry.path.split("/")[0] === first;
+        });
+        if (oneFolder) { return first + "/"; }
+        var names = entries.slice(0, 3).map(function (entry) { return entry.path; });
+        return names.join(", ") + (entries.length > 3 ? ", \u2026" : "");
+    }
+
     function addEntries(entries) {
-        entries.forEach(function (entry) { selected.push(entry); });
+        if (!entries.length) { return; }
+        batches.push({ label: batchLabel(entries), entries: entries });
+        rebuildSelected();
+    }
+
+    function removeBatch(index) {
+        batches.splice(index, 1);
+        rebuildSelected();
+    }
+
+    function rebuildSelected() {
+        selected = [];
+        batches.forEach(function (batch) {
+            batch.entries.forEach(function (entry) { selected.push(entry); });
+        });
         renderList();
     }
 
+    function renderDrops() {
+        dropListEl.innerHTML = "";
+        batches.forEach(function (batch, index) {
+            var bytes = batch.entries.reduce(function (s, e) { return s + e.file.size; }, 0);
+            var li = document.createElement("li");
+            var text = document.createElement("span");
+            text.textContent = batch.label + " \u2014 " + batch.entries.length
+                + (batch.entries.length === 1 ? " file, " : " files, ") + humanBytes(bytes);
+            var remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "btn btn-link btn-xs";
+            remove.textContent = "Remove";
+            remove.disabled = uploading;
+            remove.addEventListener("click", function () { removeBatch(index); });
+            li.appendChild(text);
+            li.appendChild(remove);
+            dropListEl.appendChild(li);
+        });
+        resetBtn.disabled = uploading || (batches.length === 0 && !typeSelect.value);
+    }
+
     function renderList() {
+        renderDrops();
         fileListEl.innerHTML = "";
         var buckets = {};
         // Files the chosen type declined, grouped by what they look like instead. Saying
@@ -271,6 +331,13 @@
     }
 
     typeSelect.addEventListener("change", renderList);
+
+    // Back to the page as it loaded: no drops, no type chosen, no result from last time.
+    resetBtn.addEventListener("click", function () {
+        typeSelect.value = "";
+        resultEl.innerHTML = "";
+        clearSelection();
+    });
 
     // --- pickers and drop ---
     document.getElementById("pick-folder").addEventListener("click", function () { dirInput.click(); });
@@ -412,6 +479,7 @@
     // browser fires no `change` when the same folder is picked again, so the page would look
     // cleared and then refuse to accept the re-pick.
     function clearSelection() {
+        batches = [];
         selected = [];
         dirInput.value = "";
         fileInput.value = "";
@@ -423,6 +491,8 @@
         if (!selected.length) { return; }
 
         submitBtn.disabled = true;
+        uploading = true;
+        renderDrops();
         resultEl.innerHTML = "";
         lastUnits = null;
         setProgress(0, 1, "Preparing…");
@@ -432,7 +502,7 @@
         // and uploading it meant a long wait followed by a page of "not recognized"
         // warnings for files nobody asked to import.
         var toUpload = selected.filter(function (entry) { return classify(entry.path); });
-        if (!toUpload.length) { submitBtn.disabled = false; return; }
+        if (!toUpload.length) { submitBtn.disabled = false; uploading = false; renderDrops(); return; }
 
         var uploadId = null;
         mutintUpload(toUpload, {
@@ -466,6 +536,7 @@
             // renderList, not `submitBtn.disabled = false`: it owns that flag and derives it
             // from the selection. Setting it by hand here would re-enable Add one tick after
             // a successful import had just emptied the selection.
+            uploading = false;
             renderList();
         });
     });
