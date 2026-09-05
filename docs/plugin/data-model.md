@@ -83,10 +83,19 @@ Core's own groups, for reading:
 | `sample.sequencing` | `date`, `library_prep`, `reference_genome` |
 | `sample.curation` | `medium_description` |
 | `mutation.genome_diff` | the GenomeDiff record the import parsed, which `to_gd_line()` writes back |
+| `call.vcf` | the VCF line this call arrived on, when it came from one |
 
 Each answers `{}` when nothing was recorded, so a sample nobody has filled in renders rather
 than raising. **Every one of these keys may be absent** — they were columns until recently and
 several never had a writer at all.
+
+**`MutationCall` carries `supplemental_data` as well as `evidence`, and they are different
+things.** `evidence` is breseq's read counts in breseq's own shape, read by the mutation table
+to render a cell; `supplemental_data` is the namespaced container, for the record a call
+*arrived* with. The VCF import is what needed the second: `INFO`, `QUAL` and `FILTER` describe
+a site while `FORMAT` and each sample column describe one sample's call, and a `Mutation` is
+shared between samples. If your plugin has per-call material that came in with an import, it
+goes here under your own component name.
 
 The rest are not namespaced and are core's: `Mutation.annotation`, `MutationCall.evidence`
 (one sample's read counts for one call), `ReferenceSequences.seq_ids`,

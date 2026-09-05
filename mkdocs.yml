@@ -74,6 +74,7 @@ nav:
       - What ALEdb is: index.md
       - Quick start: using/quickstart.md
       - Loading data: using/loading-data.md
+      - Importing VCF: using/importing-vcf.md
       - Reference genomes: using/reference-genomes.md
       - Configuration: using/configuration.md
       - Management commands: using/commands.md

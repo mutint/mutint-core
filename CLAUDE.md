@@ -103,8 +103,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1743 run, 0 failures** standalone. They were **1716** before `aledb_jobs`, and
-**1696** before `aledb_import/tests/test_staging.py` -- each figure run, not subtracted.
+**Baseline: 1799 run, 0 failures** standalone. They were **1743** before the VCF importer,
+**1716** before `aledb_jobs`, and **1696** before `aledb_import/tests/test_staging.py` -- each
+figure run, not subtracted.
 
 **And the number this replaces was wrong by sixty.** It said 1636 while the suite actually ran
 1696, which is the drift the paragraph below warns about, sprung again in the figure right
@@ -3165,6 +3166,81 @@ exclude files that live inside one.
 `patterns` does more than route. `identify()` uses it to name the type a rejected file belongs
 to, and the Add page serialises it to name the type a file in the drop belongs to before
 anything uploads — so a plugin gets both of those by registering, with no edit to core.
+
+### Reading VCF, and why it is not a second kind of mutation
+
+`aledb_import/vcf.py` converts; `vcf_import.py` places; `vcf_export.py` gives it back. Every
+mutation still arrives as GenomeDiff, because **the records go to
+`gd_import._database_gd_mutations`, the same function the `.gd` path uses**. That is what makes
+"GenomeDiff is the anchor format" true rather than aspirational: `synthesize_sequence_change`,
+the seven-field `get_or_create`, the `"None"`-gene trap, annotation and `_coerce_frequency` are
+shared by construction. A site called by breseq and the same site called by GATK are one row
+because one function decides.
+
+`aledb_import/tests/test_vcf_import.py` opens with the assertion that says so: a `.gd` and a
+VCF of the same SNP, imported as two samples, produce **one** `Mutation` with two calls whose
+sources are `breseq` and `vcf`.
+
+**`gdtools VCF2GD` was the pattern, and was measured rather than assumed.** Run against breseq
+0.50, it classifies on string length alone and reads the reference for nothing. Four of its
+behaviours we match exactly and `GdtoolsAgreementTestCase` holds its real output as fixtures:
+`SNP` at POS, `INS` at POS with the inserted bases, `DEL` at `POS + len(ALT)`, and the sizes.
+Five we diverge from, each with a test named for its reason:
+
+| VCF | gdtools | us |
+|---|---|---|
+| `AC -> AGG` | `INS AGG` | `SUB` at POS+1, `size=1`, `new_seq=GG` |
+| `ACGT -> TGCA` | dropped with a warning | `SUB size=4` |
+| `ACGTAA -> TTT` | `DEL 203 3` | `SUB size=6 new_seq=TTT` |
+| `A -> TCGT` | `INS TCGT` | `SUB size=1 new_seq=TCGT` |
+| `AAA -> AA` | `DEL 102` | `DEL 100` -- left-aligned |
+| `T -> G,A` | **fatal, whole file abandoned** | split per allele, genotype chooses |
+| REF disagreeing with the reference | imported silently | refused, naming the likely cause |
+
+**Trimming before classifying is the load-bearing part.** Common suffix, then common prefix,
+advancing the position -- `bcftools norm` semantics except the anchor base goes entirely,
+because GenomeDiff needs none. Suffix-before-prefix does two jobs: it keeps `AT -> AGT` an
+insertion rather than a substitution, and it **left-aligns** an indel in a homopolymer.
+`start_position` and `sequence_change` are both `get_or_create` fields, so getting either wrong
+forks one mutation into two rather than merely mislabelling it.
+
+**Four classification rules, not five.** SNP, INS (REF empty), DEL (ALT empty), and SUB for
+everything else -- `SUB` replaces `size` reference bases with `new_seq` and **the two lengths
+need not match**. Splitting SUB by whether the lengths happen to be equal would be a
+distinction GenomeDiff does not make, and gdtools' two separate wrong answers for the two
+halves are what having no SUB path looks like.
+
+`TrimTestCase.test_the_conversion_reproduces_what_the_line_asserted` is the guard that matters
+most: 3,000 random REF/ALT pairs, each converted and then *applied back* to the reference, must
+reproduce exactly the sequence the VCF asserted. A conversion whose fields look plausible and
+whose position is one out passes every example somebody thought to write and fails this.
+
+**Where the VCF's own fields live.** The header on the `Sample`, each call's own line on the
+`MutationCall` -- which is why `MutationCall` gained `supplemental_data`. Per call rather than
+per mutation, deliberately: a `Mutation` is deduplicated and written once on create, so a site
+record hung there would be whichever VCF wrote first, and a multi-allelic split maps one line
+to several mutations anyway. **Nothing VCF-specific goes near the GenomeDiff record**, because
+`to_gd_line()` splats every key of it onto the emitted line -- this is the one place gdtools'
+behaviour must not be copied, since it writes `AD=`, `DP=` and `AF=` into the GenomeDiff and
+those are not GenomeDiff fields. `AF` becomes `MutationCall.frequency`.
+
+`/import/vcf/<sample_id>/export` re-emits the stored header and lines, byte-for-byte for a
+single-sample file. A mutation added or edited since import has no stored line and is
+regenerated, with an `##aledb_regenerated=` header saying how many -- refusing outright would
+make the mutation editor and this feature mutually exclusive, and saying nothing would hand
+somebody a file that quietly is not what they gave us.
+
+**MOB inference is off by default** (`ALEDB_VCF_INFER_MOB`) and the default is the honest one.
+An INS becomes a MOB only when exactly one annotated repeat family -- read from
+`AnnotatedSequence.repeat_locations`, through `trim_repeat_name`, so IS186B and IS186 are one
+family -- matches the inserted sequence end to end on one strand, and `duplication_size` is
+*measured* from the flanking sequence rather than assumed. Ambiguity is silence. A wrong MOB is
+worse than an honest INS: it asserts a mechanism the data may not support, and because it lands
+in the same `get_or_create` key it forks the row against every other import of the same call.
+
+**And the `.gd` export now checks `can_view_project`**, which it never did -- a `.gd` for any
+sample id was downloadable by anyone, anonymous included. Its own test passed *because* of the
+hole. Fixed while the VCF export was being written beside it, rather than copied.
 
 ### Staging a drop that is not an import
 

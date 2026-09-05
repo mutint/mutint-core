@@ -4,6 +4,7 @@ from aledb_import import add_views, staging, upload_session, views
 
 urlpatterns = [
     re_path(r'^gd/(?P<sample_id>\d+)/export$', views.gd_export_view, name='gd_export'),
+    re_path(r'^vcf/(?P<sample_id>\d+)/export$', views.vcf_export_view, name='vcf_export'),
 
     # One place to add anything to an experiment; what you drop is classified by the
     # import registry, so a plugin's type is reachable here without touching this file.

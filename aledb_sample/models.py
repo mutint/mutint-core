@@ -453,7 +453,7 @@ class Mutation(SupplementalDataMixin):
         return mark_safe(", ".join(get_ecocyc_gene_list(names, self.is_ecocyc_gene())))
 
 
-class MutationCall(models.Model):
+class MutationCall(SupplementalDataMixin):
     """One caller's assertion about one mutation in one sample.
 
     Written by `gd_import` for every record in a sample's `.gd`, and by
@@ -461,6 +461,17 @@ class MutationCall(models.Model):
     edit log works at, the row every cross-sample table has a cell for, and the row an edit
     hard-deletes -- never the `Mutation`, whose primary key is stored as a bare integer in
     aledb-phylogeny's `branch_mutations` and in every exported CSV.
+
+    **It carries `supplemental_data` as well as `evidence`, and the two are not duplicates.**
+    `evidence` is breseq's read counts for this call, in breseq's own shape, read by the
+    mutation table to render a cell. `supplemental_data` is the namespaced container every
+    other row has: the record this call *arrived* with, keyed by the component that wrote it.
+
+    The VCF import is what needed it, and it needs it because VCF's fields divide exactly
+    along the line these models already draw. `INFO`, `QUAL` and `FILTER` describe a site and
+    could in principle live on the `Mutation`; `FORMAT` and each sample column describe one
+    sample's call and could not. In practice the whole line is kept here, per call -- see
+    `aledb_import/vcf_import.py` for why a shared `Mutation` is the wrong home for any of it.
     """
 
     sample = models.ForeignKey(Sample, on_delete=models.CASCADE, null=True)

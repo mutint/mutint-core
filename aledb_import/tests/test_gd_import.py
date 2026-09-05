@@ -191,16 +191,36 @@ class GdImportTestCase(TestCase):
         self.assertEqual(Mutation.objects.count(), summary["total_mutations"])
 
     def test_gd_export_endpoint(self):
-        """Outlived /import/: the export download is still routed."""
+        """Outlived /import/: the export download is still routed.
+
+        **It now asks `can_view_project`, which it did not.** This endpoint had no
+        authorization of any kind, so a `.gd` for any sample id was downloadable by anyone --
+        and since `LoginRequiredMiddleware` is installed only in `settings_private.py`, that
+        included an anonymous caller. This test passed *because* of the hole; it logs in now,
+        and the refusal is asserted below.
+        """
         experiment = self._ensure_reference("export exp", project="export project")
         gd_import.import_gd_files(
             [_uploaded(CLEAN_GD)], project_name="export project",
             experiment_name="export exp", owner_name="tester")
 
         reseq = Sample.objects.get()
+        self.client.force_login(self.user)
         export = self.client.get("/import/gd/%d/export" % reseq.id)
         self.assertEqual(export.status_code, 200)
         self.assertIn("#=GENOME_DIFF", export.content.decode("utf-8"))
+
+    def test_gd_export_refuses_somebody_who_cannot_see_the_sample(self):
+        """404 rather than 403, so a sample you may not read is not distinguishable from one
+        that does not exist."""
+        self._ensure_reference("export exp", project="export project")
+        gd_import.import_gd_files(
+            [_uploaded(CLEAN_GD)], project_name="export project",
+            experiment_name="export exp", owner_name="tester")
+
+        reseq = Sample.objects.get()
+        self.assertEqual(404,
+                         self.client.get("/import/gd/%d/export" % reseq.id).status_code)
 
     # --- sample identity from the filename -------------------------------------------
 

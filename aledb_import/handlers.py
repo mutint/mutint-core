@@ -56,6 +56,7 @@ ANNOTATION_PATTERNS = [".gbk", ".gb", ".gbff", ".genbank", ".gff", ".gff3",
                        ".fa", ".fasta", ".fna", ".fas"]
 
 GENOMEDIFF_PATTERNS = [".gd"]
+VCF_PATTERNS = [".vcf", ".vcf.gz"]
 
 # The one file that makes a directory a sample. `breseq_folder` owns the definition; this is
 # the suffix form of it, for reading sample names back off a list of claimed paths.
@@ -66,6 +67,7 @@ GD_RELATIVE_SUFFIX = "data/output.gd"
 # what people come here for; replacing an established genome's annotation last because it is
 # the rarest and the hardest to undo.
 MENU_GENOMEDIFF = 10
+MENU_VCF = 15
 MENU_BRESEQ = 20
 MENU_REFERENCE = 30
 MENU_REPLACE_ANNOTATION = 90
@@ -329,6 +331,100 @@ def handle_genomediff(experiment, staged_root, paths, user):
     return {"files": results, "total_mutations": total}
 
 
+def detect_vcf(staged_root, paths):
+    """Only .vcf files that are not part of a breseq sample, mirroring detect_genomediff."""
+    claimed_by_breseq = set(detect_breseq_folders(staged_root, paths))
+    return [p for p in paths
+            if p not in claimed_by_breseq and matches_patterns(p, VCF_PATTERNS)]
+
+
+def list_vcf_units(staged_root, claimed):
+    """One unit per sample the drop will produce, which is not one per file.
+
+    A twelve-column VCF is twelve samples' worth of work, and a progress bar counting files
+    would sit at 0/1 for the length of it. The announced name must equal the `file` key of the
+    eventual result -- `test_import_progress.AnnouncedNamesTestCase` pins that -- so this reads
+    each file's header to find out what the samples are called, and `handle_vcf` reports under
+    exactly the same names.
+    """
+    from aledb_import import vcf, vcf_import
+
+    names = []
+    for relative in claimed:
+        filename = os.path.basename(relative)
+        try:
+            with open(os.path.join(staged_root, relative), "rb") as handle:
+                document = vcf.read(handle, filename)
+        except Exception:
+            # Unreadable here is reported by the handler, which is the one place that should
+            # say so. Announce the file itself so the row exists to carry the error.
+            names.append(filename)
+            continue
+        names.extend(vcf_import.sample_names_for(document, filename))
+    return names
+
+
+def handle_vcf(experiment, staged_root, paths, user):
+    """Import variant calls, one ALEdb sample per VCF sample column."""
+    from aledb_import import vcf, vcf_import
+    from aledb_import.gd_import import prepare_experiment_by_id, run_post_processing
+    from aledb_import.reference_store import has_reference
+
+    context = prepare_experiment_by_id(experiment.id)
+
+    if not has_reference(experiment):
+        # A VCF carries no reference, and the reference is also what the REF check and MOB
+        # inference read -- so this is refused for two reasons rather than one.
+        refusals = [{"file": os.path.basename(p), "mutations": 0,
+                     "error": ("this experiment has no reference genome; add one "
+                               "(GenBank, GFF3 or FASTA) before importing VCF files")}
+                    for p in paths]
+        for entry in refusals:
+            import_progress.report(entry)
+        return {"files": refusals, "total_mutations": 0}
+
+    results = []
+    total = 0
+    for relative in paths:
+        filename = os.path.basename(relative)
+        try:
+            with open(os.path.join(staged_root, relative), "rb") as handle:
+                document = vcf.read(handle, filename)
+        except Exception as exc:
+            logger.exception("could not read %s", relative)
+            entry = {"file": filename, "mutations": 0, "error": str(exc)}
+            results.append(entry)
+            import_progress.begin(filename)
+            import_progress.report(entry)
+            continue
+
+        for sample_name in vcf_import.sample_names_for(document, filename):
+            import_progress.begin(sample_name)
+
+            def import_one(sample_name=sample_name):
+                with transaction.atomic():
+                    return vcf_import.import_sample(
+                        document, sample_name, context, experiment)
+
+            try:
+                count, replaced, problems = with_retry(import_one, describe=sample_name)
+                entry = {"file": sample_name, "mutations": count, "error": None,
+                         "warnings": problems, "replaced": replaced}
+                total += count
+            except Exception as exc:
+                logger.exception("vcf import failed for %s in %s", sample_name, relative)
+                entry = {"file": sample_name, "mutations": 0, "error": str(exc),
+                         "warnings": []}
+            results.append(entry)
+            import_progress.report(entry)
+
+    if total:
+        import_progress.stage("Recomputing derived data\u2026")
+        run_post_processing(experiment)
+
+    return {"files": results, "total_mutations": total}
+
+
 def register_core_import_handlers():
     register_import_handler(
         name="reference",
@@ -394,3 +490,17 @@ def register_core_import_handlers():
         # An entry you can see and cannot pick is a worse way to say the same thing.
         requires_reference=True,
         description="Mutations only. Needs the experiment to already have a reference.")
+    register_import_handler(
+        name="vcf",
+        label="VCF variant calls (.vcf)",
+        patterns=VCF_PATTERNS,
+        # Beside genomediff: both are mutations against a reference that must already exist,
+        # and neither can run before the reference handler.
+        priority=PRIORITY_DATA + 10,
+        detect=detect_vcf,
+        handle=handle_vcf,
+        list_units=list_vcf_units,
+        menu_order=MENU_VCF,
+        requires_reference=True,
+        description="Variant calls from any caller. Normalised and converted to GenomeDiff "
+                    "on the way in, so they share rows with breseq's own calls.")
