@@ -83,18 +83,26 @@
 
         <div class="form-group">
             <label for="se-rep-description">Medium description</label>
+            {% comment %} `sample` here is the row dict `_row_context` builds, which carries the
+               medium description flat; it was read as `sample.curation.medium_description`,
+               a key the dict does not have, so this box rendered empty on every load and a
+               save with it blank cleared the note. {% endcomment %}
             <input type="text" class="form-control" id="se-rep-description"
-                   maxlength="500" value="{{ sample.curation.medium_description }}">
+                   maxlength="500" value="{{ sample.medium_description }}">
             <small class="help-block">
                 A note about what this sample was grown in. Published by the interop API.
             </small>
         </div>
 
-        <div class="form-group">
-            <label for="se-rep-tags">Tags</label>
-            <input type="text" class="form-control" id="se-rep-tags"
-                   maxlength="500" value="{{ sample.rep_tags }}">
+        {% comment %} The sample flags -- mutint_sample.flags describes them once. These
+           replaced a free-text Tags box whose words nothing read. {% endcomment %}
+        {% for flag in sample.flags %}
+        <div class="checkbox">
+            <label><input type="checkbox" id="se-{{ flag.key }}" data-flag="{{ flag.field }}"
+                          {% if flag.on %}checked{% endif %}> {{ flag.label }}</label>
+            <small class="help-block">{{ flag.help }}</small>
         </div>
+        {% endfor %}
 
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="se-save">Save sample</button>
@@ -115,9 +123,12 @@
             flask: document.getElementById("se-flask").value,
             isolate: document.getElementById("se-isolate").value,
             isolate_description: document.getElementById("se-isolate-description").value,
-            medium_description: document.getElementById("se-rep-description").value,
-            rep_tags: document.getElementById("se-rep-tags").value
+            medium_description: document.getElementById("se-rep-description").value
         };
+        // The flags, sent both ways for the reason the mixed box is below.
+        Array.prototype.forEach.call(document.querySelectorAll("input[data-flag]"), function (box) {
+            data[box.getAttribute("data-flag")] = box.checked ? "1" : "0";
+        });
         // Sent both ways, always. It used to be set only when checked, so an unchecked box
         // omitted the key and the server fell back to False. That happened to mean "clonal",
         // so the bug was invisible -- and this is the commit whose polarity change would have

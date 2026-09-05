@@ -11,8 +11,7 @@ urlpatterns = [
     # There is no `^$` here any more. The cross-sample table it used to serve is the
     # Compare page, which now lives in the mutint-compare plugin at /compare/ -- it is one
     # way of looking at an experiment, not a core function, and a deployment may leave it
-    # out. The tag and filter endpoints that used to sit here moved to /mutation-table/
-    # (mutint_sample/table_urls.py): every table page posts to them, not just Compare.
+    # out. The tag endpoints that used to sit here went with tagging itself.
     re_path(r'^breseq$', mutint_sample.views.breseq_table.breseq_table, name="breseq_table"),
 
     # breseq's own HTML report for one sample, kept at import. Two routes: the viewer, which

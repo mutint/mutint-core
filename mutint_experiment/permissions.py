@@ -8,8 +8,8 @@ Four roles, ordered (`mutint_experiment/roles.py`):
 
     read  < write < admin < owner
 
-`read` sees the project and its data. `write` adds, edits and curates -- data, samples, tags
-and experiment filters. `admin` additionally manages who has access and may soft-delete the
+`read` sees the project and its data. `write` adds, edits and curates -- data, samples, their
+flags and mutations. `admin` additionally manages who has access and may soft-delete the
 project. `owner` additionally grants and revokes ownership.
 
 Three things confer a role without a `ProjectAccess` row, and all three are in
@@ -236,42 +236,17 @@ def can_delete_experiment(user, experiment):
     return can_edit_experiment(user, experiment)
 
 
-def can_curate(user, experiment):
-    """Tag a mutation or a replicate, and edit an experiment's filter.
-
-    This replaces `can_add_global_filter(user) or can_add_experiment_filter(user, experiment)`,
-    which is what the mutation table's tag dropdowns and `table_actions._may_curate` both read
-    while a site-wide filter existed. That disjunction had two problems and only one of them
-    was the dead name.
-
-    **It short-circuited past the experiment lock.** The left half was `user.is_superuser`, so
-    a superuser was allowed before the right half -- which is where the lock is checked -- was
-    ever reached. `_may_curate` had to test the lock *before* the `or` to compensate, and said
-    so in a comment. Asking the question in one place removes the need for that.
-
-    **But it was load-bearing for one case**, which is why it is not simply deleted: a
-    `Mutation` with no experiment cannot be scoped to a project, so there is nothing to grant
-    against and `can_add_experiment_filter` answers False for everybody. Superusers could tag
-    one and still can. `mutint_sample.tests.test_table_actions` pins that, and it is the case the
-    removal note originally guessed wrong -- it is not about an experiment with no *project*,
-    which `effective_role` already handles by answering `owner` to a superuser.
-    """
-    if experiment is None:
-        return bool(user and user.is_superuser)
-    return can_add_experiment_filter(user, experiment)
-
-
 def can_add_experiment_filter(user, experiment):
-    """Curating -- tagging a mutation, editing an experiment filter -- is a write.
+    """Curating -- editing what an experiment's pages show to everyone -- is a write.
 
-    The sample's `tags` and the experiment filter are read by four different mutation
-    tables, so a change here is a change to what everyone else sees. It used to be granted by
-    the plain view permission, which let a read-only visitor rewrite shared state.
+    It used to be granted by the plain view permission, which let a read-only visitor rewrite
+    shared state. (`can_curate` sat beside this for the tag endpoints, with a special case for
+    a `Mutation` with no experiment; tagging is gone and so is it.)
 
     Delegates to `can_edit_experiment`, so it refuses a locked experiment too. That one line
-    is what carries the lock into the mutation editor's four write endpoints, both tag
-    endpoints and the filter page, and into the controls those pages render -- every one of
-    them already asks this question.
+    is what carries the lock into the mutation editor's four write endpoints and the filter
+    page, and into the controls those pages render -- every one of them already asks this
+    question.
     """
     return can_edit_experiment(user, experiment)
 

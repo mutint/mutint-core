@@ -472,7 +472,7 @@ class ExperimentFilterTestCase(TestCase):
             name="E", project=self.project,)
 
     def test_a_reader_may_not_curate(self):
-        """Tagging and filtering write shared state that four mutation tables read back."""
+        """Filtering writes shared state that every mutation table reads back."""
         self.assertFalse(can_add_experiment_filter(self.reader, self.experiment))
 
     def test_a_writer_may(self):

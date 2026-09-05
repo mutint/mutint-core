@@ -30,6 +30,7 @@
                 <th width="90">Time point</th>
                 <th width="70">Sample</th>
                 <th width="50">Mixed</th>
+                {% for flag in flags %}<th width="50">{{ flag.label }}</th>{% endfor %}
                 <th>Description</th>
                 <th width="50"></th>
             </tr>
@@ -57,6 +58,11 @@
                     <td style="text-align: center;">
                         <input type="checkbox" id="sb-mixed-{{ sample.id }}"
                                {% if sample.is_mixed %}checked{% endif %}></td>
+                    {% for flag in sample.flags %}
+                    <td style="text-align: center;">
+                        <input type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
+                               data-flag="{{ flag.field }}" {% if flag.on %}checked{% endif %}></td>
+                    {% endfor %}
                     <td><input type="text" class="form-control input-sm" maxlength="300"
                                id="sb-isolate-description-{{ sample.id }}"
                                value="{{ sample.isolate_description }}"></td>
@@ -100,7 +106,7 @@
                 var id = tr.getAttribute("data-reseq-id");
                 ids.push(id);
                 tr.classList.remove("danger");
-                rows.push({
+                var row = {
                     id: id,
                     sample_name: value("name", id),
                     ale: value("ale", id),
@@ -108,7 +114,11 @@
                     isolate: value("isolate", id),
                     is_mixed: document.getElementById("sb-mixed-" + id).checked ? 1 : 0,
                     isolate_description: value("isolate-description", id)
+                };
+                Array.prototype.forEach.call(tr.querySelectorAll("input[data-flag]"), function (box) {
+                    row[box.getAttribute("data-flag")] = box.checked ? 1 : 0;
                 });
+                rows.push(row);
             });
 
         // One JSON string, because mutintPost stringifies each value into FormData -- a

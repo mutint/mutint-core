@@ -18,7 +18,7 @@ Experiment ── Population ── Sample ── MutationCall ── Mutation
 |---|---|
 | `Experiment` | one evolution experiment; the unit access is granted below and the unit almost every page is scoped to |
 | `Population` | one ALE — a lineage within the experiment, with its strain and species |
-| `Sample` | one sequenced flask or isolate, at a `time_point` |
+| `Sample` | one sequenced flask or isolate, at a `time_point`; carries three flags, `is_hypermutator`, `is_contaminated`, `is_low_coverage` (`mutint_sample.flags`) |
 | `Mutation` | one genomic change, **per experiment**, with its annotation |
 | `MutationCall` | one caller's assertion about one mutation in one sample |
 
@@ -81,7 +81,7 @@ Core's own groups, for reading:
 |---|---|
 | `sample.breseq` | `version`, `reads`, `average_read_length`, `mean_coverage`, `percentage_mapped` |
 | `sample.sequencing` | `date`, `library_prep`, `reference_genome` |
-| `sample.curation` | `medium_description` |
+| `sample.curation` | `medium_description`; `legacy_tags`, whatever free text the retired `tags` column held |
 | `mutation.genome_diff` | the GenomeDiff record the import parsed, which `to_gd_line()` writes back |
 | `call.vcf` | the VCF line this call arrived on, when it came from one |
 

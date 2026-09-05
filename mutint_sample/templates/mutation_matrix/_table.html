@@ -1,3 +1,4 @@
+{% load sample_flags %}
 {% comment %} The mutation matrix: mutations down, samples across. Rendered by the
    mutation_matrix template tag; see mutint_sample/mutation_matrix.py for the data and
    js/mutation_matrix.js for what happens to it.
@@ -40,7 +41,7 @@
             </button>
             <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="samples">
                 {% for sample in matrix.samples %}
-                    <li data-value="{{ sample.id }}" class="active"><a href="#">{{ sample.label }}</a></li>
+                    <li data-value="{{ sample.id }}" class="active"><a href="#">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></li>
                 {% endfor %}
             </ul>
         </div>
@@ -60,7 +61,7 @@
                     <th class="{{ column.css_class }}" data-key="{{ column.key }}"{% if column.sort_key %} data-sort-key="{{ column.sort_key }}"{% endif %}>{{ column.title }}</th>
                 {% endfor %}
                 {% for sample in matrix.samples %}
-                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}">{{ sample.label }}</th>
+                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</th>
                 {% endfor %}
             </tr>
         </thead>

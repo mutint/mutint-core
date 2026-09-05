@@ -207,17 +207,56 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.assertEqual(before, self.chain_counts())
 
     def test_the_bulk_table_does_not_blank_fields_it_has_no_column_for(self):
-        """It shows no medium description and no tags; a missing key must leave the
-        stored value alone."""
-        self.sample.medium_description = "second run"
-        self.sample.tags = "resequenced"
+        """It shows no medium description; a missing key must leave the stored value alone,
+        and so must a flag the row does not mention. (This used to set a `medium_description`
+        attribute the model no longer has, so it asserted nothing.)"""
+        self.sample.set_record(Sample.COMPONENT, Sample.CURATION,
+                               {"medium_description": "second run"})
+        self.sample.is_hypermutator = True
         self.sample.save()
 
         self.assertEqual(200, self.bulk([self.row(self.sample, ale=2)]).status_code)
 
         self.sample.refresh_from_db()
-        self.assertEqual("second run", self.sample.medium_description)
-        self.assertEqual("resequenced", self.sample.tags)
+        self.assertEqual("second run", self.sample.curation["medium_description"])
+        self.assertTrue(self.sample.is_hypermutator)
+
+    def test_the_flags_toggle_both_ways_on_both_pages(self):
+        for field in ("is_hypermutator", "is_contaminated", "is_low_coverage"):
+            with self.subTest(field=field):
+                response = self.single(self.sample, **{field: "1"})
+                self.assertEqual(200, response.status_code, response.content)
+                self.sample.refresh_from_db()
+                self.assertTrue(getattr(self.sample, field))
+                response = self.bulk([self.row(self.sample, **{field: 0})])
+                self.assertEqual(200, response.status_code, response.content)
+                self.sample.refresh_from_db()
+                self.assertFalse(getattr(self.sample, field))
+
+    def test_a_time_point_read_back_as_a_float_saves(self):
+        """A FloatField time point comes back as 500.0, the pages rendered it that way, and
+        the parser refused it as not a whole number -- so a page merely opened and saved
+        failed. Both ends are fixed: the box shows 500, and 500.0 is accepted anyway."""
+        self.sample.refresh_from_db()
+        response = self.single(self.sample, flask="1.0", sample_name="renamed")
+        self.assertEqual(200, response.status_code, response.content)
+        body = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
+        self.assertIn('id="se-flask" value="1"', body)
+        self.assertNotIn('value="1.0"', body)
+
+    def test_the_edit_page_offers_every_flag_and_shows_the_medium_description(self):
+        self.sample.set_record(Sample.COMPONENT, Sample.CURATION,
+                               {"medium_description": "DM25"})
+        self.sample.is_contaminated = True
+        self.sample.save()
+        body = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
+        for key in ("hypermutator", "contaminated", "low_coverage"):
+            self.assertIn('id="se-%s"' % key, body)
+        tag = body.split('id="se-contaminated"', 1)[1].split(">", 1)[0]
+        self.assertIn("checked", tag)
+        # The box used to read a key the context did not have and rendered empty.
+        self.assertIn('value="DM25"', body)
+        self.assertNotIn("se-rep-tags", body)
 
     def test_a_duplicate_sample_name_is_refused(self):
         """Re-import finds an existing sample by name within the experiment, so two

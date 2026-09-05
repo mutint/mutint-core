@@ -188,23 +188,6 @@ class EveryWritePathTestCase(LockTestCase):
             sample=self.sample_a).first()
         self.lock()
 
-    @staticmethod
-    def _status(response):
-        """The real status.
-
-        `@ajax` (mutint_common.ajax) always sends HTTP 200 and puts the status in the body, so
-        the two tag endpoints have to be read differently from the rest -- which is exactly
-        the sort of thing a sweep across mixed endpoints has to know.
-        """
-        if response.status_code == 200:
-            try:
-                body = response.json()
-            except ValueError:
-                return response.status_code
-            if isinstance(body, dict) and "status" in body:
-                return body["status"]
-        return response.status_code
-
     def writes(self):
         """(name, callable) for every experiment-scoped write the web offers."""
         experiment_id = self.experiment.id
@@ -222,14 +205,6 @@ class EveryWritePathTestCase(LockTestCase):
                 "target_sample_ids": json.dumps([self.sample_b.id])})),
             ("mutation restore", lambda: self.client.post("/mutation-editor/restore", {
                 "experiment_id": experiment_id, "edit_set_id": "", "sample_ids": "[]"})),
-            ("mutation tag", lambda: self.client.post(
-                "/mutation-table/toggle-mut-tag/",
-                {"mut_id": self.mut_1.id, "tag_name": "contaminated"},
-                HTTP_X_REQUESTED_WITH="XMLHttpRequest")),
-            ("replicate tag", lambda: self.client.post(
-                "/mutation-table/toggle-rep-tag",
-                {"rep_id": self.sample_a.pk, "tag_name": "contaminated"},
-                HTTP_X_REQUESTED_WITH="XMLHttpRequest")),
             ("sample update", lambda: self.client.post(
                 "/sample/%d/update/" % self.sample_a.id, {"sample_name": "x"})),
             ("bulk sample update", lambda: self.client.post(
@@ -243,7 +218,7 @@ class EveryWritePathTestCase(LockTestCase):
     def test_every_write_endpoint_refuses(self):
         for name, call in self.writes():
             with self.subTest(endpoint=name):
-                self.assertIn(self._status(call()), (400, 403),
+                self.assertIn(call().status_code, (400, 403),
                               "%s did not refuse a locked experiment" % name)
 
     def test_nothing_was_written_by_any_of_them(self):
@@ -255,25 +230,6 @@ class EveryWritePathTestCase(LockTestCase):
         self.experiment.refresh_from_db()
         self.assertEqual("E", self.experiment.name, "experiment_update did not land")
         self.assertIsNone(self.experiment.deleted_at, "experiment_delete did not land")
-        self.mut_1.refresh_from_db()
-        self.assertFalse(self.mut_1.tags, "the tag endpoint did not land")
-
-    def test_a_superuser_is_refused_by_the_tag_endpoints_too(self):
-        """`_may_curate` reads `can_add_global_filter(user) or ...`, and the first is
-        `is_superuser` -- so a lock tested only on the right-hand side is short-circuited
-        past. This is the assertion that pins the ordering."""
-        admin = User.objects.create(username="super", email="s@e.com",
-                                    is_active=True, is_superuser=True)
-        self.client.force_login(admin)
-
-        response = self.client.post(
-            "/mutation-table/toggle-mut-tag/",
-            {"mut_id": self.mut_1.id, "tag_name": "contaminated"},
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest")
-
-        self.assertEqual(403, response.json()["status"])
-        self.mut_1.refresh_from_db()
-        self.assertFalse(self.mut_1.tags)
 
     def test_the_edit_pages_refuse_as_well(self):
         """Not only the endpoints: a form you can fill in and never save is a dead end."""

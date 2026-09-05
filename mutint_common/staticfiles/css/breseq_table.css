@@ -166,6 +166,24 @@
     margin-left: 0.4em;
 }
 
+/* The sample flags -- hypermutator, contaminated, low coverage -- drawn the way the
+   ancestor tag is, wherever a sample is named: the Mutations page picker, the stats table,
+   the mutation matrix's header and Samples menu. mutint_sample.flags names them once. */
+.sample-flag {
+    font-size: 85%;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 0.4em;
+    white-space: nowrap;
+}
+
+.sample-flag-hypermutator { color: #8a6d3b; }
+.sample-flag-contaminated { color: #a94442; }
+.sample-flag-low_coverage { color: #777; }
+
+/* On the matrix's green header the badge would vanish; keep it legible there. */
+.breseq-table th .sample-flag { color: rgba(255, 255, 255, 0.85); font-weight: normal; }
+
 .breseq-legend {
     color: #666;
     font-size: 9pt;

@@ -18,8 +18,10 @@ in a table with a column per sample every cell already is one.
 cells are compact -- `{"f": "42.0%", "s": 0.42, "p": true, "u": "..."}` -- because rows x
 samples is the whole payload of the page.
 
-What is deliberately not here: tags, curation menus, a `user` argument. The matrix is a
-read-only view; whoever wants to change the data has the mutation editor.
+What is deliberately not here: curation menus and a `user` argument. The matrix is a
+read-only view; whoever wants to change the data has the mutation editor. A sample's flags
+(hypermutator, contaminated, low coverage) are shown as badges, because they describe
+the column; they are edited on the sample's own page.
 """
 
 from dataclasses import dataclass, field
@@ -28,6 +30,7 @@ from typing import Optional
 from django.urls import reverse
 
 from mutint_sample.breseq_report import _frequency, describe_mutation
+from mutint_sample.flags import flags_of
 from mutint_sample.ncbi import verified_contig_names
 
 #: What a present call with no recorded frequency shows -- a hand-added mutation need not
@@ -56,6 +59,8 @@ class SampleColumn:
     label: str
     index: int
     bam_stored: bool
+    #: The sample's flags (`mutint_sample.flags.Flag`), drawn as badges in the header and menu.
+    flags: tuple = ()
 
 
 @dataclass
@@ -154,7 +159,8 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     """
     samples = [SampleColumn(id=sample.id,
                             label=sample.qualified_label if labels == "qualified" else sample.label,
-                            index=index, bam_stored=bool(sample.bam_stored))
+                            index=index, bam_stored=bool(sample.bam_stored),
+                            flags=tuple(flags_of(sample)))
                for index, sample in enumerate(reseq_dict.values())]
     column_of = {sample.id: sample.index for sample in samples}
     browse_url = browse_url or browse_url_for(reseq_dict)

@@ -128,7 +128,7 @@ class ClonalPolarityTestCase(TestCase):
         response = self.client.post(
             "/sample/%d/update/" % self.clone.pk,
             {"sample_name": "clone", "ale": "1", "flask": 500, "isolate": "1",
-             "isolate_description": "", "medium_description": "", "rep_tags": "",
+             "isolate_description": "", "medium_description": "",
              "is_mixed": "1"})
 
         self.assertEqual(200, response.status_code, response.content)
@@ -141,7 +141,7 @@ class ClonalPolarityTestCase(TestCase):
         response = self.client.post(
             "/sample/%d/update/" % self.mixed.pk,
             {"sample_name": "mixed", "ale": "1", "flask": 500, "isolate": "2",
-             "isolate_description": "", "medium_description": "", "rep_tags": "",
+             "isolate_description": "", "medium_description": "",
              "is_mixed": "0"})
 
         self.assertEqual(200, response.status_code, response.content)

@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1929 run, 0 failures** standalone. They were **1907** before the mutation matrix
+**Baseline: 1925 run, 0 failures** standalone. They were **1929** before tagging was retired
+(the endpoint tests went, the flag tests came), **1907** before the mutation matrix
 replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
 partial, the first Search tests, minus the old builder's), **1839** before the background-worker
 work, which adds 68 -- the deadman supervisor and its constraints, the `start` gates, the
@@ -1488,7 +1489,8 @@ reachable only by typing the URL, and empty in practice. `mutint_filter.0005` fo
 into each experiment before dropping it -- convert, then drop, the posture
 `mutint_mutation_editor.0002` took with the ignored *mutation* lists.
 
-**`can_add_global_filter` became `can_curate`, and the reason is not the one you would guess.**
+**`can_add_global_filter` became `can_curate`, which is gone too** -- its only caller was the
+tag endpoints (see **Sample flags**). The history stays because the lock-ordering lesson does.
 Two call sites gated the tag dropdowns on
 `can_add_global_filter(user) or can_add_experiment_filter(user, experiment)`. The left half was
 `is_superuser`, so the `or` short-circuited before the lock on the right was ever consulted --
@@ -1757,8 +1759,8 @@ one place to change the answer. Nothing below the project has an owner.
 
     read  <  write  <  admin  <  owner
 
-`read` sees the project and its data. `write` adds, edits and curates — data, samples, tags,
-experiment filters. `admin` additionally manages access and may soft-delete the project.
+`read` sees the project and its data. `write` adds, edits and curates — data, samples and
+their flags, mutations. `admin` additionally manages access and may soft-delete the project.
 `owner` additionally grants and revokes ownership.
 
 `mutint_experiment/roles.py` holds the ordering and nothing else — it imports nothing from
@@ -1971,11 +1973,9 @@ queryset and renders **the mutation matrix** (below) through `mutation_matrix/pa
 was simply the one that had never been moved out.
 
 What stayed in core, and why: the matrix itself (`mutint_sample/mutation_matrix.py`, the tag,
-the partial, the script), because Search and both other plugins render it; and **the curation
-endpoints** at `/mutation-table/` (`mutint_sample/views/table_actions.py`,
-`mutint_sample/table_urls.py`). Those are retained API now -- **nothing in the UI posts to them**
-since tagging left the cross-sample table -- and are a candidate for removal along with
-`Sample.tags` and `Mutation.tags`, which the sample edit page still shows.
+the partial, the script), because Search and both other plugins render it. The curation
+endpoints at `/mutation-table/` stayed for one afternoon as retained API and then went with
+tagging altogether -- see **Sample flags** below.
 
 **`/mutations/` is not a page any more** and returns 404. `mutint_sample.urls` has no `^$`, and a
 plugin cannot reclaim that path: Django does not backtrack out of a matched `include()`.
@@ -2044,6 +2044,32 @@ button, "Column Sort from Right" (sample headers sort by frequency instead, abse
 The CSV export (`mutint_export/util.py`) used to borrow the table's header and cell markup; it
 carries its own `CSV_MUTATION_HEADER` now, byte-identical, and writes `✓` where `strip_tags` had
 left the `&#10003;` entity in the file.
+
+### Sample flags
+
+`Sample.is_hypermutator`, `is_contaminated`, `is_low_coverage`: three booleans, described once in
+`mutint_sample/flags.py` (column, form key, label, help text) so the edit pages, the badge partial
+(`{% sample_flag_badges %}`, `sample/_flags.html`) and the matrix's `SampleColumn.flags` agree.
+They are edited on the sample page and the bulk table, both of which send every flag as `"1"`/`"0"`
+-- the same rule as the mixed box -- while the parser treats an *absent* key as "leave it", so a
+client that predates a flag cannot clear it. They show as badges wherever a sample is named:
+the Mutations page picker, the stats table, the matrix header and its Samples menu.
+
+**Nothing computes over them yet.** Convergence could leave a hypermutator out, phylogeny could
+drop a contaminated sample; each is its own change with its own reason, and a flag nobody reads
+is still worth recording because the person looking at the table is a reader too.
+
+**They replaced tagging.** `Sample.tags` and `Mutation.tags` were comma-joined text with a
+three-word vocabulary (`contaminated`, `hypermutated`, `fixating`), written by the old cross-sample
+table's tag menus (`table_actions.py`, `table_urls.py`, the `@ajax` envelope in
+`mutint_common/ajax.py`, all deleted) and the sample edit page, and read by nothing but the
+Show/Hide Tag column filter that went with that table. `can_curate` went with the endpoints; its
+special case -- a `Mutation` with no experiment -- had no other caller. `mutint_sample.0004` maps
+`hypermutated`/`contaminated` onto the booleans, drops `fixating` (Fixed Mutations computes it),
+and keeps any other text under `supplemental_data["mutint_core"]["curation"]["legacy_tags"]`
+(mutations: `["mutint_core"]["legacy_tags"]`), because a deployment's database may hold curation
+nobody here can see. **It is the first `RunPython` in the repository**: there was none because
+the history was regenerated from scratch, not because there is a rule against them.
 
 ### Per-user preferences
 
@@ -3126,7 +3152,7 @@ All apps use the `mutint_*` namespace. Key apps:
     and nowhere else -- see **Reading a sample's identity out of its filename** below.
 - **`mutint_sample/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`,
   `/mutations/ncbi`, `/mutations/reference`), the shared mutation matrix, and the
-  curation endpoints at `/mutation-table/`. `/mutations/reference` is the only page that says
+  sample flags (`mutint_sample/flags.py`). `/mutations/reference` is the only page that says
   what genome an experiment is called against, and is where an NCBI accession is recorded. `browse` is igv.js over the sample's reads; `ncbi` is NCBI's Sequence
   Viewer over curated annotation, and draws nothing until the contig's sequence has been
   confirmed to be the accession somebody claimed — see **The NCBI Sequence Viewer** above.

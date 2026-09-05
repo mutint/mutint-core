@@ -127,11 +127,18 @@ class Sample(SupplementalDataMixin):
     #: `#=COMMAND` line, and that is the only thing that sets this False on the way in.
     is_clonal = models.BooleanField(default=True)
 
+    #: Three facts a person records about a sample, shown as a badge wherever it is named.
+    #: `mutint_sample.flags` describes them once for every page. They replaced `tags`, a
+    #: comma-joined text column that three pages wrote and nothing read; `0004` mapped the
+    #: words it held onto these and kept anything else under `curation["legacy_tags"]`.
+    #: Nothing computes over them yet -- see that module's docstring.
+    is_hypermutator = models.BooleanField(default=False)
+    is_contaminated = models.BooleanField(default=False)
+    is_low_coverage = models.BooleanField(default=False)
+
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
     #: sample is labeled -- see `label`.
     description = models.CharField(max_length=300, **blank_field)
-    #: Both came from `TechnicalReplicate`.
-    tags = models.CharField(max_length=500, **blank_field)
     #: What the file or folder this was imported from was called. `source_name`, because
     #: `sample_name` on a model called `Sample` says nothing about which of its several
     #: names it is -- this is the one the import read, not the one the product displays.
@@ -317,7 +324,6 @@ class Mutation(SupplementalDataMixin):
     #: is regenerated here, so there is nothing to migrate, but a deployment with a live log
     #: would need those blobs rewritten.
     seq_id = models.CharField(max_length=200, **blank_field)
-    tags = models.CharField(max_length=500, **blank_field)
 
     # Mutations belong to one experiment. Two experiments that call the same
     # variant get their own rows, so re-annotating one against a new reference

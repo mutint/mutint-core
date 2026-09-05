@@ -31,6 +31,8 @@ from mutint_experiment.samples import (
     rebuild_after_structural_change, rows_are_structural, sample_coordinate,
     sample_experiment, sample_project,
 )
+from mutint_experiment.coordinates import format_time_point
+from mutint_sample.flags import FLAG_FIELDS, FLAGS
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +85,17 @@ def _row_context(reseq):
         "coordinate": coordinate_str(coordinate),
         "label": reseq.label,
         "ale": coordinate[0],
-        "flask": coordinate[1],
+        # Through the formatter, so an integral float shows as `500` in the box and not
+        # `500.0` -- see `samples._positive_int` for what the latter used to do on save.
+        "flask": format_time_point(coordinate[1]),
         "isolate": coordinate[2],
         "is_mixed": reseq.is_mixed,
         "isolate_description": reseq.description or "",
         "medium_description": reseq.curation.get("medium_description") or "",
-        "rep_tags": reseq.tags or "",
+        # The flags as the templates draw them: what to call each, and whether it is on.
+        "flags": [{"field": flag.field, "key": flag.key, "label": flag.label,
+                   "help": flag.help, "on": bool(getattr(reseq, flag.field))}
+                  for flag in FLAGS],
     }
 
 
@@ -123,6 +130,8 @@ def experiment_samples(request, pk):
     context.update({
         "experiment": experiment,
         "samples": [_row_context(reseq) for reseq in _experiment_samples(experiment)],
+        # For the table's header row; each sample row carries its own resolved copy.
+        "flags": FLAGS,
     })
     return render(request, "sample/list.html", context)
 
@@ -179,8 +188,12 @@ def sample_update(request, pk):
         "is_mixed": request.POST.get("is_mixed"),
         "isolate_description": request.POST.get("isolate_description"),
         "medium_description": request.POST.get("medium_description"),
-        "rep_tags": request.POST.get("rep_tags"),
     }
+    # Only the flags the form sent: an absent key leaves the flag alone, so a client that
+    # predates one of them cannot clear it by not knowing about it.
+    for field in FLAG_FIELDS:
+        if field in request.POST:
+            row[field] = request.POST.get(field)
     try:
         _save(experiment, [row])
     except SampleEditError as error:

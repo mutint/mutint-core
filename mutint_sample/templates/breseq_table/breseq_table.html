@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load view_filter %}
 {% load static %}
+{% load sample_flags %}
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
@@ -40,7 +41,7 @@
                    one statement rather than two coincidences. {% endcomment %}
                 {% for reseq in reseq_list %}
                     <li class="{% if reseq.id == selected_sample_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
-                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %} {% sample_flag_badges reseq %}</a>
                     </li>
                 {% endfor %}
             </ul>

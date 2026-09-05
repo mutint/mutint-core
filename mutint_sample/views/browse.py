@@ -76,7 +76,7 @@ def _resolve(request):
         raise Http404("No such mutation or sample.")
 
     # Reached through the calls rather than through `Mutation.experiment`, which
-    # may be null -- the unscoped case `permissions.can_curate` exists for -- and would refuse
+    # may be null -- an unscoped mutation nothing can grant against -- and would refuse
     # a mutation this experiment plainly observes. `get_mutation_call_queryset` is the
     # shared spelling of "observed in this experiment".
     #

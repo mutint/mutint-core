@@ -138,8 +138,8 @@ def create_staging_session(request):
     `can_edit_experiment` already refuses anonymous (`effective_role` caps them at `read`). It
     states the rule where somebody editing this file will read it, the way `project_create`
     does -- and the shape that has bitten this codebase before is exactly a new endpoint whose
-    author had no object to run a predicate against. `mutint_sample/views/table_actions.py`
-    carries the note; its two tag endpoints were anonymously writable until it was added.
+    author had no object to run a predicate against -- the old tag endpoints were anonymously
+    writable until such a line was added to them.
     """
     if not request.user.is_authenticated:
         return JsonResponse({"error": "You must be signed in."}, status=403)

@@ -115,8 +115,8 @@ def get_reseq_ordered_dict(experiment_id, population=None, sample_type=None,
     which this wraps.
 
     It took a `request` too, for a `tag_select` query parameter that showed or hid sample
-    columns by their tags. That control went with the shared table it sat above; the
-    parameter went with it so a caller cannot pass one and believe it filtered.
+    columns by their tags. Tagging is gone; the parameter went first, so a caller cannot pass
+    one and believe it filtered.
     """
     reseq_queryset = get_ordered_reseq_queryset(experiment_id, population, sample_type,
                                                 include_ancestor=include_ancestor)

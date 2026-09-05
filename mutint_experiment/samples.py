@@ -38,13 +38,13 @@ from django.db import transaction
 
 from mutint_experiment import coordinates
 from mutint_experiment.models import Population
+from mutint_sample.flags import FLAG_FIELDS
 
 logger = logging.getLogger(__name__)
 
 # Fields a user may change that do not affect identity. Editing one of these must not
 # create a row, delete a row, or trigger a rebuild -- see `rows_are_structural`.
-DESCRIPTIVE_FIELDS = ("sample_name", "isolate_description",
-                      "medium_description", "rep_tags")
+DESCRIPTIVE_FIELDS = ("sample_name", "isolate_description", "medium_description")
 # The form's field names, which are the query-string vocabulary and change with it rather
 # than with the columns behind them.
 STRUCTURAL_FIELDS = ("ale", "flask", "isolate", "is_mixed")
@@ -190,9 +190,19 @@ def _truthy(raw):
 
 
 def _positive_int(raw, label, row_label):
+    """A whole number, also when it arrives as `500.0`.
+
+    `Sample.time_point` is a float, so a coordinate read back from a row and posted again
+    comes back as `500.0` -- and `int("500.0")` raises. That is how a bulk save of a page
+    that had merely been *opened* failed with "must be a whole number", and how a test that
+    refreshed its sample between two saves found it.
+    """
     try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError):
+        number = float(str(raw).strip())
+        if not number.is_integer():
+            raise ValueError(raw)
+        value = int(number)
+    except (TypeError, ValueError, OverflowError):
         raise SampleEditError(
             "%s: %s must be a whole number." % (row_label, label))
     if value < 0:
@@ -233,10 +243,10 @@ def _label(raw, label, row_label):
 # somebody types into a form still wants a bound, and because the sample edit page's
 # `maxlength` attribute mirrors it client-side.
 _MAX_LENGTHS = {"sample_name": 200, "isolate_description": 300,
-                "medium_description": 500, "rep_tags": 500}
+                "medium_description": 500}
 _FIELD_LABELS = {"sample_name": "sample name",
                  "isolate_description": "description",
-                 "medium_description": "medium description", "rep_tags": "tags"}
+                 "medium_description": "medium description"}
 
 
 def _check_lengths(descriptive, row_label):
@@ -293,14 +303,18 @@ def parse_rows(rows, samples_by_id):
             continue
 
         # Only fields the form actually sent. The bulk table has no column for the medium
-        # description or the tags, and a missing key must leave the stored value alone --
-        # treating absent as empty would have the table silently blank a field it does not
-        # even show.
+        # description, and a missing key must leave the stored value alone -- treating
+        # absent as empty would have the table silently blank a field it does not even show.
         descriptive = {field: (row.get(field) or "").strip()
                        for field in DESCRIPTIVE_FIELDS if field in row}
         # The form asks the mixed question, because that is the box a person ticks. The
         # column stores the clonal one. The negation happens once, in `apply_rows`.
         descriptive["is_mixed"] = _truthy(row.get("is_mixed"))
+        # The sample flags -- see mutint_sample.flags. Present means "set it to this"; absent
+        # means untouched, for the same reason as the text fields above.
+        for field in FLAG_FIELDS:
+            if field in row:
+                descriptive[field] = _truthy(row.get(field))
         try:
             _check_lengths(descriptive, row_label)
         except SampleEditError as error:
@@ -493,15 +507,18 @@ def apply_rows(experiment, parsed):
             if source_population is not None:
                 vacated.append(source_population)
 
-        # One row written where there were three. The description and the tags used to
-        # belong to the isolate and the replicate, which were *shared* -- so a move had to
-        # decide whether they travelled with the sample or stayed with the row, and the
-        # answer ("travel, but only onto a row that did not exist a moment ago") was three
-        # paragraphs of comment. They are the sample's own columns now, so they simply move
-        # with it and there is nothing left to decide.
+        # One row written where there were three. The description used to belong to the
+        # isolate, which was *shared* -- so a move had to decide whether it travelled with
+        # the sample or stayed with the row, and the answer ("travel, but only onto a row
+        # that did not exist a moment ago") was three paragraphs of comment. It is the
+        # sample's own column now, so it simply moves with it and there is nothing to decide.
         reseq.is_clonal = not descriptive["is_mixed"]
+        for field in FLAG_FIELDS:
+            if field in descriptive:
+                setattr(reseq, field, descriptive[field])
+                always.append(field)
         _write(reseq, {"source_name": "sample_name",
-                       "description": "isolate_description", "tags": "rep_tags"},
+                       "description": "isolate_description"},
                descriptive, always,
                curation={"medium_description": "medium_description"})
 

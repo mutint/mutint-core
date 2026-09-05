@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load sample_flags %}
 {% load static %}
 {% load humanize %}
 {% block title %}{{ ale_project_name }}: {{ experiment_name }} experiment overview{% endblock %}
@@ -362,7 +363,7 @@
             {% for row in experiments_info_list %}
                 <tr class="experiment_stats">
                     <td class="sample_name">
-                        {{ row.sample.label }}
+                        {{ row.sample.label }} {% sample_flag_badges row.sample %}
                     </td>
                     <td class="mutation_count">{{ row.mutation_count }}</td>
                     {% comment %} Bases, not regions: one region can be a single base or a

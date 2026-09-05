@@ -46,10 +46,6 @@ def get_core_urlpatterns():
         re_path(r'^interop-query/', include('mutint_interop_query.urls')),
         re_path(r'^mutation-editor/', include('mutint_mutation_editor.urls')),
         re_path(r'^mutations/', include('mutint_sample.urls')),
-        # Curation actions every mutation table posts to -- Compare, Fixed Mutations,
-        # Converged Mutations and Search. Not under ^mutations/, which names only one
-        # of those pages, and no longer even that one.
-        re_path(r'^mutation-table/', include('mutint_sample.table_urls')),
         re_path(r'^search/', include('mutint_search.urls')),
         re_path(r'^stats/', include('mutint_stats.urls')),
         # What a page remembers about one person -- see mutint_common/preferences.py. Here

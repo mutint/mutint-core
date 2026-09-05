@@ -126,7 +126,7 @@ def mutation_features(experiment_id, contig=None):
     **Reached through the calls, not through `Mutation.experiment`**, so this track
     and `frequency_features` can never disagree about what belongs to the experiment. Filtering
     on the column looks equivalent and is not: a `Mutation` may carry a null `experiment`
-    -- the unscoped case `permissions.can_curate` exists to handle -- and two such rows in the
+    -- an unscoped mutation, which nothing can grant against -- and two such rows in the
     dev database were observed in an experiment while being owned by none, so the Mutations
     track came up empty beside a Frequency track with features in it.
 

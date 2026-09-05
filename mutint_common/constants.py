@@ -28,12 +28,6 @@ SAMPLE_TYPES = (SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED)
 # (`mutint_sample.mutation_matrix`) reads cells by name, so there is no index for anything to
 # agree about; the CSV export carries its own header in `mutint_export.util`.
 
-TAGS = {
-    "contaminated": '<i class="fa fa-random fa-fw" aria-hidden="true"></i>',
-    "hypermutated": '<i class="fa fa-line-chart fa-fw" aria-hidden="true"></i>',
-    "fixating":     '<i class="fa fa-signal fa-fw" aria-hidden="true"></i>',
-}
-
-COLUMN_TAGS = ["contaminated", "hypermutated"]
-
-ROW_TAGS = ["contaminated", "hypermutated", "fixating"]
+# TAGS, COLUMN_TAGS and ROW_TAGS stood here: the vocabulary of `Sample.tags` and
+# `Mutation.tags`, free-text columns three pages wrote and nothing read. The two words that
+# meant something about a sample are booleans now -- see `mutint_sample.flags`.
