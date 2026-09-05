@@ -62,7 +62,7 @@ saying before it is chosen: this is the only setting in the product that changes
            Select none buttons are suppressed. {% endcomment %}
         {% include "select_list.html" with items=samples id="anc-samples" selected_ids=selected_ids single=True empty_message="This experiment has no samples yet." %}
 
-        <div style="margin-top: 1.5em;">
+        <div class="btn-row" style="margin-top: 1.5em;">
             {% if can_edit %}
                 <button type="button" class="btn btn-primary" id="anc-save">Save</button>
                 <button type="button" class="btn btn-default" id="anc-clear">No ancestor</button>

@@ -354,6 +354,14 @@ has no height but still contributes Bootstrap's 20px `h2` margin. That leaves 25
 title -- the same padding the page has at its foot -- and 16px below the header. `:empty` rather
 than hiding the error heading outright, so a real error still shows.
 
+**A row of standalone buttons carries `.btn-row`.** The shared `.btn + .btn { margin-left }`
+rule spaces buttons sideways and knows nothing about wrapping, so on a narrow window the
+Overview's sixth button dropped to a second line flush against the first -- inline-blocks have
+no vertical margin. `.btn-row` is a flex row with a 5px gap on both axes, and it is the rule for
+every row of buttons that is not a `.btn-group`: the Overview's actions, the list pages' "+ New"
+and Delete, a form's Save / Cancel. Anything that should sit *under* the row (an error line)
+goes after the row's `</div>`, not inside it, or flex puts it on the same line.
+
 Menus that run as long as the experiment has samples carry `.mutint-menu`, which is only
 `max-height` and `overflow-y`: Bootstrap's `.dropdown-menu` already gives these menus everything
 else they share with the Metadata page's column menu.

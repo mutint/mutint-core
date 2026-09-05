@@ -48,6 +48,7 @@
                 <dt>Description</dt>
                 <dd>{{ project.description|default:"&mdash;" }}</dd>
             </dl>
+            <div class="btn-row">
             {% if can_edit %}
             <a class="btn btn-default"
                href="/project/{{ project.id }}/edit/">Edit project</a>
@@ -56,6 +57,7 @@
             <a class="btn btn-default"
                href="/project/{{ project.id }}/access/">Sharing</a>
             {% endif %}
+            </div>
         </div>
     </div>
 
@@ -76,12 +78,14 @@
            is named in #del-error, because the lock lives on the experiment and only the
            experiment can answer for it. {% endcomment %}
         {% if can_edit %}
-        <div style="margin-bottom: 1em;">
+        <div class="btn-row" style="margin-bottom: 1em;">
             <a class="btn btn-primary"
                href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
             <button type="button" class="btn btn-danger" id="delete-selected">
                 &minus; Delete selected</button>
             <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
+        </div>
+        <div style="margin-bottom: 1em;">
             <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
         </div>
         {% endif %}

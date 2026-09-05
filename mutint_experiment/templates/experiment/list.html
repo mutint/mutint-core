@@ -20,7 +20,7 @@
 {% block title %}Experiment List{% endblock %}
 {% block header %}Experiment List{% endblock %}
 {% block content %}
-    <div style="margin-bottom: 1em;">
+    <div class="btn-row" style="margin-bottom: 1em;">
         {% comment %} Was a link to /project/, which dead-ended: that page can only create an
            experiment alongside a *new* project, so there was no way to add one to a project
            that already existed. The endpoint always existed; nothing called it. {% endcomment %}
@@ -36,9 +36,11 @@
         <button type="button" class="btn btn-danger" id="delete-selected">
             &minus; Delete selected</button>
         <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
-        <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
         {% endif %}
     </div>
+    {% if user.is_authenticated %}
+        <div id="del-error" style="color: #a00; margin-top: 0.5em; margin-bottom: 1em;"></div>
+    {% endif %}
 
     <div id='loadingmessage' style='display:none'>
         <img src='{% static "img/Ajax-loader.gif" %}'>

@@ -361,6 +361,24 @@ a:hover {
     margin-left: 5px;
 }
 
+/* A row of standalone buttons -- the Overview's actions, a list page's "+ New" and Delete,
+   a form's Save / Cancel. The sibling rule above spaces buttons horizontally and knows
+   nothing about wrapping: on a narrow window the sixth button dropped to a second line and
+   sat flush against the first, because inline-blocks carry no vertical margin. A flex row
+   with a gap spaces both axes and lets the browser decide where the break falls. Every row
+   of buttons that is not a `.btn-group` should carry this class; the margin-left reset keeps
+   the gap from doubling. */
+.btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-row > .btn + .btn {
+    margin-left: 0;
+}
+
 .centered {
     text-align: center;
 }
