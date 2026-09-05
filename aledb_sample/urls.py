@@ -3,6 +3,7 @@ import aledb_sample.views.alignments
 import aledb_sample.views.breseq_table
 import aledb_sample.views.browse
 import aledb_sample.views.ncbi_view
+import aledb_sample.views.report
 
 
 # TODO: Understand if '-' is better than "_" within a URL.
@@ -13,6 +14,16 @@ urlpatterns = [
     # out. The tag and filter endpoints that used to sit here moved to /mutation-table/
     # (aledb_sample/table_urls.py): every table page posts to them, not just Compare.
     re_path(r'^breseq$', aledb_sample.views.breseq_table.breseq_table, name="breseq_table"),
+
+    # breseq's own HTML report for one sample, kept at import. Two routes: the viewer, which
+    # is an ALEdb page framing it, and the files themselves. The file route takes a
+    # client-named path because breseq's report links to whatever it wrote, and it is
+    # contained by a realpath check rather than by a narrower pattern. Everything it serves is
+    # sandboxed by a response header as well as by the frame -- see views/report.py.
+    re_path(r'^report/(?P<sample_id>\d+)/$', aledb_sample.views.report.report,
+            name='sample_report'),
+    re_path(r'^report/(?P<sample_id>\d+)/files/(?P<path>.*)$',
+            aledb_sample.views.report.report_file, name='sample_report_file'),
 
     # igv.js at one mutation call's position, linked from the mutation table's cells.
     re_path(r'^browse$', aledb_sample.views.browse.browse_mutation, name='browse_mutation'),

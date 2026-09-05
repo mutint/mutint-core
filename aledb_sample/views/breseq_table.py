@@ -82,7 +82,10 @@ def breseq_table(request):
             "reference": _reference(experiment),
             "title": "%s mutations" % experiment.name,
             "template_header": "Mutations",
-            "can_edit": can_edit_project(request.user, experiment.project),
+            # Whether to offer the breseq report links. The flag rather than a stat: this renders
+        # on every view of the page.
+        "report_stored": bool(reseq is not None and reseq.report_stored),
+        "can_edit": can_edit_project(request.user, experiment.project),
         })
 
         logger.info("samples",

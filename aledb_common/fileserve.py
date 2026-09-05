@@ -57,11 +57,18 @@ def content_type_for(filename):
     return EXTENSION_CONTENT_TYPES.get(extension.lower(), "application/octet-stream")
 
 
-def serve_file(request, path, filename, content_type=None):
+def serve_file(request, path, filename, content_type=None, headers=None):
     """Stream `path` as `filename`, honouring a single Range header.
 
     404 when the file is not there, 206 + ``Content-Range`` for a satisfiable range, 416 for
     one that is not, 200 otherwise -- always with ``Accept-Ranges: bytes``.
+
+    ``headers`` is applied to every response this returns. It is a parameter rather than
+    something the caller sets afterwards because there are three exit points, and a caller
+    that patched the response by hand would sooner or later miss one -- which for a security
+    header is the whole of the failure. `aledb_sample/views/report.py` is why it exists: it
+    serves HTML that breseq generated from user-supplied names, and every byte of it has to
+    carry the sandbox.
     """
     if not os.path.isfile(path):
         raise Http404("No such file.")
@@ -76,14 +83,14 @@ def serve_file(request, path, filename, content_type=None):
         response["Content-Length"] = str(size)
         response["Accept-Ranges"] = "bytes"
         response["Content-Disposition"] = 'inline; filename="%s"' % filename
-        return response
+        return _with(response, headers)
 
     parsed = parse_range(range_header, size)
     if parsed is None:
         response = HttpResponse(status=416)
         response["Content-Range"] = "bytes */%d" % size
         response["Accept-Ranges"] = "bytes"
-        return response
+        return _with(response, headers)
 
     start, end = parsed
     length = end - start + 1
@@ -93,6 +100,12 @@ def serve_file(request, path, filename, content_type=None):
     response["Content-Range"] = "bytes %d-%d/%d" % (start, end, size)
     response["Accept-Ranges"] = "bytes"
     response["Content-Disposition"] = 'inline; filename="%s"' % filename
+    return _with(response, headers)
+
+
+def _with(response, headers):
+    for name, value in (headers or {}).items():
+        response[name] = value
     return response
 
 

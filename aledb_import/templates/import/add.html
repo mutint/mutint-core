@@ -139,6 +139,17 @@
         return false;
     }
 
+    // A whole directory the type claims, wherever it sits in the drop -- breseq's output/
+    // report, whose filenames breseq chooses and which no suffix can describe. See
+    // `directories` on register_import_handler.
+    function underDirectory(path, directories) {
+        var lower = "/" + (path || "").toLowerCase().replace(/\\/g, "/");
+        for (var i = 0; i < (directories || []).length; i++) {
+            if (lower.indexOf("/" + directories[i] + "/") !== -1) { return true; }
+        }
+        return false;
+    }
+
     // Preview only. A file inside a breseq folder matches several types' patterns; the server
     // resolves that by priority and by each handler's own detect.
     function classify(path) {
@@ -146,7 +157,10 @@
         if (!chosen) { return null; }
         var candidates = IMPORT_TYPES.filter(function (t) { return t.name === chosen; });
         for (var i = 0; i < candidates.length; i++) {
-            if (matches(path, candidates[i].patterns)) { return candidates[i]; }
+            if (matches(path, candidates[i].patterns) ||
+                    underDirectory(path, candidates[i].directories)) {
+                return candidates[i];
+            }
         }
         return null;
     }

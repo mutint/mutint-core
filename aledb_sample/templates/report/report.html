@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}breseq report — {{ sample_label }}{% endblock %}
+
+{% block header %}
+    <b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>:
+       {{ experiment_name }}</b> &mdash; breseq report for {{ sample_label }}
+{% endblock %}
+
+{% block content %}
+<div class="report-bar">
+    {% for page in pages %}
+        {% if page.current %}
+            <b>{{ page.label }}</b>
+        {% else %}
+            <a href="?page={{ page.file }}">{{ page.label }}</a>
+        {% endif %}
+        {% if not forloop.last %}&nbsp;|&nbsp;{% endif %}
+    {% endfor %}
+    <span class="report-bar-right">
+        <a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">&laquo;
+           back to this sample's mutations</a>
+        &nbsp;|&nbsp;
+        {% comment %} Deliberately offered, and deliberately not the default. Opened on its
+           own the report is a top-level document with no frame around it -- which is safe
+           only because every file response carries the same sandbox as a CSP header. See
+           views/report.py. {% endcomment %}
+        <a href="{{ frame_url }}" target="_blank" rel="noopener noreferrer">open on its own</a>
+    </span>
+</div>
+
+{% comment %} The report is HTML breseq generated from names a user supplied, so it is framed
+   with an opaque origin: `sandbox` **without** `allow-same-origin` is the whole of the
+   isolation, and the flags come from one constant that the response header also uses, because
+   the browser intersects the two. Do not add `allow-same-origin` -- with it the frame is
+   same-origin with us and the sandbox stops isolating anything at all. {% endcomment %}
+<iframe id="breseq-report"
+        src="{{ frame_url }}"
+        sandbox="{{ sandbox_flags }}"
+        title="breseq report for {{ sample_label }}"></iframe>
+{% endblock %}
+
+{% block scripts_and_style %}
+<style>
+    .report-bar {
+        margin-bottom: 0.75em;
+        padding-bottom: 0.5em;
+        border-bottom: 1px solid #ddd;
+    }
+    .report-bar-right { float: right; }
+    /* Fills what is left of the window under the bar. A fixed height would either waste the
+       bottom of a tall screen or clip breseq's tables on a short one, and the report scrolls
+       inside itself either way. */
+    #breseq-report {
+        display: block;
+        width: 100%;
+        height: calc(100vh - 210px);
+        min-height: 400px;
+        border: 1px solid #ddd;
+        background: white;
+    }
+</style>
+{% endblock %}

@@ -54,6 +54,17 @@
         <a href="{{ compare_url }}?experiment_id={{ experiment_id }}"
            class="breseq-crosslink">all samples &raquo;</a>
         {% endif %}
+        {% comment %} breseq's own report for this sample, kept at import. The evidence
+           behind a row -- the read pileup breseq called it from -- is otherwise nowhere in
+           the product, and this is the page you are on when you want it. Only when the
+           sample actually has one: a `.gd` drop carries no report, so most samples of an
+           older deployment will not show these. {% endcomment %}
+        {% if report_stored and selected_sample_id %}
+        <a href="/mutations/report/{{ selected_sample_id }}/"
+           class="breseq-crosslink">breseq report &raquo;</a>
+        <a href="/mutations/report/{{ selected_sample_id }}/?page=summary.html"
+           class="breseq-crosslink">summary &raquo;</a>
+        {% endif %}
         {% comment %} You are looking at one sample's mutations when you realise its
            identity is wrong, so the edit page is one click from here. {% endcomment %}
         {% if can_edit and selected_sample_id %}

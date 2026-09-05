@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1799 run, 0 failures** standalone. They were **1743** before the VCF importer,
+**Baseline: 1823 run, 0 failures** standalone. They were **1799** before the breseq report
+viewer, **1743** before the VCF importer,
 **1716** before `aledb_jobs`, and **1696** before `aledb_import/tests/test_staging.py` -- each
 figure run, not subtracted.
 
@@ -113,8 +114,9 @@ beside it: sixty tests had been added without anybody re-counting. Every figure 
 this list is therefore suspect by an unknown amount and is worth reading as history rather
 than as a measurement.
 
-Assembled, **1992** -- also measured. It was **1955** before the jobs page and the sign-in
-rule, and 1903 before `mutint-breseq` became a submodule at all; every one of those was run.
+Assembled, **2069** -- also measured. It was **2048** before the breseq report viewer (which
+adds 24 in core and removes 3 from the plugin), **1992** before the VCF importer, **1955**
+before the jobs page and the sign-in rule, and 1903 before `mutint-breseq` became a submodule at all; every one of those was run.
 (The 1817 recorded here before any of it was sixty-odd short of what the suite was really
 doing at the time -- see the paragraph above.)
 They were 1646 and 1827 before the platform move, which deleted
@@ -3166,6 +3168,63 @@ exclude files that live inside one.
 `patterns` does more than route. `identify()` uses it to name the type a rejected file belongs
 to, and the Add page serialises it to name the type a file in the drop belongs to before
 anything uploads — so a plugin gets both of those by registering, with no edit to core.
+
+### Serving breseq's report, which is the only HTML we did not write
+
+`aledb_sample/views/report.py` serves breseq's `output/` for one sample -- the mutation index,
+the run summary, and the read pileup behind each call. Core's importer keeps it now
+(`breseq_folder._store_report` -> `store.sample_report_dir`), so it is part of what a sample
+*is* rather than something the plugin that produced it happened to hang on to.
+
+**It is untrusted markup, and that is the whole design.** breseq is trusted software generating
+HTML from things a user supplied: the sample's name, its read filenames, the reference's gene
+names and products. Served plainly on our origin -- and `fileserve` already answers `.html`
+with `text/html; inline` -- a `<script>` smuggled through a gene name would run with the
+reader's session and read the CSRF token. There was no CSP, no `X-Frame-Options`, no
+`SecurityMiddleware` and no second origin to serve from, so the containment had to be built.
+
+**Three layers, and `SANDBOX_FLAGS` is one string used in two of them:**
+
+- the viewer frames it with `sandbox=SANDBOX_FLAGS` and **no `allow-same-origin`** -- that
+  absence is what gives the document an opaque origin and is the entire isolation;
+- every file response carries `Content-Security-Policy: sandbox <the same flags>`, which is
+  the only thing covering a reader who pastes the raw URL or follows one of breseq's own
+  `target="_top"` links and gets a *top-level* document;
+- `X-Content-Type-Options: nosniff`, so a `.png` full of HTML is not sniffed into a document.
+
+**The header and the attribute must list the same flags, because the browser intersects
+them.** A header narrower than the attribute silently removes what the attribute granted, and
+the symptom is "the evidence links stopped working" with nothing naming the cause.
+`test_report.py` asserts the two sets are equal.
+
+**Why each flag is there, measured rather than assumed.** breseq 0.50's `evidence.html` is a
+JavaScript application: JSZip and pako bundled inline, every evidence page, SVG and PNG as one
+base64 ZIP, unzipped client-side and rendered into a nested `srcdoc` frame with
+`<base href>` computed from `location.href`. The file it shows is named by the URL **fragment**,
+which never reaches the server -- so one route serves the whole evidence tree, and `.gd`-era
+`evidence/` directories work too because the route takes a path.
+
+- `allow-scripts` -- without it the page is blank. Verified in headless Chrome under exactly
+  this CSP: the ZIP decoded, a 72 KB read-alignment page rendered, images inlined as `data:`.
+- `allow-top-navigation-by-user-activation` -- the evidence pages carry `<base target="_top">`,
+  so their cross-links navigate the top window and without this every one silently does
+  nothing. *By user activation* is what still refuses a script redirecting the page on its own.
+- `allow-downloads` -- `output.gd` and `log.txt` are linked from the report.
+
+`serve_file` grew a `headers=` argument for this rather than the view patching the response
+afterwards: it has three exit points, and a caller doing it by hand would eventually miss the
+range branch -- which for a security header is the whole of the failure.
+
+**`store.sample_report_dir` is inside the sample's own directory** so `purge_deleted`, which
+already rmtrees `sample_dir`, reaps it with everything else and there is no second lifecycle to
+forget. Storing it is best-effort, the posture coverage takes: a sample keeps its mutations
+whether or not its report stores, and a `.gd` drop has no report at all.
+
+**`register_import_handler` grew `directories=`** for the same feature, and it is the thing
+`patterns` cannot express: patterns are suffix matches and "everything under `output/`" is not
+a suffix -- breseq chooses the filenames and they differ between releases. It matters on the
+*client* as much as the server, because the Add page decides what to upload from these
+declarations before a byte is sent.
 
 ### Reading VCF, and why it is not a second kind of mutation
 

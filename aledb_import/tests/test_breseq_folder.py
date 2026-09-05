@@ -1,11 +1,13 @@
 import os
 import shutil
 import tempfile
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
 from aledb_common import store
+from aledb_experiment.models import Project
 from aledb_import import breseq_folder
 from aledb_import.tests import breseq_fixture
 from aledb_sample.models import (
@@ -346,3 +348,79 @@ class BreseqGdFilenameTestCase(TestCase):
         self.assertIsNone(
             breseq_folder.find_gd_file(os.path.join(self.drop, "1-1-1-1")))
         self.assertEqual(0, self._import()["total_mutations"])
+
+
+class ReportStoredTestCase(TestCase):
+    """breseq's `output/` is kept, so the evidence behind a call stays reachable."""
+
+    def setUp(self):
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(ALEDB_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.user = User.objects.create(username="tester", email="t@e.com", is_active=True)
+        self.project = Project.objects.create(name="p", user=self.user)
+        from aledb_experiment.views import _create_experiment
+        self.experiment = _create_experiment(self.project, "e", self.user)
+
+    def _drop(self, with_report=True, nested=False):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        sample_dir = breseq_fixture.write_sample(root, "s1")
+        if with_report:
+            output = os.path.join(sample_dir, "output")
+            os.makedirs(output, exist_ok=True)
+            with open(os.path.join(output, "index.html"), "w") as handle:
+                handle.write("<html>breseq index</html>")
+            if nested:
+                # The older layout: an evidence/ tree rather than one evidence.html.
+                os.makedirs(os.path.join(output, "evidence"), exist_ok=True)
+                with open(os.path.join(output, "evidence", "RA_1.html"), "w") as handle:
+                    handle.write("<html>pileup</html>")
+        return root
+
+    def test_a_folder_with_a_report_keeps_it(self):
+        breseq_folder.import_samples_into(self.experiment, self._drop())
+
+        sample = Sample.objects.get()
+        self.assertTrue(sample.report_stored)
+        self.assertTrue(os.path.isfile(
+            os.path.join(store.sample_report_dir(sample.pk), "index.html")))
+
+    def test_the_older_evidence_tree_is_kept_whole(self):
+        breseq_folder.import_samples_into(self.experiment, self._drop(nested=True))
+
+        sample = Sample.objects.get()
+        self.assertTrue(os.path.isfile(os.path.join(
+            store.sample_report_dir(sample.pk), "evidence", "RA_1.html")))
+
+    def test_a_folder_without_one_imports_anyway(self):
+        # A hand-assembled data/ directory, and every .gd drop there has ever been.
+        summary = breseq_folder.import_samples_into(
+            self.experiment, self._drop(with_report=False))
+
+        self.assertIsNone(summary["files"][0]["error"])
+        self.assertFalse(Sample.objects.get().report_stored)
+
+    def test_a_report_that_cannot_be_stored_does_not_fail_the_sample(self):
+        # Best-effort, the posture coverage takes: the mutations are the data.
+        root = self._drop()
+        with mock.patch("aledb_import.breseq_folder.shutil.copytree",
+                        side_effect=OSError("disk full")):
+            summary = breseq_folder.import_samples_into(self.experiment, root)
+
+        self.assertIsNone(summary["files"][0]["error"])
+        self.assertGreater(summary["total_mutations"], 0)
+        self.assertFalse(Sample.objects.get().report_stored)
+
+    def test_the_report_is_purged_with_the_sample_directory(self):
+        breseq_folder.import_samples_into(self.experiment, self._drop())
+        sample = Sample.objects.get()
+        directory = store.sample_report_dir(sample.pk)
+        self.assertTrue(os.path.isdir(directory))
+
+        # purge_deleted rmtrees store.sample_dir, which is why the report lives inside it.
+        shutil.rmtree(store.sample_dir(sample.pk), ignore_errors=True)
+        self.assertFalse(os.path.exists(directory))

@@ -67,6 +67,20 @@ def sample_path(sample_id, filename):
     return os.path.join(sample_dir(sample_id), filename)
 
 
+def sample_report_dir(sample_id):
+    """breseq's own HTML report for a sample, as it wrote it.
+
+    A *tree* rather than an artifact, so it has no entry in `sample_path`'s whitelist -- what
+    breseq writes there is breseq's business, and the containment is done where the request
+    comes in (`aledb_sample/views/report.py`) rather than by naming every file here.
+
+    Inside the sample's own directory deliberately: `purge_deleted` already rmtrees
+    `sample_dir`, so this is reaped along with the BAM and the `.gd` and there is no second
+    lifecycle to forget about.
+    """
+    return os.path.join(sample_dir(sample_id), "report")
+
+
 def staging_dir(upload_session_id):
     """Staging area for one upload session.
 

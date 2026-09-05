@@ -146,6 +146,11 @@ class Sample(SupplementalDataMixin):
     # rather than something inferred from bam_stored: the derivation needs external tools and
     # is best-effort, so a sample can have its reads and not its coverage.
     coverage_stored = models.BooleanField(default=False)
+    #: Whether breseq's own HTML report -- its `output/` directory -- is in the store, so
+    #: `/mutations/report/<pk>/` has something to show. A third flag for the same reason the
+    #: second exists: a sample can have its reads and not its report, because a `.gd` drop
+    #: carries no report at all and a hand-assembled `data/` folder need not either.
+    report_stored = models.BooleanField(default=False)
 
     # Shortcuts up the chain, for the call sites that want one field from it and not the
     # rows in between. They were `ale_experiment`, `ale_id` and `flask_number`.

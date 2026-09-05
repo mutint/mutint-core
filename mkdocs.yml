@@ -75,6 +75,7 @@ nav:
       - Quick start: using/quickstart.md
       - Loading data: using/loading-data.md
       - Importing VCF: using/importing-vcf.md
+      - Reading breseq's report: using/breseq-report.md
       - Reference genomes: using/reference-genomes.md
       - Configuration: using/configuration.md
       - Management commands: using/commands.md

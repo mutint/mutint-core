@@ -51,7 +51,7 @@ def register_import_handler(name, label, patterns, handle,
                             priority=PRIORITY_DATA, detect=None, description="",
                             requires_reference=False,
                             only_without_reference=False, accepts_options=False,
-                            list_units=None, menu_order=None):
+                            list_units=None, menu_order=None, directories=()):
     """Register an import type.
 
     name        stable slug; the value the Add page's dropdown submits
@@ -112,6 +112,23 @@ def register_import_handler(name, label, patterns, handle,
                 priority order, because the Add page walks *that* list to name what an
                 unrecognised file looks like and wants the handler that would really
                 claim it named first.
+    directories directory names whose whole contents this handler claims, wherever they
+                appear in the drop.
+
+                **The thing `patterns` cannot express**: patterns are suffix matches, and
+                "every file under `output/`" is not a suffix. breseq's HTML report is
+                exactly that shape -- breseq chooses the filenames, they differ between
+                releases, and older ones nest an `evidence/` directory inside it.
+
+                It matters on the *client* as much as here. The Add page decides what it
+                will upload from these declarations before a byte is sent, so a directory
+                no handler declares is never transferred and the server's own `detect`
+                never gets to see it.
+
+                Broader than a pattern by construction, so declare one only where the
+                handler identifies the enclosing folder another way --
+                `detect_breseq_folders` claims `output/` only inside a directory that
+                already holds `data/output.gd`.
     """
     if any(handler["name"] == name for handler in _import_handlers):
         raise ValueError("import handler %r is already registered" % (name,))
@@ -119,6 +136,7 @@ def register_import_handler(name, label, patterns, handle,
         "name": name,
         "label": label,
         "patterns": [p.lower() for p in patterns],
+        "directories": [d.strip("/").lower() for d in directories],
         "priority": priority,
         "handle": handle,
         "detect": detect,
@@ -173,6 +191,7 @@ def get_import_types():
         "name": h["name"],
         "label": h["label"],
         "patterns": h["patterns"],
+        "directories": h["directories"],
         "description": h["description"],
         "requires_reference": h["requires_reference"],
         "only_without_reference": h["only_without_reference"],

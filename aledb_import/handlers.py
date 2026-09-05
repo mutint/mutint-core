@@ -34,9 +34,13 @@ REFERENCE_PATTERNS = [
 ]
 
 BRESEQ_PATTERNS = [
-    # Everything a sample contributes lives in data/ -- the .gd beside the reference it
-    # was called against. output/ is not consulted, and annotated.gd is not read at all
-    # now that annotation comes from the stored reference. See aledb_import.breseq_folder.
+    # Everything a sample's *data* contributes lives in data/ -- the .gd beside the reference
+    # it was called against. annotated.gd is not read at all now that annotation comes from
+    # the stored reference. See aledb_import.breseq_folder.
+    #
+    # (This said "output/ is not consulted", and that stopped being true: breseq's HTML report
+    # is kept now so a reader can see the evidence behind a call. It is claimed by
+    # BRESEQ_DIRECTORIES below rather than from here, because no suffix describes it.)
     "data/output.gd",
     # ~10 KB, and the only source of the sample's read/coverage statistics now that they are
     # no longer scraped out of summary.html. Optional: a sample without it still imports.
@@ -46,6 +50,13 @@ BRESEQ_PATTERNS = [
     "data/reference.bam",
     "data/reference.bam.bai",
 ]
+
+# breseq's own HTML report, claimed whole. It cannot be a pattern: breseq chooses the
+# filenames inside it and they differ between releases -- 0.50 writes one self-contained
+# `evidence.html` with the whole evidence tree zipped inside it, older ones write an
+# `evidence/` directory of pages and images -- and "everything under this directory" is not a
+# suffix. See `directories` on `register_import_handler`, and `store.sample_report_dir`.
+BRESEQ_DIRECTORIES = ["output"]
 
 # replace_annotation takes features, not sequence, so a FASTA has nothing it can use.
 # FASTA is included even though a FASTA carries no annotation to install: this type is also
@@ -75,6 +86,13 @@ MENU_REPLACE_ANNOTATION = 90
 
 # --- breseq result folders ----------------------------------------------------------------
 
+def _under_output(path, prefixes):
+    """Whether `path` is inside a breseq sample's own `output/` directory."""
+    lowered = path.replace(os.sep, "/").lower()
+    return any(lowered.startswith((prefix.replace(os.sep, "/") + "output/").lower())
+               for prefix in prefixes)
+
+
 def detect_breseq_folders(staged_root, paths):
     """Claim every file belonging to a directory that looks like a breseq sample.
 
@@ -91,7 +109,8 @@ def detect_breseq_folders(staged_root, paths):
     prefixes = tuple(
         os.path.relpath(d, staged_root) + os.sep for d in sample_dirs)
     return [p for p in paths
-            if p.startswith(prefixes) and matches_patterns(p, BRESEQ_PATTERNS)]
+            if p.startswith(prefixes)
+            and (matches_patterns(p, BRESEQ_PATTERNS) or _under_output(p, prefixes))]
 
 
 def list_breseq_units(_staged_root, claimed):
@@ -464,12 +483,14 @@ def register_core_import_handlers():
         name="breseq_folder",
         label="breseq data folders",
         patterns=BRESEQ_PATTERNS,
+        directories=BRESEQ_DIRECTORIES,
         priority=PRIORITY_DATA,
         detect=detect_breseq_folders,
         handle=handle_breseq_folders,
         list_units=list_breseq_units,
         menu_order=MENU_BRESEQ,
-        description="One or more sample folders, each with a data/ holding output.gd, the reference and the alignment.")
+        description="One or more sample folders, each with a data/ holding output.gd, the "
+                    "reference and the alignment. breseq's own output/ report is kept too.")
     register_import_handler(
         name="genomediff",
         label="GenomeDiff mutations (.gd)",
