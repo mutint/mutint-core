@@ -36,6 +36,14 @@ REFSEQ_COLUMN_IN_MUT_TABLE = 2
 HTML_MUTATION_TABLE_HEADER = ["", "Tags", "Reference Seq", "Position", "Mutation Type",
                               "Sequence Change", "Gene (Scrollable)", "Product", "Mut ID",
                               "Details"]
+# Where the per-sample columns begin, which is every column after the fixed ones above.
+# `table_template.js` used to place it by arithmetic on REFSEQ_COLUMN_IN_MUT_TABLE, with
+# offsets from when the fixed set was longer: its default hid "samples" at +8 and +9 that were
+# by then the first two real sample columns, styled samples only from the fourth, and -- on an
+# experiment with one sample -- asked DataTables to hide a column past the end, which alerts
+# twice per draw. Derived from the header rather than written as a number so the next column
+# to come or go moves it too. Reaches templates through `request_vocabulary`.
+FIRST_SAMPLE_COLUMN_IN_MUT_TABLE = len(HTML_MUTATION_TABLE_HEADER)
 
 TAGS = {
     "contaminated": '<i class="fa fa-random fa-fw" aria-hidden="true"></i>',

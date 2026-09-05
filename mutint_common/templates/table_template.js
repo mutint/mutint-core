@@ -21,14 +21,23 @@ $(document).ready(function () {
         columns_to_export.push(k)
     }
 
+    // The sample columns, every one of them. This ran from refseq_column + 11, an offset
+    // from a longer fixed set, and left the first three samples unstyled.
     var styling_targets = [];
-
-    for (var l = number_of_columns - 1; l > refseq_column + 10; l--) {
+    for (var l = number_of_columns - 1; l >= first_sample_column; l--) {
         styling_targets.push(l)
     }
     var hidden_cols = document.getElementById('hidden_columns').value.split(',');
     if(hidden_cols[0] == "") {
-        hidden_cols = [refseq_column + 5, refseq_column + 6, refseq_column + 7, refseq_column+8, refseq_column+9]
+        // The fixed columns after Gene -- Product, Mut ID, Details -- and never a sample.
+        // This was five fixed offsets from refseq_column, two of which had become the first
+        // two sample columns; with a single sample the second of those pointed past the
+        // table, and DataTables answers a hidden column that does not exist with an alert
+        // on every draw.
+        hidden_cols = [];
+        for (var h = refseq_column + 5; h < first_sample_column; h++) {
+            hidden_cols.push(h)
+        }
     }
 
     var oTable = $("#data").DataTable({
@@ -73,7 +82,7 @@ $(document).ready(function () {
                 text: 'Show all samples',
                 action: function(e, dt, node, config) {
                     var colcount = dt.columns().header().length
-                    for (var i = 14; i<colcount; i++){
+                    for (var i = first_sample_column; i<colcount; i++){
                         dt.columns(i).visible(true)
                     }
                 }
@@ -82,7 +91,7 @@ $(document).ready(function () {
                 text: 'Hide all samples',
                 action: function(e, dt, node, config) {
                     var colcount = dt.columns().header().length
-                    for (var i = 14; i<colcount; i++){
+                    for (var i = first_sample_column; i<colcount; i++){
                         dt.columns(i).visible(false)
                     }
                 }
@@ -141,7 +150,7 @@ $(document).ready(function () {
             var data = row.data();
 
             var has_entry = false;
-            for(var l = sorted_column + 9; l < visible_columns.length; l++) {
+            for(var l = first_sample_column; l < visible_columns.length; l++) {
                 if(visible_columns[l] == true) {
                     if(data[l] != '<span class="empty"></span>') {
                         has_entry = true;
@@ -184,7 +193,7 @@ function column_sort_from_right() {
     var table = $("#data").DataTable();
     var visible_columns = table.columns().visible();
 
-    for (var i = sorted_column + 10; i < number_of_columns; i++) {
+    for (var i = first_sample_column; i < number_of_columns; i++) {
         if(visible_columns[i] == true) {
             sorting_array.push([i, 'desc'])
         }

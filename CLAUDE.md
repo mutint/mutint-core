@@ -1648,6 +1648,18 @@ Two things this shook out that are worth knowing:
   index, so they followed for free. Getting it wrong renders a table labeled one way and
   sorted another, which reads like CSS. `test_mutation_table_builder` now asserts the header
   and every row are the same width and that the constant points at "Reference Seq".
+
+  **"Relative to that constant" was not enough, and there is a second one now.** The offsets
+  past the fixed columns -- where the *samples* begin -- were also written relative to
+  `REFSEQ_COLUMN_IN_MUT_TABLE`, from a time when the fixed set was longer, and nothing moved
+  them when it shrank. So the default hidden set covered the first two sample columns, the
+  cell coloring started at the fourth, and on an experiment with **one** sample the script
+  asked DataTables to hide a column past the end, which is two `alert()`s per page load and a
+  table showing no sample at all. `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE` is
+  `len(HTML_MUTATION_TABLE_HEADER)` and reaches the script through `request_vocabulary`, so
+  no view passes it and the next fixed column to come or go moves it. `test_table_columns.py`
+  pins it, and the one-sample case is the check: load Compare on such an experiment and
+  there must be no dialog.
 - **A filter with no cutoff at either end used to exclude the whole experiment.** An empty `Q`
   handed to `.exclude()` excludes everything. The guard survives in a new form -- with no cutoff
   the queryset is returned untouched and `.exclude()` is never called -- and the second copy of
