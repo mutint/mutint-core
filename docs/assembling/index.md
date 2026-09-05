@@ -34,9 +34,15 @@ mutint/
 │   ├── settings.py
 │   ├── urls.py
 │   └── wsgi.py
-├── aledb                # management entry point (executable Python script)
-└── requirements.txt
+├── env/                 # everything the entry script provisions; git-ignored
+├── mutint               # management entry point (executable Python script)
+├── requirements.txt     # this project's own additions only — see below
+└── tools.txt            # non-Python tools, if this project needs any of its own
 ```
+
+**The entry script is named for the project**, not `aledb` — `./mutint`, `./aledb-deploy`.
+It is the one command anybody runs, so it is the one thing that says which checkout they are
+standing in, and three checkouts of the same platform on one machine are the normal case here.
 
 ---
 
@@ -118,87 +124,93 @@ application = get_wsgi_application()
 
 ---
 
-## Management entry point (`aledb`, executable)
+## Management entry point
 
-Create this file at the repo root and make it executable (`chmod +x aledb`):
+**Copy `mutint/mutint` to your repo root under your own project's name and make it
+executable.** Do not write one — aledb-core's `./aledb`, `mutint/mutint` and
+`aledb-deploy/aledb-deploy` are byte-identical by design. Nothing in it names a project:
+everything is derived from `BASE_DIR`, the script's own location. The components come from
+`.gitmodules` beside it, and the database name from the checkout's directory
+(`aledb_common/pg.py`), which is why three checkouts on one machine get three databases
+without being configured for it.
+
+It ends in the four lines you would have written by hand:
 
 ```python
-#!/usr/bin/env python
-import os, sys
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(BASE_DIR, 'aledb-core'))
-sys.path.append(os.path.join(BASE_DIR, 'mutint-app'))
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-
 from aledb_common.cli import manage
 if __name__ == '__main__':
     manage()
 ```
 
-This mirrors aledb-core's own `./aledb` script but points at your assembled project's
-settings. All Django management commands work: `./aledb migrate`, `./aledb shell`, etc.
+Everything above them is why it is not four lines. Before Django is importable at all it
+provisions a pinned Python into `env/python`, builds `env/main` from it, installs every
+component's `requirements.txt` and `tools.txt`, provisions and starts a PostgreSQL cluster
+under `env/`, exports `ALEDB_TOOLS_DIR` and the database connection, and re-execs itself
+under the venv. It discovers the components to do that for by reading `.gitmodules`, so a
+copied script needs no edit when you add a submodule.
+
+**Anything run outside it will not find the database.** `env/main/bin/python manage.py …`
+connects to libpq's default socket and fails, because the connection is exported by the
+script and cannot be derived in settings. All Django management commands work through it:
+`./mutint migrate`, `./mutint shell`, and so on.
 
 ---
 
-## requirements.txt
+## requirements.txt and tools.txt
 
-```
--r aledb-core/requirements.txt
-# add mutint-specific dependencies here
-```
+**Do not chain `-r aledb-core/requirements.txt`.** The entry script walks `.gitmodules` and
+installs every component's `requirements.txt` itself, so a chain installs aledb-core's twice
+and, worse, describes a mechanism that is not the one running. The project's own file is for
+dependencies the *project* adds, and mutint's is empty but for a comment saying so.
+
+`tools.txt` beside it is the same idea for non-Python tools, as conda package specs, collected
+the same way and installed into `env/tools` with micromamba. It cannot be a Django registry:
+installation happens before Django exists. Code finds them through `aledb_common.tools`.
 
 ---
 
 ## First-time setup and running
 
-If your entry script bootstraps its own venv (like standalone aledb-core's `./aledb` and
-mutint's `./mutint`, which auto-create `env/main/` and install dependencies on first run),
-just run:
-
 ```bash
-./aledb start    # first run: creates env/main, installs deps, then migrate + superuser +
-                 # browser + runserver. Use `./aledb install` to (re)install deps only.
+./mutint start   # first run: provisions env/, migrates, creates an admin, spawns a worker,
+                 # opens a browser, starts the server
+./mutint install # (re)install dependencies only
 ```
 
-Otherwise, provision a venv manually first:
+That is the whole of it on a clean machine — **nothing is installed on the host** and no
+PostgreSQL server is something you supply. There is deliberately no documented manual path:
+hand-building a `.venv` and running `manage.py` gets you an interpreter with no database
+behind it, which fails in a way that reads like a broken checkout.
+
+Or step by step, still through the entry script:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-./aledb start    # runs migrate, creates admin superuser, opens browser, starts server
-```
-
-Or step by step:
-
-```bash
-./aledb migrate --run-syncdb
-./aledb createsuperuser
-./aledb runserver
+./mutint migrate --run-syncdb
+./mutint createsuperuser
+./mutint runserver
 ```
 
 ---
 
 ## What you get from aledb-core without changes
 
-- All ALEdb data models, mutation views, experiment upload, fixation, convergence, and stats
-- `./aledb start` first-run setup (migrate + superuser + browser open)
+- The data models, the import pipeline, the mutation views and tables, export, filtering,
+  stats, the genome browser and the mutation editor — every core `aledb_*` app.
+  **Fixation and convergence are not among them**: both are plugin repos, as compare, the
+  needle plot and phylogeny are, and an assembled project gets them by listing them in
+  `.gitmodules`. A component you do not install contributes nothing rather than an empty page.
+- `./mutint start` first-run setup, and the provisioned `env/` behind it
 - Auth slot — `aledb_accounts_noauth` is the only implementation shipped; swap in your own
   by changing `INSTALLED_APPS` in your `config/settings.py` and setting `auth_app = True` on
   its `AppConfig`
-- Context registry — inject data into experiment views from your app without touching
-  aledb-core code (see `aledb_common.context_registry`)
+- The eight registries in `aledb_common/`, which are how an app contributes to a core page
+  without core importing it: nav entries, About sections, import types, Overview panels,
+  export handlers, experiment-view context, example datasets and derived-data rebuilds. See
+  [The registries](../plugin/registries.md), and the Reference pages generated from their
+  docstrings.
 
----
-
-## Future integration points
-
-aledb-core will gain additional injection stubs for:
-
-- Extending experiment detail views with custom panels
-- Hooking into the experiment upload pipeline
-- Adding sidebar content and navigation items
-
-These will allow deeper integration without forking aledb-core.
+**This section used to end with a list of integration points aledb-core "will gain"** —
+custom panels on experiment detail views, hooks into the upload pipeline, and sidebar
+navigation. All three shipped: `panel_registry`, `plugin_registry` with `rebuild_registry`,
+and `nav_registry` respectively. The list is gone rather than corrected, because what
+replaced it is the bullet above.

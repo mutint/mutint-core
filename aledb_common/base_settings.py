@@ -30,7 +30,10 @@ def get_base_settings(base_dir, aledb_core_dir=None):
 
     Args:
         base_dir:       Root of the assembled project (or aledb-core itself when standalone).
-                        Used for STATIC_ROOT and the default SQLite database path.
+                        Everything the project owns hangs off it: STATIC_ROOT, the default
+                        ALEDB_STORE_DIR, and the templates/ and staticfiles/ dirs that lead
+                        their search paths. Not the database -- that is named from the
+                        checkout's own directory, in aledb_common.pg.
         aledb_core_dir: Path to the aledb-core checkout. Defaults to base_dir (correct for
                         standalone use). Used for STATICFILES_DIRS so aledb_common's static
                         assets are always found when running as a submodule.
