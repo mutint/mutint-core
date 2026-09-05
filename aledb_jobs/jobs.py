@@ -30,6 +30,7 @@ import logging
 
 from django.utils import timezone
 
+from aledb_jobs import queue
 from aledb_jobs.models import Job
 
 logger = logging.getLogger("aledb_jobs")
@@ -70,12 +71,28 @@ def is_cancelled(task_result_id):
     `task_result_id` rather than a `Job` pk, because that is what a task has: it was given a
     primary key of its own domain object, and the queue id is what links the two. A task with
     no `Job` row -- enqueued the plain way -- is never cancelled, which is the right answer.
+
+    **It cannot raise**, which is the same posture `queue.status_of` takes beside it and
+    `rebuild_registry.ensure_fresh` takes on a read path: a question *about* a job must not be
+    able to take down the job it is about. Found the hard way -- a dev database predating this
+    app has no `aledb_jobs_job` table, and the coverage task, which now checks this before it
+    does anything, failed with `UndefinedTable`. That is a broken installation and it should be
+    reported as one, but not as a coverage failure whose message says nothing about coverage.
+
+    "We cannot tell" therefore means **not cancelled**, and that direction is deliberate: the
+    cost is that a cancellation somebody asked for is ignored, which they can see and ask for
+    again. The other direction would silently skip work nobody cancelled.
     """
     if not task_result_id:
         return False
-    return Job.objects.filter(
-        task_result_id=str(task_result_id),
-        cancel_requested_at__isnull=False).exists()
+    try:
+        return Job.objects.filter(
+            task_result_id=str(task_result_id),
+            cancel_requested_at__isnull=False).exists()
+    except Exception:
+        logger.warning("could not read the cancellation flag for %s; assuming not cancelled",
+                       task_result_id, exc_info=True)
+        return False
 
 
 def check_cancelled(task_result_id, message="This job was cancelled."):
@@ -140,3 +157,38 @@ def may_cancel(user, job):
     if user.is_superuser:
         return True
     return job.user_id == user.id
+
+
+#: How long a queue row may sit before `reap_stranded` calls it abandoned rather than pending.
+#: Fourteen days, matching `prune_db_task_results`'s own default for finished rows and
+#: `purge_deleted`'s retention window -- the two nearest things in the suite.
+DEFAULT_REAP_DAYS = 14
+
+
+def reap_stranded(now=None, older_than_days=DEFAULT_REAP_DAYS, dry_run=False):
+    """Clear queue rows nothing will ever finish, and the `Job` rows that named them.
+
+    Returns `(queue_rows, job_rows)`. `now` is injectable so a test can age a row without
+    waiting a fortnight, which is the shape `upload_session.reap_expired_sessions` already
+    established and `./aledb reap_uploads` is the thin command over.
+
+    **Only the `Job` rows whose queue row we just removed.** A `Job` whose result the library's
+    own pruner has already discarded is not litter -- it is the ordinary end of a finished job,
+    and `queue.STATUS_UNKNOWN` exists precisely to render it. Tidying those away would delete
+    the installation's record of work it did, which is the thing every `SET_NULL` on this model
+    is there to preserve.
+    """
+    now = now or timezone.now()
+    cutoff = now - timezone.timedelta(days=older_than_days)
+
+    ids = queue.reap_stranded_rows(cutoff, dry_run=dry_run)
+    if not ids:
+        return 0, 0
+
+    orphans = Job.objects.filter(task_result_id__in=[str(i) for i in ids])
+    if dry_run:
+        return len(ids), orphans.count()
+
+    removed = orphans.delete()[0]
+    logger.info("reaped %d stranded queue row(s) and %d job row(s)", len(ids), removed)
+    return len(ids), removed

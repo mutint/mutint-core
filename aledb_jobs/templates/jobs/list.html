@@ -12,6 +12,7 @@
        These are the jobs you asked for.{% endif %}</p>
 
     <div id="jobs-error"></div>
+    <div id="jobs-stalled"></div>
     <div id="jobs-table"></div>
 
     {% if is_superuser %}
@@ -27,6 +28,7 @@
 
 {{ jobs|json_script:"jobs-data" }}
 {{ unattributed|json_script:"jobs-unattributed-data" }}
+{{ stalled_since|json_script:"jobs-stalled-data" }}
 
 <script type="text/javascript">
 (function () {
@@ -41,10 +43,13 @@
     var jobsData = JSON.parse(document.getElementById("jobs-data").textContent);
     var unattributedData = JSON.parse(
         document.getElementById("jobs-unattributed-data").textContent);
+    var stalledData = JSON.parse(
+        document.getElementById("jobs-stalled-data").textContent);
 
     var tableEl = document.getElementById("jobs-table");
     var unattributedEl = document.getElementById("jobs-unattributed");
     var errorEl = document.getElementById("jobs-error");
+    var stalledEl = document.getElementById("jobs-stalled");
     var pollTimer = null;
     // The same guard the Add page and the breseq page use: a poll already in flight when
     // something else redraws must not paint a stale list over the top of it.
@@ -86,6 +91,20 @@
             html += '<br><small style="color: #666;">waiting for a worker</small>';
         }
         return html;
+    }
+
+    // Says what was observed and hedges what it means, deliberately. A worker halfway through
+    // a twelve-hour breseq run leaves the head of the queue waiting exactly like no worker at
+    // all, and there is no way to tell the two apart -- the queue keeps no worker registry and
+    // no heartbeat. A banner that stated the conclusion would be wrong often enough to teach
+    // people to ignore it.
+    function renderStalled(since) {
+        if (!since) { stalledEl.innerHTML = ""; return; }
+        var when = new Date(since);
+        stalledEl.innerHTML =
+            '<div class="alert alert-warning">Work has been waiting since ' +
+            esc(when.toLocaleString()) + '. No worker appears to be running: start one with ' +
+            '<code>db_worker</code>, or restart the server.</div>';
     }
 
     function renderJobs(jobs) {
@@ -161,6 +180,7 @@
                         jobsData = body.jobs;
                         renderJobs(jobsData);
                         renderUnattributed(body.unattributed || []);
+                        renderStalled(body.stalled_since || null);
                         if (!anyUnfinished(jobsData)) { stopPolling(); return; }
                     }
                     pollTimer = setTimeout(poll, POLL_MS);
@@ -194,6 +214,7 @@
 
     renderJobs(jobsData);
     renderUnattributed(unattributedData);
+    renderStalled(stalledData);
     if (anyUnfinished(jobsData)) { startPolling(); }
 }());
 </script>

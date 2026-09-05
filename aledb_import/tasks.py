@@ -33,14 +33,21 @@ import logging
 from django.tasks import task
 
 from aledb_import import coverage
+from aledb_jobs import jobs
 from aledb_sample.models import Sample
 
 logger = logging.getLogger(__name__)
 
 
-@task()
-def build_coverage(sample_id):
+@task(takes_context=True)
+def build_coverage(context, sample_id):
     """Derive and store one sample's coverage BigWig.
+
+    **`takes_context=True` is how it learns its own queue id**, which is what `aledb_jobs`
+    keys a cancellation on. `mutint_breseq` does not need this -- its `BreseqRun` row stores
+    `task_result_id` -- but coverage has no row of its own, only a sample's primary key.
+    Django hands a `TaskContext` whose `task_result.id` is exactly the handle
+    `jobs.is_cancelled` wants.
 
     **Takes the primary key, not the model.** Task arguments are serialized to JSON, so a
     model instance cannot travel and would fail at enqueue time; the pk is also the honest
@@ -54,6 +61,15 @@ def build_coverage(sample_id):
     likely to hit: a `db_worker` started outside `./aledb` has no `ALEDB_TOOLS_DIR`, so
     `bedGraphToBigWig` is not found and every sample would silently get no coverage.
     """
+    # Polled once, at entry, and that is the only place it would mean anything: the
+    # derivation below is a single `build_for` call with no loop to check inside. It matters
+    # because `request_cancel` deliberately never touches the queue row, so a job cancelled
+    # while it was still queued is handed to a worker anyway -- the same reason
+    # `mutint_breseq.tasks.run_breseq` checks before it does anything.
+    if jobs.is_cancelled(context.task_result.id):
+        logger.info("coverage for sample %s was cancelled before it ran", sample_id)
+        return None
+
     reseq = Sample.objects.filter(pk=sample_id).first()
     if reseq is None:
         # Deleted between enqueue and execution. Not an error: there is nothing to derive.

@@ -168,7 +168,7 @@ def list_breseq_units(_staged_root, claimed):
 def handle_breseq_folders(experiment, staged_root, paths, user):
     from aledb_import.breseq_folder import import_samples_into
 
-    return import_samples_into(experiment, staged_root)
+    return import_samples_into(experiment, staged_root, user=user)
 
 
 # --- reference genomes --------------------------------------------------------------------

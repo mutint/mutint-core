@@ -11,6 +11,10 @@ covered at all -- the script is three byte-identical copies with no tests.
 
 import ast
 import os
+import shutil
+import subprocess
+import sys
+import tempfile
 
 from django.test import TestCase
 
@@ -147,3 +151,78 @@ class DescribeTestCase(TestCase):
 
         self.assertIn("server:    not installed", lines)
         self.assertTrue(any(line.startswith("database:") for line in lines))
+
+
+class StopIfOwnerIsTestCase(TestCase):
+    """`stop_if_owned` asked on somebody else's behalf, for the deadman supervisor.
+
+    That supervisor learns its parent has died -- however it died, `kill -9` included -- and
+    then has to stop the cluster that parent owned. It cannot use `owned_by_me`: its own pid is
+    not the owner's.
+
+    Nothing here starts a cluster. `stop()` on a tree with no running postmaster takes its
+    `is_running()` branch and simply disowns, so the *decision* is observable as whether the
+    owner file survives, which is the only thing these tests are about.
+    """
+
+    def setUp(self):
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
+        self.cluster = pg.Cluster(self.base)
+        os.makedirs(os.path.dirname(self.cluster.owner_file), exist_ok=True)
+
+    def _own(self, pid):
+        with open(self.cluster.owner_file, "w") as handle:
+            handle.write(str(pid))
+
+    def _dead_pid(self):
+        """A pid that certainly is not running: one we waited on."""
+        done = subprocess.Popen([sys.executable, "-c", ""])
+        done.wait()
+        return done.pid
+
+    def test_it_stops_a_cluster_its_dead_parent_owned(self):
+        pid = self._dead_pid()
+        self._own(pid)
+
+        self.cluster.stop_if_owner_is(pid)
+
+        self.assertFalse(os.path.exists(self.cluster.owner_file))
+
+    def test_it_leaves_one_somebody_else_has_adopted(self):
+        """The race this guards is real: another invocation reads the owner file, finds the pid
+        dead and claims it, while we -- having read the same file a moment earlier -- stop the
+        cluster underneath it. `_FileLock` is what makes the read and the stop one step; this
+        check is what makes the answer right once we hold it."""
+        self._own(os.getpid())
+
+        self.cluster.stop_if_owner_is(self._dead_pid())
+
+        self.assertTrue(os.path.exists(self.cluster.owner_file))
+
+    def test_it_leaves_one_whose_owner_is_still_alive(self):
+        """Pid reuse. If the number has been handed to a live process, this is not our parent
+        and the cluster is not ours to stop."""
+        self._own(os.getpid())
+
+        self.cluster.stop_if_owner_is(os.getpid())
+
+        self.assertTrue(os.path.exists(self.cluster.owner_file))
+
+    def test_it_leaves_an_unowned_one_entirely(self):
+        """`./aledb db start` creates one deliberately, so a server outlives one command.
+        There is no owner file, so `owner()` answers None and equals no pid."""
+        self.cluster.stop_if_owner_is(self._dead_pid())
+
+        self.assertFalse(os.path.exists(self.cluster.owner_file))
+
+    def test_it_does_nothing_without_a_pid(self):
+        self._own(os.getpid())
+
+        self.cluster.stop_if_owner_is(None)
+
+        self.assertTrue(os.path.exists(self.cluster.owner_file))
+
+    def test_it_never_raises(self):
+        """`stop_if_owned`'s contract: it runs where there is nobody left to tell."""
+        pg.Cluster("/definitely/not/a/checkout").stop_if_owner_is(1)

@@ -13,10 +13,15 @@ still succeeds, because coverage was always best-effort. What you get is every s
 silently arriving without a BigWig.
 """
 
+import inspect
+from unittest import mock
+
+from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.tasks import TaskResultStatus, task_backends
 
-from aledb_import import tasks
+from aledb_import import breseq_folder, coverage, tasks
+from aledb_jobs import jobs
 
 DATABASE_BACKEND = {
     "default": {"BACKEND": "django_tasks_db.DatabaseBackend"},
@@ -87,3 +92,67 @@ class DatabaseBackendTestCase(TestCase):
 
         self.assertEqual("django_tasks_db.backend.DatabaseBackend",
                          "%s.%s" % (type(backend).__module__, type(backend).__name__))
+
+
+@override_settings(TASKS=DATABASE_BACKEND)
+class CoverageIsAttributedTestCase(TestCase):
+    """Coverage work has an owner and a name, and it did not use to.
+
+    Enqueued the plain way it created no `Job`, so `/jobs/` showed it only in the
+    superuser-only *unattributed* panel -- no owner, no label, no Cancel button. The person
+    whose import queued it could not see it at all, which is most of why four of these sat in
+    two dev databases until somebody went looking in the database itself.
+    """
+
+    def setUp(self):
+        from django_tasks_db.models import DBTaskResult
+        self.DBTaskResult = DBTaskResult
+        self.user = User.objects.create(username="importer", email="i@e.com", is_active=True)
+
+    def _worker(self):
+        from django_tasks_db.management.commands.db_worker import Worker
+        return Worker(queue_names=["default"], interval=0, batch=True,
+                      backend_name="default", startup_delay=False, max_tasks=1,
+                      worker_id="test", excluded_queue_names=[])
+
+    def test_the_importer_enqueues_through_aledb_jobs(self):
+        """Asserted on `breseq_folder` rather than by calling `jobs.enqueue` here, since what
+        could regress is the call site reverting to a bare `task.enqueue`."""
+        source = inspect.getsource(breseq_folder)
+
+        self.assertIn("jobs.enqueue(tasks.build_coverage", source)
+        self.assertNotIn("tasks.build_coverage.enqueue", source)
+
+    def test_a_job_row_carries_the_owner_and_the_sample(self):
+        job = jobs.enqueue(tasks.build_coverage, 123456789, user=self.user,
+                           label="Coverage — 763A", component="aledb_import",
+                           cancellable=True)
+
+        self.assertEqual(self.user, job.user)
+        self.assertIn("763A", job.label)
+        self.assertTrue(job.cancellable)
+
+    def test_a_cancelled_job_derives_nothing(self):
+        """`request_cancel` deliberately never touches the queue row, so a job cancelled while
+        it was queued is still handed to a worker. The task has to check, and `takes_context`
+        is how it learns the id to check under -- it has no row of its own, only a sample pk."""
+        job = jobs.enqueue(tasks.build_coverage, 123456789, user=self.user, cancellable=True)
+        jobs.request_cancel(job, by=self.user)
+        row = self.DBTaskResult.objects.get(id=job.task_result_id)
+
+        with mock.patch.object(coverage, "build_for") as build:
+            self._worker().run_task(row)
+
+        row.refresh_from_db()
+        self.assertEqual(TaskResultStatus.SUCCESSFUL, row.status)
+        self.assertEqual(0, build.call_count)
+
+    def test_an_uncancelled_one_still_runs(self):
+        """The other half: the check must not be a permanent refusal."""
+        jobs.enqueue(tasks.build_coverage, 123456789, user=self.user, cancellable=True)
+        row = self.DBTaskResult.objects.get()
+
+        self._worker().run_task(row)
+
+        row.refresh_from_db()
+        self.assertEqual(TaskResultStatus.SUCCESSFUL, row.status)

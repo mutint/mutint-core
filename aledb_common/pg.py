@@ -275,6 +275,40 @@ class Cluster(object):
         except Exception:
             pass
 
+    def stop_if_owner_is(self, pid):
+        """`stop_if_owned` asked on somebody else's behalf, for the deadman supervisor.
+
+        The supervisor watches a pipe whose write end only `./aledb start` holds, so it learns
+        that its parent died however it died -- including `kill -9`, which `atexit` cannot
+        reach. It then has to stop the cluster that parent owned, and it cannot use
+        `owned_by_me`: its own pid is not the owner's. See `aledb_jobs/supervisor.py`.
+
+        Three things make it safe rather than merely plausible, and each guards a state that
+        really occurs:
+
+        - **The lock.** `ensure` holds it across its whole check-start-adopt sequence, so
+          without taking it here there is a genuine race: another invocation reads the owner
+          file, finds the pid dead and claims, while we -- having read the same file a moment
+          earlier -- stop the cluster underneath it, leaving the adopter holding a server it
+          believes is running.
+        - **The owner check.** An *unowned* cluster must be left alone: `./aledb db start`
+          creates one deliberately so a server outlives one command, and its owner file is
+          absent, so `owner()` answers None and never equals a pid.
+        - **The liveness check.** If the number has since been handed to a live process, this
+          is not our parent and the cluster is not ours to stop. Pid reuse is unlikely and
+          costs a running database when it happens.
+
+        Never raises, for `stop_if_owned`'s reason: it runs where there is nobody to tell.
+        """
+        try:
+            if pid is None:
+                return
+            with _FileLock(self.lock_file):
+                if self.owner() == pid and not _alive(pid):
+                    self.stop()
+        except Exception:
+            pass
+
     # -- the database ------------------------------------------------------------------
 
     def _psql(self, *args):

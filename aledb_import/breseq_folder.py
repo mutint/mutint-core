@@ -35,6 +35,7 @@ from django.db import transaction
 from aledb_common import import_progress, store
 from aledb_import.retry import with_retry
 from aledb_import import tasks
+from aledb_jobs import jobs
 from aledb_import import reference as reference_io
 from aledb_import.breseq_summary import read_breseq_summary
 from aledb_sample.models import Sample
@@ -138,19 +139,24 @@ def import_breseq_folders(root, project_name, experiment_name, owner_name,
     return _import_samples(context, root, report_loose_gd=True)
 
 
-def import_samples_into(experiment, root):
+def import_samples_into(experiment, root, user=None):
     """Import every breseq sample under ``root`` into an existing experiment.
 
     Loose ``.gd`` files are left alone here: the import registry routes those to the
     genomediff handler, so claiming them would import the same file twice.
+
+    ``user`` is whoever asked, and is only ever used to attribute the background coverage job
+    so it appears on their ``/jobs/`` page. **A keyword with a default, not a third positional
+    argument**, because `mutint_breseq.tasks` calls this too, from a repository that cannot see
+    this change; a positional one would break the plugin at the moment this landed.
     """
     from aledb_import.gd_import import prepare_experiment_by_id
 
     context = prepare_experiment_by_id(experiment.id)
-    return _import_samples(context, root, report_loose_gd=False)
+    return _import_samples(context, root, report_loose_gd=False, user=user)
 
 
-def _import_samples(context, root, report_loose_gd):
+def _import_samples(context, root, report_loose_gd, user=None):
     experiment = context["experiment"]
 
     sample_dirs = find_sample_dirs(root)
@@ -199,7 +205,20 @@ def _import_samples(context, root, report_loose_gd):
             # With no worker running the BigWig is simply not built, which is a state the
             # product already handles: the browser falls back to igv's own coverage row and
             # `./aledb coverage` backfills.
-            tasks.build_coverage.enqueue(seq_experiment.id)
+            #
+            # Through `aledb_jobs` rather than `task.enqueue` directly, which is what puts the
+            # work on /jobs/ with a name and an owner and makes it stoppable. Enqueued the
+            # plain way it appeared only in the superuser-only *unattributed* panel, with no
+            # owner and no label -- so the person whose import queued it could not see it at
+            # all, which is most of why four of them sat unnoticed until somebody went looking
+            # in the database. `cancellable=True` is a promise `build_coverage` keeps: it polls
+            # at entry.
+            jobs.enqueue(tasks.build_coverage, seq_experiment.id,
+                         user=user,
+                         label="Coverage \u2014 %s" % sample_name,
+                         component="aledb_import",
+                         experiment=experiment,
+                         cancellable=True)
             entry = {"file": sample_name, "mutations": count, "error": None,
                      "warnings": warnings, "replaced": replaced}
             total_mutations += count

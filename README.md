@@ -210,6 +210,8 @@ All configuration is via environment variables. The defaults are suitable for lo
 ./aledb db stop               # stop it
 ./aledb db reset --yes        # throw the database away and start again, empty
 ./aledb db_worker             # run queued background work (coverage derivation)
+                              #   `./aledb start` runs one for you; this is for everywhere else
+./aledb reap_jobs             # discard queue rows no worker ever claimed
 ./aledb test                  # run test suite
 ./aledb makemigrations        # generate new migrations after model changes
 ./aledb migrate               # apply migrations

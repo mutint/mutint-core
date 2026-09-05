@@ -4,6 +4,7 @@ import logging
 
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
@@ -58,6 +59,27 @@ def _unattributed(user):
     } for row in queue.unattributed(known)]
 
 
+def _stalled_since(user):
+    """When the head of the queue started waiting, if nothing appears to be taking it.
+
+    **This is the closest thing to "is a worker running" that can honestly be asked.**
+    `django_tasks_db` keeps no worker registry and no heartbeat -- only `worker_ids`, written
+    onto rows a worker has already claimed -- so the page reports the observation and leaves
+    the reader to draw the conclusion, because a worker busy on a twelve-hour breseq run looks
+    from here exactly like no worker at all.
+
+    Shown to everybody, not just superusers, unlike the unattributed list: that panel exposes
+    other people's work, while this is a fact about the installation that explains why *your*
+    job says queued.
+    """
+    oldest = queue.oldest_ready()
+    if oldest is None:
+        return None
+    if (timezone.now() - oldest).total_seconds() < queue.STALLED_SECONDS:
+        return None
+    return oldest.isoformat()
+
+
 @ensure_csrf_cookie
 def jobs(request):
     """`/jobs/` -- your jobs, or everyone's if you are a superuser."""
@@ -68,6 +90,7 @@ def jobs(request):
     context.update({
         "jobs": _rows(request.user),
         "unattributed": _unattributed(request.user),
+        "stalled_since": _stalled_since(request.user),
         "is_superuser": request.user.is_superuser,
     })
     return render(request, "jobs/list.html", context)
@@ -78,9 +101,13 @@ def jobs_json(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "You must be signed in."}, status=403)
 
+    # `stalled_since` rides the poll as well as the first render. The page refreshes every few
+    # seconds, so a banner written only into the initial context would go stale in the wrong
+    # direction -- still accusing a worker that started a minute ago.
     return JsonResponse({
         "jobs": _rows(request.user),
         "unattributed": _unattributed(request.user),
+        "stalled_since": _stalled_since(request.user),
     })
 
 

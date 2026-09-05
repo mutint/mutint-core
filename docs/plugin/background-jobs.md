@@ -102,9 +102,21 @@ plus the unattributed section. It polls while anything is unfinished and stops w
 
 ## Running the work
 
-**Nothing spawns a worker.** `./mutint db_worker` is what executes what has been enqueued, and
-it must be started through the entry script — a bare `manage.py db_worker` has neither the
-database connection nor `ALEDB_TOOLS_DIR`, so it finds none of the external tools.
+**`./mutint start` runs a worker alongside the dev server**, so in development the queue
+drains on its own. It is spawned under a deadman supervisor that stops it when the server
+goes — including `kill -9` — and `--no-worker` turns it off.
+
+**Everywhere else, nothing spawns one.** `./mutint db_worker` is what executes what has been
+enqueued, and it must be started through the entry script — a bare `manage.py db_worker` has
+neither the database connection nor `ALEDB_TOOLS_DIR`, so it finds none of the external tools.
+A deployment runs one under whatever supervises its web server.
+
+The worker `start` runs is deliberately **not** reloaded on code changes, so it executes the
+code as of launch. Restart the server after editing a task, or your edit is not what runs.
+
+`./mutint reap_jobs` clears queue rows that were never claimed — the library's own
+`prune_db_task_results` only removes *finished* ones, so an unclaimed row is otherwise
+immortal.
 
 Decide, before you enqueue anything, **which kind of task yours is**:
 
@@ -112,7 +124,10 @@ Decide, before you enqueue anything, **which kind of task yours is**:
   backfills later. An installation with no worker is merely missing something.
 - *Broken when skipped*, like a breseq run: nothing else will ever do it. Then your page has
   to say so — ask the queue and tell the reader that nothing has picked the job up, rather
-  than leaving "queued" to mean both "soon" and "never".
+  than leaving "queued" to mean both "soon" and "never". `/jobs/` does this for you if you
+  enqueue through `aledb_jobs`, and also says when work has been waiting with nothing taking
+  it — which is as close to "is a worker running" as can honestly be asked, since the queue
+  keeps no worker registry and no heartbeat.
 
 ## Testing it
 

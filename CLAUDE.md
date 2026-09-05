@@ -103,7 +103,10 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1839 run, 0 failures** standalone. They were **1834** before the sidebar rework --
+**Baseline: 1907 run, 0 failures** standalone. They were **1839** before the background-worker
+work, which adds 68 -- the deadman supervisor and its constraints, the `start` gates, the
+process-group clean-up, the reaper's `skip_locked`, the stalled-queue signal, and
+`stop_if_owner_is`. They were **1834** before the sidebar rework --
 **measured at HEAD by stashing the change and running it**, because the figure recorded here
 was 1823 and the suite was really doing 1834. Eleven tests had been added without anybody
 re-counting, which is the drift the paragraph below warns about, sprung again in the figure
@@ -118,8 +121,9 @@ beside it: sixty tests had been added without anybody re-counting. Every figure 
 this list is therefore suspect by an unknown amount and is worth reading as history rather
 than as a measurement.
 
-Assembled, **2085** -- also measured, with `PYTHONPATH` pointed at the root checkouts of
-aledb-core and aledb-needle, since `mutint/`'s copies are submodule clones of the last commit.
+Assembled, **2153** -- also measured, with `PYTHONPATH` pointed at the root checkouts of
+aledb-core, aledb-needle and mutint-breseq, since `mutint/`'s copies are submodule clones of
+the last commit. It was **2085** before the background-worker work.
 The figure recorded here before it was **2069**, and that is 16 short rather than 5 -- the same
 eleven uncounted tests as the standalone line above, which is what says the two numbers had
 drifted together rather than one of them being wrong on its own. It was **2048** before the breseq report viewer (which
@@ -3460,6 +3464,53 @@ section is superusers-only (with no owner and no label there is nothing to tell 
 and capped, because the only index on `status` is partial on READY and there is none on
 `enqueued_at`.
 
+**Coverage derivation is attributed now, and this was most of why four tasks went unnoticed.**
+`aledb_import/breseq_folder.py` enqueued it with a bare `task.enqueue`, so it created no `Job`
+-- and a job with no `Job` appears only in the superuser-only unattributed panel, with no
+owner, no label and no Cancel button. The person whose import queued the work could not see it
+at all. It goes through `jobs.enqueue` now, with the importing user, a label naming the sample,
+and `cancellable=True`.
+
+**That last flag needed `@task(takes_context=True)` to be honest.** `jobs.is_cancelled` takes
+the queue's own id, and `build_coverage(sample_id)` had no way to know its own -- unlike
+`mutint-breseq`, whose `BreseqRun` row stores `task_result_id`. Django 6.1 hands a
+`TaskContext` whose `task_result.id` is exactly that. The check is polled **once, at entry**,
+which is the only place it would mean anything: the derivation is a single `build_for` call
+with no loop to check inside, and `request_cancel` deliberately never touches the queue row, so
+a job cancelled while queued is handed to a worker anyway.
+
+**`is_cancelled` cannot raise**, the posture `queue.status_of` takes beside it. Found the hard
+way: a dev database predating this app has no `aledb_jobs_job` table, and the coverage task --
+which now asks before it does anything -- failed with `UndefinedTable`, reported as a coverage
+failure whose message said nothing about coverage. "Cannot tell" means *not cancelled*, and
+that direction is deliberate: the cost is a cancellation ignored, which the person can see and
+ask for again, where the other way silently skips work nobody cancelled.
+
+**The unattributed list did not do what its own comment said.** The comment on
+`UNATTRIBUTED_LIMIT` claimed "unfinished rows first, then this many of the most recent finished
+ones"; the code was one `order_by("-enqueued_at")[:50]`. On any installation with more than
+fifty queue rows a stranded READY row from last month was pushed off the list by this morning's
+successes -- and for work enqueued without a `Job`, that panel is the only place it is visible
+at all. It is two queries now, and the split is cheaper as well as correct: the unfinished half
+rides `tasks_db_new_ordering_idx`, which is partial on READY, while a global sort on
+`enqueued_at` has no index behind it.
+
+**Deleting a queue row is dangerous, and `./aledb reap_jobs` is the one thing that does it.**
+The worker claims inside `SELECT ... FOR UPDATE SKIP LOCKED`, so a plain
+`.filter(status=READY).delete()` can read a row as READY, block on the worker's lock, and
+delete one that has since become RUNNING -- after which `set_successful` raises
+`Model.NotUpdated` on its zero-row `save(update_fields=...)`, `set_failed` raises again from
+inside the except block, and the exception escapes the run loop and **takes the worker process
+down** with every other job it would have run. `queue.reap_stranded_rows` collects ids under
+`select_for_update(skip_locked=True)` in one transaction and deletes exactly those, which
+passes over anything a live worker holds. There is a test asserting the `skip_locked`, because
+this is a failure nothing else would catch until it happened in production.
+
+It removes only the `Job` rows whose queue row it just removed. A `Job` whose result the
+library's pruner already discarded is not litter -- it is the ordinary end of a finished job,
+which `STATUS_UNKNOWN` exists to render, and deleting it would throw away the installation's
+record of work it did, which is what every `SET_NULL` on that model is there to preserve.
+
 **The sidebar link is in `base.html`'s account block, not `nav_registry`.** That registry has no
 per-user visibility concept, so a registered entry renders for anonymous visitors and leads to a
 403 — the dead end `project/list.html`'s comment refuses. It reads as an account entry anyway:
@@ -3471,6 +3522,102 @@ for the account block itself.
 own settings every job's status reads as unknown and the page shows "no longer on the queue".
 That is correct — an immediate backend keeps no results — and it is why every test about
 queueing overrides `TASKS` to the database backend. `aledb_jobs/tests/test_jobs.py` pins both.
+
+### Running a worker with the dev server
+
+`./aledb start` spawns a `db_worker` alongside `runserver`, so in development the queue drains
+on its own. It used to refuse to, in a comment, and **the refusal named two real hazards and
+was right about both** -- which is why what replaced it answers them rather than deleting them:
+
+> *"runserver re-executes this whole command line on every code change, so a spawned one
+> becomes an orphan-management problem, and a background worker that dies silently is worse
+> than one you can see."*
+
+The first is answered by `is_first_launch()`, the `RUN_MAIN` gate this module already carried
+for `migrate`: we are the reloader's *parent*, and it re-executes only the child. The second is
+answered three ways, below.
+
+**Why `start.py` and not the entry script**, which is where the other long-lived child lives:
+the two constraints point opposite ways. `pg.py` is in the entry script because there is no
+alternative -- settings cannot connect to a cluster that is not up. A worker has the reverse
+problem: `db_worker`'s loop opens with `DBTaskResult.objects.ready()`, and on a fresh checkout
+that table does not exist until `migrate --run-syncdb` has run. A missing relation raises
+`ProgrammingError`, which the worker loop does **not** catch -- it catches `OperationalError`
+only -- so an entry-script spawn would die in its first second on precisely the clone-and-run
+path this suite is built around. `test_start_command` asserts `migrate` precedes the spawn for
+that reason, rather than leaving it to a comment. The three entry scripts are untouched.
+
+**`--no-reload`, passed explicitly, is the least obvious decision here.** Its default is
+`settings.DEBUG`, so leaving it alone means *on* in dev, and `db_worker`'s own help says why
+not: *"tasks may not be stopped cleanly."* Django's reloader exits from the main thread while
+the worker loop is a daemon thread, so saving a file guillotines the task in flight -- for a
+breseq run that is a stranded row **and** an orphaned breseq process group nothing will ever
+signal, because `runner.py` deliberately put it in a session of its own. Saving a file would
+saturate the machine indefinitely. The cost is that the worker runs the code as of launch,
+which the startup banner says out loud.
+
+#### The deadman pipe
+
+`atexit` covers more than it looks like -- `run_with_reloader` installs `SIGTERM ->
+sys.exit(0)` and ends `except KeyboardInterrupt: pass`, so Ctrl-C, SIGTERM and a closed
+terminal all exit normally and run the hook. What no hook can cover is `kill -9`. So
+`aledb_jobs/supervisor.py` sits between `start` and the worker, holding the read end of a pipe
+whose write end only `start` has: when `start` dies **for any reason**, the kernel closes it,
+the read returns EOF, and the supervisor stops the worker and the cluster.
+
+- **The write end must stay non-inheritable**, and this is the detail that would disable the
+  whole thing *silently*. `restart_with_reloader` spawns runserver with `close_fds=False`, so
+  anything inheritable is handed to a process that lives as long as the server -- and the read
+  would then never return. PEP 446 makes `os.pipe()` fds non-inheritable by default and only
+  the supervisor's read end is passed, via `pass_fds`. That is a property of the standard
+  library rather than of this code, which is why `DeadmanPipeTestCase` pins it.
+- **The supervisor imports nothing from Django** and is launched **by path**. Under an
+  assembled project `aledb_jobs` is importable only because `config/settings.py` puts the
+  submodule directories on `sys.path`, which a process that never loads settings has not done.
+  It loads `pg.py` by path for the same reason, and can only do so because `pg.py` is
+  standard-library-only -- a property it has for the entry script's sake that happens to be
+  exactly what is needed here.
+- **The cluster half is armed only when `start` owns the cluster**, which it can answer
+  directly because `os.execv` preserved the pid, so its process *is* the owner.
+  `Cluster.stop_if_owner_is(pid)` takes `_FileLock` -- the same lock `ensure` holds across its
+  check-start-adopt sequence, without which another invocation can find the pid dead and adopt
+  while we stop the cluster underneath it -- and refuses when the owner file names somebody
+  else, when the pid is alive, or when the cluster is unowned (`./aledb db start` creates
+  those deliberately so a server outlives one command). **Adoption stays**, demoted to the
+  backstop for a supervisor that is itself killed.
+- **`atexit` is LIFO and that ordering is load-bearing.** The entry script registers the
+  cluster's hook first, so `start`'s worker hook -- registered later -- runs first: worker
+  down, then cluster. Reversed, `pg_ctl stop` drops the connection under a live worker, whose
+  next query raises into `run_task`'s handler, whose `set_failed` then writes to the database
+  that has just gone away. Every Ctrl-C would end in a traceback with no apparent cause.
+
+#### "Dies silently", answered three ways
+
+- **The child's output is inherited, never captured.** `db_worker.configure_logging` attaches
+  a StreamHandler at INFO when nothing else has, so its lines land in the same terminal as
+  runserver's. Redirecting them anywhere is precisely what the objection means, and it is
+  exactly the sort of thing a later tidy-up "improves" -- so a test asserts `stdout` and
+  `stderr` are absent from the `Popen` kwargs.
+- **A watcher thread says so** when the worker exits on its own, gated on a `threading.Event`
+  the shutdown hook sets first, or every Ctrl-C would print it.
+- **`/jobs/` says so too**, and this is the only honest form the question can take: the queue
+  keeps no worker registry and no heartbeat, only `worker_ids` written onto rows already
+  claimed. So `queue.oldest_ready()` reports when the row a worker *would claim next* started
+  waiting, and past `STALLED_SECONDS` (60, not 5 -- a page loaded a second after an import
+  would otherwise accuse a worker about to claim the row) the page states the observation and
+  **hedges the conclusion**, because a worker halfway through a twelve-hour breseq run looks
+  identical from here.
+
+Two designs were rejected and are worth not re-proposing. **A worker pid file** knows only
+about workers `start` itself launched, while the likeliest real failure is a `db_worker`
+started outside `./aledb` -- a file saying "no worker" while one runs elsewhere is a lie in
+the direction that makes people start a second one and stop trusting the indicator. **A queue
+line in `./aledb db status`** would destroy that command's stated virtue of answering on a
+tree where nothing is provisioned, since `db` is entry-script-dispatched and pre-venv.
+
+**This must not grow into process supervision.** No restart-on-crash, no worker pool, no
+`--workers N`. A deployment runs `db_worker` under systemd, supervisor or a container restart
+policy, which already exist and are better at it.
 
 ### Pluggable App Slots
 
@@ -3536,16 +3683,33 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
   under `env/`, or one you run yourself by exporting `ALEDB_DB_HOST`. See **The database** in
   the suite `CLAUDE.md`.
 - File storage: `ALEDB_STORE_DIR`, keyed by database id (`aledb_common/store.py`)
-- Background work: **a worker, and it has to be run.** `TASKS` names
-  `django_tasks_db.DatabaseBackend`, and `./aledb db_worker` is what executes what has been
-  enqueued. Nothing spawns one for you. The only thing *this repo* enqueues is coverage
+- Background work: **`./aledb start` runs one; everywhere else it has to be run.** `TASKS`
+  names `django_tasks_db.DatabaseBackend`, and `./aledb db_worker` is what executes what has
+  been enqueued. The dev server now spawns one alongside itself (see **Running a worker with
+  the dev server** below), so a developer's queue drains on its own; a deployment does not use
+  `start` and runs its own under whatever supervises its web server. The only thing *this repo* enqueues is coverage
   derivation, whose degraded state is benign: an installation with no worker running imports
   correctly and simply has no coverage tracks until `./aledb coverage` is run. **A plugin's
   task need not be so forgiving** -- `mutint-breseq` enqueues an hours-long breseq run that
   nothing backfills, so with no worker it never happens at all. See **Background work** in the
   suite `CLAUDE.md`.
 
-There is still **no broker and no scheduler**; `./aledb reap_uploads` is still cron's job.
+There is still **no broker and no scheduler**; `./aledb reap_uploads` and the new
+`./aledb reap_jobs` are both still cron's job.
+
+**`reap_jobs` clears queue rows nothing will ever finish**, and it exists because nothing else
+can. `django_tasks_db` ships `prune_db_task_results`, and it filters
+`DBTaskResult.objects.finished()` -- SUCCESSFUL or FAILED -- so **a row no worker ever claimed
+is immortal by construction**. Four accumulated in this suite's two dev databases before
+anybody looked: three coverage tasks in MutInt's and one in aledb-core's, all READY, all from
+imports that ran while no worker existed.
+
+Two shapes qualify, both meaning "a worker was supposed to deal with this and never will":
+READY past the window, by `enqueued_at`; and RUNNING past it, by `started_at`, which
+`./aledb start`'s shutdown produces when it kills a worker mid-task rather than waiting out a
+twelve-hour breseq run. The delete is taken under `select_for_update(skip_locked=True)` and
+**that is not optional** -- see **Seeing and stopping background work** in
+`aledb-core/CLAUDE.md` for what deleting a claimed row does to the worker.
 
 This section used to claim Daphne, Django Channels, nginx and Redis. **Nothing in
 `requirements.txt` supported any of it** and no compose file in this tree referenced it -- it
