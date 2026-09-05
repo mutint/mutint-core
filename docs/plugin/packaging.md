@@ -21,10 +21,10 @@ The entry scripts collect these exactly as they collect requirements and install
 `env/tools` with micromamba, downloaded as a static binary so no conda is needed on the host.
 This cannot be a Django registry — installation happens before Django exists.
 
-Find them at runtime through `aledb_common.tools`:
+Find them at runtime through `mutint_common.tools`:
 
 ```python
-from aledb_common.tools import require, tool_path
+from mutint_common.tools import require, tool_path
 
 path = tool_path("bedtools")      # env/tools/bin, then PATH, then None
 path = require("bedtools")        # or raises ToolMissing naming the install command
@@ -44,10 +44,10 @@ genuinely computed.
 
 ```python
 import os
-from aledb_common.example_registry import register_example_dataset
+from mutint_common.example_registry import register_example_dataset
 
 register_example_dataset(
-    'aledb-yourthing-example',
+    'mutint-yourthing-example',
     os.path.join(os.path.dirname(__file__), 'examples', 'yourthing'),
     description='What this shows.')
 ```
@@ -63,7 +63,7 @@ A plugin contributes pages to its deployment's manual by having two files. There
 registry call:
 
 ```
-aledb-yourthing/
+mutint-yourthing/
 ├── mkdocs.yml
 └── docs/
     └── using/yourthing.md
@@ -73,16 +73,16 @@ aledb-yourthing/
 who it is for**:
 
 ```yaml
-site_name: aledb-yourthing
+site_name: mutint-yourthing
 
 nav:
-  - Using ALEdb:
+  - Using MutInt:
       - Your Thing: using/yourthing.md
-  - Extending ALEdb:
+  - Extending MutInt:
       - How it computes: extending/internals.md
 ```
 
-`Using ALEdb` and `Extending ALEdb` are merged across every installed component, so your page
+`Using MutInt` and `Extending MutInt` are merged across every installed component, so your page
 sits beside core's rather than in a section of your own. Anything under a heading the manual
 does not recognize lands under *About this deployment* named for your plugin — visible, rather
 than dropped.
@@ -91,7 +91,7 @@ than dropped.
 
 !!! warning "Do not link to another component's pages"
 
-    Your page is at `aledb-yourthing/using/yourthing/` in a deployment's manual and at
+    Your page is at `mutint-yourthing/using/yourthing/` in a deployment's manual and at
     `using/yourthing/` if your plugin is ever built alone, so a link across components is
     broken in one of the two. Name the other component instead of linking to it. Building with
     `--strict` turns such a link into an error rather than a warning.
@@ -100,8 +100,8 @@ than dropped.
 
 ```bash
 cd mutint
-git -c protocol.file.allow=always submodule add ../aledb-yourthing aledb-yourthing
-git add -A && git commit -m "feat: add aledb-yourthing submodule"
+git -c protocol.file.allow=always submodule add ../mutint-yourthing mutint-yourthing
+git add -A && git commit -m "feat: add mutint-yourthing submodule"
 ```
 
 That is the whole installation. No edit to `config/settings.py` or `config/urls.py`:
@@ -121,10 +121,10 @@ change what the project runs until the pointer moves:
 
 ```bash
 cd mutint
-git -c protocol.file.allow=always submodule update --remote aledb-yourthing
-git submodule status aledb-yourthing        # must equal your repo's HEAD
+git -c protocol.file.allow=always submodule update --remote mutint-yourthing
+git submodule status mutint-yourthing        # must equal your repo's HEAD
 ./mutint check
-git add aledb-yourthing && git commit -m "chore: bump aledb-yourthing"
+git add mutint-yourthing && git commit -m "chore: bump mutint-yourthing"
 ```
 
 !!! warning "Check the SHA against your repo's HEAD"
@@ -137,7 +137,7 @@ git add aledb-yourthing && git commit -m "chore: bump aledb-yourthing"
 
     Your plugin exists twice: your own checkout, and a clone inside the assembled project on
     a **detached HEAD**. A commit made in the second is reachable only by SHA inside that one
-    clone and is discarded the next time the pointer moves. `cd aledb-yourthing` from inside
+    clone and is discarded the next time the pointer moves. `cd mutint-yourthing` from inside
     the project lands there, looks identical, and passes its tests.
 
     Check `git branch --show-current` before committing: an empty answer means the wrong

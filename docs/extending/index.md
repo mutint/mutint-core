@@ -1,11 +1,11 @@
-# Writing a plugin for ALEdb
+# Writing a plugin for MutInt
 
-`aledb-core` is a Django project that can run on its own or be embedded in an **assembled
+`mutint-core` is a Django project that can run on its own or be embedded in an **assembled
 project** alongside other apps. A **plugin** is one of those other apps: its own git
-repository, holding one Django app, that adds something to ALEdb without aledb-core knowing it
+repository, holding one Django app, that adds something to MutInt without mutint-core knowing it
 exists.
 
-That last part is literal. **aledb-core contains no reference to any plugin** — no import, no
+That last part is literal. **mutint-core contains no reference to any plugin** — no import, no
 setting, no template include, no URL. A plugin announces itself at startup by calling
 registration functions, and core renders whatever has been registered. Adding one to a
 deployment is adding a git submodule; there is no core file to edit.
@@ -14,10 +14,10 @@ Four plugins exist today, and they are the worked examples this guide keeps poin
 
 | plugin | what it adds |
 |---|---|
-| `aledb-compare` | the cross-sample mutation table at `/compare/` |
-| `aledb-fixation` | mutations that have fixed in a lineage, at `/fixation` |
-| `aledb-converge` | genes hit independently in more than one lineage, at `/converge` |
-| `aledb-phylogeny` | a maximum-parsimony tree over an experiment's samples |
+| `mutint-compare` | the cross-sample mutation table at `/compare/` |
+| `mutint-fixation` | mutations that have fixed in a lineage, at `/fixation` |
+| `mutint-converge` | genes hit independently in more than one lineage, at `/converge` |
+| `mutint-phylogeny` | a maximum-parsimony tree over an experiment's samples |
 
 ## What a plugin can add
 
@@ -31,7 +31,7 @@ Everything below is a registration, made from your `AppConfig.ready()`. Each is 
 - **A CSV export type**, appearing in the export menus.
 - **An import type**, appearing on the Add Data page and in its auto-detection.
 - **A section on `/about`**, describing your component and reporting its version.
-- **An example dataset**, loadable with `./aledb load_example`.
+- **An example dataset**, loadable with `./mutint load_example`.
 - **Context for the experiment views**, without core depending on you.
 
 ## What a plugin cannot do

@@ -9,7 +9,7 @@ Core's export menus are rendered from the registry, so a new type appears in the
 edit:
 
 ```python
-from aledb_common.plugin_registry import register_export_handler
+from mutint_common.plugin_registry import register_export_handler
 
 register_export_handler('yourthing_mut', get_your_calls,
                         label='Your Mutations')
@@ -30,18 +30,18 @@ The second argument is optional. The registry inspects your signature once at re
 hands the filter only to a handler that can take it, so one written before this existed keeps
 working untouched. See [Showing filtered data](filtering.md).
 
-`aledb_export/util.py` dispatches on the type: `mut` uses the base queryset and everything
+`mutint_export/util.py` dispatches on the type: `mut` uses the base queryset and everything
 else is looked up here. There are no plugin names anywhere in core's export code.
 
 If your handler reads derived data, this is a read path like any other — call `ensure_fresh`
-inside it, or an export will happily write out last week's answer. `aledb-fixation` registers
+inside it, or an export will happily write out last week's answer. `mutint-fixation` registers
 the same function as both its page's queryset and its export handler, which is the reason
 the freshness check lives in the function rather than in the view.
 
 ## An import type
 
 ```python
-from aledb_common.import_registry import register_import_handler
+from mutint_common.import_registry import register_import_handler
 
 register_import_handler(
     name='yourthing',
@@ -81,7 +81,7 @@ required of you — a handler that reports nothing still returns its rows, and t
 — but two lines make your type behave like core's:
 
 ```python
-from aledb_common import import_progress
+from mutint_common import import_progress
 
 for path in paths:
     import_progress.begin(name_of(path))
@@ -107,12 +107,12 @@ It defaults to `claimed` itself, which is right whenever one file is one unit.
 ## A section on `/about`
 
 ```python
-register_about_section(self, name='aledb-yourthing',
-                       template='about/sections/aledb_yourthing.html')
+register_about_section(self, name='mutint-yourthing',
+                       template='about/sections/mutint_yourthing.html')
 ```
 
 Called with `self`, the `AppConfig`, because the unit is the **component** — the checkout an
-app came from — rather than the Django app. aledb-core is fifteen apps and has to read as one
+app came from — rather than the Django app. mutint-core is fifteen apps and has to read as one
 entry.
 
 Every installed component appears whether or not it registers anything, with its directory
@@ -123,7 +123,7 @@ warning rather than breaking a page that is mostly other components' content.
 ## A panel on the experiment Overview
 
 ```python
-from aledb_common.panel_registry import register_overview_panel
+from mutint_common.panel_registry import register_overview_panel
 
 register_overview_panel(self, name='needle_plot',
                         title='Mutation Needle Plot',
@@ -145,21 +145,21 @@ dropped with a logged warning and the rest of the page renders — the same post
 entry whose route will not reverse.
 
 This is the seam to reach for when what you have is *one panel and not a page*.
-[`aledb-needle`](https://github.com/barricklab) — the mutation needle plot — is a component
+[`mutint-needle`](https://github.com/barricklab) — the mutation needle plot — is a component
 that registers a panel and an About section and nothing else whatever: no URL, no nav entry, no
-model, no migration. Before this registry existed it had to live in aledb-core, for no better
+model, no migration. Before this registry existed it had to live in mutint-core, for no better
 reason than that `/stats` is where it is drawn.
 
 ## Context for the experiment views
 
 ```python
-from aledb_common.context_registry import register_experiment_context_provider
+from mutint_common.context_registry import register_experiment_context_provider
 
 register_experiment_context_provider(add_your_context)
 ```
 
 Your callable contributes to the context of core's experiment views, which is how
-`aledb_bibliome` puts publication data on those pages without core depending on it. Use it
+`mutint_bibliome` puts publication data on those pages without core depending on it. Use it
 when your data belongs *on somebody else's page* and that page already renders it; reach for
 `register_overview_panel` above when you are bringing the markup too, and use a nav entry and
 your own view when it deserves its own page.
@@ -167,7 +167,7 @@ your own view when it deserves its own page.
 ## When contigs are renamed
 
 ```python
-from aledb_common.plugin_registry import register_sequence_rename_hook
+from mutint_common.plugin_registry import register_sequence_rename_hook
 
 register_sequence_rename_hook(resync_after_rename)
 ```
@@ -177,7 +177,7 @@ an experiment's reference contigs are renamed. It is separate from the rebuild r
 because a rename carries a *mapping*: rewriting a stored blob in place is as valid a response
 as recomputing from scratch, and only you know which applies.
 
-This matters more than it sounds if you store anything positional. `aledb-phylogeny` rebuilds
+This matters more than it sounds if you store anything positional. `mutint-phylogeny` rebuilds
 its whole tree here, because its character matrix is ordered by `seq_id` and its
 site list is positional — renaming one contig can move its columns relative to another's and
 leave every stored index off by some amount. A single-contig experiment is unaffected, which

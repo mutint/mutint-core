@@ -16,10 +16,10 @@ keep the part that is about what they are for.
 
 ## What core does for you
 
-`aledb_import.staging`, plus the chunk endpoint you already have:
+`mutint_import.staging`, plus the chunk endpoint you already have:
 
 ```python
-from aledb_import import staging
+from mutint_import import staging
 
 session = staging.open_session(request.user, experiment, "my_plugin", files)
 ```
@@ -35,23 +35,23 @@ session = staging.open_session(request.user, experiment, "my_plugin", files)
 - **The chunk endpoint** — `POST /import/uploads/<id>/chunk`, unchanged. It does not care
   which kind of session it is appending to, so 8 MB slices, resume from a 409 and the retry
   budget are all already written.
-- **Reaping** — a session left open past `ALEDB_UPLOAD_SESSION_TTL_HOURS` is cleared by
-  `./aledb reap_uploads` like any other.
+- **Reaping** — a session left open past `MUTINT_UPLOAD_SESSION_TTL_HOURS` is cleared by
+  `./mutint reap_uploads` like any other.
 
-In the browser, `aledbUpload` is loaded on every page from `base.html`:
+In the browser, `mutintUpload` is loaded on every page from `base.html`:
 
 ```js
-aledbUpload(entries, {
+mutintUpload(entries, {
     experimentId: EXPERIMENT_ID,
     consumer: "my_plugin",
     onProgress: function (done, total, label) { /* … */ }
 }).then(function (uploadId) {
-    return aledbPostJson("/my-plugin/launch", {upload_id: uploadId, /* … */});
+    return mutintPostJson("/my-plugin/launch", {upload_id: uploadId, /* … */});
 });
 ```
 
-`aledbCollectDropped(e.dataTransfer)` builds `entries` from a drop, descending into
-directories; `aledbFromFileList(input.files)` does it from an `<input type=file>`.
+`mutintCollectDropped(e.dataTransfer)` builds `entries` from a drop, descending into
+directories; `mutintFromFileList(input.files)` does it from an `<input type=file>`.
 
 ## The one rule
 
@@ -80,7 +80,7 @@ staging.close(session)                 # removes what is left of the staging are
 For "somewhere you reap yourself", core offers a path and nothing else:
 
 ```python
-from aledb_common import store
+from mutint_common import store
 store.component_dir("my_plugin", row.pk)     # <store>/components/my_plugin/<pk>/
 ```
 

@@ -35,7 +35,7 @@ core
 # Managed environments — env/ holds the venv (env/main) and any future venvs/conda envs
 env/
 
-# Local database. base_settings.py creates aledb_local.sqlite3 by default and
+# Local database. base_settings.py creates mutint_local.sqlite3 by default and
 # dev.sqlite3 under FORCE_SQLITE=1 or a test run; naming them one at a time is
 # what let dev.sqlite3 sit untracked in the working tree for as long as it did.
 *.sqlite3
@@ -43,14 +43,14 @@ env/
 *.sqlite3-wal
 *.sqlite3-shm
 
-# Managed file store. ALEDB_STORE_DIR defaults to <base_dir>/aledb_store
-# (aledb_common/base_settings.py), so an unconfigured instance writes uploaded references,
+# Managed file store. MUTINT_STORE_DIR defaults to <base_dir>/mutint_store
+# (mutint_common/base_settings.py), so an unconfigured instance writes uploaded references,
 # .gd files and alignments straight into the checkout. Anchored: only the one at the repo
 # root is the default's, and it is real instance data rather than build output.
-/aledb_store/
+/mutint_store/
 # ...and one moved aside, which is what a migration reset asks for: primary keys restart
 # at 1 while store paths are derived from them, so the old files have to leave the way.
-/aledb_store.*/
+/mutint_store.*/
 
 # Operator-local audit working docs. Contain live credential values + detailed
 # operational notes from the pre-publish security audit. The publish-safe
@@ -65,7 +65,7 @@ env/
 .claude/settings.local.json
 .claude/.DS_Store
 
-# `./aledb docs`. The sources are docs/ and mkdocs.yml; these two are generated --
+# `./mutint docs`. The sources are docs/ and mkdocs.yml; these two are generated --
 # .docs-build/ is the merged tree of symlinks plus a generated config, site/ the output.
 /.docs-build/
 /site/

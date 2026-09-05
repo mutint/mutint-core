@@ -2,5 +2,5 @@
 from .defaults import *
 
 MIDDLEWARE += (
-    'aledb_common.middleware.LoginRequiredMiddleware',
+    'mutint_common.middleware.LoginRequiredMiddleware',
 )

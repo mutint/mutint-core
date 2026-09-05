@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% load static %}
+{% comment %}
+Designate the sample this experiment started from.
+
+One page rather than a control on the experiment's edit form, because the consequence needs
+saying before it is chosen: this is the only setting in the product that changes what
+*everyone* sees, and the repo already has a scar from one that did that silently
+(`AleExperimentFilter`, one shared row anybody with write access could edit).
+{% endcomment %}
+{% block title %}Designate ancestor{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} base.html does not load sweetalert; every page that confirms something has
+       to pull it in. {% endcomment %}
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+{% endblock %}
+{% block header %}Designate ancestor: {{ experiment.name }}{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% csrf_token %}
+
+        {% comment %} Named at the top, before the explanation, because after a save this is
+           the one thing the reader came back to check. The page reloads onto it. {% endcomment %}
+        {% if experiment.has_ancestor %}
+            <div class="alert alert-info" style="font-size: 15px;">
+                Ancestor:
+                <strong>{{ experiment.ancestor.label }}</strong>
+                <div style="color: #555; font-size: 13px; margin-top: 4px;">
+                    Set{% if experiment.ancestor_set_at %} on
+                        {{ experiment.ancestor_set_at|date:"Y-m-d H:i" }}{% endif %}
+                    by {{ experiment.ancestor_set_by.get_username|default:"the system" }}.
+                    <a href="/mutations/breseq?experiment_id={{ experiment.id }}&amp;sample_id={{ experiment.ancestor_id }}">See its mutations</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info" style="font-size: 15px;">
+                <strong>No ancestor is designated.</strong>
+                Every sample is shown and analyzed.
+            </div>
+        {% endif %}
+
+        <div class="alert alert-warning">
+            <p><strong>The designated ancestor is excluded from every view and analysis of
+                this experiment</strong>, and every mutation observed in it is subtracted
+                from every other sample before anything is computed.</p>
+            <p style="margin-bottom: 0;">That reaches the mutation tables, convergence,
+                fixation, the Overview counts and the phylogeny. It is not a filter: no
+                reader can turn it off, and it changes what everyone sees, not just you.
+                Its own sample page still opens, with those mutations shown in red.</p>
+        </div>
+
+        {% if lock_refusal %}
+            <div class="alert alert-warning">{{ lock_refusal }}</div>
+        {% elif not can_edit %}
+            <div class="alert alert-warning">
+                You do not have permission to change this experiment.
+            </div>
+        {% endif %}
+
+        <h4 style="margin-top: 1.5em;">Ancestor</h4>
+        {% comment %} `single`: exactly one row is the answer, so the helper's Select all /
+           Select none buttons are suppressed. {% endcomment %}
+        {% include "select_list.html" with items=samples id="anc-samples" selected_ids=selected_ids single=True empty_message="This experiment has no samples yet." %}
+
+        <div style="margin-top: 1.5em;">
+            {% if can_edit %}
+                <button type="button" class="btn btn-primary" id="anc-save">Save</button>
+                <button type="button" class="btn btn-default" id="anc-clear">No ancestor</button>
+            {% endif %}
+            <a class="btn btn-default"
+               href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
+        </div>
+        <div id="anc-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var list = document.getElementById("anc-samples");
+    var save = document.getElementById("anc-save");
+    if (!list || !save) { return; }
+    var error = document.getElementById("anc-error");
+
+    // The helper is multi-select and stays that way. A plain click already selects exactly
+    // one row; ctrl/shift-click is what can add a second, so this trims back to one.
+    //
+    // `changed` is the rows that *moved*, and that includes rows that moved *off* -- so the
+    // last one is not necessarily the one just clicked. Today it always is, because every
+    // gesture that leaves more than one row selected only ever turns rows on, and the plain
+    // click that does deselect leaves exactly one and returns above. The filter costs a line
+    // and removes the dependency on that reasoning holding inside the shared helper.
+    var picker = window.mutintSelectList(list, {
+        controls: null,
+        onChange: function (changed) {
+            if (picker.count() <= 1) { return; }
+            var on = changed.filter(picker.isSelected);
+            var keep = on[on.length - 1];
+            if (keep) { picker.select(function (row) { return row === keep; }); }
+        }
+    });
+
+    function show(message) { if (error) { error.textContent = message; } }
+
+    function post(data, question, detail) {
+        // sweetalert 2: `icon` / `buttons` and a promise. The v1 spelling -- `type`,
+        // `showCancelButton`, and a callback as the second argument -- is silently ignored
+        // here, which makes the button look dead rather than broken.
+        swal({title: question, text: detail, icon: "warning", buttons: true})
+            .then(function (confirmed) {
+                if (!confirmed) { return; }
+                show("Saving\u2026");
+                return window.mutintPost(
+                    "/experiment/{{ experiment.id }}/ancestor/apply/", data
+                ).then(function () {
+                    // Reload rather than patch the page in place: designating changes what
+                    // every panel on it would say, and the banner at the top is what the
+                    // reader came here to read back.
+                    window.location.reload();
+                });
+            })
+            .catch(function (err) {
+                show((err && err.message) || "Could not save the ancestor.");
+            });
+    }
+
+    save.addEventListener("click", function () {
+        show("");
+        var chosen = picker.selected();
+        if (chosen.length !== 1) {
+            show("Pick exactly one sample, or choose No ancestor.");
+            return;
+        }
+        post({sample_id: chosen[0]}, "Designate this ancestor?",
+             "This sample will be excluded from every view and analysis, and its mutations "
+             + "subtracted from every other sample. Everyone sees this change.");
+    });
+
+    var clear = document.getElementById("anc-clear");
+    if (clear) {
+        clear.addEventListener("click", function () {
+            show("");
+            post({}, "Remove the designation?",
+                 "Every sample will be shown and analyzed again, including the mutations "
+                 + "currently subtracted. Everyone sees this change.");
+        });
+    }
+})();
+</script>
+{% endblock %}

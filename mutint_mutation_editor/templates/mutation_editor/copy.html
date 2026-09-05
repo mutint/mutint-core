@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} The script goes with the stylesheet everywhere, exception-free -- this tab
+       has no Description column to collapse a gene list into today, and remembering which
+       pages do is how the handler came to be missing from two of them. {% endcomment %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    {% include "mutation_editor/_toolbar.html" with active='copy' %}
+    {% csrf_token %}
+
+    <div class="row breseq-picker">
+        <b>Copy from:</b>
+        <div class="btn-group" id="source_picker">
+            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
+                    aria-haspopup="true" aria-expanded="false">
+                {{ source_reseq.label }} <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu">
+                {% for reseq in reseq_list %}
+                    <li {% if reseq.id == source_sample_id %}class="active"{% endif %}>
+                        <a href="?experiment_id={{ experiment_id }}&amp;source_sample_id={{ reseq.id }}">{{ reseq.label }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    {% if not source_reseq %}
+        <p>This experiment has no resequencing samples to copy between.</p>
+    {% elif not can_edit %}
+        <p>Copying mutations between samples needs write access to this project.</p>
+    {% else %}
+        <div class="row">
+            <p style="color: #666;">
+                Pick mutations from this sample and the samples to put them on. A target that
+                already carries a mutation is skipped rather than given a second copy of it.
+                Copying is recorded and can be undone from the
+                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>.
+                Copying between <em>experiments</em> is not offered: a mutation belongs to one
+                experiment's reference genome, so the same position can mean a different locus
+                in another.
+            </p>
+        </div>
+
+        <div class="row" style="margin-bottom: 10px;">
+            <button type="button" class="btn btn-primary" id="me-apply">+ Copy to selected samples</button>
+            <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
+        </div>
+
+        {% comment %} The mutations first and the samples on the right, which is where Add and
+           Change put their sample list too. The two columns are read in that order -- what to
+           copy, then where to -- and a page whose sample list is on the left and another's on
+           the right is a difference the person has to notice. {% endcomment %}
+        <div class="col-lg-8" style="padding-left: 0;">
+            <h4>Mutations in {{ source_reseq.label }}</h4>
+            {% comment %} Same DataTables-with-Select reasoning as the edit page: no cell here
+               is an input, so selection lives in DataTables' data model and survives paging
+               and searching. {% endcomment %}
+            <table class="table breseq-table" id="me-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th class="breseq-evidence">Type</th>
+                        <th class="breseq-seq-id">Reference</th>
+                        <th class="breseq-position">Position</th>
+                        <th class="breseq-mutation">Mutation</th>
+                        <th class="breseq-gene">Gene</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr data-mutation-id="{{ row.mutation_id }}">
+                        <td></td>
+                        <td class="breseq-evidence">{{ row.mutation_type }}</td>
+                        <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
+                        <td class="breseq-position">{{ row.position|safe }}</td>
+                        <td class="breseq-mutation">{{ row.mutation|safe }}</td>
+                        <td class="breseq-gene">{{ row.gene|safe }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="6">This sample has no mutations stored.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% comment %} A bare column under #mutint-content has its gutter zeroed by
+           common.css, so this one would touch the column beside it. 30px is what
+           Bootstrap puts between two columns (15px each side), put back on the one
+           side that needs it -- the page still lines up with the title on the left
+           and the content edge on the right. {% endcomment %}
+        <div class="col-lg-4" style="padding-left: 30px;">
+            <h4>Copy to</h4>
+            {% include "select_list.html" with items=targets id="me-targets" empty_message="This experiment has only one sample, so there is nowhere to copy to." %}
+        </div>
+    {% endif %}
+
+    <script type="text/javascript">
+    // $(document).ready, not a bare IIFE: base.html loads the DataTables Select and Buttons
+    // extensions in the last <script> of <body>, after this block. Initializing at parse time
+    // silently drops `select:` and `buttons:` -- the table draws either way and the checkbox
+    // column still gets its class from the stylesheet, so the failure looks like styling
+    // rather than a load-order problem. /experiment/ does the same thing for the same
+    // reason.
+    $(document).ready(function () {
+        "use strict";
+        if (!document.getElementById("me-apply")) { return; }
+
+        var targets = window.mutintSelectList(document.getElementById("me-targets"));
+
+        var table = $("#me-table").DataTable({
+            paging: true,
+            pageLength: 100,
+            lengthMenu: [50, 100, 500, 1000],
+            deferRender: true,
+            order: [[2, "asc"], [3, "asc"]],
+            columnDefs: [{ targets: 0, orderable: false, className: "select-checkbox" }],
+            select: { style: "multi", selector: "td:first-child" },
+            dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
+            buttons: [{ extend: "collection", text: "Select",
+                        buttons: ["selectAll", "selectNone"] }]
+        });
+
+        document.getElementById("me-apply").addEventListener("click", function () {
+            var mutationIds = [];
+            table.rows({ selected: true }).every(function () {
+                var id = this.node().getAttribute("data-mutation-id");
+                if (id) { mutationIds.push(parseInt(id, 10)); }
+            });
+
+            var targetIds = targets.selected().map(function (id) {
+                return parseInt(id, 10);
+            });
+
+            if (!mutationIds.length) {
+                swal("", "Select at least one mutation to copy.", "warning");
+                return;
+            }
+            if (!targetIds.length) {
+                swal("", "Select at least one sample to copy to.", "warning");
+                return;
+            }
+
+            document.getElementById("me-error").textContent = "";
+            window.mutintPost("/mutation-editor/copy/apply", {
+                experiment_id: "{{ experiment_id }}",
+                source_sample_id: "{{ source_sample_id }}",
+                mutation_ids: JSON.stringify(mutationIds),
+                target_sample_ids: JSON.stringify(targetIds)
+            }).then(function (body) {
+                var message = "Copied " + body.added + " call(s).";
+                if (body.already && body.already.length) {
+                    message += " Already carried some of them: "
+                             + body.already.join(", ") + ".";
+                }
+                swal("", message, "success").then(function () { window.location.reload(); });
+            }).catch(function (err) {
+                document.getElementById("me-error").textContent = err.message;
+            });
+        });
+    });
+    </script>
+{% endblock %}

@@ -1,9 +1,9 @@
 # External (non-Python) tools this component needs, as conda package specs -- one per line,
 # `#` comments ignored. The entry script collects these from every component the same way it
 # collects requirements.txt, and installs them into env/tools with micromamba. Code finds
-# them through aledb_common.tools.tool_path(), which falls back to PATH.
+# them through mutint_common.tools.tool_path(), which falls back to PATH.
 #
-# Used by aledb_import/coverage.py to turn a bedGraph into the BigWig igv reads:
+# Used by mutint_import/coverage.py to turn a bedGraph into the BigWig igv reads:
 #     <weighted bedGraph> | sort | bedGraphToBigWig - sizes coverage.bw
 #
 # bedtools was here too, for `genomecov -ibam`, and is gone. Coverage now weights each

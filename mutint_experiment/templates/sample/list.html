@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}Samples in {{ experiment.name }}{% endblock %}
+{% block header %}Edit samples: {{ experiment.name }}{% endblock %}
+{% block content %}
+    {% comment %} A plain table, deliberately not a DataTable. The Metadata page's table
+       uses deferRender, which never builds the DOM for rows it has not drawn -- values
+       typed into those rows would not exist to be read back on save. Experiments run to
+       tens or a few hundred samples, so paging buys nothing here anyway. {% endcomment %}
+    <div style="max-width: 100%; overflow-x: auto;">
+        {% csrf_token %}
+
+        <p style="color: #666;">
+            Everything saves in one step, or not at all. The <b>Shown as</b> column is what
+            the sample is called throughout the site: it follows the description when there
+            is one, and the coordinate beneath it when there is not &mdash; so renumbering a
+            sample that carries a description changes no label until you clear it. Every
+            column here belongs to the sample alone; nothing you change on one row affects
+            another.
+        </p>
+
+        {% if samples %}
+        <table class="table table-striped table-bordered" style="width: 100%;">
+            <thead class="alert-success">
+            <tr>
+                <th>Shown as</th>
+                <th>Sample name</th>
+                <th width="70">Population</th>
+                {% comment %} The column is `TimePoint.value` and the label has always said "Time
+                   point" -- the two agree now. Fixation orders samples by it. {% endcomment %}
+                <th width="90">Time point</th>
+                <th width="70">Sample</th>
+                <th width="50">Mixed</th>
+                <th>Description</th>
+                <th width="50"></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for sample in samples %}
+                <tr data-reseq-id="{{ sample.id }}">
+                    <td style="white-space: nowrap;">
+                        {{ sample.label }}
+                        <br><small style="color: #888;">{{ sample.coordinate }}</small>
+                    </td>
+                    <td><input type="text" class="form-control input-sm" maxlength="200"
+                               id="sb-name-{{ sample.id }}"
+                               value="{{ sample.reseq.source_name|default_if_none:'' }}"></td>
+                    {% comment %} ALE and sample label are text: a lineage is called `Ara-1`,
+                       a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
+                       three -- silently, by sending an empty value. The time point is text
+                       for the reason `sample_edit.html` gives. {% endcomment %}
+                    <td><input type="text" class="form-control input-sm" maxlength="100"
+                               id="sb-ale-{{ sample.id }}" value="{{ sample.ale }}"></td>
+                    <td><input type="text" class="form-control input-sm"
+                               id="sb-flask-{{ sample.id }}" value="{{ sample.flask }}"></td>
+                    <td><input type="text" class="form-control input-sm" maxlength="100"
+                               id="sb-isolate-{{ sample.id }}" value="{{ sample.isolate }}"></td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" id="sb-mixed-{{ sample.id }}"
+                               {% if sample.is_mixed %}checked{% endif %}></td>
+                    <td><input type="text" class="form-control input-sm" maxlength="300"
+                               id="sb-isolate-description-{{ sample.id }}"
+                               value="{{ sample.isolate_description }}"></td>
+                    <td><a href="/sample/{{ sample.id }}/edit/">Edit</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 1.5em;">
+            <button type="button" class="btn btn-primary" id="sb-save">Save all samples</button>
+            <a class="btn btn-default"
+               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
+        </div>
+        <div id="sb-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+        {% else %}
+        <p>This experiment has no samples yet.
+           <a href="/import/add/?experiment_id={{ experiment.id }}">Add data</a>.</p>
+        <div style="margin-top: 1.5em;">
+            <a class="btn btn-default"
+               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
+        </div>
+        {% endif %}
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("sb-save")) { return; }
+
+    function value(prefix, id) {
+        var field = document.getElementById("sb-" + prefix + "-" + id);
+        return field ? field.value : "";
+    }
+
+    document.getElementById("sb-save").addEventListener("click", function () {
+        var rows = [];
+        var ids = [];
+        Array.prototype.forEach.call(
+            document.querySelectorAll("tr[data-reseq-id]"), function (tr) {
+                var id = tr.getAttribute("data-reseq-id");
+                ids.push(id);
+                tr.classList.remove("danger");
+                rows.push({
+                    id: id,
+                    sample_name: value("name", id),
+                    ale: value("ale", id),
+                    flask: value("flask", id),
+                    isolate: value("isolate", id),
+                    is_mixed: document.getElementById("sb-mixed-" + id).checked ? 1 : 0,
+                    isolate_description: value("isolate-description", id)
+                });
+            });
+
+        // One JSON string, because mutintPost stringifies each value into FormData -- a
+        // nested object would arrive as "[object Object]".
+        window.mutintPost("/experiment/{{ experiment.id }}/samples/update/",
+                         { rows: JSON.stringify(rows) }).then(function () {
+            window.location.reload();
+        }).catch(function (err) {
+            document.getElementById("sb-error").textContent = err.message;
+            var refused = (err.body && err.body.errors) || {};
+            ids.forEach(function (id) {
+                if (refused[id]) {
+                    var tr = document.querySelector('tr[data-reseq-id="' + id + '"]');
+                    if (tr) { tr.classList.add("danger"); }
+                }
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

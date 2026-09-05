@@ -1,8 +1,8 @@
-# ALEdb
+# MutInt
 
 A Django web application for cataloging [Adaptive Laboratory Evolution (ALE)](https://en.wikipedia.org/wiki/Adaptive_laboratory_evolution) experiments — tracking experimental metadata, sequencing data, and genetic mutations.
 
-**Live instance:** https://aledb.org
+**Live deployment:** [ALEdb](https://aledb.org), built on this platform.
 
 ---
 
@@ -11,15 +11,15 @@ A Django web application for cataloging [Adaptive Laboratory Evolution (ALE)](ht
 **Requirements:** Python 3.10+, Git
 
 ```bash
-git clone <repo-url> aledb-core
-cd aledb-core
-./aledb start
+git clone <repo-url> mutint-core
+cd mutint-core
+./mutint start
 ```
 
-`./aledb start` will:
+`./mutint start` will:
 1. Install everything it needs into `env/`, on the first invocation only: a pinned Python, a
    virtual environment built from it, the external tools components declare in their
-   `tools.txt`, and PostgreSQL (use `./aledb install` to do this without starting)
+   `tools.txt`, and PostgreSQL (use `./mutint install` to do this without starting)
 2. Start a private PostgreSQL server and create the database
 3. Run database migrations
 4. Create a default admin user (`admin` / `admin`)
@@ -37,12 +37,12 @@ The app starts empty — no experiments loaded. See [Loading data](#loading-data
 
 ## Loading data
 
-ALEdb imports experiments from [breseq](https://github.com/barricklab/breseq) output directories. Each ALE experiment corresponds to one breseq output directory, which contains a `.gd` (genome diff) file and associated HTML result files.
+MutInt imports experiments from [breseq](https://github.com/barricklab/breseq) output directories. Each ALE experiment corresponds to one breseq output directory, which contains a `.gd` (genome diff) file and associated HTML result files.
 
 ### Upload experiments
 
 ```bash
-./aledb import /path/to/data --project P --experiment E --owner alice
+./mutint import /path/to/data --project P --experiment E --owner alice
 ```
 
 Each path should be the root of a breseq output directory (the one containing `output/` and `data/` subdirectories). The upload command parses the `.gd` files, creates all mutation and metadata records, and recomputes fixation and convergence statistics.
@@ -50,7 +50,7 @@ Each path should be the root of a breseq output directory (the one containing `o
 To delete experiments by ID:
 
 ```bash
-./aledb delete 4 20 19
+./mutint delete 4 20 19
 ```
 
 ### Viewing alignments
@@ -68,12 +68,12 @@ The browser reads BAM/BAI directly over HTTP range requests from
 `/mutations/reference/<experiment_id>/{fasta,fai,gff3}`. Every request is permission-checked
 like any other page, so a browser session sees exactly the experiments its user can view.
 
-### breseq result import (`ALEDB_STORE_DIR`)
+### breseq result import (`MUTINT_STORE_DIR`)
 
 Dropping breseq result folders on `/import/add/` uploads five files per sample --
 `data/output.gd`, `data/reference.gff3`, `data/reference.fasta`,
 `data/reference.bam`, `data/reference.bam.bai` -- and nothing else, so the bulk of a run
-never leaves your machine. They are stored under `ALEDB_STORE_DIR`, keyed by database id:
+never leaves your machine. They are stored under `MUTINT_STORE_DIR`, keyed by database id:
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
@@ -92,7 +92,7 @@ served with HTTP range support, so a genome browser can read them:
 
 Access is gated by project permissions.
 
-### breseq result import (`ALEDB_STORE_DIR`)
+### breseq result import (`MUTINT_STORE_DIR`)
 
 Dropping breseq result folders on `/import/add/` uploads five files per sample and nothing else,
 so the bulk of a run never leaves your machine:
@@ -104,7 +104,7 @@ so the bulk of a run never leaves your machine:
 ```
 
 Large folders are uploaded in chunks with progress, so a multi-GB drop never depends on a
-single long request. Files are stored under `ALEDB_STORE_DIR`, keyed by database id:
+single long request. Files are stored under `MUTINT_STORE_DIR`, keyed by database id:
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
@@ -112,7 +112,7 @@ single long request. Files are stored under `ALEDB_STORE_DIR`, keyed by database
 ```
 
 **Sample statistics come from `data/summary.json`.** breseq writes it beside `output/`;
-ALEdb reads total reads, average read length, percent mapped and mean coverage from it. A
+MutInt reads total reads, average read length, percent mapped and mean coverage from it. A
 sample without that file still imports, with those statistics left at zero. They used to be
 scraped out of `summary.html` by table position, which is why breseq HTML reports were once
 needed at all.
@@ -172,28 +172,28 @@ All configuration is via environment variables. The defaults are suitable for lo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ALEDB_STORE_DIR` | `<repo>/aledb_store` | Managed store that ALEdb owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it are derived from database ids, never from client input. |
-| `ALEDB_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./aledb reap_uploads` removes it. |
-| `ALEDB_STORE_DIR` | `<repo>/aledb_store` | Managed store ALEdb owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it derive from database ids, never from client input. |
-| `ALEDB_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./aledb reap_uploads` removes it. |
+| `MUTINT_STORE_DIR` | `<repo>/mutint_store` | Managed store that MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it are derived from database ids, never from client input. |
+| `MUTINT_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./mutint reap_uploads` removes it. |
+| `MUTINT_STORE_DIR` | `<repo>/mutint_store` | Managed store MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it derive from database ids, never from client input. |
+| `MUTINT_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./mutint reap_uploads` removes it. |
 | `DJANGO_SECRET_KEY` | insecure dev key | Django secret key. Must be set to a long random string in any non-local deployment. |
 | `DEBUG` | `0` | Set to `1` to enable Django debug mode (shows error tracebacks in the browser). |
 | `DJANGO_SERVER_HOST` | `localhost` | Hostname added to `ALLOWED_HOSTS`. Set to your server's hostname or IP for non-local deployments. |
 | `PUBLIC` | `0` | Set to `1` to enable read-only public access mode. |
 | `GOOGLE_ANALYTICS_TAG` | _(empty)_ | Google Analytics measurement ID (e.g. `G-XXXXXXXX`). |
-| `ALEDB_DB_HOST` | _(unset)_ | **Unset means the entry script manages a PostgreSQL server under `env/`.** Set it to a hostname (or a socket directory) to use a server you run yourself, in which case nothing is provisioned, started or stopped for you. |
-| `ALEDB_DB_NAME` | the checkout's directory name | Database name, e.g. `aledb_core`. |
-| `ALEDB_DB_USER` | `aledb` | Database role. |
-| `ALEDB_DB_PASSWORD` | _(empty)_ | Not needed for the managed server, which is socket-only and trusts the local user. |
-| `ALEDB_DB_PORT` | `5432` | Ignored by the managed server, which listens on no port at all. |
-| `ALEDB_ALLOW_REMOTE_TESTS` | `0` | Set to `1` to let `./aledb test` run against a server this checkout does not manage. Tests create and drop `test_<name>` on it, so this is deliberately awkward. |
+| `MUTINT_DB_HOST` | _(unset)_ | **Unset means the entry script manages a PostgreSQL server under `env/`.** Set it to a hostname (or a socket directory) to use a server you run yourself, in which case nothing is provisioned, started or stopped for you. |
+| `MUTINT_DB_NAME` | the checkout's directory name | Database name, e.g. `mutint_core`. |
+| `MUTINT_DB_USER` | `mutint` | Database role. |
+| `MUTINT_DB_PASSWORD` | _(empty)_ | Not needed for the managed server, which is socket-only and trusts the local user. |
+| `MUTINT_DB_PORT` | `5432` | Ignored by the managed server, which listens on no port at all. |
+| `MUTINT_ALLOW_REMOTE_TESTS` | `0` | Set to `1` to let `./mutint test` run against a server this checkout does not manage. Tests create and drop `test_<name>` on it, so this is deliberately awkward. |
 | `DJANGO_SETTINGS_MODULE` | `config.settings_local` | Django settings module. Use `config.settings_private` for production with auth enforcement. |
 
 ### Settings files
 
 | File | Purpose |
 |------|---------|
-| `config/settings_local.py` | Local development (`DEBUG=True`). Default when using `./aledb`. |
+| `config/settings_local.py` | Local development (`DEBUG=True`). Default when using `./mutint`. |
 | `config/settings_private.py` | Production with login enforcement (`LoginRequiredMiddleware`). |
 | `config/settings_public.py` | Public read-only deployment. |
 
@@ -202,35 +202,35 @@ All configuration is via environment variables. The defaults are suitable for lo
 ## Management commands
 
 ```bash
-./aledb import path1 path2    # import breseq dirs, .gd files and reference genomes
-./aledb delete 4 20 19        # delete experiments by ID
-./aledb shell                 # open Django shell
-./aledb db status             # where the database is, and whether it is running
-./aledb db start              # start it and leave it up across several commands
-./aledb db stop               # stop it
-./aledb db reset --yes        # throw the database away and start again, empty
-./aledb db_worker             # run queued background work (coverage derivation)
-                              #   `./aledb start` runs one for you; this is for everywhere else
-./aledb reap_jobs             # discard queue rows no worker ever claimed
-./aledb test                  # run test suite
-./aledb makemigrations        # generate new migrations after model changes
-./aledb migrate               # apply migrations
-./aledb collectstatic         # collect static files to STATIC_ROOT
+./mutint import path1 path2    # import breseq dirs, .gd files and reference genomes
+./mutint delete 4 20 19        # delete experiments by ID
+./mutint shell                 # open Django shell
+./mutint db status             # where the database is, and whether it is running
+./mutint db start              # start it and leave it up across several commands
+./mutint db stop               # stop it
+./mutint db reset --yes        # throw the database away and start again, empty
+./mutint db_worker             # run queued background work (coverage derivation)
+                              #   `./mutint start` runs one for you; this is for everywhere else
+./mutint reap_jobs             # discard queue rows no worker ever claimed
+./mutint test                  # run test suite
+./mutint makemigrations        # generate new migrations after model changes
+./mutint migrate               # apply migrations
+./mutint collectstatic         # collect static files to STATIC_ROOT
 ```
 
 ---
 
-## Extending ALEdb
+## Extending MutInt
 
-ALEdb is extended by **plugins**: separate repositories, each holding one Django app, that
+MutInt is extended by **plugins**: separate repositories, each holding one Django app, that
 register themselves at startup. This repo contains no reference to any of them -- installing
 one is adding a git submodule, with no file here to edit.
 
 The full guide is the documentation site, built locally:
 
 ```bash
-./aledb docs --serve      # http://127.0.0.1:8001
-./aledb docs              # or build to site/
+./mutint docs --serve      # http://127.0.0.1:8001
+./mutint docs              # or build to site/
 ```
 
 It covers the repository structure a plugin should use, the seven registries and what each
@@ -241,7 +241,7 @@ is not installed in this one), and how to assemble a project in the first place.
 
 ## Citation
 
-If you use ALEdb in your work, please cite:
+MutInt grew out of ALEdb. If you use it in your work, please cite:
 
 > Patrick V Phaneuf, Dennis Gosting, Bernhard O Palsson, Adam M Feist,
 > *ALEdb 1.0: a database of mutations from adaptive laboratory evolution
@@ -251,4 +251,4 @@ If you use ALEdb in your work, please cite:
 
 ## License
 
-ALEdb is released under the **MIT License** — free for any use, including educational, research, non-profit, and commercial. Copyright © 2015–2026 The Feist Lab. See [LICENSE](LICENSE) for full terms.
+MutInt is released under the **MIT License** — free for any use, including educational, research, non-profit, and commercial. Copyright © 2015–2026 The Feist Lab. See [LICENSE](LICENSE) for full terms.

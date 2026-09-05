@@ -4,17 +4,17 @@
 
 | module | for |
 |---|---|
-| `config/defaults.py` | the base; delegates to `aledb_common.base_settings` |
+| `config/defaults.py` | the base; delegates to `mutint_common.base_settings` |
 | `config/settings_local.py` | local development — SQLite, `DEBUG=True`, no external services |
 | `config/settings_private.py` | production, with authentication enforced |
 | `config/settings_public.py` | a public read-only deployment |
 
-Select one with `DJANGO_SETTINGS_MODULE`. `./aledb start` writes `settings_local.py` on first
+Select one with `DJANGO_SETTINGS_MODULE`. `./mutint start` writes `settings_local.py` on first
 run.
 
 ## Storage
 
-`ALEDB_STORE_DIR` is where references and alignments live, keyed by database id. It is the one
+`MUTINT_STORE_DIR` is where references and alignments live, keyed by database id. It is the one
 setting a real deployment must think about — it holds the BAMs.
 
 !!! danger "Point it away from anything you care about before running tests"
@@ -23,7 +23,7 @@ setting a real deployment must think about — it holds the BAMs.
     1. A test that exercises the importer and forgets to override the store writes its
     fixtures into `experiments/1/` of whatever deployment it was run against.
 
-    The test runner redirects `ALEDB_STORE_DIR` to a temporary directory as a backstop, which
+    The test runner redirects `MUTINT_STORE_DIR` to a temporary directory as a backstop, which
     exists because this happened: a run replaced a real REL606 reference with a 6 kb synthetic
     one, and the genome browser then drew empty tracks for 29 samples whose BAMs were
     perfectly intact.
@@ -33,10 +33,10 @@ setting a real deployment must think about — it holds the BAMs.
 Pluggable by changing `INSTALLED_APPS`. Any app with `auth_app = True` on its `AppConfig` and
 `app_name = 'accounts'` in its `urls.py` is discovered automatically.
 
-- `aledb_accounts_noauth` — the only one shipped. Django's built-in login, nothing enforced.
+- `mutint_accounts_noauth` — the only one shipped. Django's built-in login, nothing enforced.
 
-The routes and templates live in `aledb_common`, not in the app, so a replacement inherits
-login, logout and change-password rather than restating them. **ALEdb ships no brute-force
+The routes and templates live in `mutint_common`, not in the app, so a replacement inherits
+login, logout and change-password rather than restating them. **MutInt ships no brute-force
 protection**; an app that adds it is the intended way to have it.
 
 ## Filtering
@@ -117,16 +117,16 @@ derived data still keeps up, and management commands still write — the lock gu
 
 ## Branding
 
-aledb-core is unbranded: `/` is the project list, the sidebar carries no name, no institution
-is credited. A deployment adds its own through `ALEDB_BRANDING` and by supplying templates at
+mutint-core is unbranded: `/` is the project list, the sidebar carries no name, no institution
+is credited. A deployment adds its own through `MUTINT_BRANDING` and by supplying templates at
 known paths, because an assembled project's `templates/` directory is searched ahead of every
 app's.
 
 The `Powered by ALEdb` line at the foot of the sidebar is not branding and has no setting. It
-is aledb-core's attribution and renders on every deployment. It carries no version number:
-`./aledb version` reports the platform's, and `/about` lists the version and git revision of
+is mutint-core's attribution and renders on every deployment. It carries no version number:
+`./mutint version` reports the platform's, and `/about` lists the version and git revision of
 every installed component.
 
-The name at the top of the sidebar — whatever `ALEDB_BRANDING['name']` says, or the word
+The name at the top of the sidebar — whatever `MUTINT_BRANDING['name']` says, or the word
 **Dashboard** when there is no branding — links to `/dashboard`, the installation's inventory
 of projects, experiments, samples and mutations. There is no separate sidebar entry for it.

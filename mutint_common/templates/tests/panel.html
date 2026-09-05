@@ -1,0 +1,4 @@
+{% comment %} A body for mutint_common/tests/test_panel_registry.py to render through the panel
+   registry. It ships rather than living in the test because a panel is a *template name*, and
+   a test that overrode TEMPLATES to supply one would be exercising a loader the product does
+   not use. {% endcomment %}{{ panel_body }}

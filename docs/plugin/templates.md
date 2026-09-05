@@ -6,8 +6,8 @@ Both directories are searched flat across every installed app, so a template at
 `templates/index.html` in your plugin competes with every other app's. Namespace by app:
 
 ```
-aledb_yourthing/templates/yourthing/tree.html      ->  render(..., "yourthing/tree.html")
-aledb_yourthing/static/aledb_yourthing/thing.css   ->  {% static 'aledb_yourthing/thing.css' %}
+mutint_yourthing/templates/yourthing/tree.html      ->  render(..., "yourthing/tree.html")
+mutint_yourthing/static/mutint_yourthing/thing.css   ->  {% static 'mutint_yourthing/thing.css' %}
 ```
 
 ## Extending core's base template
@@ -17,7 +17,7 @@ aledb_yourthing/static/aledb_yourthing/thing.css   ->  {% static 'aledb_yourthin
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
-    <link rel="stylesheet" href="{% static 'aledb_yourthing/thing.css' %}">
+    <link rel="stylesheet" href="{% static 'mutint_yourthing/thing.css' %}">
 {% endblock %}
 {% block header %}<b>{{ ale_project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
 
@@ -38,20 +38,20 @@ knowing anything about it.
 ## Reusing core's mutation table
 
 A plugin that shows mutations should render them the way every other page does, not imitate
-it. The cells come from `aledb_import.annotate.display`, a port of the code that wrote the
+it. The cells come from `mutint_import.annotate.display`, a port of the code that wrote the
 report the sample was imported from, and they mean nothing without the surrounding columns.
 
-- **`aledb_sample/templates/breseq_table/_mutation_table.html`** — one sample's mutations, the
+- **`mutint_sample/templates/breseq_table/_mutation_table.html`** — one sample's mutations, the
   partial the per-sample page and the genome browser share.
 - **`mutation_table_builder` + `base_table_template.html`** — the cross-sample table, mutations
-  down and samples across. `aledb-compare`, `aledb-fixation` and `aledb-converge` are all this
+  down and samples across. `mutint-compare`, `mutint-fixation` and `mutint-converge` are all this
   same view with a different queryset.
 
 If you use the cross-sample table, take the column index from the constant rather than
 counting:
 
 ```python
-from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 ```
 
 Removing one column from that table once shifted every other column left by one. Everything

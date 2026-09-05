@@ -1,0 +1,416 @@
+"""Import a staged tree of breseq result folders.
+
+A sample is any directory containing ``data/output.gd``. Everything this importer reads
+lives in that ``data/`` folder -- the reference and the alignment beside the calls made
+against them -- which is what lets this path store a BAM and validate the reference,
+neither of which a bare ``.gd`` upload can do.
+
+Per sample::
+
+    <sample>/data/output.gd             parsed for mutations
+    <sample>/data/reference.gff3        the reference, hashed
+    <sample>/data/reference.fasta       the reference sequence, hashed
+    <sample>/data/reference.bam         copied into the store
+    <sample>/data/reference.bam.bai     copied into the store
+
+``output/`` is not consulted. A stock breseq run writes its .gd there, but the trees being
+imported are curated ones that keep only ``data/``.
+
+Every sample in an experiment must agree on the reference. The first one establishes it;
+a later mismatch rejects that sample and the batch continues, matching how the bare-.gd
+importer already isolates per-file failures.
+
+``annotated.gd`` is no longer read. It existed because the importer took ``gene_name`` /
+``gene_product`` straight out of the file and only ``gdtools ANNOTATE`` put them there;
+annotation is derived from the stored reference now (``mutint_import.annotation``), so
+breseq's own ``output.gd`` is enough and the extra gdtools step is not needed.
+"""
+
+import logging
+import os
+import shutil
+
+from django.db import transaction
+
+from mutint_common import import_progress, store
+from mutint_import.retry import with_retry
+from mutint_import import tasks
+from mutint_jobs import jobs
+from mutint_import import reference as reference_io
+from mutint_import.breseq_summary import read_breseq_summary
+from mutint_sample.models import Sample
+from mutint_import import reference_store
+from mutint_import.gd_import import (
+    _parse_document,
+    _prepare_experiment,
+    parse_warnings,
+    run_post_processing,
+    import_document_as_sample,
+)
+
+logger = logging.getLogger("mutint_import.breseq_folder")
+
+# One path, not a preference list. Everything this importer reads lives in data/ --
+# the .gd beside the reference it was called against, the alignment, and the summary --
+# so output/ is not consulted at all. annotated.gd is gone with it: it only ever existed
+# because the importer needed gdtools ANNOTATE to have written gene_name/gene_product
+# into the file, and annotation is derived from the stored reference now.
+GD_RELATIVE_PATH = os.path.join("data", "output.gd")
+GFF3_RELATIVE_PATH = os.path.join("data", "reference.gff3")
+FASTA_RELATIVE_PATH = os.path.join("data", "reference.fasta")
+BAM_RELATIVE_PATH = os.path.join("data", "reference.bam")
+BAI_RELATIVE_PATH = os.path.join("data", "reference.bam.bai")
+
+# What the client is asked to upload per sample. Everything else a breseq run writes
+# (01_sequence_conversion/ ... 08_mutation_identification/) is unread by this codebase and
+# is often the bulk of the run, so it never leaves the user's machine.
+SAMPLE_FILES = (
+    GD_RELATIVE_PATH,
+    GFF3_RELATIVE_PATH,
+    FASTA_RELATIVE_PATH,
+    BAM_RELATIVE_PATH,
+    BAI_RELATIVE_PATH,
+)
+
+# breseq's own HTML report, kept whole so a reader can see the evidence behind a call. Its
+# contents are breseq's business and differ between releases, so nothing here names a file
+# inside it -- see `store.sample_report_dir` and `mutint_sample/views/report.py`.
+REPORT_RELATIVE_PATH = "output"
+
+
+class SampleError(Exception):
+    """A problem with one sample. Rejects that sample; the batch continues."""
+
+
+def find_gd_file(sample_dir):
+    """The sample's data/output.gd, or None if it has none."""
+    candidate = os.path.join(sample_dir, GD_RELATIVE_PATH)
+    return candidate if os.path.isfile(candidate) else None
+
+
+def find_sample_dirs(root):
+    """Return sample directories under ``root``, sorted, at any nesting depth.
+
+    A dropped folder may be a single sample or a collection of them, so this walks rather
+    than doing one os.listdir -- unlike ale_experiment._get_sample_report_list, which
+    assumes exactly one level.
+
+    **Two of the returned directories may share a basename**, which is what a sample is
+    named by. Walking is what makes that reachable: ``a/s1`` and ``b/s1`` are two samples
+    called ``s1``. ``_import_samples`` imports the first and refuses the rest -- see
+    ``_duplicate_error`` for why refusing beats renaming.
+    """
+    found = []
+    for dirpath, dirnames, _filenames in os.walk(root):
+        if find_gd_file(dirpath):
+            found.append(dirpath)
+            # Samples do not nest inside one another.
+            dirnames[:] = []
+    return sorted(found)
+
+
+def find_loose_gd_files(root, sample_dirs):
+    """Return ``.gd`` files under ``root`` that are not part of any sample folder.
+
+    These cannot be imported here. Every sample in an experiment must hash-match a shared
+    reference, and a bare ``.gd`` carries none -- importing one would put a sample into the
+    experiment that the reference check can never apply to. They are reported as skipped so
+    a stray file is visible rather than silently ignored.
+    """
+    prefixes = tuple(os.path.join(sample_dir, "") for sample_dir in sample_dirs)
+    found = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        if dirpath in sample_dirs or dirpath.startswith(prefixes):
+            continue
+        for filename in filenames:
+            if filename.lower().endswith(".gd"):
+                found.append(os.path.join(dirpath, filename))
+    return sorted(found)
+
+
+def import_breseq_folders(root, project_name, experiment_name, owner_name,
+                          is_public=False):
+    """Name-addressed entry point, kept for the CLI and existing callers.
+
+    Web callers use :func:`import_samples_into` instead, which takes the experiment itself --
+    see ``gd_import.prepare_experiment_by_id`` for why identity by primary key matters.
+    """
+    context = _prepare_experiment(project_name, experiment_name, owner_name, is_public)
+    return _import_samples(context, root, report_loose_gd=True)
+
+
+def import_samples_into(experiment, root, user=None):
+    """Import every breseq sample under ``root`` into an existing experiment.
+
+    Loose ``.gd`` files are left alone here: the import registry routes those to the
+    genomediff handler, so claiming them would import the same file twice.
+
+    ``user`` is whoever asked, and is only ever used to attribute the background coverage job
+    so it appears on their ``/jobs/`` page. **A keyword with a default, not a third positional
+    argument**, because `mutint_breseq.tasks` calls this too, from a repository that cannot see
+    this change; a positional one would break the plugin at the moment this landed.
+    """
+    from mutint_import.gd_import import prepare_experiment_by_id
+
+    context = prepare_experiment_by_id(experiment.id)
+    return _import_samples(context, root, report_loose_gd=False, user=user)
+
+
+def _import_samples(context, root, report_loose_gd, user=None):
+    experiment = context["experiment"]
+
+    sample_dirs = find_sample_dirs(root)
+    file_results = []
+    total_mutations = 0
+    # A sample is named by its directory's basename, and `find_sample_dirs` walks, so two
+    # folders at different depths can arrive under one name. See `_duplicate_error`.
+    imported_from = {}
+
+    for sample_dir in sample_dirs:
+        sample_name = os.path.basename(sample_dir.rstrip(os.sep))
+        # Before the work, not after: a sample's coverage alone can run for minutes, and
+        # saying which one is being worked on is most of the value of reporting at all.
+        import_progress.begin(sample_name)
+
+        if sample_name in imported_from:
+            logger.warning(
+                "skipping %s: another folder in this drop is already importing as %s",
+                os.path.relpath(sample_dir, root), sample_name)
+            entry = {"file": sample_name, "mutations": 0, "warnings": [],
+                     "error": _duplicate_error(root, imported_from[sample_name], sample_dir)}
+            file_results.append(entry)
+            import_progress.report(entry)
+            continue
+        imported_from[sample_name] = sample_dir
+
+        def import_one(sample_dir=sample_dir, sample_name=sample_name):
+            with transaction.atomic():
+                return _import_one_sample(sample_dir, sample_name, context)
+
+        try:
+            # Retried only for lock contention; the transaction rolls back whole and
+            # re-import is idempotent. See mutint_import.retry.
+            count, seq_experiment, warnings, replaced = with_retry(
+                import_one, describe=sample_name)
+            # Enqueued rather than run here: it walks the whole alignment and shells out
+            # to bedGraphToBigWig under a 900-second timeout, per sample, and this is a POST
+            # somebody is waiting on. See mutint_import/tasks.py.
+            #
+            # Still outside the transaction, and the reason has changed rather than gone: the
+            # sample's rows are committed by the time this runs, so the task can never
+            # reference something uncommitted. Do not "improve" it by moving the enqueue
+            # inside import_one to gain transactional enqueueing -- it already has the
+            # property that would buy.
+            #
+            # With no worker running the BigWig is simply not built, which is a state the
+            # product already handles: the browser falls back to igv's own coverage row and
+            # `./mutint coverage` backfills.
+            #
+            # Through `mutint_jobs` rather than `task.enqueue` directly, which is what puts the
+            # work on /jobs/ with a name and an owner and makes it stoppable. Enqueued the
+            # plain way it appeared only in the superuser-only *unattributed* panel, with no
+            # owner and no label -- so the person whose import queued it could not see it at
+            # all, which is most of why four of them sat unnoticed until somebody went looking
+            # in the database. `cancellable=True` is a promise `build_coverage` keeps: it polls
+            # at entry.
+            jobs.enqueue(tasks.build_coverage, seq_experiment.id,
+                         user=user,
+                         label="Coverage \u2014 %s" % sample_name,
+                         component="mutint_import",
+                         experiment=experiment,
+                         cancellable=True)
+            entry = {"file": sample_name, "mutations": count, "error": None,
+                     "warnings": warnings, "replaced": replaced}
+            total_mutations += count
+        except Exception as exc:  # one bad sample must not poison the batch
+            logger.exception("breseq folder import failed for %s", sample_name)
+            entry = {"file": sample_name, "mutations": 0, "error": str(exc),
+                     "warnings": []}
+        file_results.append(entry)
+        import_progress.report(entry)
+
+    if report_loose_gd:
+        for gd_path in find_loose_gd_files(root, sample_dirs):
+            entry = {
+                "file": os.path.basename(gd_path),
+                "mutations": 0,
+                "warnings": [],
+                "error": ("a bare .gd has no reference genome, which every sample in an "
+                          "experiment must share; import it into an experiment whose "
+                          "reference is already established"),
+            }
+            file_results.append(entry)
+            import_progress.report(entry)
+
+    if total_mutations:
+        # The longest silence in an import: every registered rebuild runs here, the
+        # dashboard's installation-wide totals included, after the last row is already filled.
+        import_progress.stage("Recomputing derived data…")
+        run_post_processing(experiment)
+
+    return {
+        "experiment_id": experiment.id,
+        "experiment": experiment.name,
+        "total_mutations": total_mutations,
+        "files": file_results,
+    }
+
+
+def _duplicate_error(root, kept, skipped):
+    """Why the second folder of a name was not imported.
+
+    Two directories with the same basename resolve to the same sample -- an A-F-I-R name
+    parses to one coordinate, and an auto-numbered one reuses the Sample
+    already matching that name. So the second folder does not arrive beside the first, it
+    *replaces* it: `_database_gd_mutations` deletes the sample's calls and writes its
+    own. The whole of the first folder's data would be gone, with nothing reported and both
+    folders listed as imported.
+
+    Skipping is deliberate, and inventing a distinct name for the second would be worse:
+    the name is the sample's identity here -- it is what `parse_sample_identity` reads the
+    ALE, flask and isolate out of -- so a name this code made up would place the sample at a
+    coordinate nobody chose, and the drop would import without ever saying so. Which of the
+    two folders was meant is a question only the person who made them can answer.
+    """
+    return ("%s was skipped: %s in the same drop is also called %r, and both would import "
+            "as the same sample -- the second would replace the first rather than join it. "
+            "Rename one of them and import it separately."
+            % (os.path.relpath(skipped, root),
+               os.path.relpath(kept, root),
+               os.path.basename(skipped.rstrip(os.sep))))
+
+
+def _import_one_sample(sample_dir, sample_name, context):
+    experiment = context["experiment"]
+
+    gd_path = find_gd_file(sample_dir)
+    if gd_path is None:
+        raise SampleError("%s has no %s" % (sample_name, GD_RELATIVE_PATH))
+    gff3_path = _require(sample_dir, GFF3_RELATIVE_PATH, sample_name)
+    fasta_path = _require(sample_dir, FASTA_RELATIVE_PATH, sample_name)
+    bam_path = _require(sample_dir, BAM_RELATIVE_PATH, sample_name)
+    # A .bai cannot be generated without samtools/pysam, and a BAM without one is useless
+    # to a genome browser, so its absence is a rejection rather than a silent degradation.
+    bai_path = _require(sample_dir, BAI_RELATIVE_PATH, sample_name)
+
+    _establish_or_check_reference(experiment, gff3_path, fasta_path)
+
+    with open(gd_path, "rb") as handle:
+        document = _parse_document(handle)
+
+    seq_experiment, count, replaced = import_document_as_sample(
+        document, sample_name, context)
+    warnings = parse_warnings(document)
+
+    sample_store = store.ensure_dir(store.sample_dir(seq_experiment.id))
+    shutil.copyfile(gd_path, os.path.join(sample_store, store.SAMPLE_GD))
+    shutil.copyfile(bam_path, os.path.join(sample_store, store.SAMPLE_BAM))
+    shutil.copyfile(bai_path, os.path.join(sample_store, store.SAMPLE_BAI))
+
+    seq_experiment.bam_stored = True
+    updated = ["bam_stored"]
+
+    if _store_report(sample_dir, seq_experiment.id):
+        seq_experiment.report_stored = True
+        updated.append("report_stored")
+
+    # data/summary.json is optional -- a drop without it still imports, just with zeroed
+    # statistics, which is what every web upload had before it was collected at all.
+    statistics = read_breseq_summary(sample_dir)
+    if statistics:
+        # Stored as `read_breseq_summary` already builds it. This was a `setattr` per key
+        # onto four columns, which is the fan-out the columns existed for.
+        seq_experiment.set_record(Sample.COMPONENT, Sample.BRESEQ, statistics, save=False)
+        updated.append("supplemental_data")
+
+    seq_experiment.save(update_fields=updated)
+
+    # The sample goes back with the count so the caller can derive from it once this
+    # transaction has closed; the warnings go back so the summary can report what the
+    # parser could not read; `replaced` so it can report what this import displaced.
+    return count, seq_experiment, warnings, replaced
+
+
+def _establish_or_check_reference(experiment, gff3_path, fasta_path):
+    """First sample defines the experiment's reference; later ones must match it.
+
+    The sample's own two reference files are cross-checked against each other first, then
+    normalized -- so this compares on the same canonical form as a reference uploaded
+    through an explicit reference upload, rather than on breseq's raw output.
+    """
+    _validated_sequences(gff3_path, fasta_path)
+    gff3_text, sequences = reference_io.normalize_reference(gff3_path, GFF3_RELATIVE_PATH)
+
+    try:
+        reference, _created = reference_store.establish_or_check(
+            experiment, gff3_text, sequences)
+    except reference_store.ReferenceMismatch as exc:
+        raise SampleError(str(exc))
+    return reference
+
+
+def _validated_sequences(gff3_path, fasta_path):
+    """Cross-check the GFF3's inline ##FASTA against data/reference.fasta.
+
+    Compared sequence by sequence rather than byte by byte, since line wrapping and case
+    legitimately differ between the two files.
+    """
+    with open(fasta_path, "r", encoding="utf-8", errors="replace") as handle:
+        fasta_sequences = list(reference_io.parse_fasta(handle))
+    if not fasta_sequences:
+        raise SampleError("data/reference.fasta contains no sequences")
+
+    gff3_sequences = reference_io.read_gff3(gff3_path)["sequences"]
+    if not gff3_sequences:
+        # breseq always inlines the sequence; its absence means this is not a breseq
+        # reference, so there is nothing to cross-check against.
+        raise SampleError("data/reference.gff3 has no ##FASTA section")
+
+    fasta_map = {seq_id: seq.upper() for seq_id, seq in fasta_sequences}
+    gff3_map = {seq_id: seq.upper() for seq_id, seq in gff3_sequences}
+
+    if set(fasta_map) != set(gff3_map):
+        raise SampleError(
+            "reference.gff3 and reference.fasta disagree on sequences: %s vs %s"
+            % (sorted(gff3_map), sorted(fasta_map)))
+    for seq_id, sequence in fasta_map.items():
+        if gff3_map[seq_id] != sequence:
+            raise SampleError(
+                "reference.gff3 and reference.fasta disagree on the sequence of %s" % seq_id)
+
+    return fasta_sequences
+
+
+def _store_report(sample_dir, sample_id):
+    """Copy breseq's `output/` into the sample's store. Returns whether one was kept.
+
+    **Best-effort, and deliberately last.** A sample keeps its mutations whether or not its
+    report stores -- the same posture coverage takes, and for the same reason: the mutations
+    are the data and the report is a way of looking at them. A folder assembled by hand from a
+    `data/` directory has no `output/` at all and imports perfectly without one.
+
+    Copied whole rather than file by file. What breseq writes in there is breseq's business:
+    0.50 writes one self-contained `evidence.html` with the whole evidence tree zipped inside
+    it, older releases write an `evidence/` directory of pages and PNGs, and a rule here naming
+    either would quietly drop the other.
+    """
+    source = os.path.join(sample_dir, REPORT_RELATIVE_PATH)
+    if not os.path.isdir(source):
+        return False
+
+    destination = store.sample_report_dir(sample_id)
+    try:
+        shutil.rmtree(destination, ignore_errors=True)
+        shutil.copytree(source, destination)
+        return True
+    except (OSError, shutil.Error):
+        logger.warning("could not store the breseq report for sample %s", sample_id,
+                       exc_info=True)
+        return False
+
+
+def _require(sample_dir, relative_path, sample_name):
+    path = os.path.join(sample_dir, relative_path)
+    if not os.path.isfile(path):
+        raise SampleError("%s is missing %s" % (sample_name, relative_path))
+    return path

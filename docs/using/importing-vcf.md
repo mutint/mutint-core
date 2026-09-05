@@ -8,7 +8,7 @@ is also what checks that the calls were made against the genome this experiment 
 
 ## What one file becomes
 
-- A VCF with **sample columns** becomes one ALEdb sample per column, named from the column
+- A VCF with **sample columns** becomes one MutInt sample per column, named from the column
   headers. They share one mutation per site, so a variant called in nine of twelve samples is
   one row with nine filled cells.
 - A **sites-only** VCF — no `FORMAT`, no sample columns — is one sample, named from the
@@ -20,7 +20,7 @@ auto-numbered onto ALE 1. That is the same rule a `.gd` filename goes through.
 
 ## Mutations share rows with breseq's
 
-A VCF is converted to GenomeDiff on the way in, which is ALEdb's own format. That is not a
+A VCF is converted to GenomeDiff on the way in, which is MutInt's own format. That is not a
 formality: it means the same variant called by breseq and by GATK is **one mutation**, with a
 call from each sample that has it, rather than two rows that happen to sit at the same
 position.
@@ -62,13 +62,13 @@ genome.
 and the same data lines, byte for byte for a single-sample file. A sample that never came from
 a VCF has no export.
 
-Mutations **added or edited in ALEdb** since the import have no original line, so they are
-rebuilt from the mutation, and the file says so in an `##aledb_regenerated=` header. Their
-`QUAL`, `FILTER` and `INFO` are `.` — ALEdb never had those values to keep.
+Mutations **added or edited in MutInt** since the import have no original line, so they are
+rebuilt from the mutation, and the file says so in an `##mutint_regenerated=` header. Their
+`QUAL`, `FILTER` and `INFO` are `.` — MutInt never had those values to keep.
 
 ## Mobile elements
 
-Off unless a deployment turns it on (`ALEDB_VCF_INFER_MOB`). When on, an insertion whose
+Off unless a deployment turns it on (`MUTINT_VCF_INFER_MOB`). When on, an insertion whose
 sequence is exactly one of the reference's annotated repeat families becomes a `MOB` with that
 family and a target-site duplication measured from the surrounding sequence. Anything
 ambiguous — two families matching, a partial match, a reference with no annotated repeats —

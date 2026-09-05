@@ -21,7 +21,7 @@ django-debug-toolbar>=8,<9
 # Without that last part a current breseq output.gd fails to load in full.
 #
 # 43a0f72 adds genomediff.schema -- breseq's own field guards, mirrored from
-# genome_diff_entry.cpp -- behind Record.get()/set()/validate(). aledb_mutation_editor
+# genome_diff_entry.cpp -- behind Record.get()/set()/validate(). mutint_mutation_editor
 # checks hand-entered mutations against it rather than keeping a second opinion about
 # what breseq accepts. It also stops a malformed line costing the whole file: problems
 # collect in gd.parse_errors, which the import summary now reports per file.
@@ -32,18 +32,18 @@ django-debug-toolbar>=8,<9
 #   pip install --force-reinstall --no-deps 'git+https://github.com/barricklab/genomediff-python.git@43a0f72'
 # (dev: `pip install -e /path/to/genomediff`)
 genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72
-# GenBank/FASTA parsing for uploaded reference genomes (aledb_import/reference.py).
+# GenBank/FASTA parsing for uploaded reference genomes (mutint_import/reference.py).
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.
 biopython>=1.84
 jsonschema>=4.23
-# BeautifulSoup's parser, named explicitly at aledb_import/annotate/display.py:421 and in
+# BeautifulSoup's parser, named explicitly at mutint_import/annotate/display.py:421 and in
 # its tests. Nothing imports lxml, so it reads like dead weight and is not: bs4 falls back
 # to html.parser when it is absent, which parses breseq's generated cells differently.
 lxml>=5.3
 numpy>=1.26
 pandas>=2.2
-# Reads the stored BAM in aledb_import/coverage.py, to weight each alignment by 1/X1 --
+# Reads the stored BAM in mutint_import/coverage.py, to weight each alignment by 1/X1 --
 # breseq's redundancy tag, the number of places a read mapped equally well. Without that
 # weighting a read matching ten IS copies is counted once at each and repeats dominate the
 # coverage track.
@@ -58,8 +58,8 @@ pandas>=2.2
 # samtools in env/tools, so before this there was no way to produce one.
 pysam>=0.24
 requests>=2.32
-# pandas reads .xls through xlrd; `./aledb load_projects` is the one caller
-# (aledb_experiment/management/commands/load_projects.py:19, pd.read_excel). Another
+# pandas reads .xls through xlrd; `./mutint load_projects` is the one caller
+# (mutint_experiment/management/commands/load_projects.py:19, pd.read_excel). Another
 # import with no import statement behind it.
 xlrd>=2.0.1
 openpyxl>=3.1

@@ -6,16 +6,16 @@ The single most important thing on this page:
 
     ```bash
     cd mutint
-    ./mutint test aledb_yourthing     # your suite
+    ./mutint test mutint_yourthing     # your suite
     ./mutint test                     # everything installed, yours included
     ```
 
-    Not because of anything about testing — because your app is not installed in aledb-core.
+    Not because of anything about testing — because your app is not installed in mutint-core.
     It lives in a different repository, so it is not on that project's `sys.path` and not in
-    its `INSTALLED_APPS`. `./aledb test aledb_yourthing` therefore errors on an app label it
+    its `INSTALLED_APPS`. `./mutint test mutint_yourthing` therefore errors on an app label it
     has never heard of.
 
-    aledb-core runs **its own** suite normally, and with the same runner; there is nothing
+    mutint-core runs **its own** suite normally, and with the same runner; there is nothing
     second-class about either mode. What it cannot do is run tests for code that is not
     installed in it, and teaching it to would mean core knowing which plugins exist — the one
     thing this architecture is built to avoid.
@@ -23,31 +23,31 @@ The single most important thing on this page:
 ## One runner, both modes
 
 There is no separate standalone path. `TEST_RUNNER` is set once, in
-`aledb_common/base_settings.py`, and aledb-core and every assembled project inherit it:
+`mutint_common/base_settings.py`, and mutint-core and every assembled project inherit it:
 
 ```python
-'TEST_RUNNER': 'aledb_common.test_runner.AledbTestRunner'
+'TEST_RUNNER': 'mutint_common.test_runner.MutintTestRunner'
 ```
 
 Given no labels, it runs the **installed first-party apps** rather than whatever discovery
-finds. aledb-core has sixteen of those; an assembled project has those sixteen plus each
+finds. mutint-core has sixteen of those; an assembled project has those sixteen plus each
 installed plugin's. That is the whole difference between the two.
 
 ## Why the runner substitutes at all
 
-Standalone, it need not. aledb-core's app packages sit directly under the working directory, so
+Standalone, it need not. mutint-core's app packages sit directly under the working directory, so
 ordinary `unittest` discovery would find exactly the same set — substituting changes nothing
 there.
 
 In an assembled project it is the difference between running the suite and not. The code lives
-in submodule directories named `aledb-core`, `aledb-yourthing` and so on, and **those names
+in submodule directories named `mutint-core`, `mutint-yourthing` and so on, and **those names
 contain hyphens**, so they can never be Python packages and discovery can never descend into
 them, however they are laid out. Your app is importable only because settings puts each
 submodule directory on `sys.path`, which discovery does not consult.
 
 Renaming the directories would not help either: giving a submodule root an `__init__.py` would
-make every app importable by two dotted paths at once, and `aledb_yourthing.models` and
-`aledb_core.aledb_yourthing.models` are two module objects holding two sets of model classes.
+make every app importable by two dotted paths at once, and `mutint_yourthing.models` and
+`mutint_core.mutint_yourthing.models` are two module objects holding two sets of model classes.
 
 So a bare run is told what to run instead, from
 `about_registry.first_party_app_configs()` — the same predicate the About page inventories
@@ -59,11 +59,11 @@ way to fail: it says success.
 
 ## The store is redirected for you
 
-The test runner points `ALEDB_STORE_DIR` at a temporary directory for the duration of a run.
+The test runner points `MUTINT_STORE_DIR` at a temporary directory for the duration of a run.
 
 This is a backstop, not a convenience. Store paths are derived from primary keys, and a test
 database numbers its experiments from 1 — so a test that exercises the importer and forgets
-`override_settings(ALEDB_STORE_DIR=...)` writes its fixtures into `experiments/1/` of whatever
+`override_settings(MUTINT_STORE_DIR=...)` writes its fixtures into `experiments/1/` of whatever
 deployment it was run against. It has happened: a run replaced a real REL606 reference with a
 6 kb synthetic one, and the genome browser then drew empty tracks for all 29 samples in that
 experiment while their BAMs and coverage files sat perfectly intact.
@@ -84,7 +84,7 @@ self.assertNotIn("Compare", nav_labels)
 self.assertIn("Your Thing", nav_labels)
 ```
 
-Three tests in aledb-core made exactly this mistake. Assert your own registrations; leave
+Three tests in mutint-core made exactly this mistake. Assert your own registrations; leave
 everybody else's to them. Where you genuinely need to count, count per component rather than
 in total — the About page's test does this, because the number of sections is the number of
 installed components and that is not a fixed number.
@@ -95,7 +95,7 @@ If a test needs a rebuild, an import type or a nav entry of its own, register it
 of its own and remove it again:
 
 ```python
-from aledb_common.rebuild_registry import register_rebuilder, unregister_rebuilder
+from mutint_common.rebuild_registry import register_rebuilder, unregister_rebuilder
 
 def _register(self, name, fn):
     register_rebuilder(name, fn)

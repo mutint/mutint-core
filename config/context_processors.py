@@ -1,1 +1,1 @@
-from aledb_common.context_processors import global_settings  # noqa: F401
+from mutint_common.context_processors import global_settings  # noqa: F401

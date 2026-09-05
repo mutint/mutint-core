@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% block title %}Edit sample {{ sample.label }}{% endblock %}
+{% block header %}Edit sample: {{ sample.label }}{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="se-name">Sample name</label>
+            <input type="text" class="form-control" id="se-name" maxlength="200"
+                   value="{{ sample.reseq.source_name|default_if_none:'' }}" autofocus>
+            <small class="help-block">
+                Must be unique within the experiment: re-importing finds an existing sample
+                by this name, so two samples sharing one can be merged by a later upload.
+            </small>
+        </div>
+
+        <h4 style="margin-top: 2em;">Identity</h4>
+        {% comment %} The coordinate and the displayed label are shown together on
+           purpose. `label` returns the isolate description whenever it is
+           set, and the import path sets it to the filename for every sample not already
+           named A-F-I-R -- so changing these four numbers can leave every label on every
+           page byte-identical. Seeing both is what stops a successful save looking like
+           it did nothing. {% endcomment %}
+        <p style="color: #666;">
+            Currently <b>{{ sample.coordinate }}</b>, displayed everywhere as
+            <b>{{ sample.label }}</b>.
+        </p>
+
+        <div class="row">
+            <div class="col-sm-3 form-group">
+                {% comment %} Text, not type="number": an ALE is named, not counted --
+                   `Ara-1` and `Ara+1` are two LTEE populations and neither is a number.
+                   Same for the isolate below. {% endcomment %}
+                <label for="se-ale">Population</label>
+                <input type="text" class="form-control" id="se-ale" maxlength="100"
+                       value="{{ sample.ale }}">
+            </div>
+            <div class="col-sm-3 form-group">
+                {% comment %} The column is `TimePoint.value`, and "Time point" is what every
+                   label here has always called it. It is the only ordinal in the
+                   schema that places a sample along an ALE, and fixation orders by it --
+                   it sorts flask numbers and takes the last two to decide what has fixed.
+                   Plain text rather than type="number": the steppers are meaningless on a
+                   value that runs to five figures. {% endcomment %}
+                <label for="se-flask">Time point</label>
+                <input type="text" class="form-control" id="se-flask" value="{{ sample.flask }}">
+            </div>
+            {% comment %} One box where there were two. A replicate was never a level of
+                anything: `3-30000-1-2` is a sample called `1-2` in flask 30000, so the
+                label is one field and holds whatever the filename spelled. {% endcomment %}
+            <div class="col-sm-3 form-group">
+                <label for="se-isolate">Sample</label>
+                <input type="text" class="form-control" id="se-isolate" maxlength="100"
+                       value="{{ sample.isolate }}">
+            </div>
+        </div>
+
+        <div class="checkbox">
+            <label><input type="checkbox" id="se-mixed"
+                          {% if sample.is_mixed %}checked{% endif %}> Mixed</label>
+            <small class="help-block">
+                A whole evolving population sequenced together, so its mutations carry
+                frequencies. Unchecked means a clone -- one genotype.
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label for="se-isolate-description">Description</label>
+            <input type="text" class="form-control" id="se-isolate-description"
+                   maxlength="300" value="{{ sample.isolate_description }}">
+            <small class="help-block">
+                When set, this is what the sample is called throughout the site, in place
+                of its coordinate. Clear it to show the coordinate instead.
+            </small>
+        </div>
+
+        {% comment %} The sentence that stood here said the description and the population
+           flag described the *isolate*, so they applied to every technical replicate of it
+           rather than to this sample alone. There is one row now, so they apply to this
+           sample and to nothing else -- and a caveat that is no longer true is worse than
+           no caveat. {% endcomment %}
+
+        <div class="form-group">
+            <label for="se-rep-description">Medium description</label>
+            <input type="text" class="form-control" id="se-rep-description"
+                   maxlength="500" value="{{ sample.curation.medium_description }}">
+            <small class="help-block">
+                A note about what this sample was grown in. Published by the interop API.
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label for="se-rep-tags">Tags</label>
+            <input type="text" class="form-control" id="se-rep-tags"
+                   maxlength="500" value="{{ sample.rep_tags }}">
+        </div>
+
+        <div style="margin-top: 1.5em;">
+            <button type="button" class="btn btn-primary" id="se-save">Save sample</button>
+            <a class="btn btn-default"
+               href="/experiment/{{ experiment.id }}/samples/">Cancel</a>
+        </div>
+        <div id="se-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("se-save")) { return; }
+    document.getElementById("se-save").addEventListener("click", function () {
+        var data = {
+            sample_name: document.getElementById("se-name").value,
+            ale: document.getElementById("se-ale").value,
+            flask: document.getElementById("se-flask").value,
+            isolate: document.getElementById("se-isolate").value,
+            isolate_description: document.getElementById("se-isolate-description").value,
+            medium_description: document.getElementById("se-rep-description").value,
+            rep_tags: document.getElementById("se-rep-tags").value
+        };
+        // Sent both ways, always. It used to be set only when checked, so an unchecked box
+        // omitted the key and the server fell back to False. That happened to mean "clonal",
+        // so the bug was invisible -- and this is the commit whose polarity change would have
+        // made it visible, in one page and not the other. The bulk page always sent both.
+        data.is_mixed = document.getElementById("se-mixed").checked ? "1" : "0";
+        window.mutintPost("/sample/{{ sample.id }}/update/", data).then(function () {
+            window.location.reload();
+        }).catch(function (err) {
+            document.getElementById("se-error").textContent = err.message;
+        });
+    });
+})();
+</script>
+{% endblock %}

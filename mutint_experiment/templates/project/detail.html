@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Project {{ project.name }}{% endblock %}
+{% block header %}Project: {{ project.name }}{% endblock %}
+{% block scripts_and_style %}
+    <script type="text/javascript">
+        var project_id = {{ project.id }};
+        {% include "experiment/_datatables.js" %}
+    </script>
+
+    <script type="text/javascript" src="{% static "vendor/pdfmake-0.1.36/pdfmake.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "vendor/pdfmake-0.1.36/vfs_fonts.js" %}"></script>
+    <script type="text/javascript"
+            src="{% static "vendor/datatables-bundle-dt11018/datatables.min.js" %}"></script>
+
+    <script type="text/javascript" src="{% static "vendor/jszip-3.1.3/jszip.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/csv.min.js" %}"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js"></script>
+    {# For alert#}
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+{% endblock %}
+
+{% block content %}
+
+    {% comment %} Read-only: nothing here posts anywhere, and there is no edit view behind it.
+       These were editable text inputs, which invited changes that were silently
+       discarded on reload. Two of the three even shared name="user". {% endcomment %}
+    {% comment %} No `.container` here. A container centers itself with auto margins and
+       takes a fixed width per breakpoint, so nesting one inside a row inset this whole
+       block 40px from the experiments table below it -- which is why the Edit button did
+       not line up with anything. {% endcomment %}
+    <div class="row">
+        <div>
+            <dl class="project-summary">
+                <dt>Project Name</dt>
+                <dd>{{ project.name }}</dd>
+                <dt>Created Date</dt>
+                <dd>{{ project.date_str }}</dd>
+                <dt>Owner Name</dt>
+                <dd>{{ project.owner }}</dd>
+                <dt>Status</dt>
+                <dd>{{ project.get_status_display }}</dd>
+                <dt>Is public?</dt>
+                <dd>{{ project.is_public|yesno:"Yes,No" }}</dd>
+                {% comment %} Both of these were editable once and shown never. They are
+                   editable again on /edit/, so a save that changed one has to be visible
+                   somewhere -- otherwise it reads as having done nothing. {% endcomment %}
+                <dt>Description</dt>
+                <dd>{{ project.description|default:"&mdash;" }}</dd>
+            </dl>
+            {% if can_edit %}
+            <a class="btn btn-default"
+               href="/project/{{ project.id }}/edit/">Edit project</a>
+            {% endif %}
+            {% if can_admin %}
+            <a class="btn btn-default"
+               href="/project/{{ project.id }}/access/">Sharing</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <br>
+        <h4>Experiments in the Project:</h4>
+        <div id='loadingmessage' style='display:none'>
+            <img src='{% static "img/Ajax-loader.gif" %}'>
+        </div>
+        <br>
+        {% comment %} Deleting from here, and not only from the installation-wide list:
+           this is the page that shows a project's experiments in context, so it is where
+           somebody is standing when they decide one of them should go.
+
+           Gated on `can_edit` -- project write -- rather than on being signed in, as the
+           flat list is: that list spans projects and cannot tell, while this page knows
+           exactly one. An experiment that is *locked* still refuses from the endpoint and
+           is named in #del-error, because the lock lives on the experiment and only the
+           experiment can answer for it. {% endcomment %}
+        {% if can_edit %}
+        <div style="margin-bottom: 1em;">
+            <a class="btn btn-primary"
+               href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
+            <button type="button" class="btn btn-danger" id="delete-selected">
+                &minus; Delete selected</button>
+            <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
+            <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
+        </div>
+        {% endif %}
+
+        <table id="exp_table" class="table table-striped table-bordered" style="width: 100%;">
+            <thead class="alert-success">
+            <tr>
+                <th></th>
+                <th>Exp ID</th>
+                <th>Exp Name</th>
+                <th>Project</th>
+                <th>Publication</th>
+                <th>Date</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for experiment in experiments %}
+                <tr>
+                    <td></td>
+                    <td width="90">{{ experiment.id }}</td>
+                    <td>
+                        <a href="/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
+                    </td>
+                    <td>
+                        <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
+                    </td>
+                    <td>
+                        {% for doi in experiment.doi_as_list %}
+                            <a href="https://doi.org/{{ doi }}">{{ doi }}</a>
+                        {% endfor %}
+                    </td>
+                    <td>{{ experiment.date }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("delete-selected")) { return; }   // no write access
+    document.getElementById("delete-selected").addEventListener("click", function () {
+        window.mutintDeleteSelected({tableId: "exp_table", path: "/experiment/",
+                                    noun: "experiment"});
+    });
+})();
+</script>
+{% endblock %}

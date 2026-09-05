@@ -4,8 +4,8 @@ This guide moved into the documentation site, alongside the plugin API it kept o
 with — two descriptions of how `config/settings.py` is wired would have drifted apart.
 
 ```bash
-./aledb docs            # build to site/
-./aledb docs --serve    # read it at http://127.0.0.1:8001
+./mutint docs            # build to site/
+./mutint docs --serve    # read it at http://127.0.0.1:8001
 ```
 
 Sources are in `docs/`. Assembling a project is under **Assembling a project**; writing a

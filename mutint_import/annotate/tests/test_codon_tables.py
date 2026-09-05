@@ -1,0 +1,101 @@
+"""
+Pin our Biopython-derived codon tables to breseq's hardcoded ones.
+
+breseq stores 64-character tables verbatim in reference_sequence.cpp:3167-3217.
+We derive ours from Bio.Data.CodonTable instead, which is equivalent -- an
+initiation table is just the standard table with every start codon mapped to M.
+This test holds that equivalence in place, so that a Biopython upgrade which
+resyncs with a newer NCBI release cannot silently change how MutInt annotates.
+
+The single documented divergence is table 3's GTG; see
+mutint_import/annotate/codon_tables.INITIATION_OVERRIDES.
+"""
+
+from django.test import SimpleTestCase
+
+from mutint_import.annotate.codon_tables import (
+    BRESEQ_TABLE_IDS,
+    translate_codon,
+)
+
+ALL_CODONS = [a + b + c for a in 'TCAG' for b in 'TCAG' for c in 'TCAG']
+
+# reference_sequence.cpp:3167-3189
+BRESEQ_STANDARD_TABLES = {
+    1: 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    2: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSS**VVVVAAAADDEEGGGG',
+    3: 'FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    4: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    5: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSSSVVVVAAAADDEEGGGG',
+    6: 'FFLLSSSSYYQQCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    9: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+    10: 'FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    11: 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    12: 'FFLLSSSSYY**CC*WLLLSPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    13: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVVAAAADDEEGGGG',
+    14: 'FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+    15: 'FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    16: 'FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    21: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+    22: 'FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    23: 'FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    24: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG',
+}
+
+# reference_sequence.cpp:3191-3217
+BRESEQ_INITIATION_TABLES = {
+    1: 'FFLMSSSSYY**CC*WLLLMPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    2: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRMMMMTTTTNNKKSS**VVVMAAAADDEEGGGG',
+    3: 'FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    4: 'FFMMSSSSYY**CCWWLLLMPPPPHHQQRRRRMMMMTTTTNNKKSSRRVVVMAAAADDEEGGGG',
+    5: 'FFLMSSSSYY**CCWWLLLLPPPPHHQQRRRRMMMMTTTTNNKKSSSSVVVMAAAADDEEGGGG',
+    6: 'FFLLSSSSYYQQCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    9: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVMAAAADDEEGGGG',
+    10: 'FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    11: 'FFLMSSSSYY**CC*WLLLMPPPPHHQQRRRRMMMMTTTTNNKKSSRRVVVMAAAADDEEGGGG',
+    12: 'FFLLSSSSYY**CC*WLLLMPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    13: 'FFLMSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVMAAAADDEEGGGG',
+    14: 'FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG',
+    15: 'FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    16: 'FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    21: 'FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVMAAAADDEEGGGG',
+    22: 'FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+    23: 'FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRMIIMTTTTNNKKSSRRVVVMAAAADDEEGGGG',
+    24: 'FFLMSSSSYY**CCWWLLLMPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVMAAAADDEEGGGG',
+}
+
+
+class CodonTableTest(SimpleTestCase):
+
+    def _render(self, table_id, codon_number_1):
+        return ''.join(translate_codon(codon, table_id, codon_number_1)
+                       for codon in ALL_CODONS)
+
+    def test_standard_tables_match_breseq(self):
+        for table_id in BRESEQ_TABLE_IDS:
+            with self.subTest(table=table_id):
+                # Codon number 2 means "not an initiation codon".
+                self.assertEqual(BRESEQ_STANDARD_TABLES[table_id],
+                                 self._render(table_id, 2))
+
+    def test_initiation_tables_match_breseq(self):
+        for table_id in BRESEQ_TABLE_IDS:
+            with self.subTest(table=table_id):
+                self.assertEqual(BRESEQ_INITIATION_TABLES[table_id],
+                                 self._render(table_id, 1))
+
+    def test_bacterial_start_codons_translate_as_methionine(self):
+        for codon in ('ATG', 'GTG', 'TTG', 'ATT', 'ATC', 'ATA', 'CTG'):
+            self.assertEqual('M', translate_codon(codon, 11, 1))
+
+    def test_internal_codons_use_the_standard_table(self):
+        self.assertEqual('V', translate_codon('GTG', 11, 2))
+        self.assertEqual('L', translate_codon('TTG', 11, 7))
+
+    def test_ambiguous_and_malformed_codons_are_unknown(self):
+        for codon in ('NNN', 'ATN', '', 'AT', 'ATGC', None):
+            self.assertEqual('?', translate_codon(codon, 11, 2))
+
+    def test_stop_codons(self):
+        for codon in ('TAA', 'TAG', 'TGA'):
+            self.assertEqual('*', translate_codon(codon, 11, 2))

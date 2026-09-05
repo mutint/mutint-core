@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Edit {{ experiment.name }}{% endblock %}
+{% block header %}Edit experiment{% endblock %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="ee-name">Experiment name</label>
+            <input type="text" class="form-control" id="ee-name" maxlength="200"
+                   value="{{ experiment.name }}" required autofocus>
+        </div>
+
+        <div class="form-group">
+            <label for="ee-project">Project</label>
+            {% comment %} Only projects you may edit are offered, so the picker cannot
+               name a destination the POST would refuse. The endpoint checks both ends
+               anyway -- this page has a URL and will be reached directly. {% endcomment %}
+            <select class="form-control" id="ee-project">
+                {% for editable in editable_projects %}
+                    <option value="{{ editable.id }}"
+                            {% if editable.id == experiment.project_id %}selected{% endif %}>{{ editable.name }}</option>
+                {% endfor %}
+            </select>
+            <small class="help-block">Moving an experiment moves its samples and mutations with it.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="ee-doi">DOI <small>(space-separated for more than one)</small></label>
+            <input type="text" class="form-control" id="ee-doi" value="{{ experiment.doi|default_if_none:'' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="ee-notes">Notes</label>
+            <textarea class="form-control" id="ee-notes" rows="5">{{ experiment.notes|default_if_none:'' }}</textarea>
+        </div>
+
+        <div style="margin-top: 1.5em;">
+            <button type="button" class="btn btn-primary" id="ee-save">Save experiment</button>
+            <a class="btn btn-default"
+               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
+            <a class="btn btn-default" style="margin-left: 1em;"
+               href="/experiment/{{ experiment.id }}/samples/">Edit samples &raquo;</a>
+        </div>
+        <div id="ee-error" style="color: #a00; margin-top: 1em;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("ee-save")) { return; }
+    document.getElementById("ee-save").addEventListener("click", function () {
+        var project = document.getElementById("ee-project");
+        window.mutintPost("/experiment/{{ experiment.id }}/update/", {
+            name: document.getElementById("ee-name").value,
+            project: project ? project.value : "",
+            doi: document.getElementById("ee-doi").value,
+            notes: document.getElementById("ee-notes").value
+        }).then(function () {
+            window.location.href = "/stats?experiment_id={{ experiment.id }}";
+        }).catch(function (err) {
+            document.getElementById("ee-error").textContent = err.message;
+        });
+    });
+})();
+</script>
+{% endblock %}

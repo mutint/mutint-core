@@ -1,4 +1,4 @@
-# Gitleaks configuration for ALEdb.
+# Gitleaks configuration for MutInt.
 # https://github.com/zricethezav/gitleaks
 #
 # Extends gitleaks' default ruleset, then allowlists known
@@ -8,7 +8,7 @@
 useDefault = true
 
 [allowlist]
-description = "ALEdb-specific false positives"
+description = "MutInt-specific false positives"
 
 # Genome diff (.gd) files under builder/tests/ and builder/gdparse/
 # are test fixtures for the genome-diff parsing code. They contain

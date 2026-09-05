@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}About{% endblock %}
+{% block header %}About{% endblock %}
+{% block scripts_and_style %}
+    <link href="{% static "css/about.css" %}?v={{ mutint_version }}" rel="stylesheet">
+{% endblock %}
+{% block content %}
+    {% comment %} The page is assembled from whatever is installed: every component gets a
+       heading, and the ones that registered prose get a body under it. See
+       mutint_common/about_registry.py. Nothing here names a plugin. {% endcomment %}
+
+    {% include "about/deployment.html" %}
+
+    {% if sections|length > 1 %}
+        {% comment %} Only worth a contents list when there is more than one place to go.
+           {% endcomment %}
+        <ul class="about-contents">
+            {% for section in sections %}
+                <li><a href="#{{ section.anchor }}">{{ section.name }}</a></li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% for section in sections %}
+        <h3 id="{{ section.anchor }}" class="about-section">
+            {{ section.name }}
+            <small>
+                {% if section.version %}{{ section.version }}{% endif %}
+                {% if section.revision %}
+                    {% if section.version %}&middot;{% endif %}
+                    {% if section.revision_url %}
+                        <a href="{{ section.revision_url }}"><code>{{ section.revision }}</code></a>
+                    {% else %}
+                        <code>{{ section.revision }}</code>
+                    {% endif %}
+                {% endif %}
+            </small>
+        </h3>
+        {% if section.template %}{% include section.template %}{% endif %}
+    {% endfor %}
+
+    <hr>
+    <div class="container">
+        {% include "branding/footer.html" %}
+    </div>
+{% endblock %}

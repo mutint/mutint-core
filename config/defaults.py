@@ -1,13 +1,13 @@
 """
-Standalone aledb-core base settings.
-Delegates to aledb_common.base_settings so assembled projects can import
+Standalone mutint-core base settings.
+Delegates to mutint_common.base_settings so assembled projects can import
 the same settings without touching the config/ namespace.
 """
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-from aledb_common.base_settings import get_base_settings as _get_base_settings
+from mutint_common.base_settings import get_base_settings as _get_base_settings
 
 # Spread all settings into this module's namespace so `from config.defaults import *`
 # continues to work exactly as before.

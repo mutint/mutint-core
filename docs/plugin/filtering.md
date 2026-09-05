@@ -7,17 +7,17 @@ shows and what it downloads.
 
 There was a shared `AleExperimentFilter` row per experiment until recently, edited at `/filter`
 by anyone with write access — so changing your own view changed everybody's. That conflated two
-different things: **curating** a dataset, which is `aledb_mutation_editor`'s job and is logged
+different things: **curating** a dataset, which is `mutint_mutation_editor`'s job and is logged
 and reversible, and **choosing what you want to look at**, which is nobody else's business.
 
 ## Getting it
 
 ```python
-from aledb_filter.util import filter_mutation_calls
-from aledb_filter.view_filter import get_view_filter
+from mutint_filter.util import filter_mutation_calls
+from mutint_filter.view_filter import get_view_filter
 
 def my_page(request):
-    experiment = aledb_sample.views.common.get_experiment(request)
+    experiment = mutint_sample.views.common.get_experiment(request)
     view_filter = get_view_filter(request, experiment.id)
 
     rows = filter_mutation_calls(my_queryset, view_filter=view_filter)
@@ -69,7 +69,7 @@ the same for everyone, and **there is no opting out** — no toggle, no query pa
 `ancestor=None` to pass. If you are deriving something, you subtract it.
 
 ```python
-from aledb_sample.util import calls_for_samples
+from mutint_sample.util import calls_for_samples
 
 queryset = calls_for_samples(list(reseq_dict), experiment_id)
 queryset, ignored_genes = filtered_mutation_call_queryset(queryset, view_filter=view_filter)
@@ -89,7 +89,7 @@ has to reach the derivation, exactly as the section below says the reader's filt
 If your page curates rather than reads — it edits or deletes samples — pass
 `get_reseq_ordered_dict(experiment_id, include_ancestor=True)`. Nothing else should.
 
-For a queryset spanning experiments, `aledb_experiment.ancestor.exclude_all_ancestry(queryset)`
+For a queryset spanning experiments, `mutint_experiment.ancestor.exclude_all_ancestry(queryset)`
 takes no experiment id. It is unambiguous because `Mutation` rows are per experiment, so an id
 observed in one experiment's ancestor cannot turn up in another's samples.
 
@@ -129,14 +129,14 @@ page it was launched from — which is usually the point.
 
 Three cases, and each is a decision rather than an oversight:
 
-- **An inventory of the installation.** `aledb_dashboard` counts what the deployment holds. A
+- **An inventory of the installation.** `mutint_dashboard` counts what the deployment holds. A
   site-wide total computed through one person's cutoff answers a question nobody asked, and once
   filtering is per-reader it stops being computable at all — a shared table cannot be keyed by
   user. `/stats` is the same argument at experiment scale.
-- **A page that must show what is stored.** `aledb_mutation_editor` is deliberately unfiltered: a
+- **A page that must show what is stored.** `mutint_mutation_editor` is deliberately unfiltered: a
   mutation hidden from every table still has to be reachable somewhere it can be removed, or it
   cannot be curated and comes back the moment somebody widens their filter.
-- **A page with rules of its own.** `aledb-phylogeny` encodes frequency in three states rather
+- **A page with rules of its own.** `mutint-phylogeny` encodes frequency in three states rather
   than excluding on it. It renders no controls, and says so with
   `{% view_filter_summary own_rules="..." %}` — because an empty summary reads as "no filtering
   here" when the truth is "different filtering here".

@@ -1,9 +1,9 @@
 # Quickstart
 
 A plugin from nothing to a page in an assembled project. It adds one thing — a page listing
-an experiment's mutation types with counts — and touches no file in aledb-core.
+an experiment's mutation types with counts — and touches no file in mutint-core.
 
-The names: repository `aledb-yourthing`, app `aledb_yourthing`. See
+The names: repository `mutint-yourthing`, app `mutint_yourthing`. See
 [Repository structure](structure.md) for why they differ.
 
 ## 1. The repository
@@ -12,69 +12,69 @@ Beside the other repos in the suite, because submodule URLs here are relative pa
 resolves against the parent's remote:
 
 ```bash
-cd ~/src/aledb-refactor
-mkdir -p aledb-yourthing/aledb_yourthing/{templates/yourthing,tests}
-cd aledb-yourthing
+cd ~/src/mutint-code
+mkdir -p mutint-yourthing/mutint_yourthing/{templates/yourthing,tests}
+cd mutint-yourthing
 git init
 touch requirements.txt
-touch aledb_yourthing/__init__.py aledb_yourthing/tests/__init__.py
+touch mutint_yourthing/__init__.py mutint_yourthing/tests/__init__.py
 ```
 
 ## 2. The app
 
-`aledb_yourthing/apps.py` — everything core learns about you:
+`mutint_yourthing/apps.py` — everything core learns about you:
 
 ```python
 from django.apps import AppConfig
 
 
 class YourThingConfig(AppConfig):
-    name = 'aledb_yourthing'
+    name = 'mutint_yourthing'
 
     def ready(self):
         # Inside ready(), not at module scope: apps.py is imported while the app registry is
         # still populating.
         from django.urls import include, re_path
-        from aledb_common.nav_registry import EXPERIMENT_SECTION, register_nav_item
-        from aledb_common.plugin_registry import register_plugin_urlpatterns
+        from mutint_common.nav_registry import EXPERIMENT_SECTION, register_nav_item
+        from mutint_common.plugin_registry import register_plugin_urlpatterns
 
         register_plugin_urlpatterns([
-            re_path(r'^yourthing/', include('aledb_yourthing.urls')),
+            re_path(r'^yourthing/', include('mutint_yourthing.urls')),
         ])
         register_nav_item('Your Thing', url_name='yourthing',
                           section=EXPERIMENT_SECTION)
 ```
 
-`aledb_yourthing/urls.py`:
+`mutint_yourthing/urls.py`:
 
 ```python
 from django.urls import re_path
 
-from aledb_yourthing import views
+from mutint_yourthing import views
 
 urlpatterns = [
     re_path(r'^$', views.your_thing, name='yourthing'),
 ]
 ```
 
-`aledb_yourthing/views.py`:
+`mutint_yourthing/views.py`:
 
 ```python
 import collections
 
-import aledb_sample.views.common
+import mutint_sample.views.common
 from django.shortcuts import render
 
-from aledb_common.util import get_user_context
-from aledb_experiment.models import Experiment
-from aledb_experiment.permissions import can_view_project
-from aledb_filter.util import filtered_mutation_call_queryset
-from aledb_filter.view_filter import get_view_filter
-from aledb_experiment import paths
-from aledb_sample.models import MutationCall
+from mutint_common.util import get_user_context
+from mutint_experiment.models import Experiment
+from mutint_experiment.permissions import can_view_project
+from mutint_filter.util import filtered_mutation_call_queryset
+from mutint_filter.view_filter import get_view_filter
+from mutint_experiment import paths
+from mutint_sample.models import MutationCall
 
 # The ORM path from a MutationCall up to its experiment. Spelled by
-# `aledb_experiment.paths` rather than by hand: it is `sample__population__experiment`
+# `mutint_experiment.paths` rather than by hand: it is `sample__population__experiment`
 # today, and it has changed twice.
 EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
@@ -82,10 +82,10 @@ EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 def your_thing(request):
     context = get_user_context(request.user)
     try:
-        experiment = aledb_sample.views.common.get_experiment(request)
+        experiment = mutint_sample.views.common.get_experiment(request)
     except Experiment.DoesNotExist:
         # Not an error: it is how the page opens before an experiment is chosen.
-        return aledb_sample.views.common.no_experiment_selected(
+        return mutint_sample.views.common.no_experiment_selected(
             request, context, None, "your thing")
     except ValueError:
         return render(request, "403.html", context, status=403)
@@ -113,7 +113,7 @@ def your_thing(request):
     return render(request, "yourthing/index.html", context)
 ```
 
-`aledb_yourthing/templates/yourthing/index.html`:
+`mutint_yourthing/templates/yourthing/index.html`:
 
 ```django
 {% extends 'base.html' %}
@@ -137,14 +137,14 @@ def your_thing(request):
 Commit it:
 
 ```bash
-git add -A && git commit -m "feat: aledb-yourthing"
+git add -A && git commit -m "feat: mutint-yourthing"
 ```
 
 ## 3. Install it
 
 ```bash
 cd ../mutint
-git -c protocol.file.allow=always submodule add ../aledb-yourthing aledb-yourthing
+git -c protocol.file.allow=always submodule add ../mutint-yourthing mutint-yourthing
 ./mutint check
 ```
 
@@ -162,13 +162,13 @@ after the other plugins, because nav order is `INSTALLED_APPS` order.
 
 ## 5. A test
 
-`aledb_yourthing/tests/test_page.py`:
+`mutint_yourthing/tests/test_page.py`:
 
 ```python
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from aledb_experiment.models import Experiment
+from mutint_experiment.models import Experiment
 
 
 class YourThingTestCase(TestCase):
@@ -189,7 +189,7 @@ class YourThingTestCase(TestCase):
         self.assertIn("no mutations stored", response.content.decode())
 
     def test_it_registers_a_nav_entry(self):
-        from aledb_common.nav_registry import EXPERIMENT_SECTION, get_nav_items
+        from mutint_common.nav_registry import EXPERIMENT_SECTION, get_nav_items
 
         labels = [item["label"] for item in get_nav_items(EXPERIMENT_SECTION)]
 
@@ -198,14 +198,14 @@ class YourThingTestCase(TestCase):
         self.assertIn("Your Thing", labels)
 ```
 
-Run it — **from the assembled project, not from aledb-core**:
+Run it — **from the assembled project, not from mutint-core**:
 
 ```bash
 cd mutint
-./mutint test aledb_yourthing
+./mutint test mutint_yourthing
 ```
 
-From aledb-core this finds nothing and reports `Ran 0 tests ... OK`. See
+From mutint-core this finds nothing and reports `Ran 0 tests ... OK`. See
 [Testing](testing.md).
 
 ## Next

@@ -1,12 +1,12 @@
-# `./aledb docs` builds this; `./aledb docs --serve` serves it with live reload.
+# `./mutint docs` builds this; `./mutint docs --serve` serves it with live reload.
 #
 # Not hosted anywhere. When it should be versioned, `mike` is the tool -- see
 # docs/contributing/docs.md for the one addition that needs.
 
-site_name: ALEdb
-site_description: Using and extending ALEdb
+site_name: MutInt
+site_description: Using and extending MutInt
 # No site_url: nothing is hosted yet, and a wrong one makes the canonical links wrong.
-repo_url: https://github.com/barricklab/aledb-core
+repo_url: https://github.com/barricklab/mutint-core
 edit_uri: ""
 
 docs_dir: docs
@@ -37,7 +37,7 @@ plugins:
         python:
           paths: ["."]
           options:
-            # The whole reason for this toolchain: the docstrings in aledb_common are written
+            # The whole reason for this toolchain: the docstrings in mutint_common are written
             # in markdown and are parsed as markdown here. Nothing about them changed to make
             # this work.
             docstring_style: null
@@ -66,12 +66,12 @@ markdown_extensions:
 #
 # The two top-level headings are not decoration. An assembled project merges every installed
 # component's nav into one manual, and these headings are how a page says who it is for --
-# `Using ALEdb` and `Extending ALEdb` from `aledb_common.docs_manual`. Anything filed under a
+# `Using MutInt` and `Extending MutInt` from `mutint_common.docs_manual`. Anything filed under a
 # heading that module does not recognize lands under "About this deployment" instead, named
 # for this component, which is visible rather than silent.
 nav:
-  - Using ALEdb:
-      - What ALEdb is: index.md
+  - Using MutInt:
+      - What MutInt is: index.md
       - Quick start: using/quickstart.md
       - Loading data: using/loading-data.md
       - Importing VCF: using/importing-vcf.md
@@ -79,7 +79,7 @@ nav:
       - Reference genomes: using/reference-genomes.md
       - Configuration: using/configuration.md
       - Management commands: using/commands.md
-  - Extending ALEdb:
+  - Extending MutInt:
       - Writing a plugin:
           - Overview: extending/index.md
           - Quickstart: plugin/quickstart.md

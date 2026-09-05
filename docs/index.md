@@ -1,19 +1,19 @@
-# ALEdb
+# MutInt
 
-ALEdb stores and analyzes **adaptive laboratory evolution** experiments: the sequencing output
+MutInt stores and analyzes **adaptive laboratory evolution** experiments: the sequencing output
 of evolved populations and clones, the mutations called from it, and the analyses that make
 sense of them across a lineage.
 
 It is a Django application that runs on its own or as part of an **assembled project** —
-aledb-core plus whichever plugins a deployment wants. If you are reading this inside a
-deployment's manual, everything under *Using ALEdb* is the platform, and the sections beside
+mutint-core plus whichever plugins a deployment wants. If you are reading this inside a
+deployment's manual, everything under *Using MutInt* is the platform, and the sections beside
 it are what that deployment adds.
 
 ## What is in here
 
-- **Using ALEdb** — getting an instance running, loading experiments, establishing a reference
+- **Using MutInt** — getting an instance running, loading experiments, establishing a reference
   genome, and the commands that maintain it.
-- **Extending ALEdb** — writing a plugin. aledb-core knows nothing about any plugin; a plugin
+- **Extending MutInt** — writing a plugin. mutint-core knows nothing about any plugin; a plugin
   registers itself at startup, and installing one is adding a git submodule.
 
 ## The shape of the data

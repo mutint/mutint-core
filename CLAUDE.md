@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ALEdb is a Django 6.1 web application for managing Adaptive Laboratory Evolution (ALE)
+MutInt is a Django 6.1 web application for managing Adaptive Laboratory Evolution (ALE)
 experiments. (This said "Django 5" for a long time while 4.2 was what installed, and then said 4.2 while
 the pin moved under it. `requirements.txt` pins `Django>=6.1,<6.2`; check it rather than this
 sentence. The upgrade's whole user-visible surface was four things: `USE_L10N` gone,
@@ -19,16 +19,16 @@ provides analysis tools for mutations, convergence, and enrichment.
 **Python is 3.13 and PostgreSQL is the only backend**, both provisioned by the entry script
 rather than taken from the host: Django 6.1 requires Python 3.12+ and a current macOS ships
 3.9. See **The database** in the suite `CLAUDE.md` for the whole design, including why running
-anything outside `./aledb` will not find the database.
+anything outside `./mutint` will not find the database.
 
 ### Role of this repo
 
-`aledb-core` serves two purposes:
+`mutint-core` serves two purposes:
 
-1. **Standalone app** — run directly from this repo for a self-contained ALEdb instance (SQLite, local dev via `./aledb start`).
-2. **Git submodule** — embedded in an assembled project (e.g. `mutint`) that adds custom Django apps without modifying aledb-core. The assembled project provides its own `config/` package (settings, URLs, wsgi) and uses helpers from `aledb_common` to inherit core settings and URL patterns:
-   - `aledb_common.base_settings.get_base_settings()` — returns all core settings as a dict
-   - `aledb_common.urls.get_core_urlpatterns()` — returns all core URL patterns
+1. **Standalone app** — run directly from this repo for a self-contained MutInt instance (SQLite, local dev via `./mutint start`).
+2. **Git submodule** — embedded in an assembled project (e.g. `mutint`) that adds custom Django apps without modifying mutint-core. The assembled project provides its own `config/` package (settings, URLs, wsgi) and uses helpers from `mutint_common` to inherit core settings and URL patterns:
+   - `mutint_common.base_settings.get_base_settings()` — returns all core settings as a dict
+   - `mutint_common.urls.get_core_urlpatterns()` — returns all core URL patterns
 
 See `DEVELOPER.md` for the full submodule integration guide.
 
@@ -36,29 +36,29 @@ See `DEVELOPER.md` for the full submodule integration guide.
 
 **Local dev setup** (SQLite, no MySQL or Docker needed):
 ```bash
-./aledb start             # first run: auto-creates a venv at env/main and installs
+./mutint start             # first run: auto-creates a venv at env/main and installs
                           #   requirements, then re-execs under it; runs migrations,
                           #   creates admin user, opens browser, starts server
-./aledb install           # (re)install deps into env/main without starting the server
+./mutint install           # (re)install deps into env/main without starting the server
 ```
 
-`./aledb` bootstraps its own virtualenv at `env/main/` (sentinel `env/main/.installed`)
+`./mutint` bootstraps its own virtualenv at `env/main/` (sentinel `env/main/.installed`)
 and re-execs under `env/main/bin/python` — no manual `python -m venv` / `activate` needed.
 This mirrors mutint's `./mutint` entry script. `env/` is git-ignored.
 
 **Run all tests**:
 ```bash
-./aledb test
+./mutint test
 ```
 
 **Run a single test**:
 ```bash
-./aledb test aledb_import.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
+./mutint test mutint_import.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
 ```
 
 **Coverage**:
 ```bash
-coverage run ./aledb test && coverage report
+coverage run ./mutint test && coverage report
 ```
 
 ### Testing notes
@@ -67,7 +67,7 @@ coverage run ./aledb test && coverage report
 standalone, 121s assembled. It was 140s standalone on Python 3.9 and *57s* on 3.12 with
 Django 4.2 -- the interpreter made it two and a half times faster and Django 6.1 gave most of
 that back, which is what a framework raising its default password-hasher iterations looks like
-in a suite where two modules call `set_password` per user in `setUp`. Per-app it runs from 1.9s (`aledb_stats`, 32 tests) to 96s (`aledb_experiment`,
+in a suite where two modules call `set_password` per user in `setUp`. Per-app it runs from 1.9s (`mutint_stats`, 32 tests) to 96s (`mutint_experiment`,
 416) -- and that one app is two thirds of the whole run. Inside it `test_access_views` is 57s
 and `test_groups` 34s, 90 of its 96 between them: both call `User.set_password` per user in
 setUp, and Django 4.2's default PBKDF2 hasher costs a few tenths of a second every time.
@@ -76,8 +76,8 @@ answer if it ever becomes worth fixing. The test database is `test_<name>` on th
 entry script starts under `env/`, created and dropped per run.
 
 **Tests refuse to run against a database this checkout does not manage.** `base_settings`
-raises `ImproperlyConfigured` unless `ALEDB_DB_MANAGED=1` (which only the entry script sets)
-or `ALEDB_ALLOW_REMOTE_TESTS=1`. The old guard swapped in SQLite, which is not a thing that
+raises `ImproperlyConfigured` unless `MUTINT_DB_MANAGED=1` (which only the entry script sets)
+or `MUTINT_ALLOW_REMOTE_TESTS=1`. The old guard swapped in SQLite, which is not a thing that
 can protect anything now: the suite creates and drops a real database on whatever server is
 configured, and that server could be a deployment's.
 
@@ -90,15 +90,15 @@ added.
 
 **A full run outlasts a two-minute command timeout**, which is new and is the first thing to
 suspect when a run appears to die near the end having printed nothing. Give it a longer
-timeout, or run one app at a time -- everything except `aledb_experiment` finishes in under
+timeout, or run one app at a time -- everything except `mutint_experiment` finishes in under
 half a minute.
 
 **If a test run appears to hang, that aside, it is almost certainly not the tests.** Two
 things cause it:
 
-1. *Chaining the run onto slow setup.* `patch files && migrate && ./aledb test` can blow a
+1. *Chaining the run onto slow setup.* `patch files && migrate && ./mutint test` can blow a
    command timeout in the earlier steps, and the run looks stuck when it never really started.
-   Run `./aledb test` as its own command.
+   Run `./mutint test` as its own command.
 2. *Killing your own shell.* `ps aux | grep "[z]sh -c source" | xargs kill` matches the wrapper
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
@@ -112,7 +112,7 @@ was 1823 and the suite was really doing 1834. Eleven tests had been added withou
 re-counting, which is the drift the paragraph below warns about, sprung again in the figure
 directly above it. Read every number before this point as history. They were **1799** before the breseq report
 viewer, **1743** before the VCF importer,
-**1716** before `aledb_jobs`, and **1696** before `aledb_import/tests/test_staging.py` -- each
+**1716** before `mutint_jobs`, and **1696** before `mutint_import/tests/test_staging.py` -- each
 figure run, not subtracted.
 
 **And the number this replaces was wrong by sixty.** It said 1636 while the suite actually ran
@@ -122,7 +122,7 @@ this list is therefore suspect by an unknown amount and is worth reading as hist
 than as a measurement.
 
 Assembled, **2153** -- also measured, with `PYTHONPATH` pointed at the root checkouts of
-aledb-core, aledb-needle and mutint-breseq, since `mutint/`'s copies are submodule clones of
+mutint-core, mutint-needle and mutint-breseq, since `mutint/`'s copies are submodule clones of
 the last commit. It was **2085** before the background-worker work.
 The figure recorded here before it was **2069**, and that is 16 short rather than 5 -- the same
 eleven uncounted tests as the standalone line above, which is what says the two numbers had
@@ -138,7 +138,7 @@ page's normalization, the local change-password page and the sidebar's admin lin
 added 24 tests to a corner that had none at all.
 **The standalone figure went down and the assembled one up** at the entry before that,
 which is what extracting a component looks like: the needle plot's 22 tests left this repo with
-the plot and 25 run in aledb-needle, and 8 new ones cover `panel_registry` here. They were 1634
+the plot and 25 run in mutint-needle, and 8 new ones cover `panel_registry` here. They were 1634
 and 1790 before that, 1625 and 1781 before the needle plot got a sequence
 picker, 1622 and 1778 before a reference stopped reporting a
 mutation count, 1621 and 1777 before the sample menu started toggling,
@@ -166,7 +166,7 @@ handler moved out of one template, 1391 and 1534 before editing and deleting bec
 tabs, 1387 and 1530 before the Edit page learned to open on the sample it was linked from, and
 1375 and 1518 before it learned to edit a mutation in some of its samples rather than all of
 them. (The assembled figure was *run*, not
-added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/aledb-core` is a submodule
+added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/mutint-core` is a submodule
 clone of the last commit. See the trap two sentences down for why the arithmetic is not
 trusted, even when it agrees as it does here.)
 They were 1305 and 1441 before the Add page learned to report
@@ -184,12 +184,12 @@ rather than by removing themselves, and before `locked_reason` went.
 The count went *down* because the shared filter's model tests went
 with the model; 22 new ones cover the reader's filter and its session. They were 1287 and 1424
 before filtering became per-reader, 1264 and 1401 before functional change moved onto
-`snp_type`, and 1239 and 1370 before the dashboard stopped filtering and `aledb_stats` stopped
-storing -- **19 of that earlier jump is `aledb_dashboard`'s tests running for the first time**,
+`snp_type`, and 1239 and 1370 before the dashboard stopped filtering and `mutint_stats` stopped
+storing -- **19 of that earlier jump is `mutint_dashboard`'s tests running for the first time**,
 see the `__init__.py` gotcha below, so the derived-table removals added fewer than the
 arithmetic suggests. They were 1213 and 1344 before the global filter went and the filter
 summary arrived, 1201 and 1332 before the collected manual, 1197 and
-1328 before `./aledb docs` learned to refuse,
+1328 before `./mutint docs` learned to refuse,
 1190 and 1321 before the plugin API docs, 1178 and
 1293 before the tree learned to go stale,
 1163 and 1278 before the lazy-rebuild sweep, 1156 and
@@ -209,15 +209,15 @@ standalone was already 698 before it. Re-count rather than adjusting the number 
 think you added.)
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
-`aledb_common/test_runner.py` substitutes them when no labels are given. Standalone this
+`mutint_common/test_runner.py` substitutes them when no labels are given. Standalone this
 changes nothing; in an assembled project it is the difference between running the suite and
 not. `./mutint test` used to report `Ran 0 tests ... OK` — unittest discovery walks the
 working directory, and an assembled project's code lives in submodule directories named
-`aledb-core`, `aledb-compare` and so on, which can never be Python packages, so discovery
+`mutint-core`, `mutint-compare` and so on, which can never be Python packages, so discovery
 could not descend into them however they were laid out. Renaming them would not have helped:
 a directory is skipped unless it holds an `__init__.py`, and giving one to a submodule root
-would make every app importable by two dotted paths at once — `aledb_sample.models` and
-`aledb_core.aledb_sample.models` are two module objects, which means two sets of model classes.
+would make every app importable by two dotted paths at once — `mutint_sample.models` and
+`mutint_core.mutint_sample.models` are two module objects, which means two sets of model classes.
 
 The app set comes from `about_registry.first_party_app_configs()`, the same predicate the
 About page inventories with, so "which apps are ours" is stated once.
@@ -229,7 +229,7 @@ it passes standalone and fails the moment a plugin is added. Assert core's own r
 and leave a plugin's to the plugin. Three tests said otherwise and were wrong; the About one
 now counts entries per *checkout*, which is the invariant it always meant.
 
-It was not green for years. The last six were all in `aledb_metadata`, whose parser and tests
+It was not green for years. The last six were all in `mutint_metadata`, whose parser and tests
 had disagreed since two 2019 commits that changed code without migrating what depended on it.
 That app and the `Media` table it wrote are gone; the story is kept because it is the reason
 this file says a red suite is a regression rather than the weather.
@@ -249,36 +249,36 @@ this file says a red suite is a regression rather than the weather.
   `return bool(user.is_staff)`. A test that gives someone `is_staff=True` and expects them to
   see a project is asserting the old behavior.
 - **A `tests/` directory with no `__init__.py` is not run at all, and says nothing.**
-  `aledb_dashboard/tests/` had none, so its nine tests had never run in the suite -- and the
-  symptom is not a failure, it is a total that is quietly nineteen short. A bare `./aledb test`
+  `mutint_dashboard/tests/` had none, so its nine tests had never run in the suite -- and the
+  symptom is not a failure, it is a total that is quietly nineteen short. A bare `./mutint test`
   runs *app labels* (see above), and label discovery cannot descend into a directory that is
-  not a package; naming the module explicitly (`./aledb test aledb_dashboard.tests.test_x`)
-  works fine, which is what makes it invisible when writing a new test. `./aledb test
+  not a package; naming the module explicitly (`./mutint test mutint_dashboard.tests.test_x`)
+  works fine, which is what makes it invisible when writing a new test. `./mutint test
   <app_label>` reporting `Found 0 test(s)` for an app that plainly has tests is the tell.
-- **Override the store.** Anything touching `ALEDB_STORE_DIR` needs
-  `override_settings(ALEDB_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
+- **Override the store.** Anything touching `MUTINT_STORE_DIR` needs
+  `override_settings(MUTINT_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
 - **Template content outside a `{% block %}` is silently discarded** in a child template. A
   `<script>` appended after `{% endblock %}` never renders and no error is raised — assert on
   the rendered HTML rather than trusting the file.
 - **A soft-deleted row is still in `objects`.** `objects` is deliberately unfiltered; assert
-  through `aledb_experiment.models.live()` or the list helpers when checking visibility.
+  through `mutint_experiment.models.live()` or the list helpers when checking visibility.
 
 **Django management commands** (local):
 ```bash
-./aledb shell
-./aledb makemigrations && ./aledb migrate
-./aledb import path1 path2   # import breseq folders, .gd files and reference genomes
-./aledb delete 4 20 19       # delete experiments by ID
-./aledb collectstatic
-./aledb ncbi_accessions --list            # which contigs are confirmed NCBI records
-./aledb ncbi_accessions 4 --seq-id NC_000913 --accession NC_000913.3
+./mutint shell
+./mutint makemigrations && ./mutint migrate
+./mutint import path1 path2   # import breseq folders, .gd files and reference genomes
+./mutint delete 4 20 19       # delete experiments by ID
+./mutint collectstatic
+./mutint ncbi_accessions --list            # which contigs are confirmed NCBI records
+./mutint ncbi_accessions 4 --seq-id NC_000913 --accession NC_000913.3
 ```
 
 An accession is normally recorded in the web UI instead, on an experiment's **Reference**
 page; the command is for bulk work and for a deployment being set up from a shell.
 
 Migrations are tracked in version control. Commit the files generated by
-`./aledb makemigrations` alongside the model changes that produced them.
+`./mutint makemigrations` alongside the model changes that produced them.
 
 **There is no Docker in this repo.** This section used to give
 `docker-compose -f docker-compose-prod-asgi-host-nginx.yml up`; that file does not exist here
@@ -296,7 +296,7 @@ Neither the sidebar nor the content box has a fixed width, and neither should ge
   either side. `max-width: 17vw` -- what the fixed width used to be -- keeps a long experiment
   name from pushing the page over; `overflow-x: hidden` trims it instead. Collapsed, the inline
   width is cleared and `.sidebar`'s `width: 0` is what remains.
-- `#aledb-content` is `display: flow-root` and fills whatever is left beside the sidebar and the
+- `#mutint-content` is `display: flow-root` and fills whatever is left beside the sidebar and the
   collapse strip. It used to be `float: left; width: 77vw` beside a 17vw sidebar, with
   `toggle_sidebar` swapping in a second guess of 95vw; neither added up, and several vw of every
   page went unused down the right-hand side. With the sidebar sized to its own content, any
@@ -306,13 +306,13 @@ Neither the sidebar nor the content box has a fixed width, and neither should ge
 stops the box sliding under the floats, but `hidden` would clip a menu that opens past the edge
 -- the genome browser's sample menu is one.
 
-**The title and the page's content share one left edge, at `#aledb-content`'s 25px padding.**
+**The title and the page's content share one left edge, at `#mutint-content`'s 25px padding.**
 Two things used to break that, and they broke it in opposite directions, which is why the
 misalignment looked inconsistent rather than uniform:
 
 - The header block sits in a Bootstrap `.col-lg-12`, and a grid column carries a 15px gutter
   each side -- so the title alone stood 15px further in.
-- A `.row` placed straight into `#aledb-content` bleeds 15px *out*, because its -15px margins
+- A `.row` placed straight into `#mutint-content` bleeds 15px *out*, because its -15px margins
   are meant to be cancelled by the 15px padding of a `.container`, and this box is not one --
   it has 25px of its own. Most pages use `.row` as a plain wrapper round a form or a table,
   so their content sat left of the title while the edit pages, which use no row, sat flush.
@@ -340,7 +340,7 @@ cached older copy of `common.css` renders every page with the header on top of t
 which is exactly what happened when the rule lived only in the stylesheet. Layout this
 load-bearing ships with the markup that assumes it.
 
-For the same reason aledb-core's own CSS and JS are linked with `?v={{ aledb_version }}`. A
+For the same reason mutint-core's own CSS and JS are linked with `?v={{ mutint_version }}`. A
 release changes every one of those URLs, so a browser cannot serve half of one version and half
 of another. Third-party CDN assets are already versioned in their paths.
 
@@ -351,12 +351,12 @@ has no height but still contributes Bootstrap's 20px `h2` margin. That leaves 25
 title -- the same padding the page has at its foot -- and 16px below the header. `:empty` rather
 than hiding the error heading outright, so a real error still shows.
 
-Menus that run as long as the experiment has samples carry `.aledb-menu`, which is only
+Menus that run as long as the experiment has samples carry `.mutint-menu`, which is only
 `max-height` and `overflow-y`: Bootstrap's `.dropdown-menu` already gives these menus everything
 else they share with the Metadata page's column menu.
 
-**A list whose highlight is its selection carries `.aledb-select-list` as well**, and
-`aledb_common/staticfiles/js/aledb_select_list.js` drives every one of them -- the genome
+**A list whose highlight is its selection carries `.mutint-select-list` as well**, and
+`mutint_common/staticfiles/js/mutint_select_list.js` drives every one of them -- the genome
 browser's sample menu and the three mutation-editor pages that pick a set of samples. `active`
 on the `<li>` is the selection; there is no checkbox anywhere to hold a second opinion about it.
 The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
@@ -387,7 +387,7 @@ drawn drop shadow, and was reported as one. It is `.dot.active` now. Nothing ren
 is the fix for the bug, and removing the carousel is somebody else's commit.
 
 **The gap from the column beside it is on the column, not on the list.** These pages lay a
-form or a table beside the sample list as two bare `col-lg-*` under `#aledb-content`, and the
+form or a table beside the sample list as two bare `col-lg-*` under `#mutint-content`, and the
 rule a few paragraphs up zeroes a bare column's gutter so its content lines up with the page
 title -- which leaves the list touching the form, measured at 0px. The column carrying the list
 puts 30px back on its left, which is what Bootstrap puts between two columns anyway. Doing it on
@@ -396,14 +396,14 @@ page is the table underneath.
 
 The browser's menu is a dropdown and gets its row box and fill from Bootstrap; the editor's
 three are not, and cannot borrow `.dropdown-menu` to get them -- `position: absolute; display:
-none` comes with it. So `.aledb-select-list` writes both out to match. `select_list.html` in
-`aledb_common/templates/` is the markup the editor's three share; the browser writes its own
+none` comes with it. So `.mutint-select-list` writes both out to match. `select_list.html` in
+`mutint_common/templates/` is the markup the editor's three share; the browser writes its own
 rows, because they carry a track's URLs and a mutant flag.
 
 ### The account pages, and the sidebar block that reaches them
 
-Login, logout and changing a password. The routes are `aledb_common/account_urls.py` and the
-templates `aledb_common/templates/accounts/`, shared by both auth apps -- see **Auth slot**
+Login, logout and changing a password. The routes are `mutint_common/account_urls.py` and the
+templates `mutint_common/templates/accounts/`, shared by both auth apps -- see **Auth slot**
 below for why they are not in the slot.
 
 **`registration/` is a template namespace `django.contrib.admin` owns, and this is the trap to
@@ -456,7 +456,7 @@ and `base.html` already has `user`; adding a `visible_to=` predicate for one ent
 mechanism with a single producer.
 
 **Groups joined it from `MAIN_SECTION`**, where it had been registered by
-`aledb_experiment.apps` beside Projects and Experiments as though it were data. What `/group/`
+`mutint_experiment.apps` beside Projects and Experiments as though it were data. What `/group/`
 lists is `visible_groups(user)` -- the groups you own or belong to, the way this is the password
 *you* change -- and registered it rendered for anonymous visitors too, who can see none.
 
@@ -496,18 +496,18 @@ in it. There is a test for the staff case specifically.
 enter the correct username and password for a staff account". It was broken for exactly the
 people most likely to click it, and for staff it worked by leaving the product.
 
-### Branding: aledb-core has none
+### Branding: mutint-core has none
 
 `/` is the project list, the sidebar carries no name or version, there is no icon upper-right,
-and no institution is credited. All of that was ALEdb's and now lives in the `aledb-deploy`
-repo. A deployment adds its own through three seams, none of which aledb-core knows the content
+and no institution is credited. All of that was ALEdb's and now lives in the `aledb`
+repo. A deployment adds its own through three seams, none of which mutint-core knows the content
 of:
 
-- `ALEDB_BRANDING` (`aledb_common/base_settings.py`) — `{'name', 'version', 'logo'}`, empty by
+- `MUTINT_BRANDING` (`mutint_common/base_settings.py`) — `{'name', 'version', 'logo'}`, empty by
   default. `base.html` renders each only `{% if %}` it is set, so an unset value renders nothing
   rather than an empty element.
-- `templates/home/splash.html` — `aledb_home.views.home` looks it up and falls back to
-  `aledb_experiment.views.projects` on `TemplateDoesNotExist`. Rendered in place, not
+- `templates/home/splash.html` — `mutint_home.views.home` looks it up and falls back to
+  `mutint_experiment.views.projects` on `TemplateDoesNotExist`. Rendered in place, not
   redirected, so `/` stays `/`.
 - `templates/branding/footer.html` — the "hosted and maintained by…" footer, included by the
   dashboard and About pages. Core ships it **empty**; it existed as four pasted copies before.
@@ -516,19 +516,19 @@ More generally, `TEMPLATES['DIRS']` now leads with the project's `templates/` di
 `STATICFILES_DIRS` with its `staticfiles/`, so a deployment overrides any core template or asset
 by path. The source dir is `staticfiles/`, not `static/` — `static/` is `STATIC_ROOT`, and
 Django raises `ImproperlyConfigured` if it appears in `STATICFILES_DIRS`. The entry is also
-omitted when the directory is absent, or every `./aledb check` reports `staticfiles.W004`.
+omitted when the directory is absent, or every `./mutint check` reports `staticfiles.W004`.
 
 **The `Powered by ALEdb` watermark is not part of this** and has no setting. It is
-aledb-core's attribution and renders on every deployment, branded or not. **It carries no
+mutint-core's attribution and renders on every deployment, branded or not. **It carries no
 version**, and used to read `Powered by ALEdb vX.Y.Z` -- which made an attribution read as a
-status line, at the foot of every page of a site people come to for the science. `./aledb
+status line, at the foot of every page of a site people come to for the science. `./mutint
 version` and `/about` are where a version belongs, and About gives every installed component's
 rather than the platform's alone. `test_branding.test_the_watermark_carries_no_version` is the
 old test inverted rather than deleted, so putting it back has to be a decision.
 
 **`navbar-brand` renders unbranded too, and links to `/dashboard`.** It used to be inside the
 `{% if branding %}`, which was right while it was only a name. It is now the only route to the
-dashboard -- `aledb_dashboard` registers no nav entry, because an inventory of the whole
+dashboard -- `mutint_dashboard` registers no nav entry, because an inventory of the whole
 installation is what clicking a site's own name asks for and a second entry three rows below
 said the same thing twice. Unbranded the element carries the word **Dashboard**: the label of a
 link rather than a name this deployment has acquired, and the four things a deployment adds -- a
@@ -537,22 +537,22 @@ unbranded checkout renders no brand at all, leaves the dashboard reachable from 
 
 ### Versioning
 
-`aledb_common/version.py` is the single source of truth — before this it existed only as the
-literal `ALEdb 1.1.0` inside `base.html`. Bump with `./aledb version --bump patch|minor|major`,
+`mutint_common/version.py` is the single source of truth — before this it existed only as the
+literal `ALEdb 1.1.0` inside `base.html`. Bump with `./mutint version --bump patch|minor|major`,
 which rewrites that file and leaves the `git tag v<version>` to you.
 
 `version` is a name Django reserves: `ManagementUtility.execute()` answers it with Django's own
 version before app commands are ever consulted, so the management command alone is not enough.
-`aledb_common/cli.py` dispatches it directly. Delete that branch and `./aledb version` silently
-starts printing Django's version instead — `aledb_common/tests/test_version.py` goes through
+`mutint_common/cli.py` dispatches it directly. Delete that branch and `./mutint version` silently
+starts printing Django's version instead — `mutint_common/tests/test_version.py` goes through
 `manage()` rather than `call_command` precisely to catch that.
 
 
 ### The per-sample mutation page
 
-`aledb_sample/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
+`mutint_sample/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
 column order and coloring, as the per-sample companion to Compare, which pivots the whole
-experiment and lives in the **aledb-compare** plugin at `/compare/` (see **Compare is a
+experiment and lives in the **mutint-compare** plugin at `/compare/` (see **Compare is a
 plugin** below). A picker moves between samples; the evidence cell links into the genome
 browser when the sample has a stored alignment.
 
@@ -563,7 +563,7 @@ form**: one request per sample either way, and links need no script at all, whic
 `<noscript>` submit button used to cover. The href is the same `?experiment_id&sample_id`
 pair the form submitted.
 
-The cell markup is not a lookalike -- it is generated by `aledb_import.annotate.display`,
+The cell markup is not a lookalike -- it is generated by `mutint_import.annotate.display`,
 the port of the code that wrote the report the sample was imported from. A row is
 `{**mutation.genome_diff, **mutation.annotation}` handed to `add_html_fields()`, which is why
 annotation lives in one JSON column rather than twenty scalar ones: rendering is a dict
@@ -575,37 +575,37 @@ because the markup already exists by the time the view runs.
 button, and the click handler for it was an inline `<script>` in *this* page's template --
 while three pages render rows from `build_rows`: this one, the genome browser and the mutation
 editor's Edit/Delete listing. On the other two the button rendered, was styled by the shared
-stylesheet, and did nothing. The handler is `aledb_common/staticfiles/js/breseq_table.js` now
+stylesheet, and did nothing. The handler is `mutint_common/staticfiles/js/breseq_table.js` now
 and travels with `breseq_table.css`: **link the stylesheet, load the script**, with no
 exception for a page that has no Description column today -- the Copy tab loads it and does not
 need it, because deciding that per page is what went wrong.
-`aledb_common/tests/test_templates.py` keeps the pair together, and the three pages each assert
+`mutint_common/tests/test_templates.py` keeps the pair together, and the three pages each assert
 the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
 silently.
 
 It is called **Mutations** in the nav and on the page. **Compare** used to sit beside it
-here; it is registered by the aledb-compare plugin now, so on a deployment without that
+here; it is registered by the mutint-compare plugin now, so on a deployment without that
 plugin this page is the only mutation table core offers. The table markup
-itself lives in `aledb_sample/templates/breseq_table/_mutation_table.html`, shared with the genome
+itself lives in `mutint_sample/templates/breseq_table/_mutation_table.html`, shared with the genome
 browser, which renders the one mutation it is open at through the same `build_rows` — the two
 must not drift, because the cell contents come from `annotate.display` and mean nothing without
 these columns around them.
 
 A mutation imported before a reference was available has no annotation to render and falls
-back to the flat columns, with the page pointing at `./aledb reannotate`. That fallback is
+back to the flat columns, with the page pointing at `./mutint reannotate`. That fallback is
 the usual reason the page looks plain: nothing is wrong with the rendering, the rows simply
 have no annotation yet. The GenomeDiff record is kept for every mutation, so `reannotate`
 recomputes them in place against the stored reference -- re-importing is not needed.
 
 ### The plugin API documentation
 
-`docs/`, built with `./aledb docs` (add `--serve` for live reload on :8001, `--strict` to fail
+`docs/`, built with `./mutint docs` (add `--serve` for live reload on :8001, `--strict` to fail
 on a broken link). Output goes to `site/`, which is git-ignored. Nothing is hosted.
 
 **The toolchain is MkDocs + Material + mkdocstrings, and the reason is the docstrings.** The
 eight registries carry **465** non-blank lines of docstring containing **143** single-backtick
 code spans, written as markdown. (This said 360 and 90, of seven registries; re-counted over
-every docstring in `aledb_common/*_registry.py`, the seven were already 413 and 117 before the
+every docstring in `mutint_common/*_registry.py`, the seven were already 413 and 117 before the
 eighth was added. Measured, not adjusted -- the same drift the test counts above warn about.)
 Sphinx's `autodoc` parses docstrings as reStructuredText, where a single backtick is a *title
 reference* -- all 143 would render as italics and warn. MyST changes
@@ -615,16 +615,16 @@ reference renders correctly with no edit to any docstring. (Secondarily: on this
 
 **`requirements-docs.txt` is separate from `requirements.txt` on purpose** -- the entry script
 installs the latter into every deployment, and production has no use for a site generator.
-`./aledb docs` installs it on first run, the way `./aledb start` bootstraps the venv.
+`./mutint docs` installs it on first run, the way `./mutint start` bootstraps the venv.
 
 **`DEVELOPER.md` moved into the site** (`docs/assembling/`) and is now a stub pointing at it.
 Two descriptions of how `config/settings.py` is wired would have drifted.
 
-**Where a fact belongs**: how something behaves goes in the `aledb_common` docstring, because
+**Where a fact belongs**: how something behaves goes in the `mutint_common` docstring, because
 the Reference pages are generated from those; how to do something goes in a guide under
 `docs/plugin/`; why *this repo* is built as it is stays here, for a different reader.
 
-`aledb_common/tests/test_docs.py` guards two kinds of drift, by reading files rather than
+`mutint_common/tests/test_docs.py` guards two kinds of drift, by reading files rather than
 importing mkdocs or PyYAML -- neither is installed in a normal environment. It fails when a
 registry has no reference page, when a page names the wrong module, when the nav omits one,
 and when a public `register_*` is named nowhere in `docs/`. That last one caught five
@@ -632,9 +632,9 @@ undocumented hooks the first time it ran. **Neither guard catches prose going ou
 which is said out loud in `docs/contributing/docs.md`.
 
 **The same command builds a deployment's whole manual.** Both entry scripts end at
-`aledb_common.cli.manage()`, so `./mutint docs` reaches this command -- and rather than
-building aledb-core's docs from inside the submodule, it builds MutInt's manual: MutInt's own
-pages plus every installed component's. `aledb_common/docs_manual.py` collects them.
+`mutint_common.cli.manage()`, so `./mutint docs` reaches this command -- and rather than
+building mutint-core's docs from inside the submodule, it builds MutInt's manual: MutInt's own
+pages plus every installed component's. `mutint_common/docs_manual.py` collects them.
 
 There is no eighth registry. A component contributes by having `docs/` and `mkdocs.yml`;
 discovery is `about_registry.first_party_app_configs()` → `component_dir()`, so an uninstalled
@@ -643,10 +643,10 @@ About page is.
 
 Four things in that module are load-bearing:
 
-- **The project is excluded from its own component list.** Standalone, aledb-core *is* the
+- **The project is excluded from its own component list.** Standalone, mutint-core *is* the
   project and its apps are installed; without the exclusion every page renders twice, once at
   the top level and once nested under a component heading.
-- **`ALEDB_TOOLS_DIR` says which project is being built**, because the entry script exports it
+- **`MUTINT_TOOLS_DIR` says which project is being built**, because the entry script exports it
   and is the one place that knows -- settings cannot, for the reason `templates/` and
   `staticfiles/` have to be re-pointed.
 - **Component docs are symlinked**, not copied: mkdocs walks `docs_dir` with
@@ -655,14 +655,14 @@ Four things in that module are load-bearing:
 - **`mkdocstrings.paths` must name every component**, or a plugin's `:::` reference does not
   resolve once its pages are built from somewhere else.
 
-**The manual is organized by audience, not by component.** `Using ALEdb` and `Extending ALEdb`
+**The manual is organized by audience, not by component.** `Using MutInt` and `Extending MutInt`
 are top-level nav headings a component uses in its *own* `mkdocs.yml` to say who each page is
 for, and the collector merges each heading across components. Anything under an unrecognized
 heading lands under `About this deployment` named for its component -- visible rather than
 dropped, so a component that has not thought about audience still builds.
 
 **Cross-component links are not supported and `--strict` catches them.** A page is at
-`aledb-core/plugin/testing/` in a manual and `plugin/testing/` when built alone, so such a link
+`mutint-core/plugin/testing/` in a manual and `plugin/testing/` when built alone, so such a link
 is broken in one of the two. One was written and caught this way.
 
 Versioning is deliberately not configured. `mike` is the intended path and needs one block in
@@ -677,8 +677,8 @@ today and is not a plan.
 `MutationCall` used to carry `breseq_present` and `gatk_present` beside `present` -- one
 flag per variant caller -- and **every read path asked the caller flags rather than `present`**:
 `_get_table_mutation_entry` for a filled cell, `browse._samples_calling` for the genome
-browser's `*`, and `aledb_interop_query`. That was harmless while breseq was the only thing
-that ever wrote a mutation, and stopped being harmless the moment `aledb_mutation_editor` let a
+browser's `*`, and `mutint_interop_query`. That was harmless while breseq was the only thing
+that ever wrote a mutation, and stopped being harmless the moment `mutint_mutation_editor` let a
 person add one. A hand-added call is `present=True` with no caller flag, so it answered
 no to all three: it was stored, it showed on the editor's own per-sample page, and it was
 **absent from Compare, fixation, converge and search** -- which reads as the add having
@@ -693,23 +693,23 @@ Both columns are gone. The two questions they conflated are now asked of separat
   Null means imported before that column existed, which is its own thing and must not be
   read as "unknown caller".
 
-`aledb_sample.0010` backfills `present=True` wherever a caller flag was set and `present` was
+`mutint_sample.0010` backfills `present=True` wherever a caller flag was set and `present` was
 null, then drops the columns -- in that order, because a row whose presence was recorded only
 in a flag would otherwise become a row about which nothing was ever recorded, and those render
-nowhere. `aledb_sample/tests/test_caller_flag_migration.py` stands the database up at `0009`
+nowhere. `mutint_sample/tests/test_caller_flag_migration.py` stands the database up at `0009`
 through the real migration executor to check it, which is the only way to test a data migration
 whose columns the live model no longer has.
 
 **Old change-log snapshots needed no migration.** `history._call_kwargs` builds its
 kwargs by walking `CALL_FIELDS` and calling `snapshot.get(field)`, so the two keys left
 behind in stored `MutationEdit.call` blobs are simply never read again.
-`aledb_mutation_editor.migrations.0002` writes those blobs and had its own copy of the field
+`mutint_mutation_editor.migrations.0002` writes those blobs and had its own copy of the field
 list; it now skips a column the model does not have, because which side of the drop it runs on
 depends on where it falls in a given database's graph.
 
 ### Editing a sample's mutations, and the history that makes it safe
 
-`aledb_mutation_editor` owns four operations -- **edit** a mutation, **delete** a call
+`mutint_mutation_editor` owns four operations -- **edit** a mutation, **delete** a call
 from a sample, **add** one nothing carries yet and **batch-copy** one from a sibling sample --
 and an append-only edit log that makes all of them reversible. The toolbar is
 `/mutation-editor/` (Edit), `/mutation-editor/delete`, `/mutation-editor/add`,
@@ -734,7 +734,7 @@ Deleting used to be a bare `^delete$`, the odd one out, and the Delete *tab* nee
 
 **What it deletes is an `MutationCall`, never a `Mutation`.** That distinction is the whole
 design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
-prunes them, in aledb-phylogeny's `branch_mutations` JSON -- whose
+prunes them, in mutint-phylogeny's `branch_mutations` JSON -- whose
 docstring says *"ids do not move"*, and which is not on the
 rebuild hook -- and in every exported CSV's "Mut ID" column. Deleting a Mutation and letting a
 re-import recreate it through `gd_import`'s seven-field `get_or_create` would mint a new pk for
@@ -742,8 +742,8 @@ the same biological mutation and quietly invalidate all of it. Removing only the
 call changes nothing any stored id means.
 
 **The rows are hard-deleted, and that is what kept every read path untouched.** An
-MutationCall is read by `mutation_table_builder`, `breseq_table`, `aledb_export`,
-`aledb_stats`, `aledb_dashboard`, `aledb_search`, aledb-fixation and aledb-converge, and this
+MutationCall is read by `mutation_table_builder`, `breseq_table`, `mutint_export`,
+`mutint_stats`, `mutint_dashboard`, `mutint_search`, mutint-fixation and mutint-converge, and this
 repo's default managers are deliberately unfiltered. A soft-delete flag would have needed all
 eight taught to filter, and the one that was missed would have gone on showing deleted
 mutations in an export or a fixation table. Nothing was added to any query.
@@ -759,12 +759,12 @@ snapshot** of the row (`call`) and of its mutation's identity (`mutation_identit
   gone -- but `_call_kwargs` still coerces through `float()`, because a changeset written
   before the change holds a string and restoring one would put a string in a float column.
 - **`mutation_identity` exists because the Mutation row may not outlive the log.**
-  `aledb_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
+  `mutint_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
   no MutationCall, and runs after an experiment delete and after `delete_sample` -- so
   removing a mutation's last call makes it eligible for a sweep triggered by something
   else entirely. The snapshot is the exact `get_or_create` key plus `supplemental_data` and
   `annotation`,
-  which is enough to put it back indistinguishable from an imported row. `aledb_import` needed
+  which is enough to put it back indistinguishable from an imported row. `mutint_import` needed
   no edit for this, and `test_restore.SweptMutationTestCase` is what pins it.
 
 **Restoring is a new edit set, not a rewind.** `history.state_after` derives the state at a
@@ -788,7 +788,7 @@ Rebuilds run through `history.rebuild_after_edit`, outside the transaction as
 because a renumber cannot change a mutation count. Adding or removing a call changes
 every registered rebuild.
 
-That used to have a sharper second reason -- aledb-fixation cached MutationCall *ids*, in a
+That used to have a sharper second reason -- mutint-fixation cached MutationCall *ids*, in a
 column only its delete-and-recompute rebuild cleared, and those are exactly the rows an edit
 hard-deletes. Fixation stores nothing now, so no registered rebuild holds a call id.
 
@@ -809,12 +809,12 @@ class from the stylesheet, so it reads as a styling fault rather than a load-ord
 `rebuild_registry` splits marking from running on purpose -- `request_rebuild` is one UPDATE
 and safe from any request, `run_rebuilds` is expensive -- and the design says the page that
 reads the data closes the gap by calling **`ensure_fresh`**. For a long time exactly one reader
-did. Six rebuilders were registered; `aledb_stats.get_experiment_summary` was the only one that
+did. Six rebuilders were registered; `mutint_stats.get_experiment_summary` was the only one that
 refreshed itself.
 
 So a filter edit, which deliberately marks and rebuilds nothing, left the needle plot, Fixed
 Mutations, Convergence and the dashboard showing what was true under the *previous* cutoff, with
-nothing short of `./aledb rebuild` that would ever correct them. The global filter view's own
+nothing short of `./mutint rebuild` that would ever correct them. The global filter view's own
 comment -- *"Each page rebuilds its own on next view"* -- described something that had never
 been implemented.
 
@@ -826,13 +826,13 @@ disagreeing in the same viewport. Every reader calls `ensure_fresh` now.
 where it is available: an `ensure_fresh` closes the gap between two caches, and having no cache
 means there is no gap to close. `/stats` is two queries over the same rows now, so the two
 halves cannot disagree about how fresh they are. The remaining readers that do call
-`ensure_fresh` -- `aledb_dashboard` and `aledb-fixation` -- are the ones whose answer is
+`ensure_fresh` -- `mutint_dashboard` and `mutint-fixation` -- are the ones whose answer is
 genuinely expensive to produce.
 
 **A plugin must not spell its own rebuilder's name.** `register_post_experiment_hook` derives
 it from the app label, suffixes a second registration, and **returns** what it used;
-aledb-fixation captures that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
-`'aledb_fixation'` would be a second opinion about a name `_candidate_names` owns.
+mutint-fixation captures that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
+`'mutint_fixation'` would be a second opinion about a name `_candidate_names` owns.
 
 **`ensure_fresh` cannot raise**, which is what makes it safe on a read path: a rebuild that
 fails is logged, recorded in `last_error` and left stale, and the page renders whatever was
@@ -843,7 +843,7 @@ stored before. A broken plugin rebuild degrades its own page instead of 500ing i
 `rebuild_after_edit` is **unnarrowed by name and narrowed by scope**, and those are different
 questions. Never `only=`, unlike `rebuild_after_structural_change`: adding or removing an
 call changes every derived thing an experiment has. (It used to also be because
-aledb-fixation cached MutationCall ids that only its own rebuild cleared; it stores nothing
+mutint-fixation cached MutationCall ids that only its own rebuild cleared; it stores nothing
 now, and the first reason stands alone.) But `request_rebuild`
 marks the **site-scoped** totals stale too, correctly, and running them here made a single
 delete recount every MutationCall in the installation -- measured at 4.9s for the read half
@@ -862,7 +862,7 @@ on ten deletes costing one recount rather than ten, which is true at any per-row
 
 `register_rebuilder(..., auto=False)` is derived data that is **tracked and marked stale but
 never rebuilt on its own**. Until it existed the two were welded together -- you could only be
-told your data had gone stale by promising to recompute it -- and `aledb-phylogeny` refused
+told your data had gone stale by promising to recompute it -- and `mutint-phylogeny` refused
 that bargain and so registered nothing at all. Its stored tree was never invalidated by
 anything, and `/phylogeny` drew a topology inferred from mutations that had since been deleted.
 
@@ -871,12 +871,12 @@ import would otherwise build every opted-out thing there is. Being named in `onl
 runs one.
 
 **Nothing registers `auto=False` today.** The plugin it was added for stopped needing it: what
-`aledb-phylogeny` registers now is a *deletion* of its cached trees, and a DELETE is cheap
+`mutint-phylogeny` registers now is a *deletion* of its cached trees, and a DELETE is cheap
 enough to run wherever any other rebuild does. The flag and its tests stay, because the next
 expensive stored answer will want them, but there is no live example to read.
 
 The skip lives in `run_rebuilds`, **not** in `get_rebuilders`: `request_rebuild` and
-`./aledb rebuild --list` both go through the latter and must still see manual rebuilders --
+`./mutint rebuild --list` both go through the latter and must still see manual rebuilders --
 one to mark them, the other to show them, tagged `(manual -- --only runs it)` so a stale marker
 beside one does not read as a failure.
 
@@ -888,7 +888,7 @@ reads.
 
 `inputs=` took `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(changed=...)`
 said which had moved, so a filter save marked only what read through the filter. It existed for
-`aledb_phylogeny`, which reads `MutationCall` directly: marked by a cutoff edit, its stored
+`mutint_phylogeny`, which reads `MutationCall` directly: marked by a cutoff edit, its stored
 tree would have been thrown away and redrawn to the identical topology -- the false alarm that
 teaches people to ignore the real one.
 
@@ -901,9 +901,9 @@ meaning behind it.*
 
 #### Freshness belongs where the data is written
 
-`aledb_phylogeny.rebuild_phylogeny` settles its own staleness row rather than leaving it to the
+`mutint_phylogeny.rebuild_phylogeny` settles its own staleness row rather than leaving it to the
 view. **A missing `DerivedDataState` row already counts as stale**, so anything built by a route
-other than the registry -- the page's own button, `load_example`, `./aledb rebuild_phylogeny` --
+other than the registry -- the page's own button, `load_example`, `./mutint rebuild_phylogeny` --
 is born stale and is thrown away by the very next read unless the write says otherwise. That is
 how it was found the first time: four of the example suite's branch tests started answering 409.
 
@@ -924,21 +924,21 @@ right after the frequency cutoff started filtering: the dashboard stored **74,85
 where the filter yields **73,857**, marked fresh, so `ensure_fresh` would have left it
 indefinitely.
 
-`aledb_common.0002` stamps every `DerivedDataState` row stale for that reason -- one UPDATE, no
+`mutint_common.0002` stamps every `DerivedDataState` row stale for that reason -- one UPDATE, no
 rebuilding, and each page recomputes on its next view. Measured end to end on the dev database
 after migrating: the first `/dashboard` view took **5.4s** and corrected the stored total from
 74,859 to 73,857; the second took **0.00s**. **Any future change to filtering or
 counting logic needs the same migration**, because there is no way for the data to work it out
-for itself. `./aledb rebuild --all --force` is the manual equivalent.
+for itself. `./mutint rebuild --all --force` is the manual equivalent.
 
-**`aledb_common.0003` is that rule being followed**, and it moves the same total back: the
+**`mutint_common.0003` is that rule being followed**, and it moves the same total back: the
 dashboard stopped applying the filter, so 73,857 becomes 74,859 again. It marks only
 `mutation_counts`, because only that changed -- `0002` marked everything because the filter
 itself had changed and every derived table read through it.
 
 **`0004` is the third application**, when the functional-change buckets moved onto
 `Mutation.snp_type`. It marks `mutation_counts` for the same reason and **depends on
-`aledb_dashboard.0003`**, which adds the `nonsense` column the ensuing rebuild writes. That
+`mutint_dashboard.0003`**, which adds the `nonsense` column the ensuing rebuild writes. That
 ordering is not tidiness: `ensure_fresh` cannot raise, so a rebuild scheduled before the column
 existed would log a `FieldError` into `last_error` and leave the dashboard stale indefinitely --
 the quiet failure the registry's isolation deliberately trades for.
@@ -969,8 +969,8 @@ altogether -- which is the change described next.
 
 ### A gene list has two separators, and a ceiling
 
-`Mutation.gene` is written by `aledb_import.gene_annotation.get_annotated_gene_list` and read
-by `aledb_common.util.get_gene_list`, and for a long time the two disagreed about what
+`Mutation.gene` is written by `mutint_import.gene_annotation.get_annotated_gene_list` and read
+by `mutint_common.util.get_gene_list`, and for a long time the two disagreed about what
 separates a name.
 
 - A mutation spanning a **gene range** stores every name breseq listed, and those come through
@@ -996,11 +996,11 @@ structural variant can span most of a chromosome, and 23,003 characters had alre
 `gene`'s own `CharField(max_length=19000)` -- silently, because SQLite does not enforce it and
 Postgres would have refused the row. Over the limit the importer records the **range**
 (`mokC–[fimA]`, breseq's own Gene column for such a mutation) and both renderers show a count
-rather than a list, with no expander to open. The limit lives in `aledb_common/util.py` because
+rather than a list, with no expander to open. The limit lives in `mutint_common/util.py` because
 the importer and the renderers have to agree: a row written under one limit and read under
 another would show a truncation nothing performed.
 
-`aledb_sample.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
+`mutint_sample.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
 is not tidying: a row left holding the long string no longer matches what the importer computes,
 so re-importing that sample would mint a second `Mutation` and split its calls across
 both. What it writes is `annotation['gene_name']`, which is exactly what
@@ -1017,7 +1017,7 @@ mutations bucketed as `unannotated`, including every one of the 12,793 nonsynony
 synonymous SNPs. The comment on `FUNCTIONAL_CHANGE_TYPE_LIST` said as much all along: *"these
 names match with Breseq's HTML annotations"* -- they are `snp_type`'s vocabulary.
 
-`aledb_sample/functional_change.py` owns the vocabulary and the rule; `aledb_sample/views/common.py`
+`mutint_sample/functional_change.py` owns the vocabulary and the rule; `mutint_sample/views/common.py`
 re-exports both so no importer changed. Four things about it are load-bearing:
 
 - **`nonsense` was missing from the vocabulary**, though `annotator.py:470` has always written
@@ -1040,7 +1040,7 @@ re-exports both so no importer changed. Four things about it are load-bearing:
   and the sums silently exceed the true distinct count.
 
 **Both pages now render these counts**, which they never did: the four context keys
-`aledb_stats/views.py` pushes had no reader in `stats.html`, and the dashboard's six columns had
+`mutint_stats/views.py` pushes had no reader in `stats.html`, and the dashboard's six columns had
 none in `dashboard.html`. That is how two of them sat at zero unnoticed. The two apps also agree
 now — the Overview used to count a mutation under *every* token it matched, so its
 functional-change sums exceeded its mutation count; with one bucket per mutation they equal it,
@@ -1065,7 +1065,7 @@ another's needle plot wrong, and `request_rebuild()` with no experiment would ma
 
 ### The frequency cutoff, which excluded nothing
 
-`aledb_filter`'s min/max cutoff is the oldest user-facing filter here and it did not work, in
+`mutint_filter`'s min/max cutoff is the oldest user-facing filter here and it did not work, in
 any configuration reachable through the form. Two independent faults in one block of
 `filtered_mutation_call_queryset`, neither with a test. That queryset builds a `Q` and
 hands it to `.exclude()`, so every term describes something to **hide**.
@@ -1082,8 +1082,8 @@ Two smaller things fell out with them: one branch was a straight duplicate of th
 it, and both gatk branches compared against `min_cutoff`/`max_cutoff` rather than their own
 settings -- so those settings were never values, only switches.
 
-`frequency_gatk`, `min_gatk_cutoff` and `max_gatk_cutoff` are gone (`aledb_sample.0011`,
-`aledb_filter.0004`), and the two remaining terms are **OR**ed. The block is now two lines and
+`frequency_gatk`, `min_gatk_cutoff` and `max_gatk_cutoff` are gone (`mutint_sample.0011`,
+`mutint_filter.0004`), and the two remaining terms are **OR**ed. The block is now two lines and
 does what the page has always said it does.
 
 **This changes what every read-only table shows**, which is the point and is still worth
@@ -1093,11 +1093,11 @@ floor. Every other experiment loses nothing, because a clonal isolate rarely car
 that low. So the filter finally working is most visible exactly where it was designed to
 matter, and somebody will notice that one experiment got shorter.
 
-They are still *stored*, and still listed in `aledb_mutation_editor`, whose listings are
+They are still *stored*, and still listed in `mutint_mutation_editor`, whose listings are
 deliberately unfiltered -- which matters more now than it did, because a mutation hidden from
 every table has to stay somewhere it can be removed. There is a test for that.
 
-`aledb_interop_query` carries a hand-rebuilt copy of the same block and had every one of the
+`mutint_interop_query` carries a hand-rebuilt copy of the same block and had every one of the
 same faults; it was fixed in the same shape.
 
 ### The whole experiment at once: `?sample_id=all`
@@ -1191,7 +1191,7 @@ and do the new values already name a mutation this experiment has?
 | some | yes | the chosen calls move onto the row already holding those values |
 
 Only the first row keeps the primary key, and it is kept there because it can be: mutation ids
-are stored as bare integers, with no foreign key, in aledb-phylogeny's `branch_mutations` and in
+are stored as bare integers, with no foreign key, in mutint-phylogeny's `branch_mutations` and in
 every exported CSV, and nothing refreshes them.
 
 **The last three paths are one call, and it is the one that was already there.**
@@ -1219,7 +1219,7 @@ not a thing anybody can act on.
 
 **An emptied row is left in place, not deleted.** That is the posture delete takes with a
 `Mutation` as well, and it is what lets the restore above resolve back to the same pk.
-`aledb_import.ale_experiment._delete_all_orphaned_mutations` sweeps it if something else triggers
+`mutint_import.ale_experiment._delete_all_orphaned_mutations` sweeps it if something else triggers
 a sweep.
 
 **The mutation the unchosen samples were left on is not re-annotated**, and that is a live trap
@@ -1239,9 +1239,9 @@ which are `apply_edits` with removals and additions, needed nothing either.
 
 **What the whole-set path does not re-create is the Mutation row.** `_resolve_mutation` returns
 the row it is handed, so the additions point back at the one the removals came off and the
-primary key never moves. Mutation ids are stored as bare integers, with no foreign key, in aledb-phylogeny's
+primary key never moves. Mutation ids are stored as bare integers, with no foreign key, in mutint-phylogeny's
 `branch_mutations` and in every exported CSV -- and **nothing refreshes them**. What
-aledb-phylogeny does on a mutation edit is throw its cached trees away, which corrects the ids
+mutint-phylogeny does on a mutation edit is throw its cached trees away, which corrects the ids
 it held by no longer holding them; an exported CSV cannot be reached to correct at all. Minting
 a new row would leave all of that pointing at a mutation with no calls; reusing it
 leaves them resolving, to the corrected call.
@@ -1296,7 +1296,7 @@ as `0.4.2`, so a version pin cannot tell one from another and pip will not upgra
 
 At `43a0f72` the package grew `genomediff.schema` — breseq's `genome_diff_entry.cpp` tables,
 mirrored and checked against `gdtools VALIDATE` over breseq's own 306-file test suite — behind
-`Record.get()` / `set()` / `validate()`. `aledb_mutation_editor.validation` defers to
+`Record.get()` / `set()` / `validate()`. `mutint_mutation_editor.validation` defers to
 `check_field` for those rules rather than keeping a second opinion about what breseq accepts.
 
 **`check_field` is well-formedness only.** It guards about twenty field names with five rules
@@ -1442,9 +1442,9 @@ the row from the client-side DataTable until the next reload.
 
 All of it is gone, along with `add_to_exp_filter`, its `mutation_to_exp_filter` route, its
 dropdown entry, and `save_to_experiment_filter`/`deleteRow` in `table_template.js`.
-`aledb_mutation_editor.migrations.0002` converts whatever those columns held into delete
-edit sets before `aledb_filter.0003` drops them, so what was hidden stays hidden and becomes
-inspectable and restorable; `aledb_filter.0003` depends on it, which is what stops the drop
+`mutint_mutation_editor.migrations.0002` converts whatever those columns held into delete
+edit sets before `mutint_filter.0003` drops them, so what was hidden stays hidden and becomes
+inspectable and restorable; `mutint_filter.0003` depends on it, which is what stops the drop
 running first. Those edit sets have `created_by` null and render as "system".
 
 ### There is one filter, and it belongs to the reader
@@ -1452,13 +1452,13 @@ running first. Those edit sets have `created_by` null and render as "system".
 **A filter is a value a reader carries, not a row.** `AleExperimentFilter` held one frequency
 range and one ignored-gene list per experiment, edited at `/filter` by anyone with write access,
 and it was *shared*: changing your own view changed everybody's, silently, with no record of who
-did it. That conflated curating a dataset -- `aledb_mutation_editor`'s job, logged and
+did it. That conflated curating a dataset -- `mutint_mutation_editor`'s job, logged and
 reversible -- with choosing what you want to look at, which is nobody else's business.
-`aledb_filter.0006` drops the table, and logs what it discards, because there is nowhere to fold
+`mutint_filter.0006` drops the table, and logs what it discards, because there is nowhere to fold
 it forward to and "calls below 20% here are noise" is a fact about the data that somebody may
 have recorded in it.
 
-`aledb_filter/view_filter.py` is the value and where it lives; `util.py` is what applies it.
+`mutint_filter/view_filter.py` is the value and where it lives; `util.py` is what applies it.
 Separate modules so a plugin importing the filter does not drag in `MutationCall`'s joins,
 and so the value's tests need no database -- pinning the gene-subset rule used to take six model
 rows. `ViewFilter` normalizes `0` and `100` to `None`, which collapses "configured" and
@@ -1482,9 +1482,9 @@ has no SQL. And **core has no experiment-scoped rebuilder left**: `experiment_fi
 last one, so several tests register their own rather than borrowing whatever was lying around.
 
 `GlobalFilter` was a still earlier layer: one row for the whole installation, superuser-only,
-reachable only by typing the URL, and empty in practice. `aledb_filter.0005` folded its genes
+reachable only by typing the URL, and empty in practice. `mutint_filter.0005` folded its genes
 into each experiment before dropping it -- convert, then drop, the posture
-`aledb_mutation_editor.0002` took with the ignored *mutation* lists.
+`mutint_mutation_editor.0002` took with the ignored *mutation* lists.
 
 **`can_add_global_filter` became `can_curate`, and the reason is not the one you would guess.**
 Two call sites gated the tag dropdowns on
@@ -1496,11 +1496,11 @@ so.
 Deleting the left half outright looked safe because `effective_role` already answers `owner` to
 a superuser. It is not: the case it really covered is a **`Mutation` with no experiment**, where
 `can_edit_experiment(user, None)` returns False for everybody and an unscoped mutation becomes
-uncurateable by anyone. `aledb_sample.tests.test_table_actions` pins it. `can_curate` keeps that
+uncurateable by anyone. `mutint_sample.tests.test_table_actions` pins it. `can_curate` keeps that
 case and asks the question once, so the lock is no longer something to route around.
 
-Two things that fell out with it: `aledb_interop_query` had been assigning `global_filter_genes`
-and never reading it, and `aledb_stats._count_in_python` -- which carries its own copy of the
+Two things that fell out with it: `mutint_interop_query` had been assigning `global_filter_genes`
+and never reading it, and `mutint_stats._count_in_python` -- which carries its own copy of the
 gene loop -- lost both its cross-experiment `deleted_global_mutations` cache and the copied
 `and`/`or` precedence quirk, since a global gene meaning the same thing everywhere was the only
 reason either existed.
@@ -1511,12 +1511,12 @@ An ALE starts from an ancestor, and that ancestor already differs from the refer
 Those differences are the starting line rather than evolution, so
 `Experiment.ancestor` names one sample and everything follows from that column:
 its mutations are subtracted from every other sample before anything is computed, and the
-sample itself leaves every listing. `aledb_experiment/ancestor.py` is the whole mechanism.
+sample itself leaves every listing. `mutint_experiment/ancestor.py` is the whole mechanism.
 
 **It sits next to the section above and is the opposite of it on every count**, which is why it
-is not in `aledb_filter`. A `ViewFilter` is per-person, session-scoped, ephemeral and clearable
+is not in `mutint_filter`. A `ViewFilter` is per-person, session-scoped, ephemeral and clearable
 in a click; this is shared, permanent, has no toggle and no query parameter, and reaches
-aledb-phylogeny, which never touches the filter layer. Putting an unconditional exclusion inside
+mutint-phylogeny, which never touches the filter layer. Putting an unconditional exclusion inside
 that package would undo the distinction it exists to draw.
 
 **The idea was already here four times, and none of them subtracted anything.**
@@ -1526,7 +1526,7 @@ never did. `STARTING_STRAIN_ALE_ID = "0"`, which kept ALE 0 out of four pickers 
 dashboard counts while its samples went on landing in every analysis the moment no ALE was
 picked, *which is the bug that convention actually had*. And
 `AleExperimentFilter.starting_strain_mutations`, a hand-curated id list already migrated into
-delete edit sets. All four are gone; `aledb_experiment.0010` drops the columns and backfills
+delete edit sets. All four are gone; `mutint_experiment.0010` drops the columns and backfills
 the designation.
 
 **That migration is the load-bearing part of retiring the label.** Nothing reads `"0"`
@@ -1609,7 +1609,7 @@ become one and `applied` is simply `not is_empty`.
 **Template tags, not context keys**, and that is what makes them generic: they read
 `experiment_id` and the request out of the context every table page already sets, so
 including `{% view_filter_fields %}` and `{% view_filter_summary %}` once in
-`base_table_template.html` reaches aledb-compare, aledb-fixation and aledb-converge **without
+`base_table_template.html` reaches mutint-compare, mutint-fixation and mutint-converge **without
 touching any of their repositories**. `{% view_filter_form %}` is the standalone variant, for a
 page with no view-control form of its own to join -- the per-sample breseq table uses it.
 
@@ -1621,7 +1621,7 @@ a property now rather than a thing to remember.
 
 A page filtering by its own rules passes `own_rules=` rather than rendering an empty summary
 that reads as "no filtering here" when the truth is "different filtering here". Search does,
-because it spans experiments; aledb-phylogeny does, because it encodes frequency in three
+because it spans experiments; mutint-phylogeny does, because it encodes frequency in three
 states rather than excluding on it.
 
 **What it does not claim**: criteria a view hardcodes. `get_table_body` passes
@@ -1642,16 +1642,16 @@ and pass `view_filter=None` to `get_table_body`.
 Two things this shook out that are worth knowing:
 
 - **Removing the close icon shifted every column of the shared mutation table left by one.**
-  `REFSEQ_COLUMN_IN_MUT_TABLE` went 3 -> 2 and `aledb_export.util`'s `mut_pos_index` with it;
-  everything in `table_template.js` is expressed relative to that constant, and aledb-compare,
-  aledb-fixation, aledb-converge and `aledb_search` all import it rather than hardcoding an
+  `REFSEQ_COLUMN_IN_MUT_TABLE` went 3 -> 2 and `mutint_export.util`'s `mut_pos_index` with it;
+  everything in `table_template.js` is expressed relative to that constant, and mutint-compare,
+  mutint-fixation, mutint-converge and `mutint_search` all import it rather than hardcoding an
   index, so they followed for free. Getting it wrong renders a table labeled one way and
   sorted another, which reads like CSS. `test_mutation_table_builder` now asserts the header
   and every row are the same width and that the constant points at "Reference Seq".
 - **A filter with no cutoff at either end used to exclude the whole experiment.** An empty `Q`
   handed to `.exclude()` excludes everything. The guard survives in a new form -- with no cutoff
   the queryset is returned untouched and `.exclude()` is never called -- and the second copy of
-  that block is gone with it: `aledb_interop_query` had rebuilt the whole thing by hand, skipping
+  that block is gone with it: `mutint_interop_query` had rebuilt the whole thing by hand, skipping
   gene filtering as too slow, and now goes through the shared path. Its six endpoints take
   `min_freq`/`max_freq`/`ignore_genes` and default to unfiltered, because an anonymous caller
   used to get a view shaped by a setting they could not see.
@@ -1684,7 +1684,7 @@ displayed before: a save has to be visible somewhere or it reads as having done 
 **Changing a sample's identity never writes a number.** A coordinate is
 `(population, time_point, label)`, and **half of it is on the sample and half is not**: the
 label and the time point are the sample's own columns, the population is a row it shares with
-its siblings. `aledb_experiment/samples.py` resolves (or creates) the `Population` for the
+its siblings. `mutint_experiment/samples.py` resolves (or creates) the `Population` for the
 *target* coordinate and re-points `Sample.population` at it, then assigns the other two.
 
 The shared row must never be edited in place -- `population.name = "Ara-2"` renumbers every
@@ -1708,7 +1708,7 @@ description.** The first two are facts about the organizm and hold across ALEs; 
 is what makes *this* ALE different from the others.
 
 Two samples may not share a coordinate, and the save refuses it. There is no constraint saying
-so, but `aledb-fixation` builds `flask_isolate_mutation_dict[(time_point, label)] = qs` by
+so, but `mutint-fixation` builds `flask_isolate_mutation_dict[(time_point, label)] = qs` by
 plain assignment, so the second sample at a coordinate silently overwrites the first and its
 mutations vanish from fixation with no error. Emptied populations are pruned for the opposite
 reason: `rebuild_sample_counts` counts `Population` **rows**, and the ALE picker is built from
@@ -1730,7 +1730,7 @@ used to record cumulative divisions rather than a count of flasks. The column ke
 only the UI changed, including the validation message, which is the one place the internal
 name would otherwise reach a user. Its input is plain text, not `type="number"`: steppers are
 useless on a five-figure value. **It is still an `IntegerField`, and is now the only member
-of the coordinate that is** -- the ALE and the isolate became text (`aledb_experiment.0008`)
+of the coordinate that is** -- the ALE and the isolate became text (`mutint_experiment.0008`)
 and this one deliberately did not, because it is the ordinal fixation reads. A fractional
 time point is therefore still refused.
 
@@ -1745,7 +1745,7 @@ Two things went with it beyond the columns. `_prepare_experiment`'s `get_or_crea
 a second experiment** -- a sharp edge `prepare_experiment_by_id`'s docstring existed to warn
 about, and now simply absent. And `person` had been threaded as an argument through six import
 functions whose only remaining use of it was writing `Sample.person`; that thread is dead code
-now and went too. What survives is `--owner` on `./aledb import`, which resolves a real `User`
+now and went too. What survives is `--owner` on `./mutint import`, which resolves a real `User`
 through `find_user` because a newly created project needs one -- it was never the free-text
 field, and is renamed from `--person` to stop reading like it.
 
@@ -1769,18 +1769,18 @@ one place to change the answer. Nothing below the project has an owner.
 experiment filters. `admin` additionally manages access and may soft-delete the project.
 `owner` additionally grants and revokes ownership.
 
-`aledb_experiment/roles.py` holds the ordering and nothing else — it imports nothing from
+`mutint_experiment/roles.py` holds the ordering and nothing else — it imports nothing from
 Django, so `models.py` (which needs `ROLE_CHOICES` for a field) and `permissions.py` (which
 needs `rank`) can both use it without importing each other. Roles are strings, not integers,
 so the column reads in `/admin/` and in a sqlite dump; `roles_at_least()` is what turns
 "role ≥ write" into one `role__in=[...]` lookup.
 
-`aledb_experiment/permissions.py` is the whole policy, and `effective_role(user, project)` is
+`mutint_experiment/permissions.py` is the whole policy, and `effective_role(user, project)` is
 the whole of *that* — every `can_*` is a comparison against it. Three things confer a role
 with no row: a superuser is owner everywhere, `Project.user` is owner of their own project,
 and `is_public` gives everyone `read`. **There is no blanket grant for staff**; that clause
 used to end `can_view_project` and, since `load_projects` marks every imported user staff, it
-made nearly everything readable by nearly everyone. `./aledb project_access` is the escape
+made nearly everything readable by nearly everyone. `./mutint project_access` is the escape
 hatch for a deployment that relied on it.
 
 **`ProjectAccess` is one row per (project, subject, role)**, where the subject is a user *or*
@@ -1818,7 +1818,7 @@ project whose owner is named only by the field — which is exactly what
 row should be a display bug rather than an owner locked out of their own project, which is the
 trap the guardian scheme had.
 
-**`Project.user` is `on_delete=PROTECT`** (`aledb_experiment.0009`). The column is NOT NULL and
+**`Project.user` is `on_delete=PROTECT`** (`mutint_experiment.0009`). The column is NOT NULL and
 carries a real FK, so deleting a project's primary owner always failed — but under `DO_NOTHING`
 it failed as an `IntegrityError` from SQLite at commit, after the admin's confirmation page had
 promised otherwise. PROTECT refuses up front and names the projects in the way. `ProjectAccess.user`
@@ -1841,7 +1841,7 @@ grant (every test, and the CLI) from answering with a stale role.
 
 **django-guardian is gone.** It stored a single `view_project` object permission and nothing
 else, and the two lookups built on it filtered on the app label `'ale'` while the real label
-is `aledb_experiment`, so they matched nothing. `0005` converts its grants to `read` rows and
+is `mutint_experiment`, so they matched nothing. `0005` converts its grants to `read` rows and
 every `Project.user` to an `owner` row. It reads guardian's table with **raw SQL behind an
 introspection guard**, not `apps.get_model("guardian", ...)`: the ORM version only works while
 guardian is still in `INSTALLED_APPS`, which would have forced migrate-then-uninstall across
@@ -1851,16 +1851,16 @@ two releases.
 migration history. It is worth one paragraph, because the shape of what it got wrong outlives
 it. The file was inert and had to stay under its name, because a dependency on an uninstalled
 app makes `migrate` fail with `NodeNotFoundError` on a fresh database — and this note listed
-the four apps that named it: `aledb_sample.0005`, `aledb_stats.0003`, `aledb_filter.0002`,
-`aledb_common.0001`. **There were five.** The fifth was
-`aledb-phylogeny/…/0001_initial.py`, invisible to a note written from inside this repo, and it
+the four apps that named it: `mutint_sample.0005`, `mutint_stats.0003`, `mutint_filter.0002`,
+`mutint_common.0001`. **There were five.** The fifth was
+`mutint-phylogeny/…/0001_initial.py`, invisible to a note written from inside this repo, and it
 is why the migration reset had to span four repositories at once. `./mutint check` passes
 with a broken migration graph, so the two checks the suite's rules prescribe after a bump are
 both blind to exactly that failure; only `migrate` or `test` finds it.
 
 ### Groups
 
-`UserGroup` + `UserGroupMembership`, in `aledb_experiment`. Deliberately not
+`UserGroup` + `UserGroupMembership`, in `mutint_experiment`. Deliberately not
 `django.contrib.auth.Group`: that one is administered from `/admin/`, has no owner, and
 carries a `permissions` m2m that would sit unused inviting someone to wire model permissions
 into a per-object scheme.
@@ -1886,7 +1886,7 @@ exist, and `test_permissions` asserts the two strings are equal.
 `/project/<pk>/access/` (admin or owner) and `/group/`, `/group/<pk>/`. Same
 shape as every other page here: function-based views, permission checked inline, `403.html`
 with a status, hand-written Bootstrap markup posting to `@require_POST` JSON endpoints through
-`aledbPost` — no Django `Form` classes, no autocomplete, usernames typed in and resolved
+`mutintPost` — no Django `Form` classes, no autocomplete, usernames typed in and resolved
 server-side.
 
 The role dropdown on a row posts to the **same** grant endpoint as the add boxes: it is an
@@ -1920,7 +1920,7 @@ and names the one it refused.
 is the flag, with no boolean beside it to disagree. `/experiment/<pk>/lock/` sets it,
 gated on `can_admin_project`.
 
-**There is no `locked_reason` any more** (`aledb_experiment.0007`). It was a third column fed
+**There is no `locked_reason` any more** (`mutint_experiment.0007`). It was a third column fed
 by a text box on the lock dialog, which is a plain confirm now: the questions a lock has to
 answer are whether the dataset is closed and who to ask about it, and the two remaining
 columns carry both. `lock()` takes no `reason`, `lock_message()` is the experiment's name plus
@@ -1953,16 +1953,16 @@ Three places it would have silently not held, all now tested:
 - **`project_delete`** refuses while the project holds a locked experiment, naming them.
   Otherwise the lock is sidestepped by the most obvious adjacent button.
 
-`aledb_mutation_editor.history.apply_edits` raises `ExperimentLocked` too, trusting no
+`mutint_mutation_editor.history.apply_edits` raises `ExperimentLocked` too, trusting no
 caller: it is the lowest layer that still knows which experiment it is writing to, and a write
 path added later is exactly what forgets.
 
 **What it deliberately does not stop.** Derived-data rebuilds — those recompute what the
 mutations already imply, and a locked experiment whose counts silently went stale would be
-worse, not safer. That covers more than it looks: aledb-phylogeny's build button writes a row,
+worse, not safer. That covers more than it looks: mutint-phylogeny's build button writes a row,
 and does not ask, because what it writes is a cached tree keyed by a selection one reader made.
 The test is whether the write is *shared*, not whether it is a write. Reading and exporting. Access changes, since locking is per experiment and
-access is per project. And **management commands**: the lock guards the web, so `./aledb
+access is per project. And **management commands**: the lock guards the web, so `./mutint
 upload` still writes to a locked experiment, matching by name as it always has.
 
 An experiment with **no project can never be locked**: `effective_role` answers `None` for a
@@ -1971,34 +1971,34 @@ be unlocked either, but it cannot get locked in the first place.
 
 ### Compare is a plugin
 
-`/compare/` -- mutations as rows, samples as columns -- lives in the **aledb-compare** repo,
+`/compare/` -- mutations as rows, samples as columns -- lives in the **mutint-compare** repo,
 not in core. It is one way of looking at an experiment rather than a core function, which is
-exactly what aledb-fixation and aledb-converge are: all three are a function view that builds a
+exactly what mutint-fixation and mutint-converge are: all three are a function view that builds a
 context and renders `base_table_template.html` through `mutation_table_builder`. Compare was
 simply the one that had never been moved out.
 
 What stayed, and why none of it could go:
 
-- **`mutation_table_builder`** -- `aledb_search`, `aledb_export`, aledb-fixation and
-  aledb-converge all call it.
+- **`mutation_table_builder`** -- `mutint_search`, `mutint_export`, mutint-fixation and
+  mutint-converge all call it.
 - **`base_table_template.html` and `table_template.js`** -- rendered by three other pages.
-- **The curation endpoints**, now at `/mutation-table/` (`aledb_sample/views/table_actions.py`,
-  `aledb_sample/table_urls.py`). Every table posts to them, not just Compare, and the state is
+- **The curation endpoints**, now at `/mutation-table/` (`mutint_sample/views/table_actions.py`,
+  `mutint_sample/table_urls.py`). Every table posts to them, not just Compare, and the state is
   shared: `Sample.tags` is what the Show/Hide Tag control filters sample columns on
   in `get_reseq_ordered_dict`, so tagging from one table changes what the other three show.
   Replicating them per plugin would have meant four write paths to core-owned tables.
 
-**`/mutations/` is not a page any more** and returns 404. `aledb_sample.urls` has no `^$`, and a
+**`/mutations/` is not a page any more** and returns 404. `mutint_sample.urls` has no `^$`, and a
 plugin cannot reclaim that path: Django does not backtrack out of a matched `include()`.
 
 Two consequences worth knowing before wondering whether something is broken:
 
 - **Compare's nav entry sits at the end of the experiment section**, after Filter and the other
   plugins, because nav order is `INSTALLED_APPS` order and assembled projects append plugins
-  after every core app. Listing `aledb-compare` first in `.gitmodules` makes it the first
+  after every core app. Listing `mutint-compare` first in `.gitmodules` makes it the first
   *plugin* entry, which is as close to its old position as the design allows.
-- **Core's suite cannot reach it.** `./aledb test` has no plugin discovery, so Compare's tests
-  run only as `./mutint test aledb_compare`.
+- **Core's suite cannot reach it.** `./mutint test` has no plugin discovery, so Compare's tests
+  run only as `./mutint test mutint_compare`.
 
 `breseq_table.html` links to it through `{% url 'compare' as compare_url %}` inside an `{% if %}`,
 so the "all samples" link disappears rather than dangling where the plugin is not installed --
@@ -2009,15 +2009,15 @@ file is a Django template included inside a `<script>`, so `{% url %}` works the
 anything else tag-shaped, **including inside a `//` or `/* */` comment**, which the template
 engine does not recognize as a comment at all. Writing a tag name in a comment there executes it.
 
-Nothing in core rendered that file until this change: `aledb_search` has no tests and the other
-three consumers are plugin pages. `aledb_sample/tests/test_table_actions.py` renders it directly now,
+Nothing in core rendered that file until this change: `mutint_search` has no tests and the other
+three consumers are plugin pages. `mutint_sample/tests/test_table_actions.py` renders it directly now,
 which is what lets core notice a broken tag before four pages do.
 
 ### Example datasets
 
-`./aledb load_example` lists what is registered; `./aledb load_example <name>` loads it.
-Components own their own data -- `aledb-fixation` ships `aledb-fixation-example` -- and
-register it from `AppConfig.ready()` through `aledb_common/example_registry.py`, the sixth
+`./mutint load_example` lists what is registered; `./mutint load_example <name>` loads it.
+Components own their own data -- `mutint-fixation` ships `mutint-fixation-example` -- and
+register it from `AppConfig.ready()` through `mutint_common/example_registry.py`, the sixth
 registry.
 
 **A dataset is a directory of files the import path already understands**, not a Django
@@ -2040,9 +2040,9 @@ expected answer as a table, and each asserted by that plugin's tests:
 
 | dataset | shape | what it demonstrates |
 |---|---|---|
-| `aledb-fixation-example` | 2 ALEs x 4 flasks | a mutation in the last two flasks is fixed; one lost earlier is not |
-| `aledb-converge-example` | 3 ALEs x 2 flasks | a gene hit in two lineages converges; one recurring in a single lineage does not |
-| `aledb-compare-example` | 2 ALEs x 3 flasks | a pivot with full, partial and single rows across all six mutation types |
+| `mutint-fixation-example` | 2 ALEs x 4 flasks | a mutation in the last two flasks is fixed; one lost earlier is not |
+| `mutint-converge-example` | 3 ALEs x 2 flasks | a gene hit in two lineages converges; one recurring in a single lineage does not |
+| `mutint-compare-example` | 2 ALEs x 3 flasks | a pivot with full, partial and single rows across all six mutation types |
 
 The first two have a computed answer to check. **Compare's does not** -- it derives nothing --
 so what its dataset supplies instead is a *pattern*, because a table whose rows all look alike
@@ -2069,7 +2069,7 @@ code invented would file the sample at a coordinate nobody chose and the drop wo
 looking entirely successful. Which of the two was meant is a question only the person who made
 them can answer.
 
-`aledb_import/sample_names.py` is the one place a filename becomes a coordinate, asked by
+`mutint_import/sample_names.py` is the one place a filename becomes a coordinate, asked by
 `gd_import.import_document_as_sample` -- so a bare `.gd` and the breseq directory of the same
 sample cannot answer differently. Two shapes are read and anything else is auto-numbered:
 
@@ -2078,11 +2078,11 @@ sample cannot answer differently. Two shapes are read and anything else is auto-
 | `3-30000-1-1` | `3` | 30000 | `1` | 1 |
 | `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | 1 |
 
-**`Population.name` and `Sample.name` are `CharField`s** (`aledb_experiment.0008`), which is
+**`Population.name` and `Sample.name` are `CharField`s** (`mutint_experiment.0008`), which is
 what makes the second row expressible at all: `Ara-1` and `Ara+1` are two LTEE populations
 that both end in 1, and `763A` and `763B` are two clones from one flask that differ only in
 the trailer. Any rule reducing either to an integer merges rows that are not the same sample
--- and a merge is invisible, because `aledb-fixation` builds a dict keyed by
+-- and a merge is invisible, because `mutint-fixation` builds a dict keyed by
 `(time_point, label)` by plain assignment, so the second sample's mutations simply vanish.
 
 **`Sample.time_point` stays numeric**, and is the reason the middle field is the
@@ -2108,13 +2108,13 @@ answering None and auto-numbering is what keeps a misread name addressable.
 
 **Ordering had to follow.** A text column sorts `10` before `2`, which on an auto-numbered
 import -- one isolate per sample, fifty-one of them in the dev database's largest experiment
--- reorders every mutation table's columns. `aledb_experiment/ordering.py` `sample_order()`
-is what every sample listing orders by, in core and in aledb-phylogeny: it pads each text
+-- reorders every mutation table's columns. `mutint_experiment/ordering.py` `sample_order()`
+is what every sample listing orders by, in core and in mutint-phylogeny: it pads each text
 field with zeros for the comparison, so digits sort by value and labels still sort as text.
 
 ### A mutation is fixated in the last two time points, so the time axis must be the time point
 
-`aledb-fixation` intersects an ALE's final two time points by `Sample.time_point`, so **an ALE
+`mutint-fixation` intersects an ALE's final two time points by `Sample.time_point`, so **an ALE
 with one time point can never fix anything** -- and neither can an experiment made entirely of
 such ALEs. That is the usual reason for an empty Fixed Mutations page and it is not a bug.
 
@@ -2130,7 +2130,7 @@ there.
 sample's identity out of its filename**. Data already imported does not move on its own; it
 takes a re-import, or the sample editor, to put those samples on a time axis.
 
-`./aledb fixation [<experiment_id>]` reports the count, and says when no ALE has more than one
+`./mutint fixation [<experiment_id>]` reports the count, and says when no ALE has more than one
 flask -- which is the difference between an empty page and an impossible one, and the reason
 the command still exists.
 
@@ -2176,7 +2176,7 @@ that establishes one leaves the page stale. `finalize` therefore returns `has_re
 the page **reloads** when it flips rather than patching the menu and the banner in the client,
 where the two could drift from what the server would render. The import summary is the only
 record that the drop happened, so it rides across the reload in `sessionStorage` under
-`aledb-add-summary-<experiment>` and is re-rendered on the way back.
+`mutint-add-summary-<experiment>` and is re-rendered on the way back.
 
 ### An import reports itself, sample by sample
 
@@ -2185,7 +2185,7 @@ An import is long -- `coverage.build_quietly` walks the BAM and runs `bedGraphTo
 call in the installation. Reported as a single POST, all of it was a page that had
 stopped moving, which is indistinguishable from one that had broken.
 
-`aledb_common/import_progress.py` is the seam. `run_import` **announces every unit before any
+`mutint_common/import_progress.py` is the seam. `run_import` **announces every unit before any
 handler runs**, and each handler brackets its own work with `begin` / `report`; the Add page
 lists every sample as *waiting* immediately and fills each in as it lands, above a bar counting
 samples rather than bytes.
@@ -2226,7 +2226,7 @@ authority on what happened.
 section is the history of a SQLite failure, and the suite is on PostgreSQL now; read it for why
 `import_lock` and `retry` exist, not for what they defend against today.
 
-- **The backend piece is gone.** `aledb_common.db.sqlite_immediate`, then
+- **The backend piece is gone.** `mutint_common.db.sqlite_immediate`, then
   `OPTIONS={'transaction_mode': 'IMMEDIATE'}`, then nothing: PostgreSQL has no deferred-`BEGIN`
   refusal to work around.
 - **`retry` matches SQLSTATE now** (`40001`, `40P01`, `55P03`), not message text. It matched
@@ -2263,13 +2263,13 @@ Measured, three concurrent importers, one transaction per sample:
 
 So all three are needed and none is sufficient:
 
-- **`aledb_common/db/sqlite_immediate/`** -- the stock SQLite backend with
+- **`mutint_common/db/sqlite_immediate/`** -- the stock SQLite backend with
   `_start_transaction_under_autocommit` issuing `BEGIN IMMEDIATE`. **Delete it at Django
   5.1**, which has `OPTIONS={'transaction_mode': 'IMMEDIATE'}`; 4.2 has no such setting, which
   is the only reason a subclass of a private method exists. `test_concurrent_imports` asserts
   both the statement issued *and* that Django still has the hook, so an upgrade that moves it
   fails loudly rather than silently reverting every transaction to deferred.
-- **`aledb_import/import_lock.py`** -- one import at a time, and the piece that actually
+- **`mutint_import/import_lock.py`** -- one import at a time, and the piece that actually
   closes it. **A row, not a Python lock**: the dev server is threaded and a deployment runs
   several processes, neither of which an in-process lock is visible to. Acquisition is the
   row *insert* rather than `select_for_update`, which is a documented no-op on SQLite and
@@ -2278,7 +2278,7 @@ So all three are needed and none is sufficient:
   progress reporting exists to prevent, and the staged files survive so retrying costs only
   the button. Stale locks are reclaimed after two hours, because a process killed mid-import
   cannot run its own cleanup.
-- **`aledb_import/retry.py`** -- a sample that loses to some *other* writer tries again. Safe
+- **`mutint_import/retry.py`** -- a sample that loses to some *other* writer tries again. Safe
   because each sample is already its own transaction and re-import is idempotent, so a failed
   attempt rolls back whole. Deliberately narrow: it matches lock wording only, since a
   malformed file fails identically every time and retrying it turns a clear message into a
@@ -2298,8 +2298,8 @@ drop:
 
 It was not slow, it was starved: the poll never got the write lock until the importer was
 finished, so the page showed *Scanning the upload for samples…* for the entire run and the
-table arrived with the result. `aledb_common/session_middleware.py` is a `SessionMiddleware`
-subclass that skips the save for a request that sets `aledb_skip_session_save`, and
+table arrived with the result. `mutint_common/session_middleware.py` is a `SessionMiddleware`
+subclass that skips the save for a request that sets `mutint_skip_session_save`, and
 `upload_progress` is the only thing that sets it. **Deliberately not
 `SESSION_SAVE_EVERY_REQUEST = False`**: that would fix one endpoint by changing when everybody
 gets logged out.
@@ -2312,7 +2312,7 @@ onto the queue -- see **What is still on the request path** in the suite `CLAUDE
 
 **Postgres was considered and is not needed for this.** The 30/30 above is SQLite. What
 Postgres would buy is *simultaneous* imports rather than queued ones -- a throughput question,
-not a correctness one -- at the cost of the no-external-services property `./aledb start` is
+not a correctness one -- at the cost of the no-external-services property `./mutint start` is
 built around. It is also not a guarantee by itself: it still raises serialization failures and
 deadlocks, so the retry would be wanted there too.
 
@@ -2323,7 +2323,7 @@ same contention it made failures *more* frequent, 50% to 66%. The risk is per at
 second held, so more and shorter transactions means more attempts. Batching is not a lock fix
 and must not be counted as one.
 
-**Polling a database that is being written is what forced `aledb_common/sqlite_tuning.py`,
+**Polling a database that is being written is what forced `mutint_common/sqlite_tuning.py`,
 which is deleted with SQLite.** PostgreSQL's readers are never blocked by a writer, so there is
 nothing here to configure and no deployment ruled out — the paragraph is kept because it is the
 measurement that explains why the progress endpoint is careful, not because the pragmas exist.
@@ -2366,7 +2366,7 @@ file result carries `mutations`, so the reference handler filled it with the 0 i
 imported -- and the Add page rendered that twice, in the table's Mutations column and in
 *Added to E (#1): 0 mutations*, both of which read as a mutation file that landed nothing.
 The entry sets `mutations` to None and declares `kind=KIND_REFERENCE`
-(`aledb_common/import_registry.py`) instead; the page prints **Reference** in that column and
+(`mutint_common/import_registry.py`) instead; the page prints **Reference** in that column and
 uses it for the headline when the drop imported no mutations. The kind rides through
 `import_progress` onto the `UploadSession` snapshot as well, or the row would say one thing
 while the import ran and another the moment it finished. Absent `kind` means the count is a
@@ -2413,7 +2413,7 @@ each catching what the one before it cannot:
   recognized as Reference genome" into "...it looks like GenomeDiff mutations, so import it
   with that type". Patterns only, never a handler's `detect`: the job is to name a likely
   alternative, not to re-decide what the file is.
-- **Server-side, by content**, `aledb_import/sniff.py` reads the first non-blank line, which
+- **Server-side, by content**, `mutint_import/sniff.py` reads the first non-blank line, which
   is where all four formats declare themselves. This is the layer that survives a wrong
   extension: a `.gd` saved as `.gbk` passes every pattern check above and is caught by
   `reference.detect_format`, and a GenBank named `.gd` by `gd_import._parse_document`.
@@ -2425,7 +2425,7 @@ nothing is still the parser's to judge.
 
 ### The genome browser
 
-`aledb_sample/views/browse.py` renders igv.js for one `MutationCall` at
+`mutint_sample/views/browse.py` renders igv.js for one `MutationCall` at
 `/mutations/browse?mutation_call_id=<pk>`, linked from every mutation-table frequency cell whose
 sample has `bam_stored`. It is the first consumer of the alignment routes, which had been built
 and tested with nothing pointing at them.
@@ -2438,12 +2438,12 @@ Two things are easy to get wrong and fail *silently* — an empty track, no erro
   `data/reference.bam.bai` to `aligned.bam.bai`, so igv.js's default `<url>.bai` derivation
   would be wrong even if the URLs had extensions.
 
-`igv.min.js` is vendored in `aledb_common/staticfiles/js/` and loaded from the browse template
+`igv.min.js` is vendored in `mutint_common/staticfiles/js/` and loaded from the browse template
 only — it is ~1.4 MB and no other page needs it.
 
 ### A component can put a panel on the Overview
 
-`aledb_common/panel_registry.py` is the eighth registry, and the first that lets an app put
+`mutint_common/panel_registry.py` is the eighth registry, and the first that lets an app put
 **its own rendered content** on a core page rather than contribute a link, a heading, a handler
 or a name. An app registers from `AppConfig.ready()`:
 
@@ -2457,12 +2457,12 @@ components cannot disagree about what a section there looks like.
 
 **It exists because there was no seam for something that is one panel and not a page.** Every
 earlier way to be seen was `register_plugin_urlpatterns` plus `register_nav_item` -- which is
-what aledb-compare, aledb-fixation and aledb-converge are. `context_registry` gets *context*
+what mutint-compare, mutint-fixation and mutint-converge are. `context_registry` gets *context*
 onto an experiment view and stops there: some template must already be written to render it,
 which is exactly the compile-time knowledge of a plugin core is built not to have. So the
-needle plot lived in `aledb_stats` beside the Overview's counts for no better reason than that
-`/stats` is where it is drawn. **It is the aledb-needle component now**, and standalone
-aledb-core has no needle plot at all -- see that repo's `CLAUDE.md` for the plot's own design.
+needle plot lived in `mutint_stats` beside the Overview's counts for no better reason than that
+`/stats` is where it is drawn. **It is the mutint-needle component now**, and standalone
+mutint-core has no needle plot at all -- see that repo's `CLAUDE.md` for the plot's own design.
 
 Four things about the mechanism:
 
@@ -2475,7 +2475,7 @@ Four things about the mechanism:
 - **Each panel renders on its own**, rather than every panel's context being merged into one
   dict for `{% include %}` to sort out: two panels using the name `data` would otherwise
   silently read each other's. It is also what makes the isolation below expressible at all.
-  `request=` is passed to the renderer, so a panel sees the same `aledb_version`, user and
+  `request=` is passed to the renderer, so a panel sees the same `mutint_version`, user and
   static configuration as the page around it.
 - **A panel that raises is dropped with a logged warning** and the rest of the page renders --
   the posture `nav_registry` takes with a `url_name` that will not reverse. The trade is that
@@ -2487,12 +2487,12 @@ Ordering is INSTALLED_APPS order with no parameter, as with `nav_registry` and
 
 **Core's own tests may only assert on the panels they register.** `test_panel_registry` was
 written comparing the rendered list outright; it passed standalone and failed four ways under
-`./mutint test`, because aledb-needle's panel is in that list too. Same rule as the About and
+`./mutint test`, because mutint-needle's panel is in that list too. Same rule as the About and
 nav tests, sprung again in a new place.
 
 ### The mutations are drawn from the database, not from a file
 
-`aledb_sample/tracks.py` builds igv features out of database rows. Until it existed `browse.html`
+`mutint_sample/tracks.py` builds igv features out of database rows. Until it existed `browse.html`
 passed igv **`tracks: []`** -- the page drew the reference, the gene track and the reads, and
 not the calls the reads were opened to look at. The only thing the database contributed was
 the locus string that positioned the view.
@@ -2575,11 +2575,11 @@ disagreeing is worse than either alone.
 
 Kept where there is *no* BigWig -- a sample imported before coverage existed, or one whose
 derivation failed -- because igv's row is then the only coverage that sample has. Unnormalized,
-but better than none, and `./aledb coverage` is what replaces it.
+but better than none, and `./mutint coverage` is what replaces it.
 
-A sample imported before coverage existed simply has no wig track until `./aledb coverage` runs.
+A sample imported before coverage existed simply has no wig track until `./mutint coverage` runs.
 
-**Each alignment counts 1/X1, not 1**, and that is most of what `aledb_import/coverage.py` is
+**Each alignment counts 1/X1, not 1**, and that is most of what `mutint_import/coverage.py` is
 for. X1 is breseq's redundancy tag: how many places the read mapped equally well. A read
 matching all ten copies of an IS element is written to the BAM ten times, once per copy, so
 counting each as 1 gave every copy ten times its real depth and the trace was dominated by
@@ -2614,7 +2614,7 @@ Three things about it are load-bearing:
 
 **Nothing records which rule a stored BigWig was built under**, deliberately -- no column, no
 migration. So every file built before this change is still the old unnormalized kind until
-`./aledb coverage --force` re-derives it, and the only thing that can say whether a rebuild
+`./mutint coverage --force` re-derives it, and the only thing that can say whether a rebuild
 changed anything is the tally that command now prints per sample: how much of the BAM was
 redundantly mapped, or that it carried no X1 at all. That last line is the answer to "I rebuilt
 and the repeats still spike" -- only breseq writes the tag.
@@ -2635,7 +2635,7 @@ which will waste an afternoon if you do not know them:
 The **sample menu** is a dropdown over every sample in the experiment with an alignment, the
 one being viewed included: it is shown and hidden like the rest, so *Hide all samples* leaves
 only the reference and gene tracks. **Clicking a row toggles that one sample** -- it runs
-`aledbSelectList` in `{toggle: true}` mode, matching the Tracks menu beside it. It used to run
+`mutintSelectList` in `{toggle: true}` mode, matching the Tracks menu beside it. It used to run
 the helper's default, where a plain click selects only the row it lands on: on a list of
 samples that meant showing one silently unloaded every other, and there is no gesture that
 puts them back except clicking each again. The four presets still set the whole selection,
@@ -2741,7 +2741,7 @@ loaded -- an experiment with no mutations offers Genes alone, and a re-enabled
 **Deliberately not a Reset button.** Getting a track back should not cost the sample selection
 you had arranged or send the Display setting back to Both, and it does not touch either.
 
-**Independent toggles, so not `aledbSelectList`.** That helper is a *selection*, where a plain
+**Independent toggles, so not `mutintSelectList`.** That helper is a *selection*, where a plain
 click means "only this row"; these are checkboxes. It is a plain `ul.dropdown-menu` whose rows
 carry `active`, which Bootstrap's own `.dropdown-menu > .active > a` paints -- the same thing
 the sample menu relies on -- and the click handler stops propagation so the menu stays open
@@ -2769,7 +2769,7 @@ for `class="true"`. Keep that class on the anchor, and keep `true` out of the em
 
 ### Everything the browser loads is served from here
 
-`aledb_common/staticfiles/vendor/` holds every third-party asset, with
+`mutint_common/staticfiles/vendor/` holds every third-party asset, with
 `vendor/VENDOR.md` recording the source URL and sha256 of each. **This is what makes "works
 with no outbound network" true**, and it was not true before: `base.html` could not render
 without jQuery from `ajax.googleapis.com`, while the suite pulled **22 assets from seven CDN
@@ -2782,7 +2782,7 @@ anything else.
 and modernising a decade-old front end are separate problems; doing both at once leaves no way
 to tell which half broke a page.
 
-`aledb_common/tests/test_offline.py` fails on any `<script src>` or `<link href>` naming an
+`mutint_common/tests/test_offline.py` fails on any `<script src>` or `<link href>` naming an
 external host in a first-party template. It matches **asset loads only** -- a plain
 `<a href="https://ncbi…">` is an ordinary link that costs nothing offline -- and it strips
 Django comments first, because a commented-out include is not a load (`dashboard.html` carries
@@ -2811,7 +2811,7 @@ Four things about the vendored layout are load-bearing:
 - **The four DataTables bundles stay distinct.** The pages differ in which extensions they use,
   so consolidating them is a behavior change wearing a cleanup's clothes.
 
-`?v={{ aledb_version }}` is deliberately **not** applied to these: every vendored path already
+`?v={{ mutint_version }}` is deliberately **not** applied to these: every vendored path already
 carries its version, so a release cannot serve half of one version and half of another.
 
 **Two tests located Bootstrap by searching `base.html` for a `cdn.datatables.net` URL.** When
@@ -2822,7 +2822,7 @@ locate what it guards must say so rather than agree.
 
 ### The NCBI Sequence Viewer, and the check that has to come first
 
-`aledb_sample/views/ncbi_view.py` renders NCBI's own Sequence Viewer at one mutation's locus, at
+`mutint_sample/views/ncbi_view.py` renders NCBI's own Sequence Viewer at one mutation's locus, at
 `/mutations/ncbi?mutation_id=<pk>`. It is the companion to the genome browser above: that page
 shows a mutation as *reads*, this one shows it in *curated annotation* -- the genes, operons
 and features NCBI holds, which the stored GFF3 track cannot supply because it carries only
@@ -2840,7 +2840,7 @@ completely convincing page pointing at the wrong gene.
 
 #### There is no accession stored anywhere, and that is deliberate
 
-`aledb_import/annotate/genbank.py` `_record_seq_id` takes a GenBank's **LOCUS** name
+`mutint_import/annotate/genbank.py` `_record_seq_id` takes a GenBank's **LOCUS** name
 (`NC_000913`) and not its **VERSION** (`NC_000913.3`), because breseq does the same and every
 seq_id in a `.gd` it writes is therefore unversioned. The VERSION survives as an in-memory
 alias in `load_genbank` and is never persisted -- `sequence_entries()` writes `{id, length,
@@ -2860,7 +2860,7 @@ touch them.
 
 #### The check is a verification, not a search
 
-`aledb_sample/ncbi.py`, two stages, cheapest first:
+`mutint_sample/ncbi.py`, two stages, cheapest first:
 
 1. **esummary** -> `accessionversion` and `slen`. A length that differs is a definitive no,
    settled for one small request with **no genome downloaded** -- which matters, because a
@@ -2901,7 +2901,7 @@ was `NcbiSequence`; nothing above is NCBI's, though -- a contig could be confirm
 ENA, DDBJ or an institutional archive and the digest key, the four failure states and "a name
 is never the evidence" would all read the same. What *is* NCBI's is the protocol and the
 viewer, so **the model is named for the concept and the module for the protocol**:
-`DatabaseSequenceLink` beside `aledb_sample/ncbi.py`.
+`DatabaseSequenceLink` beside `mutint_sample/ncbi.py`.
 
 `database` is a discriminator, **not a plugin seam**. There is one value,
 `"NCBI-nucleotide"`, and one module that can speak to a database; a second database is a
@@ -2923,15 +2923,15 @@ MISMATCH somebody already paid for should not be re-fetched by the next reader.
 
 #### The page never blocks on NCBI, and never renders a viewer it has not earned
 
-Verification happens on demand -- a button on the page, or `./aledb ncbi_accessions` -- and
-the page renders instantly from the stored verdict, the posture `./aledb coverage` takes.
+Verification happens on demand -- a button on the page, or `./mutint ncbi_accessions` -- and
+the page renders instantly from the stored verdict, the posture `./mutint coverage` takes.
 Four states, each decided in the view and handed to the template as a boolean, and **the
 sviewer `<script>` is absent from the page in all four non-verified ones**, the same
 discipline `browse.html` applies to `igv.min.js`.
 
 **The script is remote and cannot be vendored.** `https://www.ncbi.nlm.nih.gov/projects/
 sviewer/js/sviewer.js` is a client for NCBI's own backend, so the page needs
-ncbi.nlm.nih.gov reachable whatever we do with the file -- this is aledb-core's only runtime
+ncbi.nlm.nih.gov reachable whatever we do with the file -- this is mutint-core's only runtime
 CDN dependency. A deployment with no outbound network never reaches VERIFIED, so it never
 renders the script either.
 
@@ -2946,7 +2946,7 @@ anywhere. The right-hand end is clamped using the `length` in `seq_ids`, so no f
 
 #### The extent rule moved, and there is one of it
 
-`aledb_sample/locus.py` holds `mutation_extent` and `LOCUS_BUFFER_BASES`, extracted from
+`mutint_sample/locus.py` holds `mutation_extent` and `LOCUS_BUFFER_BASES`, extracted from
 `browse.py` when this became a second page drawing the same interval. A pure module, in the
 shape `functional_change.py` was extracted into and for the same reason: `views/common.py`
 imports django.http and the permissions layer, and "which bases does this mutation cover"
@@ -2995,7 +2995,7 @@ knows both anyway. One endpoint, one contract.
    whether the row renders and `table_template.js` tests for it to color a sample cell; the
    column count must not change, because everything in `table_template.js` is indexed
    relative to `REFSEQ_COLUMN_IN_MUT_TABLE`; and the CSV export is unaffected because
-   `aledb_export/util.py` re-derives `seq_id` itself rather than reusing this cell.
+   `mutint_export/util.py` re-derives `seq_id` itself rather than reusing this cell.
    `test_the_row_holds_the_reference_at_that_index` compares the cell's **text**, since the
    name is now wrapped in an anchor.
 2. **The per-sample breseq table**, through a `refseq_url=` callable on `build_rows`, in the
@@ -3017,25 +3017,25 @@ through earlier versions is a non-goal for now.
 
 ### Django Apps
 
-All apps use the `aledb_*` namespace. Key apps:
+All apps use the `mutint_*` namespace. Key apps:
 
-- **`aledb_experiment/`** — Core data models: `Project`, `Experiment`, `Population`, plus
+- **`mutint_experiment/`** — Core data models: `Project`, `Experiment`, `Population`, plus
   access control (`ProjectAccess`, `UserGroup`, `UserGroupMembership`) and the ORM join paths
   in `paths.py`. Central schema everything else references.
-- **`aledb_import/`** — Experiment upload pipeline. **Every path ends in `gd_import`**, so a
+- **`mutint_import/`** — Experiment upload pipeline. **Every path ends in `gd_import`**, so a
   CLI upload and a web drop produce identical rows:
   - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
     the one place mutations are stored. Each record is kept verbatim in
-    `Mutation.supplemental_data["aledb_core"]["genome_diff"]` and round-tripped back out by
-    `Mutation.to_gd_line()` (`aledb_sample/models.py`) for `gdtools APPLY`. **That rule is
+    `Mutation.supplemental_data["mutint_core"]["genome_diff"]` and round-tripped back out by
+    `Mutation.to_gd_line()` (`mutint_sample/models.py`) for `gdtools APPLY`. **That rule is
     structural now rather than a convention**: `to_gd_line` splats every key of what it
     reads, so while the record sat flat in the column anything a second writer put there
     landed in an emitted `.gd` file. It reads the one key, the column is namespaced by
     component, and a plugin may keep its own import records beside core's -- see
     `Mutation.supplemental_data` for what belongs there and what does not.
-  - CLI import — `./aledb import <path>` resolves the target experiment from its options and
+  - CLI import — `./mutint import <path>` resolves the target experiment from its options and
     hands every path to the same `import_registry` handlers the Add page uses, so the shell
-    and the web agree by construction. It was `./aledb upload`, which read the project,
+    and the web agree by construction. It was `./mutint upload`, which read the project,
     experiment and owner out of `<exp>/metadata/*.csv` and was a second importer sharing no
     code with the web paths; that is gone, along with `upload.py` and the metadata app.
   - The vendored `gdparse/gdparse/gdparse.py` (`GDParser`) survives only for the annotation
@@ -3043,21 +3043,21 @@ All apps use the `aledb_*` namespace. Key apps:
   - **Annotation is internal** (`annotation.py` + `annotate/`). Gene, codon and amino-acid
     fields are derived from the experiment's stored reference at import, not read out of
     the `.gd`, so breseq's plain `output.gd` is enough and `gdtools ANNOTATE` is not needed.
-    `./aledb reannotate <id> [--ref FILE]` recomputes them when a better reference arrives.
+    `./mutint reannotate <id> [--ref FILE]` recomputes them when a better reference arrives.
     The annotator is a port of breseq's own, checked against `gdtools` output.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}` --
     everything from the sample's `data/` folder, `output/` is not consulted;
-    stores them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`), and
+    stores them under `MUTINT_STORE_DIR` keyed by database id (`mutint_common/store.py`), and
     records the shared reference as `ReferenceSequences`. Samples whose reference does not
     hash-match the experiment's are rejected individually. Alignments are served with HTTP
-    range support by `aledb_sample/views/alignments.py`, which resolves every path from a
+    range support by `mutint_sample/views/alignments.py`, which resolves every path from a
     primary key rather than from anything the client sends.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
-    storing them under `ALEDB_STORE_DIR` keyed by database id (`aledb_common/store.py`).
+    storing them under `MUTINT_STORE_DIR` keyed by database id (`mutint_common/store.py`).
     The shared reference is recorded as `ReferenceSequences`; a sample whose reference
     *sequence* does not hash-match the experiment's is rejected on its own. Sequence is the
     sole invariant (`ReferenceSequences.matches_sequence`) — differing annotation never
@@ -3083,41 +3083,41 @@ All apps use the `aledb_*` namespace. Key apps:
     same genome would hash differently and the shared-reference check would reject valid data.
     GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
     Biopython has no GFF3 parser. Alignments are served with HTTP range support by
-    `aledb_sample/views/alignments.py`.
+    `mutint_sample/views/alignments.py`.
     Sample identity comes from the filename, through `sample_names.parse_sample_identity`
     and nowhere else -- see **Reading a sample's identity out of its filename** below.
-- **`aledb_sample/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`,
+- **`mutint_sample/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`,
   `/mutations/ncbi`, `/mutations/reference`), the shared `mutation_table_builder`, and the
   curation endpoints at `/mutation-table/`. `/mutations/reference` is the only page that says
   what genome an experiment is called against, and is where an NCBI accession is recorded. `browse` is igv.js over the sample's reads; `ncbi` is NCBI's Sequence
   Viewer over curated annotation, and draws nothing until the contig's sequence has been
   confirmed to be the accession somebody claimed — see **The NCBI Sequence Viewer** above.
-  Note `/mutations/` itself is **not** a page: it was Compare, now the aledb-compare plugin.
-- **`aledb_fixation/`** — Fixated mutation computation.
-- **`aledb_converge/`** — Convergence analysis across experiments.
-- **`aledb_filter/`** — Experiment filtering UI and models: frequency cutoffs and
+  Note `/mutations/` itself is **not** a page: it was Compare, now the mutint-compare plugin.
+- **`mutint_fixation/`** — Fixated mutation computation.
+- **`mutint_converge/`** — Convergence analysis across experiments.
+- **`mutint_filter/`** — Experiment filtering UI and models: frequency cutoffs and
   ignored genes. The three mutation-id hide lists it used to carry are gone — see
   **The old way of deleting a mutation** above.
-- **`aledb_mutation_editor/`** — Adding, deleting and copying a sample's mutations, with an
+- **`mutint_mutation_editor/`** — Adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
-- **`aledb_export/`** — Data export in various formats.
-- **`aledb_stats/`** — The `/stats` page: the Overview's mutation counts, the sample table,
+- **`mutint_export/`** — Data export in various formats.
+- **`mutint_stats/`** — The `/stats` page: the Overview's mutation counts, the sample table,
   and whatever the installed components register as panels. **It has no models.** Its counts
   were stored as `ExperimentSummary` with its own rebuilder, and are computed by the request
   that renders them now, in 0.07s on the largest experiment in the dev database — by reading
   the three or four columns the answer needs as `values_list` tuples instead of materialising
   every MutationCall as a model. The needle plot was the other half of this app, stored as
-  `StaticData` and then computed the same way; it is the **aledb-needle** component now and
+  `StaticData` and then computed the same way; it is the **mutint-needle** component now and
   reaches the page through `panel_registry`.
-- **`aledb_search/`** — Cross-experiment search.
-- **`aledb_bibliome/`** — Publication/bibliography management.
-- **`aledb_dashboard/`** — Dashboard views and timeline events.
-- **`aledb_accounts_noauth/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
-- **`aledb_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
+- **`mutint_search/`** — Cross-experiment search.
+- **`mutint_bibliome/`** — Publication/bibliography management.
+- **`mutint_dashboard/`** — Dashboard views and timeline events.
+- **`mutint_accounts_noauth/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
+- **`mutint_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
   model, `Job`, which stores no status of its own. See **Seeing and stopping background
   work** above.
-- **`aledb_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eight
+- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eight
   registries (context, import, plugin, nav, about, example, **panel** and **rebuild**), and
   global static files. `DerivedDataState` is its only model.
 - **`config/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
@@ -3142,26 +3142,26 @@ Creation and deletion are nested under the objects they act on:
   tell, while this page knows exactly one. A **locked** experiment in the selection still
   refuses from the endpoint and is named in `#del-error` — the lock lives on the experiment
   and only the experiment can answer for it.
-- Shared JS for those controls lives in `aledb_common/staticfiles/js/aledb_crud.js`, loaded
-  from `base.html`: `aledbPost`, the two confirm dialogs below, and `aledbDeleteSelected` —
+- Shared JS for those controls lives in `mutint_common/staticfiles/js/mutint_crud.js`, loaded
+  from `base.html`: `mutintPost`, the two confirm dialogs below, and `mutintDeleteSelected` —
   the whole gather-confirm-post-reload routine, which was inline in `ale/projects.html` and
   `ale/experiments.html` near enough byte for byte, and which the project page wanting it as
-  well turned from two copies into an argument for none. (`aledbTogglePanel` was a third
+  well turned from two copies into an argument for none. (`mutintTogglePanel` was a third
   helper and is **gone**; the create forms are modals opened declaratively by Bootstrap. This
   line listed it for a while after it had been deleted, and
-  `aledb_import/tests/test_add_page.py` asserts it is absent.) A page using `aledbPost` must
+  `mutint_import/tests/test_add_page.py` asserts it is absent.) A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
-- **Deleting data makes you type `DELETE`.** `aledbConfirmTypedDelete` is the dialog behind
+- **Deleting data makes you type `DELETE`.** `mutintConfirmTypedDelete` is the dialog behind
   the four controls that destroy something — the two bulk deletes above, the project list's,
   and **Delete experiment** on `/stats` — and it resolves true only for that exact word.
-  `aledbConfirmDelete`, the plain yes/no, stays for `ale/group_detail.html` and
+  `mutintConfirmDelete`, the plain yes/no, stays for `ale/group_detail.html` and
   `ale/project_access.html`: removing a membership or revoking a grant destroys nothing, and
   a dialog that feels the same for both is what teaches people to click through the one that
   matters. The wording lives with each helper, so a page carries no delete copy of its own.
   - **It is client-side only, deliberately.** The endpoints already check the role and the
     lock, which is what actually protects the data; a server-side "must post DELETE" field
-    would be a contract `./aledb delete` does not honour and one `curl` away from bypass,
+    would be a contract `./mutint delete` does not honour and one `curl` away from bypass,
     while reading like a security control. It guards the mis-aimed click and nothing more.
   - The trap in writing it: sweetalert resolves the **input's value**, not a boolean — `null`
     when dismissed, `""` when confirmed with an empty box. Both are falsy, so the
@@ -3169,7 +3169,7 @@ Creation and deletion are nested under the objects they act on:
     somebody who pressed Delete and saw nothing happen cannot tell that from a broken page.
     The two cases are separated so only one of them says anything.
 - An experiment's page (`/stats?experiment_id=<pk>`) carries **+ Add data** and **Delete**,
-  rendered through `{% block experiment_actions %}` in `aledb_common/templates/base.html`.
+  rendered through `{% block experiment_actions %}` in `mutint_common/templates/base.html`.
   **Deleting lands on the experiment's project**, not on the flat experiment list it used to
   go to — having just removed one experiment out of a project, the project is where the rest
   of them are. The destination rides on the button as `data-after-delete` rather than being
@@ -3188,7 +3188,7 @@ Creation and deletion are nested under the objects they act on:
   experiment **by primary key**, so two experiments may share a name and two people may add to
   the same one — unlike `_prepare_experiment`, whose name lookup can only ever reach one of
   them. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
-  There is **no unscoped form of this page and no sidebar entry for it** — `aledb_import`
+  There is **no unscoped form of this page and no sidebar entry for it** — `mutint_import`
   registers no nav item. Both existed briefly and could only ever land on a page with no
   experiment to add to; without a usable `experiment_id` the route is now a plain 404.
 - Everything records the logged-in user; there are no person fields to fill in.
@@ -3199,13 +3199,13 @@ Creation and deletion are nested under the objects they act on:
 
 **Deletion is soft.** `Project` and `Experiment` carry `deleted_at`/`deleted_by`
 (`SoftDeleteMixin`); only those two are flagged, and children are reached by traversal when
-`./aledb purge_deleted --older-than <days>` finally removes them. `objects` is deliberately
+`./mutint purge_deleted --older-than <days>` finally removes them. `objects` is deliberately
 unfiltered — a filtered default manager would silence the import paths' `get_or_create` — so
-user-facing lists exclude deleted rows explicitly via `aledb_experiment.models.live()`.
+user-facing lists exclude deleted rows explicitly via `mutint_experiment.models.live()`.
 
 ### Import types are pluggable
 
-`aledb_common/import_registry.py` is one of eight registries in `aledb_common/` -- alongside
+`mutint_common/import_registry.py` is one of eight registries in `mutint_common/` -- alongside
 `plugin_registry`, `nav_registry`, `about_registry`, `context_registry`, `example_registry`,
 `panel_registry` and `rebuild_registry`. An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
 page's type dropdown and in auto-detect, with no edit to core:
@@ -3218,7 +3218,7 @@ register_import_handler(name='my_type', label='My measurements (.tsv)',
 Unlike `nav_registry`, this one **has explicit ordering**: `priority` decides which handler runs
 first, because a reference genome must be established before mutations that are hash-checked
 against it. Core registers `reference` (10), `breseq_folder` (50) and `genomediff` (60) in
-`aledb_import/handlers.py`. A handler whose shape is not a suffix match supplies its own
+`mutint_import/handlers.py`. A handler whose shape is not a suffix match supplies its own
 `detect` — breseq folders are directory-shaped, and both the reference and genomediff handlers
 exclude files that live inside one.
 
@@ -3228,7 +3228,7 @@ anything uploads — so a plugin gets both of those by registering, with no edit
 
 ### Serving breseq's report, which is the only HTML we did not write
 
-`aledb_sample/views/report.py` serves breseq's `output/` for one sample -- the mutation index,
+`mutint_sample/views/report.py` serves breseq's `output/` for one sample -- the mutation index,
 the run summary, and the read pileup behind each call. Core's importer keeps it now
 (`breseq_folder._store_report` -> `store.sample_report_dir`), so it is part of what a sample
 *is* rather than something the plugin that produced it happened to hang on to.
@@ -3285,7 +3285,7 @@ declarations before a byte is sent.
 
 ### Reading VCF, and why it is not a second kind of mutation
 
-`aledb_import/vcf.py` converts; `vcf_import.py` places; `vcf_export.py` gives it back. Every
+`mutint_import/vcf.py` converts; `vcf_import.py` places; `vcf_export.py` gives it back. Every
 mutation still arrives as GenomeDiff, because **the records go to
 `gd_import._database_gd_mutations`, the same function the `.gd` path uses**. That is what makes
 "GenomeDiff is the anchor format" true rather than aspirational: `synthesize_sequence_change`,
@@ -3293,7 +3293,7 @@ the seven-field `get_or_create`, the `"None"`-gene trap, annotation and `_coerce
 shared by construction. A site called by breseq and the same site called by GATK are one row
 because one function decides.
 
-`aledb_import/tests/test_vcf_import.py` opens with the assertion that says so: a `.gd` and a
+`mutint_import/tests/test_vcf_import.py` opens with the assertion that says so: a `.gd` and a
 VCF of the same SNP, imported as two samples, produce **one** `Mutation` with two calls whose
 sources are `breseq` and `vcf`.
 
@@ -3342,11 +3342,11 @@ those are not GenomeDiff fields. `AF` becomes `MutationCall.frequency`.
 
 `/import/vcf/<sample_id>/export` re-emits the stored header and lines, byte-for-byte for a
 single-sample file. A mutation added or edited since import has no stored line and is
-regenerated, with an `##aledb_regenerated=` header saying how many -- refusing outright would
+regenerated, with an `##mutint_regenerated=` header saying how many -- refusing outright would
 make the mutation editor and this feature mutually exclusive, and saying nothing would hand
 somebody a file that quietly is not what they gave us.
 
-**MOB inference is off by default** (`ALEDB_VCF_INFER_MOB`) and the default is the honest one.
+**MOB inference is off by default** (`MUTINT_VCF_INFER_MOB`) and the default is the honest one.
 An INS becomes a MOB only when exactly one annotated repeat family -- read from
 `AnnotatedSequence.repeat_locations`, through `trim_repeat_name`, so IS186B and IS186 are one
 family -- matches the inserted sequence end to end on one strand, and `duplication_size` is
@@ -3360,7 +3360,7 @@ hole. Fixed while the VCF export was being written beside it, rather than copied
 
 ### Staging a drop that is not an import
 
-`aledb_import/staging.py` is the same upload machinery opened for a **component** rather than
+`mutint_import/staging.py` is the same upload machinery opened for a **component** rather than
 for the import registry. It exists because `mutint-breseq` takes FASTQ reads, which are not a
 mutation file at all: they are the input to a job whose *output* is imported hours later, and
 which needs a sample name and a command line beside them. `handle(experiment, staged_root,
@@ -3399,20 +3399,20 @@ reaches the filesystem" still holds. Nothing reaps it; a `post_delete` receiver 
 is keyed by is the intended lifecycle, which for a row hanging off `Experiment` with `CASCADE`
 means deleting the experiment reaches the files with nothing further written.
 
-`docs/plugin/staging.md` is the guide; `aledb_import/tests/test_staging.py` pins the boundary.
+`docs/plugin/staging.md` is the guide; `mutint_import/tests/test_staging.py` pins the boundary.
 
-**The uploader is shared JS now**, in `aledb_common/staticfiles/js/aledb_upload.js` and loaded
-from `base.html`: `aledbUpload(entries, {experimentId, importType|consumer, onProgress})`,
-plus `aledbCollectDropped` and `aledbFromFileList`. It was inline in `import/add.html`, which
-was the right place for it while there was one caller. `aledbPostJson` and `aledbCsrfHeader`
-moved into `aledb_crud.js` at the same time, so **reading the CSRF cookie has one definition**
-rather than the three it was about to have — `aledbPost` sends FormData and stringifies every
+**The uploader is shared JS now**, in `mutint_common/staticfiles/js/mutint_upload.js` and loaded
+from `base.html`: `mutintUpload(entries, {experimentId, importType|consumer, onProgress})`,
+plus `mutintCollectDropped` and `mutintFromFileList`. It was inline in `import/add.html`, which
+was the right place for it while there was one caller. `mutintPostJson` and `mutintCsrfHeader`
+moved into `mutint_crud.js` at the same time, so **reading the CSRF cookie has one definition**
+rather than the three it was about to have — `mutintPost` sends FormData and stringifies every
 value, so an endpoint taking a structure needs the JSON sibling rather than a fourth
 hand-rolled `fetch`.
 
 ### Seeing and stopping background work
 
-`aledb_jobs` is `/jobs/`: your queued and running work, everyone's if you are a superuser, with
+`mutint_jobs` is `/jobs/`: your queued and running work, everyone's if you are a superuser, with
 a Cancel button on anything that can take one. It exists because `django_tasks_db` records a
 status against a UUID nobody sees — no user column, no label, and no metadata field to put
 either in (one was added in its migration 0017 and removed again in 0019). That is enough for a
@@ -3466,7 +3466,7 @@ and capped, because the only index on `status` is partial on READY and there is 
 `enqueued_at`.
 
 **Coverage derivation is attributed now, and this was most of why four tasks went unnoticed.**
-`aledb_import/breseq_folder.py` enqueued it with a bare `task.enqueue`, so it created no `Job`
+`mutint_import/breseq_folder.py` enqueued it with a bare `task.enqueue`, so it created no `Job`
 -- and a job with no `Job` appears only in the superuser-only unattributed panel, with no
 owner, no label and no Cancel button. The person whose import queued the work could not see it
 at all. It goes through `jobs.enqueue` now, with the importing user, a label naming the sample,
@@ -3481,7 +3481,7 @@ with no loop to check inside, and `request_cancel` deliberately never touches th
 a job cancelled while queued is handed to a worker anyway.
 
 **`is_cancelled` cannot raise**, the posture `queue.status_of` takes beside it. Found the hard
-way: a dev database predating this app has no `aledb_jobs_job` table, and the coverage task --
+way: a dev database predating this app has no `mutint_jobs_job` table, and the coverage task --
 which now asks before it does anything -- failed with `UndefinedTable`, reported as a coverage
 failure whose message said nothing about coverage. "Cannot tell" means *not cancelled*, and
 that direction is deliberate: the cost is a cancellation ignored, which the person can see and
@@ -3496,7 +3496,7 @@ at all. It is two queries now, and the split is cheaper as well as correct: the 
 rides `tasks_db_new_ordering_idx`, which is partial on READY, while a global sort on
 `enqueued_at` has no index behind it.
 
-**Deleting a queue row is dangerous, and `./aledb reap_jobs` is the one thing that does it.**
+**Deleting a queue row is dangerous, and `./mutint reap_jobs` is the one thing that does it.**
 The worker claims inside `SELECT ... FOR UPDATE SKIP LOCKED`, so a plain
 `.filter(status=READY).delete()` can read a row as READY, block on the worker's lock, and
 delete one that has since become RUNNING -- after which `set_successful` raises
@@ -3522,11 +3522,11 @@ for the account block itself.
 **A trap when testing:** `ImmediateBackend.supports_get_result` is False, so under the suite's
 own settings every job's status reads as unknown and the page shows "no longer on the queue".
 That is correct — an immediate backend keeps no results — and it is why every test about
-queueing overrides `TASKS` to the database backend. `aledb_jobs/tests/test_jobs.py` pins both.
+queueing overrides `TASKS` to the database backend. `mutint_jobs/tests/test_jobs.py` pins both.
 
 ### Running a worker with the dev server
 
-`./aledb start` spawns a `db_worker` alongside `runserver`, so in development the queue drains
+`./mutint start` spawns a `db_worker` alongside `runserver`, so in development the queue drains
 on its own. It used to refuse to, in a comment, and **the refusal named two real hazards and
 was right about both** -- which is why what replaced it answers them rather than deleting them:
 
@@ -3562,7 +3562,7 @@ which the startup banner says out loud.
 `atexit` covers more than it looks like -- `run_with_reloader` installs `SIGTERM ->
 sys.exit(0)` and ends `except KeyboardInterrupt: pass`, so Ctrl-C, SIGTERM and a closed
 terminal all exit normally and run the hook. What no hook can cover is `kill -9`. So
-`aledb_jobs/supervisor.py` sits between `start` and the worker, holding the read end of a pipe
+`mutint_jobs/supervisor.py` sits between `start` and the worker, holding the read end of a pipe
 whose write end only `start` has: when `start` dies **for any reason**, the kernel closes it,
 the read returns EOF, and the supervisor stops the worker and the cluster.
 
@@ -3573,7 +3573,7 @@ the read returns EOF, and the supervisor stops the worker and the cluster.
   the supervisor's read end is passed, via `pass_fds`. That is a property of the standard
   library rather than of this code, which is why `DeadmanPipeTestCase` pins it.
 - **The supervisor imports nothing from Django** and is launched **by path**. Under an
-  assembled project `aledb_jobs` is importable only because `config/settings.py` puts the
+  assembled project `mutint_jobs` is importable only because `config/settings.py` puts the
   submodule directories on `sys.path`, which a process that never loads settings has not done.
   It loads `pg.py` by path for the same reason, and can only do so because `pg.py` is
   standard-library-only -- a property it has for the entry script's sake that happens to be
@@ -3583,7 +3583,7 @@ the read returns EOF, and the supervisor stops the worker and the cluster.
   `Cluster.stop_if_owner_is(pid)` takes `_FileLock` -- the same lock `ensure` holds across its
   check-start-adopt sequence, without which another invocation can find the pid dead and adopt
   while we stop the cluster underneath it -- and refuses when the owner file names somebody
-  else, when the pid is alive, or when the cluster is unowned (`./aledb db start` creates
+  else, when the pid is alive, or when the cluster is unowned (`./mutint db start` creates
   those deliberately so a server outlives one command). **Adoption stays**, demoted to the
   backstop for a supervisor that is itself killed.
 - **`atexit` is LIFO and that ordering is load-bearing.** The entry script registers the
@@ -3611,9 +3611,9 @@ the read returns EOF, and the supervisor stops the worker and the cluster.
 
 Two designs were rejected and are worth not re-proposing. **A worker pid file** knows only
 about workers `start` itself launched, while the likeliest real failure is a `db_worker`
-started outside `./aledb` -- a file saying "no worker" while one runs elsewhere is a lie in
+started outside `./mutint` -- a file saying "no worker" while one runs elsewhere is a lie in
 the direction that makes people start a second one and stop trusting the indicator. **A queue
-line in `./aledb db status`** would destroy that command's stated virtue of answering on a
+line in `./mutint db status`** would destroy that command's stated virtue of answering on a
 tree where nothing is provisioned, since `db` is entry-script-dispatched and pre-venv.
 
 **This must not grow into process supervision.** No restart-on-crash, no worker pool, no
@@ -3625,12 +3625,12 @@ policy, which already exist and are better at it.
 Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 **Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in
-its `urls.py` is auto-discovered by `config/urls.py`. `aledb_accounts_noauth` is the only
+its `urls.py` is auto-discovered by `config/urls.py`. `mutint_accounts_noauth` is the only
 occupant, and the resolver takes the **first** match, so a second installed one is ambiguous
 rather than additive.
 
 **There is no brute-force protection, and that is a gap rather than an omission.** There was a
-second app, `aledb_accounts`, whose entire reason to exist was carrying `django-defender`. It
+second app, `mutint_accounts`, whose entire reason to exist was carrying `django-defender`. It
 was in no settings module's `INSTALLED_APPS` and defender was in no `requirements.txt`, so the
 "production" auth app could not actually be installed — and once defender went, what remained
 was identical to the default. An alternative that is not an alternative is worse than one
@@ -3638,26 +3638,26 @@ occupant and an honest sentence, which is what this is. Anything that replaces i
 routes below rather than restating them.
 
 **The routes and templates are shared, and the slot is not where they live.**
-`aledb_common/account_urls.py` holds all four — login, logout, `password/` and
+`mutint_common/account_urls.py` holds all four — login, logout, `password/` and
 `password/done/` — and an auth app's `urls.py` is three lines that serve that list. The
-templates are `aledb_common/templates/accounts/`. Both sit outside the slot so that whatever
+templates are `mutint_common/templates/accounts/`. Both sit outside the slot so that whatever
 occupies it next inherits them, rather than being expected to write them again.
 
 **That is the lesson the second app left behind, and it is why this is worth a paragraph.**
 When there were two hand-written lists they had already drifted into two live bugs nothing
-exercised: `aledb_accounts` passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict**
+exercised: `mutint_accounts` passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict**
 rather than to `as_view()`, raising `TypeError` on the first login, and it had no
 `registration/login.html`, so swapping the slot also meant `TemplateDoesNotExist`. Neither was
-found by running it — nothing installed it. `aledb_common/tests/test_accounts.py` now asserts
+found by running it — nothing installed it. `mutint_common/tests/test_accounts.py` now asserts
 the *mechanism* instead: exactly one app declares the slot, and what it declares is what
 `/accounts/` actually reverses to.
 
-**Experiment context providers** — registered via `aledb_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `aledb_bibliome` to inject publication data into experiment views without a hard dependency.
+**Experiment context providers** — registered via `mutint_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `mutint_bibliome` to inject publication data into experiment views without a hard dependency.
 
 ### Settings Structure
 
-- `config/defaults.py` — Delegates to `aledb_common.base_settings.get_base_settings()`; adds `ROOT_URLCONF` and `WSGI_APPLICATION`. SQLite fallback when `FORCE_SQLITE=1` or running tests.
-- `config/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./aledb start`.
+- `config/defaults.py` — Delegates to `mutint_common.base_settings.get_base_settings()`; adds `ROOT_URLCONF` and `WSGI_APPLICATION`. SQLite fallback when `FORCE_SQLITE=1` or running tests.
+- `config/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./mutint start`.
 - `config/settings_private.py` — Production: adds `LoginRequiredMiddleware`, and nothing
   else. It never swapped the auth app, whatever this line used to say.
 - `config/settings_public.py` — Public read-only deployment.
@@ -3665,14 +3665,14 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 
 ### Data Flow: Uploading an Experiment
 
-1. `./aledb import <path> --experiment-id <pk>` (or `--project`/`--experiment`/`--owner`)
-   calls `aledb_import.ale_experiment.resolve_experiment()` then `import_paths()`
-2. Hands each breseq folder to `aledb_import.breseq_folder`, which parses via
-   `aledb_import.gd_import` / the `genomediff` package -- the same route a web drop takes,
+1. `./mutint import <path> --experiment-id <pk>` (or `--project`/`--experiment`/`--owner`)
+   calls `mutint_import.ale_experiment.resolve_experiment()` then `import_paths()`
+2. Hands each breseq folder to `mutint_import.breseq_folder`, which parses via
+   `mutint_import.gd_import` / the `genomediff` package -- the same route a web drop takes,
    through the same `import_registry` handlers
-3. Creates `aledb_experiment` and `aledb_sample` model instances
+3. Creates `mutint_experiment` and `mutint_sample` model instances
 4. Ends in `gd_import.run_post_processing`, which asks the rebuild registry to recompute
-   everything derived -- the experiment filter defaults, `aledb_fixation`'s table, then the
+   everything derived -- the experiment filter defaults, `mutint_fixation`'s table, then the
    dashboard's installation-wide totals. It asks for whatever is registered, so the needle
    plot, the Overview's counts and convergence dropped off it by ceasing to be registered
    rather than by an edit here. See **Derived data and rebuilds** in the suite `CLAUDE.md`;
@@ -3681,36 +3681,36 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 ### Infrastructure (production)
 
 - Database: **PostgreSQL**, and only PostgreSQL. Either the cluster the entry script manages
-  under `env/`, or one you run yourself by exporting `ALEDB_DB_HOST`. See **The database** in
+  under `env/`, or one you run yourself by exporting `MUTINT_DB_HOST`. See **The database** in
   the suite `CLAUDE.md`.
-- File storage: `ALEDB_STORE_DIR`, keyed by database id (`aledb_common/store.py`)
-- Background work: **`./aledb start` runs one; everywhere else it has to be run.** `TASKS`
-  names `django_tasks_db.DatabaseBackend`, and `./aledb db_worker` is what executes what has
+- File storage: `MUTINT_STORE_DIR`, keyed by database id (`mutint_common/store.py`)
+- Background work: **`./mutint start` runs one; everywhere else it has to be run.** `TASKS`
+  names `django_tasks_db.DatabaseBackend`, and `./mutint db_worker` is what executes what has
   been enqueued. The dev server now spawns one alongside itself (see **Running a worker with
   the dev server** below), so a developer's queue drains on its own; a deployment does not use
   `start` and runs its own under whatever supervises its web server. The only thing *this repo* enqueues is coverage
   derivation, whose degraded state is benign: an installation with no worker running imports
-  correctly and simply has no coverage tracks until `./aledb coverage` is run. **A plugin's
+  correctly and simply has no coverage tracks until `./mutint coverage` is run. **A plugin's
   task need not be so forgiving** -- `mutint-breseq` enqueues an hours-long breseq run that
   nothing backfills, so with no worker it never happens at all. See **Background work** in the
   suite `CLAUDE.md`.
 
-There is still **no broker and no scheduler**; `./aledb reap_uploads` and the new
-`./aledb reap_jobs` are both still cron's job.
+There is still **no broker and no scheduler**; `./mutint reap_uploads` and the new
+`./mutint reap_jobs` are both still cron's job.
 
 **`reap_jobs` clears queue rows nothing will ever finish**, and it exists because nothing else
 can. `django_tasks_db` ships `prune_db_task_results`, and it filters
 `DBTaskResult.objects.finished()` -- SUCCESSFUL or FAILED -- so **a row no worker ever claimed
 is immortal by construction**. Four accumulated in this suite's two dev databases before
-anybody looked: three coverage tasks in MutInt's and one in aledb-core's, all READY, all from
+anybody looked: three coverage tasks in MutInt's and one in mutint-core's, all READY, all from
 imports that ran while no worker existed.
 
 Two shapes qualify, both meaning "a worker was supposed to deal with this and never will":
 READY past the window, by `enqueued_at`; and RUNNING past it, by `started_at`, which
-`./aledb start`'s shutdown produces when it kills a worker mid-task rather than waiting out a
+`./mutint start`'s shutdown produces when it kills a worker mid-task rather than waiting out a
 twelve-hour breseq run. The delete is taken under `select_for_update(skip_locked=True)` and
 **that is not optional** -- see **Seeing and stopping background work** in
-`aledb-core/CLAUDE.md` for what deleting a claimed row does to the worker.
+`mutint-core/CLAUDE.md` for what deleting a claimed row does to the worker.
 
 This section used to claim Daphne, Django Channels, nginx and Redis. **Nothing in
 `requirements.txt` supported any of it** and no compose file in this tree referenced it -- it

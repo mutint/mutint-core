@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Edit {{ project.name }}{% endblock %}
+{% block header %}Edit project{% endblock %}
+{% block content %}
+    {% comment %} A page rather than inputs in the project summary. The summary was
+       editable once, inside a form that posted nowhere, so everything typed into it was
+       discarded on reload; it is a read-only <dl> now and stays one. {% endcomment %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="pe-name">Project name</label>
+            <input type="text" class="form-control" id="pe-name" maxlength="50"
+                   value="{{ project.name }}" required autofocus>
+        </div>
+
+        <div class="form-group">
+            <label for="pe-description">Description</label>
+            <textarea class="form-control" id="pe-description" rows="3"
+                      maxlength="300">{{ project.description }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="pe-status">Status</label>
+            <select class="form-control" id="pe-status">
+                {% for value, label in statuses %}
+                    <option value="{{ value }}"
+                            {% if value == project.status %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="checkbox">
+            <label><input type="checkbox" id="pe-public"
+                          {% if project.is_public %}checked{% endif %}> Public</label>
+            <small class="help-block">Public projects are visible to everyone, signed in or not.</small>
+        </div>
+
+        <dl class="dl-horizontal" style="color: #666; margin-top: 1.5em;">
+            <dt>Owner</dt><dd>{{ project.owner }}</dd>
+            <dt>Created</dt><dd>{{ project.date_str }}</dd>
+        </dl>
+
+        <div style="margin-top: 1.5em;">
+            <button type="button" class="btn btn-primary" id="pe-save">Save project</button>
+            <a class="btn btn-default" href="/project/{{ project.id }}/">Cancel</a>
+        </div>
+        <div id="pe-error" style="color: #a00; margin-top: 1em;"></div>
+    </div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+    if (!document.getElementById("pe-save")) { return; }
+    document.getElementById("pe-save").addEventListener("click", function () {
+        var data = {
+            name: document.getElementById("pe-name").value,
+            description: document.getElementById("pe-description").value,
+            status: document.getElementById("pe-status").value
+        };
+        if (document.getElementById("pe-public").checked) { data.is_public = "1"; }
+        window.mutintPost("/project/{{ project.id }}/update/", data).then(function () {
+            window.location.href = "/project/{{ project.id }}/";
+        }).catch(function (err) {
+            document.getElementById("pe-error").textContent = err.message;
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    {% include "mutation_editor/_toolbar.html" with active='add' %}
+    {% csrf_token %}
+
+    {% comment %} The whole form schema, straight from `genomediff.records.TYPE_SPECIFIC_FIELDS`
+       via `validation.form_schema()`. Through json_script rather than a JS literal, which is
+       the `import/add.html` precedent and which escapes properly. The client never restates
+       which fields a type takes: it reads them from here, so the dropdown, the visible inputs
+       and the server's required-field check are one table. {% endcomment %}
+    {{ schema|json_script:"mutation-schema" }}
+
+    {% if not targets %}
+        <p>This experiment has no resequencing samples to add a mutation to.</p>
+    {% elif not can_edit %}
+        <p>Adding a mutation needs write access to this project.</p>
+    {% else %}
+        {% if not has_reference %}
+        <div class="alert alert-warning">
+            <b>This experiment has no reference genome.</b> The fields below are still checked
+            for shape &mdash; a size has to be a number, a strand has to be 1 or &minus;1
+            &mdash; but nothing can be compared against the sequence, so a mutation that would
+            change nothing cannot be detected and will be accepted. Establish a reference on
+            the <a href="/import/add/?experiment_id={{ experiment_id }}">Add Data</a>
+            page to turn those checks on.
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <p style="color: #666;">
+                Records a mutation no sample carries yet. It is added to every sample you
+                highlight, as one entry in the
+                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>,
+                and can be restored away from there. A sample that already has this mutation is
+                skipped rather than given a second copy of it.
+            </p>
+        </div>
+
+        <div class="col-lg-7" style="padding-left: 0;">
+            <div class="form-group">
+                <label for="me-type">Mutation type</label>
+                <select class="form-control" id="me-type">
+                    {% for entry in schema.types %}
+                        <option value="{{ entry.name }}">{{ entry.label }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-block" id="me-type-help"></p>
+            </div>
+
+            {% comment %} Every field any type can ask for, rendered once and shown or hidden by
+               type. One input per spec field name is what lets a value survive a type change
+               without a mapping table: `new_seq` is the same box in SNP, SUB and INS because
+               the spec means the same thing by it. {% endcomment %}
+            {% include "mutation_editor/_mutation_fields.html" %}
+
+            <div class="form-group" data-field="frequency">
+                <label for="me-f-frequency">Frequency</label>
+                <input type="text" class="form-control" id="me-f-frequency"
+                       data-name="frequency" value="1.0">
+                <p class="help-block">Applied to every sample below. 1.0 is a fixed mutation.</p>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="me-apply">+ Add mutation</button>
+            <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
+        </div>
+
+        {% comment %} A bare column under #mutint-content has its gutter zeroed by
+           common.css, so this one would touch the column beside it. 30px is what
+           Bootstrap puts between two columns (15px each side), put back on the one
+           side that needs it -- the page still lines up with the title on the left
+           and the content edge on the right. {% endcomment %}
+        <div class="col-lg-5" style="padding-left: 30px;">
+            <h4>Add to</h4>
+            {% include "select_list.html" with items=targets id="me-targets" %}
+        </div>
+    {% endif %}
+
+    <script type="text/javascript">
+    {% include "mutation_editor/_mutation_form.js" %}
+
+    (function () {
+        "use strict";
+        if (!document.getElementById("me-apply")) { return; }
+
+        var form = mutintMutationForm(null);
+        var targets = window.mutintSelectList(document.getElementById("me-targets"));
+
+        document.getElementById("me-apply").addEventListener("click", function () {
+            var targetIds = targets.selected().map(function (id) {
+                return parseInt(id, 10);
+            });
+            if (!targetIds.length) {
+                swal("", "Select at least one sample to add the mutation to.", "warning");
+                return;
+            }
+
+            form.clearFieldErrors();
+
+            var payload = {
+                experiment_id: "{{ experiment_id }}",
+                mutation_type: form.type(),
+                frequency: document.getElementById("me-f-frequency").value,
+                target_sample_ids: JSON.stringify(targetIds)
+            };
+            var fields = form.fields();
+            Object.keys(fields).forEach(function (name) { payload[name] = fields[name]; });
+
+            window.mutintPost("/mutation-editor/add/apply", payload).then(function (body) {
+                var message = "Added to " + body.added + " sample(s).";
+                if (body.already && body.already.length) {
+                    message += " Already had it: " + body.already.join(", ") + ".";
+                }
+                swal("", message, "success").then(function () { window.location.reload(); });
+            }).catch(function (err) {
+                document.getElementById("me-error").textContent = err.message;
+                form.showFieldErrors(err.body && err.body.errors);
+            });
+        });
+    })();
+    </script>
+{% endblock %}

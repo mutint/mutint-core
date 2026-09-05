@@ -3,43 +3,43 @@
 ## Building
 
 ```bash
-./aledb docs             # build to site/
-./aledb docs --serve     # live reload at http://127.0.0.1:8001
-./aledb docs --strict    # fail on a broken link or an unresolved reference
+./mutint docs             # build to site/
+./mutint docs --serve     # live reload at http://127.0.0.1:8001
+./mutint docs --strict    # fail on a broken link or an unresolved reference
 ```
 
 The first run installs `requirements-docs.txt` into `env/main`. That toolchain is deliberately
 **not** in `requirements.txt`: the entry script installs that into every deployment, and a
-production ALEdb has no use for a static site generator.
+production MutInt has no use for a static site generator.
 
 `site/` is git-ignored. The sources are `docs/` and `mkdocs.yml`.
 
 ## The same command builds a deployment's manual
 
 Every command here is inherited by an assembled project — both entry scripts end at
-`aledb_common.cli.manage()` — so `./mutint docs` reaches this one. It does **not** build
-aledb-core's docs from inside the submodule. It builds MutInt's manual: MutInt's own pages,
+`mutint_common.cli.manage()` — so `./mutint docs` reaches this one. It does **not** build
+mutint-core's docs from inside the submodule. It builds MutInt's manual: MutInt's own pages,
 plus every installed component's, merged by audience.
 
-`aledb_common/docs_manual.py` does the collecting. In outline:
+`mutint_common/docs_manual.py` does the collecting. In outline:
 
-- the project is found from `ALEDB_TOOLS_DIR`, exported by the entry script and the only thing
+- the project is found from `MUTINT_TOOLS_DIR`, exported by the entry script and the only thing
   that knows — settings cannot, because an assembled project reaches `get_base_settings()`
-  through aledb-core's `config/defaults.py`;
+  through mutint-core's `config/defaults.py`;
 - components come from `about_registry.first_party_app_configs()`, so an uninstalled submodule
   contributes nothing, and **the project is excluded from its own component list** or
-  aledb-core standalone would collect itself and render everything twice;
+  mutint-core standalone would collect itself and render everything twice;
 - each component's `docs/` is **symlinked** into `.docs-build/docs/<component>/` — mkdocs walks
   with `followlinks=True`, so a build can never serve a stale copy of somebody else's pages;
 - a generated `mkdocs.yml` merges the navs and points `mkdocstrings.paths` at every component,
   without which a plugin's `:::` reference will not resolve.
 
-There is one code path. Standalone, aledb-core finds no other components and the merge is a
+There is one code path. Standalone, mutint-core finds no other components and the merge is a
 merge of one.
 
 ## Where a fact should live
 
-- **How something behaves** → the docstring in `aledb_common/`. The Reference pages are
+- **How something behaves** → the docstring in `mutint_common/`. The Reference pages are
   generated from those, so fixing the docstring fixes the page.
 - **How to do something, and why it is done that way** → a guide page under `docs/plugin/`.
 - **Why *this repo* is built the way it is**, for whoever maintains core → `CLAUDE.md`. That
@@ -64,9 +64,9 @@ one that was deleted; listing them makes both a visible edit.
 
 ## What is guarded, and what is not
 
-`aledb_common/tests/test_docs.py` fails when:
+`mutint_common/tests/test_docs.py` fails when:
 
-- a registry module in `aledb_common/` has no page under `docs/reference/`;
+- a registry module in `mutint_common/` has no page under `docs/reference/`;
 - a public `register_*` function is named nowhere under `docs/`.
 
 Both are file reads — they do not import mkdocs, which is not installed in a normal

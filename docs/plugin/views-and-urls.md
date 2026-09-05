@@ -4,10 +4,10 @@
 
 ```python
 from django.urls import include, re_path
-from aledb_common.plugin_registry import register_plugin_urlpatterns
+from mutint_common.plugin_registry import register_plugin_urlpatterns
 
 register_plugin_urlpatterns([
-    re_path(r'^yourthing/', include('aledb_yourthing.urls')),
+    re_path(r'^yourthing/', include('mutint_yourthing.urls')),
 ])
 ```
 
@@ -24,7 +24,7 @@ symptom is a 404 rather than an error. Core's occupied prefixes include `mutatio
 
 Every page in this codebase is a function-based view that checks its own permission and
 renders a template. There are no `Form` classes, no class-based views and no DRF. A write is a
-separate `@require_POST` endpoint returning JSON, called from the page with `aledbPost`.
+separate `@require_POST` endpoint returning JSON, called from the page with `mutintPost`.
 
 The split matters:
 
@@ -35,14 +35,14 @@ The split matters:
 
 ## Permissions
 
-Authorization is `aledb_experiment/permissions.py` and nothing else. Four ordered roles are
+Authorization is `mutint_experiment/permissions.py` and nothing else. Four ordered roles are
 granted on a **project**: `read < write < admin < owner`. Nothing below the project is owned;
 an experiment, a sample and a mutation are all reached through `experiment.project`.
 
 For reading:
 
 ```python
-from aledb_experiment.permissions import can_view_project
+from mutint_experiment.permissions import can_view_project
 
 if not can_view_project(request.user, experiment.project):
     return render(request, "403.html", context, status=403)
@@ -53,7 +53,7 @@ For writing, there is an obligation core cannot meet for you:
 !!! danger "Ask `can_edit_experiment`, not `can_edit_project`"
 
     ```python
-    from aledb_experiment.permissions import can_edit_experiment
+    from mutint_experiment.permissions import can_edit_experiment
 
     if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "..."}, status=403)
@@ -64,7 +64,7 @@ For writing, there is an obligation core cannot meet for you:
     lives on the experiment, so `can_edit_project(user, experiment.project)` cannot see it
     and will happily authorise a write into a dataset somebody deliberately closed.
 
-    Core's own write paths all ask the right question, and so does `aledb-phylogeny`, which
+    Core's own write paths all ask the right question, and so does `mutint-phylogeny`, which
     is the plugin to copy. Rebuilds are deliberately exempt: derived data should keep up with
     a locked experiment rather than go stale.
 
@@ -79,7 +79,7 @@ that loops, ask through the same helpers rather than querying `ProjectAccess` yo
 ## Getting the experiment
 
 Core's pages take `?experiment_id=` and resolve it through
-`aledb_sample.views.common.get_experiment(request)`, which raises
+`mutint_sample.views.common.get_experiment(request)`, which raises
 `Experiment.DoesNotExist` when none was selected — a normal state, not an error, and
 `no_experiment_selected()` renders the page that explains it — and a bare `ValueError` when
 the caller may not view it.
@@ -90,7 +90,7 @@ in fact they were refused.
 ## A nav entry
 
 ```python
-from aledb_common.nav_registry import EXPERIMENT_SECTION, MAIN_SECTION, register_nav_item
+from mutint_common.nav_registry import EXPERIMENT_SECTION, MAIN_SECTION, register_nav_item
 
 register_nav_item('Your Thing', url_name='yourthing', section=EXPERIMENT_SECTION)
 ```

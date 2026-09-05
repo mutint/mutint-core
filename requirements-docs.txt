@@ -1,8 +1,8 @@
 # The documentation toolchain, deliberately *not* in requirements.txt.
 #
 # The entry script installs every component's requirements.txt plus this repo's root one, so
-# anything listed there lands in every deployment. A production ALEdb has no use for a static
-# site generator, and `./aledb docs` installs this file on first use instead.
+# anything listed there lands in every deployment. A production MutInt has no use for a static
+# site generator, and `./mutint docs` installs this file on first use instead.
 #
 # MkDocs rather than Sphinx for two reasons measured against this repo rather than assumed:
 #

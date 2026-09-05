@@ -1,7 +1,7 @@
 # Work that takes minutes, or hours
 
 Anything long belongs off the request. The API is Django's own — `@task` and `.enqueue()` —
-and aledb-core adds one thing on top: a record of **who asked**, so the work appears on
+and mutint-core adds one thing on top: a record of **who asked**, so the work appears on
 `/jobs/` with a name and can be stopped.
 
 ## Declaring a task
@@ -22,7 +22,7 @@ passing an instance fails at enqueue time.
 ## Enqueueing it so a person can see it
 
 ```python
-from aledb_jobs import jobs
+from mutint_jobs import jobs
 
 jobs.enqueue(tasks.analyze, row.pk,
              user=request.user,
@@ -49,7 +49,7 @@ cooperative: core records that somebody asked, and your task is the only thing t
 Check on the way in, and again wherever you can:
 
 ```python
-from aledb_jobs import jobs
+from mutint_jobs import jobs
 
 @task()
 def analyze(row_id):
@@ -108,7 +108,7 @@ goes — including `kill -9` — and `--no-worker` turns it off.
 
 **Everywhere else, nothing spawns one.** `./mutint db_worker` is what executes what has been
 enqueued, and it must be started through the entry script — a bare `manage.py db_worker` has
-neither the database connection nor `ALEDB_TOOLS_DIR`, so it finds none of the external tools.
+neither the database connection nor `MUTINT_TOOLS_DIR`, so it finds none of the external tools.
 A deployment runs one under whatever supervises its web server.
 
 The worker `start` runs is deliberately **not** reloaded on code changes, so it executes the
@@ -125,7 +125,7 @@ Decide, before you enqueue anything, **which kind of task yours is**:
 - *Broken when skipped*, like a breseq run: nothing else will ever do it. Then your page has
   to say so — ask the queue and tell the reader that nothing has picked the job up, rather
   than leaving "queued" to mean both "soon" and "never". `/jobs/` does this for you if you
-  enqueue through `aledb_jobs`, and also says when work has been waiting with nothing taking
+  enqueue through `mutint_jobs`, and also says when work has been waiting with nothing taking
   it — which is as close to "is a worker running" as can honestly be asked, since the queue
   keeps no worker registry and no heartbeat.
 
@@ -136,7 +136,7 @@ for tests that care what the work *produced* — one POST exercises everything �
 tests about queueing, where there is no queued job to cancel and
 `ImmediateBackend.supports_get_result` is False so every status reads as unknown.
 
-For those, override it, as `aledb_import/tests/test_tasks.py` and `aledb_jobs/tests/test_jobs.py`
+For those, override it, as `mutint_import/tests/test_tasks.py` and `mutint_jobs/tests/test_jobs.py`
 both do:
 
 ```python

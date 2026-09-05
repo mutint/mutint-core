@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    <link href="{% static "css/ncbi_view.css" %}?v={{ mutint_version }}" rel="stylesheet">
+{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        {% if not has_reference %}
+            <div class="alert alert-warning">
+                This experiment has no reference genome. One arrives with a breseq result
+                folder, or on its own (GenBank, GFF3 or FASTA) from the experiment's
+                <a href="/import/add/?experiment_id={{ experiment_id }}">Add data</a>
+                page.
+            </div>
+        {% else %}
+            <p class="ncbi-summary">
+                {{ contigs|length }} sequence{{ contigs|length|pluralize }},
+                {{ total_length }} bases in total.
+                {% if verified_count %}
+                    {{ verified_count }} confirmed against NCBI.
+                {% else %}
+                    {% comment %} Said plainly rather than left to be inferred from a column
+                       of dashes: this is the state every experiment starts in, and the page
+                       has to explain what to do about it. {% endcomment %}
+                    None has been matched to an NCBI record yet, so no mutation can be shown
+                    in NCBI's annotation.
+                {% endif %}
+            </p>
+
+            <table class="table table-condensed reference-table">
+                <thead>
+                    <tr>
+                        <th>Sequence</th>
+                        <th class="reference-length">Length</th>
+                        <th>Previously named</th>
+                        <th>NCBI record</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for contig in contigs %}
+                    <tr>
+                        <td><code>{{ contig.id }}</code></td>
+                        <td class="reference-length">{{ contig.length_display }}</td>
+                        <td>
+                            {% if contig.aliases %}
+                                {% for alias in contig.aliases %}<code>{{ alias }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if contig.is_verified %}
+                                <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ contig.accession }}"
+                                   target="_blank" rel="noopener">{{ contig.accession }}</a>
+                                <span class="reference-ok" title="{{ contig.detail }}">&#10003; sequence confirmed</span>
+                            {% elif not contig.checkable %}
+                                {% comment %} No per-sequence digest: established before
+                                   hashing, so there is nothing to compare a record against
+                                   and offering a check would be theatre. {% endcomment %}
+                                <span class="reference-muted">
+                                    cannot be checked &mdash; this reference was stored before
+                                    per-sequence hashing
+                                </span>
+                            {% else %}
+                                {% if contig.detail %}
+                                    <div class="reference-problem">{{ contig.detail }}</div>
+                                {% endif %}
+                                {% if may_check %}
+                                    <form class="form-inline ncbi-check">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="experiment_id" value="{{ experiment_id }}">
+                                        <input type="hidden" name="seq_id" value="{{ contig.id }}">
+                                        <input type="text" class="form-control input-sm"
+                                               name="accession" value="{{ contig.accession }}"
+                                               placeholder="e.g. NC_000913.3" autocomplete="off">
+                                        <button type="submit" class="btn btn-default btn-sm">Check</button>
+                                        <span class="ncbi-check-status"></span>
+                                    </form>
+                                {% else %}
+                                    <span class="reference-muted">not recorded</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {% if may_check %}
+                <p class="ncbi-check-help">
+                    An accession is never guessed from a sequence name &mdash; a contig called
+                    <code>NC_000913</code> is usually one and a contig called <code>REL606</code>
+                    is not, and a wrong guess would draw a convincing picture of the wrong gene.
+                    What you enter is only a proposal: it is accepted only if NCBI's record for
+                    it is byte-for-byte this sequence. Confirming one lets every mutation on it
+                    be opened in NCBI's annotation from the Reference column of any mutation
+                    table.
+                </p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+{% if may_check and has_reference %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var forms = document.querySelectorAll("form.ncbi-check");
+    Array.prototype.forEach.call(forms, function (form) {
+        var button = form.querySelector("button");
+        var status = form.querySelector(".ncbi-check-status");
+
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+            // A check is one summary request plus, if that passes, a whole genome --
+            // seconds, not milliseconds. Saying so beats a button that looks ignored.
+            button.disabled = true;
+            status.textContent = "Asking NCBI…";
+
+            fetch("{% url 'ncbi_check' %}", {
+                method: "POST",
+                body: new FormData(form),
+                credentials: "same-origin"
+            }).then(function (response) {
+                return response.json().then(function (data) {
+                    return {ok: response.ok, data: data};
+                });
+            }).then(function (result) {
+                if (result.data.verified) {
+                    // Reload rather than rewriting the row here: a confirmed sequence
+                    // changes this row, the count above it and every mutation table's
+                    // Reference column, and the server already decides all of that.
+                    window.location.reload();
+                    return;
+                }
+                button.disabled = false;
+                status.textContent = result.data.detail || result.data.error
+                                     || "The check failed.";
+            }).catch(function () {
+                button.disabled = false;
+                status.textContent = "The check could not be sent.";
+            });
+        });
+    });
+}());
+</script>
+{% endif %}
+{% endblock %}

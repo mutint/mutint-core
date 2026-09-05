@@ -4,8 +4,8 @@ Every existing plugin has the same shape, and it is worth following because the 
 machinery assumes parts of it.
 
 ```
-aledb-yourthing/                 <- the git repository
-├── aledb_yourthing/             <- exactly one Django app package
+mutint-yourthing/                 <- the git repository
+├── mutint_yourthing/             <- exactly one Django app package
 │   ├── __init__.py
 │   ├── apps.py                  <- the AppConfig, and every registration
 │   ├── urls.py                  <- your URL patterns
@@ -16,7 +16,7 @@ aledb-yourthing/                 <- the git repository
 │   ├── templates/
 │   │   └── yourthing/           <- namespaced by app, not flat
 │   ├── static/
-│   │   └── aledb_yourthing/     <- namespaced by app, not flat
+│   │   └── mutint_yourthing/     <- namespaced by app, not flat
 │   ├── examples/                <- optional, see Packaging
 │   └── tests/
 ├── requirements.txt             <- even if empty; the entry script looks for it
@@ -25,22 +25,22 @@ aledb-yourthing/                 <- the git repository
 
 ## The two names
 
-The **repository** is `aledb-yourthing`, with a hyphen. The **app package** inside it is
-`aledb_yourthing`, with an underscore. They are not interchangeable and the difference causes
+The **repository** is `mutint-yourthing`, with a hyphen. The **app package** inside it is
+`mutint_yourthing`, with an underscore. They are not interchangeable and the difference causes
 one of the more confusing failures in this codebase:
 
 !!! warning "A submodule directory can never be a Python package"
 
     An assembled project puts each submodule directory on `sys.path`, which is how
-    `aledb_yourthing` becomes importable. The submodule directory itself —
-    `aledb-yourthing` — has a hyphen, so it can never be a package, and `unittest`
+    `mutint_yourthing` becomes importable. The submodule directory itself —
+    `mutint-yourthing` — has a hyphen, so it can never be a package, and `unittest`
     discovery can never descend into it. That is why a bare `./mutint test` cannot find
     plugin tests by discovery and has to be told what to run. See
     [Testing](testing.md).
 
     Renaming the directory would not help. Giving a submodule root an `__init__.py` would
-    make every app importable by two dotted paths at once, and `aledb_yourthing.models`
-    and `aledb_core.aledb_yourthing.models` are two module objects with two sets of model
+    make every app importable by two dotted paths at once, and `mutint_yourthing.models`
+    and `mutint_core.mutint_yourthing.models` are two module objects with two sets of model
     classes.
 
 ## One app per repository
@@ -60,15 +60,15 @@ from django.apps import AppConfig
 
 
 class YourThingConfig(AppConfig):
-    name = 'aledb_yourthing'
+    name = 'mutint_yourthing'
 
     def ready(self):
         from django.urls import include, re_path
-        from aledb_common.nav_registry import EXPERIMENT_SECTION, register_nav_item
-        from aledb_common.plugin_registry import register_plugin_urlpatterns
+        from mutint_common.nav_registry import EXPERIMENT_SECTION, register_nav_item
+        from mutint_common.plugin_registry import register_plugin_urlpatterns
 
         register_plugin_urlpatterns([
-            re_path(r'^yourthing/', include('aledb_yourthing.urls')),
+            re_path(r'^yourthing/', include('mutint_yourthing.urls')),
         ])
         register_nav_item('Your Thing', url_name='yourthing',
                           section=EXPERIMENT_SECTION)

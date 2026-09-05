@@ -2,7 +2,7 @@
 
 The tables a plugin queries, and the handful of rules about them that are not obvious from the
 field lists. This is the schema as it stands, not a tour of every column — read
-`aledb_sample/models.py` and `aledb_experiment/models.py` for those, where the reasoning is in
+`mutint_sample/models.py` and `mutint_experiment/models.py` for those, where the reasoning is in
 the docstrings.
 
 ## The spine
@@ -26,10 +26,10 @@ Experiment ── Population ── Sample ── MutationCall ── Mutation
 forty samples is one row and forty calls. That is why a cross-sample table is a join over
 `MutationCall` and why `Mutation.id` means something outside the row it came from.
 
-**Do not spell the joins by hand.** `aledb_experiment.paths` holds them in one place:
+**Do not spell the joins by hand.** `mutint_experiment.paths` holds them in one place:
 
 ```python
-from aledb_experiment import paths
+from mutint_experiment import paths
 
 paths.to_experiment()                    # 'population__experiment'      from a Sample
 paths.to_experiment(paths.FROM_CALL)     # 'sample__population__experiment'
@@ -47,7 +47,7 @@ This is the one invariant a plugin is most likely to depend on without noticing.
   outright; nothing filters on a "deleted" flag, because there is nothing to filter. A row
   that is gone is gone.
 - **`Mutation` rows are never deleted by an edit.** So a stored `Mutation.id` — in a JSON
-  column, in an exported CSV — keeps meaning the same mutation. `aledb_phylogeny` stores bare
+  column, in an exported CSV — keeps meaning the same mutation. `mutint_phylogeny` stores bare
   ids on that promise.
 - **But a mutation can be split.** Editing a mutation in *some* of the samples carrying it
   moves those calls onto a different row, which may be one that did not exist before. Ids
@@ -70,7 +70,7 @@ sample.record("assembly", component="your_plugin")     # -> {"n50": 41203} or {}
 ```
 
 `Sample.supplemental_data` and `Mutation.supplemental_data` are both
-`{component: {kind: {...}}}`. Core owns the `aledb_core` key and nothing else; write under
+`{component: {kind: {...}}}`. Core owns the `mutint_core` key and nothing else; write under
 your own component name and core's writers will not touch it. `set_record` merges rather than
 replaces, which matters because `update_fields` can name the column but cannot say which part
 of it you meant.
@@ -107,7 +107,7 @@ The rest are not namespaced and are core's: `Mutation.annotation`, `MutationCall
 Four helpers, and using them is not a style preference:
 
 ```python
-from aledb_sample.util import (calls_for_samples, get_mutation_call_queryset,
+from mutint_sample.util import (calls_for_samples, get_mutation_call_queryset,
                                get_ordered_reseq_queryset, get_reseq_ordered_dict)
 ```
 
@@ -126,7 +126,7 @@ Four repos each hand-wrote `MutationCall.objects.filter(sample_id__in=...)` befo
 existed. The failure is quiet and severe: an ancestral mutation is in every ALE by
 construction, so convergence reported all of them as convergent and fixation all of them as
 fixed. If you need the cross-experiment form, it is
-`aledb_experiment.ancestor.exclude_all_ancestry`.
+`mutint_experiment.ancestor.exclude_all_ancestry`.
 
 Pass `include_ancestor=True` only on a page that curates rather than reads.
 
@@ -140,12 +140,12 @@ within it.
 `DatabaseSequenceLink` records that a contig's bases are byte-for-byte some database's record
 — keyed on `(database, sha256)`, so the verdict cannot outlive the sequence it was about.
 Today the only value is `"NCBI-nucleotide"`. Ask
-`aledb_sample.ncbi.verified_contig_names(experiment)` before drawing anything in a public
+`mutint_sample.ncbi.verified_contig_names(experiment)` before drawing anything in a public
 database's coordinate space; a contig name is never the evidence.
 
 **Uncalled regions.** `UncalledRegion` is where a sample had no coverage, per contig. A
 mutation absent from a sample there was not observed to be absent — it was not looked at.
-`aledb_phylogeny` encodes that as ambiguous rather than ancestral.
+`mutint_phylogeny` encodes that as ambiguous rather than ancestral.
 
 **Editing.** `MutationEditSet` and `MutationEdit` are the append-only log that makes every
 edit reversible. You never write these; know they exist because every write to them requests a
@@ -166,7 +166,7 @@ dashboard's site-wide totals. Both are described in
 
 - **No table per plugin by default.** Four of the six shipped plugins define no models at all
   — compare, converge, fixation and the needle plot are computed by the request that renders
-  them, and were faster for it. `aledb_phylogeny` stores one table, and what it stores is a
+  them, and were faster for it. `mutint_phylogeny` stores one table, and what it stores is a
   cache it deletes rather than derived data it repairs.
 - **No `TimePoint`, `Isolate` or `TechnicalReplicate`.** A sample's `time_point` is a float
   column on the sample, so `time_point__gte=500` is a filter rather than a join.

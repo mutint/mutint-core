@@ -10,13 +10,13 @@ rows.
 ## From the command line
 
 ```bash
-./aledb import /path/to/experiment1 /path/to/experiment2 \
+./mutint import /path/to/experiment1 /path/to/experiment2 \
     --project "My project" --experiment "My experiment" --owner alice
-./aledb delete 4 20 19
+./mutint delete 4 20 19
 ```
 
 Each path is the root of a breseq output directory — the one holding `output/` and `data/`.
-Deleting is **soft**: rows are flagged, and `./aledb purge_deleted --older-than <days>` is what
+Deleting is **soft**: rows are flagged, and `./mutint purge_deleted --older-than <days>` is what
 finally removes them.
 
 ## From the browser
@@ -74,7 +74,7 @@ point 1, with the filename kept as its description so it displays by name.
 
 ## Storage
 
-Files are stored under `ALEDB_STORE_DIR`, keyed by database id:
+Files are stored under `MUTINT_STORE_DIR`, keyed by database id:
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}

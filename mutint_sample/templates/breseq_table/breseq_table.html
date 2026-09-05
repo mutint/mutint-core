@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% load view_filter %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} These two travel together: the cell markup is generated in Python, by
+       mutint_import.annotate.display, so any template rendering a breseq-style row needs both
+       the stylesheet and the Show button's handler. The handler was inline here once, and the
+       button was inert on the other two pages that render the same rows.
+       mutint_common.tests.test_templates keeps the pair together. {% endcomment %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+{% endblock %}
+{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+
+{% block content %}
+    <div class="row breseq-picker">
+        <b>Sample:</b>
+        {% comment %} The same menu as the genome browser's Samples control and the Metadata
+           page's column menu, but picking one sample rather than any number of them, so the
+           button carries the chosen sample's name as its value and the chosen row is the one
+           marked `active`.
+
+           Its rows are ordinary links, not a <select> in a form. It is one request per sample
+           either way, and links need no script at all -- Bootstrap's data-api opens the menu
+           and the hrefs do the rest, which is what the <noscript> submit button was there
+           for. The query is the same pair the form used to submit. {% endcomment %}
+        <div class="btn-group" id="reseq_picker">
+            <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
+                    aria-haspopup="true" aria-expanded="false">
+                {{ selected_reseq.label }} <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu">
+                {% comment %} The designated ancestor is listed, first, and tinted the same
+                   red its mutations are in the table below. One sample at a time is exactly
+                   the view where there is no reason to hide it: nothing aggregates here, so
+                   nothing is contaminated, and it is the row the others are read against.
+                   The tint is the same color as `ancestral_table_row` so the two read as
+                   one statement rather than two coincidences. {% endcomment %}
+                {% for reseq in reseq_list %}
+                    <li class="{% if reseq.id == selected_sample_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% comment %} Compare lives in the mutint-compare plugin, which a deployment may
+           not install. `{% url %}` with `as` sets an empty string instead of raising
+           NoReverseMatch, so the link disappears rather than dangling -- the same posture
+           nav_registry takes with a url_name that will not reverse. {% endcomment %}
+        {% url 'compare' as compare_url %}
+        {% if compare_url %}
+        <a href="{{ compare_url }}?experiment_id={{ experiment_id }}"
+           class="breseq-crosslink">all samples &raquo;</a>
+        {% endif %}
+        {% comment %} breseq's own report for this sample, kept at import. The evidence
+           behind a row -- the read pileup breseq called it from -- is otherwise nowhere in
+           the product, and this is the page you are on when you want it. Only when the
+           sample actually has one: a `.gd` drop carries no report, so most samples of an
+           older deployment will not show these. {% endcomment %}
+        {% if report_stored and selected_sample_id %}
+        <a href="/mutations/report/{{ selected_sample_id }}/"
+           class="breseq-crosslink">breseq report &raquo;</a>
+        <a href="/mutations/report/{{ selected_sample_id }}/?page=summary.html"
+           class="breseq-crosslink">summary &raquo;</a>
+        {% endif %}
+        {% comment %} You are looking at one sample's mutations when you realise its
+           identity is wrong, so the edit page is one click from here. {% endcomment %}
+        {% if can_edit and selected_sample_id %}
+        <a href="/sample/{{ selected_sample_id }}/edit/"
+           class="breseq-crosslink">edit this sample &raquo;</a>
+        {% endif %}
+    </div>
+
+    {% if not selected_reseq %}
+        <p>This experiment has no resequencing samples to show.</p>
+    {% else %}
+        {% comment %} This page honours the reader's filter like the shared tables do, so it
+           carries the same controls and says the same thing about itself. The *form* variant,
+           not the bare fields: this page has no view-control form of its own to drop them
+           into, and inputs with no way to submit are the control-that-does-nothing this
+           design is trying to avoid. {% endcomment %}
+        {% if is_ancestor %}
+            {% comment %} Reached by URL rather than by the picker, which does not list it.
+               Says what designating it did, and offers the way back. {% endcomment %}
+            <div class="alert alert-warning" style="margin-bottom: 10px;">
+                <strong>This is the designated ancestor.</strong>
+                It is excluded from every view and analysis of this experiment, and the
+                mutations below are subtracted from every other sample before anything is
+                computed.
+                <a href="/experiment/{{ experiment_id }}/ancestor/">Change</a>
+            </div>
+        {% endif %}
+        {% view_filter_form %}
+        {% comment %} `ancestor_subtracted=False`: this is the one page in the suite that does
+           *not* subtract the designated ancestor, so the shared summary must not claim it did.
+           A page describing filtering it did not do is the failure `mutint_filter` is built to
+           prevent, and it cuts both ways. {% endcomment %}
+        {% view_filter_summary ancestor_subtracted=False %}
+        <div class="row">
+            {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." %}
+        </div>
+
+        <div class="breseq-legend">
+            {% if reference %}
+                Annotated against the experiment's reference
+                (<code>{{ reference.total_length }}</code>&nbsp;bp).
+            {% else %}
+                This experiment has no reference genome, so nothing here is annotated.
+            {% endif %}
+            {% if unannotated_count %}
+                <div class="breseq-unannotated">
+                    {{ unannotated_count }} of {{ rows|length }} mutations were imported before a
+                    reference was available and are shown without breseq formatting. Run
+                    <code>./mutint reannotate {{ experiment_id }}</code> to fill them in.
+                </div>
+            {% endif %}
+            <div>
+                Amino acid changes are colored by effect:
+                <span class="snp_type_synonymous">synonymous</span>,
+                <span class="snp_type_nonsynonymous">nonsynonymous</span>,
+                <span class="snp_type_nonsense">nonsense</span>.
+                The changed base in a codon is
+                <span class="mutation_in_codon">underlined red</span>.
+                {% if is_mixed %}
+                    Rows shaded green are polymorphic &mdash; below 100% frequency.
+                {% endif %}
+            </div>
+            {% comment %} Its own row rather than trailing the color key above: this one is
+               not about how a cell is rendered, it is about rows being excluded everywhere
+               else, and it names the sample responsible. {% endcomment %}
+            {% if ancestral_count %}
+                <div>
+                    <span style="background-color: rgb(255, 218, 218);">Rows shaded red</span>
+                    ({{ ancestral_count }}) are in this experiment's designated ancestor{% if ancestor %}
+                    ({% if is_ancestor %}{{ ancestor.name }}, this sample{% else %}<a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ ancestor.sample_id }}">{{ ancestor.name }}</a>{% endif %}){% endif %}
+                    and are subtracted everywhere else.
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}

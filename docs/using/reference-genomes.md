@@ -41,5 +41,5 @@ Gene, codon and amino-acid fields are **derived at import** from the stored refe
 out of the `.gd`. breseq's plain `output.gd` is enough; `gdtools ANNOTATE` is not needed.
 
 A mutation imported before a reference existed has no annotation and renders through a plainer
-fallback. Nothing is lost — the verbatim record is kept — and `./aledb reannotate <id>`
+fallback. Nothing is lost — the verbatim record is kept — and `./mutint reannotate <id>`
 recomputes annotations in place once a reference arrives. Re-importing is not needed.

@@ -1,0 +1,653 @@
+/* Fills whatever is left beside the sidebar and the collapse strip, rather than being
+   given a guessed width. It used to be `float: left; width: 77vw` beside a 17vw sidebar,
+   which left several vw of dead page down the right-hand side -- and the sidebar is sized
+   to its own content now, so any fixed width would be wrong by a different amount again.
+
+   The `display: flow-root` that makes that work is set inline in base.html, not here: it
+   is the block formatting context that stops this box sliding under the floats, and a
+   browser holding a cached older copy of this file would otherwise put the page header on
+   top of the sidebar. `overflow: hidden` would establish the context too, but would clip
+   menus that open past the edge -- the genome browser's sample menu is one. */
+#mutint-content {
+    padding: 25px;
+    background-color: white;
+}
+
+/* The header block -- the project/experiment title and the | links under it -- used to sit
+   in 65px of space above and 53px below, on every page. Three stacked pieces made the gap
+   below: .page-header's 9px padding-bottom, its 20px margin-bottom, and the
+   <h2>{{ error }}</h2> slot further down base.html, which collapses to no height when there
+   is no error but still contributes Bootstrap's 20px h2 margin. The gap above was
+   .page-header's own 40px margin-top on top of #mutint-content's 25px of padding.
+
+   Trimmed to 25px above -- the same padding the page has at its foot -- and 16px below. The
+   h2's own margin-top has to go with .page-header's: .page-header carries no padding or
+   border at the top, so that margin collapses straight through and would put the title back
+   at 45px. The empty error heading is taken out of flow with :empty rather than hidden
+   outright, so a real error still shows. Measured, not estimated. */
+#mutint-content > h2:empty {
+    display: none;
+}
+
+#mutint-content .page-header {
+    margin-top: 0;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+}
+
+#mutint-content .page-header > h2 {
+    margin-top: 0;
+}
+
+/* The title lines up with the page's content, which it did not.
+
+   The header block sits in a Bootstrap `.col-lg-12`, and a grid column carries a 15px
+   gutter each side. #mutint-content's own 25px padding is where everything else on the page
+   starts, so the title alone stood 15px further in -- on every page, measured, not guessed.
+   Some pages hid it better than others: a `.row` pulls back 15px with its negative margins,
+   so a table page's toolbar sat left of the title while its cells sat right of it.
+   Zeroing the gutter puts the heading, its | links and the action buttons on the same left
+   edge as whatever the page renders below them. The column is a full-width single cell, so
+   the gutter was the only thing it contributed. */
+#mutint-content .navbar .col-lg-12 {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* ...and the page's own content lines up with it, which it also did not.
+
+   A Bootstrap `.row` carries -15px margins, meant to be cancelled by the 15px padding of
+   the `.container` it sits in. #mutint-content is not a container -- it has 25px of padding
+   of its own -- so a `.row` placed straight into it bleeds 15px into that padding on both
+   sides. Most pages use `.row` as a plain wrapper around a form or a table, so their
+   content sat 15px LEFT of the title while the edit pages, which use no row, sat flush.
+   That is why the misalignment looked inconsistent rather than uniform.
+
+   Zeroing the margin fixes the wrapper case. The columns keep their gutters so a genuine
+   multi-column row (the Overview page's three panels) still breathes; only the outermost
+   edges are flattened, which is what makes the first column start where the title does. */
+#mutint-content > .row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+#mutint-content > .row > [class*="col-"]:first-child {
+    padding-left: 0;
+}
+
+#mutint-content > .row > [class*="col-"]:last-child {
+    padding-right: 0;
+}
+
+/* The project summary's labels sat against a wall of empty space.
+
+   It was a Bootstrap `.dl-horizontal`, which floats each `dt` into a fixed 160px column
+   and **right-aligns** it, then pushes every `dd` to a 180px margin. On labels as short as
+   "Status" that leaves most of the column empty and the text stranded in the middle of the
+   page, and the widths are the same whatever the labels say.
+
+   A two-column grid sized to its content does the same job with none of that: the label
+   column is exactly as wide as the longest label, both columns start where the text does,
+   and there are no floats to clear. `dt`/`dd` alternate into the two columns on their own,
+   so the markup stays a plain definition list. */
+.project-summary {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 20px;
+    margin: 0 0 16px;
+}
+
+.project-summary dt,
+.project-summary dd {
+    margin: 0;
+    text-align: left;
+}
+
+/* The pagination dropped its last button onto a second line.
+
+   Bootstrap 3 builds `.pagination` as an inline-block `ul` whose `li`s are `display: inline`
+   and whose `a`s are floated. The shrink-to-fit width that gives the `ul` came out one
+   button short, so "Last" wrapped below "Next" -- on every page with a paged table, at any
+   window width, and regardless of how much empty space sat to its right. Laying the buttons
+   out as flex items sizes the row to its contents and takes the float arithmetic out of it;
+   the `li`s blockify as flex items, which is what the floats were emulating anyway.
+
+   Pre-existing, and unrelated to the alignment rules above -- measured identical before
+   them. */
+#mutint-content .dataTables_paginate .pagination {
+    display: inline-flex;
+}
+
+/* Same story one level up: a grid column used as a plain wrapper straight inside the
+   content box -- the Add Data page does this -- carries a 15px gutter with no row to
+   cancel it, so its content sat 15px RIGHT of the title. Outside a row a column is only a
+   width, and the gutter is noise. */
+#mutint-content > [class*="col-"] {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+#padding_top {
+    padding-top: 1em;
+}
+
+.navbar-default {
+    position: relative;
+    height: 100%;
+}
+
+/* Sidebar entries are single lines. Without this a long experiment name wraps to two or
+   three, which is what the cap above was already trying to prevent -- `overflow-x: hidden`
+   can only trim what refuses to wrap. Only inside .sidebar: nav links elsewhere on the page
+   are laid out by Bootstrap and are none of this rule's business. */
+.sidebar .nav > li > a {
+    white-space: nowrap;
+}
+
+.nav > li > a:focus, .nav > li > a:hover {
+    text-decoration: none;
+    background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
+}
+
+/* The sidebar stays put while the page scrolls. Sticky is on the outer panel,
+   not on .sidebar itself: a sticky box moves within its containing block, and
+   .sidebar's parent is only ever as tall as .sidebar, so there is nowhere for it
+   to travel. The panel's containing block is #wrapper, which is as tall as the
+   page content beside it. */
+/* #wrapper holds three floats and nothing else, so its height collapsed to zero.
+   A sticky box travels within its containing block, and a zero-height one gives it
+   nowhere to go -- the panel below reported position: sticky and stayed put. The
+   clearfix gives #wrapper the height of its tallest float, which is the page
+   content, and that is the room the panel sticks through. */
+#wrapper::after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.sidebar-panel {
+    float: left;
+    position: sticky;
+    top: 0;
+}
+
+.sidebar {
+    /* Its own scrollbar once the menu is taller than the viewport, so a long
+       experiment section cannot push the watermark out of reach. */
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+    /* Open, it is `width: max-content` (set in base.html, and by toggle_sidebar) so it is
+       as wide as its widest entry plus the 15px `.nav > li > a` padding either side, and no
+       wider. The cap stops an experiment whose name runs long from pushing the page over;
+       `overflow-x: hidden` below trims it, and the `nowrap` further down is what makes that
+       a trim rather than a wrap. Collapsed, the inline width is cleared and this 0 is what
+       remains.
+
+       A pixel cap, not `17vw`. Viewport units made the sidebar a fraction of the window, so
+       narrowing the browser squeezed the panel and wrapped every entry in it -- measured at
+       255px wide with 60px-tall links on a 1500px window, and 153px wide with 100px-tall
+       links at 900px. The sidebar's job is to be as wide as its own contents; how wide the
+       window is has nothing to do with it. 260px is roughly what 17vw came to on a normal
+       screen, so this is the width it always had, minus the shrinking. */
+    width: 0;
+    max-width: 260px;
+    position: relative;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    overflow-x: hidden;
+    transition: 0.1s;
+    padding-top: 12px;
+    /* sb-admin-2 sets margin-top: 70px on .sidebar above 768px, leaving room for
+       the fixed top navbar its layout assumes. This app has no top navbar -- the
+       brand sits inside the sidebar -- so that was 70px of blank panel above the
+       first link. Same specificity, and common.css loads after it, so this wins. */
+    margin-top: 0;
+}
+
+/* Bootstrap floats .navbar-brand, so it contributes no height and the menu would
+   start underneath it. The old inline padding-top: 6em on #side-menu was clearing
+   that float by hand -- which also meant ~96px of blank panel when no branding is
+   configured and there is no brand to clear. Taking the float off instead lets the
+   brand occupy its own height, so the menu sits under it either way and the
+   spacing below is a real 0.5em rather than a guess. */
+.sidebar .navbar-header,
+.sidebar .navbar-brand {
+    float: none;
+    display: block;
+}
+
+#side-menu {
+    padding-top: 0.5em;
+}
+
+/* The collapse strip beside the sidebar: one viewport tall, sticking alongside
+   .sidebar-panel above it, with the arrow centered in it.
+
+   Its height used to come from an inline `line-height: 100vh` on the arrow -- one
+   character in a 100vh line box -- inside a float carrying `margin: 5em 0`. That made
+   the strip 100vh + 169px (5em against font-size: 1.2em of Bootstrap's 14px body, twice,
+   plus a stray 1px of padding), and since #wrapper's clearfix takes the height of its
+   tallest float *including* its margins, every page in the app scrolled 169px past the
+   fold with nothing in that space -- measured, not estimated. It showed worst on
+   /mutations/browse, which fits igv.js to the viewport and so has no content of its
+   own to hide the gap behind.
+   Height belongs on the strip; the arrow is just a glyph to center in it. */
+#sidebarbutton {
+    float: left;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    background-color: #f8f8f8;
+    border-radius: 0 5px 5px 0;
+    color: #444;
+    font-size: 1.2em;
+    cursor: pointer;
+}
+
+/* On the strip, not on .sidebar_arrows: the arrow is one glyph tall now, and hovering
+   should still light up the whole strip you are about to click. */
+#sidebarbutton:hover {
+    background-image: linear-gradient(to right, #f8f8f8, #c4dce8);
+}
+
+.sidebar_arrows {
+    text-align: center;
+    border-radius: 1vw;
+    border-left-style: none;
+    border-right-style: solid;
+    border-color: #f8f8f8;
+}
+
+.fab-container {
+    position: fixed;
+    bottom: 40px;
+    right: 40px;
+    cursor: pointer;
+}
+
+.iconbutton {
+    width: 50px;
+    height: 50px;
+    border-radius: 100%;
+    background: #FF4F79;
+}
+
+.iconbutton:hover {
+    box-shadow: 3px 3px 1px #aaaaaa;
+    background: #7a1f72;
+}
+
+.fab-button {
+    width: 60px;
+    height: 60px;
+    background: #A11692;
+}
+
+.iconbutton i {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: white;
+}
+
+
+html {
+    scroll-behavior: smooth;
+    background-color: white;
+    background-image: linear-gradient(to right, #f8f8f8, white);
+    background-repeat: no-repeat;
+}
+
+h1 {
+    margin-top: 60px;
+    font-size: 60px;
+    font-family: helvetica;
+}
+
+a:hover {
+    text-decoration: none;
+}
+
+.page-header {
+    margin: 0px;
+}
+
+.small-spacer-top {
+    margin-top: 24px;
+}
+
+.small-padding-top {
+    padding-top: 24px;
+}
+
+.header-description {
+    font-size: 26px;
+}
+
+.description {
+    color: #555555;
+}
+
+.small-prompt {
+    font-size: 20px;
+}
+
+.prompt-button {
+    display: inline-block;
+    position: relative;
+    padding: 12px 12px 12px 12px;
+}
+
+.prompt-button:hover {
+    background-color: rgba(26, 115, 232, .04);
+}
+
+.home-key-btn {
+    padding: 12px 24px 12px 24px;
+}
+
+/* No float here. This was `.btn { float: right }`, applied to every Bootstrap
+   button in the app -- 85 of them across 12 templates -- from a 2023 commit named
+   "updates" with no rationale. Floating takes a button out of the flow, so the
+   "+ New experiment" control landed at the right edge and rode up out of line with
+   the DataTables toolbar beneath it instead of stacking above it. Buttons that want
+   to sit right belong in a `.pull-right` container, one place at a time. */
+.btn + .btn {
+    margin-left: 5px;
+}
+
+.centered {
+    text-align: center;
+}
+
+.center-img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 80%;
+}
+
+.margin-sides {
+    margin-left: 12px;
+    margin-right: 12px;
+}
+
+.pair-grid-container {
+    display: grid;
+    grid-template-columns: auto auto;
+    background-color: #FFF;
+    padding: 20px;
+    margin: 10% 5%;
+}
+
+.grid-item {
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 20px;
+    font-size: 18px;
+    text-align: left;
+    line-height: 24px;
+}
+
+.grid-img {
+    max-width: 100%;
+}
+
+
+.example-link {
+    font-size: 16px;
+}
+
+.git-hash {
+    display: block;
+    font-size: .7em;
+    padding-left: 1.5em;
+}
+
+.d3-tip {
+    z-index: 1001;
+}
+
+.dot {
+    cursor: pointer;
+    height: 15px;
+    width: 15px;
+    margin: 0 2px;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background-color 0.6s ease;
+}
+
+/* `.dot.active`, not a bare `.active`. This was `.active, .dot:hover`, which is a rule about
+   carousel dots written so that it painted #717171 behind *any* element carrying the class --
+   and Bootstrap puts `active` on a selected nav tab, a selected dropdown row and the current
+   sidebar entry. Mostly the inner <a> covered the gray and nobody saw it. On a nav tab it did
+   not: `.nav-tabs > li > a` has `margin-right: 2px` and no bottom border, so the gray showed
+   as a hard edge down the right and along the foot of the selected tab, which reads as a
+   badly drawn drop shadow. Measured at 5x before believing it.
+
+   (No template renders `class="dot"` any more, so the block above is dead as it stands. Left
+   in place rather than deleted here -- narrowing the selector is the fix for the bug; the
+   carousel's removal is somebody else's commit.) */
+.dot.active, .dot:hover {
+    background-color: #717171;
+}
+
+.reject {
+    background-color: #f1f1f1;
+    color: #db3b5e;
+    padding: .5%;
+}
+
+.next {
+    background-color: #f1f1f1;
+    color: #0a8211;
+    padding: .5%;
+}
+
+.neighbor {
+    background-color: #f1f1f1;
+    color: black;
+    padding: .5%;
+}
+
+#footer {
+    position: fixed;
+    bottom: 0;
+    margin: 1%;
+    padding: .5%;
+    width: 100%;
+    font-size: 22px;
+    z-index: 1;
+}
+
+#center {
+    margin: 0 auto;
+    text-align: center;
+}
+
+
+/* A dropdown menu as long as the experiment has samples -- the genome browser's sample
+   menu and the Mutations page's picker are both that. Bootstrap's .dropdown-menu already
+   gives these menus everything else they share with the Metadata page's column menu (which
+   is DataTables' colvis collection): a <ul> of <li><a> at 3px 20px in 5px 0, and the fill
+   on an `active` row. Only the scrollbar past a screenful is missing, so only that is here,
+   and it is one class rather than a copy in each page's stylesheet. */
+.mutint-menu {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* A list whose highlight is its selection -- the genome browser's sample menu and the three
+   mutation-editor pages that pick a set of samples. `mutint_select_list.js` drives all four.
+
+   The browser's menu is inside a Bootstrap dropdown and gets its rows painted by Bootstrap's
+   own `.dropdown-menu > .active > a`. The editor's lists are not dropdowns and cannot borrow
+   that rule: putting `.dropdown-menu` on them would bring `position: absolute; display: none`
+   with it. So the row box and the fill are here, written to match what Bootstrap gives the
+   other one, and both carry this class so there is one place to change either.
+
+   Note `.active, .dot:hover { background-color: #717171 }` further up this file -- the
+   carousel dots' rule, which applies to *any* element with `.active`. In a dropdown the <a>
+   covers the <li> so that gray never shows; on a plain list it would, which is why the fill
+   below is on `> li.active > a` explicitly rather than left to the <li>. */
+.mutint-select-list {
+    list-style: none;
+    padding: 5px 0;
+    margin: 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    /* Shift-click would otherwise drag a text selection across the rows it is selecting. */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* A list already inside a .dropdown-menu has all of this from Bootstrap, and its own border
+   and rounding besides -- a second one would draw a box inside the menu's box. */
+.dropdown-menu.mutint-select-list {
+    border: none;
+    border-radius: 0;
+    padding: 5px 0;
+}
+
+.mutint-select-list > li > a {
+    display: block;
+    padding: 3px 20px;
+    clear: both;
+    font-weight: normal;
+    line-height: 1.42857143;
+    color: #333;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.mutint-select-list > li > a:hover,
+.mutint-select-list > li > a:focus {
+    color: #262626;
+    background-color: #f5f5f5;
+    text-decoration: none;
+}
+
+/* Bootstrap's dropdown-link-active fill, so a row here and a row in the browser's menu are
+   the same color. Repeated on :hover because the hover rule above would otherwise gray out
+   the row you are pointing at, which reads as it having been deselected. */
+.mutint-select-list > li.active > a,
+.mutint-select-list > li.active > a:hover,
+.mutint-select-list > li.active > a:focus {
+    color: #fff;
+    background-color: #337ab7;
+    outline: 0;
+}
+
+/* Not a row: no data-value, so the helper never sees it. Boxed like one so the sentence
+   sits where a name would. */
+.mutint-select-empty {
+    padding: 3px 20px;
+    color: #777;
+}
+
+/* The block as a whole -- buttons, count and list. Only a margin below, so a heading
+   following the list does not sit on its border. The gap from the column beside it is NOT
+   here: `#mutint-content > [class*="col-"]` above zeroes a bare column's gutter on purpose,
+   so the fix belongs on the column. Putting it on this block instead would indent the list
+   away from whatever else the column holds -- on the Change page, the table under it. */
+.mutint-select {
+    margin-bottom: 20px;
+}
+
+/* The Select all / Select none buttons and the count, above the list. */
+.mutint-select-controls {
+    margin-bottom: 4px;
+}
+
+.mutint-select-count {
+    margin-left: 8px;
+    font-size: 12px;
+    color: #777;
+}
+
+/* Logout posts rather than links, because LogoutView is POST-only from Django 5.0. The
+   control still has to read as the two links either side of it, so the button borrows
+   `.nav > li > a`'s box (10px 15px) and its hover rather than looking like a button --
+   the same thing .mutint-watermark does, and for the same reason. font-family only, so
+   `.small` on the element still decides the size. */
+.sidebar .mutint-logout {
+    margin: 0;
+}
+
+.sidebar .mutint-logout button {
+    display: block;
+    width: 100%;
+    padding: 10px 15px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.sidebar .mutint-logout button:focus,
+.sidebar .mutint-logout button:hover {
+    text-decoration: none;
+    background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
+}
+
+/* The account submenu, which is sb-admin-2's own sidebar idiom -- see base.html. Two
+   rules, both because this sidebar is `width: max-content` and the theme's were written
+   for a fixed 250px one. */
+
+/* The chevron is `float: right` in the theme, which contributes nothing to a shrink-to-fit
+   box: the sidebar sizes itself to the username and the arrow is then laid over the last
+   letter of it. In flow with a margin instead, so the box is as wide as its contents say. */
+.sidebar .arrow {
+    float: none;
+    margin-left: 8px;
+}
+
+/* The theme indents second-level links with `padding-left: 37px`, which reaches an <a> and
+   not the Logout <button>. It borrows `.nav > li > a`'s box a few rules up, so the indent
+   has to be added here or Logout sits a level out from the four entries beside it. */
+.sidebar .nav-second-level .mutint-logout button {
+    padding-left: 37px;
+}
+
+/* mutint-core's attribution, closing the sidebar menu. Muted and small: it is a
+   watermark, not a nav entry, and must not compete with the links above it. */
+.mutint-watermark {
+    /* Same box as `.nav > li > a` (10px 15px) so the text lines up with the
+       links above it -- the watermark is a bare <li> with no inner <a> to
+       inherit that from. Separation from the nav is margin, not extra padding. */
+    padding: 10px 15px;
+    margin-top: 1.5em;
+    font-size: 13px;
+    color: #999;
+    white-space: nowrap;
+}
+
+/* Sized against the text rather than in pixels, so the icon holds its proportion
+   to it and only the font-size above has to change to resize the whole mark.
+   The ratios are the ones it was drawn at: a 13px icon sunk 2px against 11px text. */
+.mutint-watermark img {
+    height: 1.18em;
+    vertical-align: -0.18em;
+    margin-right: 0.6em;
+    opacity: 0.7;
+}
+
+/* A one-of-many picker above the thing it picks for: a bold label beside a Bootstrap
+   dropdown of links. `.breseq-picker` is the same idea in `breseq_table.css`, which is
+   loaded only by the pages that render a breseq table -- this one is here so any page can
+   use it, which the needle plot's sequence picker on /stats is the first to do. */
+.mutint-picker {
+    margin-bottom: 0.75em;
+}
