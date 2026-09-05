@@ -179,3 +179,44 @@
 .breseq-unannotated {
     color: #8a6d3b;
 }
+
+/* The mutation matrix -- mutint_sample/mutation_matrix.py -- is this table with a column per
+   sample after the descriptive ones. A sample cell is that sample's frequency, tinted when the
+   sample carries the mutation; an absent cell is blank and untinted, because "not here" is
+   the ordinary state of a cell in a sparse matrix and painting it would drown the signal. The
+   polymorphic fill is breseq's own, per cell here rather than per row: one row holds many
+   samples, and only some of them are polymorphic. */
+.breseq-table th.breseq-sample,
+.breseq-table td.breseq-sample {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.breseq-table td.breseq-sample.present { background-color: rgba(0, 130, 0, 0.10); }
+.breseq-table td.breseq-sample.polymorphic { background-color: rgb(160, 255, 160); }
+
+/* The two menus and the presets sit on one line above the table, spaced the way the genome
+   browser's control bar is. */
+.mutation-matrix-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    margin-bottom: 0.75em;
+}
+
+.mutation-matrix-form {
+    margin-bottom: 0.75em;
+}
+
+.mutation-matrix-form .form-control {
+    margin-right: 0.5em;
+}
+
+/* DataTables' Bootstrap theme wants the header sortable-arrows on a white ground; the breseq
+   header is green with white text, so the arrows are white too. */
+table.dataTable.breseq-table thead .sorting:after,
+table.dataTable.breseq-table thead .sorting_asc:after,
+table.dataTable.breseq-table thead .sorting_desc:after {
+    color: rgb(255, 255, 255);
+    opacity: 0.6;
+}

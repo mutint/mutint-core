@@ -49,7 +49,7 @@ def breseq_table(request):
         # unreachable rather than merely excluded. It is listed first and tinted; the
         # analyses that aggregate across samples still leave it out.
         reseq_dict = get_reseq_ordered_dict(experiment.id, ale_number,
-                                            sample_type, request, include_ancestor=True)
+                                            sample_type, include_ancestor=True)
         reseq_dict = _ancestor_first(reseq_dict, experiment.ancestor_id)
         reseq = _selected_reseq(request, reseq_dict, experiment)
 

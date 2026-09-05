@@ -58,13 +58,13 @@ class NoSharedFilterRemainsTestCase(TestCase):
 
         path = None
         for directory in settings.TEMPLATES[0]["DIRS"]:
-            candidate = os.path.join(directory, "base_table_template.html")
+            candidate = os.path.join(directory, "mutation_matrix", "page.html")
             if os.path.isfile(candidate):
                 path = candidate
         if path is None:
-            from mutint_common import __file__ as common_file
-            path = os.path.join(os.path.dirname(common_file), "templates",
-                                "base_table_template.html")
+            from mutint_sample import __file__ as sample_file
+            path = os.path.join(os.path.dirname(sample_file), "templates",
+                                "mutation_matrix", "page.html")
 
         markup = io.open(path, encoding="utf-8").read()
 

@@ -52,3 +52,35 @@ class DerivedDataState(models.Model):
     def __str__(self):
         where = "site" if self.experiment_id is None else "experiment %s" % self.experiment_id
         return "%s (%s): %s" % (self.name, where, "stale" if self.stale_since else "current")
+
+
+class UserPreference(models.Model):
+    """One remembered choice of one person: a key, and a JSON value.
+
+    The second model here, and the first that is about a *person* rather than the data. It
+    exists so a page can remember how somebody likes to look at things -- which columns of the
+    mutation table they hide, which samples they have turned off in an experiment -- across
+    experiments and across browsers, which the reader's view filter (session-scoped, and
+    deliberately so) cannot do and localStorage (one browser) cannot either.
+
+    It is deliberately a key/value store and not a column per preference: a plugin that wants
+    to remember something writes under its own key and needs no migration in core. Keys are
+    dotted names, `mutation_matrix.columns`, and the value is whatever JSON the owner of the key
+    understands. See `mutint_common/preferences.py` for the rules on both, and for the endpoint
+    a page saves through.
+    """
+
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="preferences")
+    key = models.CharField(max_length=100)
+    value = models.JSONField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["user", "key"], name="one_preference_per_user_per_key"),
+        ]
+        verbose_name = "user preference"
+        verbose_name_plural = "user preferences"
+
+    def __str__(self):
+        return "%s: %s" % (self.user_id, self.key)

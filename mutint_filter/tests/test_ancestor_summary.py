@@ -1,6 +1,6 @@
 """What a table says about the subtraction it just did.
 
-`{% view_filter_summary %}` is included once in `base_table_template.html`, so a sentence added
+`{% view_filter_summary %}` is included once in `mutation_matrix/page.html`, so a sentence added
 there reaches mutint-compare, mutint-fixation and mutint-converge without an edit to any of those
 repositories -- the same leverage that got them their filter controls.
 

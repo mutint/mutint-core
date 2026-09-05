@@ -44,13 +44,13 @@ that test; do not write a second one.
 ```
 
 `{% view_filter_form %}` is the inputs wrapped in their own GET form. If your page already has a
-form carrying its view state — the shared `base_table_template.html` keeps columns, ALE, sample
-type and tags in one form behind one Apply button — use `{% view_filter_fields %}` instead and put
+form carrying its view state — the shared `mutation_matrix/page.html` keeps ALE, sample type and
+the filter in one form behind one Apply button — use `{% view_filter_fields %}` instead and put
 them inside it. Two Apply buttons on one page means each discards the other's pending edits.
 
-**If you render `base_table_template.html` you already have both.** That is what the tags are tags
-for: Compare, Fixed Mutations and Converged Mutations got their controls without an edit to any of
-their repositories.
+**If you render `mutation_matrix/page.html` you already have both.** That is what the tags are
+tags for: Compare, Fixed Mutations and Converged Mutations got their controls without an edit to
+any of their repositories.
 
 Both render **nothing** when the context has no `experiment_id`. That is deliberate and it is
 the rule to keep: a control that does nothing is worse than no control. There used to be a

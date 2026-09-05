@@ -1,6 +1,6 @@
 """The filter form's parameter names reach the template.
 
-`base_table_template.html` used to write `name="population"` and its sample-type values as
+`mutation_matrix/page.html` used to write `name="population"` and its sample-type values as
 literals. They are context variables now, so that the query-string vocabulary can be renamed
 in `constants.py` alone -- but a context variable that does not arrive renders as the empty
 string, and Django says nothing. The form would then post `?=1` instead of `?population=1`, every
@@ -10,10 +10,13 @@ So this asserts the wiring rather than the words: whatever `constants.py` says, 
 comes out of the form. Dropping `request_vocabulary` from the context processors fails here.
 
 The template is rendered directly rather than through a page, because **no mutint-core page
-renders it** -- mutint-compare, mutint-converge and mutint-fixation do. Core owns the template
+renders it** -- mutint-compare, mutint-converge and mutint-fixation do (Search renders the
+matrix through its own page). Core owns the template
 and the context processor, so core is where the seam between them belongs; a test living in
 one plugin would leave the other two believing someone else checked.
 """
+
+from collections import OrderedDict
 
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -21,6 +24,7 @@ from django.template import loader
 from django.test import RequestFactory, TestCase
 
 from mutint_common import constants
+from mutint_sample.mutation_matrix import build_matrix
 
 
 class RequestVocabularyTestCase(TestCase):
@@ -34,8 +38,9 @@ class RequestVocabularyTestCase(TestCase):
         # `experiment_id` gates the whole control block -- without an experiment
         # selected the page renders no pickers at all, and every assertion below would
         # pass against an empty form.
-        return loader.get_template("base_table_template.html").render(
-            {"experiment_id": 1, "ales": ["1"], "mutations": []}, request)
+        return loader.get_template("mutation_matrix/page.html").render(
+            {"experiment_id": 1, "ales": ["1"], "matrix": build_matrix([], OrderedDict()),
+             "empty_message": "Nothing."}, request)
 
     def test_the_pickers_are_named_from_constants(self):
         html = self.render()

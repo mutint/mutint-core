@@ -43,32 +43,55 @@ report the sample was imported from, and they mean nothing without the surroundi
 
 - **`mutint_sample/templates/breseq_table/_mutation_table.html`** — one sample's mutations, the
   partial the per-sample page and the genome browser share.
-- **`mutation_table_builder` + `base_table_template.html`** — the cross-sample table, mutations
-  down and samples across. `mutint-compare`, `mutint-fixation` and `mutint-converge` are all this
-  same view with a different queryset.
+- **The mutation matrix** — mutations down, samples across, drawn with the same cells.
+  `mutint-compare`, `mutint-fixation`, `mutint-converge` and core's Search are all this one
+  component with a different queryset.
 
-If you use the cross-sample table, take the column index from the constant rather than
-counting:
+### The mutation matrix
+
+Build it from a list of `MutationCall`s and the samples that should be columns:
 
 ```python
-from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+from mutint_sample.mutation_matrix import build_matrix
+from mutint_sample.util import get_reseq_ordered_dict
+
+reseq_dict = get_reseq_ordered_dict(experiment.id, population, sample_type)
+matrix = build_matrix(calls, reseq_dict, experiment=experiment,
+                      csv_title="%s_ExpID%d" % (experiment.name, experiment.id))
 ```
 
-Removing one column from that table once shifted every other column left by one. Everything
-in `table_template.js` is expressed relative to that constant, and the plugins that import it
-followed for free; one that had hardcoded an index would have broken silently, rendering a
-table labeled one way and sorted another.
+`reseq_dict` is `{sample_id: Sample}` in column order — `get_reseq_ordered_dict` for one
+experiment's samples (the designated ancestor already left out), `get_ordered_reseq_dict(calls)`
+for the samples that appear in a set of calls. Pass `labels="qualified"` on a page that spans
+experiments so each column names its experiment. A row is one mutation and appears when at least
+one listed sample carries it; each sample cell is that sample's frequency, linked into the genome
+browser when the sample has reads. The `browse_url(call)` and `refseq_url(mutation)` callables
+can be replaced if your page links elsewhere.
 
-## `table_template.js` is a Django template
+Then either render **`mutation_matrix/page.html`** — the page the three plugin tables share:
+the ALE and sample-type pickers, the reader's filter controls and summary, and the matrix — with
+`experiment_id, ales, population, sample_type, experiment_name, ale_project_name, ale_project_id,
+template_header, title, matrix, empty_message` in the context; or put the tag in a page of your
+own:
 
-It is included inside a `<script>` tag, which is what lets its three endpoint URLs be reversed
-by name rather than written out.
+```django
+{% load mutation_matrix %}
+{% mutation_matrix matrix empty_message="No mutations matched." %}
+```
 
-!!! danger "A `//` comment is not a template comment"
+A page rendering the tag links three assets, and a core test checks that they travel together:
+`css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
+`mutint_select_list.js` come from `base.html`.
 
-    The template engine does not recognize JavaScript comments. Anything tag-shaped inside
-    one is still parsed and executed — writing a tag name in a `//` line runs it. The file
-    describes its tags in prose rather than spelling them out, for exactly this reason.
+Two menus above the table let the reader show and hide descriptive columns and samples. Those
+choices are remembered for a signed-in reader through `mutint_common.preferences` — keys
+`mutation_matrix.columns` (everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by
+every matrix page of that experiment) — and in the browser's localStorage otherwise. A plugin
+that wants to remember something of its own writes under its own prefix through the same
+`/preferences/` endpoint; nothing in core needs to know.
+
+The filter reaches the *derivation*, not the matrix: build your queryset through the reader's
+filter (see [filtering](filtering.md)) and hand the result over. `build_matrix` filters nothing.
 
 ## Overriding a core template
 

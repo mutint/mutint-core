@@ -103,7 +103,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1907 run, 0 failures** standalone. They were **1839** before the background-worker
+**Baseline: 1929 run, 0 failures** standalone. They were **1907** before the mutation matrix
+replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
+partial, the first Search tests, minus the old builder's), **1839** before the background-worker
 work, which adds 68 -- the deadman supervisor and its constraints, the `start` gates, the
 process-group clean-up, the reaper's `skip_locked`, the stalled-queue signal, and
 `stop_if_owner_is`. They were **1834** before the sidebar rework --
@@ -742,7 +744,7 @@ the same biological mutation and quietly invalidate all of it. Removing only the
 call changes nothing any stored id means.
 
 **The rows are hard-deleted, and that is what kept every read path untouched.** An
-MutationCall is read by `mutation_table_builder`, `breseq_table`, `mutint_export`,
+MutationCall is read by `mutation_matrix`, `breseq_table`, `mutint_export`,
 `mutint_stats`, `mutint_dashboard`, `mutint_search`, mutint-fixation and mutint-converge, and this
 repo's default managers are deliberately unfiltered. A soft-delete flag would have needed all
 eight taught to filter, and the one that was missed would have gone on showing deleted
@@ -1153,9 +1155,9 @@ Two smaller things the browser found:
 
 The grid is a **second** mutations-by-samples table beside Compare's, and that is allowed: this
 one is unfiltered, selectable, capped and shows uncalled calls, and Compare is none of
-those. `mutation_table_builder` could not have been reused anyway -- its cells are `<a>`
-elements into the genome browser, which would fight a click meaning "select", and
-`get_table_body` filters through `filter_mutation_calls` while this page must show what is
+those. The matrix could not have been reused anyway -- its cells are `<a>`
+elements into the genome browser, which would fight a click meaning "select", and it is
+handed rows that have been through `filter_mutation_calls` while this page must show what is
 stored.
 
 ### Editing a mutation, in every sample or in some of them
@@ -1609,7 +1611,7 @@ become one and `applied` is simply `not is_empty`.
 **Template tags, not context keys**, and that is what makes them generic: they read
 `experiment_id` and the request out of the context every table page already sets, so
 including `{% view_filter_fields %}` and `{% view_filter_summary %}` once in
-`base_table_template.html` reaches mutint-compare, mutint-fixation and mutint-converge **without
+`mutation_matrix/page.html` reaches mutint-compare, mutint-fixation and mutint-converge **without
 touching any of their repositories**. `{% view_filter_form %}` is the standalone variant, for a
 page with no view-control form of its own to join -- the per-sample breseq table uses it.
 
@@ -1641,32 +1643,10 @@ and pass `view_filter=None` to `get_table_body`.
 
 Two things this shook out that are worth knowing:
 
-- **Removing the close icon shifted every column of the shared mutation table left by one.**
-  `REFSEQ_COLUMN_IN_MUT_TABLE` went 3 -> 2 and `mutint_export.util`'s `mut_pos_index` with it;
-  everything in `table_template.js` is expressed relative to that constant, and mutint-compare,
-  mutint-fixation, mutint-converge and `mutint_search` all import it rather than hardcoding an
-  index, so they followed for free. Getting it wrong renders a table labeled one way and
-  sorted another, which reads like CSS. `test_mutation_table_builder` now asserts the header
-  and every row are the same width and that the constant points at "Reference Seq".
-
-  **"Relative to that constant" was not enough, and there is a second one now.** The offsets
-  past the fixed columns -- where the *samples* begin -- were also written relative to
-  `REFSEQ_COLUMN_IN_MUT_TABLE`, from a time when the fixed set was longer, and nothing moved
-  them when it shrank. So the default hidden set covered the first two sample columns, the
-  cell coloring started at the fourth, and on an experiment with **one** sample the script
-  asked DataTables to hide a column past the end, which is two `alert()`s per page load and a
-  table showing no sample at all. `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE` is
-  `len(HTML_MUTATION_TABLE_HEADER)` and reaches the script through `request_vocabulary`, so
-  no view passes it and the next fixed column to come or go moves it. `test_table_columns.py`
-  pins it, and the one-sample case is the check: load Compare on such an experiment and
-  there must be no dialog.
-- **A filter with no cutoff at either end used to exclude the whole experiment.** An empty `Q`
-  handed to `.exclude()` excludes everything. The guard survives in a new form -- with no cutoff
-  the queryset is returned untouched and `.exclude()` is never called -- and the second copy of
-  that block is gone with it: `mutint_interop_query` had rebuilt the whole thing by hand, skipping
-  gene filtering as too slow, and now goes through the shared path. Its six endpoints take
-  `min_freq`/`max_freq`/`ignore_genes` and default to unfiltered, because an anonymous caller
-  used to get a view shaped by a setting they could not see.
+- **Removing the close icon shifted every column of the shared mutation table left by one**,
+  and the column constants that followed (`REFSEQ_COLUMN_IN_MUT_TABLE` 3 -> 2, later
+  `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE`) are gone with that table: the mutation matrix reads cells
+  by name, so there is no index for four pages to agree about. See **The mutation matrix**.
 
 ### Creating and importing are pages, not dialogs
 
@@ -1842,9 +1822,10 @@ and `ProjectAccessAdmin` routes saves and deletes through `grant_project_access`
 should not be the one place able to express a state the application forbids — editing that table
 directly used to bypass the last-owner rule and the re-point together.
 
-**The role cache is not an optimisation.** `mutation_table_builder` calls
+**The role cache is not an optimisation.** The old cross-sample table called
 `can_add_experiment_filter` once per sample column *and* once per mutation row, so a table of
-400 mutations across 20 samples asks 420 times. django-guardian absorbed that in its own
+400 mutations across 20 samples asked 420 times (the mutation matrix asks nothing per row, but
+the per-sample and editor pages still ask per render). django-guardian absorbed that in its own
 per-user cache; `permissions.py` keeps a `{project_pk: (generation, role)}` dict on the `User`
 instance, whose lifetime is naturally one request. A module-level generation counter, bumped
 by every write helper, invalidates it — which is what stops a `User` object that outlives a
@@ -1986,19 +1967,15 @@ be unlocked either, but it cannot get locked in the first place.
 `/compare/` -- mutations as rows, samples as columns -- lives in the **mutint-compare** repo,
 not in core. It is one way of looking at an experiment rather than a core function, which is
 exactly what mutint-fixation and mutint-converge are: all three are a function view that builds a
-context and renders `base_table_template.html` through `mutation_table_builder`. Compare was
-simply the one that had never been moved out.
+queryset and renders **the mutation matrix** (below) through `mutation_matrix/page.html`. Compare
+was simply the one that had never been moved out.
 
-What stayed, and why none of it could go:
-
-- **`mutation_table_builder`** -- `mutint_search`, `mutint_export`, mutint-fixation and
-  mutint-converge all call it.
-- **`base_table_template.html` and `table_template.js`** -- rendered by three other pages.
-- **The curation endpoints**, now at `/mutation-table/` (`mutint_sample/views/table_actions.py`,
-  `mutint_sample/table_urls.py`). Every table posts to them, not just Compare, and the state is
-  shared: `Sample.tags` is what the Show/Hide Tag control filters sample columns on
-  in `get_reseq_ordered_dict`, so tagging from one table changes what the other three show.
-  Replicating them per plugin would have meant four write paths to core-owned tables.
+What stayed in core, and why: the matrix itself (`mutint_sample/mutation_matrix.py`, the tag,
+the partial, the script), because Search and both other plugins render it; and **the curation
+endpoints** at `/mutation-table/` (`mutint_sample/views/table_actions.py`,
+`mutint_sample/table_urls.py`). Those are retained API now -- **nothing in the UI posts to them**
+since tagging left the cross-sample table -- and are a candidate for removal along with
+`Sample.tags` and `Mutation.tags`, which the sample edit page still shows.
 
 **`/mutations/` is not a page any more** and returns 404. `mutint_sample.urls` has no `^$`, and a
 plugin cannot reclaim that path: Django does not backtrack out of a matched `include()`.
@@ -2016,14 +1993,68 @@ Two consequences worth knowing before wondering whether something is broken:
 so the "all samples" link disappears rather than dangling where the plugin is not installed --
 the posture `nav_registry` takes with a `url_name` that will not reverse.
 
-**The three endpoint URLs in `table_template.js` are reversed by name, not written out.** That
-file is a Django template included inside a `<script>`, so `{% url %}` works there -- and so does
-anything else tag-shaped, **including inside a `//` or `/* */` comment**, which the template
-engine does not recognize as a comment at all. Writing a tag name in a comment there executes it.
+### The mutation matrix
 
-Nothing in core rendered that file until this change: `mutint_search` has no tests and the other
-three consumers are plugin pages. `mutint_sample/tests/test_table_actions.py` renders it directly now,
-which is what lets core notice a broken tag before four pages do.
+`mutint_sample/mutation_matrix.py` + `templatetags/mutation_matrix.py` +
+`templates/mutation_matrix/{_table,page}.html` + `mutint_common/staticfiles/js/mutation_matrix.js`
+is the one cross-sample table: Compare, Fixed Mutations, Converged Mutations and Search all
+render it, and `docs/plugin/templates.md` is the plugin-facing guide. It replaced
+`mutation_table_builder.py` + `base_table_template.html` + `table_template.js`: a DataTable of
+positional arrays whose script found the sample columns by arithmetic on where the reference
+column sat, and which grew stale offsets, dead controls (`show_dups`, a `.shut` hover for a
+column removed years earlier), tag menus nobody wanted on a reading page, and -- on Search -- a
+`ReferenceError` that blanked the table because that page defined one variable fewer than the
+others.
+
+**It looks like the per-sample table because it is built from the same code.** The descriptive
+columns are `breseq_report.describe_mutation` -- the per-sample table's row minus the sample --
+styled by `breseq_table.css` through the same `breseq-*` classes on `<th>` and `<td>`, so a
+mutation reads identically whether one sample or forty stand beside it. There is no Freq column:
+every sample cell already is one (`100%`, `42.0%`, `✓` for a present call with no frequency),
+linked into the genome browser when the sample has reads, tinted when present, blank when absent.
+`present=False` read-support cells are gone; no importer ever wrote `evidence`, so none had ever
+rendered.
+
+**Rows are objects and DataTables reads cells by name** (`data: "gene"`, `data: "samples.3"`),
+which is what makes hiding a column, or adding one later, move no index anywhere. The header is
+server-rendered -- one `th[data-key]` per descriptive column, one `th.breseq-sample[data-sample]
+[data-index]` per sample -- so a test can count and read it, and the script builds its column
+definitions from those attributes. Rows travel as `json_script`.
+
+**The two menus are the genome browser's sample menu, twice**: `ul.dropdown-menu.mutint-menu
+.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being shown. Columns
+lists the descriptive columns (Description off by default: it is prose, and the widest column);
+Samples lists the samples with Show all / Hide all beside it. A row whose mutation is in no shown
+sample leaves the table through `$.fn.dataTable.ext.search`, so paging and the count describe
+what is visible, and the striping is redone per displayed row the way breseq stripes.
+
+**Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
+holds `mutation_matrix.columns` for the reader everywhere and `mutation_matrix.samples.<exp>` per
+experiment, shared by the three experiment pages; Search has no experiment and its sample
+selection is transient. Stored as the *hidden* set, so a column or sample that did not exist when
+the choice was made shows by default. The tag embeds a signed-in reader's preferences in the page
+and the script reads them before the first draw, so nothing flashes; an anonymous reader (ALEdb
+is public) gets the same from localStorage.
+
+What went with the old table, on purpose: tagging (rows, sample headers, the `tag_select`
+picker and the `request` parameter of `get_reseq_ordered_dict` that served it), the colvis
+button, "Column Sort from Right" (sample headers sort by frequency instead, absent last), the
+`hidden_columns` query parameter, and the three column constants
+`REFSEQ_COLUMN_IN_MUT_TABLE` / `HTML_MUTATION_TABLE_HEADER` / `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE`.
+The CSV export (`mutint_export/util.py`) used to borrow the table's header and cell markup; it
+carries its own `CSV_MUTATION_HEADER` now, byte-identical, and writes `✓` where `strip_tags` had
+left the `&#10003;` entity in the file.
+
+### Per-user preferences
+
+`mutint_common.preferences` is a key/value store per signed-in user -- `UserPreference(user,
+key, value JSON)`, one row per key, `get_preference` / `get_preferences(prefix)` /
+`set_preference` -- with an endpoint at `/preferences/` (GET `?prefix=`, POST `{key, value}`,
+403 for anonymous, plain `JsonResponse` because `mutintPostJson` reads real statuses). It exists
+for how somebody likes to *see* things, which neither the view filter (per session, and about
+which rows) nor localStorage (one browser) can carry across experiments and machines. Keys are
+dotted names owned by whoever writes them, so a plugin remembers something by picking a prefix;
+`mutint_common/preferences.py` states the size and character rules.
 
 ### Example datasets
 
@@ -2775,9 +2806,9 @@ Two things it gets right that are easy to get wrong:
 All four margins round the browser measure the same 25px; the header trim that makes the top
 one work is in `common.css` and applies to every page (see **The shell's two widths**).
 
-The cell markup is coupled to two things that substring-test it: `_contains_mutation` decides
-whether a row renders by looking for `true`, and `table_template.js` colors a cell by testing
-for `class="true"`. Keep that class on the anchor, and keep `true` out of the empty-cell literal.
+The cell markup used to be coupled to two things that substring-tested it for the literal
+`true`; the mutation matrix carries presence as a field (`samples[i]` is an object or `null`),
+so that coupling is gone.
 
 ### Everything the browser loads is served from here
 
@@ -3000,16 +3031,11 @@ knows both anyway. One endpoint, one contract.
 
 #### Three link sites, and what constrains the first
 
-1. **The shared mutation table's Reference Seq column** -- `mutation_table_builder._refseq_cell`,
-   reaching Compare, Fixation, Converge and Search at once. Three constraints, all of which
-   fail silently if broken: the cell must not carry `class="true"` **or the literal string
-   `true` at all**, since `_contains_mutation` substring-tests the row for it to decide
-   whether the row renders and `table_template.js` tests for it to color a sample cell; the
-   column count must not change, because everything in `table_template.js` is indexed
-   relative to `REFSEQ_COLUMN_IN_MUT_TABLE`; and the CSV export is unaffected because
-   `mutint_export/util.py` re-derives `seq_id` itself rather than reusing this cell.
-   `test_the_row_holds_the_reference_at_that_index` compares the cell's **text**, since the
-   name is now wrapped in an anchor.
+1. **The mutation matrix's Reference column** -- `mutation_matrix.refseq_url_for`, reaching
+   Compare, Fixation, Converge and Search at once. The link and its title are fields on the
+   row (`seq_id_url`, `seq_id_title`) and the script draws the anchor, so the cell's markup
+   constrains nothing else; the CSV export re-derives `seq_id` itself and is unaffected.
+   `test_ncbi_view.TableLinkTestCase` pins the URL and both titles.
 2. **The per-sample breseq table**, through a `refseq_url=` callable on `build_rows`, in the
    same shape as the existing `browse_url=`.
 3. **The genome browser**, whose own row links across to the annotation at the same locus --
@@ -3099,7 +3125,7 @@ All apps use the `mutint_*` namespace. Key apps:
     Sample identity comes from the filename, through `sample_names.parse_sample_identity`
     and nowhere else -- see **Reading a sample's identity out of its filename** below.
 - **`mutint_sample/`** — Mutation models and views (`/mutations/breseq`, `/mutations/browse`,
-  `/mutations/ncbi`, `/mutations/reference`), the shared `mutation_table_builder`, and the
+  `/mutations/ncbi`, `/mutations/reference`), the shared mutation matrix, and the
   curation endpoints at `/mutation-table/`. `/mutations/reference` is the only page that says
   what genome an experiment is called against, and is where an NCBI accession is recorded. `browse` is igv.js over the sample's reads; `ncbi` is NCBI's Sequence
   Viewer over curated annotation, and draws nothing until the contig's sequence has been

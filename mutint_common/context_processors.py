@@ -63,7 +63,4 @@ def request_vocabulary(request):
         'PARAM_ALL': constants.REQUEST_ALL,
         'SAMPLE_TYPE_CLONAL': constants.SAMPLE_TYPE_CLONAL,
         'SAMPLE_TYPE_MIXED': constants.SAMPLE_TYPE_MIXED,
-        # Not a query-string name, but the same kind of thing: a number the shared mutation
-        # table's script has to agree with core about, arriving without every view passing it.
-        'FIRST_SAMPLE_COLUMN': constants.FIRST_SAMPLE_COLUMN_IN_MUT_TABLE,
     }

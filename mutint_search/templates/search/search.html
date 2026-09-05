@@ -1,61 +1,21 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load view_filter %}
+{% load mutation_matrix %}
 {% block title %}Search{% endblock %}
 {% block scripts_and_style%}
-
-    <script type="text/javascript" src="{% static "vendor/datatables-bundle-bs336/datatables.min.js" %}"></script>
-    {# For alert#}
-    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+    {% comment %} The results are the mutation matrix -- see mutation_matrix/page.html for why
+       these three assets travel together. DataTables itself comes from base.html; this page
+       used to load a second copy of a different version in the head. {% endcomment %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+    <script src="{% static 'js/mutation_matrix.js' %}?v={{ mutint_version }}"></script>
     <style type="text/css" title="currentStyle">
-            .intergenic {
-                font-style: italic;
-            }
-
-            .mutation_in_codon {
-                color: red;
-                text-decoration: underline;
-            }
-
-            .reference_error {
-                text-decoration: line-through;
-            }
-
-            table.dataTable tr.odd {
-                background-color: #E2E4FF;
-            }
-
-            table.dataTable tr.even {
-                background-color: white;
-            }
-
-            .dropdown-menu li > a:hover, .dropdown-menu li > a:focus, .dropdown-submenu:hover > a {
-                background-color: #4078c0;
-            }
-
             .input-group-addon {
                 min-width: 150px;
                 text-align: left;
             }
         </style>
-
-        {% if table_body %}
-            <script type="text/javascript">
-                var refseq_column = {{ refseq_column }}
-                var sorted_column = refseq_column;
-                var table_data = {{ table_body }};
-                var table_titles = {{ table_header | safe }};
-                var table_heads = [];
-                var number_of_columns = 0;
-                var tag_list = {{ tag_dropdown | safe}};
-                for(var x in table_titles) {
-                    table_heads.push({title: table_titles[x]});
-                    number_of_columns += 1;
-                }
-                {% include 'table_template.js' %}
-            </script>
-
-        {% endif %}
 
         <script type="text/javascript">
             function clear_search() {
@@ -77,7 +37,6 @@
 
 <div class="row">
     <form action="/search/" method="get" >
-        <input class="form-control" type="hidden" id="hidden_columns" name="hidden_columns" value="{{ hidden_columns }}"/>
         <div class="form-group row">
             <label for="gene" class="col-sm-2 col-form-label text-right">Genetic Target:</label>
             <div class="col-sm-3">
@@ -168,7 +127,7 @@
     </form>
 </div>
 
-{% if table_body %}
+{% if matrix %}
     <div class="row">
         Search Returned <b>{{ mutation_count }}</b> Unique Mutations and <b>{{ mutation_call_count }}</b> Total Mutations
     </div>
@@ -178,19 +137,6 @@
        rows; `filter_mutation_calls` resolves them from the queryset. {% endcomment %}
     {% view_filter_summary own_rules="Search spans experiments, so no single per-experiment filter applies here -- the frequency and position boxes above are this page's filter. Mutations in any experiment's designated ancestor are excluded, as they are everywhere else." %}
     <br>
-<div class="row">
-    <form action="" method="get">
-        <table id="data" class="table">
-            <div class="ui">
-                <button type="button" class="btn btn-default" onclick="column_sort_from_right()">Column Sort from Right</button>
-            </div>
-            <br><br>
-            <thead>
-            </thead>
-            <tbody>
-            </tbody>
-        </table>
-    </form>
-</div>
+    {% mutation_matrix matrix empty_message="No mutation matched the search." %}
 {% endif %}
 {% endblock %}

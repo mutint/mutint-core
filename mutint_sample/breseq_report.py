@@ -68,6 +68,17 @@ def _plain_row(mutation):
     }
 
 
+def describe_mutation(mutation):
+    """The descriptive half of a row -- everything about the mutation and nothing about a
+    sample -- as breseq's markup when the mutation is annotated, flat text when it is not.
+
+    Shared with `mutint_sample.mutation_matrix`, whose rows are one of these plus a cell per
+    sample, so the cross-sample table and the per-sample one render a mutation identically.
+    """
+    entry = gd_entry(mutation)
+    return _annotated_row(entry) if entry else _plain_row(mutation)
+
+
 def _frequency(call):
     """breseq shows a polymorphism as a percentage; a fixed mutation shows nothing.
 
@@ -106,8 +117,7 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
     """
     rows = []
     for index, call in enumerate(mutation_calls):
-        entry = gd_entry(call.mutation)
-        row = _annotated_row(entry) if entry else _plain_row(call.mutation)
+        row = describe_mutation(call.mutation)
 
         frequency_text, is_polymorphism = _frequency(call)
         row["freq"] = frequency_text

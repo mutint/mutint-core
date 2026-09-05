@@ -22,28 +22,11 @@ REQUEST_SAMPLE_TYPE = "sample_type"
 SAMPLE_TYPE_CLONAL = "clonal"
 SAMPLE_TYPE_MIXED = "mixed"
 SAMPLE_TYPES = (SAMPLE_TYPE_CLONAL, SAMPLE_TYPE_MIXED)
-# Was 3. The table's first column used to hold a close icon that removed the row from the
-# client-side DataTable and nothing else -- it came back on the next reload, which is the same
-# confusion `mutint_mutation_editor` exists to end. Dropping it shifts every column left by one.
-# Everything in `table_template.js` is expressed relative to this constant; the two places that
-# were not are `mutint_export.util`'s `mut_pos_index` and the row builder itself.
-REFSEQ_COLUMN_IN_MUT_TABLE = 2
-# Function, GO Process and GO Component were columns here and are gone with the three
-# Mutation fields behind them: nothing had written those since a helper documented as
-# "executed from Django ipython shell", so every modern row rendered three empty cells and
-# exported three empty columns. They sit *after* REFSEQ_COLUMN_IN_MUT_TABLE, so the constant
-# above is unchanged -- which is the only reason this was safe to do in one edit.
-HTML_MUTATION_TABLE_HEADER = ["", "Tags", "Reference Seq", "Position", "Mutation Type",
-                              "Sequence Change", "Gene (Scrollable)", "Product", "Mut ID",
-                              "Details"]
-# Where the per-sample columns begin, which is every column after the fixed ones above.
-# `table_template.js` used to place it by arithmetic on REFSEQ_COLUMN_IN_MUT_TABLE, with
-# offsets from when the fixed set was longer: its default hid "samples" at +8 and +9 that were
-# by then the first two real sample columns, styled samples only from the fourth, and -- on an
-# experiment with one sample -- asked DataTables to hide a column past the end, which alerts
-# twice per draw. Derived from the header rather than written as a number so the next column
-# to come or go moves it too. Reaches templates through `request_vocabulary`.
-FIRST_SAMPLE_COLUMN_IN_MUT_TABLE = len(HTML_MUTATION_TABLE_HEADER)
+# REFSEQ_COLUMN_IN_MUT_TABLE, HTML_MUTATION_TABLE_HEADER and FIRST_SAMPLE_COLUMN_IN_MUT_TABLE
+# stood here: the shared cross-sample table was a DataTable of positional arrays, and every
+# consumer located a column by arithmetic on these. The mutation matrix
+# (`mutint_sample.mutation_matrix`) reads cells by name, so there is no index for anything to
+# agree about; the CSV export carries its own header in `mutint_export.util`.
 
 TAGS = {
     "contaminated": '<i class="fa fa-random fa-fw" aria-hidden="true"></i>',

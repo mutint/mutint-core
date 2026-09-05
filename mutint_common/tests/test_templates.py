@@ -96,6 +96,35 @@ class BreseqTableAssetsTravelTogetherTestCase(unittest.TestCase):
         self.assertIn("breseq_gene_list", script)
 
 
+class MutationMatrixAssetsTestCase(unittest.TestCase):
+    """A page that renders `{% mutation_matrix %}` needs three assets, not one.
+
+    The partial itself emits no <link> or <script>: the page owns its head. So a page that
+    uses the tag and forgets the script gets a header and two menus that do nothing, and no
+    error anywhere. Same rule, same shape as the breseq pair above.
+    """
+
+    ASSETS = ("css/breseq_table.css", "js/breseq_table.js", "js/mutation_matrix.js")
+
+    def test_every_template_using_the_tag_links_all_three(self):
+        users, missing = 0, []
+        for path in _templates():
+            with open(path, errors="ignore") as handle:
+                text = handle.read()
+            if "{% mutation_matrix " not in text:
+                continue
+            users += 1
+            for asset in self.ASSETS:
+                if asset not in text:
+                    missing.append("%s lacks %s" % (os.path.relpath(path, CORE), asset))
+        self.assertGreaterEqual(users, 1, "expected a template to render the matrix")
+        self.assertEqual([], missing)
+
+    def test_the_script_exists(self):
+        path = os.path.join(CORE, "mutint_common", "staticfiles", "js", "mutation_matrix.js")
+        self.assertTrue(os.path.exists(path))
+
+
 class BootstrapLoadedOnceTestCase(unittest.TestCase):
     """Bootstrap's JS must be evaluated exactly once.
 

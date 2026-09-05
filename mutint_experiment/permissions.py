@@ -53,7 +53,7 @@ class ExperimentLocked(Exception):
 # --- the per-request role cache -----------------------------------------------------------
 #
 # This is not an optimisation, it is what keeps a mutation table from issuing a query per row.
-# `mutation_table_builder.get_table_header` calls can_add_experiment_filter once per sample
+# The old cross-sample table's header builder called can_add_experiment_filter once per sample
 # column and `get_mutation_table_body` once per mutation row -- a table of 400 mutations
 # across 20 samples asks 420 times. django-guardian used to absorb that in its own
 # `_guardian_perm_cache` on the user object; replacing it with a plain lookup and no cache

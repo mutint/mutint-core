@@ -15,7 +15,7 @@ invalidate all of that. Removing only the sample's call of it changes nothing an
 stored id means.
 
 The other consequence of working at the call level is that **no read path had to
-change**. A MutationCall that is gone is gone; `mutation_table_builder`, `mutint_export`,
+change**. A MutationCall that is gone is gone; the mutation matrix, `mutint_export`,
 `mutint_stats`, `mutint_dashboard`, `mutint_search`, mutint-fixation and mutint-converge all keep
 their unfiltered queries. A soft-delete flag would have needed every one of them taught to
 filter, and the one that was missed would have gone on showing deleted mutations.

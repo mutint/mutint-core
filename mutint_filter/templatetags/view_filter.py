@@ -3,7 +3,7 @@
 The plugin-facing surface of filtering: the controls a reader changes their view with, and the
 line a table shows about what it did. Tags rather than context keys, and that is what makes them
 generic -- they read `experiment_id` and the request straight out of the context every table
-page already has, so including them in `base_table_template.html` reaches mutint-compare,
+page already has, so including them in `mutation_matrix/page.html` reaches mutint-compare,
 mutint-fixation and mutint-converge without touching any of those repositories.
 
 The library was `filter_summary`, which described a shared setting somebody else had configured.
@@ -54,8 +54,8 @@ def _fields_context(context, standalone):
 def view_filter_fields(context):
     """The filter's inputs, with no `<form>` of their own.
 
-    For a page that already has one -- `base_table_template.html` puts every view control
-    (columns, ALE, sample type, tags) in a single GET form behind a single Apply button, and a
+    For a page that already has one -- `mutation_matrix/page.html` puts every view control
+    (ALE, sample type, the filter) in a single GET form behind a single Apply button, and a
     second form beside it would mean two Apply buttons that discard each other's pending edits.
     """
     return _fields_context(context, standalone=False)

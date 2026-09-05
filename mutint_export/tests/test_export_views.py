@@ -56,6 +56,20 @@ class ExportViewTestCase(TestCase):
         self.assertEqual("application/zip", response["Content-Type"])
         self.assertEqual(1, len(self._zip(response).namelist()))
 
+    def test_the_mutation_csv_keeps_its_header(self):
+        """The header is a contract with whoever scripts against the file; it used to be
+        borrowed from the on-screen table and is the export's own now, byte for byte."""
+        from mutint_export.util import CSV_MUTATION_HEADER, get_csv_str
+
+        rows = get_csv_str(self.experiment.id, "mut")
+        self.assertEqual(CSV_MUTATION_HEADER, rows[0][:len(CSV_MUTATION_HEADER)])
+        self.assertEqual(["Reference Seq", "Position", "Mutation Type", "Sequence Change",
+                          "Gene (Scrollable)", "Product", "Mut ID", "Details"],
+                         CSV_MUTATION_HEADER)
+        self.assertGreater(len(rows), 1, "the fixture's mutations are rows")
+        for row in rows[1:]:
+            self.assertEqual(len(rows[0]), len(row))
+
     def test_the_experiment_index_answers_a_csv_of_the_experiments(self):
         """A bare CSV, not a zip -- the other endpoint bundles a file per experiment and
         this one is a single table."""

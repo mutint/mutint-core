@@ -1,0 +1,69 @@
+{% comment %} The mutation matrix: mutations down, samples across. Rendered by the
+   mutation_matrix template tag; see mutint_sample/mutation_matrix.py for the data and
+   js/mutation_matrix.js for what happens to it.
+
+   The header is server-rendered so a test can count columns and read their classes, and so
+   DataTables adopts it: each th carries its breseq-* class exactly as the per-sample table's
+   does, which is what makes breseq_table.css style both the same way. Rows travel as JSON and
+   are drawn by the script -- a thousand mutations by forty samples is not a table to render
+   twice.
+
+   The two menus are the genome browser's Samples menu, twice: a Bootstrap dropdown whose rows
+   are <li class="active"><a>, driven by mutintSelectList in toggle mode. Being active IS being
+   shown. {% endcomment %}
+<div class="mutation-matrix" data-mutation-matrix
+     data-experiment-id="{{ matrix.experiment_id|default_if_none:'' }}"
+     data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
+     data-preferences-url="{{ preferences_url }}"
+     data-csv-title="{{ matrix.csv_title }}"
+     data-empty-message="{{ empty_message }}">
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+    <div class="mutation-matrix-controls">
+        <div class="btn-group">
+            <button type="button" class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                Columns <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="columns">
+                {% for column in matrix.columns %}
+                    <li data-value="{{ column.key }}"{% if column.default_visible %} class="active"{% endif %}>
+                        <a href="#">{{ column.title }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                Samples (<span data-role="sample-count">{{ matrix.samples|length }}</span>
+                of {{ matrix.samples|length }}) <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="samples">
+                {% for sample in matrix.samples %}
+                    <li data-value="{{ sample.id }}" class="active"><a href="#">{{ sample.label }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-default" data-samples="all">Show all samples</button>
+            <button type="button" class="btn btn-default" data-samples="none">Hide all samples</button>
+        </div>
+    </div>
+
+    {{ matrix.rows|json_script:rows_id }}
+    {% if authenticated %}{{ preferences|json_script:prefs_id }}{% endif %}
+
+    <table id="{{ matrix.dom_id }}" class="table breseq-table mutation-matrix-table">
+        <thead>
+            <tr>
+                {% for column in matrix.columns %}
+                    <th class="{{ column.css_class }}" data-key="{{ column.key }}"{% if column.sort_key %} data-sort-key="{{ column.sort_key }}"{% endif %}>{{ column.title }}</th>
+                {% endfor %}
+                {% for sample in matrix.samples %}
+                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}">{{ sample.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>

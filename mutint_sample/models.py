@@ -519,7 +519,7 @@ class MutationCall(SupplementalDataMixin):
     # queryable one, which is backwards.
     #
     # Nothing has to *show* the extra digits, and nothing does. Every display site formats
-    # explicitly -- `"%.2f"` in `mutation_table_builder`, `"%.1f%%"` in `breseq_report`,
+    # explicitly -- `"%.2f"` in `mutint_export.util`, `"%.1f%%"` in `breseq_report`,
     # `"%2f"` in the interop payload -- and no template renders the value raw. Nothing
     # aggregates or orders on it either; the only query use is `mutint_filter`'s two bounds.
     frequency = models.FloatField(null=True)

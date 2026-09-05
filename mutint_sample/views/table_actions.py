@@ -1,8 +1,10 @@
 """Curation actions the mutation table performs: tagging.
 
 These are **not** Compare's, which is why they stayed in core when Compare moved out to
-`mutint-compare`. Every page that renders `base_table_template.html` or includes
-`table_template.js` posts here -- Compare, Fixed Mutations, Converged Mutations and Search --
+`mutint-compare`. Every cross-sample table used to post here -- Compare, Fixed Mutations,
+Converged Mutations and Search -- until they became the mutation matrix, which carries no
+tagging at all. **Nothing in the UI posts here now.** The endpoints stay as retained API and
+are a candidate for removal along with the tag columns they write --
 and the state they write is shared: the sample's `tags` is what the Show/Hide Tag
 control filters sample columns on in `mutint_sample.util.get_reseq_ordered_dict`, so tagging a
 replicate from one table changes what the other three show.
@@ -38,7 +40,7 @@ _REFUSED = "You do not have permission to curate this experiment."
 def _may_curate(user, experiment):
     """Who may tag a mutation or a replicate.
 
-    Deliberately the same predicate `mutation_table_builder` already uses to decide whether
+    Deliberately the predicate the old cross-sample table used to decide whether
     to render the tag dropdowns at all (see its `get_table_header` / `get_mutation_table_body`).
     The controls were gated from the start; the endpoints behind them were not, so anyone who
     could reach the URL could tag anything by primary key -- and with `LoginRequiredMiddleware`

@@ -200,7 +200,7 @@ def _grid_for(experiment, reseq_dict, query=None):
     that the person cannot see and did not know about -- on a page whose next button deletes
     them.
 
-    Built here rather than through `mutation_table_builder`, for the reasons `_rows_for` gives
+    Built here rather than through the mutation matrix, for the reasons `_rows_for` gives
     about `breseq_table/_mutation_table.html` and two more of its own. That builder renders a
     cell as an `<a>` into the genome browser, which would fight a click that means "select";
     and `get_table_body` filters through `filter_mutation_calls`, while this page must show

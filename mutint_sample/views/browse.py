@@ -333,7 +333,7 @@ def _samples_calling(mutation):
     """Ids of the samples this mutation is recorded in.
 
     `present=True` is the mutation table's own rule for a cell being filled
-    (`mutation_table_builder._get_table_mutation_entry`), and it is reused rather than
+    (the old cross-sample table's cell builder), and it is reused rather than
     restated so the menu's `*` marks exactly the samples whose cells are filled in there. An
     MutationCall row on its own is not enough: one with `present=False` records that the
     mutation was looked for in that sample and found absent, and one with `present` null

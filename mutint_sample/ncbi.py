@@ -354,7 +354,7 @@ def contig_states(experiment, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
             "id": entry.get("id") or "",
             "length": entry.get("length") or 0,
             # Formatted here rather than in the template because Django has no comma filter
-            # without contrib.humanize, and `mutation_table_builder` already formats its
+            # without contrib.humanize, and the cross-sample table already formats its
             # Position column this way. A genome length is unreadable without it.
             "length_display": format(entry.get("length") or 0, ",d"),
             "aliases": list(entry.get("aliases") or []),

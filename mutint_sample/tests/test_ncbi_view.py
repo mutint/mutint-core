@@ -246,60 +246,45 @@ class RenameTestCase(_Fixture):
 
 
 class TableLinkTestCase(_Fixture):
-    """The Reference Seq column of the shared cross-sample table."""
+    """The Reference column of the cross-sample table -- the mutation matrix."""
 
-    def _cells(self):
-        from mutint_sample.views.mutation_table_builder import get_mutation_table_body
+    def _rows(self):
+        from mutint_sample.mutation_matrix import build_matrix
         from mutint_sample.util import get_reseq_ordered_dict
         reseq_dict = get_reseq_ordered_dict(self.experiment.id)
         calls = list(MutationCall.objects.filter(
             sample__in=reseq_dict.keys()).select_related("mutation"))
-        return get_mutation_table_body(self.user, calls, reseq_dict, self.experiment)
+        return build_matrix(calls, reseq_dict, experiment=self.experiment).rows
 
     def test_an_unverified_contig_is_still_linked(self):
         """The bootstrapping fix. Gating this link on verification made the only page
         carrying the accession box reachable solely once it had already been used."""
-        from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
-        rows = self._cells()
+        rows = self._rows()
         self.assertTrue(rows)
         for row in rows:
-            cell = row[REFSEQ_COLUMN_IN_MUT_TABLE]
-            self.assertIn("/mutations/ncbi?mutation_id=", cell)
-            self.assertIn("not been matched", cell)
+            self.assertIn("/mutations/ncbi?mutation_id=", row["seq_id_url"])
+            self.assertIn("not been matched", row["seq_id_title"])
 
     def test_a_verified_contig_says_so_in_the_title(self):
-        from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
         self._verify_contig()
-        for row in self._cells():
-            self.assertIn("Show this position", row[REFSEQ_COLUMN_IN_MUT_TABLE])
+        for row in self._rows():
+            self.assertIn("Show this position", row["seq_id_title"])
 
-    def test_a_verified_contig_becomes_a_link(self):
-        from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+    def test_a_verified_contig_stays_linked(self):
         self._verify_contig()
-        rows = self._cells()
+        rows = self._rows()
         self.assertTrue(rows)
         for row in rows:
-            cell = row[REFSEQ_COLUMN_IN_MUT_TABLE]
-            self.assertIn("/mutations/ncbi?mutation_id=", cell)
+            self.assertIn("/mutations/ncbi?mutation_id=", row["seq_id_url"])
 
-    def test_the_cell_never_contains_the_literal_true(self):
-        """`_contains_mutation` substring-tests the row for `true` to decide whether it
-        renders at all, and `table_template.js` tests for it to color a sample cell. A
-        Reference cell carrying it would corrupt both, silently."""
-        from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
+    def test_linking_does_not_change_the_row_shape(self):
         self._verify_contig()
-        for row in self._cells():
-            self.assertNotIn("true", row[REFSEQ_COLUMN_IN_MUT_TABLE])
-
-    def test_linking_does_not_change_the_table_width(self):
-        from mutint_common.constants import HTML_MUTATION_TABLE_HEADER
-        self._verify_contig()
-        rows = self._cells()
-        expected = len(HTML_MUTATION_TABLE_HEADER) + len(
-            {o.sample_id for o in MutationCall.objects.all()}) - 1
+        rows = self._rows()
+        samples = {o.sample_id for o in MutationCall.objects.all()}
         for row in rows:
-            self.assertEqual(len(row), len(rows[0]))
-            self.assertGreaterEqual(len(row), len(HTML_MUTATION_TABLE_HEADER) - 1)
+            self.assertEqual(len(row["samples"]), len(rows[0]["samples"]))
+            self.assertGreaterEqual(len(row["samples"]), 1)
+            self.assertLessEqual(len(row["samples"]), len(samples))
 
 
 class BreseqTableLinkTestCase(_Fixture):

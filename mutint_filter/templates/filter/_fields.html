@@ -7,7 +7,7 @@ Renders nothing without an experiment. That is the whole of the gate the old
 and a page with an `experiment_id` always resolves its filter through `get_view_filter`.
 
 `standalone` wraps the inputs in their own GET form, for a page that has none of its own.
-`base_table_template.html` passes False and drops these into the form it already has, because
+`mutation_matrix/page.html` passes False and drops these into the form it already has, because
 that page keeps every view control behind one Apply button and a second one would mean two
 buttons that discard each other's edits.
 {% endcomment %}

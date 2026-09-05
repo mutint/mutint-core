@@ -1,6 +1,7 @@
 from django.urls import include, re_path
 from django.contrib import admin
 from mutint_common.plugin_registry import get_plugin_urlpatterns
+from mutint_common.preferences import preferences
 
 
 def get_core_urlpatterns():
@@ -51,6 +52,9 @@ def get_core_urlpatterns():
         re_path(r'^mutation-table/', include('mutint_sample.table_urls')),
         re_path(r'^search/', include('mutint_search.urls')),
         re_path(r'^stats/', include('mutint_stats.urls')),
+        # What a page remembers about one person -- see mutint_common/preferences.py. Here
+        # rather than under an app because the store is any component's to write to.
+        re_path(r'^preferences/$', preferences, name='preferences'),
     ]
 
     urlpatterns += get_plugin_urlpatterns()

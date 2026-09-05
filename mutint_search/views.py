@@ -1,23 +1,18 @@
 import time
 
 from django.http import HttpResponse
-from django.utils.safestring import mark_safe
 from django.template import loader
 from django.shortcuts import render
 from mutint_sample.models import MutationCall
 from django.db.models import Q
-import operator, collections
-import mutint_common as common
+import operator
 from functools import reduce
-from mutint_sample.views import mutation_table_builder
+from mutint_sample.mutation_matrix import build_matrix
 from mutint_experiment.utils import get_user_projects, get_strains
-from mutint_sample.util import get_ref_sequences
+from mutint_sample.util import get_ordered_reseq_dict, get_ref_sequences
 from mutint_experiment.ancestor import exclude_all_ancestry
 from mutint_filter.util import filter_mutation_calls
 from mutint_common.util import get_user_context
-from mutint_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
-from django.core.serializers.json import DjangoJSONEncoder
-import json
 
 from mutint_common.logger import user_extra, join_extras
 import logging
@@ -61,24 +56,17 @@ def search(request):
             context.update({'message': message})
             return render(request, 'search/search.html', context)
 
-        hidden_columns = request.GET.get('hidden_columns', "")
         mutation_calls = _get_mutation_calls(search_include_param_list, search_exclude_param_list)
-        reseq_dict = collections.OrderedDict({call.sample.id: call.sample
-                                                  for call in mutation_calls})
+        # Samples from many experiments, so their labels carry the experiment's name, and
+        # there is no one experiment for the matrix to remember a sample selection against.
+        reseq_dict = get_ordered_reseq_dict(mutation_calls)
+        matrix = build_matrix(mutation_calls, reseq_dict, labels="qualified",
+                              csv_title="search_results")
 
-        table_header = mutation_table_builder.get_table_header(request.user, reseq_dict)
-        # call_qryset is already filtered
-        table_body = mutation_table_builder.get_mutation_table_body(request.user,
-                                                                    mutation_calls,
-                                                                    reseq_dict)
-
-        context.update({"table_body": mark_safe(json.dumps(table_body, cls=DjangoJSONEncoder)),
+        context.update({"matrix": matrix,
                         "title": "Search Results",
-                        "table_header": mark_safe(table_header),
-                        "mutation_count": len(table_body),
+                        "mutation_count": len(matrix.rows),
                         "mutation_call_count": len(mutation_calls),
-                        "tag_dropdown": mutint_common.constants.TAGS,
-                        "refseq_column": REFSEQ_COLUMN_IN_MUT_TABLE,
                         })
         logger.info("search performance", extra=join_extras(
             {"parameters": last_search},

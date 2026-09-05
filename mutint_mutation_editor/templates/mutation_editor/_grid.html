@@ -1,7 +1,7 @@
 {% comment %}
 The whole experiment: mutations down, samples across, one cell per stored call.
 
-Not `mutation_table_builder`'s table, for the reasons `views._grid_for` gives -- its cells are
+Not the mutation matrix, for the reasons `views._grid_for` gives -- its cells are
 links into the genome browser, and it filters. Not `breseq_table/_mutation_table.html` either,
 which is shared between two read-only pages and must not grow a third caller's selection.
 

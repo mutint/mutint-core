@@ -106,39 +106,21 @@ def get_ordered_reseq_queryset(experiment_id, ale_id=None, sample_type=None, *,
     return reseq_qryset
 
 
-def get_reseq_ordered_dict(experiment_id, population=None, sample_type=None, request=None,
+def get_reseq_ordered_dict(experiment_id, population=None, sample_type=None,
                            *, include_ancestor=False):
-    """
-    Args:
-        experiment_id:
-        population:
-        sample_type: population sample
-        include_ancestor: keep the designated ancestor, for a page that curates rather
-            than reads. See `get_ordered_reseq_queryset`, which this wraps.
+    """An experiment's samples as `{id: Sample}`, in the order their columns should appear.
 
-    Returns:
-        reseq_ordered_dict: a ordered dictionary of reseq values and their ID's as keys.
-        The reseq values within the dictionary will be ordered according to that
-        defined within RESEQ_QUERY
-        :param request:
+    `population` and `sample_type` narrow the set; `include_ancestor` keeps the designated
+    ancestor, for a page that curates rather than reads. See `get_ordered_reseq_queryset`,
+    which this wraps.
 
+    It took a `request` too, for a `tag_select` query parameter that showed or hid sample
+    columns by their tags. That control went with the shared table it sat above; the
+    parameter went with it so a caller cannot pass one and believe it filtered.
     """
     reseq_queryset = get_ordered_reseq_queryset(experiment_id, population, sample_type,
                                                 include_ancestor=include_ancestor)
-    if request and request.GET.get('tag_select'):
-        tag = request.GET.get('tag_select').split(':')
-        # icontains, not contains: LIKE folds ASCII case on SQLite and does not on PostgreSQL,
-        # and this value arrives from the query string rather than from the TAGS vocabulary. A
-        # case-sensitive Hide Tag would stop hiding -- showing more rows than asked for, with
-        # nothing to say it had failed.
-        if tag[0] == 'Hide Tag':
-            reseq_queryset = reseq_queryset.exclude(
-                **{paths.to_sample(field="tags__icontains"): tag[1].replace(" ", "")})
-        elif tag[0] == 'Show Tag':
-            reseq_queryset = reseq_queryset.filter(
-                **{paths.to_sample(field="tags__icontains"): tag[1].replace(" ", "")})
-    reseq_ordered_dict = collections.OrderedDict((reseq.id, reseq) for reseq in reseq_queryset)
-    return reseq_ordered_dict
+    return collections.OrderedDict((reseq.id, reseq) for reseq in reseq_queryset)
 
 
 def get_mutations_from_calls(mutation_calls):

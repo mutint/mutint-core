@@ -162,7 +162,7 @@ class GroupGrantTestCase(TestCase):
 class CacheTestCase(TestCase):
     """The per-request role cache, and the generation counter that invalidates it.
 
-    Not an optimisation: `mutation_table_builder` asks `can_add_experiment_filter` once per
+    Not an optimisation: the old cross-sample table asked `can_add_experiment_filter` once per
     sample column and once per mutation row, so a table of 400 mutations over 20 samples asks
     420 times. django-guardian used to absorb that in its own per-user cache.
     """
