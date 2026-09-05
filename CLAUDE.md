@@ -2194,8 +2194,8 @@ samples rather than bytes.
 *yielding*, and progress arrives at `import_progress.report` in a callback several frames below
 `run_import` -- a callback cannot yield. Any generator wrapping the import would queue every
 event and emit the lot once it had already finished, which is the single POST it was meant to
-replace. Streaming would need the import on a worker thread, and that is `WORKERS.md`, not a
-progress bar. So `_SessionProgress` writes a snapshot onto `UploadSession.progress` as it goes
+replace. Streaming would need the import on a worker, which is a different change entirely,
+not a progress bar. So `_SessionProgress` writes a snapshot onto `UploadSession.progress` as it goes
 and `/import/uploads/<id>/progress` serves it. This works with no worker because **every
 progress write lands outside the per-sample `transaction.atomic()` block**, in autocommit, so
 the polling connection sees it at once.
@@ -2307,7 +2307,8 @@ gets logged out.
 **What survives all three is reported, not silent** -- a sample that still cannot be written
 appears in the status table with its error, which is how the original five were found. That is
 the honest ceiling here: everything lives inside one request, so none of it survives a crash or
-a restart. A literal guarantee is durability of the *work item*, which is `WORKERS.md`.
+a restart. A literal guarantee is durability of the *work item*, which means moving the ingest
+onto the queue -- see **What is still on the request path** in the suite `CLAUDE.md`.
 
 **Postgres was considered and is not needed for this.** The 30/30 above is SQLite. What
 Postgres would buy is *simultaneous* imports rather than queued ones -- a throughput question,
@@ -3714,6 +3715,9 @@ twelve-hour breseq run. The delete is taken under `select_for_update(skip_locked
 This section used to claim Daphne, Django Channels, nginx and Redis. **Nothing in
 `requirements.txt` supported any of it** and no compose file in this tree referenced it -- it
 was inherited from the pre-refactor deployment. It then said everything was synchronous
-in-request with no worker at all, which was true until the queue landed. `WORKERS.md` in the
-suite root is the design note this half-discharges: the seam and the first task exist; the
-enqueue-instead-of-call for the *rest* of `run_post_experiment_hooks` does not.
+in-request with no worker at all, which was true until the queue landed. That work is half
+done: the seam and the first task exist, and the enqueue-instead-of-call for the *rest* of
+`run_post_experiment_hooks` does not. **The suite `CLAUDE.md` carries the list of what is
+still on the request path**, which used to live in a `WORKERS.md` at the suite root -- deleted
+once the decisions in it were made and implemented, because a research note whose header is
+four stacked retractions is worse than no note.

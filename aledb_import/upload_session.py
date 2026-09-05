@@ -4,8 +4,9 @@ A folder drop can be tens of GB, which cannot go through one POST. The client de
 manifest, uploads each file in bounded chunks, then asks the server to finalize.
 
 Every *chunk* request stays short. ``finalize_upload`` does not, and saying otherwise is what
-``WORKERS.md`` calls out: the whole ingest runs there, parse and store and coverage and every
-derived-data rebuild. There is still no task queue -- what there is instead is a progress
+worth saying plainly: the whole ingest runs there, parse and store and coverage and every
+derived-data rebuild. There is a queue now, and this has not moved onto it -- what there is
+instead is a progress
 snapshot written as the import goes and served by ``upload_progress``, so a long finalize
 reports itself rather than looking like a hung page.
 
@@ -257,8 +258,8 @@ def finalize_upload(request, upload_id):
     `import_progress.report` five frames below `run_import`, in a callback -- and a callback
     cannot yield. Any generator wrapping `run_import` would queue every event and emit the
     lot after the import had already finished, which is this function's behavior with extra
-    machinery in front of it. Streaming would need the import on a worker thread, and that is
-    `WORKERS.md`, not a progress bar.
+    machinery in front of it. Streaming would need the import on a worker, which is a different
+    change entirely -- see **Background work** in the suite `CLAUDE.md` -- not a progress bar.
     """
     session, error = _open_session(request, upload_id)
     if error:

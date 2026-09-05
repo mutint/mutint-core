@@ -55,9 +55,9 @@ class AledbTestRunner(DiscoverRunner):
 
     # --- store isolation ----------------------------------------------------------------
 
-    #: Tasks run inline under test. This is not the `task_always_eager` posture WORKERS.md
-    #: argues against -- that is about *development* hiding the difference between queued and
-    #: immediate. A test asserting what an import produced should not also have to run a
+    #: Tasks run inline under test. This is not the `task_always_eager` posture that is worth
+    #: arguing against -- that one is about *development* hiding the difference between queued
+    #: and immediate. A test asserting what an import produced should not also have to run a
     #: worker, and the one test that must exercise the real DatabaseBackend overrides this
     #: back (aledb_import/tests/test_tasks.py).
     TASKS = {'default': {'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend'}}

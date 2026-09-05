@@ -11,8 +11,8 @@ later Django to provide.
 So the call sites are Django's standard API and the queue is a settings value:
 `TASKS['default']['BACKEND']` names `django_tasks_db.DatabaseBackend` and its `db_worker`
 management command runs them. Swapping that for Redis, RQ or Celery later is a settings
-change and touches nothing here -- which is the property WORKERS.md wanted and the reason to
-prefer the standard decorator over a vendor's.
+change and touches nothing here -- which is the property this was chosen for, and the reason
+to prefer the standard decorator over a vendor's.
 
 **This is also why PostgreSQL had to come first.** A database-backed queue claims rows with
 `SELECT ... FOR UPDATE SKIP LOCKED`, which SQLite has no equivalent of; one worker on SQLite

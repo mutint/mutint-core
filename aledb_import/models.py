@@ -4,9 +4,11 @@ A breseq folder drop can be tens of GB, which cannot go through a single POST. T
 declares a manifest, uploads each file in chunks, then asks the server to finalize.
 
 That made every *transfer* request short. It did not make finalize short -- it moved the
-entire ingest there, where it is bounded by nothing, which is the case ``WORKERS.md`` records
-as having outgrown this design. There is still no task queue, and the repo has neither Celery
-nor Channels; what a long finalize has instead is ``progress``, a snapshot the Add page polls
+entire ingest there, where it is bounded by nothing. **That is the part of this design that
+has outgrown it**, and it is still on the request path: there is a queue now (see **Background
+work** in the suite ``CLAUDE.md``) and finalize has not moved onto it, because this function's
+delete-the-staging-dir-and-return-a-summary contract *is* the synchronous shape. What a long
+finalize has instead is ``progress``, a snapshot the Add page polls
 so the wait is legible rather than silent.
 """
 
