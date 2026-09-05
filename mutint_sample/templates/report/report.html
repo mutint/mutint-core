@@ -21,18 +21,15 @@
         <a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">&laquo;
            back to this sample's mutations</a>
         &nbsp;|&nbsp;
-        {% comment %} Deliberately offered, and deliberately not the default. Opened on its
-           own the report is a top-level document with no frame around it -- which is safe
-           only because every file response carries the same sandbox as a CSP header, so the
-           browser sandboxes it whether or not anything framed it. See views/report.py.
-
-           Both carry the signed URL, so neither needs the session cookie a sandboxed frame
-           cannot send. `noopener` on both: the new context must not get a handle back to
-           this window. {% endcomment %}
-        <a href="{{ frame_url }}" target="_blank"
+        {% comment %} Both open *this viewer* on the current page, not the bare file. They
+           used to open the file, and a report file loaded as a page of its own is now sent
+           back here by the server anyway -- see views/report.py -- so linking to it directly
+           would only add a redirect. `noopener` on both: the new context must not get a
+           handle back to this window. {% endcomment %}
+        <a href="{{ viewer_url }}" target="_blank"
            rel="noopener noreferrer">open in new tab</a>
         &nbsp;|&nbsp;
-        <a href="{{ frame_url }}" id="report-open-window"
+        <a href="{{ viewer_url }}" id="report-open-window"
            rel="noopener noreferrer">open in new window</a>
     </span>
 </div>
@@ -63,6 +60,14 @@
     // different amount on every deployment.
     var frame = document.getElementById("breseq-report");
     var anchor = document.getElementById("report-anchor");
+
+    // The fragment names the evidence page (`evidence.html#RA_123.html`), and it arrives on
+    // *this* URL when the server sends one of breseq's own `target="_top"` links back into
+    // the viewer -- browsers carry the fragment across a redirect. The frame is what needs
+    // it, so it is handed on before the frame's first load completes.
+    if (window.location.hash) {
+        frame.src = frame.getAttribute("src").split("#")[0] + window.location.hash;
+    }
 
     function place() {
         var box = anchor.getBoundingClientRect();

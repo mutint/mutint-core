@@ -30,6 +30,15 @@ Why each flag is in that string:
   ``<base target="_top">``, so their cross-links navigate the top window. Without this every
   link inside an evidence page silently does nothing. *By user activation* is the point: a
   click works, a script redirecting the page on its own does not.
+
+  **And that flag is why a raw file asked for as a top-level document is sent back to the
+  viewer.** ``_top`` inside our frame is MutInt's own window, so a click on *summary* from an
+  evidence page replaced the whole page with the bare `summary.html`, chrome gone, sandboxed
+  but stranded. The browser says which it is asking for -- ``Sec-Fetch-Dest: document`` for a
+  navigation, ``iframe`` for the frame's own loads -- so `report_file` answers a top-level
+  request for an ``.html`` with a redirect to ``report/<id>/?page=<that file>``, and the browser
+  carries the ``#RA_123.html`` fragment across the redirect for the viewer to hand back to the
+  frame. Downloads are navigations too, which is why only ``.html`` is redirected.
 - ``allow-downloads`` -- ``output.gd`` and ``log.txt`` are linked from the report and are worth
   being able to save.
 
@@ -43,9 +52,10 @@ withholds the cookie. See `sign_sample`.
 
 import logging
 import os
+from urllib.parse import quote
 
 from django.core import signing
-from django.http import Http404
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import render
 
 from mutint_common import store
@@ -119,6 +129,32 @@ REPORT_PAGES = (
 )
 
 
+def _contained_html(sample, page):
+    """`page` if it names an `.html` inside this sample's report, else None.
+
+    The viewer takes any page of the report, not only the three the bar offers, because the
+    redirect below sends it whatever breseq's own links pointed at -- `evidence.html`, or an
+    `evidence/RA_12.html` from an older report. The same containment `report_file` applies:
+    the real path has to land inside the report directory.
+    """
+    if not page or not page.lower().endswith(".html"):
+        return None
+    root = os.path.realpath(store.sample_report_dir(sample.pk))
+    candidate = os.path.realpath(os.path.join(root, page))
+    if not candidate.startswith(root + os.sep) or not os.path.isfile(candidate):
+        return None
+    return os.path.relpath(candidate, root)
+
+
+def _is_top_level_navigation(request):
+    """Whether the browser is loading this as the page itself rather than into a frame.
+
+    `Sec-Fetch-Dest` is `document` for a top-level navigation and `iframe` for a frame's load;
+    a browser too old to send it is served the file as before, sandboxed by the header.
+    """
+    return request.headers.get("Sec-Fetch-Dest", "").lower() == "document"
+
+
 def _sample_or_404(request, sample_id):
     """The sample, if this reader may see it and it has a report.
 
@@ -143,11 +179,9 @@ def report(request, sample_id):
     sample = _sample_or_404(request, sample_id)
     experiment = sample.population.experiment
 
-    page = request.GET.get("page") or "index.html"
-    if page not in dict(REPORT_PAGES):
-        # Only the pages the bar offers. A free-form `?page=` would be a second, looser way
-        # into the same files than the contained route below, which is the one that is tested.
-        page = "index.html"
+    # Any .html the report holds, contained to its directory; anything else is the index. The
+    # bar marks only its own three, so an evidence page shows with nothing bold.
+    page = _contained_html(sample, request.GET.get("page")) or "index.html"
 
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
@@ -164,6 +198,8 @@ def report(request, sample_id):
         # query string would be lost the moment the report linked to anything.
         "frame_url": "/mutations/report/%d/files/%s/%s" % (
             sample.pk, sign_sample(sample.pk), page),
+        # What "open in new tab" opens: this viewer, on this page, rather than the bare file.
+        "viewer_url": "/mutations/report/%d/?page=%s" % (sample.pk, quote(page)),
         "sandbox_flags": SANDBOX_FLAGS,
     })
     return render(request, "report/report.html", context)
@@ -194,6 +230,14 @@ def report_file(request, sample_id, token, path):
     candidate = os.path.realpath(os.path.join(root, path))
     if candidate != root and not candidate.startswith(root + os.sep):
         raise Http404("No such file.")
+
+    # A page of the report navigated to as the page itself -- one of breseq's `target="_top"`
+    # links, or a pasted URL -- goes back into the viewer, which frames it. See the module
+    # docstring. The fragment, which names the evidence page, survives the redirect in the
+    # browser. Only .html: a click on `output.gd` is a navigation too, and it wants the file.
+    if candidate.lower().endswith(".html") and _is_top_level_navigation(request):
+        return HttpResponseRedirect("/mutations/report/%d/?page=%s" % (
+            sample.pk, quote(os.path.relpath(candidate, root))))
 
     return serve_file(request, candidate, os.path.basename(candidate),
                       headers=REPORT_HEADERS)

@@ -66,8 +66,8 @@ class ReportTestCase(TestCase):
             token = report_views.sign_sample(sample.pk)
         return "/mutations/report/%d/files/%s/%s" % (sample.pk, token, path)
 
-    def _files(self, path, **kwargs):
-        return self.client.get(self._url(path, **kwargs))
+    def _files(self, path, sample=None, token=None, **headers):
+        return self.client.get(self._url(path, sample=sample, token=token), **headers)
 
     # --- the sandbox -----------------------------------------------------------------------
 
@@ -113,6 +113,60 @@ class ReportTestCase(TestCase):
         # what stops a script redirecting the page on its own.
         self.assertIn("allow-top-navigation-by-user-activation", report_views.SANDBOX_FLAGS)
         self.assertNotIn("allow-top-navigation ", " %s " % report_views.SANDBOX_FLAGS)
+
+    # --- staying inside the viewer -------------------------------------------------------
+
+    def test_a_page_navigated_to_as_the_document_goes_back_into_the_viewer(self):
+        """`_top` inside our frame is MutInt's window.
+
+        So a click on *summary* from an evidence page replaced the whole page with the bare
+        file. The browser says what it is loading, and a top-level navigation to a page of
+        the report is answered with the viewer on that page.
+        """
+        response = self._files("summary.html", HTTP_SEC_FETCH_DEST="document")
+        self.assertEqual(302, response.status_code)
+        self.assertEqual("/mutations/report/%d/?page=summary.html" % self.sample.pk,
+                         response["Location"])
+
+    def test_the_frames_own_loads_are_served(self):
+        response = self._files("summary.html", HTTP_SEC_FETCH_DEST="iframe")
+        self.assertEqual(200, response.status_code)
+        self.assertIn("summary statistics", b"".join(response.streaming_content).decode())
+
+    def test_a_browser_that_says_nothing_is_served(self):
+        # Too old for Sec-Fetch-Dest: it gets the file, sandboxed by the header as before.
+        self.assertEqual(200, self._files("summary.html").status_code)
+
+    def test_a_download_is_not_redirected(self):
+        # A click on output.gd or log.txt is a top-level navigation too, and it wants the file.
+        self._write_report(extra=[("output.gd", "#=GENOME_DIFF 1.0")])
+        for path in ("output.gd", "log.txt"):
+            response = self._files(path, HTTP_SEC_FETCH_DEST="document")
+            self.assertEqual(200, response.status_code, path)
+
+    def test_a_nested_evidence_page_redirects_to_its_own_path(self):
+        self._write_report(extra=[("evidence/RA_12.html", "<html>pileup</html>")])
+        response = self._files("evidence/RA_12.html", HTTP_SEC_FETCH_DEST="document")
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response["Location"].endswith("?page=evidence/RA_12.html"))
+
+    def test_the_viewer_frames_any_page_the_report_holds(self):
+        # evidence.html is where the redirect lands most often; the fragment that names the
+        # actual evidence page never reaches the server, so the client-side script hands it on.
+        response = self.client.get("/mutations/report/%d/?page=evidence.html" % self.sample.pk)
+        rendered = response.content.decode()
+        self.assertIn("/evidence.html\"", rendered)
+        self.assertIn("window.location.hash", rendered)
+
+    def test_the_viewer_refuses_a_page_the_report_does_not_hold(self):
+        response = self.client.get("/mutations/report/%d/?page=missing.html" % self.sample.pk)
+        self.assertIn("/index.html\"", response.content.decode())
+
+    def test_open_in_new_tab_opens_the_viewer_not_the_file(self):
+        response = self.client.get("/mutations/report/%d/?page=summary.html" % self.sample.pk)
+        rendered = response.content.decode()
+        self.assertIn('href="/mutations/report/%d/?page=summary.html" target="_blank"'
+                      % self.sample.pk, rendered)
 
     def test_every_file_is_sniff_proofed(self):
         for path in ("index.html", "log.txt"):

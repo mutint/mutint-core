@@ -31,6 +31,10 @@ tab — useful for a wide table, or for printing.
 
 ## A note on how it is shown
 
+Every link in the report keeps you inside MutInt: following one of breseq's own links, into
+the evidence behind a call or across to its summary, reloads this page with that part of the
+report framed. **Open in new tab** does the same in a new tab.
+
 The report is displayed in a sandboxed frame. That is not cosmetic: breseq builds those pages
 out of things that came from your data — sample names, read filenames, gene names out of the
 reference — and MutInt treats any of it as untrusted. The sandbox means the report can draw

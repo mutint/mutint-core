@@ -3268,6 +3268,19 @@ which never reaches the server -- so one route serves the whole evidence tree, a
   nothing. *By user activation* is what still refuses a script redirecting the page on its own.
 - `allow-downloads` -- `output.gd` and `log.txt` are linked from the report.
 
+**A report page loaded as the document goes back into the viewer.** `_top` inside our frame is
+MutInt's own window, so with that flag a click on *summary* or *marginal predictions* from an
+evidence page replaced the whole MutInt page with the bare file -- sandboxed, but with the
+chrome gone, which read as the report "breaking out of the frame". The browser says what it is
+loading: `Sec-Fetch-Dest: document` for a navigation, `iframe` for the frame's own loads. So
+`report_file` answers a top-level request for an `.html` with a redirect to
+`report/<id>/?page=<that file>`, the viewer now frames any `.html` the report holds (contained
+to its directory, not only the bar's three), and the `#RA_123.html` fragment -- which never
+reaches the server -- rides across the redirect in the browser and is handed to the frame by
+the viewer's script. Only `.html` is redirected, because a click on `output.gd` is a navigation
+too and wants the file. "Open in new tab" opens the viewer for the same reason. A browser too
+old to send `Sec-Fetch-Dest` gets the file as before.
+
 `serve_file` grew a `headers=` argument for this rather than the view patching the response
 afterwards: it has three exit points, and a caller doing it by hand would eventually miss the
 range branch -- which for a security header is the whole of the failure.
