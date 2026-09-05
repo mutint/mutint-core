@@ -11,7 +11,7 @@
  *
  * `{toggle: true}` swaps the plain click for the ctrl/cmd one, so every click toggles the row
  * it lands on and shift-click adds a range rather than replacing the selection. That is the
- * behaviour of a list of checkboxes, and it suits a list whose rows are independent of each
+ * behavior of a list of checkboxes, and it suits a list whose rows are independent of each
  * other -- the genome browser's sample menu, where each row is a BAM that is either loaded or
  * not, and where "select only this one" silently unloads everything else. The default stays
  * select-only for the lists that are choosing *a* set rather than ticking members of one.

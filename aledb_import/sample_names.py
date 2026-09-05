@@ -5,7 +5,7 @@ question of one string: does this name carry an ALE, a time point and an isolate
 which. `gd_import.import_document_as_sample` asks it here so a `.gd` file and the breseq
 directory of the same sample cannot answer differently.
 
-Two shapes are recognised, and a name matching neither is auto-numbered by the caller.
+Two shapes are recognized, and a name matching neither is auto-numbered by the caller.
 
 **A-F-I-R**, four integers separated by dashes -- `3-30000-1-1` is ALE 3, flask 30000,
 sample `1-1`. Still strict: all four fields must be integers, so `Ara-1_500gen_762B` cannot
@@ -25,7 +25,7 @@ aledb-fixation sorts by it and takes an ALE's last two flasks. So its **trailing
 stripped**: `500gen` is 500, and a field with no leading digits (`t0`) is not a time point,
 so the whole name falls through to auto-numbering rather than being half-read.
 
-Deliberately not recognised:
+Deliberately not recognized:
 
 - **Two fields, or four.** Three is what makes the reading unambiguous -- with two there is
   no telling whether `Ara-2_500gen` omits the isolate or the ALE, and four would have to
@@ -84,7 +84,7 @@ def _parse_afir(sample_name):
 
 
 def _parse_underscore_triple(sample_name):
-    """`Ara-2_500gen_763A`. See the module docstring for what is and is not recognised."""
+    """`Ara-2_500gen_763A`. See the module docstring for what is and is not recognized."""
     fields = sample_name.split("_")
     if len(fields) != 3:
         return None

@@ -12,7 +12,7 @@ dependency with nothing to say about whether it survives a framework upgrade. Wh
 us is the twenty lines below, so keeping it meant carrying an unmaintained package across a
 Django major bump to avoid writing them.
 
-Two behaviours are deliberately preserved rather than tidied, because callers depend on both:
+Two behaviors are deliberately preserved rather than tidied, because callers depend on both:
 
 - **The `X-Requested-With` header is mandatory.** Without it the answer is a bare 400 rather
   than an envelope -- `@ajax(mandatory=True)` was the default and every caller is jQuery's
@@ -82,7 +82,7 @@ def ajax(view):
 
 
 class _Encoder(json.JSONEncoder):
-    """Falls back to `str()`, so a view returning a model or a Decimal still serialises."""
+    """Falls back to `str()`, so a view returning a model or a Decimal still serializes."""
 
     def default(self, obj):
         return str(obj)

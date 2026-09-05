@@ -57,7 +57,7 @@ from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
 Removing one column from that table once shifted every other column left by one. Everything
 in `table_template.js` is expressed relative to that constant, and the plugins that import it
 followed for free; one that had hardcoded an index would have broken silently, rendering a
-table labelled one way and sorted another.
+table labeled one way and sorted another.
 
 ## `table_template.js` is a Django template
 
@@ -66,7 +66,7 @@ by name rather than written out.
 
 !!! danger "A `//` comment is not a template comment"
 
-    The template engine does not recognise JavaScript comments. Anything tag-shaped inside
+    The template engine does not recognize JavaScript comments. Anything tag-shaped inside
     one is still parsed and executed — writing a tag name in a `//` line runs it. The file
     describes its tags in prose rather than spelling them out, for exactly this reason.
 

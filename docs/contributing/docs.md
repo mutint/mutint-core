@@ -74,7 +74,7 @@ environment.
 
 **Neither catches prose going out of date.** They catch a registry or a hook appearing with no
 mention at all, which is the failure that actually happens; a guide describing last year's
-behaviour will pass. If you change how something works, search `docs/` for its name.
+behavior will pass. If you change how something works, search `docs/` for its name.
 
 ## Versioning
 

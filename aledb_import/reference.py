@@ -235,7 +235,7 @@ def detect_format(path, original_name=None):
     if kind in _KIND_TO_FORMAT:
         return _KIND_TO_FORMAT[kind]
     raise ReferenceFormatError(
-        "%s is not recognisable as GenBank, GFF3, or FASTA: its first line begins none of "
+        "%s is not recognizable as GenBank, GFF3, or FASTA: its first line begins none of "
         "them (a GenBank starts LOCUS, a GFF3 ##gff-version, a FASTA >)." % (display_name,))
 
 

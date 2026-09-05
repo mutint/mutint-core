@@ -8,7 +8,7 @@ the backend that production uses. So this module overrides that back and drives
 runs it.
 
 The failure this guards against is quiet in a specific way. If the enqueue is wrong -- a bad
-signature, an argument that will not serialise, a backend that is not installed -- an import
+signature, an argument that will not serialize, a backend that is not installed -- an import
 still succeeds, because coverage was always best-effort. What you get is every sample
 silently arriving without a BigWig.
 """
@@ -55,7 +55,7 @@ class DatabaseBackendTestCase(TestCase):
                          [row.args_kwargs["args"], row.args_kwargs["kwargs"]])
 
     def test_the_pk_is_what_travels(self):
-        """Task arguments are serialised to JSON, so a model instance cannot make the trip.
+        """Task arguments are serialized to JSON, so a model instance cannot make the trip.
         Passing one fails at enqueue -- loudly here, and invisibly in an import, where the
         exception would be swallowed along with the rest of coverage's best-effort contract.
         """

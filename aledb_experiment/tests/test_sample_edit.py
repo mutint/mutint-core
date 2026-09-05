@@ -572,7 +572,7 @@ class ExistingDuplicateNamesTestCase(SampleEditTestCase):
         self.assertEqual("distinct", self.first.source_name)
 
 
-class TimePointLabellingTestCase(SampleEditTestCase):
+class TimePointLabelingTestCase(SampleEditTestCase):
     """`Sample.time_point` is the column, and "Time point" is what the pages call it.
 
     It is the only ordinal in the schema placing a sample along an ALE -- fixation sorts by

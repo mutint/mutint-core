@@ -187,7 +187,7 @@ def _build_feature(row, promote_gene_rows=False):
     feature = Feature(feature_type, product=product)
 
     if feature.is_repeat():
-        # breseq has already normalised the family name by the time it writes
+        # breseq has already normalized the family name by the time it writes
         # GFF3, but a third-party file may not have.
         feature.name = trim_repeat_name(name) if name else DEFAULT_REPEAT_NAME
         feature.product = product or DEFAULT_REPEAT_PRODUCT

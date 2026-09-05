@@ -34,7 +34,7 @@ Two things in here are load-bearing and invisible at the call site:
 
 `next_page='/'` is kept exactly as both apps had it. It is also why `LOGIN_REDIRECT_URL` and
 `LOGOUT_REDIRECT_URL` in `base_settings.py` are inert: a `next_page` on the view wins over
-both. Changing that is a behaviour change and not this module's business.
+both. Changing that is a behavior change and not this module's business.
 """
 
 from django.contrib.auth import views as auth_views

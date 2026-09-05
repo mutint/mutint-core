@@ -54,7 +54,7 @@ class LockErrorRecognitionTestCase(TestCase):
     """What counts as contention. Deliberately narrow: a malformed file fails the same way
     every time, and retrying it five times turns a clear message into a slow one."""
 
-    def test_contention_sqlstates_are_recognised(self):
+    def test_contention_sqlstates_are_recognized(self):
         for code in ("40001",     # serialization_failure
                      "40P01",     # deadlock_detected
                      "55P03"):    # lock_not_available
@@ -72,7 +72,7 @@ class LockErrorRecognitionTestCase(TestCase):
     def test_the_message_is_not_what_is_matched(self):
         """The trap this module walked into once and must not again.
 
-        Matching wording worked on SQLite and recognised *nothing* on PostgreSQL, so the
+        Matching wording worked on SQLite and recognized *nothing* on PostgreSQL, so the
         retry read as live protection while doing nothing. Matching PostgreSQL's wording
         instead would be the same bug one step on: the server translates messages according
         to `lc_messages`, so a phrase match passes here and fails on a deployment running in
@@ -80,7 +80,7 @@ class LockErrorRecognitionTestCase(TestCase):
         """
         self.assertFalse(
             retry.is_lock_error(OperationalError("deadlock detected")),
-            "recognised on the strength of its text, which does not survive lc_messages")
+            "recognized on the strength of its text, which does not survive lc_messages")
 
     def test_a_real_error_is_raised_at_once(self):
         attempts = []

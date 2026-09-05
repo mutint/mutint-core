@@ -25,10 +25,10 @@ from aledb_common.util import get_gene_list
 from aledb_experiment.ordering import sample_order
 from aledb_sample.functional_change import UNANNOTATED, functional_change_bucket
 
-#: Colour per functional-change bucket, reusing `functional_change`'s vocabulary rather than
+#: Color per functional-change bucket, reusing `functional_change`'s vocabulary rather than
 #: keeping a second opinion about severity. In that list's order, which *is* the severity
 #: hierarchy, so the palette darkens with consequence rather than by chance.
-BUCKET_COLOURS = {
+BUCKET_COLORS = {
     "nonsense": "rgb(165, 15, 21)",
     "nonsynonymous": "rgb(222, 45, 38)",
     "synonymous": "rgb(49, 130, 189)",
@@ -50,7 +50,7 @@ SAMPLE_TRACK_ID = "aledb-mutations-by-sample"
 #: Every `seg` feature is drawn with the same value, so the track marks **presence, not
 #: magnitude**, and the frequency rides along for igv's popup instead.
 #:
-#: This was going to encode frequency as colour, and three browser probes said not to. igv's
+#: This was going to encode frequency as color, and three browser probes said not to. igv's
 #: seg scale is diverging around zero and was built for log2 copy ratios: handed raw
 #: frequencies in [0, 1] it paints 5% and 100% the identical blue. Mapping them into [0.35,
 #: 1.5] to spread them out then rendered *lighter* as frequency rose, while a symmetric
@@ -58,7 +58,7 @@ SAMPLE_TRACK_ID = "aledb-mutations-by-sample"
 #: track autoscales to whatever range it was given.
 #:
 #: That is the disqualifying property, rather than any particular direction being wrong: a
-#: colour that depends on the rest of the track means the same frequency looks different on
+#: color that depends on the rest of the track means the same frequency looks different on
 #: two experiments' pages, and nobody can learn to read it. A uniform mark that says "called
 #: here, in this sample" is a smaller claim and a true one.
 SEG_PRESENT = -1.0
@@ -72,7 +72,7 @@ SEG_PRESENT = -1.0
 #: A switch rather than a deletion, because what was decided is that the track does not earn
 #: its place, not that it is wrong: `sample_features` is unchanged and still tested directly,
 #: so turning this back on restores a working track rather than resurrecting rotted code.
-#: `browse.html`'s `showSampleNames` is the other half of it -- seg rows draw unlabelled
+#: `browse.html`'s `showSampleNames` is the other half of it -- seg rows draw unlabeled
 #: without it -- and is kept for the same reason.
 DRAW_SAMPLE_TRACK = False
 
@@ -161,7 +161,7 @@ def mutation_features(experiment_id, contig=None):
             "start": start,
             "end": end,
             "name": _label(mutation_type, sequence_change, gene),
-            "color": BUCKET_COLOURS.get(bucket, BUCKET_COLOURS[UNANNOTATED]),
+            "color": BUCKET_COLORS.get(bucket, BUCKET_COLORS[UNANNOTATED]),
             # Read back by the page to link a clicked feature at the mutation editor and the
             # NCBI view, which both address a mutation by primary key.
             "mutationId": pk,
@@ -175,14 +175,14 @@ def sample_features(experiment_id, contig=None):
     """Which samples carry which mutation, as igv `seg` features -- one row per sample.
 
     `seg` is igv's sample-row track: it keys rows on `sample`, which is what lays an
-    experiment out as mutations across samples on a genome axis. The colour says only
+    experiment out as mutations across samples on a genome axis. The color says only
     "present"; see `SEG_PRESENT` for why the frequency is not in it.
 
     **Ancestor-subtracted**, through `get_evolved_call_queryset`. An ancestral mutation
     is in every sample by construction, so drawing it would paint a band across the whole track
     that says nothing about what evolved -- the same reason convergence and fixation subtract.
 
-    Rows are labelled and ordered by `get_ordered_reseq_queryset`, the same helper every
+    Rows are labeled and ordered by `get_ordered_reseq_queryset`, the same helper every
     sample listing uses, so the track reads in the order of the tables beside it and calls
     each sample what they call it.
 
@@ -219,8 +219,8 @@ def sample_features(experiment_id, contig=None):
             "start": start,
             "end": end,
             "value": SEG_PRESENT,
-            # Not encoded in the colour -- see SEG_PRESENT -- but carried so igv's popup can
-            # show the number, which is exact where a colour would only be suggestive.
+            # Not encoded in the color -- see SEG_PRESENT -- but carried so igv's popup can
+            # show the number, which is exact where a color would only be suggestive.
             "frequency": None if frequency is None else float(frequency),
             "sample": labels[sample_id],
         })

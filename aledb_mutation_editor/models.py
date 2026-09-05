@@ -28,7 +28,7 @@ KIND_DELETE = "delete"
 KIND_COPY = "copy"
 KIND_ADD = "add"
 KIND_RESTORE = "restore"
-#: A mutation's own fields changed, everywhere it was observed. The *edit set* is labelled
+#: A mutation's own fields changed, everywhere it was observed. The *edit set* is labeled
 #: this; its rows are still OP_REMOVE and OP_ADD, because that is what happened to every
 #: call -- each one moved from the old identity to the new. Nothing in `state_after`,
 #: `plan_restore` or `restore` needed to learn about it.

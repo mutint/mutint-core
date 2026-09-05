@@ -5,12 +5,12 @@ experiment -- each joined across six tables, instantiated as a model, carrying t
 and a gene column of up to 19 000 characters -- to arrive at about sixteen integers. They are
 computed where the rows already are now, and nothing is stored.
 
-**Every count is pinned literally**, including where the behaviour is surprising:
+**Every count is pinned literally**, including where the behavior is surprising:
 
   * a mutation_type outside MUTATION_TYPE_LIST is dropped, not bucketed as unannotated -- so
     the *type* sums are less than the mutation count;
   * a functional change is one bucket per mutation, resolved by severity from breseq's
-    `snp_type`, and an unrecognised value *is* bucketed, as unannotated -- so the
+    `snp_type`, and an unrecognized value *is* bucketed, as unannotated -- so the
     *functional-change* sums equal the mutation count exactly. The two sets of counts on this
     page therefore have different totals, deliberately, and that used to be true for the
     opposite reason: a mutation was counted under every token its `protein_change` contained,
@@ -149,7 +149,7 @@ class SummaryTestCase(TestCase):
         """**The Overview shows what the experiment holds.**
 
         Its counts went through the shared experiment filter until filtering became a
-        per-reader affair, and this page was left out of that -- it summarises a dataset the
+        per-reader affair, and this page was left out of that -- it summarizes a dataset the
         way the dashboard does rather than showing rows you read through. Several tests stood
         here pinning that a frequency cutoff and an ignored-gene list reached these counts.
         """
@@ -257,7 +257,7 @@ class SummaryTestCase(TestCase):
     def test_it_reflects_an_edit_with_nothing_to_invalidate(self):
         """The counts were stored and rebuilt through the 'overview' rebuilder, so a new
         call showed up only once something marked them stale. Computed, there is no
-        such window -- which is the behaviour that replaced the rebuilder."""
+        such window -- which is the behavior that replaced the rebuilder."""
         from aledb_stats.util import get_experiment_summary
 
         self.assertEqual(0, get_experiment_summary(

@@ -2,7 +2,7 @@
 The per-sample breseq report page.
 
 What is worth asserting is that the stored annotation round-trips back into
-breseq's own markup -- the colouring, the arrows, the underlined codon base --
+breseq's own markup -- the coloring, the arrows, the underlined codon base --
 because that is the whole reason the page exists rather than being another
 rendering of the cross-sample table.
 """
@@ -102,7 +102,7 @@ class BreseqTablePageTestCase(TestCase):
 
     # --- breseq's markup ------------------------------------------------------
 
-    def test_a_nonsense_snp_is_coloured_by_effect(self):
+    def test_a_nonsense_snp_is_colored_by_effect(self):
         self.assertIn("snp_type_nonsense", self.content())
 
     def test_the_changed_base_in_a_codon_is_marked(self):

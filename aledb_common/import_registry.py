@@ -57,7 +57,7 @@ def register_import_handler(name, label, patterns, handle,
     name        stable slug; the value the Add page's dropdown submits
     label       human-readable, shown in the dropdown
     patterns    lowercase path suffixes this handler claims (e.g. '.gbk',
-                'data/reference.bam'). Serialised to the client so it can bucket a
+                'data/reference.bam'). Serialized to the client so it can bucket a
                 drop before uploading, and used as the default `detect`.
     handle      callable(experiment, staged_root, paths, user) -> summary dict with
                 keys 'files' (list of {file, mutations, error, warnings}) and
@@ -110,7 +110,7 @@ def register_import_handler(name, label, patterns, handle,
 
                 Only the dropdown is sorted by it. `get_import_types()` stays in
                 priority order, because the Add page walks *that* list to name what an
-                unrecognised file looks like and wants the handler that would really
+                unrecognized file looks like and wants the handler that would really
                 claim it named first.
     directories directory names whose whole contents this handler claims, wherever they
                 appear in the drop.
@@ -164,7 +164,7 @@ def get_import_handler(name):
 def get_import_types_for(has_reference):
     """The dropdown's contents for one experiment: only the types that can run now.
 
-    A type that cannot run yet is left out rather than shown greyed. A dropdown entry
+    A type that cannot run yet is left out rather than shown grayed. A dropdown entry
     you can see but not choose is a dead end -- the page's own banner is where the
     answer ("get a reference in first") belongs, and it says so whether or not the
     entry is there to point at. Computed here rather than in the template so the
@@ -202,7 +202,7 @@ def get_import_types():
 def identify(path, exclude=None):
     """The registered type whose patterns claim `path`, or None if none do.
 
-    Turns "not recognised as Reference genome" into a sentence that says what to do about
+    Turns "not recognized as Reference genome" into a sentence that says what to do about
     it. The answer is in the registry either way, so a plugin's type names itself here with
     no edit to this module -- and a type that has an entry in the dropdown for exactly this
     file is a better thing to point at than a list of extensions.
@@ -268,20 +268,20 @@ def _unclaimed_reason(path, import_type):
         # Auto-detect: every handler already had its chance, so there is no other type to
         # point at. Reached only when a handler's own `detect` declined what its patterns
         # would have matched.
-        return "not recognised by any import type"
+        return "not recognized by any import type"
 
     chosen = get_import_handler(import_type)
     elsewhere = identify(path, exclude=import_type)
     if elsewhere is not None:
-        return ("not recognised as %s -- it looks like %s, so import it with that type"
+        return ("not recognized as %s -- it looks like %s, so import it with that type"
                 % (chosen["label"], elsewhere["label"]))
-    return "not recognised as %s" % (chosen["label"],)
+    return "not recognized as %s" % (chosen["label"],)
 
 
 def run_import(experiment, staged_root, user, import_type=None, options=None):
     """Route a staged drop through the registered handlers.
 
-    ``import_type`` None means auto-detect: every handler claims what it recognises and the
+    ``import_type`` None means auto-detect: every handler claims what it recognizes and the
     matched ones run in priority order. Naming a type forces that single handler, and anything
     it does not claim is reported as an error rather than quietly routed elsewhere -- that is
     the point of choosing explicitly.

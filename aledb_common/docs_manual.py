@@ -11,7 +11,7 @@ registry here either -- a component contributes by having a `docs/` directory an
 `mkdocs.yml`, and an uninstalled submodule contributes nothing because its apps are not
 installed.
 
-**The manual is organised by audience, not by component.** A reader arrives knowing whether
+**The manual is organized by audience, not by component.** A reader arrives knowing whether
 they want to use ALEdb or extend it, and rarely wants "everything aledb-fixation has to say".
 So a component files its pages under one of the headings below, in its own nav, and the
 collector merges each heading across every component.
@@ -27,7 +27,7 @@ import shutil
 USING = "Using ALEdb"
 EXTENDING = "Extending ALEdb"
 #: Where a component's own story goes -- and the fallback for anything filed under a heading
-#: this module does not recognise. Unrecognised is not an error: a component that has not
+#: this module does not recognize. Unrecognized is not an error: a component that has not
 #: thought about audience still builds, and its pages appear under its own name here rather
 #: than being dropped.
 DEPLOYMENT = "About this deployment"
@@ -142,7 +142,7 @@ def merge_navs(project_config, components):
                 buckets[title].extend(
                     prefix_paths(children, prefix) if prefix else children)
             else:
-                # Not filed under a recognised audience. It goes under the deployment
+                # Not filed under a recognized audience. It goes under the deployment
                 # section, named for whoever contributed it, rather than being dropped.
                 moved = prefix_paths(item, prefix) if prefix else item
                 buckets[DEPLOYMENT].append({label: [moved]} if prefix else moved)

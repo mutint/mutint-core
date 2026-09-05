@@ -99,7 +99,7 @@ subtraction. The one page that genuinely does not subtract passes
 `{% view_filter_summary ancestor_subtracted=False %}`, and it is the per-sample breseq table,
 which tints those rows red instead of hiding them.
 
-## Filter *before* you analyse, not after
+## Filter *before* you analyze, not after
 
 If your plugin derives something — what has fixated, what has converged — **the filter has to
 reach the derivation.** Fixation asks what is present in both of an ALE's last two time

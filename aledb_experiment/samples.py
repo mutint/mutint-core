@@ -132,7 +132,7 @@ def resolve_population(experiment, coordinate, *, species="", strain=""):
 
     One difference from `gd_import._get_or_create_chain` remains, and it is a correction
     rather than a preference: **Population copies species/strain but not description.** The
-    first two are facts about the experiment's organism and hold across ALEs; a description
+    first two are facts about the experiment's organizm and hold across ALEs; a description
     is what makes *this* ALE different from the others, so copying it onto a new one would
     be a lie.
     """
@@ -309,7 +309,7 @@ def parse_rows(rows, samples_by_id):
         parsed.append((reseq, coordinate, descriptive))
 
     if errors:
-        raise SampleEditError(_summarise(errors, samples_by_id), errors)
+        raise SampleEditError(_summarize(errors, samples_by_id), errors)
     _check_names(parsed, samples_by_id)
     return parsed
 
@@ -343,7 +343,7 @@ def _check_names(parsed, samples_by_id):
                 'A sample named "%s" already exists in this experiment.' % name)
         taken[name] = str(reseq.pk)
     if errors:
-        raise SampleEditError(_summarise(errors, samples_by_id), errors)
+        raise SampleEditError(_summarize(errors, samples_by_id), errors)
 
 
 def plan_moves(parsed, samples_by_id):
@@ -389,13 +389,13 @@ def plan_moves(parsed, samples_by_id):
                 'one first, or give this one a different label.'
                 % (label, occupant.source_name or occupant.pk))
     if errors:
-        raise SampleEditError(_summarise(errors, samples_by_id), errors)
+        raise SampleEditError(_summarize(errors, samples_by_id), errors)
 
     return [(reseq, coordinate, descriptive)
             for reseq, coordinate, descriptive in parsed]
 
 
-def _summarise(errors, samples_by_id):
+def _summarize(errors, samples_by_id):
     """One string that stands on its own.
 
     The page also gets `errors` keyed by sample id so it can outline the inputs, but the
@@ -479,7 +479,7 @@ def apply_rows(experiment, parsed):
         always = ["is_clonal"]
 
         if current != coordinate:
-            # A renumber re-labels a sample; it does not move it to a different organism.
+            # A renumber re-labels a sample; it does not move it to a different organizm.
             # Inheriting species/strain is the only answer that does not silently reset real
             # data. (There was a medium and a freezer box here too, both required FKs to
             # rows nothing displayed, and both are gone.)

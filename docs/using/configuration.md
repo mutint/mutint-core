@@ -52,7 +52,7 @@ it touches is on the list — ignoring one gene of two ignores nothing.
     filters like any other, because there is nothing here to protect.
 
     It used to be the opposite, and the change is worth knowing if you remember the old
-    behaviour: there was one row per experiment, editable by anyone with write access, so a
+    behavior: there was one row per experiment, editable by anyone with write access, so a
     cutoff one person set was a cutoff everyone saw, silently. That conflated *curating a
     dataset* — which is the mutation editor's job, and is attributed and reversible — with
     *choosing what you want to look at*, which is nobody else's business.

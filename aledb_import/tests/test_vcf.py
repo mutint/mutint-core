@@ -1,4 +1,4 @@
-"""Normalising a VCF variant, and what it is then called.
+"""Normalizing a VCF variant, and what it is then called.
 
 The conversion rules alone -- no database, no reference, no import. Two groups matter:
 
@@ -54,7 +54,7 @@ class GdtoolsAgreementTestCase(SimpleTestCase):
         """gdtools puts a deletion at `POS + len(ALT)`, and on canonical input so do we.
 
         Trimming reaches the same answer by a different route, which is the point: the two
-        agree wherever the VCF was left-anchored and normalised, and diverge only where it was
+        agree wherever the VCF was left-anchored and normalized, and diverge only where it was
         not -- which is exactly the input a non-breseq caller produces.
         """
         for position, ref, alt, expected_position, expected_size in (

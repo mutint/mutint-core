@@ -161,7 +161,7 @@ class AnnotationDetailTest(SimpleTestCase):
         self.assertEqual('<', minus_strand['gene_strand'])
         self.assertEqual(3, len(minus_strand['codon_ref_seq']))
 
-    def test_pseudogene_and_noncoding_are_labelled(self):
+    def test_pseudogene_and_noncoding_are_labeled(self):
         self.assertEqual('pseudogene', self.mutation('SNP', 3750)['snp_type'])
         self.assertEqual('noncoding', self.mutation('SNP', 3520)['snp_type'])
 

@@ -30,7 +30,7 @@ class SampleTypeParsingTestCase(TestCase):
     def parse(self, query):
         return get_sample_type(RequestFactory().get("/x" + query))
 
-    def test_recognised_values_pass_through(self):
+    def test_recognized_values_pass_through(self):
         self.assertEqual(self.parse("?sample_type=clonal"), SAMPLE_TYPE_CLONAL)
         self.assertEqual(self.parse("?sample_type=mixed"), SAMPLE_TYPE_MIXED)
 
@@ -41,13 +41,13 @@ class SampleTypeParsingTestCase(TestCase):
 
     def test_the_retired_token_means_no_filter(self):
         """`population` was the mixed token until this rename, so this is the stale
-        bookmark -- the reason `get_sample_type` refuses what it does not recognise instead
+        bookmark -- the reason `get_sample_type` refuses what it does not recognize instead
         of passing it through. Passing it through would have shown half the samples with
         the picker still reading "All sample types"."""
         with self.assertLogs("aledb_sample.views.common", level="WARNING"):
             self.assertIsNone(self.parse("?sample_type=population"))
 
-    def test_any_other_unrecognised_value_means_no_filter_too(self):
+    def test_any_other_unrecognized_value_means_no_filter_too(self):
         with self.assertLogs("aledb_sample.views.common", level="WARNING"):
             self.assertIsNone(self.parse("?sample_type=nonsense"))
 

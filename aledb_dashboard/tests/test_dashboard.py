@@ -1,6 +1,6 @@
 """What the installation-wide sample counts do and do not exclude.
 
-These three tests used to pin the `STARTING_STRAIN_ALE_ID` rule: an ALE labelled `"0"` was
+These three tests used to pin the `STARTING_STRAIN_ALE_ID` rule: an ALE labeled `"0"` was
 dropped from the ALE, flask and isolate counts. That label no longer means anything -- it was
 one of four half-built spellings of "the ancestor", none of which subtracted a single mutation
 -- and `Experiment.ancestor` replaced all of them.
@@ -43,7 +43,7 @@ class DashboardCountTestCase(TestCase):
 
 
 class TestEmptyRowsStillCount(DashboardCountTestCase):
-    """An ALE labelled "0" is now an ALE like any other."""
+    """An ALE labeled "0" is now an ALE like any other."""
 
     def test_bare_ale_rows_are_all_counted(self):
         for label in ("0", "9", "24", "1"):

@@ -1,6 +1,6 @@
 """Inspect and change project access from the shell.
 
-Exists chiefly as the escape hatch for one deliberate behaviour change: `can_view_project`
+Exists chiefly as the escape hatch for one deliberate behavior change: `can_view_project`
 used to end `return bool(user.is_staff)`, and `load_projects` creates every imported user
 with `is_staff=True`, so nearly everyone could read nearly everything. That clause is gone.
 The migration converts every grant that was properly issued, but a deployment that leaned on

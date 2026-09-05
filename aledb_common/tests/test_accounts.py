@@ -10,7 +10,7 @@ What is worth pinning, and why each one is here rather than left to a reader's e
 
   * the *shape* of the login markup, because "it looks like every other page" is a claim that
     rots silently and the classes that broke it are nameable;
-  * that a bad password says so, which is the behaviour the old template lost;
+  * that a bad password says so, which is the behavior the old template lost;
   * that the password page is **ours** and not admin's, because admin ships templates at the
     names Django's views default to and would render its own in its own chrome, with no error;
   * that the hand-written `name=` attributes still match the Django form's fields, which
@@ -234,7 +234,7 @@ class AuthSlotTestCase(TestCase):
     This was `AuthAppParityTestCase`, which asserted that two apps served the same routes.
     There is one app now: `aledb_accounts` existed to be the occupant carrying
     django-defender's brute-force protection, and with defender gone it was byte-for-byte the
-    same behaviour as the default -- an alternative that was not an alternative.
+    same behavior as the default -- an alternative that was not an alternative.
 
     What the parity test was really guarding is still guarded, and by construction rather than
     by assertion: both apps had drifted into separate bugs (a `next_page` passed as `re_path`'s

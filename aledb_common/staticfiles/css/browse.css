@@ -43,7 +43,7 @@
    the same shape as the Metadata page's column menu, which is DataTables' colvis collection:
    a ul.dropdown-menu of <li><a> where a showing sample is `active` on its <li>, so
    Bootstrap's own `.dropdown-menu > .active > a` paints the row. (DataTables does put #717171
-   on the active <li>, but its <a> covers the row, so that grey is never the colour you see --
+   on the active <li>, but its <a> covers the row, so that gray is never the color you see --
    do not copy it.) The scrollbar past a screenful is `.aledb-menu` in common.css, shared with
    the Mutations page's picker, and the gestures are `.aledb-select-list` beside it, shared
    with the mutation editor's three sample lists -- which are not dropdowns and so need the

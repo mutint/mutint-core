@@ -223,7 +223,7 @@
 }
 
 /* The collapse strip beside the sidebar: one viewport tall, sticking alongside
-   .sidebar-panel above it, with the arrow centred in it.
+   .sidebar-panel above it, with the arrow centered in it.
 
    Its height used to come from an inline `line-height: 100vh` on the arrow -- one
    character in a 100vh line box -- inside a float carrying `margin: 5em 0`. That made
@@ -233,7 +233,7 @@
    fold with nothing in that space -- measured, not estimated. It showed worst on
    /mutations/browse, which fits igv.js to the viewport and so has no content of its
    own to hide the gap behind.
-   Height belongs on the strip; the arrow is just a glyph to centre in it. */
+   Height belongs on the strip; the arrow is just a glyph to center in it. */
 #sidebarbutton {
     float: left;
     position: sticky;
@@ -426,8 +426,8 @@ a:hover {
 /* `.dot.active`, not a bare `.active`. This was `.active, .dot:hover`, which is a rule about
    carousel dots written so that it painted #717171 behind *any* element carrying the class --
    and Bootstrap puts `active` on a selected nav tab, a selected dropdown row and the current
-   sidebar entry. Mostly the inner <a> covered the grey and nobody saw it. On a nav tab it did
-   not: `.nav-tabs > li > a` has `margin-right: 2px` and no bottom border, so the grey showed
+   sidebar entry. Mostly the inner <a> covered the gray and nobody saw it. On a nav tab it did
+   not: `.nav-tabs > li > a` has `margin-right: 2px` and no bottom border, so the gray showed
    as a hard edge down the right and along the foot of the selected tab, which reads as a
    badly drawn drop shadow. Measured at 5x before believing it.
 
@@ -494,7 +494,7 @@ a:hover {
 
    Note `.active, .dot:hover { background-color: #717171 }` further up this file -- the
    carousel dots' rule, which applies to *any* element with `.active`. In a dropdown the <a>
-   covers the <li> so that grey never shows; on a plain list it would, which is why the fill
+   covers the <li> so that gray never shows; on a plain list it would, which is why the fill
    below is on `> li.active > a` explicitly rather than left to the <li>. */
 .aledb-select-list {
     list-style: none;
@@ -537,7 +537,7 @@ a:hover {
 }
 
 /* Bootstrap's dropdown-link-active fill, so a row here and a row in the browser's menu are
-   the same colour. Repeated on :hover because the hover rule above would otherwise grey out
+   the same color. Repeated on :hover because the hover rule above would otherwise gray out
    the row you are pointing at, which reads as it having been deselected. */
 .aledb-select-list > li.active > a,
 .aledb-select-list > li.active > a:hover,

@@ -91,7 +91,7 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
     no stored alignment renders its type as plain text.
 
     ``ancestral_mutation_ids`` tints the rows observed in the experiment's designated
-    ancestor. **This is the one page that shows them**: everything that analyses the data
+    ancestor. **This is the one page that shows them**: everything that analyzes the data
     subtracts them, but this table is what breseq called in one sample, and a row silently
     missing from it would make the page disagree with the report it was imported from.
 
@@ -118,7 +118,7 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
         row["call_id"] = call.id
         row["evidence_url"] = browse_url(call) if browse_url else None
         row["refseq_url"] = refseq_url(call) if refseq_url else None
-        # breseq alternates row shading and colours a polymorphic call green.
+        # breseq alternates row shading and colors a polymorphic call green.
         row["row_class"] = ("polymorphism_table_row" if is_polymorphism
                             else "alternate_table_row_%d" % (index % 2))
         row["ancestral"] = call.mutation_id in ancestral_mutation_ids

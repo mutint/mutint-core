@@ -27,7 +27,7 @@ evidence = re.compile(r'[A-Z]\d+[A-Z]')
 REP_DROPDOWN = '<div class="dropdown tag_dropdown"><button class="btn btn-default btn-xs dropdown-toggle" type="button" id="dropdownMenu2" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">' \
              '<i class="fa fa-tags" aria-hidden="true"></i>' \
              '</button>' \
-             '<ul class="dropdown-menu" aria-labelledby="dropdownMenu1">' \
+             '<ul class="dropdown-menu" aria-labeledby="dropdownMenu1">' \
              '%s' \
              '</ul>'
 REP_TAG = '</div><div class="tag_dropdown">%s</div>'
@@ -36,7 +36,7 @@ _table_cell_dropdown_template = """<div class="dropdown">
   <button class="btn btn-default btn-xs dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
     <i class="fa fa-bars" aria-hidden="true"></i>
   </button>
-  <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+  <ul class="dropdown-menu" aria-labeledby="dropdownMenu1">
     %s
   </ul>
 </div>"""
@@ -153,7 +153,7 @@ def get_table_body(user: User,
     """Render a queryset of calls as the shared mutation table's body.
 
     `filter_type='AMP'` means *exclude* AMP -- the values read backwards. Only the plugin tables
-    (fixation, converge) reach this now, and they keep the old behaviour; /mutations deliberately
+    (fixation, converge) reach this now, and they keep the old behavior; /mutations deliberately
     no longer excludes AMP, since its dedicated page is gone.
 
     **`view_filter` defaults to None, and both callers pass None on purpose.** A reader's filter
@@ -224,7 +224,7 @@ def _get_table_mutation_entry(mutation_call, reseq_dict):
     The frequency links to the genome browser when the sample has a stored alignment, so a
     cell is the way in to the pileup at that position. `class="true"` is load-bearing and
     must survive on both branches: `_contains_mutation` below substring-tests it to decide
-    whether a row renders at all, and table_template.js tests it to colour the cell.
+    whether a row renders at all, and table_template.js tests it to color the cell.
     """
     table_entry = ""
     if mutation_call.present:
@@ -330,7 +330,7 @@ def _refseq_cell(mutation, verified_contigs):
     Two things this markup must not do, both of which fail silently. It must not carry
     `class="true"`, and the string `true` must not appear in it at all: `_contains_mutation`
     substring-tests the row for that literal to decide whether the row renders, and
-    `table_template.js` tests for it to colour a sample cell. And it must not add or remove a
+    `table_template.js` tests for it to color a sample cell. And it must not add or remove a
     column -- everything in `table_template.js` is indexed relative to
     `REFSEQ_COLUMN_IN_MUT_TABLE`, and `aledb_export.util` re-derives this value itself rather
     than reusing this cell, so the CSV is unaffected by the anchor.

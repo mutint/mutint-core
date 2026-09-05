@@ -238,7 +238,7 @@ def _parse_document(uploaded):
 
     Read leniently, which is the parser's default: a line it cannot fully make sense of
     lands in ``document.parse_errors`` and the rest of the file still loads. `strict=True`
-    would restore the old raise-and-lose-the-file behaviour, and is deliberately not used --
+    would restore the old raise-and-lose-the-file behavior, and is deliberately not used --
     it raises on *any* problem including the field-guard violations breseq's own output
     contains, so it would start refusing files that import cleanly today. The errors are
     reported per file instead; see `parse_warnings`.
@@ -247,7 +247,7 @@ def _parse_document(uploaded):
     three-letter code and the parser classifies on that, so evidence (RA, MC, JC,
     CN, UN, SC, PD) and validation entries never reach ``document.mutations``.
     Nothing is filtered out of the text beforehand: reading an entry type the
-    parser does not recognise is genomediff's job, and it does not fail a file over
+    parser does not recognize is genomediff's job, and it does not fail a file over
     one -- see the unknown-type handling in its parser.
     """
     raw = uploaded.read()

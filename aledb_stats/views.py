@@ -89,7 +89,7 @@ def stats(request):
                         "experiments_info_list": experiments_info_list,
                         "panels": panels,
                         # `seq_color_set` and `protein_types` stood here and are gone with the
-                        # colour machinery in aledb_sample.views.common: a palette and a vocabulary
+                        # color machinery in aledb_sample.views.common: a palette and a vocabulary
                         # for a chart that was never built, and which no template has ever read.
                         # The functional-change counts below are rendered as a table instead.
                         "population_counts": population_counts,

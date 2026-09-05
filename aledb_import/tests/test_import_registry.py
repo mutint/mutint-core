@@ -96,10 +96,10 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertEqual(summary["files"][0]["file"], "s1")
         self.assertEqual(Sample.objects.count(), 1)
 
-    def test_unrecognised_files_are_reported(self):
+    def test_unrecognized_files_are_reported(self):
         self._write("notes.txt", "just notes\n")
         summary = self._run()
-        self.assertIn("not recognised", summary["files"][0]["error"])
+        self.assertIn("not recognized", summary["files"][0]["error"])
 
     # --- explicit type selection ------------------------------------------------------
 
@@ -119,27 +119,27 @@ class ImportRegistryRoutingTestCase(TestCase):
         results = {r["file"]: r for r in summary["files"]}
 
         self.assertIsNone(results["REL606.gbk"]["error"])
-        self.assertIn("not recognised as", results["sample.gd"]["error"])
+        self.assertIn("not recognized as", results["sample.gd"]["error"])
         self.assertEqual(Sample.objects.count(), 0)
 
     def test_the_rejection_names_the_type_the_file_belongs_to(self):
-        """"Not recognised" alone leaves someone to work out which of four types to pick;
+        """"Not recognized" alone leaves someone to work out which of four types to pick;
         the registry's own patterns already know, plugins included."""
         self._write("sample.gd", breseq_fixture.GD_TEXT)
 
         summary = self._run(import_type="reference")
         error = summary["files"][0]["error"]
 
-        self.assertIn("not recognised as Reference genome", error)
+        self.assertIn("not recognized as Reference genome", error)
         self.assertIn("GenomeDiff mutations", error)
 
-    def test_a_file_no_type_claims_is_still_just_unrecognised(self):
+    def test_a_file_no_type_claims_is_still_just_unrecognized(self):
         """There is nothing to point at, and inventing a suggestion would be worse."""
         self._write("notes.txt", "just notes\n")
 
         error = self._run(import_type="reference")["files"][0]["error"]
 
-        self.assertIn("not recognised as Reference genome", error)
+        self.assertIn("not recognized as Reference genome", error)
         self.assertNotIn("looks like", error)
 
     def test_a_genomediff_dropped_as_a_reference_says_what_it_is(self):
@@ -463,3 +463,63 @@ class ReferenceResultKindTestCase(TestCase):
                     if e.get("event") == "file" and e.get("file") == "synthetic.gbk"]
         self.assertEqual(1, len(reported), events)
         self.assertEqual(import_registry.KIND_REFERENCE, reported[0]["kind"])
+
+
+class BreseqFolderExclusivityTestCase(TestCase):
+    """Nothing else may claim a file inside a breseq sample directory.
+
+    A breseq run writes more into `data/` than the six files `BRESEQ_PATTERNS` names --
+    `annotated.gd`, and since 0.50 `output.vcf`. Excluding only what the breseq handler
+    *claims* left those to the genomediff and VCF handlers, which imported the sample's own
+    mutations a second time as phantom samples called `annotated` and `output`.
+
+    Found by importing a real breseq folder, which is why the fixture below writes the two
+    extra files a real one has.
+    """
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        sample = breseq_fixture.write_sample(self.root, "Ara-2_500gen_763A")
+
+        # What breseq actually leaves beside output.gd, and what no pattern names.
+        for relative, body in (
+                (os.path.join("data", "annotated.gd"), "#=GENOME_DIFF\t1.0\n"),
+                (os.path.join("data", "output.vcf"), "##fileformat=VCFv4.2\n"),
+                (os.path.join("data", "reference.fasta.fai"), "test_ref\t160\t10\t70\t71\n"),
+                (os.path.join("output", "index.html"), "<html>report</html>"),
+                (os.path.join("output", "evidence.html"), "<html>evidence</html>")):
+            path = os.path.join(sample, relative)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as handle:
+                handle.write(body)
+
+    def _claims(self):
+        paths = import_registry.walk_files(self.root)
+        return {handler["name"]: import_registry.claim(handler, self.root, paths)
+                for handler in import_registry.get_import_handlers()}
+
+    def test_only_the_breseq_handler_claims_anything(self):
+        claims = self._claims()
+        claimed_by_others = {name: paths for name, paths in claims.items()
+                             if name != "breseq_folder" and paths}
+        self.assertEqual({}, claimed_by_others,
+                         "another handler claimed part of a breseq sample")
+
+    def test_the_stray_gd_is_not_a_sample(self):
+        self.assertEqual([], self._claims()["genomediff"])
+
+    def test_breseqs_own_vcf_is_not_a_sample(self):
+        # The regression that made every breseq folder import twice.
+        self.assertEqual([], self._claims()["vcf"])
+
+    def test_the_report_is_claimed_so_it_gets_uploaded(self):
+        claimed = self._claims()["breseq_folder"]
+        self.assertIn(os.path.join("Ara-2_500gen_763A", "output", "index.html"), claimed)
+        self.assertIn(os.path.join("Ara-2_500gen_763A", "output", "evidence.html"), claimed)
+
+    def test_a_gd_outside_any_breseq_folder_is_still_claimed(self):
+        # The exclusion must not swallow a bare .gd dropped alongside a breseq folder.
+        with open(os.path.join(self.root, "loose.gd"), "w") as handle:
+            handle.write("#=GENOME_DIFF\t1.0\n")
+        self.assertEqual(["loose.gd"], self._claims()["genomediff"])

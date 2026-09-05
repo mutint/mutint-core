@@ -20,7 +20,7 @@ every backend, so the winner is whoever gets the insert in -- which is exactly t
 wanted, and is portable.
 
 The cost is visible and intended: a second import waits, or is told to come back. Since
-SQLite was serialising these anyway, what changes is that the queue is orderly rather than a
+SQLite was serializing these anyway, what changes is that the queue is orderly rather than a
 race some samples lose.
 """
 

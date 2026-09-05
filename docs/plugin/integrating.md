@@ -58,13 +58,13 @@ anything hash-checked against it, so core registers `reference` at 10, `breseq_f
 and `genomediff` at 60. Pick a number that puts you after whatever your files depend on.
 
 `patterns` does more than route. `identify()` uses it to tell somebody who chose the wrong
-type what their file looks like instead, and the Add Data page serialises it to say the same
+type what their file looks like instead, and the Add Data page serializes it to say the same
 thing *before* anything uploads. Both come free from registering.
 
 Two optional declarations worth knowing:
 
 - `requires_reference=True` hides your type until the experiment has a reference genome. It is
-  hidden rather than greyed out, because a dropdown entry you can see and cannot pick is a
+  hidden rather than grayed out, because a dropdown entry you can see and cannot pick is a
   dead end; the page's banner explains the short menu instead.
 - `only_without_reference=True` is the opposite, for a type that establishes one.
 

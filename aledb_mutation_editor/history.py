@@ -176,7 +176,7 @@ def mutation_for_identity(experiment, identity):
 
     `get_or_create` on exactly the fields `gd_import` keys on, so a row minted here is the row
     a re-import would have produced -- and a later import finds it rather than adding a second.
-    That single behaviour is what both callers want and why it is one function: `_resolve_mutation`
+    That single behavior is what both callers want and why it is one function: `_resolve_mutation`
     puts a swept mutation back, and `mutation_edit_apply` moves calls onto the row that
     already holds the corrected values or onto a new one, which is the same question asked with
     a different motive.
@@ -234,7 +234,7 @@ def apply_edits(experiment, user, kind, removals=(), additions=(), note="",
     and reads what was just written, and holding a write transaction open across it would make
     every concurrent edit queue behind it.
     """
-    # Defence in depth. Every caller checks permission first, and this trusts none of them:
+    # Defense in depth. Every caller checks permission first, and this trusts none of them:
     # it is the lowest layer that still knows which experiment it is writing to, and a new
     # write path added later is exactly the thing that forgets. Raising rather than returning
     # None because a silent no-op here would read as "there was nothing to do".

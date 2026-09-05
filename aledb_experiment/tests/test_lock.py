@@ -285,7 +285,7 @@ class EveryWritePathTestCase(LockTestCase):
                 self.assertEqual(403, self.client.get(url).status_code)
 
     def test_the_engine_refuses_even_called_directly(self):
-        """Defence in depth: `apply_edits` trusts no caller."""
+        """Defense in depth: `apply_edits` trusts no caller."""
         from aledb_mutation_editor import history
         from aledb_mutation_editor.models import KIND_DELETE
 

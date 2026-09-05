@@ -12,11 +12,11 @@ An ordinary `django.tasks` task, in your app's `tasks.py`:
 from django.tasks import task
 
 @task()
-def analyse(row_id):
+def analyze(row_id):
     ...
 ```
 
-**The argument is a primary key, not a model.** Task arguments are serialised to JSON, so
+**The argument is a primary key, not a model.** Task arguments are serialized to JSON, so
 passing an instance fails at enqueue time.
 
 ## Enqueueing it so a person can see it
@@ -24,7 +24,7 @@ passing an instance fails at enqueue time.
 ```python
 from aledb_jobs import jobs
 
-jobs.enqueue(tasks.analyse, row.pk,
+jobs.enqueue(tasks.analyze, row.pk,
              user=request.user,
              label="analysis — %s" % row.name,
              component="my_plugin",
@@ -37,7 +37,7 @@ owner and no name, so it appears on `/jobs/` only for superusers, in the unattri
 Use `jobs.enqueue` for anything a person asked for.
 
 `label` matters more than it looks: it is the only thing on the page that says what the job
-*is*. `analyse(4)` means nothing to the person who pressed the button.
+*is*. `analyze(4)` means nothing to the person who pressed the button.
 
 ## Making it stoppable
 
@@ -52,7 +52,7 @@ Check on the way in, and again wherever you can:
 from aledb_jobs import jobs
 
 @task()
-def analyse(row_id):
+def analyze(row_id):
     row = MyRow.objects.filter(pk=row_id).first()
     if row is None or jobs.is_cancelled(row.task_result_id):
         return None

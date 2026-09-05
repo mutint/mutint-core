@@ -226,7 +226,7 @@ class AnnouncedNamesTestCase(ImportProgressTestCase):
 
         self.assertEqual(recorder.announced, ["s1", "notes.txt"])
         self.assert_announcement_matches_reports(recorder)
-        self.assertIn("not recognised",
+        self.assertIn("not recognized",
                       [f["error"] for f in summary["files"] if f["file"] == "notes.txt"][0])
 
     def test_duplicate_sample_basenames_get_a_row_each(self):

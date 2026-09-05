@@ -172,7 +172,7 @@ class RebuildRegistryTestCase(TestCase):
         raise RuntimeError("the rebuild went wrong")
 
     def test_a_failure_is_isolated_and_the_others_still_run(self):
-        """The behaviour change from `run_post_experiment_hooks`, which was a bare loop: one
+        """The behavior change from `run_post_experiment_hooks`, which was a bare loop: one
         plugin raising aborted the rest and 500'd an import whose mutations were already
         committed."""
         self._register("test.explodes", fn=self._explode, priority=PRIORITY_SETTINGS)

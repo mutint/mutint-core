@@ -22,7 +22,7 @@ that the schema no longer has.
 import re
 
 #: What goes between the parts. Change it here; `format_coordinate` is the only writer, and
-#: `RETIRED_LABEL` below is what recognises the shape this replaced.
+#: `RETIRED_LABEL` below is what recognizes the shape this replaced.
 SEPARATOR = " / "
 
 
@@ -58,7 +58,7 @@ def format_time_point(time_point):
 
 #: A label of the shape this replaced: `A1 F30000 I1` or `A1 F30000 I1 R1`.
 #:
-#: Only ever used to *recognise* one, by `./aledb relabel_samples`. No import has written a
+#: Only ever used to *recognize* one, by `./aledb relabel_samples`. No import has written a
 #: description of this shape -- `gd_import` passes `""` for an A-F-I-R filename precisely so
 #: that the computed coordinate shows instead -- so anything matching it was typed by hand
 #: when the coordinate looked like that, and is now a label that contradicts the one beside

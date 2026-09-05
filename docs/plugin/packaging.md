@@ -84,7 +84,7 @@ nav:
 
 `Using ALEdb` and `Extending ALEdb` are merged across every installed component, so your page
 sits beside core's rather than in a section of your own. Anything under a heading the manual
-does not recognise lands under *About this deployment* named for your plugin — visible, rather
+does not recognize lands under *About this deployment* named for your plugin — visible, rather
 than dropped.
 
 `./mutint docs` collects it. Nothing needs adding to the project.

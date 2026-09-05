@@ -161,7 +161,7 @@ class Command(BaseCommand):
         return user
 
     def _report(self, dataset, experiment, summary):
-        """`run_import` reports per file, not a top-level error list -- an unrecognised
+        """`run_import` reports per file, not a top-level error list -- an unrecognized
         file is a `files` entry carrying an `error`. Surface those individually: a dataset
         whose reference failed to establish still imports its .gd files and would otherwise
         look like a success with suspiciously few mutations."""

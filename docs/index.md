@@ -1,6 +1,6 @@
 # ALEdb
 
-ALEdb stores and analyses **adaptive laboratory evolution** experiments: the sequencing output
+ALEdb stores and analyzes **adaptive laboratory evolution** experiments: the sequencing output
 of evolved populations and clones, the mutations called from it, and the analyses that make
 sense of them across a lineage.
 

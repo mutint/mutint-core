@@ -35,9 +35,9 @@ from aledb_sample.models import (DatabaseSequenceLink, ReferenceSequences, Mutat
 logger = logging.getLogger(__name__)
 
 #: The marker drawn over the mutation's own extent, as RGB without a leading '#'. Red, to
-#: read as "this is the thing you came to look at" against NCBI's own blue-grey feature
-#: colours rather than blending into them.
-MARKER_COLOUR = "cc0000"
+#: read as "this is the thing you came to look at" against NCBI's own blue-gray feature
+#: colors rather than blending into them.
+MARKER_COLOR = "cc0000"
 
 
 def ncbi_view(request):
@@ -189,9 +189,9 @@ def _sviewer_params(mutation, contig, record):
     return {
         "id": record.accession,
         "view": "%d:%d" % (low, high),
-        # position|name|colour. The name is sanitised because a sequence change can carry
+        # position|name|color. The name is sanitised because a sequence change can carry
         # the delimiters this syntax is built from.
-        "marker": "%d:%d|%s|%s" % (start, end, _marker_label(label), MARKER_COLOUR),
+        "marker": "%d:%d|%s|%s" % (start, end, _marker_label(label), MARKER_COLOR),
         "start": start,
         "end": end,
     }
@@ -210,7 +210,7 @@ def _marker_label(text):
     for character in ("|", ",", "!", ":", "&", "<", ">", '"', "'", "#", "%", "+", "="):
         cleaned = cleaned.replace(character, " ")
     # Underscores rather than spaces: this ends up inside an href written without
-    # percent-encoding, and a raw space there is left to the browser to normalise.
+    # percent-encoding, and a raw space there is left to the browser to normalize.
     return "_".join(cleaned.split())[:60] or "mutation"
 
 

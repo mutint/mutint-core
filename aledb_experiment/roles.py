@@ -35,7 +35,7 @@ ROLES_BY_RANK = (ROLE_OWNER, ROLE_ADMIN, ROLE_WRITE, ROLE_READ)
 
 
 def rank(role):
-    """How much a role is worth. `None` and anything unrecognised are worth nothing.
+    """How much a role is worth. `None` and anything unrecognized are worth nothing.
 
     Returning 0 rather than raising is deliberate: `effective_role` answers `None` for a user
     with no access at all, and every caller then compares that answer against a minimum. A

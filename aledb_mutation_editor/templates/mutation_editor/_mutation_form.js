@@ -1,7 +1,7 @@
 {% comment %}
 The machinery both mutation forms need, included inside a <script> the way
 `aledb_common/templates/table_template.js` is. Django template tags work in here -- and so
-does anything tag-shaped inside a // comment, which the engine does not recognise as a
+does anything tag-shaped inside a // comment, which the engine does not recognize as a
 comment at all. Do not write a tag name in one.
 
 What is shared is everything except the submit: which inputs a type shows, the values that

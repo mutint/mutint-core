@@ -477,7 +477,7 @@ def _run_query(request, ids, q_builder, empty_msg, invalid_msg, search_gene=None
             experiment_ids.append(experiment_id)
         if mutation_call.sample_id in reseq_dict.keys():
             sample_name = reseq_dict[mutation_call.sample_id].qualified_label
-            # Initialised here, and not only inside the branch below: it used to be assigned
+            # Initialized here, and not only inside the branch below: it used to be assigned
             # nowhere else, so a row that failed the test either raised NameError or silently
             # reported the *previous* row's frequency.
             frequency = ""

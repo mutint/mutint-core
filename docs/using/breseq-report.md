@@ -1,6 +1,6 @@
 # Reading breseq's own report
 
-breseq writes a full HTML report for every sample it analyses: the mutation index, a summary of
+breseq writes a full HTML report for every sample it analyzes: the mutation index, a summary of
 the run, and an evidence page per call showing the read pileup it was called from. ALEdb keeps
 that report and shows it to you inside the application.
 

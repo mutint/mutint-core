@@ -1,6 +1,6 @@
 """The one page that shows ancestral mutations instead of hiding them.
 
-`/mutations/breseq` is what breseq called in one sample. Every page that analyses the data
+`/mutations/breseq` is what breseq called in one sample. Every page that analyzes the data
 subtracts the designated ancestor; this one tints those rows red, because a row silently
 missing here would make the page disagree with the report it was imported from -- and the
 reader would have no way to find out why.
@@ -134,13 +134,13 @@ class TestWhatThePageClaims(BreseqAncestorTestCase):
 
     def test_the_legend_is_its_own_row(self):
         """`.breseq-legend > div` carries the row spacing and the 9pt type, so this belongs in
-        a div of its own rather than trailing the amino-acid colour key -- it is not about how
+        a div of its own rather than trailing the amino-acid color key -- it is not about how
         a cell is rendered, it is about rows being excluded everywhere else."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
         body = self.get(sample_id=self.sample_b.id).content.decode()
         legend = body[body.index('class="breseq-legend"'):]
         red = legend.index("Rows shaded red")
-        # The nearest tag opening before the text is this row's own <div>, not the colour
+        # The nearest tag opening before the text is this row's own <div>, not the color
         # key's -- i.e. nothing but whitespace and the swatch span sits between them.
         self.assertNotIn("nonsense", legend[legend.rindex("<div>", 0, red):red])
 

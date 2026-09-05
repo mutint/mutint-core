@@ -18,9 +18,9 @@ from aledb_filter.view_filter import (
 
 class ViewFilterValueTestCase(SimpleTestCase):
 
-    # ---- normalisation ----------------------------------------------------------------
+    # ---- normalization ----------------------------------------------------------------
     def test_the_ends_of_the_scale_hide_nothing(self):
-        """0 and 100 normalise away, so a filter that excludes nothing *is* the empty one.
+        """0 and 100 normalize away, so a filter that excludes nothing *is* the empty one.
 
         This is what lets `is_empty` be the single question. A stored 0-100 row used to be
         `configured` but not `applied`, and every reader of that distinction had to remember
@@ -71,7 +71,7 @@ class ViewFilterValueTestCase(SimpleTestCase):
 
     def test_what_is_stored_is_json_native(self):
         """The session uses JSONSerializer: a tuple or a set would not survive, and a set
-        would not even serialise."""
+        would not even serialize."""
         stored = ViewFilter.parse(min_freq=20, genes="insH").to_session_dict()
 
         self.assertIsInstance(stored["genes"], list)

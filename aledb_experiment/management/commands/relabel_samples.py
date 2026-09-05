@@ -3,7 +3,7 @@
     ./aledb relabel_samples --dry-run      # say what it would clear
     ./aledb relabel_samples                # clear it
 
-`Sample.description` wins over the computed coordinate wherever a sample is labelled, so a
+`Sample.description` wins over the computed coordinate wherever a sample is labeled, so a
 description reading `A1 F30000 I1` pins the *old* format onto a page that writes the new one
 everywhere else -- two samples side by side, one saying `A1 F30000 I1` and its neighbour
 `1 / 30000 / 1-1`, for the same three numbers.

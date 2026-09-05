@@ -185,7 +185,7 @@ class Cluster(object):
 
     # -- state -------------------------------------------------------------------------
 
-    def is_initialised(self):
+    def is_initialized(self):
         return os.path.isfile(os.path.join(self.data, 'PG_VERSION'))
 
     def postmaster_pid(self):
@@ -296,7 +296,7 @@ class Cluster(object):
     # -- the whole of it ---------------------------------------------------------------
 
     def ensure(self, micromamba, own=True):
-        """Provision, initialise, start and create, doing only what is not already done.
+        """Provision, initialize, start and create, doing only what is not already done.
 
         Held under a lock for the whole of it, and the running check is repeated *inside* the
         lock: two terminals starting at once is ordinary, and without that both would decide
@@ -304,7 +304,7 @@ class Cluster(object):
         """
         with _FileLock(self.lock_file):
             self.provision(micromamba)
-            if not self.is_initialised():
+            if not self.is_initialized():
                 self.initdb()
             self.check_version()
             if not self.is_running():
@@ -339,7 +339,7 @@ class Cluster(object):
             lines.append("server:    not installed")
             return lines
         lines.append("server:    PostgreSQL %s" % self.installed_major())
-        if not self.is_initialised():
+        if not self.is_initialized():
             lines.append("cluster:   not created")
             return lines
         lines.append("cluster:   PostgreSQL %s at %s" % (self.cluster_major(), self.data))

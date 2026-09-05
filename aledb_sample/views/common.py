@@ -50,7 +50,7 @@ MUTATION_TYPE_LABELS = {
 # `GENE_COLORS`, `SEQ_COLORS`, `COLORS`, `DEFAULT_COLOR` and `_set_colors` stood here and are gone.
 # They were read by exactly two context keys, `seq_color_set` and `protein_types`, which reached no
 # template in core or in any plugin -- palettes for a chart that was never built. Their one
-# remaining effect was that adding a token to the vocabulary silently reshuffled a colour list
+# remaining effect was that adding a token to the vocabulary silently reshuffled a color list
 # nobody rendered, which is a trap laid for precisely the change that added `nonsense`.
 
 # TODO: change all instance of 'seq_experiment' to 'reseq'
@@ -107,7 +107,7 @@ logger = logging.getLogger(__name__)
 def get_sample_type(request):
     """The `?sample_type=` filter, or None for "all".
 
-    **An unrecognised value answers None rather than passing through**, and that is a fix
+    **An unrecognized value answers None rather than passing through**, and that is a fix
     rather than politeness. `get_ordered_reseq_queryset` used to read anything that was not
     the population token as clonal, so `?sample_type=anything` quietly showed half the
     samples with the picker still reading "All sample types" -- a page that is subset and
@@ -120,7 +120,7 @@ def get_sample_type(request):
     if sample_type in (None, "", REQUEST_ALL):
         return None
     if sample_type not in SAMPLE_TYPES:
-        logger.warning("ignoring unrecognised sample_type %r", sample_type)
+        logger.warning("ignoring unrecognized sample_type %r", sample_type)
         return None
     return sample_type
 

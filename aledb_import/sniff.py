@@ -64,4 +64,4 @@ def kind_of_file(path):
 
 def describe(kind):
     """The phrase for `kind`, for messages that say what a file turned out to be."""
-    return KIND_DESCRIPTIONS.get(kind, "an unrecognised file")
+    return KIND_DESCRIPTIONS.get(kind, "an unrecognized file")

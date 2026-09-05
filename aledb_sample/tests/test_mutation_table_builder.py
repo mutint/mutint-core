@@ -167,7 +167,7 @@ class AmplificationsRemovedTestCase(TestCase):
 
         self.assertIn("/mutations/browse?mutation_call_id=%d" % call.id, cell)
         # class="true" is load-bearing: _contains_mutation substring-tests it to decide
-        # whether the row renders, and table_template.js tests it to colour the cell.
+        # whether the row renders, and table_template.js tests it to color the cell.
         self.assertIn('class="true"', cell)
 
     def test_a_cell_is_plain_text_when_the_sample_has_no_alignment(self):

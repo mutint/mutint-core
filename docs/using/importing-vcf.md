@@ -25,7 +25,7 @@ formality: it means the same variant called by breseq and by GATK is **one mutat
 call from each sample that has it, rather than two rows that happen to sit at the same
 position.
 
-VCF spells indels with an anchor base and GenomeDiff does not, so the conversion normalises
+VCF spells indels with an anchor base and GenomeDiff does not, so the conversion normalizes
 first — trimming the shared bases and left-aligning — before deciding what the variant is.
 Four things it can produce:
 

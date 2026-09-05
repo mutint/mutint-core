@@ -141,7 +141,7 @@ def describe_filters(view_filter=None):
 
     `applied` is the question a page actually asks, and it is **not** "is a filter configured".
     It used to have to be careful about that, because a stored 0-100 row was configured and hid
-    nothing. `ViewFilter` normalises those ends away at construction, so the two questions have
+    nothing. `ViewFilter` normalizes those ends away at construction, so the two questions have
     become one and this is simply `not is_empty`.
     """
     view_filter = view_filter or EMPTY

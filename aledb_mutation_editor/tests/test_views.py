@@ -192,7 +192,7 @@ class PageTestCase(EditorTestCase):
         self.assertContains(response, "owner")
         self.assertContains(response, self.sample_a.label)
 
-    def test_a_system_change_is_labelled_system_not_left_blank(self):
+    def test_a_system_change_is_labeled_system_not_left_blank(self):
         call = MutationCall.objects.get(sample=self.sample_a,
                                                 mutation=self.mut_2)
         history.apply_edits(self.experiment, None, KIND_DELETE, removals=[call],

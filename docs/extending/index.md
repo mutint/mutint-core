@@ -36,7 +36,7 @@ Everything below is a registration, made from your `AppConfig.ready()`. Each is 
 
 ## What a plugin cannot do
 
-- **It cannot change core's behaviour by being installed.** Registration is additive. If your
+- **It cannot change core's behavior by being installed.** Registration is additive. If your
   plugin needs core to behave differently, that is a change to core, not a plugin.
 - **It cannot assume another plugin is installed.** A deployment picks its own set. Where you
   must name one — asking for its rebuild, say — the API is built to skip a name nothing

@@ -311,7 +311,7 @@ class _AsGenomeDiff:
     `.evidence`. A VCF has no uncalled regions, so that list is empty and the sample's
     existing ones are left alone rather than rewritten to nothing.
 
-    A shim rather than a real `GenomeDiff`, because building one would mean serialising our
+    A shim rather than a real `GenomeDiff`, because building one would mean serializing our
     records to text and parsing them straight back to prove nothing.
     """
 
@@ -372,7 +372,7 @@ def call_record(line, sample_name):
 
     And **nothing VCF-specific goes near the GenomeDiff record**: `Mutation.to_gd_line()` splats
     every key of that record onto the line it emits, which is why it is contractually verbatim.
-    This is the one place gdtools' behaviour must not be copied -- it writes `AD=`, `DP=` and
+    This is the one place gdtools' behavior must not be copied -- it writes `AD=`, `DP=` and
     `AF=` into the GenomeDiff, and those are not GenomeDiff fields.
     """
     record = {"fixed": line.fixed}

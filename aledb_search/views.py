@@ -148,7 +148,7 @@ def _add_genes_to_query(request, include_argument_list, exclude_argument_list):
     Every lookup here is the case-insensitive variant deliberately. SQLite folds ASCII case in
     LIKE and PostgreSQL does not, so a plain `__contains` would answer differently on the two --
     and gene names are case-significant biology that people type freely, so `thra` finding `thrA`
-    is the behaviour this box has always had.
+    is the behavior this box has always had.
 
     The exclude branches are the sharp end, because they invert the harm: a case-sensitive
     negative search stops excluding and quietly returns *more* rows than asked for, which reads

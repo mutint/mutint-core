@@ -99,17 +99,17 @@ class MutationTrackTestCase(_Fixture):
             built = tracks.database_tracks(self.experiment.id)
         self.assertEqual(["Mutations", "Mutations by sample"], [t["name"] for t in built])
 
-    def test_the_colour_comes_from_the_functional_change_vocabulary(self):
+    def test_the_color_comes_from_the_functional_change_vocabulary(self):
         Mutation.objects.all().update(snp_type="nonsense")
         feature = tracks.mutation_features(self.experiment.id)[0]
-        self.assertEqual(tracks.BUCKET_COLOURS["nonsense"], feature["color"])
+        self.assertEqual(tracks.BUCKET_COLORS["nonsense"], feature["color"])
 
-    def test_an_unknown_snp_type_is_still_coloured(self):
+    def test_an_unknown_snp_type_is_still_colored(self):
         """`functional_change_bucket` answers UNANNOTATED for a token it does not know, and a
         page that raised on one would be worse than a page that called it unannotated."""
         Mutation.objects.all().update(snp_type="something_new")
         feature = tracks.mutation_features(self.experiment.id)[0]
-        self.assertEqual(tracks.BUCKET_COLOURS[tracks.UNANNOTATED], feature["color"])
+        self.assertEqual(tracks.BUCKET_COLORS[tracks.UNANNOTATED], feature["color"])
 
     def test_the_label_does_not_carry_a_whole_gene_list(self):
         Mutation.objects.all().update(gene=", ".join("gene%d" % i for i in range(500)))
@@ -131,8 +131,8 @@ class SampleTrackTestCase(_Fixture):
                          {f["sample"] for f in features})
 
     def test_presence_is_uniform_and_frequency_rides_alongside(self):
-        """The colour says only "called here". See SEG_PRESENT: seg autoscales to its own
-        data range, so a frequency-derived colour would mean different things on different
+        """The color says only "called here". See SEG_PRESENT: seg autoscales to its own
+        data range, so a frequency-derived color would mean different things on different
         experiments' pages."""
         features = tracks.sample_features(self.experiment.id)
         self.assertEqual({tracks.SEG_PRESENT}, {f["value"] for f in features})

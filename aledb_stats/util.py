@@ -228,7 +228,7 @@ def _count_in_sql(queryset):
 def compute_experiment_counts(experiment_id):
     """The Overview's four count dicts for one experiment, without materialising its rows.
 
-    **Unfiltered**, for the same reason as the needle plot above: `/stats` summarises what the
+    **Unfiltered**, for the same reason as the needle plot above: `/stats` summarizes what the
     experiment holds rather than showing rows you are reading through, and filtering became a
     per-reader affair that this page does not take part in.
 

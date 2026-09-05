@@ -3,7 +3,7 @@
 Written on the fly rather than committed, so the suite carries no binary fixtures. The BAM
 and BAI are arbitrary bytes: nothing in this codebase parses them — they are copied into the
 store and served back byte for byte — so their contents only need to be stable and
-recognisable, not valid BGZF.
+recognizable, not valid BGZF.
 """
 
 import os

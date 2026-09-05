@@ -63,7 +63,7 @@ def sanitize_relative_path(raw):
     """Return a safe relative path, or raise UploadError.
 
     Rejects absolute paths, Windows drive letters, and any ``..`` component. Note this is
-    only half the defence -- the caller still confirms the resolved path stays inside the
+    only half the defense -- the caller still confirms the resolved path stays inside the
     session's staging directory, which is what catches symlinks.
     """
     if not raw or not isinstance(raw, str):
@@ -256,7 +256,7 @@ def finalize_upload(request, upload_id):
     This deliberately did *not* become a streaming response. Progress arrives at
     `import_progress.report` five frames below `run_import`, in a callback -- and a callback
     cannot yield. Any generator wrapping `run_import` would queue every event and emit the
-    lot after the import had already finished, which is this function's behaviour with extra
+    lot after the import had already finished, which is this function's behavior with extra
     machinery in front of it. Streaming would need the import on a worker thread, and that is
     `WORKERS.md`, not a progress bar.
     """

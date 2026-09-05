@@ -128,7 +128,7 @@ class Sample(SupplementalDataMixin):
     is_clonal = models.BooleanField(default=True)
 
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
-    #: sample is labelled -- see `label`.
+    #: sample is labeled -- see `label`.
     description = models.CharField(max_length=300, **blank_field)
     #: Both came from `TechnicalReplicate`.
     tags = models.CharField(max_length=500, **blank_field)
@@ -434,7 +434,7 @@ class Mutation(SupplementalDataMixin):
 
     #: The K-12 MG1655 accession EcoCyc's gene pages are keyed on. Matched on the accession
     #: rather than the exact string so a versioned name -- NC_000913.3, which is what RefSeq
-    #: actually distributes -- is still recognised. Exact equality was fine while a contig
+    #: actually distributes -- is still recognized. Exact equality was fine while a contig
     #: name could never change; renaming an experiment's sequences makes it a live trap,
     #: because re-establishing the reference from a RefSeq download would silently turn every
     #: EcoCyc link off.
@@ -592,7 +592,7 @@ class ReferenceSequences(models.Model):
 
         A row whose `sequence_sha256` was never computed -- its stored FASTA was missing
         when the backfill ran -- falls back to the old, name-sensitive comparison. That is
-        exactly this row's behaviour before the column existed, and `plan_rename` refuses
+        exactly this row's behavior before the column existed, and `plan_rename` refuses
         to rename against it, because it has no per-sequence hashes to match names on.
         """
         if self.sequence_sha256:

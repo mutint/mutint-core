@@ -6,7 +6,7 @@
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
     <style type="text/css">
         table.dataTable tr.odd {
-            background-color: lightgrey;
+            background-color: lightgray;
         }
 
         table.dataTable tr.even {
@@ -381,7 +381,7 @@
                     <td class="percent_reads_mapped">{{ row.sample.breseq.percentage_mapped|floatformat:1 }}%</td>
                     <td class="average_read_length">{{ row.sample.breseq.average_read_length|floatformat:1 }}</td>
                     {% comment %} This is the table where you notice a sample is
-                       mislabelled, so it is the main way into the per-sample page. {% endcomment %}
+                       mislabeled, so it is the main way into the per-sample page. {% endcomment %}
                     {% if can_edit %}
                     <td><a href="/sample/{{ row.sample.id }}/edit/">Edit</a></td>
                     {% endif %}

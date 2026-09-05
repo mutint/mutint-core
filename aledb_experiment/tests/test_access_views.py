@@ -618,7 +618,7 @@ class BulkPageTestCase(AccessTestCase):
         refusals stay readable. That left the rows that *did* change still showing their old
         role, under a line reading "Applied to 7" -- the page contradicting itself.
 
-        This asserts only that the handler is wired, because the behaviour itself is not
+        This asserts only that the handler is wired, because the behavior itself is not
         reachable from a Django test: it needs a browser and a resolved fetch. Measured in
         headless Chrome, four rows ticked and the first refused by the server:
 

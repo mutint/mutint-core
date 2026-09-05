@@ -11,6 +11,7 @@ allowed, and the symptom is "the evidence links stopped working" with nothing na
 import os
 import shutil
 import tempfile
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -59,8 +60,14 @@ class ReportTestCase(TestCase):
                 handle.write(body)
         return root
 
-    def _files(self, path):
-        return self.client.get("/mutations/report/%d/files/%s" % (self.sample.pk, path))
+    def _url(self, path, sample=None, token=None):
+        sample = sample or self.sample
+        if token is None:
+            token = report_views.sign_sample(sample.pk)
+        return "/mutations/report/%d/files/%s/%s" % (sample.pk, token, path)
+
+    def _files(self, path, **kwargs):
+        return self.client.get(self._url(path, **kwargs))
 
     # --- the sandbox -----------------------------------------------------------------------
 
@@ -113,11 +120,68 @@ class ReportTestCase(TestCase):
 
     def test_the_headers_survive_a_range_request(self):
         """serve_file has three exit points and the range branches are the easy ones to miss."""
-        response = self.client.get(
-            "/mutations/report/%d/files/index.html" % self.sample.pk, HTTP_RANGE="bytes=0-4")
+        response = self.client.get(self._url("index.html"), HTTP_RANGE="bytes=0-4")
         self.assertEqual(206, response.status_code)
         self.assertIn("sandbox", response["Content-Security-Policy"])
         self.assertEqual("nosniff", response["X-Content-Type-Options"])
+
+    # --- the capability URL ----------------------------------------------------------------
+
+    def test_the_files_need_no_session(self):
+        """The bug that made the report render once, with no images and dead links.
+
+        A sandboxed frame has an *opaque* origin, so every request the report makes for
+        itself is cross-site and Django's `SameSite=Lax` session cookie is not sent. The
+        first load works because the parent initiates it; nothing after that does. So the
+        files must be readable with no cookie at all -- which is what the signed URL buys.
+        """
+        self.client.logout()
+        response = self._files("index.html")
+        self.assertEqual(200, response.status_code)
+
+    def test_a_forged_token_is_refused(self):
+        self.assertEqual(404, self._files("index.html", token="not-a-token").status_code)
+        self.assertEqual(
+            404, self._files("index.html",
+                             token=report_views.sign_sample(self.sample.pk) + "x").status_code)
+
+    def test_a_token_for_another_sample_is_refused(self):
+        # Minted honestly, but for something else -- the id in the path must match the id in
+        # the signature, or one report's link would open another's.
+        other = Sample.objects.create(population=self.sample.population, time_point=2,
+                                      name="2", source_name="s2", report_stored=True)
+        self.assertEqual(
+            404, self._files("index.html", token=report_views.sign_sample(other.pk)).status_code)
+
+    def test_an_expired_token_is_refused(self):
+        from django.core import signing
+        old = signing.dumps(self.sample.pk, salt=report_views.REPORT_SALT)
+        with mock.patch.object(report_views, "REPORT_TOKEN_MAX_AGE", -1):
+            self.assertEqual(404, self._files("index.html", token=old).status_code)
+
+    def test_the_viewer_mints_a_working_token(self):
+        page = self.client.get("/mutations/report/%d/" % self.sample.pk)
+        import re
+        match = re.search(r'src="(/mutations/report/\d+/files/[^"]+)"', page.content.decode())
+        self.assertIsNotNone(match, "the viewer did not frame a report URL")
+
+        self.client.logout()
+        self.assertEqual(200, self.client.get(match.group(1)).status_code)
+
+    def test_a_relative_link_from_the_report_keeps_the_token(self):
+        """The reason the token is a path segment rather than a query parameter.
+
+        breseq's pages link to `summary.html` and `breseq_icon.png` relative to themselves, so
+        whatever authorises the request has to survive that resolution.
+        """
+        url = self._url("index.html")
+        sibling = url.rsplit("/", 1)[0] + "/breseq_icon.png"
+        self.client.logout()
+        # No icon in the fixture, but the point is that it reaches the view rather than 404ing
+        # on authorisation -- so a missing file is the only reason it can fail.
+        self.assertEqual(404, self.client.get(sibling).status_code)
+        self._write_report(extra={"breseq_icon.png": "not really a png"})
+        self.assertEqual(200, self.client.get(sibling).status_code)
 
     # --- containment -----------------------------------------------------------------------
 
@@ -148,10 +212,14 @@ class ReportTestCase(TestCase):
 
     # --- who may see it --------------------------------------------------------------------
 
-    def test_a_stranger_gets_404_not_403(self):
+    def test_a_stranger_cannot_reach_the_viewer(self):
+        """Where the permission check lives now: minting, not serving.
+
+        The file route cannot ask who is calling -- it has no cookie to ask with -- so the
+        viewer is the gate. A stranger never gets a token.
+        """
         stranger = User.objects.create(username="stranger", email="s@e.com", is_active=True)
         self.client.force_login(stranger)
-        self.assertEqual(404, self._files("index.html").status_code)
         self.assertEqual(
             404, self.client.get("/mutations/report/%d/" % self.sample.pk).status_code)
 
@@ -160,7 +228,8 @@ class ReportTestCase(TestCase):
         from aledb_experiment.permissions import grant_project_access
         grant_project_access(self.project, reader, "read")
         self.client.force_login(reader)
-        self.assertEqual(200, self._files("index.html").status_code)
+        self.assertEqual(
+            200, self.client.get("/mutations/report/%d/" % self.sample.pk).status_code)
 
     def test_a_sample_with_no_report_is_a_404(self):
         self.sample.report_stored = False
@@ -175,7 +244,8 @@ class ReportTestCase(TestCase):
         rendered = response.content.decode()
 
         self.assertEqual(200, response.status_code)
-        self.assertIn('src="/mutations/report/%d/files/index.html"' % self.sample.pk, rendered)
+        self.assertIn('src="/mutations/report/%d/files/' % self.sample.pk, rendered)
+        self.assertIn("/index.html\"", rendered)
         self.assertIn("<iframe", rendered)
 
     def test_the_bar_offers_the_pages_that_exist(self):
@@ -193,7 +263,8 @@ class ReportTestCase(TestCase):
         # `?page=` is not a second way into the files -- only what the bar offers.
         response = self.client.get(
             "/mutations/report/%d/?page=../../etc/passwd" % self.sample.pk)
-        self.assertIn("files/index.html", response.content.decode())
+        self.assertIn("/index.html\"", response.content.decode())
+        self.assertNotIn("passwd", response.content.decode())
 
     def test_evidence_is_not_offered_on_its_own(self):
         # With no fragment it says "No evidence file specified in URL hash"; it is reached

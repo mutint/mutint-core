@@ -253,7 +253,7 @@ class ImportTypesOfferedTestCase(TestCase):
       replace_annotation  meaningless before there is a genome to hold fixed, so it
                           is absent until then
       genomediff          needs a reference, but is a thing people arrive holding --
-                          so it is shown greyed with the reason, not hidden
+                          so it is shown grayed with the reason, not hidden
     """
 
     def setUp(self):
@@ -296,7 +296,7 @@ class ImportTypesOfferedTestCase(TestCase):
         self.assertNotIn("Replace annotation", self._dropdown())
 
     def test_genomediff_is_absent(self):
-        """Not offered greyed out: an entry you can see and cannot pick is a dead end."""
+        """Not offered grayed out: an entry you can see and cannot pick is a dead end."""
         self.assertNotIn('value="genomediff"', self._dropdown())
 
     def test_the_page_says_why_the_menu_is_short(self):

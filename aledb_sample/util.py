@@ -13,7 +13,7 @@ def get_mutation_call_queryset(experiment_id):
     """Every call this experiment holds -- what is *stored*, ancestor included.
 
     **Usually not what you want.** An experiment may designate an ancestor, whose mutations
-    are the starting line rather than evolution; anything analysing or summarising the data
+    are the starting line rather than evolution; anything analyzing or summarizing the data
     wants `get_evolved_call_queryset` below. This raw form is for the three places
     that mean "what is stored": the CSV export, the mutation editor, and the per-sample
     breseq page, which tints ancestral rows rather than hiding them.
@@ -24,7 +24,7 @@ def get_mutation_call_queryset(experiment_id):
 def get_evolved_call_queryset(experiment_id):
     """This experiment's calls with its designated ancestor subtracted.
 
-    The default choice for anything that analyses or counts. See
+    The default choice for anything that analyzes or counts. See
     `aledb_experiment/ancestor.py` for what subtraction means and why it is not the reader's
     filter. With no ancestor designated this is `get_mutation_call_queryset` exactly.
     """

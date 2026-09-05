@@ -578,11 +578,11 @@ class SeqIdMustMatchTheReferenceTestCase(TestCase):
         self.assertIn("REL606", summary["files"][0]["error"])
 
 
-class NewParserBehaviourTestCase(GdImportTestCase):
+class NewParserBehaviorTestCase(GdImportTestCase):
     """What changed when the genomediff pin moved from 82cfd6d to 43a0f72.
 
     None of this is exercised by the tests above, which is the point: the suite passed
-    unchanged across the bump, so the only way these behaviours get pinned is deliberately.
+    unchanged across the bump, so the only way these behaviors get pinned is deliberately.
     """
 
     HEADER = "#=GENOME_DIFF\t1.0\n#=REFSEQ\tREL606\n"

@@ -36,7 +36,7 @@
                 {% endfor %}
             </select>
             <small class="help-block" id="add-type-help">
-                Say what you are dropping. Anything the chosen type does not recognise is
+                Say what you are dropping. Anything the chosen type does not recognize is
                 reported rather than routed elsewhere, so nothing is imported as something
                 it is not.
                 {% if not has_reference %}
@@ -251,7 +251,7 @@
         }
         if (selected.length && !typeSelect.value) {
             // Nothing to preview against until a type is chosen, and saying so is more
-            // use than listing every file as unrecognised.
+            // use than listing every file as unrecognized.
             var pick = document.createElement("li");
             pick.style.listStyle = "none";
             pick.textContent = "Choose what you are importing to see how these files will be read.";
@@ -429,7 +429,7 @@
 
         // Only what the chosen type claims. A breseq tree carries a great deal this
         // importer never reads -- per-sample .tab histograms alone run to tens of MB --
-        // and uploading it meant a long wait followed by a page of "not recognised"
+        // and uploading it meant a long wait followed by a page of "not recognized"
         // warnings for files nobody asked to import.
         var toUpload = selected.filter(function (entry) { return classify(entry.path); });
         if (!toUpload.length) { submitBtn.disabled = false; return; }

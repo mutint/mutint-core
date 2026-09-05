@@ -13,13 +13,13 @@ database at all -- where pinning the gene-subset rule used to take six model row
 
 ## The value
 
-Three fields, normalised at construction. `min_freq`/`max_freq` are percentages, matched against
+Three fields, normalized at construction. `min_freq`/`max_freq` are percentages, matched against
 `MutationCall.frequency`, which is a fraction -- the division by 100 happens in `util.py`.
 
-**Normalisation collapses two facts into one.** A stored row could be 0-100 with no genes, which
+**Normalization collapses two facts into one.** A stored row could be 0-100 with no genes, which
 is *configured* and hides nothing, so `describe_filters` had to distinguish "a filter exists" from
 "a filter does something" and every reader of that dict had to remember which it wanted. `0` and
-`100` normalise to `None` here, so a filter that hides nothing simply equals `EMPTY`. What is lost
+`100` normalize to `None` here, so a filter that hides nothing simply equals `EMPTY`. What is lost
 is the ability to say "you configured 0-100", which nobody ever wanted said.
 
 ## Where it lives
@@ -60,7 +60,7 @@ SESSION_KEY = "aledb_view_filters"
 MAX_REMEMBERED_EXPERIMENTS = 20
 
 #: Bumped if the stored shape ever changes, so `from_session_dict` can discard what it does not
-#: recognise rather than guess. A session outlives a deploy.
+#: recognize rather than guess. A session outlives a deploy.
 _SESSION_FORMAT = 1
 
 #: The names the form posts, the interop API accepts, and the URL carries. One spelling, so the
@@ -85,7 +85,7 @@ class ViewFilter:
 
     @property
     def is_empty(self):
-        """True when this hides nothing. Thanks to normalisation there is no third state."""
+        """True when this hides nothing. Thanks to normalization there is no third state."""
         return self == EMPTY
 
     @property

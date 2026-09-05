@@ -64,7 +64,7 @@ class NormalizationTestCase(TestCase):
         path = self._write("reference.txt", breseq_fixture.fasta_text(SEQUENCES))
         self.assertEqual(reference_io.detect_format(path), reference_io.FORMAT_FASTA)
 
-    def test_unrecognisable_file_is_rejected(self):
+    def test_unrecognizable_file_is_rejected(self):
         path = self._write("ref.txt", "this is not a reference genome\n")
         with self.assertRaises(reference_io.ReferenceFormatError):
             reference_io.detect_format(path)
@@ -207,7 +207,7 @@ class ReferenceStoreTestCase(TestCase):
     """What `/import/reference/` used to assert over HTTP, asserted on the store directly.
 
     The page is gone (see `aledb_import/views.py`); `establish_or_check` is where its
-    behaviour actually lived, and the Add page's `reference` / `replace_annotation` types now
+    behavior actually lived, and the Add page's `reference` / `replace_annotation` types now
     reach it. The routing half of those types is covered in `test_import_registry`.
     """
 
@@ -284,7 +284,7 @@ class ReferenceStoreTestCase(TestCase):
     def test_unreadable_reference_is_refused(self):
         with self.assertRaises(reference_io.ReferenceFormatError) as caught:
             self._establish(self._experiment(), "notes.txt", b"just some notes\n")
-        self.assertIn("not recognisable", str(caught.exception))
+        self.assertIn("not recognizable", str(caught.exception))
 
     def test_a_different_sequence_is_refused_unless_replace_is_set(self):
         experiment = self._experiment()

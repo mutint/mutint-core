@@ -37,7 +37,7 @@ def _purely_ancestral(model, sample_path):
 
     `STARTING_STRAIN_ALE_ID` stood here: three `~Q(ale_id="0")` clauses approximating "do not
     count the ancestor" from an ALE label. This asks the real question instead, and an ALE
-    genuinely labelled "0" is counted like any other.
+    genuinely labeled "0" is counted like any other.
 
     **It still counts rows, not samples.** An Population or TimePoint carrying no samples at
     all has always been counted here and still is -- dropping those would move the published

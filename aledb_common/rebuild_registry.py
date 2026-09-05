@@ -125,7 +125,7 @@ def register_rebuilder(name, fn, scope=EXPERIMENT_SCOPE, label=None,
     scope  EXPERIMENT_SCOPE or SITE_SCOPE.
     label  human-readable name for `./aledb rebuild --list`; defaults to name.
     priority  lower runs first; see the constants above. Ties break on registration order,
-           which is INSTALLED_APPS order, so leaving it alone gives the obvious behaviour.
+           which is INSTALLED_APPS order, so leaving it alone gives the obvious behavior.
     auto   False registers derived data that is *tracked* but never rebuilt behind anyone's
            back: `request_rebuild` marks it, `--list` shows it, and `run_rebuilds` skips it
            unless it is named in `only=`. It is what lets a plugin be told its data has gone

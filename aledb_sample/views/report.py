@@ -35,11 +35,16 @@ Why each flag is in that string:
 
 ``allow-same-origin`` is the one that must never be added. With it the sandbox stops isolating
 anything, because the frame is then same-origin with us and its scripts can reach our DOM.
+
+**And the sandbox is why the files are authorised by a signed URL rather than by the session.**
+An opaque origin makes every request the report issues for itself cross-site, so `SameSite=Lax`
+withholds the cookie. See `sign_sample`.
 """
 
 import logging
 import os
 
+from django.core import signing
 from django.http import Http404
 from django.shortcuts import render
 
@@ -62,6 +67,47 @@ REPORT_HEADERS = {
     # filenames come from breseq, but its *contents* include names a user chose.
     "X-Content-Type-Options": "nosniff",
 }
+
+#: Namespaces the signature so a token minted here cannot be replayed against any other
+#: signed value in the project.
+REPORT_SALT = "aledb_sample.report"
+
+#: How long a report link stays good. Long enough to read a report at leisure, short enough
+#: that a URL copied out of a browser's history is not a lasting key to somebody's data.
+REPORT_TOKEN_MAX_AGE = 12 * 60 * 60
+
+
+def sign_sample(sample_id):
+    """A capability for one sample's report, carried in the URL.
+
+    **The report's files cannot be authenticated by cookie, and that follows from the
+    sandbox.** A sandboxed frame with no `allow-same-origin` has an *opaque* origin, so every
+    request the report makes for itself -- its icon, its stylesheet, a click through to
+    `summary.html` -- is cross-site, and Django's `SameSite=Lax` session cookie is
+    deliberately not sent on those. The frame's *first* load works, because the parent
+    document initiates it and the parent is same-site; everything the report then asks for on
+    its own does not. The symptom is a report that renders once, with no images and links
+    that 404 -- which is exactly how this was found, by opening one.
+
+    So the URL carries the authority instead. Permission is checked **when the token is
+    minted**, by the viewer, which is an ordinary cookie-authenticated page; the file route
+    then trusts the signature and asks nothing about who is calling.
+
+    The trade is worth stating plainly: this is a **bearer** capability. Anyone holding the
+    URL can read that sample's report until it expires, so it is bound to one sample and to
+    `REPORT_TOKEN_MAX_AGE`. It is deliberately *not* bound to the user -- checking that would
+    need the cookie that cannot arrive, which is the whole problem.
+    """
+    return signing.dumps(int(sample_id), salt=REPORT_SALT)
+
+
+def unsign_sample(token):
+    """The sample id a token authorises, or None if it is not valid for one."""
+    try:
+        return int(signing.loads(token, salt=REPORT_SALT, max_age=REPORT_TOKEN_MAX_AGE))
+    except (signing.BadSignature, signing.SignatureExpired, ValueError, TypeError):
+        return None
+
 
 #: What the link bar offers, in the order breseq's own header does. `evidence.html` is not
 #: listed: it is reached from a row, never opened on its own -- with no fragment it says
@@ -113,21 +159,36 @@ def report(request, sample_id):
         "pages": [{"file": name, "label": label, "current": name == page}
                   for name, label in REPORT_PAGES if _has(sample, name)],
         "page": page,
-        "frame_url": "/mutations/report/%d/files/%s" % (sample.pk, page),
+        # The token sits in a path *segment*, so the report's own relative links keep it:
+        # `breseq_icon.png` beside `index.html` resolves to the same prefix. Putting it in a
+        # query string would be lost the moment the report linked to anything.
+        "frame_url": "/mutations/report/%d/files/%s/%s" % (
+            sample.pk, sign_sample(sample.pk), page),
         "sandbox_flags": SANDBOX_FLAGS,
     })
     return render(request, "report/report.html", context)
 
 
-def report_file(request, sample_id, path):
+def report_file(request, sample_id, token, path):
     """One file out of the report, contained and sandboxed.
 
-    The only route in core that serves a client-named path, so containment is the whole job:
-    the resolved `realpath` must land inside this sample's own report directory. `realpath`
-    on both sides is what makes a symlink *inside* the report pointing outward fail too --
-    breseq does not write symlinks, but the report is whatever was uploaded.
+    **Authorised by the signed token, not by the session**, for the reason `sign_sample`
+    gives: the sandbox denies this request its cookie. The token is minted by the viewer,
+    which did check `can_view_project`.
+
+    The only route in core that serves a client-named path, so containment is the rest of the
+    job: the resolved `realpath` must land inside this sample's own report directory.
+    `realpath` on both sides is what makes a symlink *inside* the report pointing outward fail
+    too -- breseq does not write symlinks, but the report is whatever was uploaded.
     """
-    sample = _sample_or_404(request, sample_id)
+    authorised = unsign_sample(token)
+    if authorised is None or authorised != int(sample_id):
+        # Same answer for a forged token, an expired one, and one minted for another sample.
+        raise Http404("No breseq report for that sample.")
+
+    sample = (Sample.objects.filter(pk=sample_id, report_stored=True).first())
+    if sample is None:
+        raise Http404("No breseq report for that sample.")
 
     root = os.path.realpath(store.sample_report_dir(sample.pk))
     candidate = os.path.realpath(os.path.join(root, path))

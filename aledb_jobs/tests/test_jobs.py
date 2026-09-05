@@ -3,7 +3,7 @@
 The cancellation tests deliberately drive the **real** database backend rather than the
 immediate one the rest of the suite runs under, for the reason `aledb_import/tests/test_tasks.py`
 gives: under the immediate backend `.enqueue()` means "run it now", so there is no such thing
-as a queued job to cancel and nothing here would be exercising the behaviour it claims to.
+as a queued job to cancel and nothing here would be exercising the behavior it claims to.
 """
 
 from django.contrib.auth.models import User

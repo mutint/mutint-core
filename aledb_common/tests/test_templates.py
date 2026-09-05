@@ -52,7 +52,7 @@ class TemplateCommentsTestCase(unittest.TestCase):
 
 
 class BreseqTableAssetsTravelTogetherTestCase(unittest.TestCase):
-    """breseq's table markup is generated in Python, so its behaviour cannot live in a page.
+    """breseq's table markup is generated in Python, so its behavior cannot live in a page.
 
     `aledb_import.annotate.display` collapses a wide deletion's gene list behind a Show
     button, and every page rendering a row from `aledb_sample.breseq_report.build_rows` gets
@@ -115,7 +115,7 @@ class BootstrapLoadedOnceTestCase(unittest.TestCase):
 
     #: A DataTables combined build that carries Bootstrap. These were `cdn.datatables.net/v/bs-`
     #: URLs and are vendored under this directory prefix now -- the naming is what these two
-    #: tests recognise a Bootstrap-carrying bundle by, so keep it if the layout ever moves.
+    #: tests recognize a Bootstrap-carrying bundle by, so keep it if the layout ever moves.
     BOOTSTRAP_BUNDLE = "vendor/datatables-bundle-bs"
 
     def test_no_standalone_bootstrap_beside_the_bundle(self):
@@ -129,7 +129,7 @@ class BootstrapLoadedOnceTestCase(unittest.TestCase):
             "base.html loads a bs- DataTables bundle (which contains Bootstrap) and "
             "bootstrap.min.js as well -- that is two copies of Bootstrap's data-api")
 
-    def test_the_bundle_is_still_recognisable(self):
+    def test_the_bundle_is_still_recognizable(self):
         """Guards the guard, and it is not hypothetical.
 
         Both tests here located Bootstrap by searching for a `cdn.datatables.net` URL. When the

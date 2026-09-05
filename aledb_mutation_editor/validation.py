@@ -26,7 +26,7 @@ a `.gd` can be imported before a reference is established. The form says so rath
 pretending it validated.
 
 The field sets come from `genomediff.records.TYPE_SPECIFIC_FIELDS`, which is what the parser
-fills a record from and what `Record.__str__` serialises in order. Restating them here would
+fills a record from and what `Record.__str__` serializes in order. Restating them here would
 give the form a second opinion about what a MOB needs.
 """
 

@@ -76,7 +76,7 @@ def register_sequence_rename_hook(fn):
     `renames` is `{old_name: new_name}`, covering only the names that changed.
 
     A rename replaces the contig names an experiment's mutations carry -- the same genome,
-    relabelled. Core rewrites everything it owns (`Mutation.seq_id`, the verbatim
+    relabeled. Core rewrites everything it owns (`Mutation.seq_id`, the verbatim
     the stored GenomeDiff record, the missing-coverage evidence, the reference row), but
     anything an app
     *derived* from those names is core's blind spot, and a plugin's derived data keyed on
@@ -155,7 +155,7 @@ def _accepts_view_filter(fn):
 
 
 def get_export_handler(type_str):
-    """The handler for a type, normalised to `(experiment_id, view_filter=None)`.
+    """The handler for a type, normalized to `(experiment_id, view_filter=None)`.
 
     Always safe to call with both arguments; one that predates the filter never sees it.
     """

@@ -251,7 +251,7 @@ class ManualAssemblyTestCase(SimpleTestCase):
         self.assertEqual([{"Group": [{"Page": "c/deep/page.md"}]}],
                          self.section(nav, EXTENDING))
 
-    def test_an_unrecognised_heading_is_filed_not_dropped(self):
+    def test_an_unrecognized_heading_is_filed_not_dropped(self):
         """A component that has not thought about audience still builds, and its pages appear
         under its own name rather than vanishing. Silent loss is the failure worth avoiding."""
         from aledb_common.docs_manual import DEPLOYMENT

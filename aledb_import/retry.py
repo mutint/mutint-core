@@ -14,12 +14,12 @@ attempt that got part-way leaves nothing for the next one to trip over.
 
 What must *not* be retried is a real error. A malformed file, a reference mismatch or a locked
 experiment will fail identically every time, and retrying them five times would turn a clear
-message into a slow one. ``is_lock_error`` is deliberately narrow: it recognises contention and
+message into a slow one. ``is_lock_error`` is deliberately narrow: it recognizes contention and
 nothing else.
 
 **It matches SQLSTATE, not the message text, and that is the whole reason this module needed
 attention when the backend changed.** It used to match SQLite's and MySQL's wording -- so on
-PostgreSQL it recognised nothing at all, and every retry in the suite quietly stopped
+PostgreSQL it recognized nothing at all, and every retry in the suite quietly stopped
 retrying while still reading like live protection. Matching PostgreSQL's *wording* instead
 would have been the same bug one step further on: the server translates error messages
 according to ``lc_messages``, so a phrase match passes on the developer's machine and fails

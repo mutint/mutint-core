@@ -284,7 +284,7 @@ class TableLinkTestCase(_Fixture):
 
     def test_the_cell_never_contains_the_literal_true(self):
         """`_contains_mutation` substring-tests the row for `true` to decide whether it
-        renders at all, and `table_template.js` tests for it to colour a sample cell. A
+        renders at all, and `table_template.js` tests for it to color a sample cell. A
         Reference cell carrying it would corrupt both, silently."""
         from aledb_common.constants import REFSEQ_COLUMN_IN_MUT_TABLE
         self._verify_contig()

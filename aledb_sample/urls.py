@@ -22,7 +22,11 @@ urlpatterns = [
     # sandboxed by a response header as well as by the frame -- see views/report.py.
     re_path(r'^report/(?P<sample_id>\d+)/$', aledb_sample.views.report.report,
             name='sample_report'),
-    re_path(r'^report/(?P<sample_id>\d+)/files/(?P<path>.*)$',
+    # The token is a path *segment* and must sit before the filename, so the report's own
+    # relative links keep it: `breseq_icon.png` beside `index.html` resolves to the same
+    # prefix. It is what authorises the request -- a sandboxed frame has an opaque origin and
+    # never gets the session cookie. See views/report.py.
+    re_path(r'^report/(?P<sample_id>\d+)/files/(?P<token>[^/]+)/(?P<path>.*)$',
             aledb_sample.views.report.report_file, name='sample_report_file'),
 
     # igv.js at one mutation call's position, linked from the mutation table's cells.

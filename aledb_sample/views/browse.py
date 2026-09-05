@@ -322,7 +322,7 @@ def _sample_tracks(experiment, mutation, current_id):
     return [dict(_sample_track(reseq),
                  has_mutation=reseq.id in called,
                  is_current=reseq.id == current_id)
-            # `include_ancestor=True`: the browser inspects evidence rather than analysing
+            # `include_ancestor=True`: the browser inspects evidence rather than analyzing
             # it, and the ancestor's own evidence link lands here. Hiding its track would
             # leave `is_current` matching nothing on the very sample that was clicked.
             for reseq in get_ordered_reseq_queryset(

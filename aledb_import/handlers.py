@@ -93,6 +93,33 @@ def _under_output(path, prefixes):
                for prefix in prefixes)
 
 
+def breseq_sample_prefixes(staged_root):
+    """Path prefixes of every breseq sample directory in the drop."""
+    from aledb_import.breseq_folder import find_sample_dirs
+
+    return tuple(os.path.relpath(d, staged_root) + os.sep
+                 for d in find_sample_dirs(staged_root))
+
+
+def inside_a_breseq_sample(path, prefixes):
+    """Whether `path` lives inside a breseq sample directory, whoever claims it.
+
+    **Wider than "claimed by the breseq handler", and it has to be.** A breseq run writes more
+    into `data/` than the six files that handler names: `annotated.gd`, and since 0.50
+    `output.vcf`. Excluding only what breseq *claims* leaves those to be picked up by the
+    genomediff and VCF handlers, which import the sample's own mutations a second time as
+    phantom samples called `annotated` and `output`.
+
+    Found by importing a real breseq folder. The `.gd` half of it predates the VCF importer;
+    adding VCF made it happen on every breseq folder rather than only where an `annotated.gd`
+    survived, which is what made it visible.
+
+    The rule is the honest one either way: everything under a breseq sample directory belongs
+    to that sample, and it is `breseq_folder`'s business what to read out of it.
+    """
+    return path.startswith(prefixes)
+
+
 def detect_breseq_folders(staged_root, paths):
     """Claim every file belonging to a directory that looks like a breseq sample.
 
@@ -272,10 +299,15 @@ def detect_genomediff(staged_root, paths):
     Without this the breseq folder's own data/output.gd would be claimed twice. The
     registry hands each file to the first handler that claims it, and breseq folders run at the
     same priority, so this exclusion has to be explicit rather than relying on ordering.
+
+    Excluded by *directory*, not by what breseq claims: `data/annotated.gd` sits beside
+    `output.gd` and no breseq pattern names it, so a claim-based exclusion imported it as a
+    phantom sample called `annotated`. See `inside_a_breseq_sample`.
     """
-    claimed_by_breseq = set(detect_breseq_folders(staged_root, paths))
+    prefixes = breseq_sample_prefixes(staged_root)
     return [p for p in paths
-            if p not in claimed_by_breseq and matches_patterns(p, GENOMEDIFF_PATTERNS)]
+            if not inside_a_breseq_sample(p, prefixes)
+            and matches_patterns(p, GENOMEDIFF_PATTERNS)]
 
 
 def handle_genomediff(experiment, staged_root, paths, user):
@@ -351,10 +383,16 @@ def handle_genomediff(experiment, staged_root, paths, user):
 
 
 def detect_vcf(staged_root, paths):
-    """Only .vcf files that are not part of a breseq sample, mirroring detect_genomediff."""
-    claimed_by_breseq = set(detect_breseq_folders(staged_root, paths))
+    """Only .vcf files that are not part of a breseq sample, mirroring detect_genomediff.
+
+    breseq 0.50 writes `data/output.vcf` beside its `.gd`, so without the directory exclusion
+    every breseq folder imported its own mutations twice -- once properly, and once as a
+    sample named `output`. See `inside_a_breseq_sample`.
+    """
+    prefixes = breseq_sample_prefixes(staged_root)
     return [p for p in paths
-            if p not in claimed_by_breseq and matches_patterns(p, VCF_PATTERNS)]
+            if not inside_a_breseq_sample(p, prefixes)
+            and matches_patterns(p, VCF_PATTERNS)]
 
 
 def list_vcf_units(staged_root, claimed):
@@ -523,5 +561,5 @@ def register_core_import_handlers():
         list_units=list_vcf_units,
         menu_order=MENU_VCF,
         requires_reference=True,
-        description="Variant calls from any caller. Normalised and converted to GenomeDiff "
+        description="Variant calls from any caller. Normalized and converted to GenomeDiff "
                     "on the way in, so they share rows with breseq's own calls.")

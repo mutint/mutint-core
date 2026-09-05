@@ -67,7 +67,7 @@ markdown_extensions:
 # The two top-level headings are not decoration. An assembled project merges every installed
 # component's nav into one manual, and these headings are how a page says who it is for --
 # `Using ALEdb` and `Extending ALEdb` from `aledb_common.docs_manual`. Anything filed under a
-# heading that module does not recognise lands under "About this deployment" instead, named
+# heading that module does not recognize lands under "About this deployment" instead, named
 # for this component, which is visible rather than silent.
 nav:
   - Using ALEdb:

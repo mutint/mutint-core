@@ -95,7 +95,7 @@ def build_record():
 
     record.features = [
         SeqFeature(SimpleLocation(0, GENOME_LENGTH, strand=1), type='source',
-                   qualifiers={'organism': ['synthetic construct'],
+                   qualifiers={'organizm': ['synthetic construct'],
                                'mol_type': ['genomic DNA']}),
 
         # thrA -> ... <- thrB : convergent, 100 bp apart. Neither promoter is hit.

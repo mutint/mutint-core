@@ -9,7 +9,7 @@ mutation *is*.
 
 This module is pure -- text in, records out, no database and no Django -- in the shape
 `reference.py` and `sample_names.py` already have. That is what makes the two rules most
-likely to be got wrong testable on their own: how a variant normalises, and what it is then
+likely to be got wrong testable on their own: how a variant normalizes, and what it is then
 called.
 
 `gdtools VCF2GD` is the pattern for the position arithmetic and is deliberately not followed
@@ -62,7 +62,7 @@ class LineProblem(Exception):
 
 
 class Variant:
-    """One ALT allele of one VCF line, normalised, with the fields needed to place it."""
+    """One ALT allele of one VCF line, normalized, with the fields needed to place it."""
 
     def __init__(self, seq_id, position, ref, alt, allele_index, line):
         self.seq_id = seq_id
@@ -78,7 +78,7 @@ class Variant:
 
 
 def trim(position, ref, alt):
-    """Normalise one REF/ALT pair. Returns `(position, ref, alt)`.
+    """Normalize one REF/ALT pair. Returns `(position, ref, alt)`.
 
     Common suffix first, then common prefix, advancing the position by each prefix base
     removed. `bcftools norm` semantics with one difference: **the anchor base is removed
@@ -121,7 +121,7 @@ def trim(position, ref, alt):
 
 
 def classify(variant):
-    """The GenomeDiff type and fields for a normalised variant, as a plain dict.
+    """The GenomeDiff type and fields for a normalized variant, as a plain dict.
 
     Four rules, and the last is one rule rather than three::
 
@@ -352,7 +352,7 @@ def looks_like_vcf(text):
 
 
 def variants_for(line, sample_name=None):
-    """The normalised variants this line calls, for one sample or for a sites-only file.
+    """The normalized variants this line calls, for one sample or for a sites-only file.
 
     **Multi-allelic lines are split, not refused.** gdtools aborts the whole file on a comma
     in ALT; here each ALT becomes its own candidate and the sample's genotype chooses between

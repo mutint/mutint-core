@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 def build_coverage(sample_id):
     """Derive and store one sample's coverage BigWig.
 
-    **Takes the primary key, not the model.** Task arguments are serialised to JSON, so a
+    **Takes the primary key, not the model.** Task arguments are serialized to JSON, so a
     model instance cannot travel and would fail at enqueue time; the pk is also the honest
     thing to send, because the row may have changed by the time a worker picks the task up.
 

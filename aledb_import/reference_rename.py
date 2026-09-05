@@ -167,7 +167,7 @@ def describe_difference(reference, sequences):
     """Why `sequences` is not this experiment's genome, in terms of sequences not hashes.
 
     Named by whichever side has a name for it -- under sequence identity the names carry no
-    weight, but they are what the person uploading recognises.
+    weight, but they are what the person uploading recognizes.
     """
     stored = _stored_hashes(reference)
     incoming = [(seq_id, reference_io.sequence_digest(seq)) for seq_id, seq in sequences]

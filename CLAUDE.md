@@ -122,7 +122,7 @@ doing at the time -- see the paragraph above.)
 They were 1646 and 1827 before the platform move, which deleted
 six test modules that drove named migrations through the real executor and added the lifecycle,
 task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
-page's normalisation, the local change-password page and the sidebar's admin link -- which
+page's normalization, the local change-password page and the sidebar's admin link -- which
 added 24 tests to a corner that had none at all.
 **The standalone figure went down and the assembled one up** at the entry before that,
 which is what extracting a component looks like: the needle plot's 22 tests left this repo with
@@ -235,7 +235,7 @@ this file says a red suite is a regression rather than the weather.
   create view, the CLI importer and `load_example` all use.
 - **Access is explicit; staff have no blanket read.** `can_view_project` used to end
   `return bool(user.is_staff)`. A test that gives someone `is_staff=True` and expects them to
-  see a project is asserting the old behaviour.
+  see a project is asserting the old behavior.
 - **A `tests/` directory with no `__init__.py` is not run at all, and says nothing.**
   `aledb_dashboard/tests/` had none, so its nine tests had never run in the suite -- and the
   symptom is not a failure, it is a total that is quietly nineteen short. A bare `./aledb test`
@@ -365,10 +365,10 @@ on the `<li>`, for the reason in the next paragraph.
 
 **That reason was a live bug, not a hypothetical.** `common.css` carried
 `.active, .dot:hover { background-color: #717171 }` -- a rule about *carousel dots*, written so
-that it painted grey behind **any** element carrying the class. Bootstrap puts `active` on a
+that it painted gray behind **any** element carrying the class. Bootstrap puts `active` on a
 selected nav tab, a selected dropdown row and the current sidebar entry. Mostly the inner `<a>`
 covered it and nobody saw it. On a nav tab it did not: `.nav-tabs > li > a` has
-`margin-right: 2px` and no bottom border, so 2px of grey showed down the right-hand side and
+`margin-right: 2px` and no bottom border, so 2px of gray showed down the right-hand side and
 along the foot of the *selected tab on every tabbed page in the suite* -- which reads as a badly
 drawn drop shadow, and was reported as one. It is `.dot.active` now. Nothing renders
 `class="dot"` any more, so the block it belongs to is dead as it stands; narrowing the selector
@@ -495,7 +495,7 @@ starts printing Django's version instead — `aledb_common/tests/test_version.py
 ### The per-sample mutation page
 
 `aledb_sample/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own
-column order and colouring, as the per-sample companion to Compare, which pivots the whole
+column order and coloring, as the per-sample companion to Compare, which pivots the whole
 experiment and lives in the **aledb-compare** plugin at `/compare/` (see **Compare is a
 plugin** below). A picker moves between samples; the evidence cell links into the genome
 browser when the sample has a stored alignment.
@@ -514,7 +514,7 @@ annotation lives in one JSON column rather than twenty scalar ones: rendering is
 merge, not a rebuild. It is server-rendered rather than fed to DataTables as a JSON blob,
 because the markup already exists by the time the view runs.
 
-**Because that markup is generated in Python, its behaviour cannot live in a page.** Past
+**Because that markup is generated in Python, its behavior cannot live in a page.** Past
 `MAX_GENES_BEFORE_SUMMARY` (15) genes a deletion's Description collapses behind a **Show**
 button, and the click handler for it was an inline `<script>` in *this* page's template --
 while three pages render rows from `build_rows`: this one, the genome browser and the mutation
@@ -599,9 +599,9 @@ Four things in that module are load-bearing:
 - **`mkdocstrings.paths` must name every component**, or a plugin's `:::` reference does not
   resolve once its pages are built from somewhere else.
 
-**The manual is organised by audience, not by component.** `Using ALEdb` and `Extending ALEdb`
+**The manual is organized by audience, not by component.** `Using ALEdb` and `Extending ALEdb`
 are top-level nav headings a component uses in its *own* `mkdocs.yml` to say who each page is
-for, and the collector merges each heading across components. Anything under an unrecognised
+for, and the collector merges each heading across components. Anything under an unrecognized
 heading lands under `About this deployment` named for its component -- visible rather than
 dropped, so a component that has not thought about audience still builds.
 
@@ -742,7 +742,7 @@ model, so a row selected on another page or behind a search box still comes back
 `rows({selected:true})`. `ale/experiment_samples.html` avoids DataTables for the opposite
 reason: `deferRender` never builds the DOM for undrawn rows, so a *typed* value on page two
 would not exist to read back. If a cell here ever becomes editable, the table has to become a
-plain one. And the initialisation must sit inside **`$(document).ready`**: base.html loads the
+plain one. And the initialization must sit inside **`$(document).ready`**: base.html loads the
 Select and Buttons extensions in the last `<script>` of `<body>`, after `{% block content %}`,
 so an IIFE in the content block runs with only plain DataTables loaded and `select:` and
 `buttons:` are silently dropped -- the table still draws and the checkbox column still gets its
@@ -797,7 +797,7 @@ one recount rather than ten.
 
 **That 4.9s was measured on an implementation that no longer exists** -- `rebuild_mutation_counts`
 materialised every call as a model in order to filter it, and reads three columns as
-tuples now. The behaviour above is unchanged and not up for revisiting on that account: it rests
+tuples now. The behavior above is unchanged and not up for revisiting on that account: it rests
 on ten deletes costing one recount rather than ten, which is true at any per-row price.
 
 `run_rebuilds` takes `scope=` for this; `get_rebuilders` already did.
@@ -992,7 +992,7 @@ while the *type* sums remain lower because an unknown type is dropped rather tha
 
 Gone with it: `SEQ_COLORS`, `GENE_COLORS`, `COLORS`, `DEFAULT_COLOR`, `_set_colors` and the
 `seq_color_set`/`protein_types` context keys — palettes for a chart never built, whose one live
-effect was that adding a token silently reshuffled a colour list nobody rendered.
+effect was that adding a token silently reshuffled a color list nobody rendered.
 
 #### The dashboard counted what had been deleted
 
@@ -1312,7 +1312,7 @@ once. It is the third thing the editor does, and the only one that has to invent
 rather than move an existing one about.
 
 **The form's fields come from `genomediff.schema.TYPE_SPECIFIC_FIELDS`.** That table is what
-the parser fills a record from and what `Record.__str__` serialises in order, and it is
+the parser fills a record from and what `Record.__str__` serializes in order, and it is
 mirrored from breseq's `genome_diff_entry.cpp`. (It used to live in `genomediff.records`, which
 still re-exports it.) `validation.form_schema()`
 hands it to the page through `json_script`, so the type dropdown, the visible inputs, the
@@ -1405,7 +1405,7 @@ have recorded in it.
 `aledb_filter/view_filter.py` is the value and where it lives; `util.py` is what applies it.
 Separate modules so a plugin importing the filter does not drag in `MutationCall`'s joins,
 and so the value's tests need no database -- pinning the gene-subset rule used to take six model
-rows. `ViewFilter` normalises `0` and `100` to `None`, which collapses "configured" and
+rows. `ViewFilter` normalizes `0` and `100` to `None`, which collapses "configured" and
 "actually hides something" into one question: `is_empty`.
 
 **It lives in `request.session`**, the repo's first session write, and the traps are in that
@@ -1420,7 +1420,7 @@ guarded a shared setting; a reader's own view has nothing to protect. That absen
 clearest statement of what the change is for.
 
 Two consequences worth knowing. **`/stats` and Search do not filter at all** -- neither is a page
-you read rows through, and the Overview summarises a dataset the way the dashboard does; that is
+you read rows through, and the Overview summarizes a dataset the way the dashboard does; that is
 what made `_count_in_python` unreachable, since it existed only because the gene half of a filter
 has no SQL. And **core has no experiment-scoped rebuilder left**: `experiment_filter` was the
 last one, so several tests register their own rather than borrowing whatever was lying around.
@@ -1547,7 +1547,7 @@ one source twice is what makes drifting hard rather than merely tested against.
 
 **`applied` is not "is a filter configured".** A 0-100 range with no ignored genes is
 configured and hides nothing; calling that "filtered" teaches people to ignore the word. It used
-to need care; `ViewFilter` normalises those ends away at construction, so the two questions have
+to need care; `ViewFilter` normalizes those ends away at construction, so the two questions have
 become one and `applied` is simply `not is_empty`.
 
 **Template tags, not context keys**, and that is what makes them generic: they read
@@ -1589,7 +1589,7 @@ Two things this shook out that are worth knowing:
   `REFSEQ_COLUMN_IN_MUT_TABLE` went 3 -> 2 and `aledb_export.util`'s `mut_pos_index` with it;
   everything in `table_template.js` is expressed relative to that constant, and aledb-compare,
   aledb-fixation, aledb-converge and `aledb_search` all import it rather than hardcoding an
-  index, so they followed for free. Getting it wrong renders a table labelled one way and
+  index, so they followed for free. Getting it wrong renders a table labeled one way and
   sorted another, which reads like CSS. `test_mutation_table_builder` now asserts the header
   and every row are the same width and that the constant points at "Reference Seq".
 - **A filter with no cutoff at either end used to exclude the whole experiment.** An empty `Q`
@@ -1648,7 +1648,7 @@ time point carrying different media. `Media` is gone and so is the row it hung o
 
 One difference from `gd_import._get_or_create_chain` remains, and it is a correction rather
 than a preference: **a newly created `Population` copies species and strain but not
-description.** The first two are facts about the organism and hold across ALEs; a description
+description.** The first two are facts about the organizm and hold across ALEs; a description
 is what makes *this* ALE different from the others.
 
 Two samples may not share a coordinate, and the save refuses it. There is no constraint saying
@@ -1666,7 +1666,7 @@ POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls ev
 count, and paying for the whole database on every rename is what would make this feel broken
 in production. A descriptive-only save rebuilds nothing.
 
-**`Sample.time_point` is labelled "Time point" on the edit pages**, and was
+**`Sample.time_point` is labeled "Time point" on the edit pages**, and was
 `TimePoint.flask_number` on a row of its own. It is the only ordinal in the schema that places
 a sample along an ALE -- fixation sorts by it and takes the last two
 to decide what has fixed -- and real data carries values like 30000, so it is plainly being
@@ -1951,7 +1951,7 @@ the posture `nav_registry` takes with a `url_name` that will not reverse.
 **The three endpoint URLs in `table_template.js` are reversed by name, not written out.** That
 file is a Django template included inside a `<script>`, so `{% url %}` works there -- and so does
 anything else tag-shaped, **including inside a `//` or `/* */` comment**, which the template
-engine does not recognise as a comment at all. Writing a tag name in a comment there executes it.
+engine does not recognize as a comment at all. Writing a tag name in a comment there executes it.
 
 Nothing in core rendered that file until this change: `aledb_search` has no tests and the other
 three consumers are plugin pages. `aledb_sample/tests/test_table_actions.py` renders it directly now,
@@ -2094,7 +2094,7 @@ the page classifies a drop with cannot disagree:
   Establishing a reference is a one-time act; replacing the *annotation* is
   `replace_annotation`, and swapping in a different genome is deliberately shell-only.
 - `requires_reference` -- `replace_annotation` and `genomediff` are **absent** until there is
-  a genome. There is no greyed-out presentation and no `unavailable` parameter; a dropdown
+  a genome. There is no grayed-out presentation and no `unavailable` parameter; a dropdown
   entry you can see and cannot pick is a dead end. The page's own banner carries the answer
   instead, and names the bare-`.gd` case explicitly, so the short menu is explained whether
   or not an entry is there to point at.
@@ -2112,7 +2112,7 @@ commonest thing anybody opens this page to do. `menu_order` defaults to `priorit
 that says nothing keeps its position; core sets `.gd` first, breseq folders second, and
 `replace_annotation` last, that one being the rarest and least reversible entry. **Only
 `get_import_types_for` sorts by it** -- `get_import_types()` stays in priority order, because
-the page walks that list to name what an unrecognised file *looks* like and wants the handler
+the page walks that list to name what an unrecognized file *looks* like and wants the handler
 that would really claim it named first.
 
 Because both the menu and the banner are rendered from `has_reference` at page load, a drop
@@ -2174,10 +2174,10 @@ section is the history of a SQLite failure, and the suite is on PostgreSQL now; 
   `OPTIONS={'transaction_mode': 'IMMEDIATE'}`, then nothing: PostgreSQL has no deferred-`BEGIN`
   refusal to work around.
 - **`retry` matches SQLSTATE now** (`40001`, `40P01`, `55P03`), not message text. It matched
-  SQLite's and MySQL's wording, so on PostgreSQL it recognised *nothing* while still reading
+  SQLite's and MySQL's wording, so on PostgreSQL it recognized *nothing* while still reading
   like live protection. Matching PostgreSQL's wording would be the same bug one step on --
   the server translates messages under `lc_messages`. Its premise is stronger here than it was:
-  MVCC produces serialisation failures a single-writer database structurally cannot.
+  MVCC produces serialization failures a single-writer database structurally cannot.
 - **`import_lock` stays, and its stated reason is now the wrong one.** It was justified by
   "SQLite permits exactly one writer". What it actually buys, and buys more dearly now, is that
   it makes the suite's unconstrained `get_or_create` calls -- `Experiment` and `Project` --
@@ -2256,7 +2256,7 @@ a restart. A literal guarantee is durability of the *work item*, which is `WORKE
 **Postgres was considered and is not needed for this.** The 30/30 above is SQLite. What
 Postgres would buy is *simultaneous* imports rather than queued ones -- a throughput question,
 not a correctness one -- at the cost of the no-external-services property `./aledb start` is
-built around. It is also not a guarantee by itself: it still raises serialisation failures and
+built around. It is also not a guarantee by itself: it still raises serialization failures and
 deadlocks, so the retry would be wanted there too.
 
 **And shortening transactions does not help.** Batching the per-record queries is worth doing
@@ -2353,7 +2353,7 @@ each catching what the one before it cannot:
   genome first"), which is why the page embeds the **unscoped** registry as
   `all_import_types` alongside the scoped `import_types` that fills the dropdown.
 - **Server-side, by pattern**, `import_registry.identify()` turns `run_import`'s "not
-  recognised as Reference genome" into "...it looks like GenomeDiff mutations, so import it
+  recognized as Reference genome" into "...it looks like GenomeDiff mutations, so import it
   with that type". Patterns only, never a handler's `detect`: the job is to name a likely
   alternative, not to re-decide what the file is.
 - **Server-side, by content**, `aledb_import/sniff.py` reads the first non-blank line, which
@@ -2444,7 +2444,7 @@ igv takes features as an inline array, so this needs **no route, no store whitel
 no `EXTENSION_CONTENT_TYPES` entry**. The module is pure, in the shape `locus.py` and
 `functional_change.py` are, and reads `values_list` tuples the way `get_needle_plot_data` does.
 
-One track is offered: **Mutations** (`annotation`, coloured by `functional_change_bucket`).
+One track is offered: **Mutations** (`annotation`, colored by `functional_change_bucket`).
 A second, **Mutations by sample** (`seg`, one row per sample in `get_ordered_reseq_queryset`
 order), is still built by `sample_features` and **switched off** by `DRAW_SAMPLE_TRACK = False`.
 
@@ -2453,7 +2453,7 @@ is that the per-sample band did not earn the vertical space it took under the Mu
 -- not that it is wrong. `sample_features` is unchanged and still tested directly, so flipping
 the flag restores a working track rather than resurrecting code that has rotted meanwhile.
 `browse.html`'s `showSampleNames: true` is the other half of the switch and is kept for the
-same reason: without it a seg track comes back with unlabelled rows, which is subtle enough to
+same reason: without it a seg track comes back with unlabeled rows, which is subtle enough to
 be worth not rediscovering. `test_tracks.py` asserts both halves -- that only Mutations is
 offered, and that `sample_features` still returns features -- so the day the flag moves, the
 failure says which half moved.
@@ -2472,7 +2472,7 @@ it drew an empty Mutations track beside a populated per-sample one. Going throug
 calls also makes both ancestor-subtracted, which is correct: an ancestral mutation is
 in every sample by construction.
 
-**The per-sample track marks presence, and deliberately does not encode frequency in colour.**
+**The per-sample track marks presence, and deliberately does not encode frequency in color.**
 Three browser probes decided that. igv's `seg` scale is diverging around zero and built for
 log2 copy ratios: raw frequencies in [0, 1] paint 5% and 100% the identical blue; mapped into
 [0.35, 1.5] they rendered *lighter* as frequency rose; a symmetric [-1.5, 1.5] track rendered
@@ -2482,7 +2482,7 @@ frequency would look different on two experiments' pages and nobody could learn 
 Every feature carries `value = SEG_PRESENT` and the frequency rides alongside for igv's popup,
 where it is a number rather than a suggestion.
 
-`showSampleNames: true` is set on the browser, or a seg track draws its rows unlabelled.
+`showSampleNames: true` is set on the browser, or a seg track draws its rows unlabeled.
 
 **The sample label cannot come out of `values_list`.** `label` is a property
 falling back through the isolate's description to a computed `A# F# I# R#`, so pulling
@@ -2511,7 +2511,7 @@ changes track identity rather than a flag, so choosing an item reloads whatever 
 **The alignment track's own coverage row is off wherever the BigWig replaces it**
 (`showCoverage: !t.coverageURL`). igv draws one inside every alignment track, so a sample was
 showing the same depth twice in one column -- measured in a browser as two histograms, the
-blue BigWig and a grey one directly beneath it, both scaled 0-169. Since coverage started
+blue BigWig and a gray one directly beneath it, both scaled 0-169. Since coverage started
 weighting reads by `1/X1` the two no longer even agree: igv counts every alignment once, so
 its row still towers over a repeat while the track above it does not, and two coverage rows
 disagreeing is worse than either alone.
@@ -2586,7 +2586,7 @@ which is what makes them presets. It has the same shape as the column menu on th
 page -- DataTables' colvis collection -- a `ul.dropdown-menu` of `<li><a>` where a showing
 sample is `active` on its `<li>`, so Bootstrap's own `.dropdown-menu > .active > a` paints the
 row and there is nothing to restyle. (DataTables does put `#717171` on the active `<li>`, but
-its `<a>` covers the row, so that grey is never the colour you see; do not copy it.) The rows
+its `<a>` covers the row, so that gray is never the color you see; do not copy it.) The rows
 are links only so Bootstrap styles them, which is why the click handler stops the default as
 well as the propagation. Three things about it are load-bearing:
 
@@ -2623,7 +2623,7 @@ either way. The same `*` is prefixed to the igv
 track name, so a stack of pileups says which of them carry the call — igv puts no constraints on
 a track name. In the menu a sample without one gets a same-width empty span so the names stay in
 a column; on the track there is deliberately no such padding, because an igv track label is its
-own shrink-to-fit badge with centred text and has no column to align to.
+own shrink-to-fit badge with centered text and has no column to align to.
 
 #### Clicking a mutation makes it the page's mutation
 
@@ -2707,7 +2707,7 @@ All four margins round the browser measure the same 25px; the header trim that m
 one work is in `common.css` and applies to every page (see **The shell's two widths**).
 
 The cell markup is coupled to two things that substring-test it: `_contains_mutation` decides
-whether a row renders by looking for `true`, and `table_template.js` colours a cell by testing
+whether a row renders by looking for `true`, and `table_template.js` colors a cell by testing
 for `class="true"`. Keep that class on the anchor, and keep `true` out of the empty-cell literal.
 
 ### Everything the browser loads is served from here
@@ -2752,7 +2752,7 @@ Four things about the vendored layout are load-bearing:
   was current (2.1.2 when vendored). A major release would have changed the `swal()` API under
   ten templates with no commit here. Vendoring pinned it.
 - **The four DataTables bundles stay distinct.** The pages differ in which extensions they use,
-  so consolidating them is a behaviour change wearing a cleanup's clothes.
+  so consolidating them is a behavior change wearing a cleanup's clothes.
 
 `?v={{ aledb_version }}` is deliberately **not** applied to these: every vendored path already
 carries its version, so a release cannot serve half of one version and half of another.
@@ -2935,7 +2935,7 @@ knows both anyway. One endpoint, one contract.
    reaching Compare, Fixation, Converge and Search at once. Three constraints, all of which
    fail silently if broken: the cell must not carry `class="true"` **or the literal string
    `true` at all**, since `_contains_mutation` substring-tests the row for it to decide
-   whether the row renders and `table_template.js` tests for it to colour a sample cell; the
+   whether the row renders and `table_template.js` tests for it to color a sample cell; the
    column count must not change, because everything in `table_template.js` is indexed
    relative to `REFSEQ_COLUMN_IN_MUT_TABLE`; and the CSV export is unaffected because
    `aledb_export/util.py` re-derives `seq_id` itself rather than reusing this cell.
@@ -3166,7 +3166,7 @@ against it. Core registers `reference` (10), `breseq_folder` (50) and `genomedif
 exclude files that live inside one.
 
 `patterns` does more than route. `identify()` uses it to name the type a rejected file belongs
-to, and the Add page serialises it to name the type a file in the drop belongs to before
+to, and the Add page serializes it to name the type a file in the drop belongs to before
 anything uploads — so a plugin gets both of those by registering, with no edit to core.
 
 ### Serving breseq's report, which is the only HTML we did not write
@@ -3242,7 +3242,7 @@ sources are `breseq` and `vcf`.
 
 **`gdtools VCF2GD` was the pattern, and was measured rather than assumed.** Run against breseq
 0.50, it classifies on string length alone and reads the reference for nothing. Four of its
-behaviours we match exactly and `GdtoolsAgreementTestCase` holds its real output as fixtures:
+behaviors we match exactly and `GdtoolsAgreementTestCase` holds its real output as fixtures:
 `SNP` at POS, `INS` at POS with the inserted bases, `DEL` at `POS + len(ALT)`, and the sizes.
 Five we diverge from, each with a test named for its reason:
 
@@ -3261,7 +3261,7 @@ advancing the position -- `bcftools norm` semantics except the anchor base goes 
 because GenomeDiff needs none. Suffix-before-prefix does two jobs: it keeps `AT -> AGT` an
 insertion rather than a substitution, and it **left-aligns** an indel in a homopolymer.
 `start_position` and `sequence_change` are both `get_or_create` fields, so getting either wrong
-forks one mutation into two rather than merely mislabelling it.
+forks one mutation into two rather than merely mislabeling it.
 
 **Four classification rules, not five.** SNP, INS (REF empty), DEL (ALT empty), and SUB for
 everything else -- `SUB` replaces `size` reference bases with `new_seq` and **the two lengths
@@ -3280,7 +3280,7 @@ per mutation, deliberately: a `Mutation` is deduplicated and written once on cre
 record hung there would be whichever VCF wrote first, and a multi-allelic split maps one line
 to several mutations anyway. **Nothing VCF-specific goes near the GenomeDiff record**, because
 `to_gd_line()` splats every key of it onto the emitted line -- this is the one place gdtools'
-behaviour must not be copied, since it writes `AD=`, `DP=` and `AF=` into the GenomeDiff and
+behavior must not be copied, since it writes `AD=`, `DP=` and `AF=` into the GenomeDiff and
 those are not GenomeDiff fields. `AF` becomes `MutationCall.frequency`.
 
 `/import/vcf/<sample_id>/export` re-emits the stored header and lines, byte-for-byte for a
