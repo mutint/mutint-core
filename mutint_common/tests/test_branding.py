@@ -150,6 +150,11 @@ class BrandingTestCase(TestCase):
         self.assertIn("Powered by ALEdb",
                       self.client.get(INTERNAL_PAGE).content.decode())
 
+    def test_the_watermark_links_to_aledb(self):
+        """Icon and words are one link to the project being credited."""
+        content = self.client.get(INTERNAL_PAGE).content.decode()
+        self.assertRegex(content, r'<a href="https://aledb\.org/"[^>]*><img [^>]*fav\.png[^>]*>Powered by ALEdb</a>')
+
     def test_the_watermark_carries_no_version(self):
         """It is an attribution, not a status line.
 

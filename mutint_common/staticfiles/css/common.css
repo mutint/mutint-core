@@ -631,14 +631,21 @@ table.dataTable thead .sorting_desc:after {
 /* mutint-core's attribution, closing the sidebar menu. Muted and small: it is a
    watermark, not a nav entry, and must not compete with the links above it. */
 .mutint-watermark {
-    /* Same box as `.nav > li > a` (10px 15px) so the text lines up with the
-       links above it -- the watermark is a bare <li> with no inner <a> to
-       inherit that from. Separation from the nav is margin, not extra padding. */
-    padding: 10px 15px;
+    /* Separation from the nav is margin, not extra padding: the box itself is the
+       <a>'s, below, which is a `.nav > li > a` and gets 10px 15px and the hover
+       gradient from Bootstrap and the rule near the top of this file. */
     margin-top: 1.5em;
     font-size: 13px;
-    color: #999;
     white-space: nowrap;
+}
+
+/* The mark is one link, icon and words, to aledb.org. Muted in every state: it is an
+   attribution rather than a nav entry, so it takes the hover gradient the links above
+   it have but never their text colour. */
+.sidebar .mutint-watermark > a,
+.sidebar .mutint-watermark > a:hover,
+.sidebar .mutint-watermark > a:focus {
+    color: #999;
 }
 
 /* Sized against the text rather than in pixels, so the icon holds its proportion

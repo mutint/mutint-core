@@ -123,7 +123,8 @@ known paths, because an assembled project's `templates/` directory is searched a
 app's.
 
 The `Powered by ALEdb` line at the foot of the sidebar is not branding and has no setting. It
-is mutint-core's attribution and renders on every deployment. It carries no version number:
+is mutint-core's attribution and renders on every deployment, and links to
+[aledb.org](https://aledb.org/). It carries no version number:
 `./mutint version` reports the platform's, and `/about` lists the version and git revision of
 every installed component.
 

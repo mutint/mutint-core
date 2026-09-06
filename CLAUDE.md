@@ -532,8 +532,9 @@ Django raises `ImproperlyConfigured` if it appears in `STATICFILES_DIRS`. The en
 omitted when the directory is absent, or every `./mutint check` reports `staticfiles.W004`.
 
 **The `Powered by ALEdb` watermark is not part of this** and has no setting. It is
-mutint-core's attribution and renders on every deployment, branded or not. **It carries no
-version**, and used to read `Powered by ALEdb vX.Y.Z` -- which made an attribution read as a
+mutint-core's attribution and renders on every deployment, branded or not. Icon and words
+are one link to https://aledb.org/, in a new tab, muted in every state so it never reads as a
+nav entry. **It carries no version**, and used to read `Powered by ALEdb vX.Y.Z` -- which made an attribution read as a
 status line, at the foot of every page of a site people come to for the science. `./mutint
 version` and `/about` are where a version belongs, and About gives every installed component's
 rather than the platform's alone. `test_branding.test_the_watermark_carries_no_version` is the
