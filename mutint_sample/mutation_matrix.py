@@ -1,7 +1,7 @@
 """The mutation matrix: mutations down, samples across, drawn the way breseq draws a mutation.
 
-This is what Compare, Fixed Mutations, Converged Mutations and Search all render, and what a
-plugin renders when it has "a set of mutation calls" to show. It replaced a builder that
+This is what Compare and Search render, and what a plugin renders when it has "a set of
+mutation calls" to show. It replaced a builder that
 produced positional arrays for a DataTable and a script that located the sample columns by
 arithmetic on where the reference column sat -- arithmetic that went stale the first time the
 fixed columns changed.
@@ -66,6 +66,25 @@ class SampleColumn:
     palette: int = 0
 
 
+@dataclass(frozen=True)
+class RowSet:
+    """A named subset of the rows, for the Show menu: `key` is what the client filters on,
+    `label` what the menu says, `mutation_ids` which mutations belong.
+
+    The matrix annotates each row with the keys of the sets holding it and offers the sets
+    in a menu; it does not filter -- the reader chooses, in the browser, with the count and
+    the pager describing what is left. What a set *means* is the caller's business: the
+    builder is handed ids and asks nothing about how they were chosen.
+    """
+    key: str
+    label: str
+    mutation_ids: frozenset
+
+    @property
+    def count(self):
+        return len(self.mutation_ids)
+
+
 @dataclass
 class MutationMatrix:
     columns: list
@@ -76,6 +95,9 @@ class MutationMatrix:
     csv_title: str = "mutations"
     #: The mutation types the rows hold (SNP, DEL, ...), sorted, for the Types menu.
     types: tuple = ()
+    #: The `RowSet`s the Show menu offers, each with the count of rows it holds. Empty for a
+    #: page with nothing to offer, and then the menu is not rendered.
+    sets: tuple = ()
 
     @property
     def width(self):
@@ -175,7 +197,7 @@ def _sample_cell(call, browse_url):
 
 def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
                  browse_url=None, refseq_url=None, csv_title="mutations",
-                 dom_id="mutation-matrix"):
+                 dom_id="mutation-matrix", sets=()):
     """Lay `mutation_calls` out against the samples in `reseq_dict`.
 
     `reseq_dict` is `{sample_id: Sample}` in the order the columns should appear -- what
@@ -190,6 +212,10 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
 
     `browse_url(call)` and `refseq_url(mutation)` -> `(url, title)` may be replaced; the
     defaults are `browse_url_for` and `refseq_url_for`.
+
+    `sets` is a sequence of `RowSet`s. Each row is annotated with the keys of the sets that
+    hold its mutation, and the sets are offered in the Show menu, counted by the rows they
+    hold here rather than by the ids handed in: an id no listed sample carries is no row.
     """
     palette = palette_indexes(s.population_id for s in reseq_dict.values())
     samples = [SampleColumn(id=sample.id,
@@ -213,10 +239,16 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
         row["samples"][column_of[call.sample_id]] = _sample_cell(call, browse_url)
 
     rows = sorted(by_mutation.values(), key=lambda r: (r["seq_id_text"], r["position_sort"]))
+    if sets:
+        for row in rows:
+            row["sets"] = [s.key for s in sets if row["id"] in s.mutation_ids]
+        sets = tuple(RowSet(s.key, s.label, frozenset(s.mutation_ids & by_mutation.keys()))
+                     for s in sets)
     return MutationMatrix(columns=list(DESCRIPTIVE), samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,
-                          types=tuple(sorted({row["type"] for row in rows if row["type"]})))
+                          types=tuple(sorted({row["type"] for row in rows if row["type"]})),
+                          sets=sets)
 
 
 def _describe(mutation, refseq_url, width):

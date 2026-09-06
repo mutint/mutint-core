@@ -183,6 +183,25 @@ class RowsTestCase(_Fixture):
         self.assertEqual(list(range(size)) + [0],
                          mutation_matrix.palette_indexes(range(size + 1)))
 
+    def test_row_sets_annotate_the_rows_and_are_counted_by_row(self):
+        """A set names mutations; the matrix says which rows fall in it, and counts only the
+        rows -- an id no listed sample carries is not a row and is not counted."""
+        snp = Mutation.objects.get(start_position=100)
+        amp = Mutation.objects.get(start_position=120)
+        sets = (mutation_matrix.RowSet("fixed", "Fixed", frozenset({snp.id, 999999})),
+                mutation_matrix.RowSet("both", "Both", frozenset({snp.id, amp.id})))
+        matrix = self.matrix(sets=sets)
+
+        self.assertEqual(["fixed", "both"], self.row(matrix, 100)["sets"])
+        self.assertEqual(["both"], self.row(matrix, 120)["sets"])
+        self.assertEqual([("fixed", "Fixed", 1), ("both", "Both", 2)],
+                         [(s.key, s.label, s.count) for s in matrix.sets])
+
+    def test_without_sets_the_rows_carry_none(self):
+        matrix = self.matrix()
+        self.assertEqual((), matrix.sets)
+        self.assertNotIn("sets", self.row(matrix, 100))
+
     def test_each_sample_links_to_its_own_mutations_page(self):
         """The experiment given, when there is one; the sample's own when there is not --
         the cross-experiment page has none to give, and the link must still be right."""
@@ -233,6 +252,27 @@ class PartialTestCase(_Fixture):
             self.assertIn('<li data-value="%s"' % value, html)
         self.assertIn('<li data-value="number" class="active">', html)
         self.assertIn('data-role="frequency-legend"', html)
+
+    def test_the_show_menu_renders_only_when_the_matrix_has_sets(self):
+        """Search and a plain Compare offer no sets and get no menu; a page that hands sets
+        over gets All plus one entry per set, each with its count."""
+        self.assertNotIn('data-role="show"', self._render())
+        snp = Mutation.objects.get(start_position=100)
+        sets = (mutation_matrix.RowSet("fixed", "Fixed", frozenset({snp.id})),)
+        html = self._render(matrix=self.matrix(sets=sets))
+        self.assertIn('data-role="show"', html)
+        self.assertIn('<li data-value="" class="active"><a href="#">All (2)</a></li>', html)
+        self.assertIn('<li data-value="fixed"><a href="#">Fixed (1)</a></li>', html)
+        self.assertIn('data-role="show-label">All<', html)
+
+    def test_a_page_that_extends_this_one_can_add_form_fields_and_a_summary(self):
+        """The two blocks a plugin fills, in the form before Apply and under the filter's
+        own sentence, so it extends the page rather than copying it."""
+        source = loader.get_template("mutation_matrix/page.html").template.source
+        self.assertIn("{% block matrix_form_fields %}{% endblock %}", source)
+        self.assertIn("{% block matrix_summary %}{% endblock %}", source)
+        self.assertLess(source.index("{% block matrix_form_fields %}"), source.index('value="Apply"'))
+        self.assertLess(source.index("{% view_filter_summary %}"), source.index("{% block matrix_summary %}"))
 
     def test_the_view_switch_offers_normal_and_condensed(self):
         html = self._render()

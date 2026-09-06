@@ -13,8 +13,10 @@
  *     when the sample does not carry the mutation; the Frequency display menu only changes
  *     the table's `freq-<format>` class, and the stylesheet draws the number, a bar, a heat
  *     map or both from that one markup -- no redraw of a thousand rows;
- *   - a row whose mutation is in no *shown* sample is filtered out, through DataTables' own
- *     search hook rather than by hiding row nodes -- so paging and the row count stay honest;
+ *   - a row whose mutation is in no *shown* sample, or outside the row set the Show menu has
+ *     chosen, is filtered out through DataTables' own search hook rather than by hiding row
+ *     nodes -- so paging and the row count stay honest, and so Export's "Showing" is exactly
+ *     what is on the screen;
  *   - the Columns, Samples and Types menus are mutintSelectList in toggle mode, the genome
  *     browser's sample menu three times over, and every change is saved back where it was
  *     read from;
@@ -38,6 +40,7 @@
     var TYPES_KEY = "mutation_matrix.types";
     var FREQUENCY_KEY = "mutation_matrix.frequency";
     var VIEW_KEY = "mutation_matrix.view";
+    var SHOW_KEY = "mutation_matrix.show";
     var VIEWS = { normal: true, condensed: true };
     var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
@@ -127,6 +130,15 @@
         var storedView = prefs.get(VIEW_KEY, null);
         var view = storedView && VIEWS[storedView.view] ? storedView.view : "condensed";
         table.classList.add("view-" + view);
+        // The row set to show, when this table offers the remembered one; All otherwise --
+        // a choice made on a page that has sets must not empty one that has none.
+        var showList = container.querySelector('[data-role="show"]');
+        var storedShow = prefs.get(SHOW_KEY, null);
+        var shownSet = "";
+        if (showList && storedShow && storedShow.set &&
+                showList.querySelector('li[data-value="' + storedShow.set + '"]')) {
+            shownSet = storedShow.set;
+        }
 
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
@@ -183,11 +195,13 @@
             li.classList.toggle("active", !hiddenTypes[li.getAttribute("data-value")]);
         });
 
-        // Rows whose mutation is in no shown sample leave the table -- through the search
-        // hook, so the count and the pager describe what is visible.
+        // Rows whose mutation is in no shown sample, or outside the chosen row set, leave the
+        // table -- through the search hook, so the count and the pager describe what is
+        // visible.
         $.fn.dataTable.ext.search.push(function (settings, searchData, index, rowData) {
             if (settings.nTable !== table) { return true; }
             if (hiddenTypes[rowData.type]) { return false; }
+            if (shownSet && (rowData.sets || []).indexOf(shownSet) < 0) { return false; }
             var cells = rowData.samples || [];
             for (var i = 0; i < cells.length; i++) {
                 if (cells[i] && shownSampleIndexes[i]) { return true; }
@@ -220,11 +234,24 @@
             // pager and Export CSV -- and the table alone in the box that scrolls. The box
             // itself is DataTables' doing, so that it wraps only the table.
             dom: '<"mutation-matrix-toolbar"lfi><"mutation-matrix-toolbar"pB>r<"mutation-matrix-scroll"t>',
+            // Export is a menu of two: the rows showing -- after the Show menu, the hidden
+            // samples and types, and the search box, which is what `search: "applied"` means
+            // -- or every row the server produced. Visible columns only, either way.
             buttons: [{
-                extend: "csv",
+                extend: "collection",
                 text: "Export CSV",
-                title: container.getAttribute("data-csv-title") || "mutations",
-                exportOptions: { columns: ":visible" }
+                autoClose: true,
+                buttons: [{
+                    extend: "csv",
+                    text: "Filtered mutations",
+                    title: (container.getAttribute("data-csv-title") || "mutations") + "_showing",
+                    exportOptions: { columns: ":visible", modifier: { search: "applied" } }
+                }, {
+                    extend: "csv",
+                    text: "All mutations",
+                    title: container.getAttribute("data-csv-title") || "mutations",
+                    exportOptions: { columns: ":visible", modifier: { search: "none" } }
+                }]
             }],
             language: { emptyTable: container.getAttribute("data-empty-message") || "No mutations to show." },
             // breseq shades by displayed row, so a filtered table stripes like a full one.
@@ -374,6 +401,31 @@
             }
         });
 
+        /* The Show menu: All, or one of the row sets the server offered. One class of row
+           filter beside the samples' and the types', through the same search hook. */
+        var showLabel = container.querySelector('[data-role="show-label"]');
+        var showPicker = null;
+        if (showList) {
+            Array.prototype.forEach.call(showList.querySelectorAll("li[data-value]"), function (li) {
+                li.classList.toggle("active", li.getAttribute("data-value") === shownSet);
+            });
+            var showName = function () {
+                var chosen = showList.querySelector("li.active a");
+                if (showLabel) { showLabel.textContent = chosen ? chosen.textContent.replace(/\s*\(\d+\)\s*$/, "") : "All"; }
+            };
+            showName();
+            showPicker = window.mutintSelectList(showList, {
+                controls: null,
+                onChange: function () {
+                    var chosen = showList.querySelector("li.active");
+                    shownSet = chosen ? chosen.getAttribute("data-value") : "";
+                    showName();
+                    dt.draw();
+                    prefs.set(SHOW_KEY, { set: shownSet });
+                }
+            });
+        }
+
         /* The View switch: Normal is the Mutations page's cell padding, Condensed one line
            per row. One class on the table, and the pinned offsets recomputed, since the
            descriptive columns' widths move with their padding. */
@@ -397,7 +449,7 @@
         });
 
         // For a harness or a console: the DataTable behind the container.
-        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, frequency: frequencyPicker };
+        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, frequency: frequencyPicker, show: showPicker };
     }
 
     $(function () {

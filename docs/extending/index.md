@@ -10,14 +10,14 @@ setting, no template include, no URL. A plugin announces itself at startup by ca
 registration functions, and core renders whatever has been registered. Adding one to a
 deployment is adding a git submodule; there is no core file to edit.
 
-Four plugins exist today, and they are the worked examples this guide keeps pointing at:
+Several plugins exist today, and they are the worked examples this guide keeps pointing at:
 
 | plugin | what it adds |
 |---|---|
-| `mutint-compare` | the cross-sample mutation table at `/compare/` |
-| `mutint-fixation` | mutations that have fixed in a lineage, at `/fixation` |
-| `mutint-converge` | genes hit independently in more than one lineage, at `/converge` |
+| `mutint-compare` | the cross-sample mutation table at `/compare/`, with its Show menu of convergent and fixed mutations |
 | `mutint-phylogeny` | a maximum-parsimony tree over an experiment's samples |
+| `mutint-needle` | the needle plot, as a panel on the Overview |
+| `mutint-breseq` | breseq runs on uploaded reads |
 
 ## What a plugin can add
 

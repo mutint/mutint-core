@@ -1,9 +1,9 @@
 # Models and derived data
 
-Almost nothing user-facing in MutInt is computed at read time. The needle plot, the Overview's
-counts, the dashboard's totals, fixation's table, convergence's table and phylogeny's tree are
-all the same idea: **a table that is a function of the mutations, recomputed when they
-change**. The Django cache framework is not used for any of it — `CACHES` is LocMemCache and
+Some of what is user-facing in MutInt is not computed at read time. The dashboard's totals
+and phylogeny's trees are the same idea: **a table that is a function of the mutations,
+recomputed when they change**. (The needle plot, the Overview's counts, and the convergent and
+fixed sets on Compare all used to be, and are computed by the request now.) The Django cache framework is not used for any of it — `CACHES` is LocMemCache and
 would be per-process.
 
 If your plugin computes anything expensive, it belongs in a model and in this system.

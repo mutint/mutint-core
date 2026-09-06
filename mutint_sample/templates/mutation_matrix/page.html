@@ -36,9 +36,15 @@
                         value="{{ SAMPLE_TYPE_MIXED }}">Population samples</option>
             </select>
             {% view_filter_fields %}
+            {% comment %} A page that extends this one puts its own controls here -- what
+               they change is still which rows the server produces, behind the same Apply --
+               and says what it did with them in matrix_summary, under the filter's own
+               sentence. {% endcomment %}
+            {% block matrix_form_fields %}{% endblock %}
             <input type="submit" class="btn btn-primary" value="Apply"/>
         </form>
         {% view_filter_summary %}
+        {% block matrix_summary %}{% endblock %}
         {% mutation_matrix matrix empty_message=empty_message %}
     {% endif %}
 {% endblock %}

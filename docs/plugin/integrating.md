@@ -34,9 +34,9 @@ working untouched. See [Showing filtered data](filtering.md).
 else is looked up here. There are no plugin names anywhere in core's export code.
 
 If your handler reads derived data, this is a read path like any other — call `ensure_fresh`
-inside it, or an export will happily write out last week's answer. `mutint-fixation` registers
-the same function as both its page's queryset and its export handler, which is the reason
-the freshness check lives in the function rather than in the view.
+inside it, or an export will happily write out last week's answer. Register the same function
+as your page's queryset and your export handler, which is the reason the freshness check
+belongs in the function rather than in the view.
 
 ## An import type
 

@@ -9,9 +9,9 @@
    are drawn by the script -- a thousand mutations by forty samples is not a table to render
    twice.
 
-   The two menus are the genome browser's Samples menu, twice: a Bootstrap dropdown whose rows
-   are <li class="active"><a>, driven by mutintSelectList in toggle mode. Being active IS being
-   shown. {% endcomment %}
+   The Columns, Samples and Types menus are the genome browser's Samples menu, three times: a
+   Bootstrap dropdown whose rows are <li class="active"><a>, driven by mutintSelectList in
+   toggle mode. Being active IS being shown. {% endcomment %}
 <div class="mutation-matrix" data-mutation-matrix
      data-experiment-id="{{ matrix.experiment_id|default_if_none:'' }}"
      data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
@@ -67,6 +67,23 @@
             <button type="button" class="btn btn-default" data-types="all">Show all types</button>
             <button type="button" class="btn btn-default" data-types="none">Hide all types</button>
         </div>
+        {% comment %} Which of the caller's row sets to show -- All, or one of them. Only when
+           the caller handed some over: a page with none to offer has no menu, rather than a
+           menu of one entry. One choice at a time, so the list runs in plain mode. {% endcomment %}
+        {% if matrix.sets %}
+            <div class="btn-group">
+                <button type="button" class="btn btn-default dropdown-toggle"
+                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Show: <span data-role="show-label">All</span> <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="show">
+                    <li data-value="" class="active"><a href="#">All ({{ matrix.rows|length }})</a></li>
+                    {% for set in matrix.sets %}
+                        <li data-value="{{ set.key }}"><a href="#">{{ set.label }} ({{ set.count }})</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
     </div>
 
     {% comment %} How a sample cell shows its frequency. The script moves this into

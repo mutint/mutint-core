@@ -44,8 +44,8 @@ report the sample was imported from, and they mean nothing without the surroundi
 - **`mutint_sample/templates/breseq_table/_mutation_table.html`** — one sample's mutations, the
   partial the per-sample page and the genome browser share.
 - **The mutation matrix** — mutations down, samples across, drawn with the same cells.
-  `mutint-compare`, `mutint-fixation`, `mutint-converge` and core's Search are all this one
-  component with a different queryset.
+  `mutint-compare` and core's Search are both this one component with a different queryset;
+  Compare also hands it *row sets*, below.
 
 ### The mutation matrix
 
@@ -68,11 +68,10 @@ one listed sample carries it; each sample cell is that sample's frequency, linke
 browser when the sample has reads. The `browse_url(call)` and `refseq_url(mutation)` callables
 can be replaced if your page links elsewhere.
 
-Then either render **`mutation_matrix/page.html`** — the page the three plugin tables share:
-the ALE and sample-type pickers, the reader's filter controls and summary, and the matrix — with
-`experiment_id, ales, population, sample_type, experiment_name, ale_project_name, ale_project_id,
-template_header, title, matrix, empty_message` in the context; or put the tag in a page of your
-own:
+Then either render **`mutation_matrix/page.html`** — the ALE and sample-type pickers, the
+reader's filter controls and summary, and the matrix — with `experiment_id, ales, population,
+sample_type, experiment_name, ale_project_name, ale_project_id, template_header, title, matrix,
+empty_message` in the context; or put the tag in a page of your own:
 
 ```django
 {% load mutation_matrix %}
@@ -83,13 +82,29 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-Three menus above the table let the reader show and hide descriptive columns, samples and
+Menus above the table let the reader show and hide descriptive columns, samples and
 mutation types. Those choices are remembered for a signed-in reader through
-`mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types` and
-`mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both)
-and `mutation_matrix.view` (Normal or Condensed row spacing)
-(everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by every matrix page of that
-experiment) — and in the browser's localStorage otherwise. The table scrolls inside its own box
+`mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
+`mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
+`mutation_matrix.view` (Normal or Condensed row spacing) and `mutation_matrix.show` (which row
+set, below) (everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by every matrix
+page of that experiment) — and in the browser's localStorage otherwise. Export CSV is a menu
+of two: the rows showing, after every menu and the search box, or every row the server
+produced; visible columns only, either way.
+
+**Row sets** are how a page offers a subset of its rows without being a second page. Hand
+`build_matrix` `sets=(RowSet("fixed", "Fixed", mutation_ids), ...)`: each row is annotated
+with the keys of the sets holding its mutation, and a **Show** menu — All, then one entry per
+set with its count — appears above the table, remembered like the other menus. The matrix
+does not filter and asks nothing about what a set means; how the ids were chosen is your
+page's business. Compare computes convergent and fixed mutations this way, from the same
+filtered calls its rows are built from, so a page with no sets to offer gets no menu.
+
+**Extending the page rather than copying it.** `mutation_matrix/page.html` has two blocks:
+`matrix_form_fields`, inside the GET form before Apply, for controls of your own that change
+which rows the server produces; and `matrix_summary`, under the reader's filter sentence, to
+say what those controls did. Compare's thresholds for what counts as convergent or fixed are
+the worked example. The table scrolls inside its own box
 with the header and the descriptive columns pinned, in the order `build_matrix` produced the
 rows — nothing sorts — and each sample's header links to that sample's Mutations page and is
 colored by population (`SampleColumn.palette`), so an experiment's ALEs read as bands.

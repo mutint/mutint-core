@@ -10,7 +10,7 @@ So a component ships data that exercises its own feature, and core provides one 
 load it. Components register in ``AppConfig.ready()``::
 
     register_example_dataset(
-        'mutint-fixation-example',
+        'mutint-compare-fixation-example',
         os.path.join(os.path.dirname(__file__), 'examples', 'fixation'),
         description='Two ALE lineages over four flasks, with mutations that arrive and stay.')
 

@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1931 run, 0 failures** standalone. They were **1925** before the matrix grew its
+**Baseline: 1936 run, 0 failures** standalone. They were **1931** before the matrix grew row
+sets and the page its two blocks (five tests), **1925** before the matrix grew its
 Types menu, scroll box, sample-header links, palette, Frequency display and View switch (six
 tests), **1929** before tagging was retired
 (the endpoint tests went, the flag tests came), **1907** before the mutation matrix
@@ -1978,13 +1979,14 @@ be unlocked either, but it cannot get locked in the first place.
 ### Compare is a plugin
 
 `/compare/` -- mutations as rows, samples as columns -- lives in the **mutint-compare** repo,
-not in core. It is one way of looking at an experiment rather than a core function, which is
-exactly what mutint-fixation and mutint-converge are: all three are a function view that builds a
-queryset and renders **the mutation matrix** (below) through `mutation_matrix/page.html`. Compare
-was simply the one that had never been moved out.
+not in core. It is one way of looking at an experiment rather than a core function: a
+function view that builds a queryset and renders **the mutation matrix** (below) through
+`mutation_matrix/page.html`. mutint-fixation and mutint-converge were two more of the same,
+each the matrix over a narrower queryset with one hard-coded rule, and they were folded into
+Compare as **row sets** with adjustable thresholds -- see that plugin's CLAUDE.md.
 
 What stayed in core, and why: the matrix itself (`mutint_sample/mutation_matrix.py`, the tag,
-the partial, the script), because Search and both other plugins render it. The curation
+the partial, the script), because Search renders it too. The curation
 endpoints at `/mutation-table/` stayed for one afternoon as retained API and then went with
 tagging altogether -- see **Sample flags** below.
 
@@ -2008,8 +2010,8 @@ the posture `nav_registry` takes with a `url_name` that will not reverse.
 
 `mutint_sample/mutation_matrix.py` + `templatetags/mutation_matrix.py` +
 `templates/mutation_matrix/{_table,page}.html` + `mutint_common/staticfiles/js/mutation_matrix.js`
-is the one cross-sample table: Compare, Fixed Mutations, Converged Mutations and Search all
-render it, and `docs/plugin/templates.md` is the plugin-facing guide. It replaced
+is the one cross-sample table: Compare and Search render it, and `docs/plugin/templates.md`
+is the plugin-facing guide. It replaced
 `mutation_table_builder.py` + `base_table_template.html` + `table_template.js`: a DataTable of
 positional arrays whose script found the sample columns by arithmetic on where the reference
 column sat, and which grew stale offsets, dead controls (`show_dups`, a `.shut` hover for a
@@ -2040,6 +2042,20 @@ Show all / Hide all beside it. A row whose type is hidden, or whose mutation is 
 sample, leaves the table through `$.fn.dataTable.ext.search`, so paging and the count describe
 what is visible, and the striping is redone per displayed row the way breseq stripes. The page
 length menu ends in All.
+
+**Row sets are the seam for a page that wants a subset of its rows without being a second
+page.** `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))` annotates each row with
+the keys of the sets holding it, and `_table.html` renders a **Show** menu -- All, then one
+entry per set with its count -- only when there are sets; the script filters through the same
+search hook the samples and types use, and remembers the choice as `mutation_matrix.show`,
+falling back to All on a table that does not offer the remembered set. The matrix still
+filters nothing and asks nothing about what a set means. mutint-compare is the producer: its
+convergent and fixed sets, with thresholds the reader sets, replaced the two plugins that were
+each the matrix over a narrower queryset. **Export CSV is a menu** -- the rows showing (after
+every menu and the search box, `search: "applied"`) or every row the server produced -- so
+"export what I am looking at" and "export the experiment" are both one click and neither is
+a page. `page.html` has two blocks, `matrix_form_fields` and `matrix_summary`, so such a page
+can extend it rather than copy it.
 
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
 puts its controls in two rows above the table -- length, search and the count; pager and Export

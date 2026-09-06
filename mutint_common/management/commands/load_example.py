@@ -1,8 +1,8 @@
 """Load a component's example dataset.
 
     ./mutint load_example                            # what is available
-    ./mutint load_example mutint-fixation-example     # load it
-    ./mutint load_example mutint-fixation-example --replace
+    ./mutint load_example mutint-compare-fixation-example     # load it
+    ./mutint load_example mutint-compare-fixation-example --replace
 
 A component that needs particular data to show its feature ships that data and registers it
 (``mutint_common.example_registry``); this loads it. The dataset is a directory laid out as it
