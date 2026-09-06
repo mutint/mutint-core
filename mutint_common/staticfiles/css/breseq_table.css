@@ -298,6 +298,13 @@ div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate ul.pagin
 .mutation-matrix-scroll .breseq-table {
     /* !important because DataTables' theme sets `table.dataTable`'s margins with one. */
     margin: 0 !important;
+    /* As wide as its columns, not the box. `.breseq-table` is `width: 100%` for the
+       per-sample table, and here it meant that hiding a descriptive column handed its
+       width to the ones left -- every sample column is a fixed 32px, so the slack had
+       nowhere else to go, and the Columns menu changed nothing about how much room the
+       pinned columns took. Shrink-wrapped, hiding a column narrows the pinned area by
+       exactly that column; with more samples than fit, the box scrolls as before. */
+    width: auto;
 }
 
 

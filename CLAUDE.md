@@ -2059,6 +2059,14 @@ every menu and the search box, `search: "applied"`) or every row the server prod
 a page. `page.html` has two blocks, `matrix_form_fields` and `matrix_summary`, so such a page
 can extend it rather than copy it.
 
+**The table is as wide as its columns, not the box.** `.breseq-table` is `width: 100%` for
+the per-sample table, and inside the scroll box the matrix overrides it to `auto`. With every
+sample column a fixed 32px, a full-width table handed every hidden descriptive column's width
+to the ones left, so the Columns menu changed nothing about how much room the pinned columns
+took -- measured on an eight-sample page: hiding Annotation and Gene left the pinned area at
+748px either way, and shrink-wrapped it goes from 535px to 287px. With more samples than fit,
+the box scrolls as before; with fewer, the header shade ends at the last sample.
+
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
 puts its controls in two rows above the table -- length, search and the count; pager and Export
 CSV -- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding on
