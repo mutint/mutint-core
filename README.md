@@ -172,9 +172,9 @@ All configuration is via environment variables. The defaults are suitable for lo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MUTINT_STORE_DIR` | `<repo>/mutint_store` | Managed store that MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it are derived from database ids, never from client input. |
+| `MUTINT_STORE_DIR` | `<repo>/data/store` | Managed store that MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it are derived from database ids, never from client input. |
 | `MUTINT_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./mutint reap_uploads` removes it. |
-| `MUTINT_STORE_DIR` | `<repo>/mutint_store` | Managed store MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it derive from database ids, never from client input. |
+| `MUTINT_STORE_DIR` | `<repo>/data/store` | Managed store MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it derive from database ids, never from client input. |
 | `MUTINT_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./mutint reap_uploads` removes it. |
 | `DJANGO_SECRET_KEY` | insecure dev key | Django secret key. Must be set to a long random string in any non-local deployment. |
 | `DEBUG` | `0` | Set to `1` to enable Django debug mode (shows error tracebacks in the browser). |

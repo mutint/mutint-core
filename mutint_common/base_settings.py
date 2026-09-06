@@ -67,8 +67,11 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         # per-experiment reference. Every path under here is derived from a database
         # primary key,
         # so no client-supplied path ever reaches the filesystem.
+        # data/store, beside data/db where the entry script keeps the cluster: everything a
+        # checkout would lose is under one directory, and env/ holds only what can be
+        # rebuilt. (It was mutint_store/ at the root.)
         'MUTINT_STORE_DIR': os.environ.get(
-            'MUTINT_STORE_DIR', os.path.join(base_dir, 'mutint_store')),
+            'MUTINT_STORE_DIR', os.path.join(base_dir, 'data', 'store')),
         # External tools a component declared in its tools.txt, installed there by the
         # entry script. Read from the environment because only the entry script knows the
         # project root: base_dir here is mutint-core's own directory under an assembled

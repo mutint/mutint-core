@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1937 run, 0 failures** standalone. They were **1935** before the Import data page grew
+**Baseline: 1939 run, 0 failures** standalone. They were **1937** before the cluster and the store
+moved under data/ (two tests), **1935** before the Import data page grew
 its tabs and registry (net two), **1939** before the interop API left for
 mutint-api with its four tests, **1936** before the sidebar grew its
 END_SECTION and Curate (three tests), **1931** before the matrix grew row

@@ -69,3 +69,7 @@ env/
 # .docs-build/ is the merged tree of symlinks plus a generated config, site/ the output.
 /.docs-build/
 /site/
+
+# Everything a checkout would lose: the file store (data/store) and the database
+# (data/db). env/ holds only what can be rebuilt.
+/data/

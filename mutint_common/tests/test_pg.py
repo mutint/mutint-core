@@ -226,3 +226,22 @@ class StopIfOwnerIsTestCase(TestCase):
     def test_it_never_raises(self):
         """`stop_if_owned`'s contract: it runs where there is nobody left to tell."""
         pg.Cluster("/definitely/not/a/checkout").stop_if_owner_is(1)
+
+
+class DataDirectoryTestCase(TestCase):
+    """The cluster is data and lives under data/db; env/ holds only what can be rebuilt."""
+
+    def setUp(self):
+        import tempfile, shutil
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, True)
+
+    def test_a_fresh_checkout_puts_the_cluster_under_data(self):
+        cluster = pg.Cluster(self.base)
+        self.assertEqual(os.path.join(self.base, "data", "db"), cluster.data)
+        self.assertTrue(cluster.prefix.startswith(os.path.join(self.base, "env")))
+
+    def test_the_file_store_defaults_beside_it(self):
+        from mutint_common.base_settings import get_base_settings
+        settings = get_base_settings(self.base)
+        self.assertEqual(os.path.join(self.base, "data", "store"), settings["MUTINT_STORE_DIR"])

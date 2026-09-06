@@ -1,4 +1,4 @@
-"""The PostgreSQL cluster this checkout owns, under ``env/``.
+"""The PostgreSQL cluster this checkout owns: the server under ``env/``, the data under ``data/``.
 
 MutInt is PostgreSQL-only. That would ordinarily cost the property mutint-core is built
 around -- *clone it and run it, with no external services* -- so the database arrives the
@@ -100,8 +100,12 @@ class Cluster(object):
     def __init__(self, base_dir):
         self.base_dir = os.path.abspath(base_dir)
         env = os.path.join(self.base_dir, 'env')
+        # The server is an installed environment and lives with the others under env/; the
+        # cluster is *data* and lives under data/, beside the file store, so that purging
+        # env/ -- `rm -rf env` is the documented way to reset the tools -- cannot take the
+        # database with it. (It was env/pgdata; a checkout from before starts over.)
         self.prefix = os.path.join(env, 'postgres')
-        self.data = os.path.join(env, 'pgdata')
+        self.data = os.path.join(self.base_dir, 'data', 'db')
         self.log = os.path.join(env, 'pg.log')
         self.owner_file = os.path.join(env, 'pg-owner')
         self.lock_file = os.path.join(env, 'pg.lock')
