@@ -49,11 +49,34 @@
             <button type="button" class="btn btn-default" data-samples="all">Show all samples</button>
             <button type="button" class="btn btn-default" data-samples="none">Hide all samples</button>
         </div>
+        {% comment %} Which mutation types the rows may be. Only the types this table holds are
+           offered; a hidden one that is absent here is still remembered for the next table. {% endcomment %}
+        <div class="btn-group">
+            <button type="button" class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                Types (<span data-role="type-count">{{ matrix.types|length }}</span>
+                of {{ matrix.types|length }}) <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="types">
+                {% for type in matrix.types %}
+                    <li data-value="{{ type }}" class="active"><a href="#">{{ type }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-default" data-types="all">Show all types</button>
+            <button type="button" class="btn btn-default" data-types="none">Hide all types</button>
+        </div>
     </div>
 
     {{ matrix.rows|json_script:rows_id }}
     {% if authenticated %}{{ preferences|json_script:prefs_id }}{% endif %}
 
+    {% comment %} The table scrolls inside this box rather than with the page, which is what
+       lets the header stick to the top and the descriptive columns to the left while the
+       sample columns scroll under them. The script sizes it to the bottom of the window.
+       Sample headers are written vertically so a column is only as wide as its cells. {% endcomment %}
+    <div class="mutation-matrix-scroll">
     <table id="{{ matrix.dom_id }}" class="table breseq-table mutation-matrix-table">
         <thead>
             <tr>
@@ -61,10 +84,11 @@
                     <th class="{{ column.css_class }}" data-key="{{ column.key }}"{% if column.sort_key %} data-sort-key="{{ column.sort_key }}"{% endif %}>{{ column.title }}</th>
                 {% endfor %}
                 {% for sample in matrix.samples %}
-                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</th>
+                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}" title="{{ sample.label }}"><span class="mutation-matrix-vertical">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</span></th>
                 {% endfor %}
             </tr>
         </thead>
         <tbody></tbody>
     </table>
+    </div>
 </div>

@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1925 run, 0 failures** standalone. They were **1929** before tagging was retired
+**Baseline: 1927 run, 0 failures** standalone. They were **1925** before the matrix grew its
+Types menu and scroll box (two tests), **1929** before tagging was retired
 (the endpoint tests went, the flag tests came), **1907** before the mutation matrix
 replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
 partial, the first Search tests, minus the old builder's), **1839** before the background-worker
@@ -2029,17 +2030,26 @@ server-rendered -- one `th[data-key]` per descriptive column, one `th.breseq-sam
 [data-index]` per sample -- so a test can count and read it, and the script builds its column
 definitions from those attributes. Rows travel as `json_script`.
 
-**The two menus are the genome browser's sample menu, twice**: `ul.dropdown-menu.mutint-menu
-.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being shown. Columns
-lists the descriptive columns (Description off by default: it is prose, and the widest column);
-Samples lists the samples with Show all / Hide all beside it. A row whose mutation is in no shown
-sample leaves the table through `$.fn.dataTable.ext.search`, so paging and the count describe
-what is visible, and the striping is redone per displayed row the way breseq stripes.
+**The three menus are the genome browser's sample menu, three times**: `ul.dropdown-menu
+.mutint-menu.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being
+shown. Columns lists the descriptive columns (Description off by default: it is prose, and the
+widest column); Samples lists the samples and Types the mutation types the rows hold, each with
+Show all / Hide all beside it. A row whose type is hidden, or whose mutation is in no shown
+sample, leaves the table through `$.fn.dataTable.ext.search`, so paging and the count describe
+what is visible, and the striping is redone per displayed row the way breseq stripes. The page
+length menu ends in All.
+
+**The table scrolls in its own box, and the samples are the point of it.** The box is sized to
+the bottom of the window; the header sticks to its top and the descriptive columns to its left,
+each pinned column's `left` written by the script after every draw as the sum of the pinned
+widths before it (`position: sticky` cannot add them up itself). Sample headers are written
+vertically and a cell shows the frequency as a bare percentage number with the full text as its
+title, so a sample column is as wide as `100` and forty of them fit where twelve did.
 
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
-holds `mutation_matrix.columns` for the reader everywhere and `mutation_matrix.samples.<exp>` per
-experiment, shared by the three experiment pages; Search has no experiment and its sample
-selection is transient. Stored as the *hidden* set, so a column or sample that did not exist when
+holds `mutation_matrix.columns` and `mutation_matrix.types` for the reader everywhere and
+`mutation_matrix.samples.<exp>` per experiment, shared by the three experiment pages; Search has
+no experiment and its sample selection is transient. Stored as the *hidden* set, so a column or sample that did not exist when
 the choice was made shows by default. The tag embeds a signed-in reader's preferences in the page
 and the script reads them before the first draw, so nothing flashes; an anonymous reader (ALEdb
 is public) gets the same from localStorage.

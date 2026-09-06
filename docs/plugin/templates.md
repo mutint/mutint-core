@@ -83,10 +83,12 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-Two menus above the table let the reader show and hide descriptive columns and samples. Those
-choices are remembered for a signed-in reader through `mutint_common.preferences` — keys
-`mutation_matrix.columns` (everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by
-every matrix page of that experiment) — and in the browser's localStorage otherwise. A plugin
+Three menus above the table let the reader show and hide descriptive columns, samples and
+mutation types. Those choices are remembered for a signed-in reader through
+`mutint_common.preferences` — keys `mutation_matrix.columns` and `mutation_matrix.types`
+(everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by every matrix page of that
+experiment) — and in the browser's localStorage otherwise. The table scrolls inside its own box
+with the header and the descriptive columns pinned. A plugin
 that wants to remember something of its own writes under its own prefix through the same
 `/preferences/` endpoint; nothing in core needs to know.
 

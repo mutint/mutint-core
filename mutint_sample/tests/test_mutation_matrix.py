@@ -164,6 +164,9 @@ class RowsTestCase(_Fixture):
             self.assertTrue(q.endswith(p))
             self.assertTrue(q.startswith(self.experiment.name))
 
+    def test_the_types_are_the_rows_types_sorted(self):
+        self.assertEqual(("AMP", "SNP"), self.matrix().types)
+
     def test_no_experiment_means_no_experiment_id(self):
         matrix = mutation_matrix.build_matrix(self.calls, self.reseq_dict)
         self.assertIsNone(matrix.experiment_id)
@@ -196,6 +199,17 @@ class PartialTestCase(_Fixture):
             self.assertIn('<li data-value="%d" class="active">' % sample.id, html)
         self.assertIn('data-samples="all"', html)
         self.assertIn('data-samples="none"', html)
+        # And the third menu: the mutation types this table holds, with its two presets.
+        self.assertIn('data-role="types"', html)
+        self.assertIn('<li data-value="SNP" class="active">', html)
+        self.assertIn('<li data-value="AMP" class="active">', html)
+        self.assertIn('data-types="all"', html)
+        self.assertIn('data-types="none"', html)
+
+    def test_the_table_sits_in_a_scroll_box_with_vertical_sample_headers(self):
+        html = self._render()
+        self.assertIn('class="mutation-matrix-scroll"', html)
+        self.assertEqual(len(self.reseq_dict), html.count('class="mutation-matrix-vertical"'))
 
     def test_rows_travel_as_json_and_the_assets_are_linked(self):
         html = self._render()

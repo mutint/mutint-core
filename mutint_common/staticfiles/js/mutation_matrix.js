@@ -12,11 +12,15 @@
  *     gave it a URL, and blank when the sample does not carry the mutation;
  *   - a row whose mutation is in no *shown* sample is filtered out, through DataTables' own
  *     search hook rather than by hiding row nodes -- so paging and the row count stay honest;
- *   - the Columns and Samples menus are mutintSelectList in toggle mode, the genome browser's
- *     sample menu twice over, and every change is saved back where it was read from.
+ *   - the Columns, Samples and Types menus are mutintSelectList in toggle mode, the genome
+ *     browser's sample menu three times over, and every change is saved back where it was
+ *     read from;
+ *   - the table lives in a scroll box: the header sticks to its top and the descriptive
+ *     columns to its left, each pinned column's `left` being the sum of the widths before it,
+ *     recomputed after every draw because widths change with the data on the page.
  *
- * Stored as the *hidden* set, not the visible one, so a column or sample that did not exist
- * when the choice was made shows by default rather than vanishing.
+ * Stored as the *hidden* set, not the visible one, so a column, sample or type that did not
+ * exist when the choice was made shows by default rather than vanishing.
  *
  * Loaded from the page beside breseq_table.js; jQuery, DataTables (with Buttons) and
  * mutint_select_list.js come from base.html.
@@ -25,6 +29,7 @@
     "use strict";
 
     var COLUMNS_KEY = "mutation_matrix.columns";
+    var TYPES_KEY = "mutation_matrix.types";
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
 
     /* One get/set pair over whichever store this reader has. */
@@ -68,17 +73,21 @@
     function renderHtml(data) { return data === null || data === undefined ? "" : data; }
 
     /* A sample cell by DataTables' four purposes: sort by frequency (absent last), filter and
-       type on the text, display the text -- linked when the server gave a URL. */
+       type on the text, display a bare percentage -- `100`, `42` -- with the full text as the
+       title, so the column can be narrow. Linked when the server gave a URL. */
+    function compact(cell) {
+        if (typeof cell.s !== "number" || cell.f.indexOf("%") < 0) { return cell.f; }
+        return String(Math.round(cell.s * 100));
+    }
     function renderSample(cell, type) {
         if (!cell) { return type === "sort" ? -1 : ""; }
         if (type === "sort") { return cell.s; }
         if (type !== "display") { return cell.f; }
-        if (!cell.u) { return cell.f; }
-        var a = document.createElement("a");
-        a.href = cell.u;
-        a.title = "View the pileup at this position";
-        a.textContent = cell.f;
-        return a.outerHTML;
+        var node = document.createElement(cell.u ? "a" : "span");
+        if (cell.u) { node.href = cell.u; }
+        node.title = cell.f + (cell.u ? " \u2014 view the pileup at this position" : "");
+        node.textContent = compact(cell);
+        return node.outerHTML;
     }
 
     function init(container) {
@@ -97,6 +106,7 @@
             });
         }
         var hiddenSamples = samplesKey ? hiddenSet(prefs.get(samplesKey, null)) : {};
+        var hiddenTypes = hiddenSet(prefs.get(TYPES_KEY, null));
 
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
@@ -142,17 +152,22 @@
         // The menus reflect the remembered state before anything is drawn.
         var columnList = container.querySelector('[data-role="columns"]');
         var sampleList = container.querySelector('[data-role="samples"]');
+        var typeList = container.querySelector('[data-role="types"]');
         Array.prototype.forEach.call(columnList.querySelectorAll("li[data-value]"), function (li) {
             li.classList.toggle("active", !hiddenColumns[li.getAttribute("data-value")]);
         });
         Array.prototype.forEach.call(sampleList.querySelectorAll("li[data-value]"), function (li) {
             li.classList.toggle("active", !hiddenSamples[li.getAttribute("data-value")]);
         });
+        Array.prototype.forEach.call(typeList.querySelectorAll("li[data-value]"), function (li) {
+            li.classList.toggle("active", !hiddenTypes[li.getAttribute("data-value")]);
+        });
 
         // Rows whose mutation is in no shown sample leave the table -- through the search
         // hook, so the count and the pager describe what is visible.
         $.fn.dataTable.ext.search.push(function (settings, searchData, index, rowData) {
             if (settings.nTable !== table) { return true; }
+            if (hiddenTypes[rowData.type]) { return false; }
             var cells = rowData.samples || [];
             for (var i = 0; i < cells.length; i++) {
                 if (cells[i] && shownSampleIndexes[i]) { return true; }
@@ -181,7 +196,7 @@
             paging: true,
             pagingType: "full_numbers",
             pageLength: 100,
-            lengthMenu: [50, 100, 500, 1000],
+            lengthMenu: [[50, 100, 500, 1000, -1], [50, 100, 500, 1000, "All"]],
             order: order,
             dom: 'l<"pull-left"B><"pull-right"f>rt<<"pull-left"i><"pull-right"p>>',
             buttons: [{
@@ -195,8 +210,40 @@
             rowCallback: function (row, data, displayIndex) {
                 row.classList.remove("alternate_table_row_0", "alternate_table_row_1", "odd", "even");
                 row.classList.add("alternate_table_row_" + (displayIndex % 2));
-            }
+            },
+            // `dt` is not assigned until the constructor returns, and the first draw happens
+            // inside it; the explicit call below covers that draw.
+            drawCallback: function () { if (dt) { pinColumns(); } }
         });
+
+        /* The descriptive columns stay put while the samples scroll. `position: sticky`
+           needs each pinned column's `left` to be the width of everything pinned before it,
+           and widths change with the page's data, so this runs after every draw. */
+        var scrollBox = container.querySelector(".mutation-matrix-scroll");
+        function pinColumns() {
+            var left = 0;
+            ths.forEach(function (th, i) {
+                if (th.getAttribute("data-key") === null) { return; }
+                var column = dt.column(i);
+                var nodes = [th].concat(Array.prototype.slice.call(column.nodes()));
+                if (!column.visible()) {
+                    nodes.forEach(function (el) { el.classList.remove("pinned"); el.style.left = ""; });
+                    return;
+                }
+                nodes.forEach(function (el) { el.classList.add("pinned"); el.style.left = left + "px"; });
+                left += th.getBoundingClientRect().width;
+            });
+        }
+
+        /* The box reaches the bottom of the window, whatever sits above it on the page. */
+        function sizeScrollBox() {
+            if (!scrollBox) { return; }
+            var top = scrollBox.getBoundingClientRect().top;
+            scrollBox.style.maxHeight = Math.max(240, window.innerHeight - top - 16) + "px";
+        }
+        sizeScrollBox();
+        window.addEventListener("resize", sizeScrollBox);
+        pinColumns();
 
         var counter = container.querySelector('[data-role="sample-count"]');
         var columnPicker = window.mutintSelectList(columnList, {
@@ -208,8 +255,29 @@
                     if (on) { delete hiddenColumns[key]; } else { hiddenColumns[key] = true; }
                 });
                 dt.columns.adjust().draw(false);
+                pinColumns();
                 prefs.set(COLUMNS_KEY, { hidden: keys(hiddenColumns) });
             }
+        });
+        var typeCounter = container.querySelector('[data-role="type-count"]');
+        var typePicker = window.mutintSelectList(typeList, {
+            toggle: true, controls: null,
+            onChange: function (changed) {
+                changed.forEach(function (li) {
+                    var type = li.getAttribute("data-value");
+                    if (typePicker.isSelected(li)) { delete hiddenTypes[type]; } else { hiddenTypes[type] = true; }
+                });
+                if (typeCounter) { typeCounter.textContent = typePicker.count(); }
+                dt.draw();
+                prefs.set(TYPES_KEY, { hidden: keys(hiddenTypes) });
+            }
+        });
+        if (typeCounter) { typeCounter.textContent = typePicker.count(); }
+        Array.prototype.forEach.call(container.querySelectorAll("[data-types]"), function (button) {
+            button.addEventListener("click", function () {
+                var all = button.getAttribute("data-types") === "all";
+                typePicker.select(function () { return all; });
+            });
         });
         var samplePicker = window.mutintSelectList(sampleList, {
             toggle: true, controls: null,
@@ -240,7 +308,7 @@
         });
 
         // For a harness or a console: the DataTable behind the container.
-        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker };
+        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker };
     }
 
     $(function () {

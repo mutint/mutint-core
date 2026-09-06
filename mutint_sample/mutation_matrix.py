@@ -71,6 +71,8 @@ class MutationMatrix:
     experiment_id: Optional[int] = None
     dom_id: str = "mutation-matrix"
     csv_title: str = "mutations"
+    #: The mutation types the rows hold (SNP, DEL, ...), sorted, for the Types menu.
+    types: tuple = ()
 
     @property
     def width(self):
@@ -179,7 +181,8 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     rows = sorted(by_mutation.values(), key=lambda r: (r["seq_id_text"], r["position_sort"]))
     return MutationMatrix(columns=list(DESCRIPTIVE), samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
-                          dom_id=dom_id, csv_title=csv_title)
+                          dom_id=dom_id, csv_title=csv_title,
+                          types=tuple(sorted({row["type"] for row in rows if row["type"]})))
 
 
 def _describe(mutation, refseq_url, width):
