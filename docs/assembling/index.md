@@ -10,15 +10,16 @@ submodule to it. Read this when you are standing up a new deployment.
 ---
 
 This guide explains how to build an assembled Django project (e.g. `mutint`) that uses
-`mutint-core` as a git submodule and a custom app (`mutint-app`) from a third repo — without
-modifying mutint-core.
+`mutint-core` as a git submodule, plus whichever plugins you want — without modifying
+mutint-core. A project needs no app of its own; if you want one, copy `mutint-example`, the
+stub plugin, and add it as one more submodule.
 
 ## Three repos, three concerns
 
 | Repo | Role |
 |------|------|
 | **`mutint-core`** | This repo. Provides all core MutInt Django apps. |
-| **`mutint-app`** | Your custom app repo. Contains a Django app named `mutint_app`. |
+| **a plugin** | Optional, one repo each. `mutint-example` is the stub to copy. |
 | **`mutint`** | The assembled project repo. Owns `config/`, wires everything together via submodules. |
 
 ---
@@ -28,7 +29,7 @@ modifying mutint-core.
 ```
 mutint/
 ├── mutint-core/          # git submodule → mutint-core repo
-├── mutint-app/          # git submodule → mutint-app repo
+├── mutint-example/      # git submodule → a plugin (optional)
 ├── config/
 │   ├── __init__.py
 │   ├── settings.py
@@ -52,7 +53,7 @@ standing in, and three checkouts of the same platform on one machine are the nor
 ```bash
 git init mutint && cd mutint
 git submodule add <mutint-core-url> mutint-core
-git submodule add <mutint-app-url> mutint-app
+git submodule add <plugin-url> mutint-example   # optional, one per plugin
 mkdir config && touch config/__init__.py
 ```
 
@@ -71,16 +72,16 @@ import os, sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MUTINT_CORE_DIR = os.path.join(BASE_DIR, 'mutint-core')
-MUTINT_APP_DIR = os.path.join(BASE_DIR, 'mutint-app')
+PLUGIN_DIR = os.path.join(BASE_DIR, 'mutint-example')   # one per plugin
 
 # Append (not insert) so this project's config/ takes precedence over mutint-core's.
 sys.path.append(MUTINT_CORE_DIR)
-sys.path.append(MUTINT_APP_DIR)
+sys.path.append(PLUGIN_DIR)
 
 from mutint_common.base_settings import get_base_settings
 globals().update(get_base_settings(BASE_DIR, mutint_core_dir=MUTINT_CORE_DIR))
 
-INSTALLED_APPS += ['mutint_app']
+INSTALLED_APPS += ['mutint_example']   # each plugin's app; it registers its own routes
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 ```
@@ -98,9 +99,7 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include, re_path
 from mutint_common.urls import get_core_urlpatterns
 
-urlpatterns = get_core_urlpatterns() + [
-    re_path(r'^mutint/', include('mutint_app.urls')),
-]
+urlpatterns = get_core_urlpatterns()   # core's routes and every plugin's
 
 if settings.DEBUG:
     import debug_toolbar
