@@ -18,7 +18,7 @@ from mutint_sample.models import (
 
 from genomediff import GenomeDiff
 
-FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "..", "gdparse", "test_gdparse")
+FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 CLEAN_GD = os.path.join(FIXTURE_DIR, "3-30000-1-1.gd")  # headers + SNP/INS/DEL/MOB/CON
 
 
@@ -92,8 +92,8 @@ class GdImportTestCase(TestCase):
 
         # Experiment chain synthesized from the filename 3-30000-1-1.
         self.assertEqual(Experiment.objects.count(), 1)
-        ale_id = Population.objects.get()
-        self.assertEqual(ale_id.name, "3")
+        population = Population.objects.get()
+        self.assertEqual(population.name, "3")
         self.assertEqual({30000}, set(Sample.objects.values_list('time_point', flat=True)))
         # `1-1`, not `1`: the replicate field is part of the label, kept even when it is
         # 1 so that `3-30000-1-1` and `3-30000-1-2` are siblings rather than a bare `1`
@@ -204,9 +204,9 @@ class GdImportTestCase(TestCase):
             [_uploaded(CLEAN_GD)], project_name="export project",
             experiment_name="export exp", owner_name="tester")
 
-        reseq = Sample.objects.get()
+        sample = Sample.objects.get()
         self.client.force_login(self.user)
-        export = self.client.get("/import/gd/%d/export" % reseq.id)
+        export = self.client.get("/import/gd/%d/export" % sample.id)
         self.assertEqual(export.status_code, 200)
         self.assertIn("#=GENOME_DIFF", export.content.decode("utf-8"))
 
@@ -218,9 +218,9 @@ class GdImportTestCase(TestCase):
             [_uploaded(CLEAN_GD)], project_name="export project",
             experiment_name="export exp", owner_name="tester")
 
-        reseq = Sample.objects.get()
+        sample = Sample.objects.get()
         self.assertEqual(404,
-                         self.client.get("/import/gd/%d/export" % reseq.id).status_code)
+                         self.client.get("/import/gd/%d/export" % sample.id).status_code)
 
     # --- sample identity from the filename -------------------------------------------
 
@@ -299,16 +299,16 @@ class GdImportTestCase(TestCase):
         """`label` prefers the sample's description, so the label survives."""
         self._import_named(["Ara-1_500gen_762B.gd"])
 
-        reseq = Sample.objects.get()
-        self.assertEqual(reseq.label, "Ara-1_500gen_762B")
+        sample = Sample.objects.get()
+        self.assertEqual(sample.label, "Ara-1_500gen_762B")
 
     def test_an_afir_name_still_displays_as_its_coordinate(self):
         """It says exactly what the coordinate says, so storing it as the description
         would relabel every table column with a filename."""
         self._import_named(["3-30000-1-1.gd"])
 
-        reseq = Sample.objects.get()
-        self.assertEqual(reseq.label, "3 / 30000 / 1-1")
+        sample = Sample.objects.get()
+        self.assertEqual(sample.label, "3 / 30000 / 1-1")
 
     def test_underscore_triple_reimport_is_idempotent(self):
         self._import_named(self.TRIPLE_NAMES)
@@ -390,7 +390,7 @@ class GdImportTestCase(TestCase):
         self.assertEqual(mutations.status_code, 200)
         mutations_html = mutations.content.decode("utf-8")
         self.assertNotIn("Page not available", mutations_html)
-        self.assertNotIn("name 'ale' is not defined", mutations_html)
+        self.assertNotIn("name 'population' is not defined", mutations_html)
 
 
 

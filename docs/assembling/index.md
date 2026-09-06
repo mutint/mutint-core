@@ -203,7 +203,7 @@ Or step by step, still through the entry script:
 - Auth slot — `mutint_accounts` is the only implementation shipped; swap in your own
   by changing `INSTALLED_APPS` in your `config/settings.py` and setting `auth_app = True` on
   its `AppConfig`
-- The eight registries in `mutint_common/`, which are how an app contributes to a core page
+- The nine registries in `mutint_common/`, which are how an app contributes to a core page
   without core importing it: nav entries, About sections, import types, Overview panels,
   export handlers, experiment-view context, example datasets and derived-data rebuilds. See
   [The registries](../plugin/registries.md), and the Reference pages generated from their

@@ -168,7 +168,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
     def test_staff_without_a_grant_may_not_edit(self):
         """Being staff is not access.
 
-        `load_projects` marks every imported user staff, so a blanket staff clause here would
+        the retired `load_projects` importer marked every user staff, so a blanket staff clause here would
         make every project's mutations editable by nearly everyone.
         """
         staff = User.objects.create(username="staff", email="st@e.com",

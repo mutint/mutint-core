@@ -74,8 +74,6 @@
     </script>
 
     <!-- Select 2 -->
-    <link href="{% static "vendor/select2-4.0.3/css/select2.min.css" %}" rel="stylesheet"/>
-    <script src="{% static "vendor/select2-4.0.3/js/select2.min.js" %}"></script>
     <link rel="stylesheet" type="text/css"
           href="{% static "vendor/datatables-bundle-bs337/datatables.min.css" %}"/>
 
@@ -176,7 +174,7 @@
                                 <a href="/group/" class="small">Groups</a>
                             </li>
                             {% comment %} Superusers, not staff. Django's admin admits anyone
-                               with is_staff -- but `load_projects` creates every imported user
+                               with is_staff -- but the retired `load_projects` importer created every user
                                with is_staff=True, so a staff gate would offer this to nearly
                                everyone on a real deployment and land most of them in an empty
                                admin. {% endcomment %}
@@ -194,14 +192,13 @@
                     <li><a href="{{ item.url }}">{{ item.label }}</a></li>
                 {% endfor %}
 
-                {# <li><a href="/bibliome">Bibliome</a></li> #}
                 {% if experiment_id %}
                     <li>
                         {% comment %} The padlock goes here rather than in the page header,
                            because `{% block header %}` is overridden by almost every
                            experiment page and a badge added to the default would render on
                            none of them. This block is not overridden anywhere. {% endcomment %}
-                        <a href="/stats?experiment_id={{ experiment_id }}"><b>{% if ale_experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ ale_project_name }}: {{ experiment_name }}</b></a>
+                        <a href="/stats?experiment_id={{ experiment_id }}"><b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ project_name }}: {{ experiment_name }}</b></a>
                     </li>
                     {% for item in nav_experiment_items %}
                         <li>
@@ -245,7 +242,7 @@
                 <div class="col-lg-12">
                     <div class="page-header">
                         <h2>{% block header %}
-                            <b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}
+                            <b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}
                             </b>{% endblock %}
                             {% if branding.logo %}
                                 <a href="/"><img src="{% static branding.logo %}"
@@ -288,16 +285,9 @@
    carries Bootstrap's own JS. Loading bootstrap.min.js as well meant two copies, and
    Bootstrap's data-api binds delegated handlers on document -- so every [data-toggle]
    fired twice and a modal opened and closed within the same millisecond. Dropping the
-   bs- component is not an option: that build 404s on the CDN.
-
-   Order matters here. bootstrap-toggle extends Bootstrap and must come after it, which
-   is why it now follows the bundle rather than preceding it. {% endcomment %}
+   bs- component is not an option: that build 404s on the CDN. {% endcomment %}
 <script type="text/javascript"
         src="{% static "vendor/datatables-bundle-bs337/datatables.min.js" %}"></script>
-
-<!-- Bootstrap Toggle -- extends Bootstrap, so it must follow the bundle above. -->
-<link href="{% static "vendor/bootstrap-toggle-2.2.2/css/bootstrap-toggle.min.css" %}" rel="stylesheet">
-<script src="{% static "vendor/bootstrap-toggle-2.2.2/js/bootstrap-toggle.min.js" %}"></script>
 
 </body>
 </html>

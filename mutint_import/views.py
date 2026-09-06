@@ -46,7 +46,7 @@ def gd_export_view(request, sample_id):
         return refusal
 
     gd_text = gd_import.export_gd_text(sample)
-    filename = "%s.gd" % (sample.source_name or ("reseq_%s" % sample_id))
+    filename = "%s.gd" % (sample.source_name or ("sample_%s" % sample_id))
     response = HttpResponse(gd_text, content_type="text/plain")
     response["Content-Disposition"] = 'attachment; filename="%s"' % filename
     return response

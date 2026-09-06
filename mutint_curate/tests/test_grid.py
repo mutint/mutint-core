@@ -248,7 +248,7 @@ class GridPageTestCase(EditorTestCase):
         """Measured in a browser first: an experiment's mutations are often concentrated in
         a subset of its samples, so several column headers select nothing. A control that
         looks live and does nothing when clicked reads as broken."""
-        empty = self.make_sample(flask_number=99)
+        empty = self.make_sample(time_point=99)
 
         html = self.grid().content.decode("utf-8")
 

@@ -51,13 +51,13 @@ class UnderscoreTripleTestCase(unittest.TestCase):
                                ("Ara-2_50000gen_763A", 50000),
                                ("Ara-2_30000cd_763A", 30000)):
             with self.subTest(name=name):
-                self.assertEqual(parse_sample_identity(name).flask, expected)
+                self.assertEqual(parse_sample_identity(name).time_point, expected)
 
     def test_the_ale_and_the_isolate_keep_every_character(self):
         """Stripping either would file `Ara-1` with `Ara+1`, or `763A` with `763B`."""
         identity = parse_sample_identity("Ara+1_500gen_763A")
-        self.assertEqual(identity.ale, "Ara+1")
-        self.assertEqual(identity.isolate, "763A")
+        self.assertEqual(identity.population, "Ara+1")
+        self.assertEqual(identity.name, "763A")
 
     def test_there_is_no_replicate(self):
         """None, not 1. This shape has no such field, and `sample_label` uses the
@@ -134,5 +134,5 @@ class SampleLabelTestCase(unittest.TestCase):
                                ("Ara-2_500gen_763A", "763A")):
             with self.subTest(name=name):
                 identity = parse_sample_identity(name)
-                self.assertEqual(sample_label(identity.isolate, identity.replicate),
+                self.assertEqual(sample_label(identity.name, identity.replicate),
                                  expected)

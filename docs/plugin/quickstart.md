@@ -105,8 +105,8 @@ def your_thing(request):
     context.update({
         "experiment_id": experiment.id,
         "experiment_name": experiment.name,
-        "ale_project_name": experiment.project.name if experiment.project else "",
-        "ale_project_id": experiment.project_id,
+        "project_name": experiment.project.name if experiment.project else "",
+        "project_id": experiment.project_id,
         "title": "%s mutation types" % experiment.name,
         "counts": sorted(counts.items()),
     })
@@ -118,7 +118,7 @@ def your_thing(request):
 ```django
 {% extends 'base.html' %}
 {% block title %}{{ title }}{% endblock %}
-{% block header %}<b>{{ ale_project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
+{% block header %}<b>{{ project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
 
 {% block content %}
     <table class="table">

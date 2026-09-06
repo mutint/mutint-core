@@ -214,9 +214,9 @@ class UploadSessionEndpointTestCase(TestCase):
         self.assertIsNone(summary["files"][0]["error"])
         self.assertGreater(summary["total_mutations"], 0)
 
-        reseq = Sample.objects.get()
-        self.assertTrue(reseq.bam_stored)
-        self.assertTrue(os.path.isfile(store.sample_path(reseq.id, store.SAMPLE_BAM)))
+        sample = Sample.objects.get()
+        self.assertTrue(sample.bam_stored)
+        self.assertTrue(os.path.isfile(store.sample_path(sample.id, store.SAMPLE_BAM)))
         self.assertEqual(ReferenceSequences.objects.count(), 1)
 
         self.assertFalse(os.path.exists(store.staging_dir(upload_id)),

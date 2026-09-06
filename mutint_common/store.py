@@ -6,7 +6,7 @@ a client-supplied path would carry cannot exist here.
 
 Layout::
 
-    <store>/experiments/<ale_experiment_pk>/reference/reference.gff3
+    <store>/experiments/<experiment_pk>/reference/reference.gff3
                                             reference/reference.fasta
                                             reference/reference.fasta.fai
     <store>/samples/<sample_pk>/sample.gd

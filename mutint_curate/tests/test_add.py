@@ -59,7 +59,7 @@ class AddTestCase(EditorTestCase):
         self.assertEqual(self.experiment, Mutation.objects.get(start_position=5000).experiment)
 
     def test_adding_to_three_samples_is_one_edit_set(self):
-        third = self.make_sample(flask_number=3)
+        third = self.make_sample(time_point=3)
         response = self.add(seq_id="NC_000913", position=5000, new_seq="T",
                             targets=[self.sample_a, self.sample_b, third])
 

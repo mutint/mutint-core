@@ -1,6 +1,6 @@
 # MutInt
 
-A Django web application for cataloging [Adaptive Laboratory Evolution (ALE)](https://en.wikipedia.org/wiki/Adaptive_laboratory_evolution) experiments — tracking experimental metadata, sequencing data, and genetic mutations.
+A Django web application for the mutations found by sequencing evolved microbial populations -- most often [adaptive laboratory evolution (ALE)](https://en.wikipedia.org/wiki/Adaptive_laboratory_evolution) experiments analysed with [breseq](https://github.com/barricklab/breseq). It stores each experiment's reference genome, populations and samples, the mutations called in each, and the tools to compare, curate and export them.
 
 **Live deployment:** [ALEdb](https://aledb.org), built on this platform.
 
@@ -8,7 +8,7 @@ A Django web application for cataloging [Adaptive Laboratory Evolution (ALE)](ht
 
 ## Quick start
 
-**Requirements:** Python 3.10+, Git
+**Requirements:** a `python3` to run the entry script (3.9 or later; the script provisions its own pinned interpreter), Git
 
 ```bash
 git clone <repo-url> mutint-core
@@ -37,15 +37,15 @@ The app starts empty — no experiments loaded. See [Loading data](#loading-data
 
 ## Loading data
 
-MutInt imports experiments from [breseq](https://github.com/barricklab/breseq) output directories. Each ALE experiment corresponds to one breseq output directory, which contains a `.gd` (genome diff) file and associated HTML result files.
+MutInt imports [breseq](https://github.com/barricklab/breseq) output directories, bare `.gd` (genome diff) files, VCF files and reference genomes, from the browser (the experiment's **Import data** page) or the shell. Each sample is one breseq run.
 
-### Upload experiments
+### Import from the shell
 
 ```bash
 ./mutint import /path/to/data --project P --experiment E --owner alice
 ```
 
-Each path should be the root of a breseq output directory (the one containing `output/` and `data/` subdirectories). The upload command parses the `.gd` files, creates all mutation and metadata records, and recomputes fixation and convergence statistics.
+Each path is a breseq output directory (the one containing `output/` and `data/`), a `.gd` file, a VCF or a reference genome; the same handlers the Import data page uses decide what each is. Importing records every mutation call and annotates it against the experiment's reference.
 
 To delete experiments by ID:
 
@@ -92,45 +92,6 @@ served with HTTP range support, so a genome browser can read them:
 
 Access is gated by project permissions.
 
-### breseq result import (`MUTINT_STORE_DIR`)
-
-Dropping breseq result folders on `/import/` uploads five files per sample and nothing else,
-so the bulk of a run never leaves your machine:
-
-```
-<sample>/data/output.gd
-<sample>/data/reference.gff3   <sample>/data/reference.fasta
-<sample>/data/reference.bam    <sample>/data/reference.bam.bai
-```
-
-Large folders are uploaded in chunks with progress, so a multi-GB drop never depends on a
-single long request. Files are stored under `MUTINT_STORE_DIR`, keyed by database id:
-
-```
-<store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
-<store>/samples/<sample_id>/{sample.gd,aligned.bam,aligned.bam.bai}
-```
-
-**Sample statistics come from `data/summary.json`.** breseq writes it beside `output/`;
-MutInt reads total reads, average read length, percent mapped and mean coverage from it. A
-sample without that file still imports, with those statistics left at zero. They used to be
-scraped out of `summary.html` by table position, which is why breseq HTML reports were once
-needed at all.
-
-**Every sample in an experiment shares one reference genome.** The first import establishes
-it; a later sample whose reference does not match is rejected individually while the rest of
-the batch imports.
-
-**The sequence is the sole invariant.** Two samples belong to the same experiment when their
-reference *sequence* is identical; annotation may legitimately differ in detail between
-breseq runs, and that alone never causes a rejection. A folder import never rewrites the
-experiment's annotation -- import order should not decide it -- but the **Replace annotation**
-import type does, since that is an explicit request.
-
-References are **normalized** before being stored or hashed: whatever arrives is converted to
-one canonical pair -- a GFF3 of genes only, plus a FASTA -- so a GenBank and the GFF3 breseq
-derived from the same genome compare equal rather than looking like two different references.
-
 ### Reference genomes
 
 A bare `.gd` carries no reference, so it cannot establish one. Drop a reference on
@@ -174,20 +135,20 @@ All configuration is via environment variables. The defaults are suitable for lo
 |----------|---------|-------------|
 | `MUTINT_STORE_DIR` | `<repo>/data/store` | Managed store that MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it are derived from database ids, never from client input. |
 | `MUTINT_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./mutint reap_uploads` removes it. |
-| `MUTINT_STORE_DIR` | `<repo>/data/store` | Managed store MutInt owns: uploaded `.gd`, BAM/BAI, and per-experiment reference genomes. Paths inside it derive from database ids, never from client input. |
-| `MUTINT_UPLOAD_SESSION_TTL_HOURS` | `24` | How long a staged-but-unfinalized upload survives before `./mutint reap_uploads` removes it. |
 | `DJANGO_SECRET_KEY` | insecure dev key | Django secret key. Must be set to a long random string in any non-local deployment. |
 | `DEBUG` | `0` | Set to `1` to enable Django debug mode (shows error tracebacks in the browser). |
 | `DJANGO_SERVER_HOST` | `localhost` | Hostname added to `ALLOWED_HOSTS`. Set to your server's hostname or IP for non-local deployments. |
-| `PUBLIC` | `0` | Set to `1` to enable read-only public access mode. |
 | `GOOGLE_ANALYTICS_TAG` | _(empty)_ | Google Analytics measurement ID (e.g. `G-XXXXXXXX`). |
 | `MUTINT_DB_HOST` | _(unset)_ | **Unset means the entry script manages a PostgreSQL server under `env/`.** Set it to a hostname (or a socket directory) to use a server you run yourself, in which case nothing is provisioned, started or stopped for you. |
-| `MUTINT_DB_NAME` | the checkout's directory name | Database name, e.g. `mutint_core`. |
+| `MUTINT_DB_NAME` | the checkout's directory name (`mutint_core`), set by the entry script; `mutint` when settings are loaded any other way | Database name. |
 | `MUTINT_DB_USER` | `mutint` | Database role. |
 | `MUTINT_DB_PASSWORD` | _(empty)_ | Not needed for the managed server, which is socket-only and trusts the local user. |
-| `MUTINT_DB_PORT` | `5432` | Ignored by the managed server, which listens on no port at all. |
+| `MUTINT_DB_PORT` | _(empty)_ | Ignored by the managed server, which listens on no port at all. |
 | `MUTINT_ALLOW_REMOTE_TESTS` | `0` | Set to `1` to let `./mutint test` run against a server this checkout does not manage. Tests create and drop `test_<name>` on it, so this is deliberately awkward. |
 | `DJANGO_SETTINGS_MODULE` | `config.settings_local` | Django settings module. Use `config.settings_private` for production with auth enforcement. |
+| `MUTINT_NCBI_EMAIL`, `MUTINT_NCBI_API_KEY` | _(empty)_ | Identify this installation to NCBI E-utilities, which the Reference page's sequence check and the NCBI viewer use; without them NCBI rate-limits harder. |
+| `MUTINT_NCBI_TIMEOUT`, `MUTINT_NCBI_MAX_BASES` | `30`, `50000000` | Seconds to wait on NCBI, and the longest sequence the check will fetch. |
+| `MUTINT_TOOLS_DIR` | `<repo>/env/tools` | Where the entry script installed components' `tools.txt`; set by the script, read by `mutint_common.tools`. |
 
 ### Settings files
 
@@ -195,7 +156,6 @@ All configuration is via environment variables. The defaults are suitable for lo
 |------|---------|
 | `config/settings_local.py` | Local development (`DEBUG=True`). Default when using `./mutint`. |
 | `config/settings_private.py` | Production with login enforcement (`LoginRequiredMiddleware`). |
-| `config/settings_public.py` | Public read-only deployment. |
 
 ---
 
@@ -233,7 +193,7 @@ The full guide is the documentation site, built locally:
 ./mutint docs              # or build to site/
 ```
 
-It covers the repository structure a plugin should use, the seven registries and what each
+It covers the repository structure a plugin should use, the nine registries and what each
 contributes, how to test a plugin (which happens in an assembled project, since a plugin's app
 is not installed in this one), and how to assemble a project in the first place.
 

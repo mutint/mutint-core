@@ -35,8 +35,8 @@ class EditorTestCase(TestCase):
         self.context = prepare_experiment_by_id(self.experiment.id)
         self.ale = Population.objects.create(experiment=self.experiment, name=1)
 
-        self.sample_a = self.make_sample(flask_number=1)
-        self.sample_b = self.make_sample(flask_number=2)
+        self.sample_a = self.make_sample(time_point=1)
+        self.sample_b = self.make_sample(time_point=2)
 
         self.mut_1 = self.make_mutation(position=100, sequence_change="A>T")
         self.mut_2 = self.make_mutation(position=200, sequence_change="C>G")
@@ -48,10 +48,10 @@ class EditorTestCase(TestCase):
 
     # --- fixture builders -----------------------------------------------------------------
 
-    def make_sample(self, flask_number, isolate_number=1, is_mixed=False):
+    def make_sample(self, time_point, sample_label=1, is_mixed=False):
         return Sample.objects.create(
-            population=self.ale, time_point=flask_number, name=isolate_number, is_clonal=not is_mixed,
-            source_name="A1 F%d I%d" % (flask_number, isolate_number))
+            population=self.ale, time_point=time_point, name=sample_label, is_clonal=not is_mixed,
+            source_name="A1 F%d I%d" % (time_point, sample_label))
 
     def make_mutation(self, position, sequence_change, gene="thrA", experiment=None):
         return Mutation.objects.create(

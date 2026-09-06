@@ -15,7 +15,7 @@ from django.test import TestCase
 from mutint_experiment.models import Experiment, Population
 from mutint_experiment.ordering import sample_sort_key
 from mutint_sample.models import Sample
-from mutint_sample.util import get_ordered_reseq_queryset
+from mutint_sample.util import get_ordered_sample_queryset
 from mutint_experiment import paths
 
 
@@ -25,16 +25,16 @@ class OrderingTestCase(TestCase):
         self.experiment = Experiment.objects.create(
             name="E")
 
-    def make(self, ale, flask, isolate="1"):
-        ale_row, _ = Population.objects.get_or_create(experiment=self.experiment,
-                                                 name=str(ale))
+    def make(self, population, time_point, name="1"):
+        population_row, _ = Population.objects.get_or_create(experiment=self.experiment,
+                                                            name=str(population))
         return Sample.objects.create(
-            population=ale_row, time_point=flask, name=str(isolate), is_clonal=True,
-            source_name="A%s F%s I%s" % (ale, flask, isolate))
+            population=population_row, time_point=time_point, name=str(name), is_clonal=True,
+            source_name="A%s F%s I%s" % (population, time_point, name))
 
     def order(self):
         return [r.source_name for r in
-                get_ordered_reseq_queryset(self.experiment.id, include_ancestor=True)]
+                get_ordered_sample_queryset(self.experiment.id, include_ancestor=True)]
 
 
 class TestTheRule(OrderingTestCase):
@@ -63,7 +63,7 @@ class TestTheRule(OrderingTestCase):
         self.assertEqual(self.order(), ["A2 F1 I1", "A10 F1 I1"])
 
     def test_isolate_ten_comes_after_isolate_two(self):
-        """The sample's `isolate_number` is text too, and an auto-numbered import gives one flask
+        """The sample's `sample_label` is text too, and an auto-numbered import gives one flask
         an isolate per sample -- fifty-one of them in the dev database's largest experiment."""
         self.make(1, 1, 2)
         self.make(1, 1, 10)
@@ -78,7 +78,7 @@ class TestTheRule(OrderingTestCase):
         self.assertEqual(self.order()[0], "A1 F1 I1")
 
     def test_a_null_flask_sorts_first_on_every_backend(self):
-        """`flask_number` is nullable and `sample_order` says `nulls_first` rather than
+        """`time_point` is nullable and `sample_order` says `nulls_first` rather than
         letting the backend decide -- PostgreSQL puts NULLs last ascending, SQLite first, so
         production and the test suite would otherwise disagree."""
         self.make(1, 1)

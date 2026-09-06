@@ -128,7 +128,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         actually writes after that function changes."""
         from mutint_curate.record_builder import build_call
         from mutint_sample.models import MutationCall
-        from mutint_sample.util import get_reseq_ordered_dict
+        from mutint_sample.util import get_ordered_sample_dict
 
         mutation = Mutation.objects.create(
             experiment=self.experiment,
@@ -137,16 +137,16 @@ class ManuallyAddedMutationTestCase(TestCase):
             mutation_type="SNP",
             sequence_change="A->G",
             gene="thrA")
-        sample = list(get_reseq_ordered_dict(self.experiment.id).values())[0]
+        sample = list(get_ordered_sample_dict(self.experiment.id).values())[0]
         MutationCall.objects.create(sample=sample, mutation=mutation, **build_call(1.0))
         return mutation
 
     def _matrix(self):
         from mutint_sample.mutation_matrix import build_matrix
-        from mutint_sample.util import get_reseq_ordered_dict
+        from mutint_sample.util import get_ordered_sample_dict
 
-        reseq_dict = get_reseq_ordered_dict(self.experiment.id)
-        return build_matrix(get_all_calls_filtered(self.experiment.id), reseq_dict,
+        sample_dict = get_ordered_sample_dict(self.experiment.id)
+        return build_matrix(get_all_calls_filtered(self.experiment.id), sample_dict,
                             experiment=self.experiment)
 
     def test_a_hand_added_mutation_has_a_row_in_the_cross_sample_table(self):

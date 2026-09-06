@@ -90,7 +90,7 @@ class ImplicitRolesTestCase(TestCase):
     def test_staff_hold_nothing(self):
         """Inverted deliberately: `can_view_project` used to end `return bool(is_staff)`.
 
-        `load_projects` creates every imported user with `is_staff=True`, so that clause made
+        the retired `load_projects` importer created every user with `is_staff=True`, so that clause made
         nearly everything readable by nearly everyone and every role below admin decorative.
         """
         staff = make_user("staff", is_staff=True)

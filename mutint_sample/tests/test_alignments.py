@@ -32,9 +32,9 @@ class AlignmentServingTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1", bam_bytes=PAYLOAD)
         breseq_folder.import_breseq_folders(
             self.drop, project_name="p", experiment_name="e", owner_name="tester")
-        self.reseq = Sample.objects.get()
-        self.experiment = self.reseq.experiment
-        self.bam_url = "/mutations/alignments/%d/bam" % self.reseq.id
+        self.sample = Sample.objects.get()
+        self.experiment = self.sample.experiment
+        self.bam_url = "/mutations/alignments/%d/bam" % self.sample.id
 
     def _body(self, response):
         return b"".join(response.streaming_content)
@@ -50,7 +50,7 @@ class AlignmentServingTestCase(TestCase):
         self.assertEqual(self._body(response), PAYLOAD)
 
     def test_bai_and_reference_files_are_served(self):
-        for url in ("/mutations/alignments/%d/bai" % self.reseq.id,
+        for url in ("/mutations/alignments/%d/bai" % self.sample.id,
                     "/mutations/reference/%d/fasta" % self.experiment.id,
                     "/mutations/reference/%d/fai" % self.experiment.id,
                     "/mutations/reference/%d/gff3" % self.experiment.id):
@@ -119,10 +119,10 @@ class AlignmentServingTestCase(TestCase):
 
     def test_sample_without_a_stored_bam_is_404(self):
         """A bare-.gd import has no alignment; the route must 404, not 500."""
-        reseq = Sample.objects.create(
-            population=self.reseq.population, time_point=self.reseq.time_point,
+        sample = Sample.objects.create(
+            population=self.sample.population, time_point=self.sample.time_point,
             source_name="no-bam")
-        response = self.client.get("/mutations/alignments/%d/bam" % reseq.id)
+        response = self.client.get("/mutations/alignments/%d/bam" % sample.id)
         self.assertEqual(response.status_code, 404)
 
     def test_no_client_path_reaches_the_filesystem(self):

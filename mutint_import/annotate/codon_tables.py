@@ -80,10 +80,3 @@ def translate_codon(codon, translation_table=DEFAULT_TRANSLATION_TABLE, codon_nu
         return UNKNOWN_AMINO_ACID
     return _table_for(translation_table, codon_number_1).get(codon.upper(), UNKNOWN_AMINO_ACID)
 
-
-def is_valid_translation_table(table_id):
-    try:
-        int_id = int(table_id)
-    except (TypeError, ValueError):
-        return False
-    return int_id in CodonTable.unambiguous_dna_by_id

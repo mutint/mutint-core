@@ -22,14 +22,6 @@ from mutint_import.annotate import loader as annotate_loader
 FASTA_DIRECTIVE = "##FASTA"
 
 
-def sha256_file(path, _chunk=1024 * 1024):
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for block in iter(lambda: handle.read(_chunk), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def parse_fasta(handle):
     """Yield ``(seq_id, sequence)`` from an open text FASTA handle.
 
@@ -88,16 +80,6 @@ def read_gff3(path):
 
     sequences = list(parse_fasta(io.StringIO("\n".join(fasta_lines)))) if fasta_lines else []
     return {"features": features, "sequences": sequences}
-
-
-def write_fasta(sequences, path, line_length=70):
-    """Write ``[(seq_id, sequence), ...]`` as FASTA with a fixed line length."""
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        for seq_id, sequence in sequences:
-            handle.write(">%s\n" % seq_id)
-            for offset in range(0, len(sequence), line_length):
-                handle.write(sequence[offset:offset + line_length] + "\n")
-    return path
 
 
 def write_fai(fasta_path, fai_path=None):

@@ -6,7 +6,7 @@ case in `SweptMutationTestCase` is the one that justifies storing `mutation_iden
 """
 
 
-from mutint_import.ale_experiment import _delete_all_orphaned_mutations
+from mutint_import.experiments import _delete_all_orphaned_mutations
 from mutint_curate import history
 from mutint_curate.models import (
     KIND_DELETE, MutationEdit, MutationEditSet,
@@ -143,7 +143,7 @@ class PerSampleRestoreTestCase(EditorTestCase):
 class SweptMutationTestCase(EditorTestCase):
     """Restoring after the orphan sweep has taken the Mutation row.
 
-    `mutint_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes every Mutation
+    `mutint_import.experiments._delete_all_orphaned_mutations` hard-deletes every Mutation
     with no MutationCall, and it runs after an experiment delete and after `delete_sample`
     -- neither of which this app is involved in. So removing a mutation's last call can
     leave a Mutation that some later, unrelated operation destroys. This is the whole reason

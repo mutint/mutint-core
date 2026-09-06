@@ -237,10 +237,10 @@ def experiment_ancestor(request, pk):
     if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", context, status=403)
 
-    from mutint_sample.util import get_ordered_reseq_queryset
+    from mutint_sample.util import get_ordered_sample_queryset
 
     # `include_ancestor=True`: the current ancestor has to appear in the list that changes it.
-    samples = list(get_ordered_reseq_queryset(experiment.id, include_ancestor=True))
+    samples = list(get_ordered_sample_queryset(experiment.id, include_ancestor=True))
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
@@ -277,7 +277,7 @@ def experiment_ancestor_apply(request, pk):
     if not raw:
         experiment.clear_ancestor()
     else:
-        from mutint_sample.util import get_ordered_reseq_queryset
+        from mutint_sample.util import get_ordered_sample_queryset
         try:
             sample_id = int(raw)
         except (TypeError, ValueError):
@@ -287,12 +287,12 @@ def experiment_ancestor_apply(request, pk):
         # schema stops the column pointing at another experiment's sample, and a mutation
         # belongs to one experiment's reference genome -- subtracting a foreign sample's
         # mutations would be meaningless where it was not simply a no-op.
-        reseq = get_ordered_reseq_queryset(
+        sample = get_ordered_sample_queryset(
             experiment.id, include_ancestor=True).filter(pk=sample_id).first()
-        if reseq is None:
+        if sample is None:
             return JsonResponse(
                 {"error": "That sample is not in this experiment."}, status=404)
-        experiment.set_ancestor(reseq, request.user)
+        experiment.set_ancestor(sample, request.user)
 
     # Everything derived changes: the ancestor's mutations leave or rejoin every other sample.
     # Marked *and* run, the shape `mutint_curate.history.rebuild_after_edit` uses for

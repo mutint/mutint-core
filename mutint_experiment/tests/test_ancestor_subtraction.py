@@ -11,7 +11,7 @@ from mutint_experiment.ancestor import (ancestral_mutation_ids, describe_ancesto
 from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 from mutint_sample.util import (get_evolved_call_queryset, get_mutation_call_queryset,
-                            get_reseq_ordered_dict, calls_for_samples)
+                            get_ordered_sample_dict, calls_for_samples)
 
 
 class SubtractionTestCase(EditorTestCase):
@@ -35,7 +35,7 @@ class TestNothingHappensWithoutADesignation(SubtractionTestCase):
                          str(raw.query))
 
     def test_every_sample_is_listed(self):
-        self.assertEqual(set(get_reseq_ordered_dict(self.experiment.id)),
+        self.assertEqual(set(get_ordered_sample_dict(self.experiment.id)),
                          {self.sample_a.id, self.sample_b.id})
 
     def test_there_is_nothing_to_describe(self):
@@ -82,14 +82,14 @@ class TestListings(SubtractionTestCase):
 
     def test_the_ancestor_is_not_listed(self):
         self.designate_a()
-        self.assertEqual(set(get_reseq_ordered_dict(self.experiment.id)),
+        self.assertEqual(set(get_ordered_sample_dict(self.experiment.id)),
                          {self.sample_b.id})
 
     def test_a_curation_page_can_still_ask_for_it(self):
         """The Edit-samples page and the mutation editor must still be able to change it."""
         self.designate_a()
         self.assertIn(self.sample_a.id,
-                      get_reseq_ordered_dict(self.experiment.id, include_ancestor=True))
+                      get_ordered_sample_dict(self.experiment.id, include_ancestor=True))
 
     def test_the_edit_samples_page_still_shows_it(self):
         self.designate_a()

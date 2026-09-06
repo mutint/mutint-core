@@ -24,7 +24,7 @@ Four levels, and every page here assumes them:
 |---|---|
 | **Project** | who owns the work. Access is granted here and nowhere else. |
 | **Experiment** | one ALE study, with one reference genome. |
-| **ALE / flask / isolate / replicate** | where a sample sits in the evolution — the `A-F-I-R` coordinate. |
+| **population / time point / sample name** | where a sample sits in the evolution: which lineage, how far along it, and which sample from that time point (a replicate is part of the name, `1-2`). |
 | **Sample** | one sequencing run, carrying the mutations called from it. |
 
 A mutation belongs to an experiment; a sample *observes* it. That distinction runs through

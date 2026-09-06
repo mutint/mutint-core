@@ -11,8 +11,8 @@ order -- reference first, then the mutation files -- and ends in the post-experi
 Whatever the example exists to demonstrate is therefore computed here, not shipped.
 
 The command is `load_example`, not `load-example`: Django takes a command's name from its
-module filename and a module name cannot contain a hyphen. `purge_deleted`, `load_projects`
-and `rebuild_stats` are the same. Dataset *names* are registry strings and keep their hyphens.
+module filename and a module name cannot contain a hyphen. `purge_deleted` and `reap_jobs`
+are the same. Dataset *names* are registry strings and keep their hyphens.
 """
 
 import os

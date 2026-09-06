@@ -1,7 +1,5 @@
-__author__ = "Patrick Phaneuf"
 
 REQUEST_ALL = "all"
-REQUEST_MUTATION_ID = "mutation_id"
 
 #: The query string every experiment-scoped page carries. It was `experiment_id`, which
 #: named a model that no longer exists.

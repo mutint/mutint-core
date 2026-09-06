@@ -28,7 +28,7 @@ from mutint_dashboard.models import InstallationCounts
 from mutint_dashboard.util import counts
 from mutint_experiment.models import Experiment, Project
 from mutint_import import annotation
-from mutint_import.ale_experiment import (
+from mutint_import.experiments import (
     delete_experiments,
     delete_sample,
     find_user,

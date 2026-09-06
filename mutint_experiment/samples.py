@@ -21,7 +21,7 @@ create) the Population for the *target* coordinate and re-point `Sample.populati
 That buys, in order of how much each one matters:
 
 - siblings are untouched, which is the whole point;
-- `reseq.pk` never changes, so the store paths (`mutint_store/samples/<pk>/aligned.bam`)
+- `sample.pk` never changes, so the store paths (`mutint_store/samples/<pk>/aligned.bam`)
   need no file moves -- see `mutint_common.store`;
 - no transient unique_together violation is possible, because a number is only ever looked
   up, never written;
@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 
 # Fields a user may change that do not affect identity. Editing one of these must not
 # create a row, delete a row, or trigger a rebuild -- see `rows_are_structural`.
-DESCRIPTIVE_FIELDS = ("sample_name", "isolate_description", "medium_description")
+DESCRIPTIVE_FIELDS = ("source_name", "description", "medium_description")
 # The form's field names, which are the query-string vocabulary and change with it rather
 # than with the columns behind them.
-STRUCTURAL_FIELDS = ("ale", "flask", "isolate", "is_mixed")
+STRUCTURAL_FIELDS = ("population", "time_point", "name", "is_mixed")
 
 MAX_ROWS = 2000
 
@@ -67,27 +67,27 @@ class SampleEditError(Exception):
         self.status = status
 
 
-def sample_project(reseq):
+def sample_project(sample):
     """The project a sample belongs to, or None.
 
     A sample knows its project only by traversal, so this is also the permission lookup:
-    `can_edit_project(user, sample_project(reseq))`. Returns None for a sample whose
+    `can_edit_project(user, sample_project(sample))`. Returns None for a sample whose
     `population` is null -- those are unreachable everywhere else too
-    (`get_ordered_reseq_queryset` filters them out), and the views 404 rather than treat a
+    (`get_ordered_sample_queryset` filters them out), and the views 404 rather than treat a
     sample with no project as one nobody needs permission for.
     """
-    if reseq.population_id is None:
+    if sample.population_id is None:
         return None
-    return reseq.population.experiment.project
+    return sample.population.experiment.project
 
 
-def sample_experiment(reseq):
-    if reseq.population_id is None:
+def sample_experiment(sample):
+    if sample.population_id is None:
         return None
-    return reseq.population.experiment
+    return sample.population.experiment
 
 
-def sample_coordinate(reseq):
+def sample_coordinate(sample):
     """`(population, time_point, label)`, or None for an unrooted sample.
 
     The population and the label are strings and the time point is a float -- see
@@ -97,9 +97,9 @@ def sample_coordinate(reseq):
     now (`1-2` rather than `1` with an `R2` beside it), so anything unpacking this into four
     names is a compile error rather than a silently short coordinate.
     """
-    if reseq.population_id is None:
+    if sample.population_id is None:
         return None
-    return (reseq.population.name, reseq.time_point, reseq.name)
+    return (sample.population.name, sample.time_point, sample.name)
 
 
 def coordinate_str(coordinate):
@@ -206,8 +206,7 @@ def _positive_int(raw, label, row_label):
         raise SampleEditError(
             "%s: %s must be a whole number." % (row_label, label))
     if value < 0:
-        # 0 is legal: mutint_experiment.common.STARTING_STRAIN_ALE_ID is "0", and the
-        # starting strain is a real sample.
+        # 0 is legal: a time point of 0 is where an ancestor sits.
         raise SampleEditError("%s: %s cannot be negative." % (row_label, label))
     return value
 
@@ -242,10 +241,10 @@ def _label(raw, label, row_label):
 # a mirror of the schema -- it is the only limit there is. The number is kept because a note
 # somebody types into a form still wants a bound, and because the sample edit page's
 # `maxlength` attribute mirrors it client-side.
-_MAX_LENGTHS = {"sample_name": 200, "isolate_description": 300,
+_MAX_LENGTHS = {"source_name": 200, "description": 300,
                 "medium_description": 500}
-_FIELD_LABELS = {"sample_name": "sample name",
-                 "isolate_description": "description",
+_FIELD_LABELS = {"source_name": "sample name",
+                 "description": "description",
                  "medium_description": "medium description"}
 
 
@@ -260,7 +259,7 @@ def _check_lengths(descriptive, row_label):
 
 
 def parse_rows(rows, samples_by_id):
-    """Validate every row and return [(reseq, coordinate, descriptive_dict), ...].
+    """Validate every row and return [(sample, coordinate, descriptive_dict), ...].
 
     Phase one of three. Nothing is written here and nothing downstream is consulted, so a
     bad row costs one dict lookup rather than a transaction.
@@ -277,8 +276,8 @@ def parse_rows(rows, samples_by_id):
         if not isinstance(row, dict):
             raise SampleEditError("Malformed request: row %d is not an object." % (index + 1))
         raw_id = str(row.get("id", "")).strip()
-        reseq = samples_by_id.get(raw_id)
-        if reseq is None:
+        sample = samples_by_id.get(raw_id)
+        if sample is None:
             # Includes an id from another experiment: samples_by_id is built from this
             # experiment's queryset, so a foreign id simply is not in it.
             raise SampleEditError(
@@ -287,16 +286,16 @@ def parse_rows(rows, samples_by_id):
         row_label = "Row %d" % (index + 1)
         try:
             coordinate = (
-                _label(row.get("ale"), "ALE", row_label),
+                _label(row.get("population"), "Population", row_label),
                 # "time point" is what the form field is called; the column is
                 # so, but that is not what anyone calls it, and a refusal is the one place
                 # the internal name would surface to a user. Still the one member of the
                 # coordinate that must be a number -- fixation orders ALEs by it.
-                _positive_int(row.get("flask"), "time point", row_label),
+                _positive_int(row.get("time_point"), "time point", row_label),
                 # One label where there were two. A replicate was never a level of
                 # anything -- `1-2` is what the sample is called, and the form has one box
                 # for it.
-                _label(row.get("isolate"), "sample label", row_label),
+                _label(row.get("name"), "sample label", row_label),
             )
         except SampleEditError as error:
             errors[raw_id] = error.message
@@ -320,7 +319,7 @@ def parse_rows(rows, samples_by_id):
         except SampleEditError as error:
             errors[raw_id] = error.message
             continue
-        parsed.append((reseq, coordinate, descriptive))
+        parsed.append((sample, coordinate, descriptive))
 
     if errors:
         raise SampleEditError(_summarize(errors, samples_by_id), errors)
@@ -339,23 +338,23 @@ def _check_names(parsed, samples_by_id):
     samples with one name, so a plain "is this name taken" rule would refuse every save on
     an experiment that already had a pair -- including the save that was fixing it.
     """
-    moving = {str(reseq.pk) for reseq, _, descriptive in parsed
-              if descriptive.get("sample_name", reseq.source_name) != reseq.source_name}
+    moving = {str(sample.pk) for sample, _, descriptive in parsed
+              if descriptive.get("source_name", sample.source_name) != sample.source_name}
     taken = {}
-    for key, reseq in samples_by_id.items():
-        if key in moving or not reseq.source_name:
+    for key, sample in samples_by_id.items():
+        if key in moving or not sample.source_name:
             continue
-        taken[reseq.source_name] = key
+        taken[sample.source_name] = key
 
     errors = {}
-    for reseq, _, descriptive in parsed:
-        name = descriptive.get("sample_name")
-        if not name or name == (reseq.source_name or ""):
+    for sample, _, descriptive in parsed:
+        name = descriptive.get("source_name")
+        if not name or name == (sample.source_name or ""):
             continue
         if name in taken:
-            errors[str(reseq.pk)] = (
+            errors[str(sample.pk)] = (
                 'A sample named "%s" already exists in this experiment.' % name)
-        taken[name] = str(reseq.pk)
+        taken[name] = str(sample.pk)
     if errors:
         raise SampleEditError(_summarize(errors, samples_by_id), errors)
 
@@ -374,39 +373,39 @@ def plan_moves(parsed, samples_by_id):
     mutations vanish from fixation with no error anywhere.
     """
     occupants = {}
-    for reseq in samples_by_id.values():
-        coordinate = sample_coordinate(reseq)
+    for sample in samples_by_id.values():
+        coordinate = sample_coordinate(sample)
         if coordinate is not None:
-            occupants.setdefault(coordinate, []).append(reseq)
+            occupants.setdefault(coordinate, []).append(sample)
 
     vacating = set()
-    for reseq, coordinate, _ in parsed:
-        current = sample_coordinate(reseq)
+    for sample, coordinate, _ in parsed:
+        current = sample_coordinate(sample)
         if current is not None and current != coordinate:
-            vacating.add(reseq.pk)
+            vacating.add(sample.pk)
 
     errors = {}
     claimed = {}
-    for reseq, coordinate, _ in parsed:
+    for sample, coordinate, _ in parsed:
         label = coordinate_str(coordinate)
-        if coordinate in claimed and claimed[coordinate] != reseq.pk:
-            errors[str(reseq.pk)] = (
+        if coordinate in claimed and claimed[coordinate] != sample.pk:
+            errors[str(sample.pk)] = (
                 "Two rows were both given the identity %s." % label)
             continue
-        claimed[coordinate] = reseq.pk
+        claimed[coordinate] = sample.pk
 
         for occupant in occupants.get(coordinate, []):
-            if occupant.pk == reseq.pk or occupant.pk in vacating:
+            if occupant.pk == sample.pk or occupant.pk in vacating:
                 continue
-            errors[str(reseq.pk)] = (
+            errors[str(sample.pk)] = (
                 '%s is already "%s". Two samples cannot share one identity -- move that '
                 'one first, or give this one a different label.'
                 % (label, occupant.source_name or occupant.pk))
     if errors:
         raise SampleEditError(_summarize(errors, samples_by_id), errors)
 
-    return [(reseq, coordinate, descriptive)
-            for reseq, coordinate, descriptive in parsed]
+    return [(sample, coordinate, descriptive)
+            for sample, coordinate, descriptive in parsed]
 
 
 def _summarize(errors, samples_by_id):
@@ -419,8 +418,8 @@ def _summarize(errors, samples_by_id):
     """
     lines = ["Nothing was saved."]
     for key, message in errors.items():
-        reseq = samples_by_id.get(key)
-        name = (reseq.source_name if reseq and reseq.source_name else "sample %s" % key)
+        sample = samples_by_id.get(key)
+        name = (sample.source_name if sample and sample.source_name else "sample %s" % key)
         lines.append("%s: %s" % (name, message))
     return "\n".join(lines)
 
@@ -433,10 +432,10 @@ def rows_are_structural(parsed):
 
     Drives whether the rebuild hooks run. A rename must not pay for a fixation rebuild.
     """
-    for reseq, coordinate, descriptive in parsed:
-        if sample_coordinate(reseq) != coordinate:
+    for sample, coordinate, descriptive in parsed:
+        if sample_coordinate(sample) != coordinate:
             return True
-        if bool(reseq.is_mixed) != descriptive["is_mixed"]:
+        if bool(sample.is_mixed) != descriptive["is_mixed"]:
             return True
     return False
 
@@ -487,9 +486,9 @@ def apply_rows(experiment, parsed):
     vacated = []
     touched = []
 
-    for reseq, coordinate, descriptive in parsed:
-        current = sample_coordinate(reseq)
-        source_population = reseq.population
+    for sample, coordinate, descriptive in parsed:
+        current = sample_coordinate(sample)
+        source_population = sample.population
         always = ["is_clonal"]
 
         if current != coordinate:
@@ -497,12 +496,12 @@ def apply_rows(experiment, parsed):
             # Inheriting species/strain is the only answer that does not silently reset real
             # data. (There was a medium and a freezer box here too, both required FKs to
             # rows nothing displayed, and both are gone.)
-            reseq.population = resolve_population(
+            sample.population = resolve_population(
                 experiment, coordinate,
                 species=source_population.species if source_population else "",
                 strain=source_population.strain if source_population else "")
-            reseq.time_point = coordinate[1]
-            reseq.name = coordinate[2]
+            sample.time_point = coordinate[1]
+            sample.name = coordinate[2]
             always += ["population", "time_point", "name"]
             if source_population is not None:
                 vacated.append(source_population)
@@ -512,17 +511,17 @@ def apply_rows(experiment, parsed):
         # the sample or stayed with the row, and the answer ("travel, but only onto a row
         # that did not exist a moment ago") was three paragraphs of comment. It is the
         # sample's own column now, so it simply moves with it and there is nothing to decide.
-        reseq.is_clonal = not descriptive["is_mixed"]
+        sample.is_clonal = not descriptive["is_mixed"]
         for field in FLAG_FIELDS:
             if field in descriptive:
-                setattr(reseq, field, descriptive[field])
+                setattr(sample, field, descriptive[field])
                 always.append(field)
-        _write(reseq, {"source_name": "sample_name",
-                       "description": "isolate_description"},
+        _write(sample, {"source_name": "source_name",
+                       "description": "description"},
                descriptive, always,
                curation={"medium_description": "medium_description"})
 
-        touched.append(reseq.pk)
+        touched.append(sample.pk)
 
     prune_orphans(vacated)
     return touched

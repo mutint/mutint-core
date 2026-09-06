@@ -24,14 +24,6 @@ def get_all_user_exps(user):
         project__in=get_user_projects(user))).order_by('name')
 
 
-def _ale_exp_exists(ale_id, recent_experiments):
-    try:
-        recent_experiments.append(Experiment.objects.get(pk=ale_id))
-    except ObjectDoesNotExist:
-        pass
-    return recent_experiments
-
-
 def get_strains():
     """return list of sorted strains"""
     return sorted(

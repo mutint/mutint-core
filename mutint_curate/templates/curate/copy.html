@@ -10,7 +10,7 @@
     <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     {% include "curate/_toolbar.html" with active='copy' %}
@@ -21,20 +21,20 @@
         <div class="btn-group" id="source_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {{ source_reseq.label }} <span class="caret"></span>
+                {{ source_sample.label }} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu mutint-menu">
-                {% for reseq in reseq_list %}
-                    <li {% if reseq.id == source_sample_id %}class="active"{% endif %}>
-                        <a href="?experiment_id={{ experiment_id }}&amp;source_sample_id={{ reseq.id }}">{{ reseq.label }}</a>
+                {% for sample in sample_list %}
+                    <li {% if sample.id == source_sample_id %}class="active"{% endif %}>
+                        <a href="?experiment_id={{ experiment_id }}&amp;source_sample_id={{ sample.id }}">{{ sample.label }}</a>
                     </li>
                 {% endfor %}
             </ul>
         </div>
     </div>
 
-    {% if not source_reseq %}
-        <p>This experiment has no resequencing samples to copy between.</p>
+    {% if not source_sample %}
+        <p>This experiment has no samples to copy between.</p>
     {% elif not can_edit %}
         <p>Copying mutations between samples needs write access to this project.</p>
     {% else %}
@@ -60,7 +60,7 @@
            copy, then where to -- and a page whose sample list is on the left and another's on
            the right is a difference the person has to notice. {% endcomment %}
         <div class="col-lg-8" style="padding-left: 0;">
-            <h4>Mutations in {{ source_reseq.label }}</h4>
+            <h4>Mutations in {{ source_sample.label }}</h4>
             {% comment %} Same DataTables-with-Select reasoning as the edit page: no cell here
                is an input, so selection lives in DataTables' data model and survives paging
                and searching. {% endcomment %}

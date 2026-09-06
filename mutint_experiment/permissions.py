@@ -17,7 +17,7 @@ Three things confer a role without a `ProjectAccess` row, and all three are in
 project; and `is_public` gives everyone, signed in or not, `read`.
 
 **There is no blanket grant for staff.** `can_view_project` used to end
-`return bool(user.is_staff)`, and `load_projects` creates every imported user with
+`return bool(user.is_staff)`, and the retired `load_projects` importer created every user with
 `is_staff=True`, so on a real deployment that made every project readable by almost everyone
 and every role below `admin` decorative. Restoring it would empty this module of meaning; the
 escape hatch for a deployment that relied on it is `./mutint project_access`.
@@ -280,12 +280,6 @@ def accessible_projects(user, minimum=ROLE_READ):
     return base.filter(query).distinct()
 
 
-def project_owners(project):
-    """Every user holding `owner`, via the mirror row or an additional grant."""
-    return ProjectAccess.objects.filter(project=project, role=ROLE_OWNER,
-                                        user__isnull=False).select_related("user")
-
-
 # --- resolving what someone typed ---------------------------------------------------------
 
 
@@ -483,7 +477,7 @@ def set_primary_owner(project, user, granted_by=None):
     """Make `user` the project's primary owner: writes `Project.user` **and** the owner row.
 
     The one writer of `Project.user`. Everything that creates a project goes through here --
-    the create page, the CLI importer, `load_projects`, `load_example` -- so a project cannot
+    the create page, the CLI importer, `load_example` -- so a project cannot
     come into existence with an owner who has no grant, which is what the old
     `Project.objects.create()` trap was.
     """

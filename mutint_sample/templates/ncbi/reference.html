@@ -5,7 +5,7 @@
 {% block scripts_and_style %}
     <link href="{% static "css/ncbi_view.css" %}?v={{ mutint_version }}" rel="stylesheet">
 {% endblock %}
-{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
 
 {% block content %}
 <div class="row">

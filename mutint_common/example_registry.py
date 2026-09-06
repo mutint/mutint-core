@@ -12,7 +12,7 @@ load it. Components register in ``AppConfig.ready()``::
     register_example_dataset(
         'mutint-compare-fixation-example',
         os.path.join(os.path.dirname(__file__), 'examples', 'fixation'),
-        description='Two ALE lineages over four flasks, with mutations that arrive and stay.')
+        description='Two lineages over four time points, with mutations that arrive and stay.')
 
 **A dataset is a directory of files the import path already understands** -- nothing more, and
 in particular not a Django fixture. Loading one therefore runs the registered import handlers

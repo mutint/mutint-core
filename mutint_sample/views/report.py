@@ -246,12 +246,3 @@ def report_file(request, sample_id, token, path):
 def _has(sample, name):
     return os.path.isfile(os.path.join(store.sample_report_dir(sample.pk), name))
 
-
-def has_report(sample):
-    """Whether this sample has something for the link bar to point at.
-
-    Reads the flag rather than the disk: the per-sample mutation table calls this while
-    rendering, and a stat per page load to answer a question the column already answers is
-    the kind of thing that is free until the store is on a network filesystem.
-    """
-    return bool(sample is not None and sample.report_stored)

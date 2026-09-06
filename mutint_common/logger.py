@@ -1,14 +1,6 @@
 import logging.config
 import uuid
 
-__author__ = 'Muyao <3'
-
-
-class UUIDFilter(logging.Filter):
-    def filter(self, record):
-        randomid = uuid.uuid1()
-        record.uuid = randomid
-        return True
 
 
 def join_extras(*dict_args):
@@ -44,17 +36,3 @@ def user_extra(request):
     }
     return extras
 
-
-def everything_extra(request):
-    return request.__dict__
-
-
-def all_get_extra(request):
-    if 'GET' in request.__dict__:
-        return request.__dict__['GET']
-    else:
-        return {}
-
-
-def extra_variables(*variables):
-    return locals()

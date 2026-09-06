@@ -52,8 +52,8 @@ class Command(BaseCommand):
             return
 
         built = failed = untagged = 0
-        for reseq in samples:
-            name = reseq.label
+        for sample in samples:
+            name = sample.label
             if options["dry_run"]:
                 self.stdout.write("  %s  would build" % name)
                 continue
@@ -65,7 +65,7 @@ class Command(BaseCommand):
                 # built under, so an IS element still towering over the trace could mean an
                 # old file, a BAM with no X1, or a broken derivation. Printed per sample so
                 # that question is answered where it is asked.
-                tally = coverage.build_for(reseq)
+                tally = coverage.build_for(sample)
                 built += 1
                 self.stdout.write("  %s  built  (%s)" % (name, tally.describe()))
                 if not tally.normalized:

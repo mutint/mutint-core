@@ -7,7 +7,7 @@ entry-point scanning.
 
 They are separate modules rather than one because **core's own apps use them too**. The
 sidebar is rendered from `nav_registry` whether or not a plugin is installed; `import_registry`
-holds core's three import types. A plugin is just another caller.
+holds core's five import types. A plugin is just another caller.
 
 ## Which one you want
 
@@ -32,7 +32,7 @@ registers a panel and nothing else at all: no URL, no nav entry, no model.
 
 ## Direction
 
-Seven of the eight run one way: an app contributes something and core consumes it. Registration
+Eight of the nine run one way: an app contributes something and core consumes it. Registration
 is additive and core never calls back.
 
 `rebuild_registry` is the exception and the only one that runs **both** ways.

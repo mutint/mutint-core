@@ -9,7 +9,7 @@ This page is about the other case: a drop that is **not** something to import. `
 takes FASTQ reads, which are the input to a job whose *output* is imported hours later, and
 which needs a sample name and a command line beside them. An import handler cannot carry
 either — `handle()` is given the experiment, the staged root, the paths and the user, and the
-Add page has no box to put anything else in.
+Import data page has no box to put anything else in.
 
 So core splits the two halves. It keeps the part that is about bytes arriving safely, and you
 keep the part that is about what they are for.

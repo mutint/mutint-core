@@ -5,7 +5,7 @@
 {% block title %}Import into {{ experiment.name }}{% endblock %}
 
 {% block header %}
-    <b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>:
+    <b><a href="/project/{{ project_id }}">{{ project_name }}</a>:
        {{ experiment.name }}</b> &mdash; Import data
 {% endblock %}
 
@@ -22,16 +22,16 @@
         {% comment %} The tab stays, and says what it is waiting for. The dropdown this page
            used to have left such a type out; a tab you can see that tells you why it cannot
            run yet is the better way to say the same thing. {% endcomment %}
-        <div class="alert alert-warning" id="add-not-offered">{{ reason }}</div>
+        <div class="alert alert-warning" id="import-not-offered">{{ reason }}</div>
     {% else %}
-    <form id="add-form">
+    <form id="import-form">
         {% csrf_token %}
-        <input type="hidden" id="add-experiment-id" value="{{ experiment.id }}">
-        <input type="hidden" id="add-had-reference" value="{{ has_reference|yesno:"1,0" }}">
+        <input type="hidden" id="import-experiment-id" value="{{ experiment.id }}">
+        <input type="hidden" id="import-had-reference" value="{{ has_reference|yesno:"1,0" }}">
         {% comment %} The type is the tab, so the page carries it rather than asking. The id
            is the one the script has always read. {% endcomment %}
-        <input type="hidden" id="add-type" value="{{ import_type.name }}">
-        <small class="help-block" id="add-type-help">
+        <input type="hidden" id="import-type" value="{{ import_type.name }}">
+        <small class="help-block" id="import-type-help">
             Anything this type does not recognize is reported rather than routed elsewhere,
             so nothing is imported as something it is not.
         </small>
@@ -51,21 +51,21 @@
         <ul id="drop-list" class="list-unstyled" style="margin-top: 1em;"></ul>
         <ul id="file-list"></ul>
 
-        <div id="add-progress" style="display: none; margin-top: 1em;">
+        <div id="import-progress" style="display: none; margin-top: 1em;">
             <div class="progress" style="margin-bottom: 0.4em;">
-                <div id="add-progress-bar" class="progress-bar" role="progressbar"
+                <div id="import-progress-bar" class="progress-bar" role="progressbar"
                      style="width: 0%;">0%</div>
             </div>
-            <small id="add-progress-text" style="color: #666;"></small>
+            <small id="import-progress-text" style="color: #666;"></small>
         </div>
 
-        <button type="submit" class="btn btn-primary" id="add-submit" disabled>Import</button>
-        <button type="button" class="btn btn-default" id="add-reset" disabled>Reset</button>
+        <button type="submit" class="btn btn-primary" id="import-submit" disabled>Import</button>
+        <button type="button" class="btn btn-default" id="import-reset" disabled>Reset</button>
         <a class="btn btn-default" href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
     </form>
     {% endif %}
 
-    <div id="add-result" style="margin-top: 1.5em;"></div>
+    <div id="import-result" style="margin-top: 1.5em;"></div>
 </div>
 
 {{ import_types|json_script:"import-types-data" }}
@@ -86,14 +86,14 @@
     // this experiment cannot use yet, which is the case worth explaining.
     var ALL_TYPES = JSON.parse(
         document.getElementById("all-import-types-data").textContent);
-    var EXPERIMENT_ID = document.getElementById("add-experiment-id").value;
-    var HAD_REFERENCE = document.getElementById("add-had-reference").value === "1";
+    var EXPERIMENT_ID = document.getElementById("import-experiment-id").value;
+    var HAD_REFERENCE = document.getElementById("import-had-reference").value === "1";
     // Where the summary waits out the reload below. Per experiment, and cleared on read.
-    var SUMMARY_KEY = "mutint-add-summary-" + EXPERIMENT_ID;
+    var SUMMARY_KEY = "mutint-import-summary-" + EXPERIMENT_ID;
     // Fast enough to feel live. It was 1000ms out of caution over SQLite write contention
     // -- SESSION_SAVE_EVERY_REQUEST is on, so every poll is also a session write -- but the
     // answer to that was WAL and a busy timeout on the connection, not a slow page. See
-    // mutint_common.sqlite_tuning.
+    // the database's own contention handling.
     var POLL_MS = 400;
     // Until the first snapshot names the samples there is no table to draw, and that wait is
     // the one that reads as nothing having happened. Ask more often over that stretch only:
@@ -115,15 +115,15 @@
     var dropzone = document.getElementById("dropzone");
     var dirInput = document.getElementById("dir-input");
     var fileInput = document.getElementById("file-input");
-    var typeSelect = document.getElementById("add-type");
+    var typeSelect = document.getElementById("import-type");
     var fileListEl = document.getElementById("file-list");
     var dropListEl = document.getElementById("drop-list");
-    var resetBtn = document.getElementById("add-reset");
-    var submitBtn = document.getElementById("add-submit");
-    var resultEl = document.getElementById("add-result");
-    var progressEl = document.getElementById("add-progress");
-    var progressBar = document.getElementById("add-progress-bar");
-    var progressText = document.getElementById("add-progress-text");
+    var resetBtn = document.getElementById("import-reset");
+    var submitBtn = document.getElementById("import-submit");
+    var resultEl = document.getElementById("import-result");
+    var progressEl = document.getElementById("import-progress");
+    var progressBar = document.getElementById("import-progress-bar");
+    var progressText = document.getElementById("import-progress-text");
     var pollTimer = null;
     // Bumped every time polling stops. A poll already in flight when the import finishes
     // resolves *after* the summary has been rendered, and would then redraw the table from
@@ -377,7 +377,7 @@
         progressBar.className = "progress-bar progress-bar-striped active";
         progressBar.style.width = "100%";
         progressBar.textContent = "";
-        progressText.textContent = "Scanning the upload for samples\u2026";
+        progressText.textContent = "Scanning the uploaded files for samples\u2026";
     }
 
     // Polling, not a stream. Progress reaches the server-side reporter in a callback several
@@ -469,7 +469,7 @@
         renderList();
     }
 
-    document.getElementById("add-form").addEventListener("submit", function (e) {
+    document.getElementById("import-form").addEventListener("submit", function (e) {
         e.preventDefault();
         if (!selected.length) { return; }
 
@@ -561,7 +561,7 @@
 
         var head = document.createElement("p");
         head.innerHTML = "<b></b>";
-        head.querySelector("b").textContent = ask.message || "This upload renames sequences.";
+        head.querySelector("b").textContent = ask.message || "This import renames sequences.";
         box.appendChild(head);
 
         var table = document.createElement("table");

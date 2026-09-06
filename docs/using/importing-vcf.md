@@ -68,7 +68,7 @@ rebuilt from the mutation, and the file says so in an `##mutint_regenerated=` he
 
 ## Mobile elements
 
-Off unless a deployment turns it on (`MUTINT_VCF_INFER_MOB`). When on, an insertion whose
+Off unless a deployment turns it on (the `MUTINT_VCF_INFER_MOB` setting, in its settings module rather than the environment). When on, an insertion whose
 sequence is exactly one of the reference's annotated repeat families becomes a `MOB` with that
 family and a target-site duplication measured from the surrounding sequence. Anything
 ambiguous — two families matching, a partial match, a reference with no annotated repeats —

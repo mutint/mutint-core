@@ -8,8 +8,8 @@ there before the first one, and the needle plot should not plot them.
 **One designation, one exclusion.** `Experiment.ancestor` names one sample. Everything
 below derives from that column; there is nothing else to configure and nothing to keep in
 sync. It replaced four half-built spellings of the same idea, none of which subtracted
-anything: `Population.starting_strain` (a FK no code path ever wrote), `filter_out_wt_reseq` and
-`get_wt_reseq_id` (helpers with no callers), `STARTING_STRAIN_ALE_ID = "0"` (which hid ALE 0
+anything: `Population.starting_strain` (a FK no code path ever wrote), `filter_out_wt_sample` and
+`get_wt_sample_id` (helpers with no callers), `STARTING_STRAIN_ALE_ID = "0"` (which hid ALE 0
 from the ALE *picker* while its samples went on landing in every analysis), and
 `AleExperimentFilter.starting_strain_mutations` (a hand-curated list of mutation ids, since
 migrated into delete edit sets).
@@ -143,7 +143,7 @@ def exclude_all_ancestry(mutation_call_queryset):
             .exclude(mutation_id__in=ancestral))
 
 
-def exclude_ancestor_samples(reseq_queryset, experiment_id=None):
+def exclude_ancestor_samples(sample_queryset, experiment_id=None):
     """Drop designated ancestors from a `Sample` queryset.
 
     With an `experiment_id`, drops that experiment's ancestor. Without one the queryset spans
@@ -153,12 +153,12 @@ def exclude_ancestor_samples(reseq_queryset, experiment_id=None):
     if experiment_id in (None, "", "all"):
         designated = (Experiment.objects.filter(ancestor__isnull=False)
                       .values("ancestor"))
-        return reseq_queryset.exclude(pk__in=designated)
+        return sample_queryset.exclude(pk__in=designated)
 
     ancestor_id = get_ancestor(experiment_id)
     if ancestor_id is None:
-        return reseq_queryset
-    return reseq_queryset.exclude(pk=ancestor_id)
+        return sample_queryset
+    return sample_queryset.exclude(pk=ancestor_id)
 
 
 def describe_ancestor(experiment_id):
@@ -174,14 +174,14 @@ def describe_ancestor(experiment_id):
 
     from mutint_sample.models import Sample
 
-    reseq = (Sample.objects
+    sample = (Sample.objects
              .select_related(paths.to_population())
              .filter(pk=ancestor_id).first())
-    if reseq is None:
+    if sample is None:
         # SET_NULL should make this unreachable; a page saying nothing beats a page 500ing.
         logger.warning("experiment %s designates a sample that is gone", experiment_id)
         return None
-    return {"name": reseq.label, "sample_id": reseq.pk}
+    return {"name": sample.label, "sample_id": sample.pk}
 
 
 def note_sample_deleted(sender, instance, **kwargs):

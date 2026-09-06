@@ -12,7 +12,7 @@
        to pull it in. {% endcomment %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     {% include "curate/_toolbar.html" with active=mode %}
@@ -20,10 +20,10 @@
 
     <div class="row breseq-picker">
         <b>Sample:</b>
-        <div class="btn-group" id="reseq_picker">
+        <div class="btn-group" id="sample_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {% if all_samples %}All samples{% else %}{{ selected_reseq.label }}{% endif %}
+                {% if all_samples %}All samples{% else %}{{ selected_sample.label }}{% endif %}
                 <span class="caret"></span>
             </button>
             <ul class="dropdown-menu mutint-menu">
@@ -34,9 +34,9 @@
                     <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ all_samples_value }}"><b>All samples</b></a>
                 </li>
                 <li role="separator" class="divider"></li>
-                {% for reseq in reseq_list %}
-                    <li {% if reseq.id == selected_sample_id %}class="active"{% endif %}>
-                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}</a>
+                {% for sample in sample_list %}
+                    <li {% if sample.id == selected_sample_id %}class="active"{% endif %}>
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">{{ sample.label }}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -50,8 +50,8 @@
         {% endif %}
     </div>
 
-    {% if not all_samples and not selected_reseq %}
-        <p>This experiment has no resequencing samples to edit.</p>
+    {% if not all_samples and not selected_sample %}
+        <p>This experiment has no samples to edit.</p>
     {% elif not can_edit %}
         <p>You have read access to this project, so this page is showing you what is stored
            without offering to change it. Editing mutations needs write access.</p>

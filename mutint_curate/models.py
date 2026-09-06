@@ -102,7 +102,7 @@ class MutationEdit(models.Model):
     walking that tuple, so a field missing from it is a field a restore silently drops.
 
     `mutation` is nullable and `mutation_identity` exists because the Mutation row is not
-    guaranteed to outlive the log. `mutint_import.ale_experiment._delete_all_orphaned_mutations`
+    guaranteed to outlive the log. `mutint_import.experiments._delete_all_orphaned_mutations`
     hard-deletes any Mutation with no MutationCall, and it runs after an experiment delete
     and after `delete_sample` -- so removing a mutation's last call makes it eligible
     for a sweep triggered by something else entirely. `mutation_identity` carries the exact

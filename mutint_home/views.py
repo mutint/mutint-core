@@ -8,7 +8,6 @@ from mutint_common.rebuild_registry import ensure_fresh
 from mutint_dashboard.models import InstallationCounts
 from mutint_dashboard.util import counts
 from mutint_dashboard.views import get_general_count_dict, type_rows
-# from mutint_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, STRAINS, REF_SEQS
 from mutint_search.views import MUT_TYPES, MUT_TYPES_DISPLAY, load_strains, load_ref_sequences
 from mutint_experiment.utils import get_user_projects
 

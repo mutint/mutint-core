@@ -169,16 +169,6 @@ class BootstrapLoadedOnceTestCase(unittest.TestCase):
         """
         self.assertIn(self.BOOTSTRAP_BUNDLE, self._base_html())
 
-    def test_bootstrap_toggle_comes_after_bootstrap(self):
-        """It extends Bootstrap, so loading it first leaves $.fn.bootstrapToggle undefined."""
-        html = self._base_html()
-        bundle = html.find(self.BOOTSTRAP_BUNDLE)
-        toggle = html.find("bootstrap-toggle.min.js")
-        self.assertNotEqual(-1, bundle)
-        self.assertNotEqual(-1, toggle)
-        self.assertLess(bundle, toggle,
-                        "bootstrap-toggle must follow the bundle that provides Bootstrap")
-
 
 class ButtonsAreNotFloatedTestCase(unittest.TestCase):
     """`.btn { float: right }` applied to every button in the app.
@@ -203,7 +193,7 @@ class ButtonsAreNotFloatedTestCase(unittest.TestCase):
 
 
 class ExperimentSidebarLabelTestCase(TestCase):
-    """base.html joins the two names itself: `{{ ale_project_name }}: {{ experiment_name }}`.
+    """base.html joins the two names itself: `{{ project_name }}: {{ experiment_name }}`.
 
     `Experiment.experiment_context()` used to return a *composed* "project: experiment"
     under the experiment key and no project key at all, so a view that simply trusted it
@@ -228,15 +218,15 @@ class ExperimentSidebarLabelTestCase(TestCase):
         context = self.experiment.experiment_context()
 
         self.assertEqual("Exp", context["experiment_name"])
-        self.assertEqual("Proj", context["ale_project_name"])
-        self.assertEqual(self.experiment.project_id, context["ale_project_id"])
+        self.assertEqual("Proj", context["project_name"])
+        self.assertEqual(self.experiment.project_id, context["project_id"])
 
     def test_a_project_less_experiment_gives_an_empty_name_rather_than_raising(self):
         """`Experiment.project` is nullable, and this used to be `self.project.name`."""
         self.experiment.project = None
         self.experiment.save()
 
-        self.assertEqual("", self.experiment.experiment_context()["ale_project_name"])
+        self.assertEqual("", self.experiment.experiment_context()["project_name"])
 
     def _sidebar_label(self, url):
         import re

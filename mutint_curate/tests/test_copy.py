@@ -42,7 +42,7 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual(source.source, copied.source)
 
     def test_a_batch_is_one_edit_set(self):
-        third = self.make_sample(flask_number=3)
+        third = self.make_sample(time_point=3)
         self._copy([self.mut_2, self.mut_3], [self.sample_b, third])
 
         self.assertEqual(1, MutationEditSet.objects.count())

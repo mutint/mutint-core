@@ -1,6 +1,6 @@
 # Quick start
 
-mutint-core runs standalone with **no external services** — SQLite, no MySQL, no Docker, no
+mutint-core runs standalone with **no external services to provide** — it installs its own PostgreSQL under `env/`; no Docker, no
 broker. The entry script builds its own virtualenv on first use.
 
 ```bash

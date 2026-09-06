@@ -54,9 +54,9 @@ class SummaryTestCase(TestCase):
         from mutint_import.gd_import import prepare_experiment_by_id
         self.context = prepare_experiment_by_id(self.experiment.id)
 
-        self.samples = [self._sample(ale=1, flask=100, isolate=1),
-                        self._sample(ale=1, flask=200, isolate=1),
-                        self._sample(ale=2, flask=100, isolate=1)]
+        self.samples = [self._sample(population=1, time_point=100, name=1),
+                        self._sample(population=1, time_point=200, name=1),
+                        self._sample(population=2, time_point=100, name=1)]
 
         # One mutation of each interesting shape. `protein_change` is set to what the
         # annotator would really write, and is deliberately *not* what any count reads.
@@ -84,12 +84,12 @@ class SummaryTestCase(TestCase):
         self._observe(self.samples[2], self.bare)
 
     # ---- fixture helpers ------------------------------------------------------------
-    def _sample(self, ale, flask, isolate):
-        ale_row, _ = Population.objects.get_or_create(
-            experiment=self.experiment, name=ale)
+    def _sample(self, population, time_point, name):
+        population_row, _ = Population.objects.get_or_create(
+            experiment=self.experiment, name=population)
         return Sample.objects.create(
-            population=ale_row, time_point=flask, name="%d-1" % isolate, is_clonal=True,
-            source_name="%d-%d-%d-1" % (ale, flask, isolate))
+            population=population_row, time_point=time_point, name="%d-1" % name, is_clonal=True,
+            source_name="%d-%d-%d-1" % (population, time_point, name))
 
     def _mutation(self, mutation_type, snp_type, gene, protein_change=""):
         return Mutation.objects.create(

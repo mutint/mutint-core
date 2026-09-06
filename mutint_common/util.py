@@ -4,7 +4,6 @@ import re
 import subprocess
 
 
-__author__ = 'Patrick Phaneuf, Denny Gosting'
 
 logger = logging.getLogger(__name__)
 
@@ -93,16 +92,7 @@ common_context = {"git_hash": get_git_hash()}
 
 def get_user_context(user):
     context = common_context.copy()
-    # context.update({"experiments": get_all_user_exps(user)})
     return context
-
-
-def is_int(s):
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
 
 
 # Gene annotation parsing — used across mutint_sample, mutint_filter, mutint_converge, mutint_stats
@@ -144,15 +134,6 @@ GENE_LIST_LIMIT = 1000
 
 INTRAGENIC_LEFT_CHAR = ']'
 INTRAGENIC_RIGHT_CHAR = '['
-
-
-def _find_between(s, first, last):
-    try:
-        start = s.index(first) + len(first)
-        end = s.index(last, start)
-        return s[start:end]
-    except ValueError:
-        return ""
 
 
 def get_gene_list(annotated_gene_list_str):

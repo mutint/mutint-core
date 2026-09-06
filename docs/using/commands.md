@@ -11,6 +11,10 @@ its plugins ship.
 ./mutint test                 # the full suite
 ./mutint shell
 ./mutint makemigrations && ./mutint migrate
+./mutint db status            # where the database is, whether it is running, who owns it
+./mutint db start             # start it unowned, so it outlives the command
+./mutint db stop
+./mutint db reset --yes       # throw the database away and start again, empty
 ```
 
 ## Data
@@ -24,17 +28,30 @@ its plugins ship.
 ./mutint load_example         # list the datasets components ship; name one to load it
 ./mutint reannotate <id>      # recompute annotations against the stored reference
 ./mutint coverage [<id>]      # backfill coverage for samples imported before it existed
+./mutint rename_contigs <id>  # rename an experiment's contigs, telling every plugin
+./mutint ncbi_accessions      # record or check NCBI accessions for stored references
+./mutint relabel_samples <id> # one-shot cleanup of labels from the retired coordinate format; --dry-run first
+./mutint project_access       # grant or revoke a role on a project from the shell
 ```
 
 `load_example` loads a directory of real files through the real import path, so the derived
 data it exists to demonstrate is genuinely computed rather than fixtured. Each dataset ships a
 README stating the expected answer.
 
+## Background work and housekeeping
+
+```bash
+./mutint db_worker            # run queued work (coverage derivation, breseq runs); --batch drains and exits
+                              #   `./mutint start` runs one for you; this is for everywhere else
+./mutint reap_uploads         # discard staged uploads nobody finalized (cron's job)
+./mutint reap_jobs            # discard queue rows no worker ever claimed; --dry-run first
+```
+
 ## Derived data
 
-Almost nothing user-facing is computed when you look at it. The needle plot, the Overview's
-counts, the dashboard totals and each plugin's tables are all recomputed when the mutations
-change.
+Most pages compute what they show when you look at it. What is still stored and rebuilt when
+the mutations change is the dashboard's installation-wide totals and whatever the installed
+plugins register.
 
 ```bash
 ./mutint rebuild --list                 # what is registered, what is stale, what last failed

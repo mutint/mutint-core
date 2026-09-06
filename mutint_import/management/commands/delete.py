@@ -1,5 +1,5 @@
 from django.core.management import BaseCommand
-from mutint_import.ale_experiment import delete_experiments
+from mutint_import.experiments import delete_experiments
 
 
 class Command(BaseCommand):

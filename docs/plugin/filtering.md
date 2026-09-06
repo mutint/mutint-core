@@ -60,7 +60,7 @@ three pages, which rendered a dead checkbox for a year.
 ## Ancestral mutations, which are not a filter
 
 An experiment may designate one sample as its **ancestor**. Its mutations were there before the
-first flask, so they are subtracted from every other sample before anything is computed, and the
+first time point, so they are subtracted from every other sample before anything is computed, and the
 sample itself leaves every listing.
 
 **This is the opposite of everything above.** The reader's filter is theirs, lives in their
@@ -71,7 +71,7 @@ the same for everyone, and **there is no opting out** — no toggle, no query pa
 ```python
 from mutint_sample.util import calls_for_samples
 
-queryset = calls_for_samples(list(reseq_dict), experiment_id)
+queryset = calls_for_samples(list(sample_dict), experiment_id)
 queryset, ignored_genes = filtered_mutation_call_queryset(queryset, view_filter=view_filter)
 ```
 
@@ -80,14 +80,14 @@ That is the same two lines you already write, with the first one changed. Do not
 which is why this helper exists.
 
 **Dropping the ancestor from your sample list is not enough**, and this is the mistake to avoid
-because it looks almost right. `get_reseq_ordered_dict` already excludes the ancestor, so its
+because it looks almost right. `get_ordered_sample_dict` already excludes the ancestor, so its
 column disappears from your table and the page looks correct — while its mutations sit in every
 other sample. An ancestral mutation is present in every ALE by construction, so convergence
 reports every one of them as convergent and fixation reports every one as fixed. The subtraction
 has to reach the derivation, exactly as the section below says the reader's filter does.
 
 If your page curates rather than reads — it edits or deletes samples — pass
-`get_reseq_ordered_dict(experiment_id, include_ancestor=True)`. Nothing else should.
+`get_ordered_sample_dict(experiment_id, include_ancestor=True)`. Nothing else should.
 
 For a queryset spanning experiments, `mutint_experiment.ancestor.exclude_all_ancestry(queryset)`
 takes no experiment id. It is unambiguous because `Mutation` rows are per experiment, so an id

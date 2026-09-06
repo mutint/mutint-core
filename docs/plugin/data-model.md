@@ -18,7 +18,7 @@ Experiment ── Population ── Sample ── MutationCall ── Mutation
 |---|---|
 | `Experiment` | one evolution experiment; the unit access is granted below and the unit almost every page is scoped to |
 | `Population` | one ALE — a lineage within the experiment, with its strain and species |
-| `Sample` | one sequenced flask or isolate, at a `time_point`; carries three flags, `is_hypermutator`, `is_contaminated`, `is_low_coverage` (`mutint_sample.flags`) |
+| `Sample` | one sequenced sample -- a clone or a mixed population -- drawn from a `Population` at a `time_point`; carries three flags, `is_hypermutator`, `is_contaminated`, `is_low_coverage` (`mutint_sample.flags`) |
 | `Mutation` | one genomic change, **per experiment**, with its annotation |
 | `MutationCall` | one caller's assertion about one mutation in one sample |
 
@@ -108,12 +108,12 @@ Four helpers, and using them is not a style preference:
 
 ```python
 from mutint_sample.util import (calls_for_samples, get_mutation_call_queryset,
-                               get_ordered_reseq_queryset, get_reseq_ordered_dict)
+                               get_ordered_sample_queryset, get_ordered_sample_dict)
 ```
 
 - `get_mutation_call_queryset(experiment_id)` — every call in an experiment.
 - `calls_for_samples(sample_ids, experiment_id)` — calls for a chosen set of samples.
-- `get_ordered_reseq_queryset(experiment_id)` / `get_reseq_ordered_dict(...)` — the samples, in
+- `get_ordered_sample_queryset(experiment_id)` / `get_ordered_sample_dict(...)` — the samples, in
   the order every page shows them.
 
 **They subtract the experiment's designated ancestor, and hand-rolling the query does not.**

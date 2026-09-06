@@ -150,17 +150,17 @@
    the table (`ancestral_table_row` above), so the dropdown and the rows read as one
    statement. `> a` rather than the <li>: Bootstrap paints the anchor, so a background on the
    <li> alone is covered on hover and on the active row. */
-.dropdown-menu > li.reseq-ancestor > a {
+.dropdown-menu > li.sample-ancestor > a {
     background-color: rgb(255, 218, 218);
 }
 
-.dropdown-menu > li.reseq-ancestor.active > a,
-.dropdown-menu > li.reseq-ancestor > a:hover,
-.dropdown-menu > li.reseq-ancestor > a:focus {
+.dropdown-menu > li.sample-ancestor.active > a,
+.dropdown-menu > li.sample-ancestor > a:hover,
+.dropdown-menu > li.sample-ancestor > a:focus {
     background-color: rgb(245, 185, 185);
 }
 
-.reseq-ancestor-tag {
+.sample-ancestor-tag {
     color: #a94442;
     font-size: 85%;
     text-transform: uppercase;

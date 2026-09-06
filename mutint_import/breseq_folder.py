@@ -92,7 +92,7 @@ def find_sample_dirs(root):
     """Return sample directories under ``root``, sorted, at any nesting depth.
 
     A dropped folder may be a single sample or a collection of them, so this walks rather
-    than doing one os.listdir -- unlike ale_experiment._get_sample_report_list, which
+    than doing one os.listdir -- unlike the importer this replaced, which
     assumes exactly one level.
 
     **Two of the returned directories may share a basename**, which is what a sample is
@@ -130,10 +130,13 @@ def find_loose_gd_files(root, sample_dirs):
 
 def import_breseq_folders(root, project_name, experiment_name, owner_name,
                           is_public=False):
-    """Name-addressed entry point, kept for the CLI and existing callers.
+    """Name-addressed entry point: creates the project and experiment as needed, then
+    imports every breseq folder under `root` into it.
 
-    Web callers use :func:`import_samples_into` instead, which takes the experiment itself --
-    see ``gd_import.prepare_experiment_by_id`` for why identity by primary key matters.
+    Nothing in the product calls this any more -- the CLI resolves its experiment through
+    ``experiments.resolve_experiment`` and the web through :func:`import_samples_into`, both
+    by primary key (see ``gd_import.prepare_experiment_by_id`` for why). The tests across
+    the suite lean on it as the one-call way to stand up a populated experiment.
     """
     context = _prepare_experiment(project_name, experiment_name, owner_name, is_public)
     return _import_samples(context, root, report_loose_gd=True)

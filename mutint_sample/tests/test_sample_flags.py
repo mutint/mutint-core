@@ -100,10 +100,10 @@ class BadgeTestCase(TestCase):
         from django.template import loader
         from django.test import RequestFactory
         from mutint_sample.mutation_matrix import build_matrix
-        from mutint_sample.util import get_all_calls_filtered, get_reseq_ordered_dict
+        from mutint_sample.util import get_all_calls_filtered, get_ordered_sample_dict
 
         matrix = build_matrix(get_all_calls_filtered(self.experiment.id),
-                              get_reseq_ordered_dict(self.experiment.id), experiment=self.experiment)
+                              get_ordered_sample_dict(self.experiment.id), experiment=self.experiment)
         by_id = {s.id: s for s in matrix.samples}
         self.assertEqual(["hypermutator"], [f.key for f in by_id[self.flagged.id].flags])
         self.assertEqual((), by_id[self.plain.id].flags)
@@ -112,7 +112,7 @@ class BadgeTestCase(TestCase):
         request.user = self.user
         SessionMiddleware(lambda r: None).process_request(request)
         html = loader.get_template("mutation_matrix/page.html").render(
-            {"experiment_id": self.experiment.id, "ales": ["1"], "matrix": matrix,
+            {"experiment_id": self.experiment.id, "population_names": ["1"], "matrix": matrix,
              "empty_message": "x"}, request)
         # Once in the Samples menu, once in the header.
         self.assertEqual(2, self._badges(html))

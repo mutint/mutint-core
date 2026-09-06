@@ -29,12 +29,12 @@ class DashboardCountTestCase(TestCase):
         self.experiment = Experiment.objects.create(
 )
 
-    def make_sample(self, ale_label, flask_number=1, isolate_number=1):
+    def make_sample(self, ale_label, time_point=1, sample_label=1):
         """The full A/F/I chain, built by hand -- `gd_import` needs a reference and a store."""
         ale, _ = Population.objects.get_or_create(experiment=self.experiment,
                                              name=str(ale_label))
         return Sample.objects.create(
-            population=ale, time_point=flask_number, is_clonal=True, name=str(isolate_number))
+            population=ale, time_point=time_point, is_clonal=True, name=str(sample_label))
 
     def counts(self):
         rebuild_sample_counts()
@@ -73,8 +73,8 @@ class TestAncestorIsNotCounted(DashboardCountTestCase):
 
     def test_a_flask_holding_the_ancestor_and_another_sample_still_counts(self):
         """The rule is *every* sample beneath it, not *any*."""
-        ancestor = self.make_sample("0", flask_number=1, isolate_number=1)
-        self.make_sample("0", flask_number=1, isolate_number=2)
+        ancestor = self.make_sample("0", time_point=1, sample_label=1)
+        self.make_sample("0", time_point=1, sample_label=2)
         self.experiment.set_ancestor(ancestor)
 
         population_count, time_point_count, sample_count = self.counts()

@@ -155,9 +155,6 @@ class Experiment(SoftDeleteMixin):
     class Meta:
         verbose_name_plural = "experiments"
 
-    def __unicode__(self):
-        return "#%d-%s" % (self.id, self.name)
-
     def __str__(self):
         return self.name
 
@@ -188,10 +185,10 @@ class Experiment(SoftDeleteMixin):
     def has_ancestor(self):
         return self.ancestor_id is not None
 
-    def set_ancestor(self, reseq, user=None):
-        """Designate `reseq` as this experiment's ancestor, replacing any prior one."""
+    def set_ancestor(self, sample, user=None):
+        """Designate `sample` as this experiment's ancestor, replacing any prior one."""
         from django.utils import timezone
-        self.ancestor = reseq
+        self.ancestor = sample
         self.ancestor_set_at = timezone.now()
         self.ancestor_set_by = user if (user and user.is_authenticated) else None
         self.save(update_fields=["ancestor", "ancestor_set_at", "ancestor_set_by"])
@@ -229,7 +226,7 @@ class Experiment(SoftDeleteMixin):
         """The four things base.html needs to render the experiment in the sidebar.
 
         It returns the experiment's own name and the project's separately, because that is
-        how the template joins them: `{{ ale_project_name }}: {{ experiment_name }}`.
+        how the template joins them: `{{ project_name }}: {{ experiment_name }}`.
         This used to return a *composed* `"project: experiment"` under the experiment key
         and no project key at all, so a caller that trusted it rendered `": project:
         experiment"` -- a stray leading colon -- and one that added the project name without
@@ -245,15 +242,15 @@ class Experiment(SoftDeleteMixin):
         return {
             "experiment_name": self.name,
             "experiment_id": self.id,
-            "ale_project_name": self.project.name if self.project else "",
-            "ale_project_id": self.project_id,
+            "project_name": self.project.name if self.project else "",
+            "project_id": self.project_id,
             # Fifth, and here for the same reason as the other four: every experiment-scoped
             # page renders the shell, and a locked experiment should say so on all of them
             # rather than only on the one page that happens to check.
-            "ale_experiment_locked": self.is_locked,
+            "experiment_locked": self.is_locked,
             # Sixth, and for the same reason: a page that hides the ancestor should be able
             # to say so without asking the database again.
-            "ale_experiment_ancestor_id": self.ancestor_id,
+            "experiment_ancestor_id": self.ancestor_id,
         }
 
 
@@ -282,8 +279,8 @@ class Population(models.Model):
     strain = models.CharField(max_length=300, **blank_field)
     experiment = models.ForeignKey(Experiment, on_delete=models.CASCADE)
 
-    def __unicode__(self):
-        return "Population %s < %s" % (self.name, self.experiment)
+    def __str__(self):
+        return "%s < %s" % (self.name, self.experiment)
 
     class Meta:
         unique_together = (("experiment", "name"),)

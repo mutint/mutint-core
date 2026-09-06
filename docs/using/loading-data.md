@@ -46,15 +46,15 @@ mapped, mean coverage. A sample without that file still imports with those left 
 Identity comes from the **filename**, and two shapes are read:
 
 ```
-3-30000-1-1.gd          ALE 3,     flask 30000, isolate 1,    replicate 1
-Ara-2_500gen_763A.gd    ALE Ara-2, flask 500,   isolate 763A, replicate 1
+3-30000-1-1.gd          population 3,     time point 30000, sample 1,    replicate 1
+Ara-2_500gen_763A.gd    population Ara-2, time point 500,   sample 763A, replicate 1
 ```
 
 The first is four whole numbers separated by dashes. The second is three fields separated by
-underscores: a lineage name, a time point, and an isolate name. **The ALE and the isolate are
+underscores: a population name, a time point, and a sample name. **The population and the sample are
 kept exactly as written** — `Ara-1` and `Ara+1` are two different populations, and `763A` and
-`763B` two different clones from one flask, so nothing is stripped off either. Only the middle
-field is read as a number, because a time point is one: `500gen` is flask 500. A middle field
+`763B` two different clones from one time point, so nothing is stripped off either. Only the middle
+field is read as a number, because a time point is one: `500gen` is time point 500. A middle field
 that does not start with a digit (`t0`) is not a time point, and the name falls through to
 auto-numbering.
 

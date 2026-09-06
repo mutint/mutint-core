@@ -50,10 +50,10 @@ class BreseqFolderImportTestCase(TestCase):
         self.assertEqual(summary["files"][0]["file"], "Ara-1_500gen_762B")
         self.assertGreater(summary["total_mutations"], 0)
 
-        reseq = Sample.objects.get()
-        self.assertTrue(reseq.bam_stored)
+        sample = Sample.objects.get()
+        self.assertTrue(sample.bam_stored)
         for artifact in (store.SAMPLE_GD, store.SAMPLE_BAM, store.SAMPLE_BAI):
-            self.assertTrue(os.path.isfile(store.sample_path(reseq.id, artifact)),
+            self.assertTrue(os.path.isfile(store.sample_path(sample.id, artifact)),
                             "%s was not stored" % artifact)
 
         reference = ReferenceSequences.objects.get()
@@ -66,13 +66,13 @@ class BreseqFolderImportTestCase(TestCase):
                 "%s was not stored" % artifact)
 
     def test_stored_bam_is_byte_identical(self):
-        sample = breseq_fixture.write_sample(self.drop, "s1")
+        folder = breseq_fixture.write_sample(self.drop, "s1")
         self._import()
 
-        reseq = Sample.objects.get()
-        with open(os.path.join(sample, breseq_folder.BAM_RELATIVE_PATH), "rb") as handle:
+        sample = Sample.objects.get()
+        with open(os.path.join(folder, breseq_folder.BAM_RELATIVE_PATH), "rb") as handle:
             original = handle.read()
-        with open(store.sample_path(reseq.id, store.SAMPLE_BAM), "rb") as handle:
+        with open(store.sample_path(sample.id, store.SAMPLE_BAM), "rb") as handle:
             self.assertEqual(handle.read(), original)
 
     def test_samples_sharing_a_reference_both_import(self):

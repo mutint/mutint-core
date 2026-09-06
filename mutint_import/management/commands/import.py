@@ -7,7 +7,7 @@ loads commands through `importlib.import_module` on a string, so this is fine; n
 
 from django.core.management import BaseCommand, CommandError
 
-from mutint_import.ale_experiment import import_paths, resolve_experiment
+from mutint_import.experiments import import_paths, resolve_experiment
 
 
 class Command(BaseCommand):

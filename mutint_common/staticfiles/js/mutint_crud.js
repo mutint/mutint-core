@@ -4,8 +4,8 @@
  * there is no panel-toggling helper here any more -- an inline panel expanded into
  * the DataTable below it, which does not reflow, and the two overlapped.
  *
- * Was duplicated inline, byte for byte, in ale/projects.html and ale/experiments.html;
- * ale/project_detail.html would have made a third copy. Loaded from base.html, so every
+ * Was duplicated inline, byte for byte, in project/list.html and experiment/list.html;
+ * project/detail.html would have made a third copy. Loaded from base.html, so every
  * page has it. mutintDeleteSelected joined them for exactly that reason: the whole
  * gather-confirm-post-reload routine was inline in those same two templates, and the
  * project page wanting it as well is what turned two copies into an argument for none.
@@ -133,7 +133,7 @@
      *        path: "/experiment/", noun: "experiment"}.
      *
      * Three pages want this and it was inline in two of them, near enough byte for byte;
-     * ale/project_detail.html would have made a third copy, which is the reason this file
+     * project/detail.html would have made a third copy, which is the reason this file
      * exists at all.
      *
      * The id comes from the row's own anchor rather than from a cell, so the two tables'

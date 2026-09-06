@@ -226,7 +226,7 @@ def _sizes_map(sizes_path):
     return lengths
 
 
-def build_for(reseq):
+def build_for(sample):
     """Derive and store the BigWig for one Sample; set `coverage_stored`.
 
     Returns a `CoverageTally` describing what the BAM turned out to hold -- how much of it was
@@ -236,15 +236,15 @@ def build_for(reseq):
     Raises CoverageError (or ToolMissing) rather than returning a flag, so a caller that wants
     it to be best-effort has to say so.
     """
-    if not reseq.bam_stored:
-        raise CoverageError("sample %s has no stored alignment" % reseq.id)
+    if not sample.bam_stored:
+        raise CoverageError("sample %s has no stored alignment" % sample.id)
 
-    bam_path = store.sample_path(reseq.id, store.SAMPLE_BAM)
+    bam_path = store.sample_path(sample.id, store.SAMPLE_BAM)
     if not os.path.isfile(bam_path):
         raise CoverageError("sample %s is flagged bam_stored but %s is missing"
-                            % (reseq.id, bam_path))
+                            % (sample.id, bam_path))
 
-    experiment = reseq.experiment
+    experiment = sample.experiment
     fai_path = store.experiment_reference_path(experiment.id, store.REFERENCE_FAI)
     if not os.path.isfile(fai_path):
         raise CoverageError(
@@ -253,8 +253,8 @@ def build_for(reseq):
 
     to_bigwig = require(BEDGRAPH_TO_BIGWIG)
 
-    out_path = store.sample_path(reseq.id, store.SAMPLE_BIGWIG)
-    store.ensure_dir(store.sample_dir(reseq.id))
+    out_path = store.sample_path(sample.id, store.SAMPLE_BIGWIG)
+    store.ensure_dir(store.sample_dir(sample.id))
 
     with tempfile.TemporaryDirectory() as scratch:
         sizes = chrom_sizes_from_fai(fai_path, os.path.join(scratch, "chrom.sizes"))
@@ -272,13 +272,13 @@ def build_for(reseq):
         _run([to_bigwig, bedgraph, sizes, staged])
         os.replace(staged, out_path)
 
-    reseq.coverage_stored = True
-    reseq.save(update_fields=["coverage_stored"])
-    logger.info("coverage for sample %s: %s", reseq.id, tally.describe())
+    sample.coverage_stored = True
+    sample.save(update_fields=["coverage_stored"])
+    logger.info("coverage for sample %s: %s", sample.id, tally.describe())
     return tally
 
 
-def build_quietly(reseq):
+def build_quietly(sample):
     """`build_for`, reporting failure rather than raising. Returns True when it wrote one.
 
     This is the import path's contract: coverage is worth having and not worth rejecting a
@@ -286,10 +286,10 @@ def build_quietly(reseq):
     ``./mutint coverage`` later.
     """
     try:
-        build_for(reseq)
+        build_for(sample)
         return True
     except (CoverageError, ToolMissing, subprocess.SubprocessError, OSError) as error:
-        logger.warning("no coverage track for sample %s: %s", reseq.id, error)
+        logger.warning("no coverage track for sample %s: %s", sample.id, error)
         return False
 
 

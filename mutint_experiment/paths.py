@@ -26,7 +26,7 @@ at all.
 
 Usage::
 
-    from mutint_experiment.paths import FROM_CALL, to_experiment_id, to_ale
+    from mutint_experiment.paths import FROM_CALL, to_experiment_id, to_population
 
     MutationCall.objects.filter(**{to_experiment_id(FROM_CALL): experiment_id})
     Sample.objects.select_related(to_population())
@@ -78,7 +78,7 @@ EXPERIMENT_PK = "id"
 POPULATION_LABEL = "name"
 
 #: The sample's ordinal along its population's history. It was `TimePoint.value` on a row of
-#: its own and before that `TimePoint.flask_number`; it is a column on the sample now, so
+#: its own and before that `TimePoint.time_point`; it is a column on the sample now, so
 #: this is a field name rather than the tail of a chain -- which is why `to_time_point_value`
 #: below composes it with `to_sample` and no longer takes a `root`.
 TIME_POINT_VALUE = "time_point"

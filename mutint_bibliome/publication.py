@@ -2,14 +2,9 @@ from mutint_bibliome.models import Publication
 from mutint_experiment.models import Experiment
 
 
-def create_publication(title_str, url_str, ale_exp_pk):
-    exp = Experiment.objects.get(pk=ale_exp_pk)
+def create_publication(title_str, url_str, experiment_pk):
+    exp = Experiment.objects.get(pk=experiment_pk)
     pub = Publication.objects.create(title=title_str, url=url_str, experiment=exp)
-
-
-def create_publications(title_str, url_str, ale_exp_pk_list):
-    for ale_exp_pk in ale_exp_pk_list:
-        create_publication(title_str, url_str, ale_exp_pk)
 
 
 def add_publication_to_experiment(experiment_ids, doi, replace=False):

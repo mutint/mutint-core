@@ -13,7 +13,7 @@ from django.test import TestCase
 
 from mutint_experiment.models import Experiment, Population, Project
 from mutint_sample.models import ReferenceSequences, Sample, UncalledRegion
-from mutint_stats.util import get_reseq_experiment_info_list, uncalled_bases_per_sample
+from mutint_stats.util import get_sample_info_list, uncalled_bases_per_sample
 
 
 class UncalledBasesTestCase(TestCase):
@@ -40,7 +40,7 @@ class UncalledBasesTestCase(TestCase):
             total_length=total_length)
 
     def rows(self):
-        return get_reseq_experiment_info_list(Sample.objects.filter(pk=self.sample.pk))
+        return get_sample_info_list(Sample.objects.filter(pk=self.sample.pk))
 
     # --- the sum -------------------------------------------------------------------------
 

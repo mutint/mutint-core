@@ -33,7 +33,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", type=int,
-                            help="Experiment primary key (ale_id)")
+                            help="Experiment primary key")
         parser.add_argument("--ref", dest="reference_path", default=None,
                             help="GenBank, GFF3 or FASTA to establish before re-annotating")
         parser.add_argument("--replace", action="store_true",
@@ -91,7 +91,7 @@ class Command(BaseCommand):
         try:
             return Experiment.objects.get(pk=experiment_id)
         except Experiment.DoesNotExist:
-            raise CommandError("No experiment with ale_id=%s" % experiment_id)
+            raise CommandError("No experiment with primary key %s" % experiment_id)
 
     def _reference(self, experiment, reference_path, replace, dry_run):
         """Establish `reference_path` if given, then load what we will annotate against."""

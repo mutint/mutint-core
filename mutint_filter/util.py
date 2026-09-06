@@ -21,7 +21,7 @@ apply.
 
 **Everything after the queryset is keyword-only.** Not style: `mutint_export/util.py` and
 `mutint_sample/views/breseq_table.py` both passed an experiment id positionally into the second slot,
-and this repo already carries a scar from exactly that shape -- `get_reseq_ordered_dict` was once
+and this repo already carries a scar from exactly that shape -- `get_ordered_sample_dict` was once
 called with a `request` in the `sample_type` slot, which silently dropped every population sample
 from two plugin pages. Keyword-only turns a call site nobody updated into a `TypeError` instead
 of a `ViewFilter` quietly landing in `filter_type`.

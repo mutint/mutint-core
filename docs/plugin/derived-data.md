@@ -39,7 +39,7 @@ Ordinary Django models in your app, with ordinary migrations. Two conventions wo
   filter or aggregate on, and anything large. This column is loaded on every read of a
   `Mutation`, which is the row this codebase works hardest not to instantiate. That is a
   table with a plain foreign key — the rest of this page.
-- **Ask whether you need a table at all.** `mutint_converge` had one and dropped it: computing
+- **Ask whether you need a table at all.** the convergence analysis (now a row set on mutint-compare) had one and dropped it: computing
   convergence on demand came out at 0.17s where keeping the stored answer correct cost a
   rebuilder, a staleness row marked on every edit, an `ensure_fresh` on the read path, and a
   column of bare `Mutation` ids. A cheap query beats a cache you have to keep honest.

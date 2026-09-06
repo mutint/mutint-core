@@ -14,7 +14,7 @@ same information, without breseq's markup.
 from mutint_import.annotate.display import add_html_fields, commify
 
 
-def is_mixed(reseq):
+def is_mixed(sample):
     """Whether to show breseq's Freq column for this sample.
 
     Here rather than on either view because both render the table and the answer must be the
@@ -24,9 +24,9 @@ def is_mixed(reseq):
     It was `is_population` over a column of that name; both were inverted, and the question
     it answers did not change -- a *mixed* sample is the one with frequencies.
     """
-    if reseq is None:
+    if sample is None:
         return False
-    return bool(reseq.is_mixed)
+    return bool(sample.is_mixed)
 
 
 def gd_entry(mutation):

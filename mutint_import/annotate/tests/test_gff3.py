@@ -28,7 +28,7 @@ from mutint_import.annotate.loader import (
     detect_format,
     load_reference,
 )
-from mutint_import.gdparse.gdparse import gdparse
+from genomediff import GenomeDiff
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
 GENBANK = os.path.join(FIXTURES, 'synthetic.gbk')
@@ -36,9 +36,10 @@ GFF3 = os.path.join(FIXTURES, 'synthetic.gff3')
 
 
 def _load_mutations():
-    with open(os.path.join(FIXTURES, 'synthetic.gd'), 'rb') as handle:
-        parser = gdparse.GDParser(file_handle=handle)
-    return [parser.data['mutation'][key] for key in sorted(parser.data['mutation'])]
+    with open(os.path.join(FIXTURES, 'synthetic.gd')) as handle:
+        document = GenomeDiff.read(handle)
+    return [{"type": record.type, "id": record.id, "parent_ids": record.parent_ids,
+             **dict(record.attributes)} for record in document.mutations]
 
 
 def _annotate_with(path):

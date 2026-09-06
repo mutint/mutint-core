@@ -19,7 +19,7 @@ mutint_yourthing/static/mutint_yourthing/thing.css   ->  {% static 'mutint_yourt
 {% block scripts_and_style %}
     <link rel="stylesheet" href="{% static 'mutint_yourthing/thing.css' %}">
 {% endblock %}
-{% block header %}<b>{{ ale_project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
+{% block header %}<b>{{ project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
 
 {% block content %}
     ...
@@ -53,15 +53,15 @@ Build it from a list of `MutationCall`s and the samples that should be columns:
 
 ```python
 from mutint_sample.mutation_matrix import build_matrix
-from mutint_sample.util import get_reseq_ordered_dict
+from mutint_sample.util import get_ordered_sample_dict
 
-reseq_dict = get_reseq_ordered_dict(experiment.id, population, sample_type)
-matrix = build_matrix(calls, reseq_dict, experiment=experiment,
+sample_dict = get_ordered_sample_dict(experiment.id, population, sample_type)
+matrix = build_matrix(calls, sample_dict, experiment=experiment,
                       csv_title="%s_ExpID%d" % (experiment.name, experiment.id))
 ```
 
-`reseq_dict` is `{sample_id: Sample}` in column order — `get_reseq_ordered_dict` for one
-experiment's samples (the designated ancestor already left out), `get_ordered_reseq_dict(calls)`
+`sample_dict` is `{sample_id: Sample}` in column order — `get_ordered_sample_dict` for one
+experiment's samples (the designated ancestor already left out), `samples_in_calls(calls)`
 for the samples that appear in a set of calls. Pass `labels="qualified"` on a page that spans
 experiments so each column names its experiment. A row is one mutation and appears when at least
 one listed sample carries it; each sample cell is that sample's frequency, linked into the genome
@@ -69,8 +69,8 @@ browser when the sample has reads. The `browse_url(call)` and `refseq_url(mutati
 can be replaced if your page links elsewhere.
 
 Then either render **`mutation_matrix/page.html`** — the ALE and sample-type pickers, the
-reader's filter controls and summary, and the matrix — with `experiment_id, ales, population,
-sample_type, experiment_name, ale_project_name, ale_project_id, template_header, title, matrix,
+reader's filter controls and summary, and the matrix — with `experiment_id, population_names, population,
+sample_type, experiment_name, project_name, project_id, template_header, title, matrix,
 empty_message` in the context; or put the tag in a page of your own:
 
 ```django

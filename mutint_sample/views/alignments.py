@@ -92,15 +92,15 @@ def chromalias_text(seq_ids):
 
 def _serve_sample(request, sample_id, filename):
     try:
-        reseq = Sample.objects.get(pk=sample_id)
+        sample = Sample.objects.get(pk=sample_id)
     except Sample.DoesNotExist:
-        raise Http404("No such resequencing experiment.")
+        raise Http404("No such sample.")
 
-    experiment = reseq.experiment
+    experiment = sample.experiment
     if not _may_view(request.user, experiment):
         return HttpResponseForbidden("You do not have access to this experiment.")
 
-    return serve_file(request, store.sample_path(reseq.id, filename), filename)
+    return serve_file(request, store.sample_path(sample.id, filename), filename)
 
 
 def _serve_reference(request, experiment_id, filename):

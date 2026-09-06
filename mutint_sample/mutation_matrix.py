@@ -145,15 +145,15 @@ def sample_page_url(sample, experiment=None):
         experiment_id_of(sample, experiment), sample.id)
 
 
-def browse_url_for(reseq_dict):
+def browse_url_for(sample_dict):
     """The default `browse_url`: into the genome browser, when the sample has an alignment.
 
     Only the breseq-folder importer stores a BAM, so a bare .gd sample has none and gets no
     link -- linking would send the reader to a page explaining the absence.
     """
     def url(call):
-        reseq = reseq_dict.get(call.sample_id)
-        if reseq is None or not reseq.bam_stored:
+        sample = sample_dict.get(call.sample_id)
+        if sample is None or not sample.bam_stored:
             return None
         return "%s?mutation_call_id=%d" % (reverse("browse_mutation"), call.id)
     return url
@@ -195,13 +195,13 @@ def _sample_cell(call, browse_url):
     return cell
 
 
-def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
+def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain",
                  browse_url=None, refseq_url=None, csv_title="mutations",
                  dom_id="mutation-matrix", sets=()):
-    """Lay `mutation_calls` out against the samples in `reseq_dict`.
+    """Lay `mutation_calls` out against the samples in `sample_dict`.
 
-    `reseq_dict` is `{sample_id: Sample}` in the order the columns should appear -- what
-    `get_reseq_ordered_dict` and `get_ordered_reseq_dict` return. `labels="qualified"` puts the
+    `sample_dict` is `{sample_id: Sample}` in the order the columns should appear -- what
+    `get_ordered_sample_dict` and `samples_in_calls` return. `labels="qualified"` puts the
     experiment's name in front of each sample's, for a page that spans experiments.
 
     A row is one mutation, and it is included when at least one listed sample carries it
@@ -217,15 +217,15 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     hold its mutation, and the sets are offered in the Show menu, counted by the rows they
     hold here rather than by the ids handed in: an id no listed sample carries is no row.
     """
-    palette = palette_indexes(s.population_id for s in reseq_dict.values())
+    palette = palette_indexes(s.population_id for s in sample_dict.values())
     samples = [SampleColumn(id=sample.id,
                             label=sample.qualified_label if labels == "qualified" else sample.label,
                             index=index, bam_stored=bool(sample.bam_stored),
                             flags=tuple(flags_of(sample)),
                             url=sample_page_url(sample, experiment), palette=palette[index])
-               for index, sample in enumerate(reseq_dict.values())]
+               for index, sample in enumerate(sample_dict.values())]
     column_of = {sample.id: sample.index for sample in samples}
-    browse_url = browse_url or browse_url_for(reseq_dict)
+    browse_url = browse_url or browse_url_for(sample_dict)
     refseq_url = refseq_url or refseq_url_for(experiment)
 
     by_mutation = {}

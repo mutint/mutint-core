@@ -14,7 +14,7 @@ from django.db.models import F, Sum
 logger = logging.getLogger(__name__)
 
 
-def count_per_population(reseq_queryset):
+def count_per_population(sample_queryset):
     """`[(population name, time points, samples), ...]` for the Overview's table.
 
     It was `get_ale_flask_isolate_count_list`, and it counted samples per flask per ALE --
@@ -22,9 +22,9 @@ def count_per_population(reseq_queryset):
     number was called an isolate count and was always a count of samples.
     """
     per_population = {}
-    for reseq in reseq_queryset:
-        time_points = per_population.setdefault(reseq.population_name, {})
-        time_points[reseq.time_point] = time_points.get(reseq.time_point, 0) + 1
+    for sample in sample_queryset:
+        time_points = per_population.setdefault(sample.population_name, {})
+        time_points[sample.time_point] = time_points.get(sample.time_point, 0) + 1
 
     return [(name, len(time_points), sum(time_points.values()))
             for name, time_points in per_population.items()]
@@ -78,7 +78,7 @@ def _percent_of(bases, reference_length):
         return None
     return 100.0 * bases / reference_length
 
-def get_reseq_experiment_info_list(reseq_experiments):
+def get_sample_info_list(samples):
     """One dict per sample for the Overview's per-sample table.
 
     **Keyed by name, and this used to be an eleven-member tuple the template indexed.**
@@ -100,7 +100,7 @@ def get_reseq_experiment_info_list(reseq_experiments):
     Overview issued 2N queries nobody was counting.
 
     `Count('id')` on MutationCall rather than a `distinct` count of mutations, because that
-    is what `reseq.mutations.count()` did: the M2M goes through MutationCall, so its count
+    is what `sample.mutations.count()` did: the M2M goes through MutationCall, so its count
     is of join rows, and MutationCall has no unique constraint on
     (sample, mutation). Counting distinct mutations would quietly differ for a
     sample that observed one twice.
@@ -117,10 +117,10 @@ def get_reseq_experiment_info_list(reseq_experiments):
     from mutint_experiment.ancestor import exclude_ancestry
     from mutint_sample.models import MutationCall
 
-    reseq_experiments = list(reseq_experiments)
-    sample_ids = [reseq.id for reseq in reseq_experiments]
-    experiment_id = (reseq_experiments[0].experiment.id
-                     if reseq_experiments else None)
+    samples = list(samples)
+    sample_ids = [sample.id for sample in samples]
+    experiment_id = (samples[0].experiment.id
+                     if samples else None)
 
     uncalled_bases = uncalled_bases_per_sample(sample_ids)
     reference_length = _reference_length(experiment_id)
@@ -132,11 +132,11 @@ def get_reseq_experiment_info_list(reseq_experiments):
         .annotate(total=Count('id')))
 
     rows = []
-    for reseq in reseq_experiments:
-        bases = uncalled_bases.get(reseq.id, 0)
+    for sample in samples:
+        bases = uncalled_bases.get(sample.id, 0)
         rows.append({
-            "sample": reseq,
-            "mutation_count": mutation_counts.get(reseq.id, 0),
+            "sample": sample,
+            "mutation_count": mutation_counts.get(sample.id, 0),
             "uncalled_bases": bases,
             # None when the reference length is unknown -- see `_percent_of`.
             "uncalled_percent": _percent_of(bases, reference_length),

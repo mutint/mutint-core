@@ -70,11 +70,11 @@ def build_coverage(context, sample_id):
         logger.info("coverage for sample %s was cancelled before it ran", sample_id)
         return None
 
-    reseq = Sample.objects.filter(pk=sample_id).first()
-    if reseq is None:
+    sample = Sample.objects.filter(pk=sample_id).first()
+    if sample is None:
         # Deleted between enqueue and execution. Not an error: there is nothing to derive.
         logger.info("sample %s is gone; no coverage to build", sample_id)
         return None
-    tally = coverage.build_for(reseq)
+    tally = coverage.build_for(sample)
     logger.info("coverage built for sample %s", sample_id)
     return str(tally) if tally is not None else None

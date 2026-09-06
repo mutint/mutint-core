@@ -1,8 +1,8 @@
 """Registry of import types contributed by apps.
 
-Mirrors ``plugin_registry.register_export_handler`` -- which already drives a UI dropdown from
+Mirrors ``plugin_registry.register_export_handler`` -- which already drives a UI menu from
 a registry -- so an app that can ingest a new kind of file registers it here and appears in the
-Add page's type dropdown with no edit to core.
+Import data page's tabs with no edit to core.
 
 Apps register in ``AppConfig.ready()``::
 
@@ -54,8 +54,8 @@ def register_import_handler(name, label, patterns, handle,
                             list_units=None, menu_order=None, directories=()):
     """Register an import type.
 
-    name        stable slug; the value the Import data page's dropdown submits
-    label       human-readable, shown in the dropdown
+    name        stable slug; the value the Import data page submits
+    label       human-readable, shown on the page
     patterns    lowercase path suffixes this handler claims (e.g. '.gbk',
                 'data/reference.bam'). Serialized to the client so it can bucket a
                 drop before uploading, and used as the default `detect`.
@@ -72,7 +72,7 @@ def register_import_handler(name, label, patterns, handle,
                 see a whole directory). Defaults to suffix matching on `patterns`.
     requires_reference
                 the type cannot run until the experiment has a reference genome, and
-                is left out of the Import data page's dropdown until it does. The handler still
+                is left out of the Import data page's offered types until it does. The handler still
                 enforces it server-side either way.
     accepts_options
                 the handler takes a fifth `options` argument -- the caller's per-request
@@ -97,7 +97,7 @@ def register_import_handler(name, label, patterns, handle,
                 directory basename, a filename, a path relative to the drop root --
                 so this mirrors one handler's own reporting rather than imposing a
                 rule. `mutint_common.import_progress` is what consumes it.
-    menu_order  where this sits in the Import data page's dropdown, lower first. Defaults to
+    menu_order  where this sits among the Import data page's offered types, lower first. Defaults to
                 `priority`, so a type that says nothing keeps the position it had.
 
                 **This exists because `priority` cannot be moved to do the job.**
@@ -108,7 +108,7 @@ def register_import_handler(name, label, patterns, handle,
                 reaches for most often and what has to happen first are different
                 questions and now have different answers.
 
-                Only the dropdown is sorted by it. `get_import_types()` stays in
+                Only that listing is sorted by it. `get_import_types()` stays in
                 priority order, because the Import data page walks *that* list to name what an
                 unrecognized file looks like and wants the handler that would really
                 claim it named first.
@@ -120,7 +120,7 @@ def register_import_handler(name, label, patterns, handle,
                 exactly that shape -- breseq chooses the filenames, they differ between
                 releases, and older ones nest an `evidence/` directory inside it.
 
-                It matters on the *client* as much as here. The Add page decides what it
+                It matters on the *client* as much as here. The Import data page decides what it
                 will upload from these declarations before a byte is sent, so a directory
                 no handler declares is never transferred and the server's own `detect`
                 never gets to see it.
@@ -162,13 +162,13 @@ def get_import_handler(name):
 
 
 def get_import_types_for(has_reference):
-    """The dropdown's contents for one experiment: only the types that can run now.
+    """The Import data page's offered types for one experiment: only those that can run now.
 
-    A type that cannot run yet is left out rather than shown grayed. A dropdown entry
+    A type that cannot run yet is left out rather than shown grayed. An offered entry
     you can see but not choose is a dead end -- the page's own banner is where the
     answer ("get a reference in first") belongs, and it says so whether or not the
     entry is there to point at. Computed here rather than in the template so the
-    dropdown and the JSON the page classifies a drop with cannot disagree.
+    listing and the JSON the page classifies a drop with cannot disagree.
     """
     offered = []
     for entry in get_import_types():
@@ -186,7 +186,7 @@ def get_import_types_for(has_reference):
 
 
 def get_import_types():
-    """The dropdown's contents: JSON-safe, no callables."""
+    """The offered types: JSON-safe, no callables."""
     return [{
         "name": h["name"],
         "label": h["label"],
@@ -204,7 +204,7 @@ def identify(path, exclude=None):
 
     Turns "not recognized as Reference genome" into a sentence that says what to do about
     it. The answer is in the registry either way, so a plugin's type names itself here with
-    no edit to this module -- and a type that has an entry in the dropdown for exactly this
+    no edit to this module -- and a type that is offered for exactly this
     file is a better thing to point at than a list of extensions.
 
     Patterns only, never a handler's own `detect`: this runs on a file the chosen handler

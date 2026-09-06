@@ -5,12 +5,10 @@
 | module | for |
 |---|---|
 | `config/defaults.py` | the base; delegates to `mutint_common.base_settings` |
-| `config/settings_local.py` | local development — SQLite, `DEBUG=True`, no external services |
+| `config/settings_local.py` | local development: `DEBUG=True` on top of the defaults |
 | `config/settings_private.py` | production, with authentication enforced |
-| `config/settings_public.py` | a public read-only deployment |
 
-Select one with `DJANGO_SETTINGS_MODULE`. `./mutint start` writes `settings_local.py` on first
-run.
+Select one with `DJANGO_SETTINGS_MODULE`. `settings_local.py` is committed and is what `./mutint` selects.
 
 ## Storage
 

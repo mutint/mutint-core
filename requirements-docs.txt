@@ -11,8 +11,7 @@
 #     where a single backtick is a *title reference*, so every one of those would render as
 #     italics and warn. (MyST changes how .md pages parse, not how docstrings do.)
 #     mkdocstrings parses them as markdown, so they render as written with no edits to code.
-#   * This venv is Python 3.9, on which Sphinx is capped at 7.4.x while mkdocs-material is
-#     current.
+#   * mkdocs-material tracks current Python; Sphinx's own theme ecosystem lags it.
 #
 # Versioning is not set up yet; `mike` is the intended path and needs nothing here until then.
 # See docs/contributing/docs.md.

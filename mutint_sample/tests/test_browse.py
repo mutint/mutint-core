@@ -36,10 +36,10 @@ class BrowseMutationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
 
-        self.reseq = Sample.objects.get()
+        self.sample = Sample.objects.get()
         self.call = MutationCall.objects.filter(
-            sample=self.reseq).first()
-        self.experiment = self.reseq.experiment
+            sample=self.sample).first()
+        self.experiment = self.sample.experiment
 
     def _get(self, mutation_call_id=None):
         return self.client.get("/mutations/browse", {
@@ -54,8 +54,8 @@ class BrowseMutationTestCase(TestCase):
 
         mutation = self.call.mutation
         self.assertIn("%s:" % mutation.seq_id, html)          # locus contig
-        self.assertIn("/mutations/alignments/%d/bam" % self.reseq.id, html)
-        self.assertIn("/mutations/alignments/%d/bai" % self.reseq.id, html)
+        self.assertIn("/mutations/alignments/%d/bam" % self.sample.id, html)
+        self.assertIn("/mutations/alignments/%d/bai" % self.sample.id, html)
         self.assertIn("/mutations/reference/%d/fasta" % self.experiment.id, html)
         self.assertIn("/mutations/reference/%d/fai" % self.experiment.id, html)
         self.assertIn("js/igv.min.js", html)
@@ -117,8 +117,8 @@ class BrowseMutationTestCase(TestCase):
 
     def test_a_sample_without_an_alignment_explains_itself(self):
         """A bare .gd import has no reads. Say so rather than render an empty browser."""
-        self.reseq.bam_stored = False
-        self.reseq.save(update_fields=["bam_stored"])
+        self.sample.bam_stored = False
+        self.sample.save(update_fields=["bam_stored"])
 
         response = self._get()
         self.assertEqual(response.status_code, 200)
@@ -193,7 +193,7 @@ class BrowseMutationTestCase(TestCase):
         breseq_fixture.write_sample(second, "s2")
         breseq_folder.import_breseq_folders(
             second, project_name="P", experiment_name="e", owner_name="tester")
-        other = Sample.objects.exclude(id=self.reseq.id).first()
+        other = Sample.objects.exclude(id=self.sample.id).first()
         self.assertIsNotNone(other)
         return other
 
@@ -204,16 +204,16 @@ class BrowseMutationTestCase(TestCase):
         self.assertIn("/mutations/alignments/%d/bam" % other.id, html)
         # The sample being viewed is in the menu like any other -- it is shown and hidden by
         # the same control, so it is not excluded the way the old add-only list excluded it.
-        self.assertIn("/mutations/alignments/%d/bam" % self.reseq.id, html)
+        self.assertIn("/mutations/alignments/%d/bam" % self.sample.id, html)
         self.assertIn('id="sample-list"', html)
 
     def test_only_the_sample_arrived_at_is_checked(self):
         self._second_sample()
 
         samples = _sample_tracks(self.experiment, self.call.mutation,
-                                 current_id=self.reseq.id)
+                                 current_id=self.sample.id)
         self.assertEqual([s["is_current"] for s in samples].count(True), 1)
-        self.assertTrue(next(s for s in samples if s["id"] == self.reseq.id)["is_current"])
+        self.assertTrue(next(s for s in samples if s["id"] == self.sample.id)["is_current"])
 
     def test_a_sample_is_marked_mutant_only_when_the_mutation_is_called_in_it(self):
         """The `*` follows the mutation table's own rule -- `present`, not the mere
@@ -227,9 +227,9 @@ class BrowseMutationTestCase(TestCase):
                                         present=False)
 
         marked = {s["id"]: s["has_mutation"]
-                  for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
+                  for s in _sample_tracks(self.experiment, mutation, current_id=self.sample.id)}
 
-        self.assertTrue(marked[self.reseq.id])
+        self.assertTrue(marked[self.sample.id])
         self.assertFalse(marked[other.id])
 
     def test_a_sample_that_carries_the_mutation_by_hand_is_marked_too(self):
@@ -251,7 +251,7 @@ class BrowseMutationTestCase(TestCase):
                                         **build_call(1.0))
 
         marked = {s["id"]: s["has_mutation"]
-                  for s in _sample_tracks(self.experiment, mutation, current_id=self.reseq.id)}
+                  for s in _sample_tracks(self.experiment, mutation, current_id=self.sample.id)}
 
         self.assertTrue(marked[other.id])
 
@@ -281,10 +281,10 @@ class SwitchingMutationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
 
-        self.reseq = Sample.objects.get()
+        self.sample = Sample.objects.get()
         self.call = MutationCall.objects.filter(
-            sample=self.reseq).first()
-        self.experiment = self.reseq.experiment
+            sample=self.sample).first()
+        self.experiment = self.sample.experiment
 
     # --- the second spelling of the page's address --------------------------------------
 
@@ -292,7 +292,7 @@ class SwitchingMutationTestCase(TestCase):
         by_call = self.client.get(
             "/mutations/browse", {"mutation_call_id": self.call.id})
         by_pair = self.client.get("/mutations/browse", {
-            "mutation_id": self.call.mutation_id, "sample_id": self.reseq.id})
+            "mutation_id": self.call.mutation_id, "sample_id": self.sample.id})
         self.assertEqual(200, by_call.status_code)
         self.assertEqual(200, by_pair.status_code)
         # The locus is what positions the browser, and it must not depend on how the page
@@ -311,16 +311,16 @@ class SwitchingMutationTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s2")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
-        return Sample.objects.exclude(pk=self.reseq.pk).get()
+        return Sample.objects.exclude(pk=self.sample.pk).get()
 
     def test_a_mutation_this_sample_does_not_call_still_renders(self):
         """The case the pair spelling exists for. An unsaved MutationCall carries it, so
         `build_rows` needed no change -- the Freq cell simply comes out empty."""
         self._sibling_sample()
         MutationCall.objects.filter(
-            mutation=self.call.mutation, sample=self.reseq).delete()
+            mutation=self.call.mutation, sample=self.sample).delete()
         response = self.client.get("/mutations/browse", {
-            "mutation_id": self.call.mutation_id, "sample_id": self.reseq.id})
+            "mutation_id": self.call.mutation_id, "sample_id": self.sample.id})
         self.assertEqual(200, response.status_code)
         row = response.context["rows"][0]
         self.assertEqual(self.call.mutation_id, row["mutation_id"])
@@ -336,14 +336,14 @@ class SwitchingMutationTestCase(TestCase):
         breseq_folder.import_breseq_folders(
             other, project_name="P2", experiment_name="e2", owner_name="tester")
         stranger = MutationCall.objects.exclude(
-            sample=self.reseq).first()
+            sample=self.sample).first()
 
         response = self.client.get("/mutations/browse", {
-            "mutation_id": stranger.mutation_id, "sample_id": self.reseq.id})
+            "mutation_id": stranger.mutation_id, "sample_id": self.sample.id})
         self.assertEqual(404, response.status_code)
 
     def test_an_unknown_pair_is_a_404(self):
-        for params in ({"mutation_id": 999999, "sample_id": self.reseq.id},
+        for params in ({"mutation_id": 999999, "sample_id": self.sample.id},
                        {"mutation_id": self.call.mutation_id, "sample_id": 999999},
                        {"mutation_id": "x", "sample_id": "y"},
                        {}):
@@ -355,12 +355,12 @@ class SwitchingMutationTestCase(TestCase):
 
     def test_it_returns_the_row_and_who_calls_it(self):
         response = self.client.get("/mutations/browse/at", {
-            "mutation_id": self.call.mutation_id, "sample_id": self.reseq.id})
+            "mutation_id": self.call.mutation_id, "sample_id": self.sample.id})
         self.assertEqual(200, response.status_code)
         body = response.json()
         self.assertEqual(self.call.mutation_id, body["mutation_id"])
         self.assertEqual(self.call.id, body["mutation_call_id"])
-        self.assertIn(self.reseq.id, body["calling"])
+        self.assertIn(self.sample.id, body["calling"])
         self.assertIn("breseq-table", body["table_html"])
         self.assertIn("mutation_call_id=%d" % self.call.id, body["url"])
 
@@ -369,21 +369,21 @@ class SwitchingMutationTestCase(TestCase):
         from, and the sample's absence from it *is* the answer."""
         sibling = self._sibling_sample()
         MutationCall.objects.filter(
-            mutation=self.call.mutation, sample=self.reseq).delete()
+            mutation=self.call.mutation, sample=self.sample).delete()
         body = self.client.get("/mutations/browse/at", {
-            "mutation_id": self.call.mutation_id, "sample_id": self.reseq.id}).json()
-        self.assertNotIn(self.reseq.id, body["calling"])
+            "mutation_id": self.call.mutation_id, "sample_id": self.sample.id}).json()
+        self.assertNotIn(self.sample.id, body["calling"])
         # The sibling still calls it, which is what the menu's `*` will now mark.
         self.assertIn(sibling.id, body["calling"])
         self.assertIsNone(body["mutation_call_id"])
         # No call to name it by, so the URL has to be the pair spelling or a reload
         # would 404 on the page it just came from.
         self.assertIn("mutation_id=%d" % self.call.mutation_id, body["url"])
-        self.assertIn("sample_id=%d" % self.reseq.id, body["url"])
+        self.assertIn("sample_id=%d" % self.sample.id, body["url"])
 
     def test_it_404s_an_unknown_mutation(self):
         self.assertEqual(404, self.client.get("/mutations/browse/at", {
-            "mutation_id": 999999, "sample_id": self.reseq.id}).status_code)
+            "mutation_id": 999999, "sample_id": self.sample.id}).status_code)
 
     def test_a_stranger_is_refused(self):
         """Through the same `_may_view` the page uses -- one answer to "may you see it"."""
@@ -393,7 +393,7 @@ class SwitchingMutationTestCase(TestCase):
             username="nobody", email="n@e.com", is_active=True)
         self.client.force_login(stranger)
         response = self.client.get("/mutations/browse/at", {
-            "mutation_id": self.call.mutation_id, "sample_id": self.reseq.id})
+            "mutation_id": self.call.mutation_id, "sample_id": self.sample.id})
         self.assertEqual(403, response.status_code)
 
     # --- what the page hands the click handler ------------------------------------------

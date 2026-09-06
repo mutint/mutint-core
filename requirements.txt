@@ -11,7 +11,6 @@ psycopg[binary]>=3.2
 # (TASKS) that no call site knows about -- swapping it for Redis or Celery later touches no code.
 django-tasks-db>=0.13
 beautifulsoup4>=4.12.3
-coverage>=7.6
 django-debug-toolbar>=8,<9
 # GenomeDiff (.gd) parser/writer used by the drag-and-drop mutation import.
 # Pinned to a git SHA, not a PyPI version: only 0.4.1 was ever published there, and
@@ -36,13 +35,11 @@ genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.
 biopython>=1.84
-jsonschema>=4.23
 # BeautifulSoup's parser, named explicitly at mutint_import/annotate/display.py:421 and in
 # its tests. Nothing imports lxml, so it reads like dead weight and is not: bs4 falls back
 # to html.parser when it is absent, which parses breseq's generated cells differently.
 lxml>=5.3
 numpy>=1.26
-pandas>=2.2
 # Reads the stored BAM in mutint_import/coverage.py, to weight each alignment by 1/X1 --
 # breseq's redundancy tag, the number of places a read mapped equally well. Without that
 # weighting a read matching ten IS copies is counted once at each and repeats dominate the
@@ -58,9 +55,4 @@ pandas>=2.2
 # samtools in env/tools, so before this there was no way to produce one.
 pysam>=0.24
 requests>=2.32
-# pandas reads .xls through xlrd; `./mutint load_projects` is the one caller
-# (mutint_experiment/management/commands/load_projects.py:19, pd.read_excel). Another
-# import with no import statement behind it.
-xlrd>=2.0.1
-openpyxl>=3.1
 zipstream-ng>=1.8

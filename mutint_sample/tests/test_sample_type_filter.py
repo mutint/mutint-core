@@ -1,7 +1,7 @@
 """`?sample_type=` selects clonal or mixed samples, or -- for anything else -- neither.
 
 The bug this pins down: `get_sample_type` returned whatever the query string said, and
-`get_ordered_reseq_queryset` read anything that was not the mixed token as *clonal*. So
+`get_ordered_sample_queryset` read anything that was not the mixed token as *clonal*. So
 `?sample_type=anything` returned half the samples while the picker still read "All sample
 types" -- a page subset without saying so, and the failure mode of a stale bookmark once the
 accepted values change.
@@ -21,7 +21,7 @@ from mutint_experiment.models import (
     Experiment, Population, Project,
 )
 from mutint_sample.models import Sample
-from mutint_sample.util import get_ordered_reseq_queryset
+from mutint_sample.util import get_ordered_sample_queryset
 from mutint_sample.views.common import get_sample_type
 
 
@@ -68,7 +68,7 @@ class SampleTypeFilterTestCase(TestCase):
             source_name="s%d" % number)
 
     def selected(self, sample_type):
-        return set(get_ordered_reseq_queryset(
+        return set(get_ordered_sample_queryset(
             self.experiment.id, sample_type=sample_type).values_list("pk", flat=True))
 
     def test_clonal_selects_only_the_clonal_sample(self):

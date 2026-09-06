@@ -33,8 +33,8 @@ class _Fixture(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="t")
-        self.reseq = Sample.objects.get()
-        self.experiment = self.reseq.experiment
+        self.sample = Sample.objects.get()
+        self.experiment = self.sample.experiment
 
 
 class CoordinateTestCase(_Fixture):
@@ -127,7 +127,7 @@ class SampleTrackTestCase(_Fixture):
         values_list collapsed every sample onto one row called "sample"."""
         features = tracks.sample_features(self.experiment.id)
         self.assertTrue(features)
-        self.assertEqual({self.reseq.label},
+        self.assertEqual({self.sample.label},
                          {f["sample"] for f in features})
 
     def test_presence_is_uniform_and_frequency_rides_alongside(self):

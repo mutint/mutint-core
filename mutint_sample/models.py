@@ -81,7 +81,7 @@ class Sample(SupplementalDataMixin):
     Collapsing them onto *this* row rather than onto `Isolate` is what made the merge
     cheap. `MutationCall.sample` and `MutationEdit.sample` point here, the managed
     store is `<store>/samples/<pk>/` keyed by this pk, and every variable in the suite
-    called `reseq` or `sample` already meant this row. Merging the other way would have
+    called `sample` or `sample` already meant this row. Merging the other way would have
     moved all of it -- and the name this model now has was the argument.
 
     What a replicate was is now a suffix on the label: `3-30000-1-1` and `3-30000-1-2`
@@ -91,7 +91,7 @@ class Sample(SupplementalDataMixin):
 
     #: Which population the sample was drawn from. Nullable because it always was: a sample
     #: with no chain above it is unreachable from every listing
-    #: (`get_ordered_reseq_queryset` filters it out) and the views 404 on it rather than
+    #: (`get_ordered_sample_queryset` filters it out) and the views 404 on it rather than
     #: treating it as ownerless.
     population = models.ForeignKey("mutint_experiment.Population", on_delete=models.CASCADE,
                                    null=True)
@@ -160,7 +160,7 @@ class Sample(SupplementalDataMixin):
     report_stored = models.BooleanField(default=False)
 
     # Shortcuts up the chain, for the call sites that want one field from it and not the
-    # rows in between. They were `ale_experiment`, `ale_id` and `flask_number`.
+    # rows in between. They were `experiments`, `ale_id` and `time_point`.
     #
     # `population_name` rather than `population`, because it answers a *value* while the row
     # of that name is now a column on this model. `time_point` was the third of these
@@ -314,7 +314,7 @@ class Mutation(SupplementalDataMixin):
     #: spelling of it in the suite already said: the `.gd` attribute, `UncalledRegion.seq_id`,
     #: `AnnotatedSequence.seq_id`, the add form's field, the mutation table's column.
     #:
-    #: It was `reseq_reference`, which read like the *genome* and shared its spelling with
+    #: It was `sample_reference`, which read like the *genome* and shared its spelling with
     #: `Sample.reference_genome`, which genuinely is one. `to_gd_line` shows what the rename
     #: bought: `{'seq_id': self.seq_id}` where it used to have to translate.
     #:

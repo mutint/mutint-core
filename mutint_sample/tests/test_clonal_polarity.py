@@ -22,7 +22,7 @@ from mutint_experiment import paths
 from mutint_experiment.models import Experiment, Population, Project
 from mutint_sample.breseq_report import is_mixed
 from mutint_sample.models import Sample
-from mutint_sample.util import get_ordered_reseq_queryset
+from mutint_sample.util import get_ordered_sample_queryset
 
 
 class ClonalPolarityTestCase(TestCase):
@@ -73,7 +73,7 @@ class ClonalPolarityTestCase(TestCase):
     # --- `?sample_type=` ------------------------------------------------------------------
 
     def _selected(self, sample_type):
-        return set(get_ordered_reseq_queryset(
+        return set(get_ordered_sample_queryset(
             self.experiment.id, sample_type=sample_type).values_list("pk", flat=True))
 
     def test_the_sample_type_filter_selects_each_and_both(self):
@@ -117,8 +117,8 @@ class ClonalPolarityTestCase(TestCase):
     def test_ticking_the_box_makes_the_sample_mixed(self):
         response = self.client.post(
             "/sample/%d/update/" % self.clone.pk,
-            {"sample_name": "clone", "ale": "1", "flask": 500, "isolate": "1",
-             "isolate_description": "", "medium_description": "",
+            {"source_name": "clone", "population": "1", "time_point": 500, "name": "1",
+             "description": "", "medium_description": "",
              "is_mixed": "1"})
 
         self.assertEqual(200, response.status_code, response.content)
@@ -130,8 +130,8 @@ class ClonalPolarityTestCase(TestCase):
         and because an unchecked box posts `0` rather than omitting the key."""
         response = self.client.post(
             "/sample/%d/update/" % self.mixed.pk,
-            {"sample_name": "mixed", "ale": "1", "flask": 500, "isolate": "2",
-             "isolate_description": "", "medium_description": "",
+            {"source_name": "mixed", "population": "1", "time_point": 500, "name": "2",
+             "description": "", "medium_description": "",
              "is_mixed": "0"})
 
         self.assertEqual(200, response.status_code, response.content)

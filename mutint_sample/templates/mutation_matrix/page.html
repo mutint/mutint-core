@@ -12,7 +12,7 @@
     <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
     <script src="{% static 'js/mutation_matrix.js' %}?v={{ mutint_version }}"></script>
 {% endblock %}
-{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 {% block content %}
     {% if experiment_id %}
         {% comment %} One GET form for every control that changes which rows and columns the
@@ -23,7 +23,7 @@
             <input type="hidden" name="experiment_id" value="{{ experiment_id }}"/>
             <select name="{{ PARAM_POPULATION }}" class="form-control">
                 <option value="{{ PARAM_ALL }}">All populations</option>
-                {% for ale in ales %}
+                {% for ale in population_names %}
                     <option {% if ale == population %}selected="selected" {% endif %}
                             value="{{ ale }}">{{ ale }}</option>
                 {% endfor %}

@@ -20,17 +20,21 @@ from django.test import SimpleTestCase
 from mutint_import.annotate.annotator import annotate_mutations
 from mutint_import.annotate.display import add_html_fields, text_from_html
 from mutint_import.annotate.loader import load_reference
-from mutint_import.gdparse.gdparse import gdparse
+from genomediff import GenomeDiff
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
 
-# gdtools writes these; they are bookkeeping rather than annotation.
-IGNORED_KEYS = {'parent_ids', 'type'}
+# gdtools writes these and renumbers ids; they are bookkeeping rather than annotation.
+IGNORED_KEYS = {'id', 'parent_ids', 'type'}
 
 
 def _load_gd(name):
-    with open(os.path.join(FIXTURES, name), 'rb') as handle:
-        return gdparse.GDParser(file_handle=handle)
+    """The fixture's mutations as the dicts `annotate_mutations` takes -- the same shape
+    `gd_import` builds from a `genomediff` record."""
+    with open(os.path.join(FIXTURES, name)) as handle:
+        document = GenomeDiff.read(handle)
+    return [{"type": record.type, "id": record.id, "parent_ids": record.parent_ids,
+             **dict(record.attributes)} for record in document.mutations]
 
 
 def _identity(mutation):
@@ -48,13 +52,13 @@ class AnnotationMatchesGdtoolsTest(SimpleTestCase):
         super().setUpClass()
         cls.references = load_reference(os.path.join(FIXTURES, 'synthetic.gbk'))
 
-        mutations = list(_load_gd('synthetic.gd').data['mutation'].values())
+        mutations = list(_load_gd('synthetic.gd'))
         annotate_mutations(mutations, cls.references)
         for mutation in mutations:
             add_html_fields(mutation)
         cls.actual = {_identity(m): m for m in mutations}
         cls.expected = {_identity(m): m
-                        for m in _load_gd('synthetic.expected.gd').data['mutation'].values()}
+                        for m in _load_gd('synthetic.expected.gd')}
 
     def test_every_fixture_mutation_was_annotated(self):
         self.assertEqual(sorted(map(str, self.expected)), sorted(map(str, self.actual)))
@@ -101,7 +105,7 @@ class AnnotationDetailTest(SimpleTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.references = load_reference(os.path.join(FIXTURES, 'synthetic.gbk'))
-        mutations = list(_load_gd('synthetic.gd').data['mutation'].values())
+        mutations = list(_load_gd('synthetic.gd'))
         annotate_mutations(mutations, cls.references)
         for mutation in mutations:
             add_html_fields(mutation)
@@ -184,7 +188,7 @@ class DisplayTest(SimpleTestCase):
     def setUpClass(cls):
         super().setUpClass()
         references = load_reference(os.path.join(FIXTURES, 'synthetic.gbk'))
-        mutations = list(_load_gd('synthetic.gd').data['mutation'].values())
+        mutations = list(_load_gd('synthetic.gd'))
         annotate_mutations(mutations, references)
         for mutation in mutations:
             add_html_fields(mutation)

@@ -122,7 +122,7 @@ def _prepare_experiment(project_name, experiment_name, owner_name, is_public):
     the instrument's name was the empty string -- so all three are gone, `Media` last, with
     the table.
     """
-    from mutint_import.ale_experiment import try_creating_project
+    from mutint_import.experiments import try_creating_project
 
     try:
         project = Project.objects.get(name=project_name)
@@ -213,13 +213,13 @@ def import_document_as_sample(document, sample_name, context):
             context, document, sample_name)
     else:
         seq_experiment = _get_or_create_chain(
-            context, document, identity.ale, identity.flask, identity.isolate,
+            context, document, identity.population, identity.time_point, identity.name,
             identity.replicate, sample_name,
             # A label only where the name carries one. `3-30000-1-1` says exactly what the
             # coordinate says, and `label` prefers the description over the
             # computed `A3 F30000 I1-1` -- so filling it for an A-F-I-R sample would
             # relabel every table column with the filename it came from.
-            isolate_description=(sample_name
+            description=(sample_name
                                  if identity.shape == sample_names.SHAPE_TRIPLE else ""))
 
     # Counted before the write, which is what clears them.
@@ -267,13 +267,13 @@ def _parse_document(uploaded):
     return GenomeDiff.read(iter(lines))
 
 
-def _get_or_create_chain(context, document, ale_number, flask_number,
-                         isolate_number, tech_rep_number, sample_name,
-                         isolate_description=""):
+def _get_or_create_chain(context, document, population_name, time_point,
+                         sample_label, replicate, sample_name,
+                         description=""):
     """Synthesize the experiment chain down to a Sample, reading
     reference/date/type hints from the GenomeDiff header (no breseq HTML).
 
-    `ale_number` and `isolate_number` are text and the other two are integers, which is the
+    `population_name` and `sample_label` are text and the other two are integers, which is the
     shape `sample_names.parse_sample_identity` answers in and the shape of the columns.
 
     **The replicate is part of the label, not a level.** `3-30000-1-1` and `3-30000-1-2` are
@@ -295,11 +295,11 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
     # flag is its negation -- the one place in the suite that turns the .gd into polarity.
     is_clonal = " -p" not in (metadata.get("COMMAND", "") or "")
 
-    ale_id, _ = Population.objects.get_or_create(experiment=experiment, name=ale_number)
-    label = sample_names.sample_label(isolate_number, tech_rep_number)
+    population, _ = Population.objects.get_or_create(experiment=experiment, name=population_name)
+    label = sample_names.sample_label(sample_label, replicate)
     seq_experiment, _ = Sample.objects.get_or_create(
-        population=ale_id,
-        time_point=flask_number,
+        population=population,
+        time_point=time_point,
         name=label,
         defaults={
             "source_name": sample_name,
@@ -315,7 +315,7 @@ def _get_or_create_chain(context, document, ale_number, flask_number,
             # `AAra-2 F500 I763A`. Not part of the identity -- a sample found by its
             # coordinate keeps whatever description it was given, including a hand-edited
             # one.
-            "description": isolate_description[:300],
+            "description": description[:300],
         })
     return seq_experiment
 
@@ -335,12 +335,12 @@ def _get_or_create_autonumbered_chain(context, document, sample_name):
         return existing
 
     metadata = document.metadata
-    ale_id, _ = Population.objects.get_or_create(experiment=experiment, name="1")
+    population, _ = Population.objects.get_or_create(experiment=experiment, name="1")
 
     return Sample.objects.create(
-        population=ale_id,
+        population=population,
         time_point=1,
-        name=_next_sample_number(ale_id, 1),
+        name=_next_sample_number(population, 1),
         # label() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],

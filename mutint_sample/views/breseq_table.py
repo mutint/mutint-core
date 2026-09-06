@@ -28,7 +28,7 @@ from mutint_filter.view_filter import get_view_filter
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.models import ReferenceSequences, MutationCall
 from mutint_experiment.ancestor import ancestral_mutation_ids, describe_ancestor
-from mutint_sample.util import get_reseq_ordered_dict
+from mutint_sample.util import get_ordered_sample_dict
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def breseq_table(request):
     try:
         started = time.time()
         experiment = mutint_sample.views.common.get_experiment(request)
-        ale_number = mutint_sample.views.common.get_population(request)
+        population = mutint_sample.views.common.get_population(request)
         sample_type = mutint_sample.views.common.get_sample_type(request)
 
         # `include_ancestor=True`, unlike every other reading page. This one shows a single
@@ -48,30 +48,30 @@ def breseq_table(request):
         # -- and hiding the ancestor from the only picker that could reach it made it
         # unreachable rather than merely excluded. It is listed first and tinted; the
         # analyses that aggregate across samples still leave it out.
-        reseq_dict = get_reseq_ordered_dict(experiment.id, ale_number,
+        sample_dict = get_ordered_sample_dict(experiment.id, population,
                                             sample_type, include_ancestor=True)
-        reseq_dict = _ancestor_first(reseq_dict, experiment.ancestor_id)
-        reseq = _selected_reseq(request, reseq_dict, experiment)
+        sample_dict = _ancestor_first(sample_dict, experiment.ancestor_id)
+        sample = _selected_sample(request, sample_dict, experiment)
 
         view_filter = get_view_filter(request, experiment.id)
         # Resolved once for the whole page: the tint is a membership test per rendered row.
         ancestral_ids = ancestral_mutation_ids(experiment.id)
-        rows = (_rows_for(experiment, reseq, view_filter, ancestral_ids)
-                if reseq is not None else [])
+        rows = (_rows_for(experiment, sample, view_filter, ancestral_ids)
+                if sample is not None else [])
 
         context.update(experiment.experiment_context())
         context.update({
-            "ales": mutint_sample.views.common.get_population_names(experiment.id),
-            "population": ale_number,
+            "population_names": mutint_sample.views.common.get_population_names(experiment.id),
+            "population": population,
             "experiment_name": experiment.name,
-            "ale_project_name": experiment.project.name if experiment.project else "",
-            "ale_project_id": experiment.project_id,
+            "project_name": experiment.project.name if experiment.project else "",
+            "project_id": experiment.project_id,
             "sample_type": sample_type,
-            "reseq_list": list(reseq_dict.values()),
-            "selected_reseq": reseq,
-            "selected_sample_id": reseq.id if reseq is not None else None,
-            "is_mixed": is_mixed(reseq),
-            "is_ancestor": reseq is not None and reseq.id == experiment.ancestor_id,
+            "sample_list": list(sample_dict.values()),
+            "selected_sample": sample,
+            "selected_sample_id": sample.id if sample is not None else None,
+            "is_mixed": is_mixed(sample),
+            "is_ancestor": sample is not None and sample.id == experiment.ancestor_id,
             "ancestral_count": sum(1 for row in rows if row["ancestral"]),
             # The name and pk, so the legend can link the tinted rows to the sample they
             # came from. `describe_ancestor` is what the summary line under every other
@@ -84,7 +84,7 @@ def breseq_table(request):
             "template_header": "Mutations",
             # Whether to offer the breseq report links. The flag rather than a stat: this renders
         # on every view of the page.
-        "report_stored": bool(reseq is not None and reseq.report_stored),
+        "report_stored": bool(sample is not None and sample.report_stored),
         "can_edit": can_edit_project(request.user, experiment.project),
         })
 
@@ -103,7 +103,7 @@ def breseq_table(request):
         return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def _ancestor_first(reseq_dict, ancestor_id):
+def _ancestor_first(sample_dict, ancestor_id):
     """Move the designated ancestor to the top of the picker.
 
     It is what the other samples are read against, so it belongs at the top rather than
@@ -111,19 +111,19 @@ def _ancestor_first(reseq_dict, ancestor_id):
     but only because its ancestor is filed under an ALE that sorts early.
 
     Order only. The *default* selection stays the first non-ancestor sample (see
-    `_selected_reseq`), so opening Mutations still lands on evolved data.
+    `_selected_sample`), so opening Mutations still lands on evolved data.
     """
-    if ancestor_id is None or ancestor_id not in reseq_dict:
-        return reseq_dict
+    if ancestor_id is None or ancestor_id not in sample_dict:
+        return sample_dict
     ordered = collections.OrderedDict()
-    ordered[ancestor_id] = reseq_dict[ancestor_id]
-    for key, value in reseq_dict.items():
+    ordered[ancestor_id] = sample_dict[ancestor_id]
+    for key, value in sample_dict.items():
         if key != ancestor_id:
             ordered[key] = value
     return ordered
 
 
-def _selected_reseq(request, reseq_dict, experiment):
+def _selected_sample(request, sample_dict, experiment):
     """The requested sample; failing that the first one that is not the ancestor.
 
     The ancestor is listed, and listed first, but is not what the page opens on: this view is
@@ -131,7 +131,7 @@ def _selected_reseq(request, reseq_dict, experiment):
     is "nothing, by definition" is a poor first thing to show. It is one click away in the
     picker, which is the point of putting it there.
 
-    The lookup still falls back to a scoped query. `reseq_dict` honours the ALE, sample-type
+    The lookup still falls back to a scoped query. `sample_dict` honours the ALE, sample-type
     and tag filters, so a requested id can legitimately be missing from it -- and without the
     fallback a link to a filtered-out sample would quietly render a *different* one, which is
     the worst available outcome because the page would look entirely normal while showing the
@@ -143,22 +143,22 @@ def _selected_reseq(request, reseq_dict, experiment):
             sample_id = int(requested)
         except (TypeError, ValueError):
             sample_id = None
-        if sample_id in reseq_dict:
-            return reseq_dict[sample_id]
+        if sample_id in sample_dict:
+            return sample_dict[sample_id]
         if sample_id is not None:
-            hidden = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
+            hidden = get_ordered_sample_dict(experiment.id, include_ancestor=True)
             if sample_id in hidden:
                 return hidden[sample_id]
-    for reseq in reseq_dict.values():
-        if reseq.id != experiment.ancestor_id:
-            return reseq
+    for sample in sample_dict.values():
+        if sample.id != experiment.ancestor_id:
+            return sample
     # An experiment whose only sample is the ancestor: show it rather than nothing.
-    for reseq in reseq_dict.values():
-        return reseq
+    for sample in sample_dict.values():
+        return sample
     return None
 
 
-def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
+def _rows_for(experiment, sample, view_filter=None, ancestral_ids=frozenset()):
     """This sample's rows, ancestor included.
 
     Deliberately the raw call queryset. Every page that analyzes the data subtracts the
@@ -166,19 +166,19 @@ def _rows_for(experiment, reseq, view_filter=None, ancestral_ids=frozenset()):
     breseq called in one sample rather than a conclusion drawn from it.
     """
     call = filter_mutation_calls(
-        MutationCall.objects.filter(sample=reseq).select_related("mutation"),
+        MutationCall.objects.filter(sample=sample).select_related("mutation"),
         view_filter=view_filter)
     # filter_mutation_calls orders across samples; within one sample breseq
     # orders by reference then position.
     call.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.start_position))
-    return build_rows(call, browse_url=_browse_url(reseq),
+    return build_rows(call, browse_url=_browse_url(sample),
                       ancestral_mutation_ids=ancestral_ids,
                       refseq_url=_refseq_url())
 
 
-def _browse_url(reseq):
+def _browse_url(sample):
     """Link the evidence cell at the alignment, when there is one to look at."""
-    if not reseq.bam_stored:
+    if not sample.bam_stored:
         return None
     return lambda call: "%s?mutation_call_id=%s" % (
         reverse("browse_mutation"), call.id)

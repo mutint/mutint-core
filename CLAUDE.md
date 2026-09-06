@@ -4,17 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MutInt is a Django 6.1 web application for managing Adaptive Laboratory Evolution (ALE)
-experiments. (This said "Django 5" for a long time while 4.2 was what installed, and then said 4.2 while
-the pin moved under it. `requirements.txt` pins `Django>=6.1,<6.2`; check it rather than this
-sentence. The upgrade's whole user-visible surface was four things: `USE_L10N` gone,
-`CheckConstraint(check=)` renamed to `condition=`, the SQLite backend subclass replaced by
-`OPTIONS={'transaction_mode': 'IMMEDIATE'}` and then deleted with SQLite itself, and the
-sidebar's Logout -- which really was a GET link that 5.0 turned into a 405, exactly as the
-comment above it had predicted for two years.)
+MutInt is a Django web application for the mutations found by sequencing evolved microbial
+populations -- adaptive laboratory evolution (ALE) experiments analysed with breseq, most
+often. `requirements.txt` pins the Django version; check it rather than any sentence here.
 
-It stores experimental data, parses genomic sequencing output (breseq `.gd` files), and
-provides analysis tools for mutations, convergence, and enrichment.
+It stores each experiment's reference genome, populations and samples, imports the mutations
+called in each (breseq `.gd`, VCF), annotates them against the reference, and provides the
+pages to compare, curate and export them.
 
 **Python is 3.13 and PostgreSQL is the only backend**, both provisioned by the entry script
 rather than taken from the host: Django 6.1 requires Python 3.12+ and a current macOS ships
@@ -25,16 +21,16 @@ anything outside `./mutint` will not find the database.
 
 `mutint-core` serves two purposes:
 
-1. **Standalone app** — run directly from this repo for a self-contained MutInt instance (SQLite, local dev via `./mutint start`).
+1. **Standalone app** — run directly from this repo for a self-contained MutInt instance (`./mutint start`, with its own PostgreSQL under `env/`).
 2. **Git submodule** — embedded in an assembled project (e.g. `mutint`) that adds custom Django apps without modifying mutint-core. The assembled project provides its own `config/` package (settings, URLs, wsgi) and uses helpers from `mutint_common` to inherit core settings and URL patterns:
    - `mutint_common.base_settings.get_base_settings()` — returns all core settings as a dict
    - `mutint_common.urls.get_core_urlpatterns()` — returns all core URL patterns
 
-See `DEVELOPER.md` for the full submodule integration guide.
+See `docs/assembling/` (built by `./mutint docs`) for the full assembly guide.
 
 ## Commands
 
-**Local dev setup** (SQLite, no MySQL or Docker needed):
+**Local dev setup** (nothing to install on the host):
 ```bash
 ./mutint start             # first run: auto-creates a venv at env/main and installs
                           #   requirements, then re-execs under it; runs migrations,
@@ -53,12 +49,12 @@ This mirrors mutint's `./mutint` entry script. `env/` is git-ignored.
 
 **Run a single test**:
 ```bash
-./mutint test mutint_import.tests.test_ale_experiment.TestEnrichment.test_reseq_URL
+./mutint test mutint_import.tests.test_sample_names.UnderscoreTripleTestCase
 ```
 
-**Coverage**:
+**Coverage** (`coverage` is not in `requirements.txt`; install it into the venv first):
 ```bash
-coverage run ./mutint test && coverage report
+env/main/bin/pip install coverage && env/main/bin/coverage run ./mutint test && env/main/bin/coverage report
 ```
 
 ### Testing notes
@@ -103,121 +99,17 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1937 run, 0 failures** standalone. They were **1939** before Replace Annotation folded
-into the Reference Sequence tab (two fewer), **1937** before the cluster and the store
-moved under data/ (two tests), **1935** before the Import data page grew
-its tabs and registry (net two), **1939** before the interop API left for
-mutint-api with its four tests, **1936** before the sidebar grew its
-END_SECTION and Curate (three tests), **1931** before the matrix grew row
-sets and the page its two blocks (five tests), **1925** before the matrix grew its
-Types menu, scroll box, sample-header links, palette, Frequency display and View switch (six
-tests), **1929** before tagging was retired
-(the endpoint tests went, the flag tests came), **1907** before the mutation matrix
-replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
-partial, the first Search tests, minus the old builder's), **1839** before the background-worker
-work, which adds 68 -- the deadman supervisor and its constraints, the `start` gates, the
-process-group clean-up, the reaper's `skip_locked`, the stalled-queue signal, and
-`stop_if_owner_is`. They were **1834** before the sidebar rework --
-**measured at HEAD by stashing the change and running it**, because the figure recorded here
-was 1823 and the suite was really doing 1834. Eleven tests had been added without anybody
-re-counting, which is the drift the paragraph below warns about, sprung again in the figure
-directly above it. Read every number before this point as history. They were **1799** before the breseq report
-viewer, **1743** before the VCF importer,
-**1716** before `mutint_jobs`, and **1696** before `mutint_import/tests/test_staging.py` -- each
-figure run, not subtracted.
+**Baseline: 1930 run, 0 failures** standalone; **2227** assembled, measured with `PYTHONPATH`
+pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
+The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
+what you think you added**: this file carried a ledger of every past count, and every time a
+figure in it was arithmetic instead of a run it was later found wrong, by as much as sixty.
 
-**And the number this replaces was wrong by sixty.** It said 1636 while the suite actually ran
-1696, which is the drift the paragraph below warns about, sprung again in the figure right
-beside it: sixty tests had been added without anybody re-counting. Every figure earlier in
-this list is therefore suspect by an unknown amount and is worth reading as history rather
-than as a measurement.
-
-Assembled, **2153** -- also measured, with `PYTHONPATH` pointed at the root checkouts of
-mutint-core, mutint-needle and mutint-breseq, since `mutint/`'s copies are submodule clones of
-the last commit. It was **2085** before the background-worker work.
-The figure recorded here before it was **2069**, and that is 16 short rather than 5 -- the same
-eleven uncounted tests as the standalone line above, which is what says the two numbers had
-drifted together rather than one of them being wrong on its own. It was **2048** before the breseq report viewer (which
-adds 24 in core and removes 3 from the plugin), **1992** before the VCF importer, **1955**
-before the jobs page and the sign-in rule, and 1903 before `mutint-breseq` became a submodule at all; every one of those was run.
-(The 1817 recorded here before any of it was sixty-odd short of what the suite was really
-doing at the time -- see the paragraph above.)
-They were 1646 and 1827 before the platform move, which deleted
-six test modules that drove named migrations through the real executor and added the lifecycle,
-task and round-trip tests that replaced them -- **re-measured, not arithmetic**. They were 1620 and 1801 before the account pages -- the login
-page's normalization, the local change-password page and the sidebar's admin link -- which
-added 24 tests to a corner that had none at all.
-**The standalone figure went down and the assembled one up** at the entry before that,
-which is what extracting a component looks like: the needle plot's 22 tests left this repo with
-the plot and 25 run in mutint-needle, and 8 new ones cover `panel_registry` here. They were 1634
-and 1790 before that, 1625 and 1781 before the needle plot got a sequence
-picker, 1622 and 1778 before a reference stopped reporting a
-mutation count, 1621 and 1777 before the sample menu started toggling,
-1620 and 1776 before the reads track stopped drawing
-its own coverage row, 1610 and 1766 before coverage started weighting each
-alignment by breseq's X1 redundancy tag, 1599 and 1755 before the genome browser dropped its
-per-sample track and learned to switch mutation on a click, 1592 and 1748 before deleting data
-made you type DELETE, 1587 and 1743 before the needle plot learned what
-genome it was drawing, 1574 and 1730 before the database tracks, and 1568 and 1724 before the
-assets were vendored. (The 1723 recorded a
-commit earlier was measured before the `data-autoload` test existed; the assembled suite has
-been re-run, not adjusted.) They were 1512 and 1668 before the NCBI Sequence Viewer, and
-**both of those are re-counts, because this line was wrong when the viewer was written**: it
-said 1437 and 1580 while the suites actually ran 1512 and 1668. Seventy-five and eighty-eight
-tests had been added without anybody re-counting -- the trap the paragraph below warns about,
-sprung again. The viewer itself adds 55, measured by running the suite with its two test
-modules moved aside and again with them back, in both projects. Every figure before this
-point in the list is therefore suspect by an unknown amount, and only worth reading as
-history.
-They were 1424 and 1567 before ownership was resynchronised on
-demotion, 1405 and 1548 before the gene-name separator and the
-1,000-gene limit, 1402 and 1545 before the Gene cell's wrapper was
-closed on both branches, 1397 and 1540 before the gene-list Show button's
-handler moved out of one template, 1391 and 1534 before editing and deleting became two
-tabs, 1387 and 1530 before the Edit page learned to open on the sample it was linked from, and
-1375 and 1518 before it learned to edit a mutation in some of its samples rather than all of
-them. (The assembled figure was *run*, not
-added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/mutint-core` is a submodule
-clone of the last commit. See the trap two sentences down for why the arithmetic is not
-trusted, even when it agrees as it does here.)
-They were 1305 and 1441 before the Import data page learned to report
-an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
-plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
-that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
-They were 1373 and 1516 before the progress poll stopped
-writing, 1351 and 1494 before imports stopped losing
-samples to each other, 1347 and 1490 before the page learned to
-stop polling a finished import, 1340 and 1483 before the import
-progress polling met SQLite's rollback journal, 1336 and 1479 before two breseq folders of
-one name stopped collapsing into one sample, and 1268 and 1404 before the ALE and the isolate became
-text columns, and 1257 and 1393 before an owner learned to leave a project by transferring
-rather than by removing themselves, and before `locked_reason` went.
-The count went *down* because the shared filter's model tests went
-with the model; 22 new ones cover the reader's filter and its session. They were 1287 and 1424
-before filtering became per-reader, 1264 and 1401 before functional change moved onto
-`snp_type`, and 1239 and 1370 before the dashboard stopped filtering and `mutint_stats` stopped
-storing -- **19 of that earlier jump is `mutint_dashboard`'s tests running for the first time**,
-see the `__init__.py` gotcha below, so the derived-table removals added fewer than the
-arithmetic suggests. They were 1213 and 1344 before the global filter went and the filter
-summary arrived, 1201 and 1332 before the collected manual, 1197 and
-1328 before `./mutint docs` learned to refuse,
-1190 and 1321 before the plugin API docs, 1178 and
-1293 before the tree learned to go stale,
-1163 and 1278 before the lazy-rebuild sweep, 1156 and
-1271 before the frequency cutoff was fixed,
-1136 and 1251 before the mutation-change page, 1116
-and 1231 before the cross-sample grid, 1109 and 1222 before the caller flags were dropped,
-1081 and 1194 before the genomediff bump, 1028 and 1141
-before the experiment lock and the bulk sharing editor, 938 and 1051 before the add form, and
-852 and 965 before the mutation editor itself.
-
-**An assembled project's venv needs the genomediff pin installed too**, and `./mutint install`
-will not do it on its own — pip sees an installed 0.4.2 and leaves it. Use the
-`--force-reinstall` line from `requirements.txt` against `mutint/env/main/bin/pip`, or the
-suite runs green against the wrong package. The suite is green — treat *any* failure as yours.
-(These said 642 and 688 for a while and were wrong by more than the sharing work added —
-standalone was already 698 before it. Re-count rather than adjusting the number by what you
-think you added.)
+**An assembled project's venv needs the genomediff pin too.** The entry script re-runs pip
+when `requirements.txt` changes, but every commit of that package reports itself as `0.4.2`,
+so if pip still says it is satisfied after a SHA bump, use the `--force-reinstall` line from
+`requirements.txt` against `mutint/env/main/bin/pip` -- or the suite runs green against the
+wrong package.
 
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
 `mutint_common/test_runner.py` substitutes them when no labels are given. Standalone this
@@ -298,6 +190,9 @@ deployment. See **Infrastructure (production)** below.
 
 ## Architecture
 
+Migration numbers cited below (`mutint_sample.0010` and the like) predate the migration reset
+of September 2026 and no longer name files; read them as history.
+
 ### The shell's two widths
 
 Neither the sidebar nor the content box has a fixed width, and neither should get one back.
@@ -327,7 +222,7 @@ misalignment looked inconsistent rather than uniform:
   are meant to be cancelled by the 15px padding of a `.container`, and this box is not one --
   it has 25px of its own. Most pages use `.row` as a plain wrapper round a form or a table,
   so their content sat left of the title while the edit pages, which use no row, sat flush.
-  The Add Data page manages the same trick one level up with a bare `.col-lg-8`.
+  The Import data page manages the same trick one level up with a bare `.col-lg-8`.
 
 `common.css` flattens the gutters that have nothing to cancel them: the header's column, a
 row that is a direct child, and a column used outside a row. A genuine multi-column row keeps
@@ -465,7 +360,7 @@ inert is exactly why it had no space between its two inputs: nothing supplied a 
 `form-group` supplies 15px. Its button was the only `btn-lg btn-block` in the codebase, its
 `<div class="row ` never closed its quote (swallowing the spacer div after it), and it rendered
 `{{ form.errors }}` nowhere, so a wrong password silently re-rendered a blank form. The
-replacement is `ale/group_new.html`'s shape. A test names each dead class, because "it looks
+replacement is `group/new.html`'s shape. A test names each dead class, because "it looks
 like every other page" is a claim that rots quietly.
 
 **The sidebar's account block is the shell's own, not a nav entry.** Username, and under it
@@ -623,15 +518,11 @@ recomputes them in place against the stored reference -- re-importing is not nee
 on a broken link). Output goes to `site/`, which is git-ignored. Nothing is hosted.
 
 **The toolchain is MkDocs + Material + mkdocstrings, and the reason is the docstrings.** The
-eight registries carry **465** non-blank lines of docstring containing **143** single-backtick
-code spans, written as markdown. (This said 360 and 90, of seven registries; re-counted over
-every docstring in `mutint_common/*_registry.py`, the seven were already 413 and 117 before the
-eighth was added. Measured, not adjusted -- the same drift the test counts above warn about.)
-Sphinx's `autodoc` parses docstrings as reStructuredText, where a single backtick is a *title
-reference* -- all 143 would render as italics and warn. MyST changes
-how `.md` pages parse, not how docstrings do. `mkdocstrings` parses them as markdown, so the
-reference renders correctly with no edit to any docstring. (Secondarily: on this repo's Python
-3.9, pip caps Sphinx at 7.4.x while `mkdocs-material` is current.)
+nine registries carry hundreds of lines of docstring with single-backtick code spans, written
+as markdown. Sphinx's `autodoc` parses docstrings as reStructuredText, where a single backtick
+is a *title reference* -- every one would render as italics and warn. MyST changes how `.md`
+pages parse, not how docstrings do. `mkdocstrings` parses them as markdown, so the reference
+renders correctly with no edit to any docstring.
 
 **`requirements-docs.txt` is separate from `requirements.txt` on purpose** -- the entry script
 installs the latter into every deployment, and production has no use for a site generator.
@@ -697,11 +588,11 @@ today and is not a plan.
 `MutationCall` used to carry `breseq_present` and `gatk_present` beside `present` -- one
 flag per variant caller -- and **every read path asked the caller flags rather than `present`**:
 `_get_table_mutation_entry` for a filled cell, `browse._samples_calling` for the genome
-browser's `*`, and `mutint_interop_query`. That was harmless while breseq was the only thing
+browser's `*`, and the interop endpoints (now `mutint-api`). That was harmless while breseq was the only thing
 that ever wrote a mutation, and stopped being harmless the moment `mutint_curate` let a
 person add one. A hand-added call is `present=True` with no caller flag, so it answered
 no to all three: it was stored, it showed on the editor's own per-sample page, and it was
-**absent from Compare, fixation, converge and search** -- which reads as the add having
+**absent from Compare, its Convergent and Fixed row sets, and Search** -- which reads as the add having
 silently failed rather than as a rendering rule being wrong.
 
 Both columns are gone. The two questions they conflated are now asked of separate columns:
@@ -713,19 +604,18 @@ Both columns are gone. The two questions they conflated are now asked of separat
   Null means imported before that column existed, which is its own thing and must not be
   read as "unknown caller".
 
-`mutint_sample.0010` backfills `present=True` wherever a caller flag was set and `present` was
-null, then drops the columns -- in that order, because a row whose presence was recorded only
-in a flag would otherwise become a row about which nothing was ever recorded, and those render
-nowhere. `mutint_sample/tests/test_caller_flag_migration.py` stands the database up at `0009`
-through the real migration executor to check it, which is the only way to test a data migration
-whose columns the live model no longer has.
+The migration that dropped them backfilled `present=True` wherever a caller flag was set and
+`present` was null, then dropped the columns -- in that order, because a row whose presence was
+recorded only in a flag would otherwise become a row about which nothing was ever recorded, and
+those render nowhere. (That migration and the test that drove it through the executor went
+with the migration reset; the ordering rule is what to keep.)
 
 **Old change-log snapshots needed no migration.** `history._call_kwargs` builds its
 kwargs by walking `CALL_FIELDS` and calling `snapshot.get(field)`, so the two keys left
 behind in stored `MutationEdit.call` blobs are simply never read again.
-`mutint_curate.migrations.0002` writes those blobs and had its own copy of the field
-list; it now skips a column the model does not have, because which side of the drop it runs on
-depends on where it falls in a given database's graph.
+The migration that wrote those blobs had its own copy of the field list and skipped a column
+the model did not have, because which side of the drop it ran on depended on where it fell in
+a given database's graph.
 
 ### Editing a sample's mutations, and the history that makes it safe
 
@@ -779,7 +669,7 @@ snapshot** of the row (`call`) and of its mutation's identity (`mutation_identit
   gone -- but `_call_kwargs` still coerces through `float()`, because a changeset written
   before the change holds a string and restoring one would put a string in a float column.
 - **`mutation_identity` exists because the Mutation row may not outlive the log.**
-  `mutint_import.ale_experiment._delete_all_orphaned_mutations` hard-deletes any Mutation with
+  `mutint_import.experiments._delete_all_orphaned_mutations` hard-deletes any Mutation with
   no MutationCall, and runs after an experiment delete and after `delete_sample` -- so
   removing a mutation's last call makes it eligible for a sweep triggered by something
   else entirely. The snapshot is the exact `get_or_create` key plus `supplemental_data` and
@@ -815,7 +705,7 @@ hard-deletes. Fixation stores nothing now, so no registered rebuild holds a call
 **Two traps in the templates.** The selection tables are DataTables with the Select extension,
 which is safe here only because no cell is an input -- selection lives in DataTables' data
 model, so a row selected on another page or behind a search box still comes back from
-`rows({selected:true})`. `ale/experiment_samples.html` avoids DataTables for the opposite
+`rows({selected:true})`. `sample/list.html` avoids DataTables for the opposite
 reason: `deferRender` never builds the DOM for undrawn rows, so a *typed* value on page two
 would not exist to read back. If a cell here ever becomes editable, the table has to become a
 plain one. And the initialization must sit inside **`$(document).ready`**: base.html loads the
@@ -867,7 +757,7 @@ mutint-fixation cached MutationCall ids that only its own rebuild cleared; it st
 now, and the first reason stands alone.) But `request_rebuild`
 marks the **site-scoped** totals stale too, correctly, and running them here made a single
 delete recount every MutationCall in the installation -- measured at 4.9s for the read half
-alone on 74,859 rows, which is exactly the bill `rebuild_after_structural_change` refuses. They
+alone on about 75,000 rows, which is exactly the bill `rebuild_after_structural_change` refuses. They
 stay marked; the dashboard's own `ensure_fresh` pays it once on the next view. Ten deletes cost
 one recount rather than ten.
 
@@ -878,7 +768,15 @@ on ten deletes costing one recount rather than ten, which is true at any per-row
 
 `run_rebuilds` takes `scope=` for this; `get_rebuilders` already did.
 
-#### Being told without being rebuilt
+**`register_rebuilder(..., auto=False)`** is derived data that is tracked and marked stale but
+never rebuilt on its own; only being named in `only=` runs it, and `force=True` does not
+override that. Nothing registers it today -- mutint-phylogeny, which it was added for, now
+registers a *deletion* of its cached trees instead -- but the flag and its tests stay for the
+next expensive stored answer. The skip lives in `run_rebuilds`, not `get_rebuilders`, so
+`request_rebuild` and `./mutint rebuild --list` still see manual rebuilders. A page that opts
+out and then forgets to ask `is_stale` is worse off than one that never registered.
+
+### Being told without being rebuilt
 
 `register_rebuilder(..., auto=False)` is derived data that is **tracked and marked stale but
 never rebuilt on its own**. Until it existed the two were welded together -- you could only be
@@ -940,19 +838,19 @@ is not.
 Every write path marks what it invalidated. Nothing marks anything when the code that decides
 what counts changes instead -- no experiment moved, so no `request_rebuild` fires, and the
 tables sit there holding pre-change values while `stale_since` says they are fresh. Measured
-right after the frequency cutoff started filtering: the dashboard stored **74,859** calls
-where the filter yields **73,857**, marked fresh, so `ensure_fresh` would have left it
+right after the frequency cutoff started filtering: the dashboard stored **about 75,000** calls
+where the filter yields **about 74,000**, marked fresh, so `ensure_fresh` would have left it
 indefinitely.
 
 `mutint_common.0002` stamps every `DerivedDataState` row stale for that reason -- one UPDATE, no
 rebuilding, and each page recomputes on its next view. Measured end to end on the dev database
 after migrating: the first `/dashboard` view took **5.4s** and corrected the stored total from
-74,859 to 73,857; the second took **0.00s**. **Any future change to filtering or
+about 75,000 to about 74,000; the second took **0.00s**. **Any future change to filtering or
 counting logic needs the same migration**, because there is no way for the data to work it out
 for itself. `./mutint rebuild --all --force` is the manual equivalent.
 
 **`mutint_common.0003` is that rule being followed**, and it moves the same total back: the
-dashboard stopped applying the filter, so 73,857 becomes 74,859 again. It marks only
+dashboard stopped applying the filter, so about 74,000 becomes about 75,000 again. It marks only
 `mutation_counts`, because only that changed -- `0002` marked everything because the filter
 itself had changed and every derived table read through it.
 
@@ -997,8 +895,8 @@ separates a name.
   `annotate.annotator`, which joins with a bare comma (`GENE_LIST_SEPARATOR = ','`).
 - Every other shape -- intergenic, single gene -- is joined by the import path with `", "`.
 
-`get_gene_list` split on `", "` only, so a 4,318-gene inversion read back as **one gene name
-23,003 characters long**. Nothing about that was visible as an error: the Gene column's
+`get_gene_list` split on `", "` only, so a 4,000-odd-gene inversion read back as **one gene name
+about 23,000 characters long**. Nothing about that was visible as an error: the Gene column's
 expander is gated on `len(...) > 10`, so it never appeared on any real mutation; ecocyc
 rendering made one broken link out of the whole string; and a reader's ignored-gene list could
 not name a single gene inside it. Measured on the dev database: 0 cells with an expander before,
@@ -1012,7 +910,7 @@ change the stored string for every range mutation and fork all of them on the ne
 column holds two spellings and the reader takes both.
 
 **Past `GENE_LIST_LIMIT` (1,000) genes the names are neither recorded nor rendered.** A
-structural variant can span most of a chromosome, and 23,003 characters had already overflowed
+structural variant can span most of a chromosome, and about 23,000 characters had already overflowed
 `gene`'s own `CharField(max_length=19000)` -- silently, because SQLite does not enforce it and
 Postgres would have refused the row. Over the limit the importer records the **range**
 (`mokC–[fimA]`, breseq's own Gene column for such a mutation) and both renderers show a count
@@ -1020,11 +918,11 @@ rather than a list, with no expander to open. The limit lives in `mutint_common/
 the importer and the renderers have to agree: a row written under one limit and read under
 another would show a truncation nothing performed.
 
-`mutint_sample.0012` moves the rows written before the cap -- 7 of 41,671 in the dev database. It
+`mutint_sample.0012` moves the rows written before the cap -- 7 of about 42,000 in the dev database. It
 is not tidying: a row left holding the long string no longer matches what the importer computes,
 so re-importing that sample would mint a second `Mutation` and split its calls across
 both. What it writes is `annotation['gene_name']`, which is exactly what
-`get_annotated_gene_list` now returns, and `test_gene_cap_migration` asserts that equality
+`get_annotated_gene_list` now returns, and `mutint_sample/tests/test_gene_cap.py` asserts that equality
 rather than asserting the string merely got shorter.
 
 ### Functional change is counted from `snp_type`
@@ -1032,8 +930,8 @@ rather than asserting the string merely got shorter.
 `Mutation.snp_type` is breseq's own functional class, written by the annotator, promoted to an
 indexed column, and for a long time **read by nothing**. Both pages classified functional change
 by substring-matching `protein_change` instead -- a *display* string, `I34S (ATC→AGC)`,
-containing neither "synonymous" nor "nonsynonymous". On the dev database 19,982 of 24,088
-mutations bucketed as `unannotated`, including every one of the 12,793 nonsynonymous and 4,878
+containing neither "synonymous" nor "nonsynonymous". On the dev database about 20,000 of about 24,000
+mutations bucketed as `unannotated`, including every one of the about 13,000 nonsynonymous and about 4,900
 synonymous SNPs. The comment on `FUNCTIONAL_CHANGE_TYPE_LIST` said as much all along: *"these
 names match with Breseq's HTML annotations"* -- they are `snp_type`'s vocabulary.
 
@@ -1049,10 +947,10 @@ re-exports both so no importer changed. Four things about it are load-bearing:
   ordered tuple to keep in step. Splitting on `|` and comparing whole tokens is also what
   removed the substring hazard that used to force `nonsynonymous` to precede `synonymous`.
 - **The breakdown is SNP-only.** breseq assigns `snp_type` for SNP and RA entries only, so every
-  DEL, INS, MOB, AMP, SUB and INV is `unannotated` — 2,720 dev-DB mutations, of which 822 used
+  DEL, INS, MOB, AMP, SUB and INV is `unannotated` — about 2,700 dev-DB mutations, of which 822 used
   to borrow an `intergenic` bucket from `protein_change`. `annotation['gene_position']` could
   recover them, but it answers a different question (which feature it sits in, not what it did
-  to a protein), and 1,631 non-SNPs are `coding`, a word with no bucket on this axis.
+  to a protein), and about 1,600 non-SNPs are `coding`, a word with no bucket on this axis.
 - **`_count_in_sql` groups rather than matching.** `values('mutation__snp_type').annotate(...)`,
   then resolve each distinct value in Python. Summing per-group distinct counts is *exact*
   because the group key is a column of `Mutation` reached by a forward FK, so every call
@@ -1083,42 +981,13 @@ experiments outright, behind a comment saying no filtering was needed.
 The two delete views mark only the aggregates by name: removing one experiment cannot make
 another's needle plot wrong, and `request_rebuild()` with no experiment would mark every one.
 
-### The frequency cutoff, which excluded nothing
+### The frequency cutoff
 
-`mutint_filter`'s min/max cutoff is the oldest user-facing filter here and it did not work, in
-any configuration reachable through the form. Two independent faults in one block of
-`filtered_mutation_call_queryset`, neither with a test. That queryset builds a `Q` and
-hands it to `.exclude()`, so every term describes something to **hide**.
-
-- **A `frequency_gatk__lt` term was ANDed in whenever `min_gatk_cutoff` was set** -- which was
-  always: it defaulted to 20 and no form, view or template ever exposed it. No import path has
-  ever written `frequency_gatk` (0 of 74,859 rows in the dev database), and a comparison
-  against null is never true, so the AND could not be satisfied and nothing was excluded.
-- **The floor and the ceiling were ANDed together**, which reads "below the floor *and* above
-  the ceiling at the same time". No row can be both, so setting a maximum silently switched
-  the minimum off as well.
-
-Two smaller things fell out with them: one branch was a straight duplicate of the term above
-it, and both gatk branches compared against `min_cutoff`/`max_cutoff` rather than their own
-settings -- so those settings were never values, only switches.
-
-`frequency_gatk`, `min_gatk_cutoff` and `max_gatk_cutoff` are gone (`mutint_sample.0011`,
-`mutint_filter.0004`), and the two remaining terms are **OR**ed. The block is now two lines and
-does what the page has always said it does.
-
-**This changes what every read-only table shows**, which is the point and is still worth
-saying out loud. In the dev database it hides 1,002 of 74,859 calls, and **all 1,002 are
-in one experiment** -- `Population tree`, where 1.9% of 53,141 calls sit below the default 20%
-floor. Every other experiment loses nothing, because a clonal isolate rarely carries a call
-that low. So the filter finally working is most visible exactly where it was designed to
-matter, and somebody will notice that one experiment got shorter.
-
-They are still *stored*, and still listed in `mutint_curate`, whose listings are
-deliberately unfiltered -- which matters more now than it did, because a mutation hidden from
-every table has to stay somewhere it can be removed. There is a test for that.
-
-`mutint_interop_query` carries a hand-rebuilt copy of the same block and had every one of the
-same faults; it was fixed in the same shape.
+The reader's min/max frequency cutoff hides calls from every read-only table, and the two
+terms are **OR**ed: below the floor *or* above the ceiling is hidden. (They were ANDed for
+years, which excluded nothing; the post-mortem is in git history.) `mutint_curate`'s listings
+are deliberately unfiltered, because a mutation hidden from every table has to stay somewhere
+it can be removed, and there is a test for that.
 
 ### The whole experiment at once: `?sample_id=all`
 
@@ -1131,7 +1000,7 @@ clicking. Per-sample stays the default: the grid is the more useful view of a la
 and also much the more expensive one.
 
 **It renders at most `GRID_ROW_LIMIT` (250) mutations, and narrows server-side.** That is not
-a display preference. The largest experiment in the dev database is 5,076 mutations across 51
+a display preference. The largest experiment in the dev database is about 5,000 mutations across 51
 samples, and laying all of it out produced a **32.8 MB** page -- built by the server in 1.6s,
 so the whole cost is what the browser is then handed. Capped it is 1.75 MB, and a real search
 (`q=thrA`) is 0.10 MB. The search box is a `GET` that re-renders rather than DataTables' own,
@@ -1144,7 +1013,7 @@ removing its last call leaves the row behind -- and a grid keyed on
 `Mutation.objects.filter(experiment=...)` went on rendering it with every cell empty, which
 is what "the page does not update when I delete" turned out to be. The page reloads; the row was
 genuinely still there. Restricted to the *shown* samples rather than to the experiment, because
-`get_reseq_ordered_dict` applies the sample tag filters and a mutation observed only in a hidden
+`get_ordered_sample_dict` applies the sample tag filters and a mutation observed only in a hidden
 sample is an all-empty row for the same reason. This is not the filtering the editor forbids: a
 mutation no sample observes is stored in no sample, so there is nothing on its row to select and
 nothing on it to delete.
@@ -1239,7 +1108,7 @@ not a thing anybody can act on.
 
 **An emptied row is left in place, not deleted.** That is the posture delete takes with a
 `Mutation` as well, and it is what lets the restore above resolve back to the same pk.
-`mutint_import.ale_experiment._delete_all_orphaned_mutations` sweeps it if something else triggers
+`mutint_import.experiments._delete_all_orphaned_mutations` sweeps it if something else triggers
 a sweep.
 
 **The mutation the unchosen samples were left on is not re-annotated**, and that is a live trap
@@ -1450,23 +1319,6 @@ for a mutation with no annotation. This path reproduces it, because `gene` is pa
 get_or_create key and writing `""` here would fork every unannotated mutation on re-import.
 Fixing it means changing both paths at once plus a data migration, and is its own change.
 
-### The old way of deleting a mutation, and why it is gone
-
-`AleExperimentFilter.ignored_mutations`, `AleExperimentFilter.starting_strain_mutations` and
-`GlobalFilter.ignored_mutations` were comma-joined `Mutation.id` strings that
-`filter_mutation_calls` excluded from every table. They were a delete that kept the row:
-scoped to a whole experiment rather than a sample, recording nothing about who did it, with no
-way back, and with nothing that ever pruned an id that had stopped meaning anything. The
-mutation table's first column carried the same idea in miniature -- a close icon that removed
-the row from the client-side DataTable until the next reload.
-
-All of it is gone, along with `add_to_exp_filter`, its `mutation_to_exp_filter` route, its
-dropdown entry, and `save_to_experiment_filter`/`deleteRow` in `table_template.js`.
-`mutint_curate.migrations.0002` converts whatever those columns held into delete
-edit sets before `mutint_filter.0003` drops them, so what was hidden stays hidden and becomes
-inspectable and restorable; `mutint_filter.0003` depends on it, which is what stops the drop
-running first. Those edit sets have `created_by` null and render as "system".
-
 ### There is one filter, and it belongs to the reader
 
 **A filter is a value a reader carries, not a row.** `AleExperimentFilter` held one frequency
@@ -1559,7 +1411,7 @@ answer rather than a visible absent one.
 
 **Two defaults, pointing opposite ways, and the asymmetry is the reason.**
 `get_mutation_call_queryset` stays raw and `get_evolved_call_queryset` is the one
-that subtracts; `get_ordered_reseq_queryset` subtracts by default and takes
+that subtracts; `get_ordered_sample_queryset` subtracts by default and takes
 `include_ancestor=True`. Forgetting to opt *in* hides the ancestor from a curation page, which
 is visible and gets reported the same day. Forgetting to opt *out* leaves ancestral data in an
 analysis, which is invisible and wrong. So each is defaulted to whichever mistake is louder.
@@ -1586,7 +1438,7 @@ id observed in one experiment's ancestor cannot appear in another's samples.
   excluded. (It was hidden at first, on the general rule. One sample at a time is the case the
   general rule does not fit.) It passes `{% view_filter_summary ancestor_subtracted=False %}`
   so the shared summary does not claim a subtraction it did not do -- that rule cuts both ways.
-  **Listed first is not selected first**: `_selected_reseq` opens on the first *non*-ancestor
+  **Listed first is not selected first**: `_selected_sample` opens on the first *non*-ancestor
   sample, because this view reads as "what evolved in this sample" and the one sample whose
   answer is "nothing, by definition" is a poor first thing to show. Its scoped fallback stays,
   for the ALE, sample-type and tag filters, which can still legitimately drop a requested id.
@@ -1688,7 +1540,7 @@ GET page that checks permission itself, a `@require_POST` JSON endpoint that che
 All four gate on `can_edit_project` -- `Project.user` or a superuser -- so staff, who may
 *view* every project, cannot edit one they do not own.
 
-The project summary on `ale/project_detail.html` **stays read-only**; editing did not go
+The project summary on `project/detail.html` **stays read-only**; editing did not go
 back into it. It now shows `description` and `status` as well, which were editable-but-never-
 displayed before: a save has to be visible somewhere or it reads as having done nothing.
 
@@ -1700,7 +1552,7 @@ its siblings. `mutint_experiment/samples.py` resolves (or creates) the `Populati
 
 The shared row must never be edited in place -- `population.name = "Ara-2"` renumbers every
 sample in that lineage rather than the one the user was looking at. Re-pointing instead buys
-three more things: `reseq.pk` never changes, so the store paths (`samples/<pk>/aligned.bam`)
+three more things: `sample.pk` never changes, so the store paths (`samples/<pk>/aligned.bam`)
 need no file moves; no transient `unique_together` violation is possible, because a name is
 only ever looked up; and a swap needs no ordering logic, since both samples move to freshly
 resolved targets and the rows they vacated are pruned at the end.
@@ -2133,7 +1985,7 @@ and the script reads them before the first draw, so nothing flashes; an anonymou
 is public) gets the same from localStorage.
 
 What went with the old table, on purpose: tagging (rows, sample headers, the `tag_select`
-picker and the `request` parameter of `get_reseq_ordered_dict` that served it), the colvis
+picker and the `request` parameter of `get_ordered_sample_dict` that served it), the colvis
 button, "Column Sort from Right" (and, since, sorting altogether), the
 `hidden_columns` query parameter, and the three column constants
 `REFSEQ_COLUMN_IN_MUT_TABLE` / `HTML_MUTATION_TABLE_HEADER` / `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE`.
@@ -2181,40 +2033,34 @@ dotted names owned by whoever writes them, so a plugin remembers something by pi
 ### Example datasets
 
 `./mutint load_example` lists what is registered; `./mutint load_example <name>` loads it.
-Components own their own data -- `mutint-fixation` ships `mutint-fixation-example` -- and
-register it from `AppConfig.ready()` through `mutint_common/example_registry.py`, the sixth
-registry.
+Components own their own data and register it from `AppConfig.ready()` through
+`mutint_common/example_registry.py`; mutint-compare ships three.
 
 **A dataset is a directory of files the import path already understands**, not a Django
 fixture. Loading one runs the registered handlers in priority order exactly as a drop on the
-Add Data page does, so the derived data it exists to show is genuinely computed. A fixture
+Import data page does, so the derived data it exists to show is genuinely computed. A fixture
 would load faster and prove nothing. A `README` and dotfiles in the directory are skipped, so
 the expected answer can live beside the files that produce it.
 
 The command refuses a second load, naming `--replace`; `--replace` soft-deletes the previous
 experiment rather than importing on top of it. Everything lands in one project called
-**Examples**, created with the django-guardian grant -- `Project.objects.create` alone leaves
-the owner unable to view what they own.
+**Examples**, created with an owner grant in `ProjectAccess` -- `Project.objects.create` alone
+leaves the owner unable to view what they own.
 
-**Why this exists.** Fixed Mutations renders an empty table when an experiment has nothing
-fixed, and an empty table when the feature is broken, and there was no data anywhere in the
-suite that could tell the two apart.
-
-Three are registered, one per plugin, each with a `README.md` beside its data stating the
-expected answer as a table, and each asserted by that plugin's tests:
+**Why this exists.** A Fixed or Convergent row set renders an empty table when an experiment
+has nothing to show, and an empty table when the feature is broken, and there was no data
+anywhere in the suite that could tell the two apart. Each dataset has a `README.md` beside its
+data stating the expected answer as a table, asserted by the plugin's tests:
 
 | dataset | shape | what it demonstrates |
 |---|---|---|
-| `mutint-fixation-example` | 2 ALEs x 4 flasks | a mutation in the last two flasks is fixed; one lost earlier is not |
-| `mutint-converge-example` | 3 ALEs x 2 flasks | a gene hit in two lineages converges; one recurring in a single lineage does not |
-| `mutint-compare-example` | 2 ALEs x 3 flasks | a pivot with full, partial and single rows across all six mutation types |
+| `mutint-compare-example` | 2 populations x 3 time points | a pivot with full, partial and single rows across all six mutation types |
+| `mutint-compare-convergence-example` | 3 populations x 2 time points | a gene hit in two lineages converges; one recurring in a single lineage does not |
+| `mutint-compare-fixation-example` | 2 populations x 4 time points | a mutation in the last two time points is fixed; one lost earlier is not |
 
-The first two have a computed answer to check. **Compare's does not** -- it derives nothing --
-so what its dataset supplies instead is a *pattern*, because a table whose rows all look alike
-demonstrates nothing. It is also the only one carrying every mutation type, `AMP` included:
-that used to appear solely on `/mutations/amplifications` because Compare passed a
-`filter_type` whose value means *exclude*, and the `AMP` row is what stops that returning
-unnoticed.
+The first carries every mutation type, `AMP` included: that used to appear solely on
+`/mutations/amplifications` because Compare passed a `filter_type` whose value means
+*exclude*, and the `AMP` row is what stops that returning unnoticed.
 
 ### Reading a sample's identity out of its filename
 
@@ -2276,34 +2122,6 @@ import -- one isolate per sample, fifty-one of them in the dev database's larges
 -- reorders every mutation table's columns. `mutint_experiment/ordering.py` `sample_order()`
 is what every sample listing orders by, in core and in mutint-phylogeny: it pads each text
 field with zeros for the comparison, so digits sort by value and labels still sort as text.
-
-### A mutation is fixated in the last two time points, so the time axis must be the time point
-
-`mutint-fixation` intersects an ALE's final two time points by `Sample.time_point`, so **an ALE
-with one time point can never fix anything** -- and neither can an experiment made entirely of
-such ALEs. That is the usual reason for an empty Fixed Mutations page and it is not a bug.
-
-It used to be easy to arrive at by accident, and the second filename shape is what fixed
-that. `gd_import` read a strict `A-F-I-R` filename (`1-1500-1-1.gd` = ALE 1, time point 1500,
-isolate 1, replicate 1) and **anything else fell to auto-numbering, which puts every sample
-under ALE 1 / time point 1** -- so a 51-timepoint series imported as `Ara-1_500gen_762B.gd`
-and friends became 51 samples at one time point, with the generations in their labels. That is
-exactly the shape of the MutInt dev database, and why fixation has never produced a row
-there.
-
-`Ara-1_500gen_762B` is read now: ALE `Ara-1`, flask 500, isolate `762B` -- see **Reading a
-sample's identity out of its filename**. Data already imported does not move on its own; it
-takes a re-import, or the sample editor, to put those samples on a time axis.
-
-`./mutint fixation [<experiment_id>]` reports the count, and says when no ALE has more than one
-flask -- which is the difference between an empty page and an impossible one, and the reason
-the command still exists.
-
-**It was `rebuild_fixation`, and there is nothing left to rebuild.** Fixation was stored in
-`FixatedMutation` and recomputed by the post-experiment hook, so an experiment whose data
-predated the plugin -- or whose filters had changed since, which altered what fixation would
-find and rebuilt nothing -- stayed stale with no way to catch up. It is computed by the page
-now, so staleness is not a state this data can be in, and only the diagnostic half remains.
 
 ### Which import types the Import data page offers
 
@@ -2408,48 +2226,7 @@ section is the history of a SQLite failure, and the suite is on PostgreSQL now; 
   about.) SQLite's whole-database lock hid that; MVCC does
   not. Do not remove it on the grounds that its original justification expired.
 
-The original account follows, because the measurements are the argument.
-
-An LTEE drop lost five `.gd` samples to `database is locked`, reported per unit and genuinely
-absent afterwards. The cause is not slowness. **Django 4.2's `atomic()` issues a deferred
-`BEGIN`**, `Mutation.objects.get_or_create` reads before it writes, and SQLite **refuses that
-read-to-write upgrade outright the moment another connection has written in between -- without
-consulting `busy_timeout`**, deliberately, because waiting could deadlock two readers each
-wanting to upgrade. No timeout and no journal mode can reach it.
-
-Measured, three concurrent importers, one transaction per sample:
-
-| | samples landed |
-|---|---|
-| deferred `BEGIN`, no retry -- what ran before | **42 / 150** |
-| `BEGIN IMMEDIATE`, no retry | 150 / 150, but **19 / 30** once a transaction outlives the timeout |
-| `BEGIN IMMEDIATE` + retry | 29 / 30 -- **bounded retry is not a guarantee either** |
-| `BEGIN IMMEDIATE` + retry + one import at a time | **30 / 30** |
-
-So all three are needed and none is sufficient:
-
-- **`mutint_common/db/sqlite_immediate/`** -- the stock SQLite backend with
-  `_start_transaction_under_autocommit` issuing `BEGIN IMMEDIATE`. **Delete it at Django
-  5.1**, which has `OPTIONS={'transaction_mode': 'IMMEDIATE'}`; 4.2 has no such setting, which
-  is the only reason a subclass of a private method exists. `test_concurrent_imports` asserts
-  both the statement issued *and* that Django still has the hook, so an upgrade that moves it
-  fails loudly rather than silently reverting every transaction to deferred.
-- **`mutint_import/import_lock.py`** -- one import at a time, and the piece that actually
-  closes it. **A row, not a Python lock**: the dev server is threaded and a deployment runs
-  several processes, neither of which an in-process lock is visible to. Acquisition is the
-  row *insert* rather than `select_for_update`, which is a documented no-op on SQLite and
-  would look like mutual exclusion while providing none. A second finalize is **refused with
-  409, not queued** -- holding a request open for somebody else's drop is the hang the
-  progress reporting exists to prevent, and the staged files survive so retrying costs only
-  the button. Stale locks are reclaimed after two hours, because a process killed mid-import
-  cannot run its own cleanup.
-- **`mutint_import/retry.py`** -- a sample that loses to some *other* writer tries again. Safe
-  because each sample is already its own transaction and re-import is idempotent, so a failed
-  attempt rolls back whole. Deliberately narrow: it matches lock wording only, since a
-  malformed file fails identically every time and retrying it turns a clear message into a
-  slow one.
-
-**A poll must not write, and that is a consequence of the above rather than a detail.** Under
+(Measured on SQLite before the move; the reason stands on PostgreSQL.) **A poll must not write, and that is a consequence of the above rather than a detail.** Under
 WAL a reader is never blocked, so a poll that only reads answers instantly however long the
 importer's transaction runs -- but `BEGIN IMMEDIATE` holds the write lock for the *whole* of
 each sample, so a poll that writes has to queue for it. `SESSION_SAVE_EVERY_REQUEST` made every
@@ -2474,34 +2251,6 @@ appears in the status table with its error, which is how the original five were 
 the honest ceiling here: everything lives inside one request, so none of it survives a crash or
 a restart. A literal guarantee is durability of the *work item*, which means moving the ingest
 onto the queue -- see **What is still on the request path** in the suite `CLAUDE.md`.
-
-**Postgres was considered and is not needed for this.** The 30/30 above is SQLite. What
-Postgres would buy is *simultaneous* imports rather than queued ones -- a throughput question,
-not a correctness one -- at the cost of the no-external-services property `./mutint start` is
-built around. It is also not a guarantee by itself: it still raises serialization failures and
-deadlocks, so the retry would be wanted there too.
-
-**And shortening transactions does not help.** Batching the per-record queries is worth doing
-for import *speed* -- 2,599 per-mutation SELECTs measure 1.28s against 0.05s for one indexed
-fetch, and 77% of the annotation UPDATEs rewrite identical values -- but measured against the
-same contention it made failures *more* frequent, 50% to 66%. The risk is per attempt, not per
-second held, so more and shorter transactions means more attempts. Batching is not a lock fix
-and must not be counted as one.
-
-**Polling a database that is being written is what forced `mutint_common/sqlite_tuning.py`,
-which is deleted with SQLite.** PostgreSQL's readers are never blocked by a writer, so there is
-nothing here to configure and no deployment ruled out — the paragraph is kept because it is the
-measurement that explains why the progress endpoint is careful, not because the pragmas exist.
-SQLite ships in rollback-journal mode, where a writer locks the whole file against *readers* --
-so the first sample whose transaction outlives the 5s busy timeout made every poll fail, and the
-contention pushed `database is locked` back onto the import itself. Reported against a real
-Ara-3 import, then reproduced: `journal=delete, 5s` fails on poll number **zero**; `journal=wal,
-30s` is clean. A `connection_created` receiver sets WAL, a 30s busy timeout and
-`synchronous=NORMAL`, for SQLite only. WAL is what stops readers and writers blocking each
-other at all; the timeout covers the writer-against-writer case WAL does not, since the poll
-also writes a session row (`SESSION_SAVE_EVERY_REQUEST`). **It rules out one deployment:** WAL
-coordinates through shared memory, which NFS and SMB do not implement, so a database on a
-network share would need the receiver disabled.
 
 **A page must be able to end an import without being told.** The finalize response is the
 authority on the summary, and it can simply never arrive -- a dropped connection, a restarted
@@ -2667,7 +2416,7 @@ no `EXTENSION_CONTENT_TYPES` entry**. The module is pure, in the shape `locus.py
 `functional_change.py` are, and reads `values_list` tuples the way `get_needle_plot_data` does.
 
 One track is offered: **Mutations** (`annotation`, colored by `functional_change_bucket`).
-A second, **Mutations by sample** (`seg`, one row per sample in `get_ordered_reseq_queryset`
+A second, **Mutations by sample** (`seg`, one row per sample in `get_ordered_sample_queryset`
 order), is still built by `sample_features` and **switched off** by `DRAW_SAMPLE_TRACK = False`.
 
 **A switch rather than a deletion, and the distinction is the point.** What was decided in use
@@ -3029,7 +2778,7 @@ touch them.
 
 1. **esummary** -> `accessionversion` and `slen`. A length that differs is a definitive no,
    settled for one small request with **no genome downloaded** -- which matters, because a
-   wrong accession is the common case. Verified live: `NC_000913` against a 48,502-base
+   wrong accession is the common case. Verified live: `NC_000913` against a about 48,500-base
    contig is rejected after one call.
 2. **efetch**, streamed, hashed incrementally, compared to the `sha256` already in
    `seq_ids`. Equal is VERIFIED and stores NCBI's *versioned* accession; unequal at equal
@@ -3126,7 +2875,7 @@ NCBI record it is -- and carries the box that records an accession. It has a **n
 `EXPERIMENT_SECTION` called **Reference**, registered first, ahead of Mutations:
 an experiment reads top-down from what it was aligned to, then what was found in it.
 
-**Nothing showed any of this before.** The Add Data page knew only `has_reference`, as a
+**Nothing showed any of this before.** The Import data page knew only `has_reference`, as a
 yes/no; the contigs, their lengths, their aliases and their NCBI status were visible nowhere
 in the product at all.
 
@@ -3198,22 +2947,11 @@ All apps use the `mutint_*` namespace. Key apps:
     and the web agree by construction. It was `./mutint upload`, which read the project,
     experiment and owner out of `<exp>/metadata/*.csv` and was a second importer sharing no
     code with the web paths; that is gone, along with `upload.py` and the metadata app.
-  - The vendored `gdparse/gdparse/gdparse.py` (`GDParser`) survives only for the annotation
-    test fixtures. Note it has no `INT` type; `genomediff` does.
   - **Annotation is internal** (`annotation.py` + `annotate/`). Gene, codon and amino-acid
     fields are derived from the experiment's stored reference at import, not read out of
     the `.gd`, so breseq's plain `output.gd` is enough and `gdtools ANNOTATE` is not needed.
     `./mutint reannotate <id> [--ref FILE]` recomputes them when a better reference arrives.
     The annotator is a port of breseq's own, checked against `gdtools` output.
-  - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
-    `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
-    `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}` --
-    everything from the sample's `data/` folder, `output/` is not consulted;
-    stores them under `MUTINT_STORE_DIR` keyed by database id (`mutint_common/store.py`), and
-    records the shared reference as `ReferenceSequences`. Samples whose reference does not
-    hash-match the experiment's are rejected individually. Alignments are served with HTTP
-    range support by `mutint_sample/views/alignments.py`, which resolves every path from a
-    primary key rather than from anything the client sends.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
     `data/output.gd` plus `data/reference.{gff3,fasta}` and `data/reference.bam{,.bai}`,
@@ -3253,11 +2991,10 @@ All apps use the `mutint_*` namespace. Key apps:
   Viewer over curated annotation, and draws nothing until the contig's sequence has been
   confirmed to be the accession somebody claimed — see **The NCBI Sequence Viewer** above.
   Note `/mutations/` itself is **not** a page: it was Compare, now the mutint-compare plugin.
-- **`mutint_fixation/`** — Fixated mutation computation.
-- **`mutint_converge/`** — Convergence analysis across experiments.
-- **`mutint_filter/`** — Experiment filtering UI and models: frequency cutoffs and
-  ignored genes. The three mutation-id hide lists it used to carry are gone — see
-  **The old way of deleting a mutation** above.
+- **`mutint_filter/`** — The reader's filter: frequency cutoffs and ignored genes, held in
+  the session (`view_filter.py`), applied by `util.py`, rendered by its template tags. **No
+  models, no URLs, no nav** -- it is installed so its `templatetags` are found. See **There is
+  one filter, and it belongs to the reader** below.
 - **`mutint_curate/`** — Adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
@@ -3271,16 +3008,18 @@ All apps use the `mutint_*` namespace. Key apps:
   `StaticData` and then computed the same way; it is the **mutint-needle** component now and
   reaches the page through `panel_registry`.
 - **`mutint_search/`** — Cross-experiment search.
-- **`mutint_bibliome/`** — Publication/bibliography management.
+- **`mutint_bibliome/`** — `Publication` rows per experiment, listed on the Overview through
+  `context_registry`. (Its `/bibliome/` page was a hard-coded ALEdb bibliography and is gone.)
 - **`mutint_dashboard/`** — Dashboard views and timeline events.
 - **`mutint_accounts/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
 - **`mutint_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
   model, `Job`, which stores no status of its own. See **Seeing and stopping background
   work** above.
-- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eight
-  registries (context, import, plugin, nav, about, example, **panel** and **rebuild**), and
+- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the nine
+  registries (context, import, import_tab, plugin, nav, about, example, **panel** and
+  **rebuild**), and
   global static files. `DerivedDataState` is its only model.
-- **`config/`** — Django project config: settings, root URLs, ASGI/WSGI entry points.
+- **`config/`** — Django project config: settings, root URLs, the WSGI entry point.
 
 ### Adding and deleting through the UI
 
@@ -3295,7 +3034,7 @@ Creation and deletion are nested under the objects they act on:
   a user with no editable project is shown **+ New project** instead.
 - **`/project/<pk>/` deletes selected experiments too**, which for a long time it could
   not: it had the checkbox column all along — it includes the same
-  `ale/experiment_datatables.js` the flat list does — and nothing that consumed the selection
+  `experiment/_datatables.js` the flat list does — and nothing that consumed the selection
   but Export. It is the page that shows a project's experiments in context, so it is where
   somebody is standing when they decide one should go. Gated on `can_edit` (project write)
   rather than on being signed in, as the flat list is: that list spans projects and cannot
@@ -3304,19 +3043,19 @@ Creation and deletion are nested under the objects they act on:
   and only the experiment can answer for it.
 - Shared JS for those controls lives in `mutint_common/staticfiles/js/mutint_crud.js`, loaded
   from `base.html`: `mutintPost`, the two confirm dialogs below, and `mutintDeleteSelected` —
-  the whole gather-confirm-post-reload routine, which was inline in `ale/projects.html` and
-  `ale/experiments.html` near enough byte for byte, and which the project page wanting it as
+  the whole gather-confirm-post-reload routine, which was inline in `project/list.html` and
+  `experiment/list.html` near enough byte for byte, and which the project page wanting it as
   well turned from two copies into an argument for none. (`mutintTogglePanel` was a third
   helper and is **gone**; the create forms are modals opened declaratively by Bootstrap. This
   line listed it for a while after it had been deleted, and
-  `mutint_import/tests/test_add_page.py` asserts it is absent.) A page using `mutintPost` must
+  `mutint_import/tests/test_import_page.py` asserts it is absent.) A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
 - **Deleting data makes you type `DELETE`.** `mutintConfirmTypedDelete` is the dialog behind
   the four controls that destroy something — the two bulk deletes above, the project list's,
   and **Delete experiment** on `/stats` — and it resolves true only for that exact word.
-  `mutintConfirmDelete`, the plain yes/no, stays for `ale/group_detail.html` and
-  `ale/project_access.html`: removing a membership or revoking a grant destroys nothing, and
+  `mutintConfirmDelete`, the plain yes/no, stays for `group/detail.html` and
+  `project/access.html`: removing a membership or revoking a grant destroys nothing, and
   a dialog that feels the same for both is what teaches people to click through the one that
   matters. The wording lives with each helper, so a page carries no delete copy of its own.
   - **It is client-side only, deliberately.** The endpoints already check the role and the
@@ -3365,10 +3104,11 @@ user-facing lists exclude deleted rows explicitly via `mutint_experiment.models.
 
 ### Import types are pluggable
 
-`mutint_common/import_registry.py` is one of eight registries in `mutint_common/` -- alongside
-`plugin_registry`, `nav_registry`, `about_registry`, `context_registry`, `example_registry`,
-`panel_registry` and `rebuild_registry`. An app registers what it can ingest from `AppConfig.ready()` and it appears in the Add
-page's type dropdown and in auto-detect, with no edit to core:
+`mutint_common/import_registry.py` is one of nine registries in `mutint_common/` -- alongside
+`import_tab_registry`, `plugin_registry`, `nav_registry`, `about_registry`, `context_registry`,
+`example_registry`, `panel_registry` and `rebuild_registry`. An app registers what it can
+ingest from `AppConfig.ready()` and it appears among the Import data page's tabs and in
+auto-detect, with no edit to core:
 
 ```python
 register_import_handler(name='my_type', label='My measurements (.tsv)',
@@ -3830,23 +3570,22 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 
 ### Settings Structure
 
-- `config/defaults.py` — Delegates to `mutint_common.base_settings.get_base_settings()`; adds `ROOT_URLCONF` and `WSGI_APPLICATION`. SQLite fallback when `FORCE_SQLITE=1` or running tests.
-- `config/settings_local.py` — Local dev (SQLite, DEBUG=True, no Redis/Azure). Created by `./mutint start`.
-- `config/settings_private.py` — Production: adds `LoginRequiredMiddleware`, and nothing
-  else. It never swapped the auth app, whatever this line used to say.
-- `config/settings_public.py` — Public read-only deployment.
-- Select with `DJANGO_SETTINGS_MODULE`.
+- `config/defaults.py` — Delegates to `mutint_common.base_settings.get_base_settings()`; adds `ROOT_URLCONF` and `WSGI_APPLICATION`.
+- `config/settings_local.py` — Local dev: `DEBUG = True` on top of the defaults. Committed; what `./mutint` selects.
+- `config/settings_private.py` — Production: adds `LoginRequiredMiddleware`, and nothing else.
+- Select with `DJANGO_SETTINGS_MODULE`. (A `settings_public` and four production/staging
+  variants were here, selected by nothing; they are gone.)
 
 ### Data Flow: Uploading an Experiment
 
 1. `./mutint import <path> --experiment-id <pk>` (or `--project`/`--experiment`/`--owner`)
-   calls `mutint_import.ale_experiment.resolve_experiment()` then `import_paths()`
+   calls `mutint_import.experiments.resolve_experiment()` then `import_paths()`
 2. Hands each breseq folder to `mutint_import.breseq_folder`, which parses via
    `mutint_import.gd_import` / the `genomediff` package -- the same route a web drop takes,
    through the same `import_registry` handlers
 3. Creates `mutint_experiment` and `mutint_sample` model instances
 4. Ends in `gd_import.run_post_processing`, which asks the rebuild registry to recompute
-   everything derived -- the experiment filter defaults, `mutint_fixation`'s table, then the
+   everything derived -- whatever the installed components registered, then the
    dashboard's installation-wide totals. It asks for whatever is registered, so the needle
    plot, the Overview's counts and convergence dropped off it by ceasing to be registered
    rather than by an edit here. See **Derived data and rebuilds** in the suite `CLAUDE.md`;

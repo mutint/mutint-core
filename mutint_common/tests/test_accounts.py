@@ -338,7 +338,7 @@ class SidebarAccountBlockTestCase(TestCase):
         self.assertNotIn("Django admin", self.sidebar(self.user))
 
     def test_a_staff_user_is_not_either(self):
-        """Django's admin would admit them, and `load_projects` marks every imported user
+        """Django's admin would admit them, and the retired `load_projects` importer marked every user
         staff -- so a staff gate here would offer the link to nearly everyone on a real
         deployment. This is the assertion that keeps the gate at is_superuser."""
         self.assertNotIn("Django admin", self.sidebar(self.staff))

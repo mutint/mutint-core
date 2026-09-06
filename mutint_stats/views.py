@@ -3,11 +3,11 @@ from django.http import HttpResponse, Http404, HttpResponseForbidden
 from django.template import loader
 from django.utils.safestring import mark_safe
 from django.conf import settings
-from mutint_sample.util import get_ordered_reseq_queryset
+from mutint_sample.util import get_ordered_sample_queryset
 from mutint_sample.views import common
 from mutint_stats.util import count_per_population,\
     get_experiment_summary,\
-    get_reseq_experiment_info_list
+    get_sample_info_list
 from mutint_common.util import get_user_context
 import logging
 from mutint_common.context_registry import get_experiment_context
@@ -22,7 +22,6 @@ __author__ = 'pphaneuf'
 STATS_TEMPLATE = "stats.html"
 
 
-# TODO: used by multiple views. Also implemented within ale_exp_filter.py; implement in one location.
 
 
 def stats(request):
@@ -43,19 +42,19 @@ def stats(request):
         # the lines above had already fetched. The duplicate import is gone with it.
         exp_name = experiment.name
         experiment_id=experiment.id
-        ale_number = common.get_population(request)
+        population = common.get_population(request)
 
-        ale_id = ale_number
-        reseq_queryset = get_ordered_reseq_queryset(experiment.id, ale_id)
-        population_counts = count_per_population(reseq_queryset)
-        ale_sum = len(population_counts)
-        flask_sum = 0
-        isolate_sum = 0
+        population = population
+        sample_queryset = get_ordered_sample_queryset(experiment.id, population)
+        population_counts = count_per_population(sample_queryset)
+        population_count = len(population_counts)
+        time_point_count = 0
+        sample_count = 0
         for l in population_counts:
-            flask_sum += l[1]
-            isolate_sum += l[2]
+            time_point_count += l[1]
+            sample_count += l[2]
 
-        experiments_info_list = get_reseq_experiment_info_list(reseq_queryset)
+        sample_info_list = get_sample_info_list(sample_queryset)
 
         # One row, not every MutationCall in the experiment. `get_experiment_summary`
         # rebuilds it first if anything has marked it stale, so the first view after an
@@ -74,10 +73,10 @@ def stats(request):
         # section. See mutint_common/panel_registry.py.
         panels = render_overview_panels(experiment, request)
         context.update({"experiment_name": exp_name,
-                        "population": ale_number,
+                        "population": population,
                         "experiment_id": experiment_id,
-                        "ale_project_name": experiment.project.name,
-                        "ale_project_id": experiment.project.id,
+                        "project_name": experiment.project.name,
+                        "project_id": experiment.project.id,
                         "protein_change_type_count_dict": protein_change_type_count_dict,
                         "protein_change_sum": sum(protein_change_type_count_dict.values()),
                         "call_protein_change_type_count_dict": call_protein_change_type_count_dict,
@@ -86,16 +85,16 @@ def stats(request):
                         "mutation_sum": sum(mutation_type_count_dict.values()),
                         "call_type_count_dict": call_type_count_dict,
                         "mutation_call_sum": sum(call_type_count_dict.values()),
-                        "experiments_info_list": experiments_info_list,
+                        "sample_info_list": sample_info_list,
                         "panels": panels,
                         # `seq_color_set` and `protein_types` stood here and are gone with the
                         # color machinery in mutint_sample.views.common: a palette and a vocabulary
                         # for a chart that was never built, and which no template has ever read.
                         # The functional-change counts below are rendered as a table instead.
                         "population_counts": population_counts,
-                        "ale_sum": ale_sum,
-                        "flask_sum": flask_sum,
-                        "isolate_sum": isolate_sum,
+                        "population_count": population_count,
+                        "time_point_count": time_point_count,
+                        "sample_count": sample_count,
                         "notes": experiment.notes,
                         # Gates the whole experiment_actions block. Delete used to render
                         # for everyone -- the POST refused it, so it was a dead end

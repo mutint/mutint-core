@@ -39,7 +39,7 @@ class RequestVocabularyTestCase(TestCase):
         # selected the page renders no pickers at all, and every assertion below would
         # pass against an empty form.
         return loader.get_template("mutation_matrix/page.html").render(
-            {"experiment_id": 1, "ales": ["1"], "matrix": build_matrix([], OrderedDict()),
+            {"experiment_id": 1, "population_names": ["1"], "matrix": build_matrix([], OrderedDict()),
              "empty_message": "Nothing."}, request)
 
     def test_the_pickers_are_named_from_constants(self):

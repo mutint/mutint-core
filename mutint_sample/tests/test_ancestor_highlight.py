@@ -65,35 +65,35 @@ class TestReachingTheAncestor(BreseqAncestorTestCase):
         self.assertIn("sample_id=%d" % self.sample_b.id, picker)
         self.assertLess(picker.index("sample_id=%d" % self.sample_a.id),
                         picker.index("sample_id=%d" % self.sample_b.id))
-        self.assertIn("reseq-ancestor", picker)
+        self.assertIn("sample-ancestor", picker)
 
     def test_only_the_ancestor_is_tinted_in_the_picker(self):
         self.experiment.set_ancestor(self.sample_a, self.owner)
         picker = self.picker(self.get(sample_id=self.sample_b.id))
-        self.assertEqual(picker.count("reseq-ancestor\""), 1)
+        self.assertEqual(picker.count("sample-ancestor\""), 1)
 
     def test_the_picker_is_untinted_without_a_designation(self):
-        self.assertNotIn("reseq-ancestor", self.picker(self.get()))
+        self.assertNotIn("sample-ancestor", self.picker(self.get()))
 
     def test_the_page_does_not_open_on_the_ancestor(self):
         """Listed first, but not what the page opens on: this view reads as "what evolved in
         this sample", and the one sample where the answer is "nothing, by definition" is a
         poor first thing to show. One click away, which is the point of listing it."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
-        self.assertEqual(self.get().context["selected_reseq"].id, self.sample_b.id)
+        self.assertEqual(self.get().context["selected_sample"].id, self.sample_b.id)
 
     def test_an_experiment_of_only_the_ancestor_still_shows_it(self):
         self.sample_b.delete()
         self.experiment.set_ancestor(self.sample_a, self.owner)
-        self.assertEqual(self.get().context["selected_reseq"].id, self.sample_a.id)
+        self.assertEqual(self.get().context["selected_sample"].id, self.sample_a.id)
 
     def test_its_own_page_still_opens(self):
-        """`_selected_reseq` resolves it outside the picker. Without that fallback a link to
+        """`_selected_sample` resolves it outside the picker. Without that fallback a link to
         the ancestor renders a *different* sample and looks entirely normal doing it."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
         response = self.get(sample_id=self.sample_a.id)
         self.assertEqual(200, response.status_code)
-        self.assertEqual(response.context["selected_reseq"].id, self.sample_a.id)
+        self.assertEqual(response.context["selected_sample"].id, self.sample_a.id)
 
     def test_its_own_page_says_what_it_is(self):
         self.experiment.set_ancestor(self.sample_a, self.owner)
@@ -107,7 +107,7 @@ class TestReachingTheAncestor(BreseqAncestorTestCase):
         foreign = Experiment.objects.get(pk=other["experiment_id"])
         response = self.client.get(BRESEQ, {"experiment_id": foreign.id,
                                             "sample_id": self.sample_a.id})
-        self.assertNotEqual(getattr(response.context.get("selected_reseq"), "id", None),
+        self.assertNotEqual(getattr(response.context.get("selected_sample"), "id", None),
                             self.sample_a.id)
 
 

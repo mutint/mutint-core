@@ -8,10 +8,10 @@
         <div class="form-group">
             <label for="se-name">Sample name</label>
             <input type="text" class="form-control" id="se-name" maxlength="200"
-                   value="{{ sample.reseq.source_name|default_if_none:'' }}" autofocus>
+                   value="{{ sample.source_name|default_if_none:'' }}" autofocus>
             <small class="help-block">
                 Must be unique within the experiment: re-importing finds an existing sample
-                by this name, so two samples sharing one can be merged by a later upload.
+                by this name, so two samples sharing one can be merged by a later import.
             </small>
         </div>
 
@@ -32,9 +32,9 @@
                 {% comment %} Text, not type="number": an ALE is named, not counted --
                    `Ara-1` and `Ara+1` are two LTEE populations and neither is a number.
                    Same for the isolate below. {% endcomment %}
-                <label for="se-ale">Population</label>
-                <input type="text" class="form-control" id="se-ale" maxlength="100"
-                       value="{{ sample.ale }}">
+                <label for="se-population">Population</label>
+                <input type="text" class="form-control" id="se-population" maxlength="100"
+                       value="{{ sample.population }}">
             </div>
             <div class="col-sm-3 form-group">
                 {% comment %} The column is `TimePoint.value`, and "Time point" is what every
@@ -43,16 +43,16 @@
                    it sorts flask numbers and takes the last two to decide what has fixed.
                    Plain text rather than type="number": the steppers are meaningless on a
                    value that runs to five figures. {% endcomment %}
-                <label for="se-flask">Time point</label>
-                <input type="text" class="form-control" id="se-flask" value="{{ sample.flask }}">
+                <label for="se-time-point">Time point</label>
+                <input type="text" class="form-control" id="se-time-point" value="{{ sample.time_point }}">
             </div>
             {% comment %} One box where there were two. A replicate was never a level of
                 anything: `3-30000-1-2` is a sample called `1-2` in flask 30000, so the
                 label is one field and holds whatever the filename spelled. {% endcomment %}
             <div class="col-sm-3 form-group">
-                <label for="se-isolate">Sample</label>
-                <input type="text" class="form-control" id="se-isolate" maxlength="100"
-                       value="{{ sample.isolate }}">
+                <label for="se-sample">Sample</label>
+                <input type="text" class="form-control" id="se-sample" maxlength="100"
+                       value="{{ sample.name }}">
             </div>
         </div>
 
@@ -66,9 +66,9 @@
         </div>
 
         <div class="form-group">
-            <label for="se-isolate-description">Description</label>
-            <input type="text" class="form-control" id="se-isolate-description"
-                   maxlength="300" value="{{ sample.isolate_description }}">
+            <label for="se-description">Description</label>
+            <input type="text" class="form-control" id="se-description"
+                   maxlength="300" value="{{ sample.description }}">
             <small class="help-block">
                 When set, this is what the sample is called throughout the site, in place
                 of its coordinate. Clear it to show the coordinate instead.
@@ -118,11 +118,11 @@
     if (!document.getElementById("se-save")) { return; }
     document.getElementById("se-save").addEventListener("click", function () {
         var data = {
-            sample_name: document.getElementById("se-name").value,
-            ale: document.getElementById("se-ale").value,
-            flask: document.getElementById("se-flask").value,
-            isolate: document.getElementById("se-isolate").value,
-            isolate_description: document.getElementById("se-isolate-description").value,
+            source_name: document.getElementById("se-name").value,
+            population: document.getElementById("se-population").value,
+            time_point: document.getElementById("se-time-point").value,
+            name: document.getElementById("se-sample").value,
+            description: document.getElementById("se-description").value,
             medium_description: document.getElementById("se-rep-description").value
         };
         // The flags, sent both ways for the reason the mixed box is below.

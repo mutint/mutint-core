@@ -53,7 +53,6 @@ MUTATION_TYPE_LABELS = {
 # remaining effect was that adding a token to the vocabulary silently reshuffled a color list
 # nobody rendered, which is a trap laid for precisely the change that added `nonsense`.
 
-# TODO: change all instance of 'seq_experiment' to 'reseq'
 
 
 def get_population_names(experiment_id):
@@ -71,14 +70,14 @@ def get_population_names(experiment_id):
     """
     # Imported here rather than at module scope: `mutint_sample.util` reaches the filter layer,
     # and this module is imported by most of it.
-    from mutint_sample.util import get_ordered_reseq_queryset
+    from mutint_sample.util import get_ordered_sample_queryset
 
     # `.order_by()` strips the sample ordering before the subquery. An ORDER BY left on a
     # queryset handed to `__in` adds its columns to the SELECT, which is an error on some
     # backends and silently wrong on others.
     from mutint_experiment.ordering import natural
 
-    visible = get_ordered_reseq_queryset(experiment_id).order_by().values("pk")
+    visible = get_ordered_sample_queryset(experiment_id).order_by().values("pk")
     # Ordered by the same natural sort a sample list uses. `Population.name` is text, so the
     # database's own order puts ALE 10 above ALE 2 -- and this dropdown had no `order_by` at
     # all, so it was whatever the join happened to produce.
@@ -96,10 +95,10 @@ def get_population(request):
     would have raised a ValueError on the first lineage called `Ara-1`. An empty parameter
     reads as "all" too, so a cleared picker cannot filter to a nonexistent ALE.
     """
-    ale_id = request.GET.get(REQUEST_POPULATION)
-    if ale_id is None or ale_id in ("", "all"):
+    population = request.GET.get(REQUEST_POPULATION)
+    if population is None or population in ("", "all"):
         return None
-    return ale_id
+    return population
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +107,7 @@ def get_sample_type(request):
     """The `?sample_type=` filter, or None for "all".
 
     **An unrecognized value answers None rather than passing through**, and that is a fix
-    rather than politeness. `get_ordered_reseq_queryset` used to read anything that was not
+    rather than politeness. `get_ordered_sample_queryset` used to read anything that was not
     the population token as clonal, so `?sample_type=anything` quietly showed half the
     samples with the picker still reading "All sample types" -- a page that is subset and
     says it is not. Answering None makes the rows and the control agree.
@@ -156,23 +155,7 @@ def no_experiment_selected(request, context, logger, what):
     return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def get_experiment_name(request):
-
-    experiment_id = request.GET.get(REQUEST_EXPERIMENT_ID)
-
-    experiment_name = "All experiments"
-
-    if experiment_id is not None and experiment_id != "all":
-
-        experiment = mutint_experiment.models.Experiment.objects.filter(pk=experiment_id)
-
-        # TODO: should only ever be returning 1 experiment. Implement error handling for more than one returned.
-        experiment_name = experiment[0].name
-
-    return experiment_name
-
-
-# `filter_out_wt_reseq` and `get_wt_reseq_id` stood here. They were the ancestor subtraction
+# `filter_out_wt_sample` and `get_wt_sample_id` stood here. They were the ancestor subtraction
 # that was meant to happen and never did -- neither had a single caller anywhere in the suite,
 # and both compared against `STARTING_STRAIN_ALE_ID`. What they were reaching for is
 # `mutint_experiment/ancestor.py`, which subtracts a designated sample rather than guessing

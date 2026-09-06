@@ -1,22 +1,13 @@
-import os
 import mutint_experiment.models
-import mutint_import.util
 from mutint_import import breseq_folder
 import mutint_sample.models
 import mutint_sample.views.common
-from mutint_import.gdparse.gdparse import gdparse
-from mutint_common.util import _find_between
 import logging
 from mutint_experiment.models import Experiment, Project
 from django.contrib.auth.models import User
 from datetime import datetime
 from mutint_experiment.permissions import set_primary_owner
 
-WILD_TYPE_ALE_NUMBER = 0
-WILD_TYPE_FLASK_NUMBER = 0
-WILD_TYPE_ISOLATE_NUMBER = 1
-WILD_TYPE_TECH_REP_NUMBER = 1
-WILD_TYPE_USER_NAME = "BOP27"
 BRESEQ_OUTPUT_REPORT_DIR = "output/"
 BRESEQ_LOG_FILE = "log.txt"
 METADATA_RELATIVE_PATH = 'metadata/'

@@ -5,7 +5,7 @@
 {% block scripts_and_style %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     {% include "curate/_toolbar.html" with active='history' %}

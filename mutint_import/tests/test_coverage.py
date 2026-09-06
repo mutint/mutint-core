@@ -64,40 +64,40 @@ class BuildPreconditionsTestCase(TestCase):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
-        self.reseq = Sample.objects.get()
+        self.sample = Sample.objects.get()
 
     def test_a_sample_with_no_alignment_says_so(self):
-        self.reseq.bam_stored = False
-        self.reseq.save(update_fields=["bam_stored"])
+        self.sample.bam_stored = False
+        self.sample.save(update_fields=["bam_stored"])
 
         with self.assertRaises(coverage.CoverageError) as caught:
-            coverage.build_for(self.reseq)
+            coverage.build_for(self.sample)
         self.assertIn("no stored alignment", str(caught.exception))
 
     def test_a_flag_without_the_file_behind_it_says_so(self):
-        os.remove(store.sample_path(self.reseq.id, store.SAMPLE_BAM))
+        os.remove(store.sample_path(self.sample.id, store.SAMPLE_BAM))
 
         with self.assertRaises(coverage.CoverageError) as caught:
-            coverage.build_for(self.reseq)
+            coverage.build_for(self.sample)
         self.assertIn("missing", str(caught.exception))
 
     def test_a_missing_reference_index_says_what_it_was_for(self):
         os.remove(store.experiment_reference_path(
-            self.reseq.experiment.id, store.REFERENCE_FAI))
+            self.sample.experiment.id, store.REFERENCE_FAI))
 
         with self.assertRaises(coverage.CoverageError) as caught:
-            coverage.build_for(self.reseq)
+            coverage.build_for(self.sample)
         self.assertIn("reference index", str(caught.exception))
 
     def test_build_quietly_reports_failure_rather_than_raising(self):
         """The import path's contract: coverage is worth having, not worth rejecting a
         sample over."""
-        self.reseq.bam_stored = False
-        self.reseq.save(update_fields=["bam_stored"])
+        self.sample.bam_stored = False
+        self.sample.save(update_fields=["bam_stored"])
 
-        self.assertFalse(coverage.build_quietly(self.reseq))
-        self.reseq.refresh_from_db()
-        self.assertFalse(self.reseq.coverage_stored)
+        self.assertFalse(coverage.build_quietly(self.sample))
+        self.sample.refresh_from_db()
+        self.assertFalse(self.sample.coverage_stored)
 
     def test_a_missing_tool_is_swallowed_by_build_quietly(self):
         with override_settings(MUTINT_TOOLS_DIR=tempfile.mkdtemp()):
@@ -107,7 +107,7 @@ class BuildPreconditionsTestCase(TestCase):
             original = coverage.require
             coverage.require = absent
             try:
-                self.assertFalse(coverage.build_quietly(self.reseq))
+                self.assertFalse(coverage.build_quietly(self.sample))
             finally:
                 coverage.require = original
 

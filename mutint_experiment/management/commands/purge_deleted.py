@@ -70,11 +70,11 @@ class Command(BaseCommand):
                              len(experiments), len(projects)))
 
     def _purge_experiment(self, experiment):
-        from mutint_import.ale_experiment import delete_experiments
+        from mutint_import.experiments import delete_experiments
 
         experiment_id = experiment.id
-        sample_dirs = [store.sample_dir(reseq.id)
-                       for reseq in self._samples(experiment)]
+        sample_dirs = [store.sample_dir(sample.id)
+                       for sample in self._samples(experiment)]
 
         delete_experiments([experiment_id])
 

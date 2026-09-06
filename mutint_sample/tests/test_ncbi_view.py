@@ -43,11 +43,11 @@ class _Fixture(TestCase):
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
 
-        self.reseq = Sample.objects.get()
+        self.sample = Sample.objects.get()
         self.call = MutationCall.objects.filter(
-            sample=self.reseq).first()
+            sample=self.sample).first()
         self.mutation = self.call.mutation
-        self.experiment = self.reseq.experiment
+        self.experiment = self.sample.experiment
         self.reference = ReferenceSequences.objects.get(experiment=self.experiment)
         self.entry = self.reference.seq_ids[0]
 
@@ -250,11 +250,11 @@ class TableLinkTestCase(_Fixture):
 
     def _rows(self):
         from mutint_sample.mutation_matrix import build_matrix
-        from mutint_sample.util import get_reseq_ordered_dict
-        reseq_dict = get_reseq_ordered_dict(self.experiment.id)
+        from mutint_sample.util import get_ordered_sample_dict
+        sample_dict = get_ordered_sample_dict(self.experiment.id)
         calls = list(MutationCall.objects.filter(
-            sample__in=reseq_dict.keys()).select_related("mutation"))
-        return build_matrix(calls, reseq_dict, experiment=self.experiment).rows
+            sample__in=sample_dict.keys()).select_related("mutation"))
+        return build_matrix(calls, sample_dict, experiment=self.experiment).rows
 
     def test_an_unverified_contig_is_still_linked(self):
         """The bootstrapping fix. Gating this link on verification made the only page
@@ -293,7 +293,7 @@ class BreseqTableLinkTestCase(_Fixture):
     def _html(self):
         return self.client.get("/mutations/breseq", {
             "experiment_id": self.experiment.id,
-            "sample_id": self.reseq.id}).content.decode("utf-8")
+            "sample_id": self.sample.id}).content.decode("utf-8")
 
     def test_the_contig_is_linked_before_it_is_verified(self):
         self.assertIn("/mutations/ncbi?mutation_id=", self._html())
@@ -418,7 +418,7 @@ class BootstrapJourneyTestCase(_Fixture):
         # 2. So does the mutation table's Reference column, with nothing yet verified.
         table = self.client.get("/mutations/breseq", {
             "experiment_id": self.experiment.id,
-            "sample_id": self.reseq.id}).content.decode("utf-8")
+            "sample_id": self.sample.id}).content.decode("utf-8")
         self.assertIn("/mutations/ncbi?mutation_id=", table)
 
         # 3. Stating an accession that really is this sequence verifies it.

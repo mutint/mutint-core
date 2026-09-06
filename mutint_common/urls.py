@@ -39,7 +39,6 @@ def get_core_urlpatterns():
         re_path(r'^sample/', include('mutint_experiment.sample_urls')),
         re_path(r'^project/', include('mutint_experiment.project_urls')),
         re_path(r'^group/', include('mutint_experiment.group_urls')),
-        re_path(r'^bibliome/', include('mutint_bibliome.urls')),
         re_path(r'^export/', include('mutint_export.urls')),
         re_path(r'^import/', include('mutint_import.urls')),
         re_path(r'^jobs/', include('mutint_jobs.urls')),

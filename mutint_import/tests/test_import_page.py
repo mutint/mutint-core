@@ -49,27 +49,32 @@ class ImportPageTestCase(TestCase):
         self.assertNotIn('id="ref-person"', html)
 
     def test_the_tabs_are_the_registered_ways_in_in_order(self):
-        """One tab per core type, in the order core registered them, each landing on this
-        page with that type -- and the first is the page's default."""
+        """One tab per registered type, in registration order, each landing on this page
+        with that type -- and the first is the page's default. Asserted against the registry
+        rather than a list of core's own four, because an assembled project's plugins add
+        tabs of their own (mutint-breseq's Run breseq) and this test runs there too."""
         html = self.client.get("/import/", {"experiment_id": self.experiment.id}
                                ).content.decode("utf-8")
 
         # No Auto-detect and no dropdown: the type is the tab, never guessed.
         self.assertNotIn("Auto-detect", html)
-        self.assertNotIn('<select class="form-control" id="add-type"', html)
+        self.assertNotIn('<select class="form-control" id="import-type"', html)
         tabs = _tabs(html)
+        from mutint_common.import_tab_registry import get_import_tabs
+        self.assertEqual([tab["label"] for tab in get_import_tabs(self.experiment.id)],
+                         [t[1] for t in tabs])
         self.assertEqual(["Reference Sequence", "Genome Diff", "Variant Call Format",
-                          "Results Folder"], [t[1] for t in tabs])
+                          "Results Folder"], [t[1] for t in tabs][:4])
         self.assertEqual("/import/?experiment_id=%d&amp;tab=genomediff" % self.experiment.id,
                          tabs[1][0])
-        self.assertIn('id="add-type" value="reference"', html)
+        self.assertIn('id="import-type" value="reference"', html)
         active = html.split('<li class="active">')[1].split("</li>")[0]
         self.assertIn("tab=reference", active)
 
     def test_a_tab_chooses_its_type(self):
         html = self.client.get("/import/", {"experiment_id": self.experiment.id,
                                             "tab": "breseq_folder"}).content.decode("utf-8")
-        self.assertIn('id="add-type" value="breseq_folder"', html)
+        self.assertIn('id="import-type" value="breseq_folder"', html)
         self.assertIn("breseq data folders", html)
         active = html.split('<li class="active">')[1].split("</li>")[0]
         self.assertIn("Results Folder", active)
@@ -285,10 +290,10 @@ class ImportTypesOfferedTestCase(TestCase):
 
     def _offers_a_form(self, tab):
         html = self._html(tab)
-        return 'id="add-form"' in html and 'id="add-not-offered"' not in html
+        return 'id="import-form"' in html and 'id="import-not-offered"' not in html
 
     def _type_chosen(self, tab):
-        return self._html(tab).split('id="add-type" value="')[1].split('"')[0]
+        return self._html(tab).split('id="import-type" value="')[1].split('"')[0]
 
     # --- with no reference yet -----------------------------------------------
 
@@ -323,7 +328,7 @@ class ImportTypesOfferedTestCase(TestCase):
     def test_genomediff_becomes_available(self):
         self._establish_reference()
         self.assertTrue(self._offers_a_form("genomediff"))
-        self.assertNotIn('id="add-not-offered"', self._html("genomediff"))
+        self.assertNotIn('id="import-not-offered"', self._html("genomediff"))
 
     def test_the_unscoped_types_endpoint_stays_unfiltered(self):
         """It has no experiment to scope by, and the handlers enforce the rules anyway."""

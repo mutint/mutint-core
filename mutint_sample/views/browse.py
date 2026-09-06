@@ -28,14 +28,14 @@ from mutint_sample.locus import LOCUS_BUFFER_BASES, mutation_extent
 from mutint_sample.tracks import MUTATION_TRACK_ID, database_tracks
 from mutint_sample.models import (ReferenceSequences, Mutation, MutationCall,
                               Sample)
-from mutint_sample.util import get_mutation_call_queryset, get_ordered_reseq_queryset
+from mutint_sample.util import get_mutation_call_queryset, get_ordered_sample_queryset
 from mutint_experiment import paths
 
 logger = logging.getLogger(__name__)
 
 
 def _resolve(request):
-    """`(reseq, mutation, observed)` from either spelling of this page's address.
+    """`(sample, mutation, observed)` from either spelling of this page's address.
 
     Two spellings, because the page is about a mutation *in a sample* and only one of those
     pairs is always a stored row:
@@ -68,7 +68,7 @@ def _resolve(request):
     try:
         # `experiment` is a property over time_point -> population, not a
         # column, so the chain is named the way `mutint_sample.util` names it.
-        reseq = (Sample.objects
+        sample = (Sample.objects
                  .select_related(paths.to_experiment())
                  .get(pk=request.GET.get("sample_id")))
         mutation = Mutation.objects.get(pk=request.GET.get("mutation_id"))
@@ -85,15 +85,15 @@ def _resolve(request):
     # mutation quite happily when a table links to one. Being stricter here would refuse an
     # address the rest of the product hands out.
     if not get_mutation_call_queryset(
-            reseq.experiment.id).filter(mutation=mutation).exists():
+            sample.experiment.id).filter(mutation=mutation).exists():
         raise Http404("That mutation is not in this sample's experiment.")
 
     call = (MutationCall.objects
-                .filter(mutation=mutation, sample=reseq).first())
-    return reseq, mutation, call
+                .filter(mutation=mutation, sample=sample).first())
+    return sample, mutation, call
 
 
-def _row_call(reseq, mutation, call):
+def _row_call(sample, mutation, call):
     """What `build_rows` is handed, which is a MutationCall even when there is none.
 
     A mutation the sample does not call has no row to show, and an **unsaved**
@@ -106,10 +106,10 @@ def _row_call(reseq, mutation, call):
     """
     if call is not None:
         return call
-    return MutationCall(mutation=mutation, sample=reseq)
+    return MutationCall(mutation=mutation, sample=sample)
 
 
-def browse_url_for(mutation, reseq, call):
+def browse_url_for(mutation, sample, call):
     """This page's address for a mutation in a sample, in whichever spelling fits.
 
     The stored-call spelling is preferred where there is one, so a link copied out of
@@ -119,14 +119,14 @@ def browse_url_for(mutation, reseq, call):
         return "%s?%s" % (reverse("browse_mutation"),
                           urlencode({"mutation_call_id": call.pk}))
     return "%s?%s" % (reverse("browse_mutation"),
-                      urlencode({"mutation_id": mutation.pk, "sample_id": reseq.pk}))
+                      urlencode({"mutation_id": mutation.pk, "sample_id": sample.pk}))
 
 
 def browse_mutation(request):
     """igv.js at one mutation's position, starting with the sample that was clicked."""
-    reseq, mutation, call = _resolve(request)
+    sample, mutation, call = _resolve(request)
 
-    experiment = reseq.experiment
+    experiment = sample.experiment
     if not _may_view(request.user, experiment):
         return HttpResponse(
             loader.get_template("403.html").render(get_user_context(request.user), request),
@@ -135,29 +135,29 @@ def browse_mutation(request):
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
-        "ale_project_name": experiment.project.name if experiment.project else "",
-        "ale_project_id": experiment.project_id,
+        "project_name": experiment.project.name if experiment.project else "",
+        "project_id": experiment.project_id,
         "title": "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.start_position),
         "template_header": "Alignments",
         "mutation": mutation,
         "mutation_call": call,
-        "sample_name": reseq.label,
+        "source_name": sample.label,
         # For the way back: the per-sample page, on the sample this browser is showing,
         # rather than the cross-experiment comparison it used to land on.
-        "sample_id": reseq.id,
+        "sample_id": sample.id,
         # The mutation is described by breseq's own table rather than by a sentence of this
         # page's own, so the row reads exactly as it does on the Samples page. One row, and
         # no evidence link -- its destination is the page you are already on.
-        "rows": build_rows([_row_call(reseq, mutation, call)],
+        "rows": build_rows([_row_call(sample, mutation, call)],
                            refseq_url=_ncbi_url()),
         # Which samples call it, for the menu's `*` -- and read back by the switch endpoint,
         # so the flags mean the same thing after a click as they did on load.
         "calling": sorted(_samples_calling(mutation)),
-        "is_mixed": is_mixed(reseq),
+        "is_mixed": is_mixed(sample),
         "locus": _locus(mutation),
         # Each state the template renders is decided here rather than in the template, so the
         # reasons stay next to the data that determines them.
-        "has_alignment": bool(reseq.bam_stored),
+        "has_alignment": bool(sample.bam_stored),
         "reference": _reference_urls(experiment),
         # The mutations themselves, drawn from the database rather than from a file. Until
         # this existed igv was handed `tracks: []` and the only thing the database
@@ -167,7 +167,7 @@ def browse_mutation(request):
         # Named here rather than written out in the template, so the click handler and the
         # track config cannot come to disagree about which track is the clickable one.
         "mutations_track_id": MUTATION_TRACK_ID,
-        "samples": _sample_tracks(experiment, mutation, current_id=reseq.id),
+        "samples": _sample_tracks(experiment, mutation, current_id=sample.id),
     })
 
     template = loader.get_template("browse/browse.html")
@@ -188,20 +188,20 @@ def browse_at(request):
     A GET, and it writes nothing. `_resolve` and `_may_view` are shared with the page, so
     there is one answer to "does this pair exist" and one to "may you see it".
     """
-    reseq, mutation, call = _resolve(request)
+    sample, mutation, call = _resolve(request)
 
-    if not _may_view(request.user, reseq.experiment):
+    if not _may_view(request.user, sample.experiment):
         return JsonResponse({"error": "You do not have access to this experiment."}, status=403)
 
-    rows = build_rows([_row_call(reseq, mutation, call)], refseq_url=_ncbi_url())
+    rows = build_rows([_row_call(sample, mutation, call)], refseq_url=_ncbi_url())
     table_html = loader.get_template("breseq_table/_mutation_table.html").render(
-        {"rows": rows, "is_mixed": is_mixed(reseq), "empty_message": ""}, request)
+        {"rows": rows, "is_mixed": is_mixed(sample), "empty_message": ""}, request)
 
     return JsonResponse({
         "mutation_id": mutation.pk,
         "mutation_call_id": call.pk if call is not None else None,
-        "url": browse_url_for(mutation, reseq, call),
-        "title": "%s %s:%s" % (reseq.experiment.name,
+        "url": browse_url_for(mutation, sample, call),
+        "title": "%s %s:%s" % (sample.experiment.name,
                                mutation.seq_id, mutation.start_position),
         "calling": sorted(_samples_calling(mutation)),
         "table_html": table_html,
@@ -284,27 +284,27 @@ def _reference_urls(experiment):
     return config
 
 
-def _sample_track(reseq):
+def _sample_track(sample):
     """One alignment track, or None when this sample has no stored alignment.
 
     Only the breseq-folder importer stores a BAM, so a bare .gd or legacy CLI import has
     none. `bam_stored` implies both the BAM and its index exist: the importer rejects a BAM
     without a .bai rather than storing it half-usable.
     """
-    if not reseq.bam_stored:
+    if not sample.bam_stored:
         return None
     return {
-        "id": reseq.id,
-        "name": reseq.label,
+        "id": sample.id,
+        "name": sample.label,
         # indexURL must be explicit: the store renames breseq's data/reference.bam.bai to
         # aligned.bam.bai, so igv.js's default "<url>.bai" derivation would be wrong.
-        "url": reverse("sample_bam", args=[reseq.id]),
-        "indexURL": reverse("sample_bai", args=[reseq.id]),
+        "url": reverse("sample_bam", args=[sample.id]),
+        "indexURL": reverse("sample_bai", args=[sample.id]),
         # The coverage BigWig, when one has been derived. Samples imported before coverage
         # existed have none until `./mutint coverage` runs, and the page simply gives them no
         # coverage track.
-        "coverageURL": (reverse("sample_bigwig", args=[reseq.id])
-                        if reseq.coverage_stored else None),
+        "coverageURL": (reverse("sample_bigwig", args=[sample.id])
+                        if sample.coverage_stored else None),
     }
 
 
@@ -314,18 +314,18 @@ def _sample_tracks(experiment, mutation, current_id):
     The sample being viewed is in the list like any other, marked `is_current` only so the
     template can check its box: it is shown and hidden by the same control as the rest.
 
-    Ordered by `get_ordered_reseq_queryset` rather than by a query of this view's own, so the
+    Ordered by `get_ordered_sample_queryset` rather than by a query of this view's own, so the
     menu reads in the same A/F/I/R order as the mutation table's columns and the Samples
     page's picker.
     """
     called = _samples_calling(mutation)
-    return [dict(_sample_track(reseq),
-                 has_mutation=reseq.id in called,
-                 is_current=reseq.id == current_id)
+    return [dict(_sample_track(sample),
+                 has_mutation=sample.id in called,
+                 is_current=sample.id == current_id)
             # `include_ancestor=True`: the browser inspects evidence rather than analyzing
             # it, and the ancestor's own evidence link lands here. Hiding its track would
             # leave `is_current` matching nothing on the very sample that was clicked.
-            for reseq in get_ordered_reseq_queryset(
+            for sample in get_ordered_sample_queryset(
                 experiment.id, include_ancestor=True).filter(bam_stored=True)]
 
 

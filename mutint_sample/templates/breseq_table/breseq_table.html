@@ -13,7 +13,7 @@
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
     <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
 {% endblock %}
-{% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
     <div class="row breseq-picker">
@@ -27,10 +27,10 @@
            either way, and links need no script at all -- Bootstrap's data-api opens the menu
            and the hrefs do the rest, which is what the <noscript> submit button was there
            for. The query is the same pair the form used to submit. {% endcomment %}
-        <div class="btn-group" id="reseq_picker">
+        <div class="btn-group" id="sample_picker">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
                     aria-haspopup="true" aria-expanded="false">
-                {{ selected_reseq.label }} <span class="caret"></span>
+                {{ selected_sample.label }} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu mutint-menu">
                 {% comment %} The designated ancestor is listed, first, and tinted the same
@@ -39,9 +39,9 @@
                    nothing is contaminated, and it is the row the others are read against.
                    The tint is the same color as `ancestral_table_row` so the two read as
                    one statement rather than two coincidences. {% endcomment %}
-                {% for reseq in reseq_list %}
-                    <li class="{% if reseq.id == selected_sample_id %}active {% endif %}{% if reseq.id == ale_experiment_ancestor_id %}reseq-ancestor{% endif %}">
-                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ reseq.id }}">{{ reseq.label }}{% if reseq.id == ale_experiment_ancestor_id %} <span class="reseq-ancestor-tag">ancestor</span>{% endif %} {% sample_flag_badges reseq %}</a>
+                {% for sample in sample_list %}
+                    <li class="{% if sample.id == selected_sample_id %}active {% endif %}{% if sample.id == experiment_ancestor_id %}sample-ancestor{% endif %}">
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">{{ sample.label }}{% if sample.id == experiment_ancestor_id %} <span class="sample-ancestor-tag">ancestor</span>{% endif %} {% sample_flag_badges sample %}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -74,8 +74,8 @@
         {% endif %}
     </div>
 
-    {% if not selected_reseq %}
-        <p>This experiment has no resequencing samples to show.</p>
+    {% if not selected_sample %}
+        <p>This experiment has no samples to show.</p>
     {% else %}
         {% comment %} This page honours the reader's filter like the shared tables do, so it
            carries the same controls and says the same thing about itself. The *form* variant,

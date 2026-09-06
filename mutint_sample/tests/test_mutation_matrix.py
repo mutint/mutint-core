@@ -17,7 +17,7 @@ from mutint_import import breseq_folder
 from mutint_import.tests import breseq_fixture
 from mutint_sample import mutation_matrix
 from mutint_sample.models import Mutation, MutationCall
-from mutint_sample.util import get_all_calls_filtered, get_reseq_ordered_dict
+from mutint_sample.util import get_all_calls_filtered, get_ordered_sample_dict
 
 GD_FIXED = """#=GENOME_DIFF\t1.0
 #=REFSEQ\ttest_ref
@@ -49,11 +49,11 @@ class _Fixture(TestCase):
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
         from mutint_experiment.models import Experiment
         self.experiment = Experiment.objects.get()
-        self.reseq_dict = get_reseq_ordered_dict(self.experiment.id)
+        self.sample_dict = get_ordered_sample_dict(self.experiment.id)
         self.calls = get_all_calls_filtered(self.experiment.id)
 
     def matrix(self, **kwargs):
-        return mutation_matrix.build_matrix(self.calls, self.reseq_dict,
+        return mutation_matrix.build_matrix(self.calls, self.sample_dict,
                                             experiment=self.experiment, **kwargs)
 
     def row(self, matrix, position):
@@ -77,10 +77,10 @@ class ColumnsTestCase(_Fixture):
 
     def test_one_sample_column_per_listed_sample_in_order(self):
         matrix = self.matrix()
-        self.assertEqual([s.id for s in self.reseq_dict.values()],
+        self.assertEqual([s.id for s in self.sample_dict.values()],
                          [s.id for s in matrix.samples])
-        self.assertEqual(list(range(len(self.reseq_dict))), [s.index for s in matrix.samples])
-        self.assertEqual(len(self.reseq_dict) + 7, matrix.width)
+        self.assertEqual(list(range(len(self.sample_dict))), [s.index for s in matrix.samples])
+        self.assertEqual(len(self.sample_dict) + 7, matrix.width)
 
 
 class RowsTestCase(_Fixture):
@@ -108,7 +108,7 @@ class RowsTestCase(_Fixture):
     def test_a_cell_links_to_the_browser_only_when_the_sample_has_reads(self):
         row = self.row(self.matrix(), 100)
         self.assertIn("/mutations/browse?mutation_call_id=", row["samples"][0]["u"])
-        first = list(self.reseq_dict.values())[0]
+        first = list(self.sample_dict.values())[0]
         first.bam_stored = False
         row = self.row(self.matrix(), 100)
         self.assertNotIn("u", row["samples"][0])
@@ -118,7 +118,7 @@ class RowsTestCase(_Fixture):
         mutation = Mutation.objects.create(
             experiment=self.experiment, start_position=4242, seq_id="test_ref",
             mutation_type="SNP", sequence_change="A->G", gene="thrA")
-        MutationCall.objects.create(sample=list(self.reseq_dict.values())[0],
+        MutationCall.objects.create(sample=list(self.sample_dict.values())[0],
                                     mutation=mutation, present=True, frequency=None)
         self.calls = get_all_calls_filtered(self.experiment.id)
         cell = self.row(self.matrix(), 4242)["samples"][0]
@@ -126,7 +126,7 @@ class RowsTestCase(_Fixture):
         self.assertEqual(1.0, cell["s"])
 
     def test_a_mutation_carried_only_by_an_unlisted_sample_has_no_row(self):
-        only_first = OrderedDict(list(self.reseq_dict.items())[:1])
+        only_first = OrderedDict(list(self.sample_dict.items())[:1])
         matrix = mutation_matrix.build_matrix(self.calls, only_first, experiment=self.experiment)
         positions = {r["position_sort"] for r in matrix.rows}
         self.assertIn(100, positions)
@@ -135,7 +135,7 @@ class RowsTestCase(_Fixture):
         mutation = Mutation.objects.create(
             experiment=self.experiment, start_position=9000, seq_id="test_ref",
             mutation_type="SNP", sequence_change="A->G", gene="thrA")
-        MutationCall.objects.create(sample=list(self.reseq_dict.values())[0],
+        MutationCall.objects.create(sample=list(self.sample_dict.values())[0],
                                     mutation=mutation, present=False)
         self.calls = get_all_calls_filtered(self.experiment.id)
         self.assertNotIn(9000, {r["position_sort"] for r in self.matrix().rows})
@@ -168,12 +168,12 @@ class RowsTestCase(_Fixture):
         self.assertEqual(("AMP", "SNP"), self.matrix().types)
 
     def test_no_experiment_means_no_experiment_id(self):
-        matrix = mutation_matrix.build_matrix(self.calls, self.reseq_dict)
+        matrix = mutation_matrix.build_matrix(self.calls, self.sample_dict)
         self.assertIsNone(matrix.experiment_id)
 
     def test_the_palette_colors_by_population_in_order_of_first_appearance(self):
         seen, expected = [], []
-        for sample in self.reseq_dict.values():
+        for sample in self.sample_dict.values():
             if sample.population_id not in seen:
                 seen.append(sample.population_id)
             expected.append(seen.index(sample.population_id))
@@ -205,7 +205,7 @@ class RowsTestCase(_Fixture):
     def test_each_sample_links_to_its_own_mutations_page(self):
         """The experiment given, when there is one; the sample's own when there is not --
         the cross-experiment page has none to give, and the link must still be right."""
-        for matrix in (self.matrix(), mutation_matrix.build_matrix(self.calls, self.reseq_dict)):
+        for matrix in (self.matrix(), mutation_matrix.build_matrix(self.calls, self.sample_dict)):
             for sample in matrix.samples:
                 self.assertEqual("/mutations/breseq?experiment_id=%d&sample_id=%d"
                                  % (self.experiment.id, sample.id), sample.url)
@@ -216,17 +216,17 @@ class PartialTestCase(_Fixture):
         request = RequestFactory().get("/")
         request.user = user or AnonymousUser()
         SessionMiddleware(lambda r: None).process_request(request)
-        context = {"experiment_id": self.experiment.id, "ales": ["1"],
+        context = {"experiment_id": self.experiment.id, "population_names": ["1"],
                    "matrix": self.matrix(), "empty_message": "Nothing."}
         context.update(extra)
         return loader.get_template("mutation_matrix/page.html").render(context, request)
 
     def test_the_header_has_one_th_per_column_each_with_its_class(self):
         html = self._render()
-        self.assertEqual(7 + len(self.reseq_dict), html.count("<th "))
+        self.assertEqual(7 + len(self.sample_dict), html.count("<th "))
         for column in mutation_matrix.DESCRIPTIVE:
             self.assertIn('<th class="%s" data-key="%s"' % (column.css_class, column.key), html)
-        self.assertEqual(len(self.reseq_dict), html.count('class="breseq-sample sample-palette-0"'))
+        self.assertEqual(len(self.sample_dict), html.count('class="breseq-sample sample-palette-0"'))
 
     def test_the_menus_list_columns_and_samples(self):
         html = self._render()
@@ -234,7 +234,7 @@ class PartialTestCase(_Fixture):
         self.assertIn('data-role="samples"', html)
         self.assertIn('<li data-value="description">', html)   # not active
         self.assertIn('<li data-value="gene" class="active">', html)
-        for sample in self.reseq_dict.values():
+        for sample in self.sample_dict.values():
             self.assertIn('<li data-value="%d" class="active">' % sample.id, html)
         self.assertIn('data-samples="all"', html)
         self.assertIn('data-samples="none"', html)
@@ -286,8 +286,8 @@ class PartialTestCase(_Fixture):
         linking to that sample's page rather than sorting anything."""
         html = self._render()
         self.assertNotIn("mutation-matrix-scroll", html)
-        self.assertEqual(len(self.reseq_dict), html.count('class="mutation-matrix-vertical"'))
-        for sample in self.reseq_dict.values():
+        self.assertEqual(len(self.sample_dict), html.count('class="mutation-matrix-vertical"'))
+        for sample in self.sample_dict.values():
             self.assertIn('href="/mutations/breseq?experiment_id=%d&amp;sample_id=%d"'
                           % (self.experiment.id, sample.id), html)
 

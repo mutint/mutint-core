@@ -29,7 +29,7 @@ empty tag id.
 ## Versions are frozen, deliberately
 
 These are byte-for-byte what the CDNs served, at the versions the templates already asked for --
-jQuery 1.12.4, Bootstrap 3.3.7, DataTables 1.10.x, select2 4.0.3. Several are long EOL. Making
+jQuery 1.12.4, Bootstrap 3.3.7, DataTables 1.10.x. Several are long EOL. Making
 the app work offline and modernising a decade-old front end are separate problems, and doing
 both at once leaves no way to tell which half broke a page.
 
@@ -60,12 +60,14 @@ whatever unpkg served that day (2.1.2 when vendored). A major release would have
 - `?v={{ aledb_version }}` cache-busting is **not** used on these, and should not be: every path
   already carries its version, so a release cannot serve half of one version and half of another.
 
-## Not vendored, and still dead
+## Removed rather than vendored
 
-`bio-pv.min.js` (146 KB) and `runs.js` / `experiment_selector.js` are committed here and
-referenced by no template. Left in place deliberately; removing them is its own change.
-`jquery-1.9.1.min.js` **was** removed, because leaving a dead 1.9.1 beside a live vendored
-1.12.4 is a trap rather than merely clutter.
+`bio-pv.min.js`, `runs.js`, `experiment_selector.js`, `csv.min.js`, `bootstrap-select`,
+`select2`, `bootstrap-toggle`, `pdfmake` and `jszip` were all here and are gone: each was
+referenced by no template, or loaded by one that never called it (the DataTables buttons on the
+project and experiment pages are Select and a custom Export collection, so the PDF and Excel
+export libraries they pulled in had no button behind them). `jquery-1.9.1.min.js` went earlier,
+because a dead 1.9.1 beside a live vendored 1.12.4 is a trap rather than merely clutter.
 
 ## Manifest
 
@@ -81,10 +83,6 @@ Source URL is where each file came from. Regenerate a hash with
 | `bootstrap-3.3.7/fonts/glyphicons-halflings-regular.woff` | 23424 | `a26394f7ede100ca118eff2eda08596275a9839b959c226e15439557a5a80742` |
 | `bootstrap-3.3.7/fonts/glyphicons-halflings-regular.woff2` | 18028 | `fe185d11a49676890d47bb783312a0cda5a44c4039214094e7957b4c040ef11c` |
 | `bootstrap-3.3.7/js/bootstrap.min.js` | 37045 | `53964478a7c634e8dad34ecc303dd8048d00dce4993906de1bacf67f663486ef` |
-| `bootstrap-select-1.12.4/css/bootstrap-select.min.css` | 6655 | `feeb377a08b6715a7498491547c727a8bb2e0d8e819ab0eebd33d4b84af51c94` |
-| `bootstrap-select-1.12.4/js/bootstrap-select.min.js` | 33379 | `d7d277ad3ded41d89d82daaa750df136efbe19dec4a0ffda83fd31d651e2d316` |
-| `bootstrap-toggle-2.2.2/css/bootstrap-toggle.min.css` | 1590 | `ac3597e97ae646db56c9505e3e19aba479e767510f98ce96411425ea1d21ec9f` |
-| `bootstrap-toggle-2.2.2/js/bootstrap-toggle.min.js` | 4129 | `799360060bad2c8e3bacace97d48e2fdd0fdb7a2d1b36808dd8a9729da033a6a` |
 | `datatables-1.10.12/js/dataTables.bootstrap.min.js` | 1960 | `f7462a9c7a26e23f0e85c110832508d888661984c13b9e0075c7f7603654f713` |
 | `datatables-1.10.12/js/jquery.dataTables.min.js` | 82638 | `4d7e8f389436bb9fda2661d327f5d42f9bd609bb8ec34010760504ce4e2f60c7` |
 | `datatables-bundle-bs336/datatables.min.css` **(rewritten)** | 128283 | `11b5b5436b603411d06306d0052bc9c1972a88a30191a6f0cc4610b4b4bb60e2` |
@@ -109,13 +107,8 @@ Source URL is where each file came from. Regenerate a hash with
 | `font-awesome-4.6.3/fonts/fontawesome-webfont.woff` | 90412 | `adbc4f95eb6d7f2738959cf0ecbc374672fce47e856050a8e9791f457623ac2c` |
 | `font-awesome-4.6.3/fonts/fontawesome-webfont.woff2` | 71896 | `7dacf83f51179de8d7980a513e67ab3a08f2c6272bb5946df8fd77c0d1763b73` |
 | `jquery-1.12.4/jquery.min.js` | 97163 | `668b046d12db350ccba6728890476b3efee53b2f42dbb84743e5e9f1ae0cc404` |
-| `jszip-3.1.3/jszip.js` | 364732 | `992d96f77099b1969244a244f72db0ecc9e7947d8472ca527f9a181f1d64124c` |
 | `metismenu-2.5.2/metisMenu.min.css` | 1524 | `5e3674cf5744b79ac6ea6a8c121cbeb2c5225fef37b6280cb118505f59eabcab` |
 | `metismenu-2.5.2/metisMenu.min.js` | 5806 | `16fb464c98026cf996af40dd22c3167ae931a0ec568564c28d3df8e704e3e58f` |
-| `pdfmake-0.1.36/pdfmake.min.js` | 970387 | `071a29c794ab8b2a52f1e139aabdfc06f6a9d99371dc2525f4767ab1ec01b5f9` |
-| `pdfmake-0.1.36/vfs_fonts.js` | 870284 | `5cb81fa70754070475938e9859359a268122c9b62cac154ebb8e120e812662cc` |
-| `select2-4.0.3/css/select2.min.css` | 15196 | `c493991dfa712d1fee861d41c18152e5f8663807484506a23ae97917f6fbbf7b` |
-| `select2-4.0.3/js/select2.min.js` | 66664 | `fa659dfc6ebd4b8aad80fa304842c879502fefe16e2fcef55976a89605e7af04` |
 | `sweetalert-2.1.2/sweetalert.min.js` | 40808 | `2ac46ebee46d515be86deeba385b4e41f8cff160364b362c9a6e153df327c66b` |
 
 ### Source URLs
@@ -129,10 +122,6 @@ Source URL is where each file came from. Regenerate a hash with
 | `bootstrap-3.3.7/fonts/glyphicons-halflings-regular.woff` | https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/fonts/glyphicons-halflings-regular.woff |
 | `bootstrap-3.3.7/fonts/glyphicons-halflings-regular.woff2` | https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/fonts/glyphicons-halflings-regular.woff2 |
 | `bootstrap-3.3.7/js/bootstrap.min.js` | https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js |
-| `bootstrap-select-1.12.4/css/bootstrap-select.min.css` | https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/css/bootstrap-select.min.css |
-| `bootstrap-select-1.12.4/js/bootstrap-select.min.js` | https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/js/bootstrap-select.min.js |
-| `bootstrap-toggle-2.2.2/css/bootstrap-toggle.min.css` | https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css |
-| `bootstrap-toggle-2.2.2/js/bootstrap-toggle.min.js` | https://gitcdn.github.io/bootstrap-toggle/2.2.2/js/bootstrap-toggle.min.js |
 | `datatables-1.10.12/js/dataTables.bootstrap.min.js` | https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap.min.js |
 | `datatables-1.10.12/js/jquery.dataTables.min.js` | https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js |
 | `datatables-bundle-bs336/datatables.min.css` | https://cdn.datatables.net/v/bs-3.3.6/jszip-2.5.0/pdfmake-0.1.18/dt-1.10.12/b-1.2.2/b-colvis-1.2.2/b-flash-1.2.2/b-html5-1.2.2/b-print-1.2.2/cr-1.3.2/fh-3.1.2/datatables.min.css |
@@ -155,13 +144,8 @@ Source URL is where each file came from. Regenerate a hash with
 | `font-awesome-4.6.3/fonts/fontawesome-webfont.woff` | https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/fonts/fontawesome-webfont.woff |
 | `font-awesome-4.6.3/fonts/fontawesome-webfont.woff2` | https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/fonts/fontawesome-webfont.woff2 |
 | `jquery-1.12.4/jquery.min.js` | https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js |
-| `jszip-3.1.3/jszip.js` | https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.js |
 | `metismenu-2.5.2/metisMenu.min.css` | https://cdnjs.cloudflare.com/ajax/libs/metisMenu/2.5.2/metisMenu.min.css |
 | `metismenu-2.5.2/metisMenu.min.js` | https://cdnjs.cloudflare.com/ajax/libs/metisMenu/2.5.2/metisMenu.min.js |
-| `pdfmake-0.1.36/pdfmake.min.js` | https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/pdfmake.min.js |
-| `pdfmake-0.1.36/vfs_fonts.js` | https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/vfs_fonts.js |
-| `select2-4.0.3/css/select2.min.css` | https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css |
-| `select2-4.0.3/js/select2.min.js` | https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js |
 | `sweetalert-2.1.2/sweetalert.min.js` | https://unpkg.com/sweetalert@2.1.2/dist/sweetalert.min.js |
 
 ## Vendored before this file existed
@@ -183,14 +167,11 @@ The lesson this file exists for: the version was recoverable only because the ex
 build could be fetched and diffed. Record the source URL when vendoring and nobody has to do
 that again.
 
-`bio-pv.min.js`, `csv.min.js` and the sb-admin-2 theme remain unrecorded; `bio-pv.min.js` is
-referenced by no template.
+The sb-admin-2 theme remains unrecorded.
 
 | file | version | bytes | sha256 | source |
 |---|---|---|---|---|
 | `../js/igv.min.js` | **3.8.5** | 1502117 | `62fc5c7860306e7567e191e997fac2391d3a80e05fdd832619082f2a60c588cf` | https://unpkg.com/igv@3.8.5/dist/igv.min.js |
-| `../js/bio-pv.min.js` | *unknown* | 146432 | `bf03692bc2440179584bbf10d612cf8ead92b566f9751f7c6f28c9ff1b0b7bcb` | *unrecorded* |
-| `../js/csv.min.js` | *unknown* | 5030 | `781a36a1356cf67eddd6d349b5faffc027e8618d3bcbb16bec13edc525c332b6` | *unrecorded* |
 | `../js/sb-admin-2.min.js` | *unknown* | 845 | `634679a53e2a3c66a85121e8c56f89f1f2168d09e373bbf4dd6044527b7d490d` | *unrecorded* |
 | `../css/sb-admin-2.css` | *unknown* | 8303 | `f214c13c1eaabd8ed93c9c3753bfd54d3c82818a00949c5263c1d1da0cc3994e` | *unrecorded* |
 

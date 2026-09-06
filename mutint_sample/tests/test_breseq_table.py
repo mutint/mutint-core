@@ -52,7 +52,7 @@ class BreseqTablePageTestCase(TestCase):
             [_uploaded_as(SYNTHETIC_GD, "1-1-1-1.gd")],
             project_name="syn project", experiment_name="syn exp", owner_name="tester")
 
-        self.reseq = Sample.objects.get()
+        self.sample = Sample.objects.get()
         self.client.force_login(self.user)
 
     def get_page(self, **params):
@@ -135,13 +135,13 @@ class BreseqTablePageTestCase(TestCase):
 
     def test_the_picker_lists_the_experiment_samples(self):
         response = self.get_page()
-        self.assertContains(response, "reseq_picker")
-        self.assertContains(response, self.reseq.label)
+        self.assertContains(response, "sample_picker")
+        self.assertContains(response, self.sample.label)
 
     def test_selecting_a_sample(self):
-        response = self.get_page(sample_id=self.reseq.id)
+        response = self.get_page(sample_id=self.sample.id)
         self.assertEqual(200, response.status_code)
-        self.assertContains(response, self.reseq.label)
+        self.assertContains(response, self.sample.label)
 
     def test_an_unknown_sample_falls_back_to_the_first(self):
         response = self.get_page(sample_id=999999)
@@ -155,8 +155,8 @@ class BreseqTablePageTestCase(TestCase):
     # --- frequency column -----------------------------------------------------
 
     def _make_population(self):
-        self.reseq.is_clonal = False
-        self.reseq.save()
+        self.sample.is_clonal = False
+        self.sample.save()
 
     def test_a_clonal_sample_has_no_frequency_column(self):
         """Asserted by header count, not by matching markup.
@@ -195,8 +195,8 @@ class BreseqTablePageTestCase(TestCase):
         """
         for population in (False, True):
             with self.subTest(population=population):
-                self.reseq.is_clonal = not population
-                self.reseq.save()
+                self.sample.is_clonal = not population
+                self.sample.save()
                 content = self.content(**self._empty_filter_params())
 
                 self.assertIn("No mutations passed the current filters", content)
@@ -204,8 +204,8 @@ class BreseqTablePageTestCase(TestCase):
                 self.assertIn('colspan="%d"' % headers, content)
 
     def test_a_polymorphic_call_is_shaded(self):
-        self.reseq.is_clonal = False
-        self.reseq.save()
+        self.sample.is_clonal = False
+        self.sample.save()
         call = MutationCall.objects.order_by("id").first()
         call.frequency = 0.42
         call.save()
@@ -217,14 +217,14 @@ class BreseqTablePageTestCase(TestCase):
     # --- evidence column ------------------------------------------------------
 
     def test_evidence_links_to_the_alignment_when_there_is_one(self):
-        self.reseq.bam_stored = True
-        self.reseq.save()
+        self.sample.bam_stored = True
+        self.sample.save()
         call = MutationCall.objects.order_by("id").first()
         self.assertIn("mutation_call_id=%s" % call.id, self.content())
 
     def test_evidence_is_plain_text_without_an_alignment(self):
         # A bare .gd import has no reads, so there is nothing to link to.
-        self.assertFalse(self.reseq.bam_stored)
+        self.assertFalse(self.sample.bam_stored)
         self.assertNotIn("mutation_call_id=", self.content())
 
     # --- rows with no annotation ---------------------------------------------
@@ -271,4 +271,4 @@ class BreseqTablePermissionTestCase(TestCase):
     def test_an_experiment_with_no_samples_says_so(self):
         self.client.force_login(User.objects.get(username="tester"))
         response = self.client.get(PAGE, {"experiment_id": self.experiment.id})
-        self.assertContains(response, "no resequencing samples")
+        self.assertContains(response, "no samples")

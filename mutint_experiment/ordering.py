@@ -64,7 +64,7 @@ def sample_order(prefix=""):
     )
 
 
-def sample_sort_key(reseq):
+def sample_sort_key(sample):
     """A sample's A/F/I coordinate as a sortable tuple, for a list already in memory.
 
     `sample_order()` above is the database form and is what every listing uses. This is for
@@ -80,8 +80,8 @@ def sample_sort_key(reseq):
 
     A null time point sorts first, as it does in the SQL form.
     """
-    population = reseq.population
+    population = sample.population
     return (population.experiment.name,
             str(population.name).rjust(PAD, "0"),
-            reseq.time_point if reseq.time_point is not None else -1,
-            str(reseq.name).rjust(PAD, "0"))
+            sample.time_point if sample.time_point is not None else -1,
+            str(sample.name).rjust(PAD, "0"))

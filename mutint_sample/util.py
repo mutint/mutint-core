@@ -1,6 +1,5 @@
 import collections
 import mutint_sample.models
-from mutint_common.util import is_int
 from mutint_experiment.ordering import sample_order, sample_sort_key
 from mutint_filter.util import filter_mutation_calls
 from mutint_common.constants import SAMPLE_TYPE_MIXED
@@ -64,7 +63,7 @@ def calls_for_samples(sample_id_list, experiment_id):
     return exclude_ancestry(queryset, experiment_id)
 
 
-def get_ordered_reseq_queryset(experiment_id, ale_id=None, sample_type=None, *,
+def get_ordered_sample_queryset(experiment_id, population=None, sample_type=None, *,
                                include_ancestor=False):
     """An experiment's samples in A/F/I/R order, without its designated ancestor.
 
@@ -79,48 +78,48 @@ def get_ordered_reseq_queryset(experiment_id, ale_id=None, sample_type=None, *,
     invisible and wrong. It also means mutint-compare, mutint-converge and mutint-fixation need
     no edit here at all.
 
-    Keyword-only: this module already carries a scar from `get_reseq_ordered_dict` being
+    Keyword-only: this module already carries a scar from `get_ordered_sample_dict` being
     called with a `request` in the `sample_type` slot, which silently dropped every
     population sample from two plugin pages.
     """
-    reseq_qryset = mutint_sample.models.Sample.objects.select_related(
+    sample_qryset = mutint_sample.models.Sample.objects.select_related(
         paths.to_experiment()
     ).order_by(*sample_order())
     if experiment_id:
-        reseq_qryset = reseq_qryset.filter(**{paths.to_experiment_id(): experiment_id})
+        sample_qryset = sample_qryset.filter(**{paths.to_experiment_id(): experiment_id})
     # `is not None`, not truthiness: the starting strain's ALE is "0"
     # (`common.STARTING_STRAIN_ALE_ID`), which was falsy while this column held integers and
     # so quietly selected every ALE instead of that one.
-    if ale_id is not None and ale_id != "":
-        reseq_qryset = reseq_qryset.filter(**{paths.to_population_label(): ale_id})
+    if population is not None and population != "":
+        sample_qryset = sample_qryset.filter(**{paths.to_population_label(): population})
     if sample_type:
         # Two named filters rather than a computed boolean. `get_sample_type` has already
         # refused anything that is not one of the two, so this is a genuine two-way choice
         # -- it used to be "population, or else clonal", which silently subset the page.
-        reseq_qryset = reseq_qryset.filter(
+        sample_qryset = sample_qryset.filter(
             **(paths.mixed_filter() if sample_type == SAMPLE_TYPE_MIXED
                else paths.clonal_filter()))
     if not include_ancestor:
         from mutint_experiment.ancestor import exclude_ancestor_samples
-        reseq_qryset = exclude_ancestor_samples(reseq_qryset, experiment_id)
-    return reseq_qryset
+        sample_qryset = exclude_ancestor_samples(sample_qryset, experiment_id)
+    return sample_qryset
 
 
-def get_reseq_ordered_dict(experiment_id, population=None, sample_type=None,
+def get_ordered_sample_dict(experiment_id, population=None, sample_type=None,
                            *, include_ancestor=False):
     """An experiment's samples as `{id: Sample}`, in the order their columns should appear.
 
     `population` and `sample_type` narrow the set; `include_ancestor` keeps the designated
-    ancestor, for a page that curates rather than reads. See `get_ordered_reseq_queryset`,
+    ancestor, for a page that curates rather than reads. See `get_ordered_sample_queryset`,
     which this wraps.
 
     It took a `request` too, for a `tag_select` query parameter that showed or hid sample
     columns by their tags. Tagging is gone; the parameter went first, so a caller cannot pass
     one and believe it filtered.
     """
-    reseq_queryset = get_ordered_reseq_queryset(experiment_id, population, sample_type,
+    sample_queryset = get_ordered_sample_queryset(experiment_id, population, sample_type,
                                                 include_ancestor=include_ancestor)
-    return collections.OrderedDict((reseq.id, reseq) for reseq in reseq_queryset)
+    return collections.OrderedDict((sample.id, sample) for sample in sample_queryset)
 
 
 def get_mutations_from_calls(mutation_calls):
@@ -128,8 +127,8 @@ def get_mutations_from_calls(mutation_calls):
     return mut_map.values()
 
 
-def get_ordered_reseq_dict(mutation_calls):
-    """The samples appearing in these calls, `{id: reseq}`, in A/F/I/R order.
+def samples_in_calls(mutation_calls):
+    """The samples appearing in these calls, `{id: sample}`, in A/F/I/R order.
 
     **It sorts rather than trusting what it was handed.** The name said "ordered" and nothing
     here did any ordering: the dict came out in first-appearance order, which is A/F/I/R only
@@ -148,7 +147,7 @@ def get_ordered_reseq_dict(mutation_calls):
     by_id = {call.sample.id: call.sample
              for call in mutation_calls}
     return collections.OrderedDict(
-        (reseq.id, reseq) for reseq in sorted(by_id.values(), key=sample_sort_key))
+        (sample.id, sample) for sample in sorted(by_id.values(), key=sample_sort_key))
 
 
 def get_ecocyc_gene_list(gene_list, is_ecocyc_gene: bool = False):
@@ -169,12 +168,3 @@ def get_ref_sequences():
         .values_list('seq_id', flat=True).distinct()
     )
 
-
-def get_matching_call_ids(mutation_id, experiment_id):
-    local_mutation_calls = mutint_sample.models.MutationCall.objects.filter(
-        **{paths.to_experiment_id(paths.FROM_CALL): experiment_id},
-        mutation__id=mutation_id).order_by(*sample_order("sample__"))
-    matching_call_ids = []
-    for local_mutation_call in local_mutation_calls:
-        matching_call_ids.append(local_mutation_call.id)
-    return matching_call_ids

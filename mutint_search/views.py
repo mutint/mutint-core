@@ -9,7 +9,7 @@ import operator
 from functools import reduce
 from mutint_sample.mutation_matrix import build_matrix
 from mutint_experiment.utils import get_user_projects, get_strains
-from mutint_sample.util import get_ordered_reseq_dict, get_ref_sequences
+from mutint_sample.util import samples_in_calls, get_ref_sequences
 from mutint_experiment.ancestor import exclude_all_ancestry
 from mutint_filter.util import filter_mutation_calls
 from mutint_common.util import get_user_context
@@ -59,8 +59,8 @@ def search(request):
         mutation_calls = _get_mutation_calls(search_include_param_list, search_exclude_param_list)
         # Samples from many experiments, so their labels carry the experiment's name, and
         # there is no one experiment for the matrix to remember a sample selection against.
-        reseq_dict = get_ordered_reseq_dict(mutation_calls)
-        matrix = build_matrix(mutation_calls, reseq_dict, labels="qualified",
+        sample_dict = samples_in_calls(mutation_calls)
+        matrix = build_matrix(mutation_calls, sample_dict, labels="qualified",
                               csv_title="search_results")
 
         context.update({"matrix": matrix,

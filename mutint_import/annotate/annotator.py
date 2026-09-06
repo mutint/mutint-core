@@ -6,7 +6,7 @@ A port of cReferenceSequences::annotate_1_mutation and friends
 `output.gd` from a reference GenBank file instead of requiring the output of
 `gdtools ANNOTATE`.
 
-Mutations are plain dicts, as produced by mutint_import.gdparse -- the same shape as
+Mutations are plain dicts, the shape `gd_import` builds from a genomediff record -- the same shape as
 breseq's cDiffEntry key/value map. Annotation keys are written back into the
 dict, exactly as `gdtools ANNOTATE` would write them.
 
@@ -817,29 +817,3 @@ def annotate_mutations(mutations, references, ignore_pseudogenes=False,
     _merge_snps_in_same_codon(annotated)
     return annotated
 
-
-def is_annotated(mutations):
-    """
-    Whether a GD already carries annotation.
-
-    True for a file produced by `gdtools ANNOTATE` (or the COMPARE merges the
-    old pipeline built), false for breseq's plain output.gd. Only the latter
-    needs a reference sequence, so this decides whether a missing reference is
-    a problem.
-    """
-    for mutation in mutations:
-        if _is_mutation(mutation) and mutation.get('gene_name'):
-            return True
-    return False
-
-
-def strip_annotation(mutation):
-    """
-    The raw GD fields of a mutation, with every annotation key removed.
-
-    This is what gets persisted as Mutation.gd_attributes: re-annotating against
-    a different reference must not inherit the old reference's answers.
-    """
-    return {key: value for key, value in mutation.items()
-            if key not in ANNOTATION_KEYS and not key.startswith('html_')
-            and not key.startswith('_')}

@@ -44,10 +44,10 @@ def _experiment_samples(experiment):
     at load time -- the dependency runs the other way, which is why
     `Sample.time_point` names its target by string.
     """
-    from mutint_sample.util import get_ordered_reseq_queryset
+    from mutint_sample.util import get_ordered_sample_queryset
     # `include_ancestor=True`: this is the page that edits and deletes samples, so it has to
     # show the designated ancestor, which every reading page hides.
-    return get_ordered_reseq_queryset(experiment.id, include_ancestor=True)
+    return get_ordered_sample_queryset(experiment.id, include_ancestor=True)
 
 
 def _get_sample(pk):
@@ -61,14 +61,14 @@ def _get_sample(pk):
     from mutint_sample.models import Sample
     from django.http import Http404
 
-    reseq = get_object_or_404(Sample, pk=pk)
-    experiment = sample_experiment(reseq)
+    sample = get_object_or_404(Sample, pk=pk)
+    experiment = sample_experiment(sample)
     if experiment is None:
         raise Http404("This sample is not attached to an experiment.")
-    return reseq, experiment
+    return sample, experiment
 
 
-def _row_context(reseq):
+def _row_context(sample):
     """What both templates need per sample.
 
     `label` is deliberately alongside `coordinate`. `label` returns
@@ -78,23 +78,24 @@ def _row_context(reseq):
     byte-identical. Showing both, next to an editable description, is what stops a
     successful save looking like it did nothing.
     """
-    coordinate = sample_coordinate(reseq)
+    coordinate = sample_coordinate(sample)
     return {
-        "reseq": reseq,
-        "id": reseq.pk,
+        "sample": sample,
+        "id": sample.pk,
+        "source_name": sample.source_name,
         "coordinate": coordinate_str(coordinate),
-        "label": reseq.label,
-        "ale": coordinate[0],
+        "label": sample.label,
+        "population": coordinate[0],
         # Through the formatter, so an integral float shows as `500` in the box and not
         # `500.0` -- see `samples._positive_int` for what the latter used to do on save.
-        "flask": format_time_point(coordinate[1]),
-        "isolate": coordinate[2],
-        "is_mixed": reseq.is_mixed,
-        "isolate_description": reseq.description or "",
-        "medium_description": reseq.curation.get("medium_description") or "",
+        "time_point": format_time_point(coordinate[1]),
+        "name": coordinate[2],
+        "is_mixed": sample.is_mixed,
+        "description": sample.description or "",
+        "medium_description": sample.curation.get("medium_description") or "",
         # The flags as the templates draw them: what to call each, and whether it is on.
         "flags": [{"field": flag.field, "key": flag.key, "label": flag.label,
-                   "help": flag.help, "on": bool(getattr(reseq, flag.field))}
+                   "help": flag.help, "on": bool(getattr(sample, flag.field))}
                   for flag in FLAGS],
     }
 
@@ -105,7 +106,7 @@ def _row_context(reseq):
 @ensure_csrf_cookie
 def sample_edit(request, pk):
     """One sample's identity and description."""
-    reseq, experiment = _get_sample(pk)
+    sample, experiment = _get_sample(pk)
     context = get_user_context(request.user)
     if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
@@ -113,7 +114,7 @@ def sample_edit(request, pk):
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
-        "sample": _row_context(reseq),
+        "sample": _row_context(sample),
     })
     return render(request, "sample/edit.html", context)
 
@@ -129,7 +130,7 @@ def experiment_samples(request, pk):
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
-        "samples": [_row_context(reseq) for reseq in _experiment_samples(experiment)],
+        "samples": [_row_context(sample) for sample in _experiment_samples(experiment)],
         # For the table's header row; each sample row carries its own resolved copy.
         "flags": FLAGS,
     })
@@ -146,7 +147,7 @@ def _save(experiment, rows):
     touch no rows at all, which is what makes "nothing was saved" true rather than
     aspirational.
     """
-    samples_by_id = {str(reseq.pk): reseq for reseq in _experiment_samples(experiment)}
+    samples_by_id = {str(sample.pk): sample for sample in _experiment_samples(experiment)}
 
     parsed = parse_rows(rows, samples_by_id)
     parsed = plan_moves(parsed, samples_by_id)
@@ -172,21 +173,21 @@ def _error_response(error):
 
 @require_POST
 def sample_update(request, pk):
-    reseq, experiment = _get_sample(pk)
+    sample, experiment = _get_sample(pk)
     if not can_edit_experiment(request.user, experiment):
         return JsonResponse({"error": "You cannot edit this sample."}, status=403)
 
     row = {
-        "id": str(reseq.pk),
-        "sample_name": request.POST.get("sample_name"),
-        "ale": request.POST.get("ale"),
-        "flask": request.POST.get("flask"),
-        "isolate": request.POST.get("isolate"),
+        "id": str(sample.pk),
+        "source_name": request.POST.get("source_name"),
+        "population": request.POST.get("population"),
+        "time_point": request.POST.get("time_point"),
+        "name": request.POST.get("name"),
         "rep": request.POST.get("rep"),
         # Passed through raw: samples._truthy decides, because an unchecked box posts
         # the string "0", which bool() reads as True.
         "is_mixed": request.POST.get("is_mixed"),
-        "isolate_description": request.POST.get("isolate_description"),
+        "description": request.POST.get("description"),
         "medium_description": request.POST.get("medium_description"),
     }
     # Only the flags the form sent: an absent key leaves the flag alone, so a client that
@@ -199,10 +200,10 @@ def sample_update(request, pk):
     except SampleEditError as error:
         return _error_response(error)
 
-    reseq.refresh_from_db()
-    return JsonResponse({"sample_id": reseq.pk,
+    sample.refresh_from_db()
+    return JsonResponse({"sample_id": sample.pk,
                          "experiment_id": experiment.id,
-                         "coordinate": coordinate_str(sample_coordinate(reseq))})
+                         "coordinate": coordinate_str(sample_coordinate(sample))})
 
 
 @require_POST
@@ -212,7 +213,7 @@ def experiment_samples_update(request, pk):
     The payload is one JSON string under `rows`. `mutintPost` builds FormData with
     `form.append(k, data[k])`, so a nested object would arrive as "[object Object]" -- a
     JSON string is the one nested shape that survives it. The alternative, flat keys like
-    `sb-ale-37`, needs a hand-written key parser in which a typo drops a field silently
+    `sb-population-37`, needs a hand-written key parser in which a typo drops a field silently
     instead of erroring.
     """
     experiment = get_object_or_404(Experiment, pk=pk)

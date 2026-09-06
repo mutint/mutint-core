@@ -43,8 +43,8 @@ from mutint_import.annotate.model import reverse_complement
 #: is `max_length=3`.
 MUTATION_TYPES = ("SNP", "SUB", "DEL", "INS", "INV", "AMP", "MOB", "CON", "INT")
 
-#: What each type is, for the dropdown and the field legend. breseq's own wording, from the
-#: field documentation in the vendored `gdparse`.
+#: What each type is, for the dropdown and the field legend. breseq's own wording, from its
+#: GenomeDiff field documentation.
 TYPE_LABELS = {
     "SNP": "SNP — single base substitution",
     "SUB": "SUB — multiple base substitution",

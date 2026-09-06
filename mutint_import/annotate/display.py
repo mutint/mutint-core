@@ -421,11 +421,6 @@ def text_from_html(html):
     return BeautifulSoup(html, 'lxml').text.replace('\xa0', ' ').strip()
 
 
-def text_mutation(mutation):
-    """The Mutation column as plain text, e.g. "A→C", "Δ776 bp", "+G"."""
-    return text_from_html(_get(mutation, 'html_mutation'))
-
-
 def text_mutation_annotation(mutation):
     """The Annotation column as plain text, e.g. "F239L (TTT→TTG)"."""
     return text_from_html(_get(mutation, 'html_mutation_annotation'))

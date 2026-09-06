@@ -48,7 +48,7 @@ from mutint_sample.models import Mutation, MutationCall
 # it must show the designated ancestor, which every reading page hides. It is also why
 # `history.calls_for` uses the raw call queryset -- this app shows what is
 # stored, and ancestral rows are stored.
-from mutint_sample.util import get_reseq_ordered_dict
+from mutint_sample.util import get_ordered_sample_dict
 from mutint_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class EditorError(Exception):
 # --- shared plumbing ------------------------------------------------------------------------
 
 
-def _selected_reseq(request, reseq_dict, param=REQUEST_SAMPLE_ID):
+def _selected_sample(request, sample_dict, param=REQUEST_SAMPLE_ID):
     """The requested sample, or the experiment's first one."""
     requested = request.GET.get(param)
     if requested:
@@ -99,14 +99,14 @@ def _selected_reseq(request, reseq_dict, param=REQUEST_SAMPLE_ID):
             sample_id = int(requested)
         except (TypeError, ValueError):
             sample_id = None
-        if sample_id in reseq_dict:
-            return reseq_dict[sample_id]
-    for reseq in reseq_dict.values():
-        return reseq
+        if sample_id in sample_dict:
+            return sample_dict[sample_id]
+    for sample in sample_dict.values():
+        return sample
     return None
 
 
-def _rows_for(reseq):
+def _rows_for(sample):
     """One sample's mutations as breseq-style rows, carrying the call id.
 
     `build_rows` is mutint_sample's, shared with the Samples page and the genome browser, so the
@@ -115,7 +115,7 @@ def _rows_for(reseq):
     shared between those two and must not grow a third caller's checkbox column.
     """
     calls = list(MutationCall.objects
-                    .filter(sample=reseq)
+                    .filter(sample=sample)
                     .select_related("mutation"))
     calls.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.start_position))
     return build_rows(calls)
@@ -146,14 +146,14 @@ def _cell_for(call):
 GRID_ROW_LIMIT = 250
 
 
-def _grid_mutations(experiment, reseq_dict, query):
+def _grid_mutations(experiment, sample_dict, query):
     """The mutations a grid should lay out, narrowed by the search box.
 
     Narrowing happens here rather than in DataTables because the point is to not *render* the
     rest: a client-side search still ships every row. Position is matched exactly when the
     query is a number, since a substring match on a coordinate is never what anybody means.
 
-    **Only mutations something in `reseq_dict` observes.** A `Mutation` is never deleted here
+    **Only mutations something in `sample_dict` observes.** A `Mutation` is never deleted here
     -- its id is stored as a bare integer in mutint-converge, in mutint-phylogeny's JSON and in
     every exported CSV -- so removing a mutation's last call leaves the row behind, and
     a grid keyed on `Mutation.objects.filter(experiment=...)` went on rendering it with
@@ -161,7 +161,7 @@ def _grid_mutations(experiment, reseq_dict, query):
     reloads, and the row is genuinely still there.
 
     Restricted to the *shown* samples rather than to the experiment, because
-    `get_reseq_ordered_dict` applies the experiment's sample tag filters -- a mutation observed
+    `get_ordered_sample_dict` applies the experiment's sample tag filters -- a mutation observed
     only in a hidden sample is an all-empty row for the same reason.
 
     This is not the filtering the editor forbids. A mutation no sample observes is stored in no
@@ -169,7 +169,7 @@ def _grid_mutations(experiment, reseq_dict, query):
     hidden, it is not there.
     """
     calls_here = (history.calls_for(experiment)
-                     .filter(sample_id__in=list(reseq_dict))
+                     .filter(sample_id__in=list(sample_dict))
                      .values("mutation_id"))
     mutations = Mutation.objects.filter(experiment=experiment,
                                         id__in=calls_here)
@@ -187,7 +187,7 @@ def _grid_mutations(experiment, reseq_dict, query):
     return mutations.order_by(F("seq_id").asc(nulls_first=True), "start_position", "pk")
 
 
-def _grid_for(experiment, reseq_dict, query=None):
+def _grid_for(experiment, sample_dict, query=None):
     """Every call of the matching mutations, as mutations down and samples across.
 
     Returns `(rows, by_mutation, by_sample, total, shown)`. The two maps are what the page's
@@ -206,11 +206,11 @@ def _grid_for(experiment, reseq_dict, query=None):
     and `get_table_body` filters through `filter_mutation_calls`, while this page must show
     what is stored -- a mutation hidden by a gene or frequency filter has to stay deletable.
     """
-    matching = _grid_mutations(experiment, reseq_dict, query)
+    matching = _grid_mutations(experiment, sample_dict, query)
     total = matching.count()
     page = list(matching[:GRID_ROW_LIMIT])
 
-    column_of = {sample_id: position for position, sample_id in enumerate(reseq_dict)}
+    column_of = {sample_id: position for position, sample_id in enumerate(sample_dict)}
     rows = {mutation.id: {"mutation": mutation, "cells": [None] * len(column_of)}
             for mutation in page}
 
@@ -222,7 +222,7 @@ def _grid_for(experiment, reseq_dict, query=None):
     for entry in calls:
         position = column_of.get(entry.sample_id)
         if position is None:
-            # A sample the picker is not showing -- `get_reseq_ordered_dict` applies the
+            # A sample the picker is not showing -- `get_ordered_sample_dict` applies the
             # experiment's sample tag filters. Its calls are not selectable here
             # because they are not on the page; they are untouched, not hidden.
             continue
@@ -235,8 +235,8 @@ def _grid_for(experiment, reseq_dict, query=None):
     # sample with nothing among the rendered rows renders as plain text instead of a link:
     # measured in a browser, an experiment's mutations are often concentrated in a subset of
     # its samples, and a control that looks live and silently does nothing reads as broken.
-    columns = [{"reseq": reseq, "count": len(by_sample.get(sample_id, ()))}
-               for sample_id, reseq in reseq_dict.items()]
+    columns = [{"sample": sample, "count": len(by_sample.get(sample_id, ()))}
+               for sample_id, sample in sample_dict.items()]
     return ordered, columns, by_mutation, by_sample, total, len(ordered)
 
 
@@ -244,8 +244,8 @@ def _page_context(request, experiment):
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
-        "ale_project_name": experiment.project.name if experiment.project else "",
-        "ale_project_id": experiment.project_id,
+        "project_name": experiment.project.name if experiment.project else "",
+        "project_id": experiment.project_id,
         "can_edit": can_add_experiment_filter(request.user, experiment),
     })
     return context
@@ -365,19 +365,19 @@ def _listing(request, mode):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
+        sample_dict = get_ordered_sample_dict(experiment.id, include_ancestor=True)
         all_samples = request.GET.get(REQUEST_SAMPLE_ID) == ALL_SAMPLES
-        reseq = None if all_samples else _selected_reseq(request, reseq_dict)
+        sample = None if all_samples else _selected_sample(request, sample_dict)
 
         context = _page_context(request, experiment)
         context.update({
-            "reseq_list": list(reseq_dict.values()),
+            "sample_list": list(sample_dict.values()),
             "all_samples": all_samples,
             "all_samples_value": ALL_SAMPLES,
-            "selected_reseq": reseq,
-            "selected_sample_id": reseq.id if reseq is not None else None,
-            "is_mixed": is_mixed(reseq),
-            "rows": _rows_for(reseq) if reseq is not None else [],
+            "selected_sample": sample,
+            "selected_sample_id": sample.id if sample is not None else None,
+            "is_mixed": is_mixed(sample),
+            "rows": _rows_for(sample) if sample is not None else [],
             "recent_edits": _recent_edits(experiment),
             "mode": mode,
             "is_delete_mode": mode == MODE_DELETE,
@@ -389,7 +389,7 @@ def _listing(request, mode):
         if all_samples:
             query = request.GET.get("q", "")
             grid_rows, grid_columns, by_mutation, by_sample, total, shown = _grid_for(
-                experiment, reseq_dict, query)
+                experiment, sample_dict, query)
             context.update({
                 "grid_rows": grid_rows,
                 "grid_columns": grid_columns,
@@ -412,12 +412,12 @@ def mutation_add(request):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
+        sample_dict = get_ordered_sample_dict(experiment.id, include_ancestor=True)
         reference_row = _reference_row(experiment)
 
         context = _page_context(request, experiment)
         context.update({
-            "targets": list(reseq_dict.values()),
+            "targets": list(sample_dict.values()),
             "schema": validation.form_schema(),
             # The contigs a position can be on. Offered as a dropdown when they are known,
             # because a mistyped contig name is refused by an exact match with no near-miss
@@ -474,7 +474,7 @@ def _initial_selection(request, carrying):
     whole set stays the default there, and `?sample_id=all` lands on it too rather than on
     nothing, since `int("all")` is not a sample.
     """
-    ids = [reseq.id for reseq in carrying]
+    ids = [sample.id for sample in carrying]
     try:
         chosen = int(request.GET.get(REQUEST_SAMPLE_ID))
     except (TypeError, ValueError):
@@ -485,14 +485,14 @@ def _initial_selection(request, carrying):
 def _carrying_samples(experiment, mutation):
     """The experiment's samples that observe `mutation`, in the usual sample order.
 
-    Ordered through `get_reseq_ordered_dict` rather than by whatever the calls come
+    Ordered through `get_ordered_sample_dict` rather than by whatever the calls come
     back in, so the list reads the same way as every other list of samples on the site.
     """
     observing = set(history.calls_for(experiment)
                     .filter(mutation=mutation)
                     .values_list("sample_id", flat=True))
-    return [reseq for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
-            if reseq.id in observing]
+    return [sample for sample in get_ordered_sample_dict(experiment.id, include_ancestor=True).values()
+            if sample.id in observing]
 
 
 def _mutation_for_page(request, experiment):
@@ -536,16 +536,16 @@ def mutation_copy(request):
     context = get_user_context(request.user)
     try:
         experiment = _experiment_for_page(request, context)
-        reseq_dict = get_reseq_ordered_dict(experiment.id, include_ancestor=True)
-        source = _selected_reseq(request, reseq_dict, REQUEST_SOURCE_SAMPLE_ID)
+        sample_dict = get_ordered_sample_dict(experiment.id, include_ancestor=True)
+        source = _selected_sample(request, sample_dict, REQUEST_SOURCE_SAMPLE_ID)
 
         context = _page_context(request, experiment)
         context.update({
-            "reseq_list": list(reseq_dict.values()),
-            "source_reseq": source,
+            "sample_list": list(sample_dict.values()),
+            "source_sample": source,
             "source_sample_id": source.id if source is not None else None,
-            "targets": [reseq for reseq in reseq_dict.values()
-                        if source is None or reseq.id != source.id],
+            "targets": [sample for sample in sample_dict.values()
+                        if source is None or sample.id != source.id],
             "rows": _rows_for(source) if source is not None else [],
             "title": "Copy mutations in %s" % experiment.name,
             "template_header": "Copy Mutations",
@@ -677,9 +677,9 @@ def mutation_copy_apply(request):
         if not sources:
             raise EditorError("Those mutations are not in the source sample.", status=404)
 
-        targets = {reseq.id: reseq for reseq in
-                   get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
-                   if reseq.id in set(target_ids)}
+        targets = {sample.id: sample for sample in
+                   get_ordered_sample_dict(experiment.id, include_ancestor=True).values()
+                   if sample.id in set(target_ids)}
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
 
@@ -728,7 +728,7 @@ def _plan_copy(experiment, sources, targets):
             # Keep the map current so copying two source rows that collapse to the same key
             # onto one target adds it once rather than twice.
             existing.setdefault(key, []).append(None)
-    return additions, [reseq.label for target_id, reseq in targets.items()
+    return additions, [sample.label for target_id, sample in targets.items()
                        if target_id in skipped]
 
 
@@ -759,9 +759,9 @@ def mutation_add_apply(request):
         if errors:
             raise EditorError("That mutation cannot be added as entered.", errors=errors)
 
-        targets = {reseq.id: reseq for reseq in
-                   get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()
-                   if reseq.id in set(target_ids)}
+        targets = {sample.id: sample for sample in
+                   get_ordered_sample_dict(experiment.id, include_ancestor=True).values()
+                   if sample.id in set(target_ids)}
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
 
@@ -821,9 +821,9 @@ def _plan_add(experiment, identity, call, targets):
 
     additions = []
     already = []
-    for target_id, reseq in targets.items():
+    for target_id, sample in targets.items():
         if existing.get((target_id, key_part, call.get("source"))):
-            already.append(reseq.label)
+            already.append(sample.label)
             continue
         additions.append({
             "sample_id": target_id,
@@ -951,8 +951,8 @@ def _move_calls(experiment, user, target, identity, chosen, note):
     """
     sample_ids = [call.sample_id for call in chosen]
     present = history.live_state(experiment, sample_ids=sample_ids)
-    names = {reseq.id: reseq.label
-             for reseq in get_reseq_ordered_dict(experiment.id, include_ancestor=True).values()}
+    names = {sample.id: sample.label
+             for sample in get_ordered_sample_dict(experiment.id, include_ancestor=True).values()}
 
     additions = []
     already = []

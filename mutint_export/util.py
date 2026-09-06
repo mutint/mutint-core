@@ -2,7 +2,7 @@ from django.utils.html import strip_tags
 
 from mutint_common.plugin_registry import get_export_handler
 from mutint_filter.util import filter_mutation_calls
-from mutint_sample.util import get_mutation_call_queryset, get_ordered_reseq_dict
+from mutint_sample.util import get_mutation_call_queryset, samples_in_calls
 
 MUT_TYPE_STR = "mut"
 
@@ -32,7 +32,7 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
     analysis uses. A download called "all mutations" that quietly dropped a sample and a set
     of rows would be a worse answer than a faithful one; a reader who wants the subtracted set
     takes it from the page that shows it. The columns follow for free -- they are built from
-    `get_ordered_reseq_dict(mutation_calls)`, i.e. from the rows themselves, so the
+    `samples_in_calls(mutation_calls)`, i.e. from the rows themselves, so the
     ancestor's column comes back with its rows and nothing here special-cases it.
 
     A *derived* export is a different question and answers it differently. `fixed_mut` and
@@ -55,11 +55,11 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
         call_qryset = handler(exp_id, view_filter)
 
     mutation_calls = filter_mutation_calls(call_qryset, view_filter=view_filter)
-    reseq_ordered_dict = get_ordered_reseq_dict(mutation_calls)
-    column_of = {sample_id: index for index, sample_id in enumerate(reseq_ordered_dict)}
+    sample_ordered_dict = samples_in_calls(mutation_calls)
+    column_of = {sample_id: index for index, sample_id in enumerate(sample_ordered_dict)}
 
-    rows = [CSV_MUTATION_HEADER + [reseq_ordered_dict[reseq].qualified_label
-                                   for reseq in reseq_ordered_dict]]
+    rows = [CSV_MUTATION_HEADER + [sample_ordered_dict[sample].qualified_label
+                                   for sample in sample_ordered_dict]]
 
     # Every mutation any of the calls names gets a row, in first-appearance order, whatever its
     # cells say -- which is what the file has always held. (The on-screen matrix drops a row

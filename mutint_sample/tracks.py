@@ -182,7 +182,7 @@ def sample_features(experiment_id, contig=None):
     is in every sample by construction, so drawing it would paint a band across the whole track
     that says nothing about what evolved -- the same reason convergence and fixation subtract.
 
-    Rows are labeled and ordered by `get_ordered_reseq_queryset`, the same helper every
+    Rows are labeled and ordered by `get_ordered_sample_queryset`, the same helper every
     sample listing uses, so the track reads in the order of the tables beside it and calls
     each sample what they call it.
 
@@ -193,10 +193,10 @@ def sample_features(experiment_id, contig=None):
     "sample". One small query for the samples and a dict is the fix; there are tens of them,
     not thousands.
     """
-    from mutint_sample.util import get_evolved_call_queryset, get_ordered_reseq_queryset
+    from mutint_sample.util import get_evolved_call_queryset, get_ordered_sample_queryset
 
-    labels = {reseq.id: reseq.label
-              for reseq in get_ordered_reseq_queryset(experiment_id)}
+    labels = {sample.id: sample.label
+              for sample in get_ordered_sample_queryset(experiment_id)}
 
     rows = get_evolved_call_queryset(experiment_id).filter(present=True)
     if contig:

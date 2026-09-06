@@ -433,7 +433,7 @@ class ProjectVisibilityTestCase(TestCase):
     """Who sees which projects.
 
     Every one of these passed vacuously before: the object-permission queries filtered on
-    `content_type__app_label='ale'` while the label is `mutint_experiment`, so they matched
+    `content_type__app_label='population'` while the label is `mutint_experiment`, so they matched
     nothing and `get_user_projects` returned every project to everybody.
     """
 
@@ -470,8 +470,8 @@ class ProjectVisibilityTestCase(TestCase):
     def test_staff_have_no_blanket_access(self):
         """The inverse of what this asserted before, and the point of explicit roles.
 
-        `can_view_project` used to end `return bool(user.is_staff)`, and `load_projects`
-        creates every imported user with `is_staff=True` -- so nearly everyone could read
+        `can_view_project` used to end `return bool(user.is_staff)`, and the retired `load_projects` importer
+        created every user with `is_staff=True` -- so nearly everyone could read
         nearly everything and every role below admin was decorative.
         """
         staff = User.objects.create(

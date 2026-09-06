@@ -70,9 +70,9 @@ class ModelTestCase(LockTestCase):
 
     def test_the_shell_context_carries_it(self):
         """So a padlock renders on every experiment-scoped page, not just the Overview."""
-        self.assertFalse(self.experiment.experiment_context()["ale_experiment_locked"])
+        self.assertFalse(self.experiment.experiment_context()["experiment_locked"])
         self.lock()
-        self.assertTrue(self.experiment.experiment_context()["ale_experiment_locked"])
+        self.assertTrue(self.experiment.experiment_context()["experiment_locked"])
 
 
 class PredicateTestCase(LockTestCase):
@@ -206,7 +206,7 @@ class EveryWritePathTestCase(LockTestCase):
             ("mutation restore", lambda: self.client.post("/curate/restore", {
                 "experiment_id": experiment_id, "edit_set_id": "", "sample_ids": "[]"})),
             ("sample update", lambda: self.client.post(
-                "/sample/%d/update/" % self.sample_a.id, {"sample_name": "x"})),
+                "/sample/%d/update/" % self.sample_a.id, {"source_name": "x"})),
             ("bulk sample update", lambda: self.client.post(
                 "/experiment/%d/samples/update/" % experiment_id, {"rows": "[]"})),
             ("experiment update", lambda: self.client.post(

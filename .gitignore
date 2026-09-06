@@ -1,61 +1,29 @@
-*.sql
 .#*
 *#
 *.swp
 *.pyc
 *~
-*.ini
-docker-compose-prod-asgi-host-ports-nginx.yml
-*.conf
 static/
-config.sh
 .ropeproject/
 .idea/
-.htpasswd
 .DS_Store
-.builder/
-.docker/data
-.docker/*.env
-
-/pipeline/transfer/**
-
-/logs/debug.log*
-/logs/info.log*
-
-# PyCharm
-.idea
 .coverage
-.ssh
 coverage.xml
 core
 
-#Python
+# Python
 .venv
 
-# Managed environments — env/ holds the venv (env/main) and any future venvs/conda envs
+# Managed environments: env/ holds the pinned interpreter, the venv (env/main), the
+# components' tools (env/tools) and the PostgreSQL server. `rm -rf env` is the reset.
 env/
 
-# Local database. base_settings.py creates mutint_local.sqlite3 by default and
-# dev.sqlite3 under FORCE_SQLITE=1 or a test run; naming them one at a time is
-# what let dev.sqlite3 sit untracked in the working tree for as long as it did.
-*.sqlite3
-*.sqlite3-journal
-*.sqlite3-wal
-*.sqlite3-shm
+# Everything a checkout would lose: the database cluster (data/db) and the file store
+# (data/store, MUTINT_STORE_DIR). Kept apart from env/ so resetting the tools cannot take
+# the data with it.
+/data/
 
-# Managed file store. MUTINT_STORE_DIR defaults to <base_dir>/mutint_store
-# (mutint_common/base_settings.py), so an unconfigured instance writes uploaded references,
-# .gd files and alignments straight into the checkout. Anchored: only the one at the repo
-# root is the default's, and it is real instance data rather than build output.
-/mutint_store/
-# ...and one moved aside, which is what a migration reset asks for: primary keys restart
-# at 1 while store paths are derived from them, so the old files have to leave the way.
-/mutint_store.*/
-
-# Operator-local audit working docs. Contain live credential values + detailed
-# operational notes from the pre-publish security audit. The publish-safe
-# versions of this content live as docs/operations/audit_summary.md (the
-# inventory + outcome) and docs/operations/git_history_scrub.md (the runbook).
+# Operator-local notes from the pre-publication security audit. Never committed.
 /audit_local/
 
 # Claude Code local state. `worktrees/` holds embedded git repos -- `git add -A` picks them
@@ -69,7 +37,3 @@ env/
 # .docs-build/ is the merged tree of symlinks plus a generated config, site/ the output.
 /.docs-build/
 /site/
-
-# Everything a checkout would lose: the file store (data/store) and the database
-# (data/db). env/ holds only what can be rebuilt.
-/data/

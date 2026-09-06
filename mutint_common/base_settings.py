@@ -114,7 +114,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'django.contrib.auth',
             'django.contrib.contenttypes',
             'django.contrib.sessions',
-            'django.contrib.sites',
             'django.contrib.messages',
             'django.contrib.staticfiles',
             # For `intcomma` alone: the Overview prints uncalled bases, which run to
@@ -139,11 +138,11 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_dashboard',       # nav: none (the sidebar's brand links to it)
             'mutint_search',          # nav: Search
             'mutint_experiment',      # nav: Projects, Experiments (Groups is an account entry)
-            'mutint_sample',             # nav: Mutations
-            'mutint_curate', # nav: Curate
-            'mutint_filter',          # nav: Filter
+            'mutint_sample',          # nav: Reference, Mutations
+            'mutint_curate',          # nav: Curate
+            'mutint_filter',          # nav: none (installed for its template tags)
             'mutint_import',          # nav: none (Import data is reached from an experiment)
-            'mutint_stats',
+            'mutint_stats',           # nav: none (Overview is the header button bar's)
             # nav: none. /jobs/ is reached from the sidebar's account block, which is written
             # into base.html rather than registered -- nav_registry cannot express "only when
             # signed in". See mutint_jobs/apps.py.
@@ -224,12 +223,9 @@ def get_base_settings(base_dir, mutint_core_dir=None):
 
         'TIME_ZONE': 'America/Los_Angeles',
         'LANGUAGE_CODE': 'en-us',
-        'SITE_ID': 1,
         'USE_I18N': True,
         'USE_TZ': True,
 
-        'MEDIA_ROOT': '',
-        'MEDIA_URL': '',
 
         'STATIC_ROOT': os.path.join(base_dir, 'static'),
         'STATIC_URL': '/static/',
@@ -246,7 +242,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'django.contrib.staticfiles.finders.AppDirectoriesFinder',
         ),
 
-        'GUARDIAN_RAISE_403': True,
         # BigAutoField, taken at the one moment it is free: every table is being created
         # from scratch, so there is no ALTER on every table and every foreign key to pay
         # for. Mutation ids are stored as bare integers in exported CSVs and in
@@ -270,7 +265,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
                         'django.template.context_processors.debug',
                         'django.template.context_processors.request',
                         'django.template.context_processors.i18n',
-                        'django.template.context_processors.media',
                         'django.template.context_processors.static',
                         'django.template.context_processors.tz',
                         'django.contrib.messages.context_processors.messages',
@@ -314,12 +308,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             },
         },
 
-        'PUBLIC': os.environ.get('PUBLIC', '0') == '1',
-        'PUBLIC_USERNAME': os.environ.get('PUBLIC_USERNAME', 'public'),
-        'PUBLIC_PASSWORD': os.environ.get('PUBLIC_PASSWORD', 'REDACTED-CREDENTIAL'),
-
-        'EMAIL_BACKEND': 'django.core.mail.backends.console.EmailBackend',
-
         'AUTH_PASSWORD_VALIDATORS': [
             {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
             {
@@ -341,7 +329,7 @@ def get_base_settings(base_dir, mutint_core_dir=None):
     # So the guard is stated instead of implied. MUTINT_DB_MANAGED is set only by the entry
     # script, and only for a cluster it manages under env/ -- so running the suite against
     # somebody else's server has to be asked for in as many words.
-    if 'test' in sys.argv or 'test_coverage' in sys.argv:
+    if 'test' in sys.argv:
         if (os.environ.get('MUTINT_DB_MANAGED') != '1'
                 and os.environ.get('MUTINT_ALLOW_REMOTE_TESTS') != '1'):
             raise ImproperlyConfigured(

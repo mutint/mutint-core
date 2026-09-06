@@ -68,13 +68,13 @@ class MutationCountsTestCase(TestCase):
     def setUp(self):
         self.experiment = Experiment.objects.create(
 )
-        self.sample = self._sample(ale=1)
-        self.other_sample = self._sample(ale=2)
+        self.sample = self._sample(population=1)
+        self.other_sample = self._sample(population=2)
 
-    def _sample(self, ale):
-        ale_row = Population.objects.create(experiment=self.experiment, name=ale)
+    def _sample(self, population):
+        population_row = Population.objects.create(experiment=self.experiment, name=population)
         return Sample.objects.create(
-            population=ale_row, time_point=100, name=1, is_clonal=True)
+            population=population_row, time_point=100, name=1, is_clonal=True)
 
     def _mutation(self, mutation_type="SNP", position=100, snp_type="", gene="thrA",
                   protein_change=""):
