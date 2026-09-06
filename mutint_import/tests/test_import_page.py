@@ -1,3 +1,4 @@
+import re
 import shutil
 import tempfile
 
@@ -8,7 +9,13 @@ from mutint_common import import_registry
 from mutint_experiment.models import Project
 
 
-class AddPageTestCase(TestCase):
+def _tabs(html):
+    """The strip alone: `[(href, label)]`, in order."""
+    strip = html.split('class="nav nav-tabs import-tabs"')[1].split("</ul>")[0]
+    return re.findall(r'<a href="([^"]+)">([^<]+)</a>', strip)
+
+
+class ImportPageTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
         self.user.set_password("pw")
@@ -32,7 +39,7 @@ class AddPageTestCase(TestCase):
 
     def test_page_renders_scoped_to_the_experiment(self):
         response = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id})
+            "/import/", {"experiment_id": self.experiment.id})
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
@@ -41,32 +48,62 @@ class AddPageTestCase(TestCase):
         self.assertNotIn('id="gd-person"', html)
         self.assertNotIn('id="ref-person"', html)
 
-    def test_dropdown_lists_the_registered_types_this_experiment_can_use(self):
-        response = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id})
-        html = response.content.decode("utf-8")
+    def test_the_tabs_are_the_registered_ways_in_in_order(self):
+        """One tab per core type, in the order core registered them, each landing on this
+        page with that type -- and the first is the page's default."""
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id}
+                               ).content.decode("utf-8")
 
-        # No Auto-detect: the type is chosen, never guessed.
+        # No Auto-detect and no dropdown: the type is the tab, never guessed.
         self.assertNotIn("Auto-detect", html)
-        offered = html.split('id="add-type"')[1].split("</select>")[0]
-        for label in ("Reference genome", "breseq data folders"):
-            self.assertIn(label, offered)
-        # The two that need a reference are absent until there is one -- see
-        # ImportTypesOfferedTestCase, which covers both sides of that.
+        self.assertNotIn('<select class="form-control" id="add-type"', html)
+        tabs = _tabs(html)
+        self.assertEqual(["Reference Sequence", "Genome Diff", "Variant Call Format",
+                          "breseq output", "Replace Annotation"], [t[1] for t in tabs])
+        self.assertEqual("/import/?experiment_id=%d&amp;type=genomediff" % self.experiment.id,
+                         tabs[1][0])
+        self.assertIn('id="add-type" value="reference"', html)
+        active = html.split('<li class="active">')[1].split("</li>")[0]
+        self.assertIn("type=reference", active)
 
-    def test_a_plugin_type_reaches_the_dropdown(self):
+    def test_a_tab_chooses_its_type(self):
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id,
+                                            "type": "breseq_folder"}).content.decode("utf-8")
+        self.assertIn('id="add-type" value="breseq_folder"', html)
+        self.assertIn("breseq data folders", html)
+        active = html.split('<li class="active">')[1].split("</li>")[0]
+        self.assertIn("breseq output", active)
+
+    def test_an_unknown_type_is_a_404(self):
+        self.assertEqual(404, self.client.get(
+            "/import/", {"experiment_id": self.experiment.id, "type": "nonsense"}).status_code)
+
+    def test_a_plugin_tab_reaches_the_strip_and_a_page_of_its_own_is_linked(self):
+        """A plugin registers a tab: for a type of its own, landing here; or for a page of
+        its own, which is what mutint-breseq's Run breseq is."""
+        from mutint_common.import_tab_registry import (
+            register_import_tab, unregister_import_tab)
         import_registry.register_import_handler(
             name="page_test_type", label="Plugin readings (.tsv)",
             patterns=[".tsv"], handle=lambda *a: {"files": [], "total_mutations": 0})
         self.addCleanup(lambda: import_registry._import_handlers.__setitem__(
             slice(None),
             [h for h in import_registry._import_handlers if h["name"] != "page_test_type"]))
+        register_import_tab("page_test", "Readings", import_type="page_test_type")
+        register_import_tab("page_test_page", "Elsewhere", url_name="reference_view")
+        register_import_tab("page_test_dead", "Dead", url_name="no_such_route_anywhere")
+        for key in ("page_test", "page_test_page", "page_test_dead"):
+            self.addCleanup(unregister_import_tab, key)
 
-        html = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id}
-        ).content.decode("utf-8")
-        self.assertIn("Plugin readings (.tsv)",
-                      html.split('id="add-type"')[1].split("</select>")[0])
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id,
+                                            "type": "page_test_type"}).content.decode("utf-8")
+        tabs = dict((label, href) for href, label in _tabs(html))
+        self.assertEqual("/import/?experiment_id=%d&amp;type=page_test_type" % self.experiment.id,
+                         tabs["Readings"])
+        self.assertEqual("/mutations/reference?experiment_id=%d" % self.experiment.id,
+                         tabs["Elsewhere"])
+        self.assertNotIn("Dead", tabs, "a tab whose route will not reverse is skipped")
+        self.assertIn("Plugin readings (.tsv)", html)
 
     def test_types_endpoint_returns_the_registry(self):
         body = self.client.get("/import/types/").json()
@@ -77,7 +114,7 @@ class AddPageTestCase(TestCase):
         # Unfiltered here: this endpoint has no experiment to scope by.
         self.assertTrue(body["types"][1]["requires_reference"])
 
-    def test_the_dropdown_leads_with_mutations_and_ends_with_replace_annotation(self):
+    def test_the_offered_list_leads_with_mutations_and_ends_with_replace_annotation(self):
         """Menu order is not run order, and this is the case that separates them.
 
         `genomediff` runs *last* -- a bare .gd is hash-checked against a reference that has
@@ -98,24 +135,6 @@ class AddPageTestCase(TestCase):
         self.assertEqual(offered[0], "genomediff")
         self.assertEqual(offered[-1], "replace_annotation")
 
-    def test_the_menu_order_is_what_the_page_renders(self):
-        """Asserted on the rendered <select>, not only on the registry, because the
-        template could always have re-sorted them back."""
-        from mutint_import import reference_store
-        from mutint_import.tests import breseq_fixture
-        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
-        reference_store.establish_or_check(
-            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
-
-        html = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id}
-        ).content.decode("utf-8")
-        select = html.split('id="add-type"')[1].split("</select>")[0]
-
-        self.assertLess(select.index('value="genomediff"'),
-                        select.index('value="breseq_folder"'))
-        self.assertLess(select.index('value="breseq_folder"'),
-                        select.index('value="replace_annotation"'))
 
     def test_run_order_is_unchanged_by_the_menu_order(self):
         """The guardrail for the above: `reference` must still run before `genomediff`,
@@ -129,7 +148,7 @@ class AddPageTestCase(TestCase):
         server -- used to leave the page polling a finished import for as long as it was
         open. The snapshot's own state is what ends it."""
         html = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id}
+            "/import/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
 
         self.assertIn("TERMINAL_STATES", html)
@@ -137,48 +156,29 @@ class AddPageTestCase(TestCase):
 
     def test_the_page_polls_for_import_progress(self):
         html = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id}
+            "/import/", {"experiment_id": self.experiment.id}
         ).content.decode("utf-8")
         self.assertIn("/progress", html)
         # A completed import must forget what was dropped, or pressing Add again
         # re-imports the samples that already landed.
         self.assertIn("clearSelection", html)
 
-    def test_replace_annotation_is_offered_only_once_a_reference_exists(self):
-        """It cannot do anything before there is a sequence to hold fixed, so offering it
-        would just be a way to get an error message."""
-        def dropdown():
-            html = self.client.get(
-                "/import/add/", {"experiment_id": self.experiment.id}
-            ).content.decode("utf-8")
-            # The <select> alone: the page also embeds the unscoped registry for naming
-            # stray files, so every label appears somewhere regardless.
-            return html.split('id="add-type"')[1].split("</select>")[0]
-
-        self.assertNotIn("Replace annotation", dropdown())
-
-        from mutint_import import reference_store
-        from mutint_import.tests import breseq_fixture
-        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
-        reference_store.establish_or_check(
-            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
-
-        self.assertIn("Replace annotation", dropdown())
 
     def test_missing_experiment_is_a_404(self):
         """The page is only ever scoped to one experiment; there is no unscoped form."""
-        self.assertEqual(self.client.get("/import/add/").status_code, 404)
+        self.assertEqual(self.client.get("/import/").status_code, 404)
         self.assertEqual(
-            self.client.get("/import/add/", {"experiment_id": 999999}).status_code, 404)
+            self.client.get("/import/", {"experiment_id": 999999}).status_code, 404)
         self.assertEqual(
-            self.client.get("/import/add/", {"experiment_id": "nonsense"}).status_code, 404)
+            self.client.get("/import/", {"experiment_id": "nonsense"}).status_code, 404)
 
-    def test_no_add_data_entry_in_the_sidebar(self):
-        """It could only ever have led to /import/add/ with nothing to add to."""
+    def test_no_import_data_entry_in_the_sidebar(self):
+        """It could only ever have led to /import/ with nothing to add to."""
         from mutint_common.nav_registry import get_nav_items
 
         labels = [item["label"] for item in get_nav_items()]
         self.assertNotIn("Add data", labels)
+        self.assertNotIn("Import data", labels)
 
     def test_someone_elses_experiment_is_forbidden(self):
         stranger = User.objects.create(username="stranger", email="s@e.com", is_active=True)
@@ -187,15 +187,17 @@ class AddPageTestCase(TestCase):
         self.client.force_login(stranger)
 
         response = self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id})
+            "/import/", {"experiment_id": self.experiment.id})
         self.assertEqual(response.status_code, 403)
 
-    def test_experiment_page_offers_add_and_delete(self):
+    def test_experiment_page_offers_import_and_delete(self):
         response = self.client.get("/stats/", {"experiment_id": self.experiment.id})
         html = response.content.decode("utf-8")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("/import/add/?experiment_id=%d" % self.experiment.id, html)
+        self.assertIn("/import/?experiment_id=%d" % self.experiment.id, html)
+        self.assertIn("+ Import data", html)
+        self.assertNotIn("Add data", html)
         self.assertIn("delete-experiment", html)
         # The dialog copy used to be inlined here, and this asserted the literal
         # "This is permanent." Deleting an experiment is one of the four controls behind
@@ -244,16 +246,17 @@ class AddPageTestCase(TestCase):
 
 
 class ImportTypesOfferedTestCase(TestCase):
-    """Which import types the Add page offers, and in what state.
+    """Which tabs can run, and what the others say.
 
+    Every tab is always drawn; the dropdown this page used to have left a type out, and a tab
+    you can see that says what it is waiting for is the better way to say the same thing.
     Three different rules, because the reasons differ:
 
-      reference           establishing one is a one-time act, so it stops being
-                          offered once the experiment has one
-      replace_annotation  meaningless before there is a genome to hold fixed, so it
-                          is absent until then
-      genomediff          needs a reference, but is a thing people arrive holding --
-                          so it is shown grayed with the reason, not hidden
+      reference           establishing one is a one-time act, so once the experiment has
+                          one the tab says so and offers no form
+      replace_annotation  meaningless before there is a genome to hold fixed
+      genomediff, vcf     need a reference, and are things people arrive holding -- so
+                          the tab says to get one in first
     """
 
     def setUp(self):
@@ -276,61 +279,51 @@ class ImportTypesOfferedTestCase(TestCase):
         reference_store.establish_or_check(
             self.experiment, breseq_fixture.gff3_text(sequences), sequences)
 
-    def _html(self):
+    def _html(self, type_name):
         return self.client.get(
-            "/import/add/", {"experiment_id": self.experiment.id}
+            "/import/", {"experiment_id": self.experiment.id, "type": type_name}
         ).content.decode("utf-8")
 
-    def _dropdown(self):
-        """Just the <select>. The page also embeds the *unscoped* registry, for naming the
-        type a stray file belongs to, so every label appears somewhere in the HTML whether
-        or not it is offered -- searching the whole page would pass either way."""
-        return self._html().split('id="add-type"')[1].split("</select>")[0]
+    def _offers_a_form(self, type_name):
+        html = self._html(type_name)
+        return 'id="add-form"' in html and 'id="add-not-offered"' not in html
 
     # --- with no reference yet -----------------------------------------------
 
     def test_reference_is_offered(self):
-        self.assertIn("Reference genome", self._dropdown())
+        self.assertTrue(self._offers_a_form("reference"))
 
-    def test_replace_annotation_is_absent(self):
-        self.assertNotIn("Replace annotation", self._dropdown())
+    def test_replace_annotation_says_it_needs_a_reference(self):
+        self.assertFalse(self._offers_a_form("replace_annotation"))
+        self.assertIn("reference genome first", self._html("replace_annotation"))
 
-    def test_genomediff_is_absent(self):
-        """Not offered grayed out: an entry you can see and cannot pick is a dead end."""
-        self.assertNotIn('value="genomediff"', self._dropdown())
-
-    def test_the_page_says_why_the_menu_is_short(self):
-        """The banner is where the answer lives once the entry itself is gone."""
-        self.assertIn("not offered below", self._html())
-
-    def test_the_page_says_a_reference_is_needed(self):
-        self.assertIn("no reference genome yet", self._html())
+    def test_genomediff_and_vcf_say_they_need_a_reference(self):
+        for name in ("genomediff", "vcf"):
+            with self.subTest(type=name):
+                self.assertFalse(self._offers_a_form(name))
+                self.assertIn("Reference Sequence tab", self._html(name))
 
     def test_breseq_folders_stay_available(self):
         """A breseq folder carries its own reference, so it is never blocked."""
-        self.assertIn('value="breseq_folder"', self._dropdown())
+        self.assertTrue(self._offers_a_form("breseq_folder"))
 
     # --- once a reference exists ---------------------------------------------
 
-    def test_reference_stops_being_offered(self):
+    def test_reference_stops_being_offered_and_says_why(self):
         self._establish_reference()
-        self.assertNotIn("Reference genome", self._dropdown())
+        self.assertFalse(self._offers_a_form("reference"))
+        self.assertIn("already has a reference genome", self._html("reference"))
 
     def test_replace_annotation_appears(self):
         self._establish_reference()
-        self.assertIn("Replace annotation", self._dropdown())
-
-    def test_replace_annotation_names_the_formats_it_takes(self):
-        """The label names renaming too: this type is the only route to it, and a FASTA is
-        accepted for exactly that reason even though it installs no annotation."""
-        self._establish_reference()
+        self.assertTrue(self._offers_a_form("replace_annotation"))
         self.assertIn("Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
-                      self._dropdown())
+                      self._html("replace_annotation"))
 
-    def test_genomediff_becomes_selectable(self):
+    def test_genomediff_becomes_available(self):
         self._establish_reference()
-        self.assertIn('value="genomediff"', self._dropdown())
-        self.assertNotIn("no reference genome yet", self._html())
+        self.assertTrue(self._offers_a_form("genomediff"))
+        self.assertNotIn('id="add-not-offered"', self._html("genomediff"))
 
     def test_the_unscoped_types_endpoint_stays_unfiltered(self):
         """It has no experiment to scope by, and the handlers enforce the rules anyway."""

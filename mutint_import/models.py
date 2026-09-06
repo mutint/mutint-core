@@ -8,7 +8,7 @@ entire ingest there, where it is bounded by nothing. **That is the part of this 
 has outgrown it**, and it is still on the request path: there is a queue now (see **Background
 work** in the suite ``CLAUDE.md``) and finalize has not moved onto it, because this function's
 delete-the-staging-dir-and-return-a-summary contract *is* the synchronous shape. What a long
-finalize has instead is ``progress``, a snapshot the Add page polls
+finalize has instead is ``progress``, a snapshot the Import data page polls
 so the wait is legible rather than silent.
 """
 

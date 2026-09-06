@@ -75,7 +75,7 @@ def import_gd_files(uploaded_files, project_name, experiment_name, owner_name,
 
     A ``.gd`` carries no reference genome, so it cannot establish the reference every
     sample in an experiment shares -- the experiment must already have one, set by dropping a
-    GenBank, GFF3 or FASTA on the Add page. ``require_reference=False`` is for callers that
+    GenBank, GFF3 or FASTA on the Import data page. ``require_reference=False`` is for callers that
     manage that invariant themselves.
     """
     from mutint_import.reference_store import has_reference
@@ -401,7 +401,7 @@ def _check_seq_ids(document, experiment, sample_name):
         raise SeqIdMismatch(
             "%s names %s, which is not this experiment's reference (%s). The same "
             "genome under a different name has to be renamed to match -- upload that "
-            "reference on the Add data page, or run `./mutint rename_contigs %s --ref "
+            "reference on the Import data page, or run `./mutint rename_contigs %s --ref "
             "<file>` -- and a different genome belongs in its own experiment."
             % (sample_name, ", ".join(unknown), ", ".join(sorted(known)),
                experiment.id if experiment is not None else "<id>"))

@@ -248,7 +248,7 @@ def finalize_upload(request, upload_id):
     900-second timeout, and the derived-data rebuild after the last sample counts every
     call in the installation. What makes that bearable to watch is
     `_SessionProgress`, which writes a snapshot onto the session as each unit starts and
-    finishes; `upload_progress` serves it and the Add page polls.
+    finishes; `upload_progress` serves it and the Import data page polls.
 
     **The progress is written from inside this request**, which is why it works with no
     worker and no thread: every write here lands outside the per-sample `transaction.atomic()`

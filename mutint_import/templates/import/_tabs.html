@@ -1,0 +1,12 @@
+{% comment %} The ways into an experiment, one tab each, from mutint_common.import_tab_registry:
+   core's import types and any page a plugin registered. The same shape as the curate strip,
+   for the same reason -- these are one task at different moments, not five sidebar entries.
+   `?experiment_id=` is carried on every link. {% endcomment %}
+{% if tabs %}
+<ul class="nav nav-tabs import-tabs" style="margin-bottom: 16px;">
+    {% for tab in tabs %}
+        <li{% if tab.key == active %} class="active"{% endif %}>
+            <a href="{{ tab.url }}">{{ tab.label }}</a></li>
+    {% endfor %}
+</ul>
+{% endif %}

@@ -371,7 +371,7 @@ class PluginDegradationTestCase(ImportProgressTestCase):
 
 
 class ProgressEndpointTestCase(TestCase):
-    """The snapshot the Add page polls while finalize runs."""
+    """The snapshot the Import data page polls while finalize runs."""
 
     def setUp(self):
         self.user = User.objects.create(username="tester", email="t@e.com", is_active=True)

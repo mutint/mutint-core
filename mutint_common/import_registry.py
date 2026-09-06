@@ -54,7 +54,7 @@ def register_import_handler(name, label, patterns, handle,
                             list_units=None, menu_order=None, directories=()):
     """Register an import type.
 
-    name        stable slug; the value the Add page's dropdown submits
+    name        stable slug; the value the Import data page's dropdown submits
     label       human-readable, shown in the dropdown
     patterns    lowercase path suffixes this handler claims (e.g. '.gbk',
                 'data/reference.bam'). Serialized to the client so it can bucket a
@@ -72,7 +72,7 @@ def register_import_handler(name, label, patterns, handle,
                 see a whole directory). Defaults to suffix matching on `patterns`.
     requires_reference
                 the type cannot run until the experiment has a reference genome, and
-                is left out of the Add page's dropdown until it does. The handler still
+                is left out of the Import data page's dropdown until it does. The handler still
                 enforces it server-side either way.
     accepts_options
                 the handler takes a fifth `options` argument -- the caller's per-request
@@ -97,7 +97,7 @@ def register_import_handler(name, label, patterns, handle,
                 directory basename, a filename, a path relative to the drop root --
                 so this mirrors one handler's own reporting rather than imposing a
                 rule. `mutint_common.import_progress` is what consumes it.
-    menu_order  where this sits in the Add page's dropdown, lower first. Defaults to
+    menu_order  where this sits in the Import data page's dropdown, lower first. Defaults to
                 `priority`, so a type that says nothing keeps the position it had.
 
                 **This exists because `priority` cannot be moved to do the job.**
@@ -109,7 +109,7 @@ def register_import_handler(name, label, patterns, handle,
                 questions and now have different answers.
 
                 Only the dropdown is sorted by it. `get_import_types()` stays in
-                priority order, because the Add page walks *that* list to name what an
+                priority order, because the Import data page walks *that* list to name what an
                 unrecognized file looks like and wants the handler that would really
                 claim it named first.
     directories directory names whose whole contents this handler claims, wherever they

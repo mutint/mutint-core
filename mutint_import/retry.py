@@ -1,7 +1,7 @@
 """Retry a sample that lost a race for the write lock.
 
 The import lock stops two imports running at once, but it does not make an import the only
-writer: every poll of the Add page writes a session row, because
+writer: every poll of the Import data page writes a session row, because
 ``SESSION_SAVE_EVERY_REQUEST`` is on, and so does anybody else using the site. Those writes are
 short, and they can still land on a sample's ``BEGIN`` and cost it the wait.
 

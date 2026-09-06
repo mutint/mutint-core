@@ -303,7 +303,7 @@ class PostProcessingTestCase(TestCase):
     genomediff handler did not.
 
     Nothing noticed, because the things it drives are all things whose absence looks like an
-    empty result: a .gd dropped on the Add Data page left Fixed Mutations and Converged
+    empty result: a .gd dropped on the Import data page left Fixed Mutations and Converged
     Mutations blank however good the data was, and the stats showing whatever the last CLI
     upload had left. Core cannot see a plugin, so this asserts the hook runs rather than what
     any plugin does with it.
@@ -396,7 +396,7 @@ class ReferenceResultKindTestCase(TestCase):
     """A reference genome's row says what it is rather than how many mutations it carried.
 
     Reported as `mutations: 0` it read as a mutation file that imported nothing -- which is
-    the one thing a reference is not, and the Add page said so twice: once in the file
+    the one thing a reference is not, and the Import data page said so twice: once in the file
     table's count column and once in "Added to E (#1): 0 mutations". The count is absent
     now and `kind` carries what the file was, so the page has something to render instead of
     a number that was never about this file.

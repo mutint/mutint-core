@@ -30,7 +30,7 @@ Everything below is a registration, made from your `AppConfig.ready()`. Each is 
 - **Derived data** — a table computed from the mutations, which core marks stale for you when
   they change.
 - **A CSV export type**, appearing in the export menus.
-- **An import type**, appearing on the Add Data page and in its auto-detection.
+- **An import type**, appearing on the Import data page and in its auto-detection.
 - **A section on `/about`**, describing your component and reporting its version.
 - **An example dataset**, loadable with `./mutint load_example`.
 - **Context for the experiment views**, without core depending on you.

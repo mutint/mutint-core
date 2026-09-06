@@ -70,7 +70,7 @@ like any other page, so a browser session sees exactly the experiments its user 
 
 ### breseq result import (`MUTINT_STORE_DIR`)
 
-Dropping breseq result folders on `/import/add/` uploads five files per sample --
+Dropping breseq result folders on `/import/` uploads five files per sample --
 `data/output.gd`, `data/reference.gff3`, `data/reference.fasta`,
 `data/reference.bam`, `data/reference.bam.bai` -- and nothing else, so the bulk of a run
 never leaves your machine. They are stored under `MUTINT_STORE_DIR`, keyed by database id:
@@ -94,7 +94,7 @@ Access is gated by project permissions.
 
 ### breseq result import (`MUTINT_STORE_DIR`)
 
-Dropping breseq result folders on `/import/add/` uploads five files per sample and nothing else,
+Dropping breseq result folders on `/import/` uploads five files per sample and nothing else,
 so the bulk of a run never leaves your machine:
 
 ```
@@ -134,7 +134,7 @@ derived from the same genome compare equal rather than looking like two differen
 ### Reference genomes
 
 A bare `.gd` carries no reference, so it cannot establish one. Drop a reference on
-`/import/add/` -- on its own, or alongside the data in the same drop, since the reference
+`/import/` -- on its own, or alongside the data in the same drop, since the reference
 import type runs first whatever order the files arrive in. Accepted:
 
 | Format | Extensions | Notes |

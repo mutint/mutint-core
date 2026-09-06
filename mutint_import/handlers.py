@@ -73,7 +73,7 @@ VCF_PATTERNS = [".vcf", ".vcf.gz"]
 # the suffix form of it, for reading sample names back off a list of claimed paths.
 GD_RELATIVE_SUFFIX = "data/output.gd"
 
-# Where each type sits in the Add page's dropdown, which is deliberately not the order they
+# Where each type sits in the Import data page's dropdown, which is deliberately not the order they
 # run in -- see `menu_order` on `register_import_handler`. Mutations first because that is
 # what people come here for; replacing an established genome's annotation last because it is
 # the rarest and the hardest to undo.
@@ -151,7 +151,7 @@ def list_breseq_units(_staged_root, claimed):
     **Derived from what was claimed, not from a second walk of the tree.** A sample *is* a
     directory holding `data/output.gd` and `detect_breseq_folders` has already found them
     all, so re-running `find_sample_dirs` here would traverse the whole staging area a
-    second time to reach the same answer -- and the whole announcement is what the Add page
+    second time to reach the same answer -- and the whole announcement is what the Import data page
     waits on before it can draw a single row. Reading it off the claim is both quicker and
     one fewer opinion about which directories are samples.
     """

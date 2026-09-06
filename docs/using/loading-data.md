@@ -1,6 +1,6 @@
 # Loading data
 
-Everything arrives through **one page** — `/import/add/?experiment_id=<id>` — or the
+Everything arrives through **one page** — `/import/?experiment_id=<id>` — or the
 equivalent command. There is no separate reference-genome page and no per-format workflow: you
 drop files, and the type is either chosen or detected.
 
@@ -21,7 +21,7 @@ finally removes them.
 
 ## From the browser
 
-Drop breseq result folders on the Add Data page. Five files per sample are uploaded and
+Drop breseq result folders on the Import data page. Five files per sample are uploaded and
 nothing else, so the bulk of a run never leaves your machine:
 
 ```

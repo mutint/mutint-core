@@ -3,10 +3,10 @@
 `upload_session` stages files and hands them to the import registry. Some components want the
 first half and not the second: `mutint-breseq` takes FASTQ reads that are not a mutation file
 at all -- they are the input to a job whose *output* is imported hours later, and which needs
-a sample name and a command line the Add page has nowhere to put.
+a sample name and a command line the Import data page has nowhere to put.
 
 Registering an import handler for them would have been the smaller change and is the wrong
-one: it puts an entry in the Add page's dropdown that cannot carry what the entry needs, and
+one: it puts an entry in the Import data page's dropdown that cannot carry what the entry needs, and
 makes `run_import` responsible for something that does not return a summary. So the split is
 made one level down. Core keeps the parts that are about *bytes arriving safely* -- the
 permission check, the manifest, path containment, the chunk endpoint and the TTL reaper -- and

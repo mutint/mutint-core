@@ -1,7 +1,7 @@
 # Taking a file upload
 
 If what your plugin accepts is a *mutation file*, you want
-[an import handler](registries.md) — register one, and the Add Data page's drag-and-drop, its
+[an import handler](registries.md) — register one, and the Import data page's drag-and-drop, its
 type dropdown, its per-file progress table and its summary all reach you with no page of your
 own.
 

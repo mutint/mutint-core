@@ -119,7 +119,7 @@
 }
 
 /* Same story one level up: a grid column used as a plain wrapper straight inside the
-   content box -- the Add Data page does this -- carries a 15px gutter with no row to
+   content box -- the Import data page does this -- carries a 15px gutter with no row to
    cancel it, so its content sat 15px RIGHT of the title. Outside a row a column is only a
    width, and the gutter is noise. */
 #mutint-content > [class*="col-"] {

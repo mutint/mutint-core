@@ -6,7 +6,7 @@
 
 A component that needs particular data to show its feature ships that data and registers it
 (``mutint_common.example_registry``); this loads it. The dataset is a directory laid out as it
-would be dropped on the Add Data page, so loading runs the real import handlers in priority
+would be dropped on the Import data page, so loading runs the real import handlers in priority
 order -- reference first, then the mutation files -- and ends in the post-experiment hooks.
 Whatever the example exists to demonstrate is therefore computed here, not shipped.
 

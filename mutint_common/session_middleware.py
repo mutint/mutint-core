@@ -2,7 +2,7 @@
 
 ``SESSION_SAVE_EVERY_REQUEST`` is on, which writes a ``django_session`` row on every request
 so that activity keeps a session alive. That is right for pages and wrong for one endpoint:
-the Add page's progress poll.
+the Import data page's progress poll.
 
 **A poll must be a pure reader, or it waits for the import it is reporting on.** Under WAL a
 reader is never blocked, so a poll that only reads answers instantly no matter how long the

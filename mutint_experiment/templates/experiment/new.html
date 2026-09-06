@@ -2,7 +2,7 @@
 {% block title %}New experiment{% endblock %}
 {% block header %}New experiment{% endblock %}
 {% block content %}
-    {% comment %} A page of its own, matching the Add data page and the new-project page.
+    {% comment %} A page of its own, matching the Import data page and the new-project page.
        The project picker lists only projects this user may edit, so it never offers one
        the create endpoint would 403 on. {% endcomment %}
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
@@ -50,7 +50,7 @@
             project: document.getElementById("ne-project").value,
             name: name
         }).then(function (body) {
-            window.location.href = "/import/add/?experiment_id=" + body.experiment_id;
+            window.location.href = "/import/?experiment_id=" + body.experiment_id;
         }).catch(function (err) {
             document.getElementById("ne-error").textContent = err.message;
         });

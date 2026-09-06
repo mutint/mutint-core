@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1935 run, 0 failures** standalone. They were **1939** before the interop API left for
+**Baseline: 1937 run, 0 failures** standalone. They were **1935** before the Import data page grew
+its tabs and registry (net two), **1939** before the interop API left for
 mutint-api with its four tests, **1936** before the sidebar grew its
 END_SECTION and Curate (three tests), **1931** before the matrix grew row
 sets and the page its two blocks (five tests), **1925** before the matrix grew its
@@ -177,7 +178,7 @@ them. (The assembled figure was *run*, not
 added up -- with `PYTHONPATH` pointed at this checkout, since `mutint/mutint-core` is a submodule
 clone of the last commit. See the trap two sentences down for why the arithmetic is not
 trusted, even when it agrees as it does here.)
-They were 1305 and 1441 before the Add page learned to report
+They were 1305 and 1441 before the Import data page learned to report
 an import sample by sample -- and that assembled figure is a re-count, not arithmetic: 1441
 plus the 31 tests this added is 1472, which is seven short, so the plugins had gained tests
 that nobody had re-counted. It is the trap this paragraph already warns about, sprung again.
@@ -1666,7 +1667,7 @@ Two things this shook out that are worth knowing:
 
 ### Creating and importing are pages, not dialogs
 
-`/project/new/`, `/experiment/new/` and `/import/add/` are all full pages. The
+`/project/new/`, `/experiment/new/` and `/import/` are all full pages. The
 first two were modals over the list tables and are not any more: a create form wants a
 heading, room to explain its fields and a URL you can link someone to. The modals were also
 where two bugs lived -- an inline panel overlapped the DataTable beneath it, and Bootstrap's
@@ -2302,7 +2303,7 @@ predated the plugin -- or whose filters had changed since, which altered what fi
 find and rebuilt nothing -- stayed stale with no way to catch up. It is computed by the page
 now, so staleness is not a state this data can be in, and only the diagnostic half remains.
 
-### Which import types the Add page offers
+### Which import types the Import data page offers
 
 Two rules, because the reasons differ. Both are declared on the handler and applied by
 `get_import_types_for(has_reference)`, never in the template, so the dropdown and the JSON
@@ -2348,7 +2349,7 @@ call in the installation. Reported as a single POST, all of it was a page that h
 stopped moving, which is indistinguishable from one that had broken.
 
 `mutint_common/import_progress.py` is the seam. `run_import` **announces every unit before any
-handler runs**, and each handler brackets its own work with `begin` / `report`; the Add page
+handler runs**, and each handler brackets its own work with `begin` / `report`; the Import data page
 lists every sample as *waiting* immediately and fills each in as it lands, above a bar counting
 samples rather than bytes.
 
@@ -2525,7 +2526,7 @@ the page says so in as many words.
 
 **A reference genome has no mutation count, and reporting one said something false.** Every
 file result carries `mutations`, so the reference handler filled it with the 0 it truthfully
-imported -- and the Add page rendered that twice, in the table's Mutations column and in
+imported -- and the Import data page rendered that twice, in the table's Mutations column and in
 *Added to E (#1): 0 mutations*, both of which read as a mutation file that landed nothing.
 The entry sets `mutations` to None and declares `kind=KIND_REFERENCE`
 (`mutint_common/import_registry.py`) instead; the page prints **Reference** in that column and
@@ -3191,7 +3192,7 @@ All apps use the `mutint_*` namespace. Key apps:
     component, and a plugin may keep its own import records beside core's -- see
     `Mutation.supplemental_data` for what belongs there and what does not.
   - CLI import — `./mutint import <path>` resolves the target experiment from its options and
-    hands every path to the same `import_registry` handlers the Add page uses, so the shell
+    hands every path to the same `import_registry` handlers the Import data page uses, so the shell
     and the web agree by construction. It was `./mutint upload`, which read the project,
     experiment and owner out of `<exp>/metadata/*.csv` and was a second importer sharing no
     code with the web paths; that is gone, along with `upload.py` and the metadata app.
@@ -3287,7 +3288,7 @@ Creation and deletion are nested under the objects they act on:
   step, and delete selected rows.
 - `/experiment/` — **+ New experiment** (a project picker plus a name) and delete selected
   rows. `/project/<pk>/` carries the same **+ New experiment**, with the project implicit.
-  Both POST `/experiment/create/` and land on the new experiment's Add page. The picker
+  Both POST `/experiment/create/` and land on the new experiment's Import data page. The picker
   lists only projects `can_edit_project` allows, so it never offers one the POST would 403 on;
   a user with no editable project is shown **+ New project** instead.
 - **`/project/<pk>/` deletes selected experiments too**, which for a long time it could
@@ -3325,7 +3326,7 @@ Creation and deletion are nested under the objects they act on:
     `if (!confirmed)` idiom the plain helper's callers use swallows the second silently, and
     somebody who pressed Delete and saw nothing happen cannot tell that from a broken page.
     The two cases are separated so only one of them says anything.
-- An experiment's page (`/stats?experiment_id=<pk>`) carries **+ Add data** and **Delete**,
+- An experiment's page (`/stats?experiment_id=<pk>`) carries **+ Import data** and **Delete**,
   rendered through `{% block experiment_actions %}` in `mutint_common/templates/base.html`.
   **Deleting lands on the experiment's project**, not on the flat experiment list it used to
   go to — having just removed one experiment out of a project, the project is where the rest
@@ -3341,7 +3342,7 @@ Creation and deletion are nested under the objects they act on:
   Compare passed `filter_type="AMP"` — a value that means **exclude** AMP, not include it.
   Both are gone and Compare now renders every mutation type. `AMP` was never a separate
   feature: it is one of eight breseq/GenomeDiff types, first-class throughout the pipeline.
-- `/import/add/?experiment_id=<pk>` is the one place data goes in. It is scoped to an
+- `/import/?experiment_id=<pk>` is the one place data goes in. It is scoped to an
   experiment **by primary key**, so two experiments may share a name and two people may add to
   the same one — unlike `_prepare_experiment`, whose name lookup can only ever reach one of
   them. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
@@ -3380,7 +3381,7 @@ against it. Core registers `reference` (10), `breseq_folder` (50) and `genomedif
 exclude files that live inside one.
 
 `patterns` does more than route. `identify()` uses it to name the type a rejected file belongs
-to, and the Add page serializes it to name the type a file in the drop belongs to before
+to, and the Import data page serializes it to name the type a file in the drop belongs to before
 anything uploads — so a plugin gets both of those by registering, with no edit to core.
 
 ### Serving breseq's report, which is the only HTML we did not write
@@ -3450,7 +3451,7 @@ whether or not its report stores, and a `.gd` drop has no report at all.
 **`register_import_handler` grew `directories=`** for the same feature, and it is the thing
 `patterns` cannot express: patterns are suffix matches and "everything under `output/`" is not
 a suffix -- breseq chooses the filenames and they differ between releases. It matters on the
-*client* as much as the server, because the Add page decides what to upload from these
+*client* as much as the server, because the Import data page decides what to upload from these
 declarations before a byte is sent.
 
 ### Reading VCF, and why it is not a second kind of mutation
@@ -3534,7 +3535,7 @@ hole. Fixed while the VCF export was being written beside it, rather than copied
 for the import registry. It exists because `mutint-breseq` takes FASTQ reads, which are not a
 mutation file at all: they are the input to a job whose *output* is imported hours later, and
 which needs a sample name and a command line beside them. `handle(experiment, staged_root,
-paths, user)` can carry neither, and the Add page has no box to put either in.
+paths, user)` can carry neither, and the Import data page has no box to put either in.
 
 Registering an import handler anyway would have been the smaller change and is the wrong one
 — a dropdown entry that cannot carry what the entry needs. So the split is made one level

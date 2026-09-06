@@ -15,7 +15,7 @@ thing that answers "why does breseq think this is a mutation".
 
 ## Which samples have one
 
-Samples imported as **breseq folders**, from the Add Data page or from a run launched in
+Samples imported as **breseq folders**, from the Import data page or from a run launched in
 MutInt. The report is part of the folder, so it arrives with the data.
 
 Samples imported as bare `.gd` files or from VCF **have no report** — those formats carry

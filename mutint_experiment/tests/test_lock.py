@@ -236,7 +236,7 @@ class EveryWritePathTestCase(LockTestCase):
         for url in ("/experiment/%d/edit/" % self.experiment.id,
                     "/experiment/%d/samples/" % self.experiment.id,
                     "/sample/%d/edit/" % self.sample_a.id,
-                    "/import/add/?experiment_id=%d" % self.experiment.id):
+                    "/import/?experiment_id=%d" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
 

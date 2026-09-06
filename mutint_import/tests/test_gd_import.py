@@ -43,7 +43,7 @@ def _uploaded_as(path, name):
 def ensure_reference(experiment="gd exp", project="gd project"):
     """A bare .gd carries no reference, so the experiment must already have one.
 
-    This is what dropping a GenBank, GFF3 or FASTA on the Add page does for a real user.
+    This is what dropping a GenBank, GFF3 or FASTA on the Import data page does for a real user.
 
     Module level rather than a method, so a test case that wants the scaffolding does not
     have to subclass `GdImportTestCase` and re-run every one of its tests to get it.
@@ -156,7 +156,7 @@ class GdImportTestCase(TestCase):
     def test_web_upload_through_the_chunked_session(self):
         """The route a .gd actually takes now that /import/ is gone: create, chunk, finalize.
 
-        Session ownership is by primary key, so the experiment is built the way the Add page
+        Session ownership is by primary key, so the experiment is built the way the Import data page
         reaches it rather than by name.
         """
         import json

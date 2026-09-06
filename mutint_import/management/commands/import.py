@@ -1,4 +1,4 @@
-"""``./mutint import`` -- the shell's half of the Add Data page.
+"""``./mutint import`` -- the shell's half of the Import data page.
 
 The module is named for a keyword, which Python's `import` statement cannot spell. Django
 loads commands through `importlib.import_module` on a string, so this is fine; nothing may
@@ -13,7 +13,7 @@ from mutint_import.ale_experiment import import_paths, resolve_experiment
 class Command(BaseCommand):
 
     help = ("Import breseq folders, .gd files and reference genomes into an experiment, "
-            "the same way the Add Data page does.")
+            "the same way the Import data page does.")
 
     def add_arguments(self, parser):
         parser.add_argument('path(s)', nargs='+', type=str,
@@ -21,7 +21,7 @@ class Command(BaseCommand):
                                  'dropped folder is.')
         parser.add_argument('--experiment-id', type=int,
                             help='Primary key of an existing experiment to add to. This is '
-                                 'what the Add page uses, and two experiments may share a '
+                                 'what the Import data page uses, and two experiments may share a '
                                  'name -- prefer it when the experiment exists.')
         parser.add_argument('--project', type=str,
                             help='Project name, created if it does not exist.')

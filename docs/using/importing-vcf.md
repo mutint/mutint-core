@@ -1,6 +1,6 @@
 # Importing VCF
 
-Drop `.vcf` files on an experiment's **Add data** page and choose *VCF variant calls*. Each
+Drop `.vcf` files on an experiment's **Import data** page, on the *Variant Call Format* tab. Each
 one becomes samples with mutations, indistinguishable from samples imported from breseq.
 
 The experiment needs a **reference genome** first. A VCF does not carry one, and the reference

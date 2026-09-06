@@ -139,7 +139,7 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_sample',             # nav: Mutations
             'mutint_curate', # nav: Curate
             'mutint_filter',          # nav: Filter
-            'mutint_import',          # nav: none (Add data is reached from an experiment)
+            'mutint_import',          # nav: none (Import data is reached from an experiment)
             'mutint_stats',
             # nav: none. /jobs/ is reached from the sidebar's account block, which is written
             # into base.html rather than registered -- nav_registry cannot express "only when
@@ -195,7 +195,7 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         'MIDDLEWARE': [
             'django.middleware.common.CommonMiddleware',
             # Django's, plus an opt-out a view can set. SESSION_SAVE_EVERY_REQUEST
-            # writes a session row on every request, and the Add page's progress poll
+            # writes a session row on every request, and the Import data page's progress poll
             # must not write at all: a writing poll queues behind the import it is
             # reporting on. See mutint_common.session_middleware.
             'mutint_common.session_middleware.SkipSaveSessionMiddleware',

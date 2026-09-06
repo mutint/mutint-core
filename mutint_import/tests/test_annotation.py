@@ -1,7 +1,7 @@
 """
 Annotation, end to end through a real import.
 
-Drops a reference and a .gd on the same experiment the way the Add page does,
+Drops a reference and a .gd on the same experiment the way the Import data page does,
 then checks the mutations come out carrying breseq's annotation -- rather than
 only what the .gd file happened to say, which for a plain breseq output.gd is
 nothing at all.

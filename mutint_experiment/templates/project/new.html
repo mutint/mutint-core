@@ -3,7 +3,7 @@
 {% block header %}New project{% endblock %}
 {% block content %}
     {% comment %} A page of its own rather than a dialog over the project list, matching
-       the Add data page. A create form has a heading, room to explain its fields and a
+       the Import data page. A create form has a heading, room to explain its fields and a
        URL you can link someone to; none of that fits in a modal over a table. {% endcomment %}
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
         {% csrf_token %}
@@ -18,7 +18,7 @@
             <input type="text" class="form-control" id="np-experiment"
                    placeholder="Leave blank to create the project only">
             <small class="help-block">
-                Name one and you land straight on its Add data page. A project with no
+                Name one and you land straight on its Import data page. A project with no
                 experiments has nowhere to put data yet.
             </small>
         </div>
@@ -47,7 +47,7 @@
         window.mutintPost("/project/create/", data).then(function (body) {
             // Straight into the new experiment when one was created with the project.
             window.location.href = body.experiment_id
-                ? "/import/add/?experiment_id=" + body.experiment_id
+                ? "/import/?experiment_id=" + body.experiment_id
                 : "/project/" + body.project_id + "/";
         }).catch(function (err) {
             document.getElementById("np-error").textContent = err.message;

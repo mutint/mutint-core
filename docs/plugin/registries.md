@@ -16,7 +16,8 @@ holds core's three import types. A plugin is just another caller.
 | [`plugin_registry`](../reference/plugin_registry.md) | URL patterns, export handlers, rename hooks | mounts your pages, offers your export type |
 | [`rebuild_registry`](../reference/rebuild_registry.md) | a function that recomputes derived data | marks it stale when the mutations change, and runs it |
 | [`nav_registry`](../reference/nav_registry.md) | a label and a URL | draws a sidebar entry |
-| [`import_registry`](../reference/import_registry.md) | a file type and a handler | offers it on the Add Data page, routes drops to it |
+| [`import_registry`](../reference/import_registry.md) | a file type and a handler | routes drops of that type to it |
+| [`import_tab_registry`](../reference/import_tab_registry.md) | a label and an import type, or a page of your own | draws a tab on the Import data page |
 | [`about_registry`](../reference/about_registry.md) | a template | gives your component a section on `/about` |
 | [`example_registry`](../reference/example_registry.md) | a directory of data | loads it with `./mutint load_example` |
 | [`context_registry`](../reference/context_registry.md) | a callable | adds to the experiment views' context |

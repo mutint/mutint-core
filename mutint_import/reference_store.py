@@ -2,7 +2,7 @@
 
 One code path for both ways a reference arrives:
 
-* an explicit upload -- a GenBank, GFF3, or FASTA dropped on the Add page; and
+* an explicit upload -- a GenBank, GFF3, or FASTA dropped on the Import data page; and
 * a breseq folder, which carries ``data/reference.gff3`` and ``data/reference.fasta``.
 
 Both are normalized first (see ``reference.normalize_reference``), so the stored artifacts

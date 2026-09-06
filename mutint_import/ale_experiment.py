@@ -122,10 +122,10 @@ def import_paths(paths, experiment, user):
 
     Named for what it does rather than for how the bytes arrived: nothing is uploaded from a
     shell. The registry is `import_registry`, the handlers are import handlers and the page
-    is `/import/add/`; `upload` was the one word in that chain saying something else.
+    is `/import/`; `upload` was the one word in that chain saying something else.
 
     One `run_import` per path with **no import type named**, so auto-detect routes every
-    file the way the Add page does. That is the whole of the unification, and it is worth
+    file the way the Import data page does. That is the whole of the unification, and it is worth
     saying what the CLI gains by it: it used to call `breseq_folder.import_breseq_folders`
     directly, which is one handler of four, so a `.gd` sitting loose beside the folders was
     imported only by the flag that told `import_breseq_folders` to report it, a reference
@@ -167,7 +167,7 @@ def resolve_experiment(*, experiment_id=None, project_name=None, experiment_name
 
     Two ways in, and they are the two the product already had:
 
-    - `experiment_id` is the web's form. `/import/add/?experiment_id=<pk>` is scoped by
+    - `experiment_id` is the web's form. `/import/?experiment_id=<pk>` is scoped by
       primary key precisely so two experiments may share a name and two people may add to
       one, and a shell upload should not be weaker than that.
     - `project_name` + `experiment_name` get-or-create, which is what the metadata file used

@@ -16,7 +16,7 @@ load it. Components register in ``AppConfig.ready()``::
 
 **A dataset is a directory of files the import path already understands** -- nothing more, and
 in particular not a Django fixture. Loading one therefore runs the registered import handlers
-in priority order, exactly as a drop on the Add Data page does, and ends in
+in priority order, exactly as a drop on the Import data page does, and ends in
 ``gd_import.run_post_processing``, which fires the post-experiment hooks. So the derived data
 the example exists to show is genuinely computed rather than shipped alongside. A fixture
 would load faster and prove nothing about the pipeline.

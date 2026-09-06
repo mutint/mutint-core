@@ -51,14 +51,27 @@ register_import_handler(
     priority=50)
 ```
 
-It appears in the Add Data page's type dropdown and in its auto-detection.
+That routes drops of your type. To give it a **tab on the Import data page**, register one
+too, from the same `ready()`:
+
+```python
+from mutint_common.import_tab_registry import register_import_tab
+
+register_import_tab('yourthing', 'Your measurements', import_type='yourthing')
+```
+
+The tab lands on the Import data page with your type chosen. A tab may instead be a page of
+your own -- `register_import_tab('run_thing', 'Run thing', url_name='your_route')` -- when a
+drop needs something the Import page has no box for; mutint-breseq's Run breseq tab is that,
+and its page renders `{% import_tabs 'run_thing' %}` so it wears the same strip. Tabs render
+in `INSTALLED_APPS` order, after core's five.
 
 `priority` is real ordering, not a preference: a reference genome must be established before
 anything hash-checked against it, so core registers `reference` at 10, `breseq_folder` at 50
 and `genomediff` at 60. Pick a number that puts you after whatever your files depend on.
 
 `patterns` does more than route. `identify()` uses it to tell somebody who chose the wrong
-type what their file looks like instead, and the Add Data page serializes it to say the same
+type what their file looks like instead, and the Import data page serializes it to say the same
 thing *before* anything uploads. Both come free from registering.
 
 Two optional declarations worth knowing:

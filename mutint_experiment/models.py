@@ -237,7 +237,7 @@ class Experiment(SoftDeleteMixin):
 
         Every experiment-scoped view was carrying its own workaround for that, and the two
         that were not carried the bug: the sample edit pages had the leading colon, the
-        genome browser and the Add Data page had the doubled name.
+        genome browser and the Import data page had the doubled name.
 
         `project` is nullable, so the project name can be empty; the template renders the
         colon regardless, which is a template question rather than this one's.

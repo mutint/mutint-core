@@ -210,7 +210,7 @@ class ExperimentSidebarLabelTestCase(TestCase):
     rendered a stray leading colon, and one that added the project name without also
     overriding the composed one rendered the project twice. Every experiment-scoped view
     carried its own workaround; the ones that did not carried the bug -- the sample edit
-    pages had the colon, the genome browser and the Add Data page had the doubled name.
+    pages had the colon, the genome browser and the Import data page had the doubled name.
     """
 
     def setUp(self):
@@ -251,7 +251,7 @@ class ExperimentSidebarLabelTestCase(TestCase):
         """No leading colon, no doubled project -- on the pages that used to have each."""
         pages = {
             "edit samples": "/experiment/%d/samples/" % self.experiment.id,
-            "add data": "/import/add/?experiment_id=%d" % self.experiment.id,
+            "add data": "/import/?experiment_id=%d" % self.experiment.id,
             "overview": "/stats/?experiment_id=%d" % self.experiment.id,
         }
         for name, url in pages.items():

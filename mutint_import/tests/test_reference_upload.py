@@ -207,7 +207,7 @@ class ReferenceStoreTestCase(TestCase):
     """What `/import/reference/` used to assert over HTTP, asserted on the store directly.
 
     The page is gone (see `mutint_import/views.py`); `establish_or_check` is where its
-    behavior actually lived, and the Add page's `reference` / `replace_annotation` types now
+    behavior actually lived, and the Import data page's `reference` / `replace_annotation` types now
     reach it. The routing half of those types is covered in `test_import_registry`.
     """
 

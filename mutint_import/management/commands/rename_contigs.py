@@ -4,7 +4,7 @@
     ./mutint rename_contigs 4 --ref REL606.gbk --yes    # do it
     ./mutint rename_contigs 4 --repair                  # recompute identity from the store
 
-The same operation the Add Data page offers, and the same gate: without `--yes` it prints
+The same operation the Import data page offers, and the same gate: without `--yes` it prints
 what would change and exits, because renaming rewrites every mutation in the experiment.
 
 `--repair` is the way out of the one state that blocks a rename: a reference recorded before

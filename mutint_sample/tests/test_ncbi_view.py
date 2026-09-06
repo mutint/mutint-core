@@ -368,7 +368,7 @@ class ReferencePageTestCase(_Fixture):
         self.reference.delete()
         html = self._get_ref().content.decode("utf-8")
         self.assertIn("no reference genome", html)
-        self.assertIn("/import/add/", html)
+        self.assertIn("/import/", html)
 
     def test_a_reference_predating_hashing_cannot_be_checked(self):
         self.reference.seq_ids = [{"id": self.entry["id"], "length": self.entry["length"]}]

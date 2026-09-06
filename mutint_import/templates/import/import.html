@@ -1,50 +1,40 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load import_tabs %}
 
-{% block title %}Add to {{ experiment.name }}{% endblock %}
+{% block title %}Import into {{ experiment.name }}{% endblock %}
 
 {% block header %}
     <b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>:
-       {{ experiment.name }}</b> &mdash; Add data
+       {{ experiment.name }}</b> &mdash; Import data
 {% endblock %}
 
 {% block content %}
+{% comment %} The strip takes the row's full width; six tabs wrap in the eight-column box the
+   form sits in. {% endcomment %}
+<div class="col-lg-12">{% import_tabs active_tab %}</div>
 <div class="col-lg-8">
     <p>Everything you drop here goes into <b>{{ experiment.name }}</b> (experiment
-       #{{ experiment.id }}).</p>
+       #{{ experiment.id }}) as <b>{{ import_type.label }}</b>.
+       {% if import_type.description %}{{ import_type.description }}{% endif %}</p>
 
-    {% if not has_reference %}
-        <div class="alert alert-warning">
-            This experiment has no reference genome yet. Drop one
-            (GenBank, GFF3 or FASTA) &mdash; on its own, or alongside your data in the same drop.
-            A breseq folder brings its own; bare <code>.gd</code> files do not. Until there is
-            one, the types that need a reference are not offered below.
-        </div>
-    {% endif %}
-
+    {% if not offered %}
+        {% comment %} The tab stays, and says what it is waiting for. The dropdown this page
+           used to have left such a type out; a tab you can see that tells you why it cannot
+           run yet is the better way to say the same thing. {% endcomment %}
+        <div class="alert alert-warning" id="add-not-offered">{{ reason }}</div>
+    {% else %}
     <form id="add-form">
         {% csrf_token %}
         <input type="hidden" id="add-experiment-id" value="{{ experiment.id }}">
         <input type="hidden" id="add-had-reference" value="{{ has_reference|yesno:"1,0" }}">
-
-        <div class="form-group">
-            <label for="add-type">Import type</label>
-            <select class="form-control" id="add-type">
-                <option value="" disabled selected>Choose what you are importing&hellip;</option>
-                {% for type in import_types %}
-                    <option value="{{ type.name }}">{{ type.label }}</option>
-                {% endfor %}
-            </select>
-            <small class="help-block" id="add-type-help">
-                Say what you are dropping. Anything the chosen type does not recognize is
-                reported rather than routed elsewhere, so nothing is imported as something
-                it is not.
-                {% if not has_reference %}
-                    Importing mutations on their own (a bare <code>.gd</code>) becomes
-                    available once this experiment has a reference genome.
-                {% endif %}
-            </small>
-        </div>
+        {% comment %} The type is the tab, so the page carries it rather than asking. The id
+           is the one the script has always read. {% endcomment %}
+        <input type="hidden" id="add-type" value="{{ import_type.name }}">
+        <small class="help-block" id="add-type-help">
+            Anything this type does not recognize is reported rather than routed elsewhere,
+            so nothing is imported as something it is not.
+        </small>
 
         <div id="dropzone" style="border: 2px dashed #999; border-radius: 6px; padding: 2.5em;
              text-align: center; color: #666; background: #fafafa; cursor: pointer;">
@@ -69,10 +59,11 @@
             <small id="add-progress-text" style="color: #666;"></small>
         </div>
 
-        <button type="submit" class="btn btn-primary" id="add-submit" disabled>Add</button>
+        <button type="submit" class="btn btn-primary" id="add-submit" disabled>Import</button>
         <button type="button" class="btn btn-default" id="add-reset" disabled>Reset</button>
         <a class="btn btn-default" href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
     </form>
+    {% endif %}
 
     <div id="add-result" style="margin-top: 1.5em;"></div>
 </div>
@@ -80,6 +71,7 @@
 {{ import_types|json_script:"import-types-data" }}
 {{ all_import_types|json_script:"all-import-types-data" }}
 
+{% if offered %}
 <script type="text/javascript">
 (function () {
     "use strict";
@@ -200,7 +192,7 @@
         }
         if (isOffered(type.name)) {
             return files + " look like " + type.label
-                 + " — choose that type instead, or drop them on their own.";
+                 + " — use that tab instead, or drop them on their own.";
         }
         if (type.requires_reference) {
             return files + " look like " + type.label
@@ -266,7 +258,7 @@
             li.appendChild(remove);
             dropListEl.appendChild(li);
         });
-        resetBtn.disabled = uploading || (batches.length === 0 && !typeSelect.value);
+        resetBtn.disabled = uploading || batches.length === 0;
     }
 
     function renderList() {
@@ -309,15 +301,6 @@
                 fileListEl.appendChild(li);
             });
         }
-        if (selected.length && !typeSelect.value) {
-            // Nothing to preview against until a type is chosen, and saying so is more
-            // use than listing every file as unrecognized.
-            var pick = document.createElement("li");
-            pick.style.listStyle = "none";
-            pick.textContent = "Choose what you are importing to see how these files will be read.";
-            pick.style.color = "#a00";
-            fileListEl.appendChild(pick);
-        }
         if (selected.length) {
             var totalLi = document.createElement("li");
             totalLi.style.listStyle = "none";
@@ -332,9 +315,9 @@
 
     typeSelect.addEventListener("change", renderList);
 
-    // Back to the page as it loaded: no drops, no type chosen, no result from last time.
+    // Back to the page as it loaded: no drops, no result from last time. The type is the
+    // tab and stays.
     resetBtn.addEventListener("click", function () {
-        typeSelect.value = "";
         resultEl.innerHTML = "";
         clearSelection();
     });
@@ -541,15 +524,14 @@
         });
     });
 
-    // Both the dropdown and the banner above it are rendered from what the experiment had
-    // when the page loaded, so a drop that establishes a reference -- a genome on its own, or
-    // a breseq folder bringing its own -- leaves both stale: the types that need a reference
-    // are still missing from the menu and the page still says to go and find one. Rather than
-    // patch the two of them in the client and risk them drifting from what the server would
-    // render, the page reloads. The summary is the only record that the import happened, so
+    // The tabs' availability is rendered from what the experiment had when the page loaded,
+    // so a drop that establishes a reference -- a genome on its own, or a breseq folder
+    // bringing its own -- leaves it stale: the Reference Sequence tab still offers a form and
+    // the tabs that need a reference still say to go and find one. Rather than patch that in
+    // the client and risk drifting from what the server would render, the page reloads. The summary is the only record that the import happened, so
     // it rides across in sessionStorage and is re-rendered on the way back.
     function finish(summary) {
-        // Always, failures included: re-pressing Add would re-upload and re-import the
+        // Always, failures included: re-pressing Import would re-upload and re-import the
         // samples that already landed, so re-picking the folder is the deliberate way back.
         clearSelection();
         if (summary.has_reference && !HAD_REFERENCE) {
@@ -689,7 +671,7 @@
         var alert = document.createElement("div");
         alert.className = "alert alert-success";
         alert.appendChild(document.createTextNode(
-            "Added to " + summary.experiment + " (#" + summary.experiment_id + "): "
+            "Imported into " + summary.experiment + " (#" + summary.experiment_id + "): "
             + whatLanded(summary) + " "));
         var link = document.createElement("a");
         link.href = "/stats?experiment_id=" + encodeURIComponent(summary.experiment_id);
@@ -795,4 +777,5 @@
     restoreSummary();
 })();
 </script>
+{% endif %}
 {% endblock %}
