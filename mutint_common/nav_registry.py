@@ -10,6 +10,10 @@ _nav_items = []
 
 MAIN_SECTION = 'main'
 EXPERIMENT_SECTION = 'experiment'
+#: Rendered after the experiment section, so its entries sit under the selected experiment's
+#: pages rather than above them. About is here: it is about the installation, and it belongs
+#: at the foot of the menu, under the things somebody came to use.
+END_SECTION = 'end'
 
 
 def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION):
@@ -23,9 +27,10 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION):
     label     text shown in the sidebar
     url       literal path, e.g. '/about'; mutually exclusive with url_name
     url_name  URL pattern name, reversed at render time
-    section   MAIN_SECTION, always shown, or EXPERIMENT_SECTION, shown only
+    section   MAIN_SECTION, always shown; EXPERIMENT_SECTION, shown only
               when an experiment is selected and rendered with
-              ?experiment_id=... appended
+              ?experiment_id=... appended; or END_SECTION, always shown,
+              after the experiment section
     """
     if (url is None) == (url_name is None):
         raise ValueError("register_nav_item() needs exactly one of url or url_name")

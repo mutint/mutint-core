@@ -8,7 +8,7 @@
 {% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
-    {% include "mutation_editor/_toolbar.html" with active='add' %}
+    {% include "curate/_toolbar.html" with active='add' %}
     {% csrf_token %}
 
     {% comment %} The whole form schema, straight from `genomediff.records.TYPE_SPECIFIC_FIELDS`
@@ -38,7 +38,7 @@
             <p style="color: #666;">
                 Records a mutation no sample carries yet. It is added to every sample you
                 highlight, as one entry in the
-                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>,
+                <a href="/curate/history?experiment_id={{ experiment_id }}">history</a>,
                 and can be restored away from there. A sample that already has this mutation is
                 skipped rather than given a second copy of it.
             </p>
@@ -59,7 +59,7 @@
                type. One input per spec field name is what lets a value survive a type change
                without a mapping table: `new_seq` is the same box in SNP, SUB and INS because
                the spec means the same thing by it. {% endcomment %}
-            {% include "mutation_editor/_mutation_fields.html" %}
+            {% include "curate/_mutation_fields.html" %}
 
             <div class="form-group" data-field="frequency">
                 <label for="me-f-frequency">Frequency</label>
@@ -84,7 +84,7 @@
     {% endif %}
 
     <script type="text/javascript">
-    {% include "mutation_editor/_mutation_form.js" %}
+    {% include "curate/_mutation_form.js" %}
 
     (function () {
         "use strict";
@@ -113,7 +113,7 @@
             var fields = form.fields();
             Object.keys(fields).forEach(function (name) { payload[name] = fields[name]; });
 
-            window.mutintPost("/mutation-editor/add/apply", payload).then(function (body) {
+            window.mutintPost("/curate/add/apply", payload).then(function (body) {
                 var message = "Added to " + body.added + " sample(s).";
                 if (body.already && body.already.length) {
                     message += " Already had it: " + body.already.join(", ") + ".";

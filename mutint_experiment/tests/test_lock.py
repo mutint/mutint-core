@@ -19,7 +19,7 @@ from mutint_experiment.permissions import (
     ExperimentLocked, can_edit_experiment, can_lock_experiment, grant_project_access,
 )
 from mutint_experiment.roles import ROLE_ADMIN, ROLE_WRITE
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import Mutation, MutationCall
 
 
@@ -192,18 +192,18 @@ class EveryWritePathTestCase(LockTestCase):
         """(name, callable) for every experiment-scoped write the web offers."""
         experiment_id = self.experiment.id
         return (
-            ("mutation delete", lambda: self.client.post("/mutation-editor/delete/apply", {
+            ("mutation delete", lambda: self.client.post("/curate/delete/apply", {
                 "experiment_id": experiment_id,
                 "call_ids": json.dumps([self.call.id])})),
-            ("mutation add", lambda: self.client.post("/mutation-editor/add/apply", {
+            ("mutation add", lambda: self.client.post("/curate/add/apply", {
                 "experiment_id": experiment_id, "mutation_type": "SNP",
                 "seq_id": "NC_000913", "position": 999, "new_seq": "T",
                 "target_sample_ids": json.dumps([self.sample_a.id])})),
-            ("mutation copy", lambda: self.client.post("/mutation-editor/copy/apply", {
+            ("mutation copy", lambda: self.client.post("/curate/copy/apply", {
                 "experiment_id": experiment_id, "source_sample_id": self.sample_a.id,
                 "mutation_ids": json.dumps([self.mut_2.id]),
                 "target_sample_ids": json.dumps([self.sample_b.id])})),
-            ("mutation restore", lambda: self.client.post("/mutation-editor/restore", {
+            ("mutation restore", lambda: self.client.post("/curate/restore", {
                 "experiment_id": experiment_id, "edit_set_id": "", "sample_ids": "[]"})),
             ("sample update", lambda: self.client.post(
                 "/sample/%d/update/" % self.sample_a.id, {"sample_name": "x"})),
@@ -242,8 +242,8 @@ class EveryWritePathTestCase(LockTestCase):
 
     def test_the_engine_refuses_even_called_directly(self):
         """Defense in depth: `apply_edits` trusts no caller."""
-        from mutint_mutation_editor import history
-        from mutint_mutation_editor.models import KIND_DELETE
+        from mutint_curate import history
+        from mutint_curate.models import KIND_DELETE
 
         with self.assertRaises(ExperimentLocked):
             history.apply_edits(self.experiment, self.owner, KIND_DELETE,
@@ -312,7 +312,7 @@ class StillAllowedTestCase(LockTestCase):
         experiment whose counts silently went stale would be worse, not safer."""
         from mutint_common.models import DerivedDataState
         from mutint_common.rebuild_registry import register_rebuilder, unregister_rebuilder
-        from mutint_mutation_editor import history
+        from mutint_curate import history
 
         # Core has no experiment-scoped rebuilder of its own any more -- the last one was
         # `experiment_filter`, which defaulted a shared filter row that no longer exists, and
@@ -346,7 +346,7 @@ class StillAllowedTestCase(LockTestCase):
 
         call = MutationCall.objects.filter(
             sample=self.sample_a).first()
-        response = self.client.post("/mutation-editor/delete/apply", {
+        response = self.client.post("/curate/delete/apply", {
             "experiment_id": self.experiment.id,
             "call_ids": json.dumps([call.id])})
         self.assertEqual(200, response.status_code)

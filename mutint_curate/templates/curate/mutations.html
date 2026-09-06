@@ -15,7 +15,7 @@
 {% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
-    {% include "mutation_editor/_toolbar.html" with active=mode %}
+    {% include "curate/_toolbar.html" with active=mode %}
     {% csrf_token %}
 
     <div class="row breseq-picker">
@@ -56,7 +56,7 @@
         <p>You have read access to this project, so this page is showing you what is stored
            without offering to change it. Editing mutations needs write access.</p>
     {% elif all_samples %}
-        {% include "mutation_editor/_grid.html" %}
+        {% include "curate/_grid.html" %}
     {% else %}
         <div class="row">
             <p style="color: #666;">
@@ -68,7 +68,7 @@
                 {% else %}
                     Editing is recorded and can be undone from the
                 {% endif %}
-                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>.
+                <a href="/curate/history?experiment_id={{ experiment_id }}">history</a>.
             </p>
         </div>
 
@@ -123,7 +123,7 @@
                                sample alone rather than on every sample sharing the mutation:
                                correcting a call you are looking at, in the sample you are
                                looking at it in, is the common case. {% endcomment %}
-                            <td><a href="/mutation-editor/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation_id }}&amp;sample_id={{ selected_sample_id }}"
+                            <td><a href="/curate/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation_id }}&amp;sample_id={{ selected_sample_id }}"
                                    title="Edit this mutation in this sample">edit</a></td>
                         {% endif %}
                         <td class="breseq-evidence">{{ row.mutation_type }}</td>
@@ -164,7 +164,7 @@
                     </li>
                 {% endfor %}
             </ul>
-            <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">Full history &raquo;</a>
+            <a href="/curate/history?experiment_id={{ experiment_id }}">Full history &raquo;</a>
         </div>
         {% endif %}
 
@@ -226,7 +226,7 @@
                 document.getElementById("me-error").textContent = "";
                 // One POST for the whole batch, not one per row: it is what makes this a
                 // single entry in the history rather than eleven.
-                window.mutintPost("/mutation-editor/delete/apply", {
+                window.mutintPost("/curate/delete/apply", {
                     experiment_id: "{{ experiment_id }}",
                     sample_id: "{{ selected_sample_id }}",
                     call_ids: JSON.stringify(ids)

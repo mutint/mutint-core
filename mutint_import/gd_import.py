@@ -538,7 +538,7 @@ def synthesize_sequence_change(record):
     """Build a short human-readable allele description used for display and as the
     dedup discriminator (the discrete alleles themselves live in the stored record).
 
-    Public because `mutint_mutation_editor` builds mutations by hand and has to land on the
+    Public because `mutint_curate` builds mutations by hand and has to land on the
     same string this does. `sequence_change` is one of the seven fields
     `Mutation.objects.get_or_create` keys on below, so a second rule for it would let a
     hand-entered mutation and a later re-import of the same call become two rows.

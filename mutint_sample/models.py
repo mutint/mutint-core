@@ -468,7 +468,7 @@ class MutationCall(SupplementalDataMixin):
     """One caller's assertion about one mutation in one sample.
 
     Written by `gd_import` for every record in a sample's `.gd`, and by
-    `mutint_mutation_editor` for a mutation somebody adds or copies by hand. It is the row the
+    `mutint_curate` for a mutation somebody adds or copies by hand. It is the row the
     edit log works at, the row every cross-sample table has a cell for, and the row an edit
     hard-deletes -- never the `Mutation`, whose primary key is stored as a bare integer in
     mutint-phylogeny's `branch_mutations` and in every exported CSV.
@@ -560,7 +560,7 @@ class ReferenceSequences(models.Model):
     `mutint_import.annotate.model.LoadedReferenceSequences` is the same genome *parsed*, held
     in memory for the annotator and the mutation editor's validator and built from the files
     this row points at. It briefly wore this exact name, which is why it now says `Loaded`:
-    `mutint_mutation_editor.validation` handles both, and two classes a letter apart in one
+    `mutint_curate.validation` handles both, and two classes a letter apart in one
     module is the shape of confusion this suite keeps having to undo.
     """
 

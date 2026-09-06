@@ -235,13 +235,13 @@ class BrowseMutationTestCase(TestCase):
     def test_a_sample_that_carries_the_mutation_by_hand_is_marked_too(self):
         """The `*` says the mutation is in that sample, not that a caller found it.
 
-        `mutint_mutation_editor` writes `present=True` with `source="manual"` and no caller
+        `mutint_curate` writes `present=True` with `source="manual"` and no caller
         flags -- which is the exact shape the old `breseq_present or gatk_present` rule
         answered no to, so a mutation somebody added went unstarred in a menu whose whole job
         is saying which pileups to look at.
         """
         
-        from mutint_mutation_editor.record_builder import build_call
+        from mutint_curate.record_builder import build_call
 
         other = self._second_sample()
         mutation = self.call.mutation

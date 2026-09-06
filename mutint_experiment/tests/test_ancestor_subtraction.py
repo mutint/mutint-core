@@ -8,7 +8,7 @@ invisible when it over-reaches and invisible when it under-reaches.
 
 from mutint_experiment.ancestor import (ancestral_mutation_ids, describe_ancestor,
                                        exclude_all_ancestry, exclude_ancestry, get_ancestor)
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 from mutint_sample.util import (get_evolved_call_queryset, get_mutation_call_queryset,
                             get_reseq_ordered_dict, calls_for_samples)
@@ -98,7 +98,7 @@ class TestListings(SubtractionTestCase):
 
     def test_the_mutation_editor_still_shows_it(self):
         self.designate_a()
-        response = self.client.get("/mutation-editor/",
+        response = self.client.get("/curate/",
                                    {"experiment_id": self.experiment.id})
         self.assertContains(response, self.sample_a.label)
 

@@ -34,7 +34,7 @@ import logging
 from django.db import transaction
 
 from mutint_experiment.permissions import ExperimentLocked
-from mutint_mutation_editor.models import (
+from mutint_curate.models import (
     KIND_EDIT, KIND_RESTORE, OP_ADD, OP_REMOVE,
     MutationEdit, MutationEditSet,
 )

@@ -8,7 +8,7 @@
 {% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
-    {% include "mutation_editor/_toolbar.html" with active='history' %}
+    {% include "curate/_toolbar.html" with active='history' %}
     {% csrf_token %}
 
     <div class="row">
@@ -112,7 +112,7 @@
                     }).then(function (confirmed) {
                         if (!confirmed) { return; }
                         document.getElementById("me-error").textContent = "";
-                        window.mutintPost("/mutation-editor/restore", {
+                        window.mutintPost("/curate/restore", {
                             experiment_id: "{{ experiment_id }}",
                             edit_set_id: id,
                             // Empty list means the whole experiment. Per-sample restore uses

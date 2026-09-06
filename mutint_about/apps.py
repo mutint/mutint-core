@@ -6,6 +6,7 @@ class AboutConfig(AppConfig):
 
     def ready(self):
         from mutint_common.nav_registry import (
-            MAIN_SECTION, register_nav_item,
+            END_SECTION, register_nav_item,
         )
-        register_nav_item('About', url='/about', section=MAIN_SECTION)
+        # END_SECTION: at the foot of the sidebar, under the selected experiment's pages.
+        register_nav_item('About', url='/about', section=END_SECTION)

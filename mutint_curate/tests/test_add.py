@@ -9,13 +9,13 @@ later re-import of the same call quietly become two rows for one mutation.
 import json
 
 from mutint_import.gd_import import synthesize_sequence_change
-from mutint_mutation_editor import history, record_builder
-from mutint_mutation_editor.models import KIND_ADD, MutationEdit, MutationEditSet
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate import history, record_builder
+from mutint_curate.models import KIND_ADD, MutationEdit, MutationEditSet
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import Mutation, MutationCall
 from genomediff.records import Record
 
-ADD = "/mutation-editor/add/apply"
+ADD = "/curate/add/apply"
 
 
 class AddTestCase(EditorTestCase):
@@ -249,7 +249,7 @@ class NoReferenceTestCase(EditorTestCase):
     """The fixture experiment has none, which is a real state, not a broken one."""
 
     def test_the_page_says_the_sequence_checks_are_off(self):
-        response = self.client.get("/mutation-editor/add",
+        response = self.client.get("/curate/add",
                                    {"experiment_id": self.experiment.id})
         self.assertContains(response, "no reference genome")
 
@@ -376,7 +376,7 @@ class AnnotatedAddTestCase(EditorTestCase):
     # --- the page ------------------------------------------------------------------------------
 
     def test_the_page_offers_the_reference_contigs(self):
-        response = self.client.get("/mutation-editor/add",
+        response = self.client.get("/curate/add",
                                    {"experiment_id": self.experiment.id})
         self.assertContains(response, 'id="me-f-seq_id"')
         self.assertContains(response, self.SEQ)

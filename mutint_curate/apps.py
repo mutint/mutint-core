@@ -1,8 +1,8 @@
 from django.apps import AppConfig
 
 
-class MutationEditorConfig(AppConfig):
-    name = "mutint_mutation_editor"
+class CurateConfig(AppConfig):
+    name = "mutint_curate"
 
     def ready(self):
         from mutint_common.nav_registry import (
@@ -12,7 +12,7 @@ class MutationEditorConfig(AppConfig):
         # One entry, not three. Copy and History are reached from the editor page: they are
         # the same task at different moments, and three sidebar rows for one feature would
         # crowd out the apps that genuinely are separate.
-        register_nav_item('Edit Mutations', url='/mutation-editor/',
+        register_nav_item('Curate', url='/curate/',
                           section=EXPERIMENT_SECTION)
 
         # Deliberately no register_about_section() here. About entries are keyed by the

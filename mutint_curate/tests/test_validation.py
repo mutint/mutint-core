@@ -11,7 +11,7 @@ before the bounds check would answer confidently and wrongly. `NeverLoads` is wh
 
 from django.test import SimpleTestCase
 
-from mutint_mutation_editor import validation
+from mutint_curate import validation
 
 
 class FakeReference:

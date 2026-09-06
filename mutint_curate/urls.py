@@ -1,8 +1,9 @@
 from django.urls import re_path
 
-from mutint_mutation_editor import views
+from mutint_curate import views
 
-# Mounted at ^mutation-editor/ (mutint_common/urls.py). Deliberately not under ^mutations/,
+# Mounted at ^curate/ (mutint_common/urls.py) -- the sidebar's Curate entry; the package is
+# still mutint_curate, which names the tables. Deliberately not under ^mutations/,
 # which is mutint_sample's and names the read-only tables, nor under ^mutation-table/, which is
 # the curation endpoints every table posts to. This app owns a different thing: the stored
 # mutations themselves, rather than a way of looking at them.
@@ -11,8 +12,8 @@ urlpatterns = [
     # are two tabs over one listing rather than one page doing both: they are different
     # decisions about the same rows, and a page whose next button might mean either is a page
     # people click carefully. `^$` is the Edit tab because that is where the sidebar's
-    # "Edit Mutations" link lands.
-    re_path(r'^$', views.mutation_editor, name='mutation_editor'),
+    # "Curate" link lands.
+    re_path(r'^$', views.curate, name='curate'),
     re_path(r'^delete$', views.mutation_delete, name='mutation_delete'),
     re_path(r'^add$', views.mutation_add, name='mutation_add'),
     re_path(r'^copy$', views.mutation_copy, name='mutation_copy'),

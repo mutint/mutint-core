@@ -17,7 +17,7 @@ needs no edit to `config/urls.py` when a plugin is added.
 **Pick a prefix nothing else owns.** Django does not backtrack out of a matched `include()`,
 so if you mount at a prefix core already matches, your patterns are unreachable and the
 symptom is a 404 rather than an error. Core's occupied prefixes include `mutations/`,
-`mutation-table/`, `mutation-editor/`, `ale/`, `import/`, `filter/`, `stats`, `export/`,
+`mutation-table/`, `curate/`, `ale/`, `import/`, `filter/`, `stats`, `export/`,
 `search/`, `dashboard`, `about`.
 
 ## The house view style

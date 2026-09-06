@@ -13,15 +13,15 @@ a subset of two is the smallest subset there is.
 
 import json
 
-from mutint_mutation_editor import history
-from mutint_mutation_editor.models import (
+from mutint_curate import history
+from mutint_curate.models import (
     KIND_EDIT, MutationEdit, MutationEditSet,
 )
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import Mutation, MutationCall
 
-PAGE = "/mutation-editor/edit"
-APPLY = "/mutation-editor/edit/apply"
+PAGE = "/curate/edit"
+APPLY = "/curate/edit/apply"
 
 
 class ChangeMutationTestCase(EditorTestCase):

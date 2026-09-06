@@ -42,7 +42,7 @@ urlpatterns = [
 
     # The designated ancestor: the sample this experiment started from, whose mutations are
     # subtracted from every other sample. A page and an apply endpoint, the pairing
-    # `mutint_mutation_editor` established -- the page checks permission itself and the write
+    # `mutint_curate` established -- the page checks permission itself and the write
     # checks it again, because the button being hidden is not a permission check.
     re_path(r'^(?P<pk>[0-9]+)/ancestor/$', experiment_ancestor, name="experiment_ancestor"),
     re_path(r'^(?P<pk>[0-9]+)/ancestor/apply/$',

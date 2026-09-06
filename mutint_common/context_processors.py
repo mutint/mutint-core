@@ -34,11 +34,12 @@ def plugin_exports(request):
 
 def nav_items(request):
     from mutint_common.nav_registry import (
-        EXPERIMENT_SECTION, MAIN_SECTION, get_nav_items,
+        END_SECTION, EXPERIMENT_SECTION, MAIN_SECTION, get_nav_items,
     )
     return {
         'nav_main_items': get_nav_items(MAIN_SECTION),
         'nav_experiment_items': get_nav_items(EXPERIMENT_SECTION),
+        'nav_end_items': get_nav_items(END_SECTION),
     }
 
 

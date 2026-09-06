@@ -7,16 +7,16 @@ outside a `{% block %}` in a child template is silently discarded -- a script ap
 
 import json
 
-from mutint_mutation_editor import history, validation
-from mutint_mutation_editor.models import KIND_DELETE
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate import history, validation
+from mutint_curate.models import KIND_DELETE
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
-EDIT = "/mutation-editor/"
-DELETE = "/mutation-editor/delete"
-ADD = "/mutation-editor/add"
-COPY = "/mutation-editor/copy"
-HISTORY = "/mutation-editor/history"
+EDIT = "/curate/"
+DELETE = "/curate/delete"
+ADD = "/curate/add"
+COPY = "/curate/copy"
+HISTORY = "/curate/history"
 
 
 class PageTestCase(EditorTestCase):
@@ -80,7 +80,7 @@ class PageTestCase(EditorTestCase):
         mean, rather than which column you happen to aim at."""
         html = self.get(EDIT, sample_id=self.sample_a.id).content.decode()
 
-        self.assertIn("/mutation-editor/edit?", html)
+        self.assertIn("/curate/edit?", html)
         self.assertNotIn('id="me-apply"', html)
         self.assertNotIn("select-checkbox", html)
 
@@ -89,7 +89,7 @@ class PageTestCase(EditorTestCase):
 
         self.assertIn('id="me-apply"', html)
         self.assertIn("select-checkbox", html)
-        self.assertNotIn("/mutation-editor/edit?", html)
+        self.assertNotIn("/curate/edit?", html)
 
     def test_both_listing_tabs_load_the_gene_list_toggle_script(self):
         """This listing renders breseq's rows too, and the Show button was inert on it.
@@ -118,7 +118,7 @@ class PageTestCase(EditorTestCase):
         """
         import re
 
-        found = re.findall(r'<li class="active">\s*<a href="/mutation-editor/[^"]*">'
+        found = re.findall(r'<li class="active">\s*<a href="/curate/[^"]*">'
                            r'([^<]+)</a>',
                            response.content.decode())
         self.assertEqual(1, len(found), "expected exactly one active tab, got %r" % found)
@@ -221,7 +221,7 @@ class PageTestCase(EditorTestCase):
             with self.subTest(url=url):
                 self.assertContains(
                     self.get(url),
-                    "/mutation-editor/history?experiment_id=%d" % self.experiment.id)
+                    "/curate/history?experiment_id=%d" % self.experiment.id)
 
 
 class NoExperimentTestCase(EditorTestCase):

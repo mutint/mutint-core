@@ -7,11 +7,11 @@ case in `SweptMutationTestCase` is the one that justifies storing `mutation_iden
 
 
 from mutint_import.ale_experiment import _delete_all_orphaned_mutations
-from mutint_mutation_editor import history
-from mutint_mutation_editor.models import (
+from mutint_curate import history
+from mutint_curate.models import (
     KIND_DELETE, MutationEdit, MutationEditSet,
 )
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import Mutation, MutationCall
 
 

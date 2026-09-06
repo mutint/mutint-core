@@ -209,6 +209,11 @@
                         </li>
                     {% endfor %}
                 {% endif %}
+                {% comment %} END_SECTION: About, under the selected experiment's pages rather
+                   than above them. {% endcomment %}
+                {% for item in nav_end_items %}
+                    <li><a href="{{ item.url }}">{{ item.label }}</a></li>
+                {% endfor %}
                 <li class="mutint-watermark">
                     {% comment %} No version. It is an attribution rather than a status line,
                        and a version number at the foot of every page is a detail nobody

@@ -24,7 +24,7 @@ rendering of it, and `draw` re-applies them.
             itself. Editing is recorded and
         {% endif %}
         can be undone from the
-        <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>.
+        <a href="/curate/history?experiment_id={{ experiment_id }}">history</a>.
     </p>
 </div>
 
@@ -123,7 +123,7 @@ rendering of it, and `draw` re-applies them.
                        spans every sample, so there is no one sample the person clicked and
                        the whole set is the honest default. {% endcomment %}
                     <td class="me-change"><a
-                        href="/mutation-editor/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
+                        href="/curate/edit?experiment_id={{ experiment_id }}&amp;mutation_id={{ row.mutation.id }}"
                         title="Edit this mutation in every sample that carries it">edit</a></td>
                 {% endif %}
                 <td class="breseq-seq-id">{{ row.mutation.seq_id|default_if_none:"" }}</td>
@@ -278,7 +278,7 @@ $(document).ready(function () {
             document.getElementById("me-error").textContent = "";
             // One POST for the whole batch across every sample it touches -- which is what
             // makes it one entry in the history rather than one per sample.
-            window.mutintPost("/mutation-editor/delete/apply", {
+            window.mutintPost("/curate/delete/apply", {
                 experiment_id: "{{ experiment_id }}",
                 call_ids: JSON.stringify(ids)
             }).then(function () {

@@ -14,7 +14,7 @@ class SampleConfig(AppConfig):
         # only page that says what genome that is, and the only place an NCBI accession
         # can be recorded, which is why it needs a nav entry at all rather than being
         # reached from a link that only appears once an accession has been recorded.
-        register_nav_item('Reference Sequence', url='/mutations/reference',
+        register_nav_item('Reference', url='/mutations/reference',
                           section=EXPERIMENT_SECTION)
         # 'Compare' used to be registered here beside this. It is the mutint-compare
         # plugin's now, and registers itself -- which is what lets a deployment leave it

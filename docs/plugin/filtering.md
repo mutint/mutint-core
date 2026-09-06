@@ -7,7 +7,7 @@ shows and what it downloads.
 
 There was a shared `AleExperimentFilter` row per experiment until recently, edited at `/filter`
 by anyone with write access — so changing your own view changed everybody's. That conflated two
-different things: **curating** a dataset, which is `mutint_mutation_editor`'s job and is logged
+different things: **curating** a dataset, which is `mutint_curate`'s job and is logged
 and reversible, and **choosing what you want to look at**, which is nobody else's business.
 
 ## Getting it
@@ -133,7 +133,7 @@ Three cases, and each is a decision rather than an oversight:
   site-wide total computed through one person's cutoff answers a question nobody asked, and once
   filtering is per-reader it stops being computable at all — a shared table cannot be keyed by
   user. `/stats` is the same argument at experiment scale.
-- **A page that must show what is stored.** `mutint_mutation_editor` is deliberately unfiltered: a
+- **A page that must show what is stored.** `mutint_curate` is deliberately unfiltered: a
   mutation hidden from every table still has to be reachable somewhere it can be removed, or it
   cannot be curated and comes back the moment somebody widens their filter.
 - **A page with rules of its own.** `mutint-phylogeny` encodes frequency in three states rather

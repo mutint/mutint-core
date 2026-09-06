@@ -23,7 +23,7 @@ def counts(name):
 
 
 #: The join from a MutationCall up to its experiment, as `mutint_sample.util`,
-#: `mutint_filter.util` and `mutint_mutation_editor.history` all spell it.
+#: `mutint_filter.util` and `mutint_curate.history` all spell it.
 _EXPERIMENT_PATH = paths.to_experiment(paths.FROM_CALL)
 
 

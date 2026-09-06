@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1936 run, 0 failures** standalone. They were **1931** before the matrix grew row
+**Baseline: 1939 run, 0 failures** standalone. They were **1936** before the sidebar grew its
+END_SECTION and Curate (three tests), **1931** before the matrix grew row
 sets and the page its two blocks (five tests), **1925** before the matrix grew its
 Types menu, scroll box, sample-header links, palette, Frequency display and View switch (six
 tests), **1929** before tagging was retired
@@ -371,7 +372,7 @@ else they share with the Metadata page's column menu.
 
 **A list whose highlight is its selection carries `.mutint-select-list` as well**, and
 `mutint_common/staticfiles/js/mutint_select_list.js` drives every one of them -- the genome
-browser's sample menu and the three mutation-editor pages that pick a set of samples. `active`
+browser's sample menu and the three curate pages that pick a set of samples. `active`
 on the `<li>` is the selection; there is no checkbox anywhere to hold a second opinion about it.
 The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
 toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range.
@@ -693,7 +694,7 @@ today and is not a plan.
 flag per variant caller -- and **every read path asked the caller flags rather than `present`**:
 `_get_table_mutation_entry` for a filled cell, `browse._samples_calling` for the genome
 browser's `*`, and `mutint_interop_query`. That was harmless while breseq was the only thing
-that ever wrote a mutation, and stopped being harmless the moment `mutint_mutation_editor` let a
+that ever wrote a mutation, and stopped being harmless the moment `mutint_curate` let a
 person add one. A hand-added call is `present=True` with no caller flag, so it answered
 no to all three: it was stored, it showed on the editor's own per-sample page, and it was
 **absent from Compare, fixation, converge and search** -- which reads as the add having
@@ -718,17 +719,17 @@ whose columns the live model no longer has.
 **Old change-log snapshots needed no migration.** `history._call_kwargs` builds its
 kwargs by walking `CALL_FIELDS` and calling `snapshot.get(field)`, so the two keys left
 behind in stored `MutationEdit.call` blobs are simply never read again.
-`mutint_mutation_editor.migrations.0002` writes those blobs and had its own copy of the field
+`mutint_curate.migrations.0002` writes those blobs and had its own copy of the field
 list; it now skips a column the model does not have, because which side of the drop it runs on
 depends on where it falls in a given database's graph.
 
 ### Editing a sample's mutations, and the history that makes it safe
 
-`mutint_mutation_editor` owns four operations -- **edit** a mutation, **delete** a call
+`mutint_curate` owns four operations -- **edit** a mutation, **delete** a call
 from a sample, **add** one nothing carries yet and **batch-copy** one from a sibling sample --
 and an append-only edit log that makes all of them reversible. The toolbar is
-`/mutation-editor/` (Edit), `/mutation-editor/delete`, `/mutation-editor/add`,
-`/mutation-editor/copy` and `/mutation-editor/history`, and `/mutation-editor/edit` is the one
+`/curate/` (Edit), `/curate/delete`, `/curate/add`,
+`/curate/copy` and `/curate/history`, and `/curate/edit` is the one
 mutation's form the Edit tab links to.
 
 **Edit and Delete are two tabs over one listing**, and that is a split rather than a
@@ -1108,7 +1109,7 @@ floor. Every other experiment loses nothing, because a clonal isolate rarely car
 that low. So the filter finally working is most visible exactly where it was designed to
 matter, and somebody will notice that one experiment got shorter.
 
-They are still *stored*, and still listed in `mutint_mutation_editor`, whose listings are
+They are still *stored*, and still listed in `mutint_curate`, whose listings are
 deliberately unfiltered -- which matters more now than it did, because a mutation hidden from
 every table has to stay somewhere it can be removed. There is a test for that.
 
@@ -1175,7 +1176,7 @@ stored.
 
 ### Editing a mutation, in every sample or in some of them
 
-`/mutation-editor/edit?mutation_id=<pk>` opens the Add form prefilled from the mutation's
+`/curate/edit?mutation_id=<pk>` opens the Add form prefilled from the mutation's
 its stored record, beside a list of the samples carrying it. It is reached from a row of the Edit tab
 rather than from the toolbar, because it needs a mutation to be about.
 
@@ -1311,7 +1312,7 @@ as `0.4.2`, so a version pin cannot tell one from another and pip will not upgra
 
 At `43a0f72` the package grew `genomediff.schema` — breseq's `genome_diff_entry.cpp` tables,
 mirrored and checked against `gdtools VALIDATE` over breseq's own 306-file test suite — behind
-`Record.get()` / `set()` / `validate()`. `mutint_mutation_editor.validation` defers to
+`Record.get()` / `set()` / `validate()`. `mutint_curate.validation` defers to
 `check_field` for those rules rather than keeping a second opinion about what breseq accepts.
 
 **`check_field` is well-formedness only.** It guards about twenty field names with five rules
@@ -1378,7 +1379,7 @@ test imports the same mutation spelled both ways and asserts one row.
 
 ### Adding a mutation by hand
 
-`/mutation-editor/add` records a mutation no sample carries yet, on one or more samples at
+`/curate/add` records a mutation no sample carries yet, on one or more samples at
 once. It is the third thing the editor does, and the only one that has to invent a `Mutation`
 rather than move an existing one about.
 
@@ -1457,7 +1458,7 @@ the row from the client-side DataTable until the next reload.
 
 All of it is gone, along with `add_to_exp_filter`, its `mutation_to_exp_filter` route, its
 dropdown entry, and `save_to_experiment_filter`/`deleteRow` in `table_template.js`.
-`mutint_mutation_editor.migrations.0002` converts whatever those columns held into delete
+`mutint_curate.migrations.0002` converts whatever those columns held into delete
 edit sets before `mutint_filter.0003` drops them, so what was hidden stays hidden and becomes
 inspectable and restorable; `mutint_filter.0003` depends on it, which is what stops the drop
 running first. Those edit sets have `created_by` null and render as "system".
@@ -1467,7 +1468,7 @@ running first. Those edit sets have `created_by` null and render as "system".
 **A filter is a value a reader carries, not a row.** `AleExperimentFilter` held one frequency
 range and one ignored-gene list per experiment, edited at `/filter` by anyone with write access,
 and it was *shared*: changing your own view changed everybody's, silently, with no record of who
-did it. That conflated curating a dataset -- `mutint_mutation_editor`'s job, logged and
+did it. That conflated curating a dataset -- `mutint_curate`'s job, logged and
 reversible -- with choosing what you want to look at, which is nobody else's business.
 `mutint_filter.0006` drops the table, and logs what it discards, because there is nowhere to fold
 it forward to and "calls below 20% here are noise" is a fact about the data that somebody may
@@ -1499,7 +1500,7 @@ last one, so several tests register their own rather than borrowing whatever was
 `GlobalFilter` was a still earlier layer: one row for the whole installation, superuser-only,
 reachable only by typing the URL, and empty in practice. `mutint_filter.0005` folded its genes
 into each experiment before dropping it -- convert, then drop, the posture
-`mutint_mutation_editor.0002` took with the ignored *mutation* lists.
+`mutint_curate.0002` took with the ignored *mutation* lists.
 
 **`can_add_global_filter` became `can_curate`, which is gone too** -- its only caller was the
 tag endpoints (see **Sample flags**). The history stays because the lock-ordering lesson does.
@@ -1960,7 +1961,7 @@ Three places it would have silently not held, all now tested:
 - **`project_delete`** refuses while the project holds a locked experiment, naming them.
   Otherwise the lock is sidestepped by the most obvious adjacent button.
 
-`mutint_mutation_editor.history.apply_edits` raises `ExperimentLocked` too, trusting no
+`mutint_curate.history.apply_edits` raises `ExperimentLocked` too, trusting no
 caller: it is the lowest layer that still knows which experiment it is writing to, and a write
 path added later is exactly what forgets.
 
@@ -3110,7 +3111,7 @@ the two pages disagree about what a deletion covers while both looking correct.
 `/mutations/reference?experiment_id=<pk>` (`ncbi_view.reference_view`) lists every
 sequence in an experiment's reference -- name, length, the names it used to have, and which
 NCBI record it is -- and carries the box that records an accession. It has a **nav entry** in
-`EXPERIMENT_SECTION` called **Reference Sequence**, registered first, ahead of Mutations:
+`EXPERIMENT_SECTION` called **Reference**, registered first, ahead of Mutations:
 an experiment reads top-down from what it was aligned to, then what was found in it.
 
 **Nothing showed any of this before.** The Add Data page knew only `has_reference`, as a
@@ -3245,7 +3246,7 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_filter/`** — Experiment filtering UI and models: frequency cutoffs and
   ignored genes. The three mutation-id hide lists it used to carry are gone — see
   **The old way of deleting a mutation** above.
-- **`mutint_mutation_editor/`** — Adding, deleting and copying a sample's mutations, with an
+- **`mutint_curate/`** — Adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
 - **`mutint_export/`** — Data export in various formats.

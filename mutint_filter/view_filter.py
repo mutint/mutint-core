@@ -4,7 +4,7 @@
 download from it, it lives in your session, and it is stored in no table of ours. `AleExperimentFilter`
 stood here before: one row per experiment, editable by anyone with write access, so changing your
 own view changed everyone's -- silently, with no record of who did it. That conflated curating a
-dataset, which is `mutint_mutation_editor`'s job and is logged and reversible, with choosing what
+dataset, which is `mutint_curate`'s job and is logged and reversible, with choosing what
 you personally want to look at, which is nobody else's business.
 
 This module is the *value* layer and `util.py` is the *query* layer, deliberately apart: a plugin

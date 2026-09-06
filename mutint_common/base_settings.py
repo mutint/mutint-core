@@ -130,14 +130,14 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             # Order is load-bearing: sidebar entries render in INSTALLED_APPS
             # order (see mutint_common/nav_registry.py). To move a nav entry,
             # move its app here. Apps contributing no nav follow.
-            # mutint_about is last of these, not first: About sits at the foot of the
-            # sidebar, under the things somebody actually came to use. Moved by moving the
-            # app, which is the only way nav order is expressed -- see nav_registry.
+            # mutint_about registers in END_SECTION, which base.html renders after the
+            # experiment section, so About sits at the foot of the sidebar under the
+            # selected experiment's pages. Its position here no longer decides that.
             'mutint_dashboard',       # nav: none (the sidebar's brand links to it)
             'mutint_search',          # nav: Search
             'mutint_experiment',      # nav: Projects, Experiments (Groups is an account entry)
             'mutint_sample',             # nav: Mutations
-            'mutint_mutation_editor', # nav: Edit Mutations
+            'mutint_curate', # nav: Curate
             'mutint_filter',          # nav: Filter
             'mutint_import',          # nav: none (Add data is reached from an experiment)
             'mutint_stats',
@@ -151,7 +151,7 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_bibliome',
             'mutint_home',
             'mutint_interop_query',
-            'mutint_about',           # nav: About -- last, so it renders at the foot
+            'mutint_about',           # nav: About, in END_SECTION (the foot)
         ],
 
         # PostgreSQL, and only PostgreSQL. The SQLite backend, its BEGIN IMMEDIATE

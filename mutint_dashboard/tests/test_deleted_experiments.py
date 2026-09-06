@@ -11,7 +11,7 @@ from mutint_common.rebuild_registry import is_stale, run_rebuilds
 from mutint_dashboard.models import InstallationCounts
 from mutint_dashboard.util import counts
 from mutint_dashboard.util import rebuild_mutation_counts, rebuild_sample_counts
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 
 
 class DeletedExperimentTestCase(EditorTestCase):

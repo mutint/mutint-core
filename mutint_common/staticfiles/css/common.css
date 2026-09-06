@@ -491,7 +491,7 @@ table.dataTable thead .sorting_desc:after {
 }
 
 /* A list whose highlight is its selection -- the genome browser's sample menu and the three
-   mutation-editor pages that pick a set of samples. `mutint_select_list.js` drives all four.
+   curate pages that pick a set of samples. `mutint_select_list.js` drives all four.
 
    The browser's menu is inside a Bootstrap dropdown and gets its rows painted by Bootstrap's
    own `.dropdown-menu > .active > a`. The editor's lists are not dropdowns and cannot borrow
@@ -619,6 +619,13 @@ table.dataTable thead .sorting_desc:after {
 .sidebar .arrow {
     float: none;
     margin-left: 8px;
+}
+
+/* Closed, the chevron points right -- into the entry, the way a disclosure arrow does --
+   and metisMenu's `active` turns it down when the block is open. The theme's closed glyph
+   was angle-left (\f104), which reads as "back". */
+.sidebar .fa.arrow:before {
+    content: "\f105";
 }
 
 /* The theme indents second-level links with `padding-left: 37px`, which reaches an <a> and

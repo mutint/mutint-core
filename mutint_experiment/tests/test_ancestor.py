@@ -13,7 +13,7 @@ endpoint.
 from django.contrib.auth.models import User
 
 from mutint_experiment.models import Experiment
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 
 PAGE = "/experiment/%d/ancestor/"
 APPLY = "/experiment/%d/ancestor/apply/"

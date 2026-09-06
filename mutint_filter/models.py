@@ -3,7 +3,7 @@
 `AleExperimentFilter` stood here: one row per experiment holding `min_cutoff`, `max_cutoff` and
 `ignored_genes`, edited at `/filter` by anyone with write access on the experiment. **It was
 shared.** Changing your own view changed everybody's, silently, with no record of who did it --
-which conflated curating a dataset, `mutint_mutation_editor`'s job and logged and reversible, with
+which conflated curating a dataset, `mutint_curate`'s job and logged and reversible, with
 choosing what you personally want to look at, which is nobody else's business.
 
 Filtering is a value a reader carries now, in their session, applied by the page that reads it.

@@ -295,7 +295,7 @@ def experiment_ancestor_apply(request, pk):
         experiment.set_ancestor(reseq, request.user)
 
     # Everything derived changes: the ancestor's mutations leave or rejoin every other sample.
-    # Marked *and* run, the shape `mutint_mutation_editor.history.rebuild_after_edit` uses for
+    # Marked *and* run, the shape `mutint_curate.history.rebuild_after_edit` uses for
     # "the mutations effectively changed" -- experiment scope now, so phylogeny's cached trees
     # are discarded before anyone reads one; site scope left marked for the dashboard's own
     # `ensure_fresh`.

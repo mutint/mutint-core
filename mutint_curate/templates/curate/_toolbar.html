@@ -11,13 +11,13 @@ you happen to aim at.
 {% endcomment %}
 <ul class="nav nav-tabs" style="margin-bottom: 16px;">
     <li{% if active == 'edit' %} class="active"{% endif %}>
-        <a href="/mutation-editor/?experiment_id={{ experiment_id }}">Edit</a></li>
+        <a href="/curate/?experiment_id={{ experiment_id }}">Edit</a></li>
     <li{% if active == 'delete' %} class="active"{% endif %}>
-        <a href="/mutation-editor/delete?experiment_id={{ experiment_id }}">Delete</a></li>
+        <a href="/curate/delete?experiment_id={{ experiment_id }}">Delete</a></li>
     <li{% if active == 'add' %} class="active"{% endif %}>
-        <a href="/mutation-editor/add?experiment_id={{ experiment_id }}">Add</a></li>
+        <a href="/curate/add?experiment_id={{ experiment_id }}">Add</a></li>
     <li{% if active == 'copy' %} class="active"{% endif %}>
-        <a href="/mutation-editor/copy?experiment_id={{ experiment_id }}">Copy</a></li>
+        <a href="/curate/copy?experiment_id={{ experiment_id }}">Copy</a></li>
     <li{% if active == 'history' %} class="active"{% endif %}>
-        <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">History</a></li>
+        <a href="/curate/history?experiment_id={{ experiment_id }}">History</a></li>
 </ul>

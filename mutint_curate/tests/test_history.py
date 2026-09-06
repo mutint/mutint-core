@@ -8,11 +8,11 @@ undo it, which is most of the value gone.
 import json
 
 from mutint_common.models import DerivedDataState
-from mutint_mutation_editor import history
-from mutint_mutation_editor.models import (
+from mutint_curate import history
+from mutint_curate.models import (
     KIND_DELETE, OP_ADD, OP_REMOVE, MutationEdit, MutationEditSet,
 )
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
 

@@ -7,11 +7,11 @@ given a second call of it, which would silently double that sample's count.
 
 import json
 
-from mutint_mutation_editor.models import KIND_COPY, MutationEdit, MutationEditSet
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.models import KIND_COPY, MutationEdit, MutationEditSet
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
-COPY = "/mutation-editor/copy/apply"
+COPY = "/curate/copy/apply"
 
 
 class CopyTestCase(EditorTestCase):
@@ -70,7 +70,7 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual(0, MutationEditSet.objects.count())
 
     def test_a_copy_can_be_restored_away(self):
-        from mutint_mutation_editor import history
+        from mutint_curate import history
 
         self._copy([self.mut_2], [self.sample_b])
         self.assertEqual({self.mut_1.id, self.mut_2.id}, self.call_ids(self.sample_b))

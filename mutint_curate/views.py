@@ -38,8 +38,8 @@ from mutint_experiment.permissions import (
     can_add_experiment_filter, experiment_lock_refusal,
 )
 from mutint_import import annotation
-from mutint_mutation_editor import history, record_builder, validation
-from mutint_mutation_editor.models import (
+from mutint_curate import history, record_builder, validation
+from mutint_curate.models import (
     KIND_ADD, KIND_COPY, KIND_DELETE, KIND_EDIT, MutationEditSet,
 )
 from mutint_sample.breseq_report import build_rows, is_mixed
@@ -331,10 +331,10 @@ def _error_response(error):
 
 
 @ensure_csrf_cookie
-def mutation_editor(request):
+def curate(request):
     """The Edit tab: this experiment's mutations, each with a link to change it.
 
-    `^$` rather than `^edit$` because this is where the sidebar's "Edit Mutations" link lands.
+    `^$` rather than `^edit$` because this is where the sidebar's "Curate" link lands.
     """
     return _listing(request, MODE_EDIT)
 
@@ -382,9 +382,9 @@ def _listing(request, mode):
             "mode": mode,
             "is_delete_mode": mode == MODE_DELETE,
             "title": ("Delete %s mutations" if mode == MODE_DELETE
-                      else "Edit %s mutations") % experiment.name,
+                      else "Curate %s mutations") % experiment.name,
             "template_header": ("Delete Mutations" if mode == MODE_DELETE
-                                else "Edit Mutations"),
+                                else "Curate"),
         })
         if all_samples:
             query = request.GET.get("q", "")
@@ -401,7 +401,7 @@ def _listing(request, mode):
                 "grid_truncated": total > shown,
                 "grid_limit": GRID_ROW_LIMIT,
             })
-        return render(request, "mutation_editor/mutations.html", context)
+        return render(request, "curate/mutations.html", context)
     except _NotForYou as refusal:
         return refusal.response
 
@@ -427,7 +427,7 @@ def mutation_add(request):
             "title": "Add a mutation to %s" % experiment.name,
             "template_header": "Add Mutation",
         })
-        return render(request, "mutation_editor/add.html", context)
+        return render(request, "curate/add.html", context)
     except _NotForYou as refusal:
         return refusal.response
 
@@ -459,7 +459,7 @@ def mutation_edit(request):
             "title": "Edit a mutation",
             "template_header": "Edit Mutation",
         })
-        return render(request, "mutation_editor/edit.html", context)
+        return render(request, "curate/edit.html", context)
     except _NotForYou as refusal:
         return refusal.response
 
@@ -550,7 +550,7 @@ def mutation_copy(request):
             "title": "Copy mutations in %s" % experiment.name,
             "template_header": "Copy Mutations",
         })
-        return render(request, "mutation_editor/copy.html", context)
+        return render(request, "curate/copy.html", context)
     except _NotForYou as refusal:
         return refusal.response
 
@@ -566,7 +566,7 @@ def mutation_history(request):
             "title": "Mutation history for %s" % experiment.name,
             "template_header": "Mutation History",
         })
-        return render(request, "mutation_editor/history.html", context)
+        return render(request, "curate/history.html", context)
     except _NotForYou as refusal:
         return refusal.response
 

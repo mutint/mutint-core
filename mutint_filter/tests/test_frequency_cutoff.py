@@ -18,7 +18,7 @@ Between them the cutoff was inert in every configuration a person could reach th
 
 from mutint_filter.util import filter_mutation_calls
 from mutint_filter.view_filter import ViewFilter
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
 
@@ -116,7 +116,7 @@ class FrequencyCutoffTestCase(EditorTestCase):
         """Now that the cutoff genuinely excludes, this matters more than it did: a mutation
         hidden from every table has to stay visible where it can be removed, or it cannot be
         curated and returns the moment somebody widens the filter."""
-        response = self.client.get("/mutation-editor/", {
+        response = self.client.get("/curate/", {
             "experiment_id": self.experiment.id, "sample_id": "all"})
 
         self.assertIn('data-obs="%d"' % self.low.id, response.content.decode("utf-8"))

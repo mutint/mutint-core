@@ -22,7 +22,7 @@ point.
 
 
 from mutint_common.rebuild_registry import is_stale, request_rebuild, run_rebuilds
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
 
@@ -64,7 +64,7 @@ class LazyRebuildTestCase(EditorTestCase):
 
     def test_a_mutation_edit_leaves_the_totals_for_the_dashboard(self):
         """The two halves together: the edit marks, the dashboard runs."""
-        from mutint_mutation_editor import history
+        from mutint_curate import history
 
         self._add_a_mutation()
         history.rebuild_after_edit(self.experiment)

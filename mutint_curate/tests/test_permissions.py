@@ -15,17 +15,17 @@ import json
 
 from django.contrib.auth.models import User
 
-from mutint_mutation_editor.models import MutationEditSet
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.models import MutationEditSet
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
-DELETE = "/mutation-editor/delete/apply"
-COPY = "/mutation-editor/copy/apply"
-ADD = "/mutation-editor/add/apply"
-RESTORE = "/mutation-editor/restore"
+DELETE = "/curate/delete/apply"
+COPY = "/curate/copy/apply"
+ADD = "/curate/add/apply"
+RESTORE = "/curate/restore"
 
-PAGES = ("/mutation-editor/", "/mutation-editor/add", "/mutation-editor/copy",
-         "/mutation-editor/history")
+PAGES = ("/curate/", "/curate/add", "/curate/copy",
+         "/curate/history")
 
 
 class WriteEndpointPermissionTestCase(EditorTestCase):
@@ -118,7 +118,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
     def test_a_writer_may_change_a_mutation(self):
         self.client.force_login(self._writer())
 
-        response = self.client.post("/mutation-editor/edit/apply", {
+        response = self.client.post("/curate/edit/apply", {
             "experiment_id": self.experiment.id,
             "mutation_id": self.mut_1.id,
             "mutation_type": "SNP",
@@ -133,7 +133,7 @@ class WriteEndpointPermissionTestCase(EditorTestCase):
         buttons would leave a writer unable to reach them."""
         self.client.force_login(self._writer())
 
-        html = self.client.get("/mutation-editor/delete", {
+        html = self.client.get("/curate/delete", {
             "experiment_id": self.experiment.id,
             "sample_id": "all"}).content.decode("utf-8")
 
@@ -226,7 +226,7 @@ class PagePermissionTestCase(EditorTestCase):
         grant_project_access(self.experiment.project, reader, ROLE_READ)
         self.client.force_login(reader)
 
-        response = self.client.get("/mutation-editor/",
+        response = self.client.get("/curate/",
                                    {"experiment_id": self.experiment.id})
         self.assertEqual(200, response.status_code)
         self.assertNotContains(response, 'id="me-apply"')

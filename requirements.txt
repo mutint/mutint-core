@@ -21,7 +21,7 @@ django-debug-toolbar>=8,<9
 # Without that last part a current breseq output.gd fails to load in full.
 #
 # 43a0f72 adds genomediff.schema -- breseq's own field guards, mirrored from
-# genome_diff_entry.cpp -- behind Record.get()/set()/validate(). mutint_mutation_editor
+# genome_diff_entry.cpp -- behind Record.get()/set()/validate(). mutint_curate
 # checks hand-entered mutations against it rather than keeping a second opinion about
 # what breseq accepts. It also stops a malformed line costing the whole file: problems
 # collect in gd.parse_errors, which the import summary now reports per file.

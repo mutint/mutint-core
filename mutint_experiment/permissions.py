@@ -44,7 +44,7 @@ class ExperimentLocked(Exception):
     """A write was refused because the experiment is locked, not because of who asked.
 
     Lives here rather than with any one write path because the lock is policy, and because
-    both `mutint_common.import_registry` and `mutint_mutation_editor.history` raise it -- two
+    both `mutint_common.import_registry` and `mutint_curate.history` raise it -- two
     layers that share nothing else. Its message is `Experiment.lock_message()`, written
     for a person and safe to show verbatim.
     """

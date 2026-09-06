@@ -13,7 +13,7 @@ that says nothing.
 from django.template import Context, Template
 from django.test import RequestFactory
 
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 
 TEMPLATE = Template("{% load view_filter %}{% view_filter_summary %}")
 NO_SUBTRACTION = Template(

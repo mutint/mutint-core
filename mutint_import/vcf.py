@@ -102,7 +102,7 @@ def trim(position, ref, alt):
 
     The result may be `("", "")` for a variant that says nothing (`REF == ALT`); the caller
     refuses those rather than storing a mutation that changes nothing, which is the same rule
-    `mutint_mutation_editor.validation` applies to a hand-typed one.
+    `mutint_curate.validation` applies to a hand-typed one.
     """
     ref = ref or ""
     alt = alt or ""

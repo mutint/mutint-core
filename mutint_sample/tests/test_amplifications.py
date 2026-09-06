@@ -99,7 +99,7 @@ class AmplificationsRemovedTestCase(TestCase):
 class ManuallyAddedMutationTestCase(TestCase):
     """A mutation somebody typed in has to appear in the cross-sample table.
 
-    `mutint_mutation_editor` writes a call with `present=True` and no caller flags --
+    `mutint_curate` writes a call with `present=True` and no caller flags --
     breseq did not call it, because a person asserted it. Every read path that decides "is
     this mutation in this sample" by asking which *caller* found it therefore answers no, and
     the row vanishes from a table that is supposed to be the experiment's contents.
@@ -126,7 +126,7 @@ class ManuallyAddedMutationTestCase(TestCase):
         """The rows `mutation_add_apply` produces, built by the code that produces them --
         `build_call` rather than a literal dict, so this goes on testing what the add form
         actually writes after that function changes."""
-        from mutint_mutation_editor.record_builder import build_call
+        from mutint_curate.record_builder import build_call
         from mutint_sample.models import MutationCall
         from mutint_sample.util import get_reseq_ordered_dict
 

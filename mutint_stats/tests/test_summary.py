@@ -170,11 +170,11 @@ class SummaryTestCase(TestCase):
     def test_a_deleted_mutation_is_excluded(self):
         """This used to set the filter's `ignored_mutations` list, which hid a mutation from
         every table while leaving its rows in place. That mechanism is gone; deleting an
-        call through `mutint_mutation_editor` is what replaces it, and the Overview must
+        call through `mutint_curate` is what replaces it, and the Overview must
         stop counting it for the same reason -- by simply not finding the row any more.
         """
-        from mutint_mutation_editor import history
-        from mutint_mutation_editor.models import KIND_DELETE
+        from mutint_curate import history
+        from mutint_curate.models import KIND_DELETE
 
         removals = list(MutationCall.objects.filter(mutation=self.deletion))
         self.assertTrue(removals, "the fixture's DEL is observed somewhere")

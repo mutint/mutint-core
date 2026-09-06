@@ -8,7 +8,7 @@
 {% block header %}<b><a href="/project/{{ ale_project_id }}">{{ ale_project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
-    {% include "mutation_editor/_toolbar.html" with active='edit' %}
+    {% include "curate/_toolbar.html" with active='edit' %}
     {% csrf_token %}
 
     {{ schema|json_script:"mutation-schema" }}
@@ -31,7 +31,7 @@
                 <b>{{ sample_count }}</b> that carr{{ sample_count|pluralize:"ies,y" }} it.
                 Each keeps its own frequency and read counts &mdash; what changes is what the
                 mutation <i>is</i>. It is one entry in the
-                <a href="/mutation-editor/history?experiment_id={{ experiment_id }}">history</a>
+                <a href="/curate/history?experiment_id={{ experiment_id }}">history</a>
                 and can be restored away from there.
             </p>
             <p style="color: #666;">
@@ -54,10 +54,10 @@
                 <p class="help-block" id="me-type-help"></p>
             </div>
 
-            {% include "mutation_editor/_mutation_fields.html" %}
+            {% include "curate/_mutation_fields.html" %}
 
             <button type="button" class="btn btn-primary" id="me-apply">Save changes</button>
-            <a href="/mutation-editor/?experiment_id={{ experiment_id }}&amp;sample_id={{ all_samples_value|default:'all' }}"
+            <a href="/curate/?experiment_id={{ experiment_id }}&amp;sample_id={{ all_samples_value|default:'all' }}"
                class="btn btn-link">cancel</a>
             <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
         </div>
@@ -92,7 +92,7 @@
     {% endif %}
 
     <script type="text/javascript">
-    {% include "mutation_editor/_mutation_form.js" %}
+    {% include "curate/_mutation_form.js" %}
 
     (function () {
         "use strict";
@@ -125,7 +125,7 @@
             var fields = form.fields();
             Object.keys(fields).forEach(function (name) { payload[name] = fields[name]; });
 
-            window.mutintPost("/mutation-editor/edit/apply", payload).then(function (body) {
+            window.mutintPost("/curate/edit/apply", payload).then(function (body) {
                 var message = "Changed in " + body.samples + " sample(s).";
                 if (body.already && body.already.length) {
                     message += " Already had this mutation: "
@@ -134,7 +134,7 @@
                 swal("", message, "success")
                     .then(function () {
                         window.location.href =
-                            "/mutation-editor/?experiment_id={{ experiment_id }}&sample_id=all";
+                            "/curate/?experiment_id={{ experiment_id }}&sample_id=all";
                     });
             }).catch(function (err) {
                 document.getElementById("me-error").textContent = err.message;

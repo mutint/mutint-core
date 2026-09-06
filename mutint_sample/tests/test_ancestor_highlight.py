@@ -8,7 +8,7 @@ reader would have no way to find out why.
 That exception is only safe if it is *stated*, which is what most of these tests are about.
 """
 
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.tests.base import EditorTestCase
 
 BRESEQ = "/mutations/breseq"
 

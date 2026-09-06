@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                 ('note', models.TextField(blank=True, default='')),
                 ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL)),
                 ('experiment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='mutation_edit_sets', to='mutint_experiment.experiment')),
-                ('restored_to', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='restorations', to='mutint_mutation_editor.mutationeditset')),
+                ('restored_to', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='restorations', to='mutint_curate.mutationeditset')),
             ],
             options={
                 'ordering': ['-created_at', '-pk'],
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                 ('mutation', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='mutint_sample.mutation')),
                 ('sample', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='+', to='mutint_sample.sample')),
                 ('source_sample', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='mutint_sample.sample')),
-                ('edit_set', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='edits', to='mutint_mutation_editor.mutationeditset')),
+                ('edit_set', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='edits', to='mutint_curate.mutationeditset')),
             ],
             options={
                 'ordering': ['pk'],

@@ -1,4 +1,4 @@
-"""The whole experiment at once: `/mutation-editor/delete?sample_id=all`.
+"""The whole experiment at once: `/curate/delete?sample_id=all`.
 
 The grid is on both tabs, but selection is the Delete tab's -- so that is where these run. The
 Edit tab renders the same rows with an `edit` link instead of a checkbox and no selection at
@@ -12,11 +12,11 @@ line up on a fixture where every sample carried everything.
 
 import json
 
-from mutint_mutation_editor.models import MutationEditSet
-from mutint_mutation_editor.tests.base import EditorTestCase
+from mutint_curate.models import MutationEditSet
+from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
 
-PAGE = "/mutation-editor/delete"
+PAGE = "/curate/delete"
 
 
 class GridPageTestCase(EditorTestCase):
@@ -114,7 +114,7 @@ class GridPageTestCase(EditorTestCase):
                MutationCall.objects.filter(mutation=self.mut_1)]
         self.assertEqual(2, len(ids))
 
-        response = self.client.post("/mutation-editor/delete/apply", {
+        response = self.client.post("/curate/delete/apply", {
             "experiment_id": self.experiment.id,
             "call_ids": json.dumps(ids)})
 
@@ -130,7 +130,7 @@ class GridPageTestCase(EditorTestCase):
         ids = [call.id for call in
                MutationCall.objects.filter(mutation=self.mut_1)]
 
-        self.client.post("/mutation-editor/delete/apply", {
+        self.client.post("/curate/delete/apply", {
             "experiment_id": self.experiment.id,
             "call_ids": json.dumps(ids)})
 
@@ -148,7 +148,7 @@ class GridPageTestCase(EditorTestCase):
                   MutationCall.objects.get(sample=self.sample_a,
                                                mutation=self.mut_3).id]
 
-        self.client.post("/mutation-editor/delete/apply", {
+        self.client.post("/curate/delete/apply", {
             "experiment_id": self.experiment.id,
             "call_ids": json.dumps(doomed)})
 
@@ -175,7 +175,7 @@ class GridPageTestCase(EditorTestCase):
                                         experiment=other),
             present=True)
 
-        response = self.client.post("/mutation-editor/delete/apply", {
+        response = self.client.post("/curate/delete/apply", {
             "experiment_id": self.experiment.id,
             "call_ids": json.dumps([outside.id])})
 
@@ -209,7 +209,7 @@ class GridPageTestCase(EditorTestCase):
         ids = [call.id for call in
                MutationCall.objects.filter(mutation=self.mut_1)]
 
-        self.client.post("/mutation-editor/delete/apply", {
+        self.client.post("/curate/delete/apply", {
             "experiment_id": self.experiment.id,
             "call_ids": json.dumps(ids)})
 
@@ -308,7 +308,7 @@ class EditGridTestCase(EditorTestCase):
     """The same grid under the Edit tab, which offers a link rather than a selection."""
 
     def grid(self):
-        return self.client.get("/mutation-editor/", {
+        return self.client.get("/curate/", {
             "experiment_id": self.experiment.id, "sample_id": "all"})
 
     def test_it_offers_an_edit_link_per_mutation(self):
