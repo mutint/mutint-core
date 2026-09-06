@@ -60,7 +60,9 @@ from mutint_common.import_tab_registry import register_import_tab
 register_import_tab('yourthing', 'Your measurements', import_type='yourthing')
 ```
 
-The tab lands on the Import data page with your type chosen. A tab may instead be a page of
+The tab lands on the Import data page with your type chosen. `import_types=(...)` names
+several in preference order, and the page takes the first the experiment can run -- core's
+Reference Sequence tab is `("reference", "replace_annotation")`. A tab may instead be a page of
 your own -- `register_import_tab('run_thing', 'Run thing', url_name='your_route')` -- when a
 drop needs something the Import page has no box for; mutint-breseq's Run breseq tab is that,
 and its page renders `{% import_tabs 'run_thing' %}` so it wears the same strip. Tabs render

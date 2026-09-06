@@ -9,8 +9,10 @@ a command line that no import handler can carry, and which renders the same stri
 as one more way in rather than a page somewhere else.
 
 So a tab is one of two things, and the registry keeps them apart by which argument it was
-given: `import_type=` names a handler in `import_registry` and lands on the Import page with
-that type; `url_name=` (or a literal `url=`) names a page the tab links to, with
+given: `import_types=` names handlers in `import_registry`, in preference order, and lands on
+the Import page as the first of them the experiment can run -- Reference Sequence is
+`reference` until the experiment has one and `replace_annotation` after, one tab for one
+question; `url_name=` (or a literal `url=`) names a page the tab links to, with
 `?experiment_id=` appended the way sidebar entries in the experiment section get it. A tab
 whose `url_name` will not reverse is skipped, the posture `nav_registry` takes, so a
 half-installed plugin cannot leave a dead tab.
@@ -26,24 +28,35 @@ handlers, so core is a caller of this registry like any plugin.
 _tabs = []
 
 
-def register_import_tab(key, label, *, import_type=None, url_name=None, url=None):
+def register_import_tab(key, label, *, import_type=None, import_types=None, url_name=None,
+                        url=None):
     """Register a tab on the Import data page (from `AppConfig.ready()`).
 
-    key          identifies the tab; the page marks the matching one active
-    label        the words on the tab
-    import_type  the `import_registry` handler name this tab imports; the tab lands on the
-                 Import page with that type chosen. Mutually exclusive with the two below.
-    url_name     a URL pattern name, reversed at render time, for a tab that is a page of
-                 its own; `?experiment_id=` is appended
-    url          a literal path, for the same, when reversing is not wanted
+    key           identifies the tab; the page marks the matching one active, and the tab's
+                  URL names it (`?tab=<key>`)
+    label         the words on the tab
+    import_types  `import_registry` handler names, in preference order: the page imports as
+                  the first one the experiment can run now, and when none can, says why the
+                  first cannot. `import_type=` is the one-name form. Mutually exclusive
+                  with the two below.
+    url_name      a URL pattern name, reversed at render time, for a tab that is a page of
+                  its own; `?experiment_id=` is appended
+    url           a literal path, for the same, when reversing is not wanted
 
     Tabs render in registration order: apps in INSTALLED_APPS order, and within an app in
     the order this is called. There is deliberately no ordering parameter.
     """
-    if sum(x is not None for x in (import_type, url_name, url)) != 1:
-        raise ValueError("register_import_tab() needs exactly one of import_type, url_name, url")
+    if import_type is not None:
+        if import_types is not None:
+            raise ValueError("register_import_tab() takes import_type or import_types, not both")
+        import_types = (import_type,)
+    if sum(x is not None for x in (import_types, url_name, url)) != 1:
+        raise ValueError("register_import_tab() needs exactly one of import_types, url_name, url")
+    if import_types is not None and not import_types:
+        raise ValueError("register_import_tab() needs at least one import type")
     _tabs[:] = [t for t in _tabs if t["key"] != key]
-    _tabs.append({"key": key, "label": label, "import_type": import_type,
+    _tabs.append({"key": key, "label": label,
+                  "import_types": tuple(import_types) if import_types else None,
                   "url_name": url_name, "url": url})
 
 
@@ -52,7 +65,7 @@ def unregister_import_tab(key):
 
 
 def get_import_tabs(experiment_id):
-    """`[{'key', 'label', 'url', 'import_type'}, ...]` for one experiment, in order.
+    """`[{'key', 'label', 'url', 'import_types'}, ...]` for one experiment, in order.
 
     URLs are reversed here rather than at registration: the URLconf is not loaded while
     `ready()` runs. A tab whose route is not installed is skipped rather than raising.
@@ -62,9 +75,9 @@ def get_import_tabs(experiment_id):
     tabs = []
     for tab in _tabs:
         try:
-            if tab["import_type"] is not None:
-                url = "%s?experiment_id=%s&type=%s" % (
-                    reverse("import_data"), experiment_id, tab["import_type"])
+            if tab["import_types"] is not None:
+                url = "%s?experiment_id=%s&tab=%s" % (
+                    reverse("import_data"), experiment_id, tab["key"])
             elif tab["url"] is not None:
                 url = "%s?experiment_id=%s" % (tab["url"], experiment_id)
             else:
@@ -72,5 +85,5 @@ def get_import_tabs(experiment_id):
         except NoReverseMatch:
             continue
         tabs.append({"key": tab["key"], "label": tab["label"], "url": url,
-                     "import_type": tab["import_type"]})
+                     "import_types": list(tab["import_types"] or [])})
     return tabs

@@ -59,24 +59,24 @@ class ImportPageTestCase(TestCase):
         self.assertNotIn('<select class="form-control" id="add-type"', html)
         tabs = _tabs(html)
         self.assertEqual(["Reference Sequence", "Genome Diff", "Variant Call Format",
-                          "breseq output", "Replace Annotation"], [t[1] for t in tabs])
-        self.assertEqual("/import/?experiment_id=%d&amp;type=genomediff" % self.experiment.id,
+                          "Results Folder"], [t[1] for t in tabs])
+        self.assertEqual("/import/?experiment_id=%d&amp;tab=genomediff" % self.experiment.id,
                          tabs[1][0])
         self.assertIn('id="add-type" value="reference"', html)
         active = html.split('<li class="active">')[1].split("</li>")[0]
-        self.assertIn("type=reference", active)
+        self.assertIn("tab=reference", active)
 
     def test_a_tab_chooses_its_type(self):
         html = self.client.get("/import/", {"experiment_id": self.experiment.id,
-                                            "type": "breseq_folder"}).content.decode("utf-8")
+                                            "tab": "breseq_folder"}).content.decode("utf-8")
         self.assertIn('id="add-type" value="breseq_folder"', html)
         self.assertIn("breseq data folders", html)
         active = html.split('<li class="active">')[1].split("</li>")[0]
-        self.assertIn("breseq output", active)
+        self.assertIn("Results Folder", active)
 
-    def test_an_unknown_type_is_a_404(self):
+    def test_an_unknown_tab_is_a_404(self):
         self.assertEqual(404, self.client.get(
-            "/import/", {"experiment_id": self.experiment.id, "type": "nonsense"}).status_code)
+            "/import/", {"experiment_id": self.experiment.id, "tab": "nonsense"}).status_code)
 
     def test_a_plugin_tab_reaches_the_strip_and_a_page_of_its_own_is_linked(self):
         """A plugin registers a tab: for a type of its own, landing here; or for a page of
@@ -96,9 +96,9 @@ class ImportPageTestCase(TestCase):
             self.addCleanup(unregister_import_tab, key)
 
         html = self.client.get("/import/", {"experiment_id": self.experiment.id,
-                                            "type": "page_test_type"}).content.decode("utf-8")
+                                            "tab": "page_test"}).content.decode("utf-8")
         tabs = dict((label, href) for href, label in _tabs(html))
-        self.assertEqual("/import/?experiment_id=%d&amp;type=page_test_type" % self.experiment.id,
+        self.assertEqual("/import/?experiment_id=%d&amp;tab=page_test" % self.experiment.id,
                          tabs["Readings"])
         self.assertEqual("/mutations/reference?experiment_id=%d" % self.experiment.id,
                          tabs["Elsewhere"])
@@ -252,9 +252,8 @@ class ImportTypesOfferedTestCase(TestCase):
     you can see that says what it is waiting for is the better way to say the same thing.
     Three different rules, because the reasons differ:
 
-      reference           establishing one is a one-time act, so once the experiment has
-                          one the tab says so and offers no form
-      replace_annotation  meaningless before there is a genome to hold fixed
+      Reference Sequence  `reference` until the experiment has one, then
+                          `replace_annotation` -- one tab for one question at two moments
       genomediff, vcf     need a reference, and are things people arrive holding -- so
                           the tab says to get one in first
     """
@@ -279,23 +278,25 @@ class ImportTypesOfferedTestCase(TestCase):
         reference_store.establish_or_check(
             self.experiment, breseq_fixture.gff3_text(sequences), sequences)
 
-    def _html(self, type_name):
+    def _html(self, tab):
         return self.client.get(
-            "/import/", {"experiment_id": self.experiment.id, "type": type_name}
+            "/import/", {"experiment_id": self.experiment.id, "tab": tab}
         ).content.decode("utf-8")
 
-    def _offers_a_form(self, type_name):
-        html = self._html(type_name)
+    def _offers_a_form(self, tab):
+        html = self._html(tab)
         return 'id="add-form"' in html and 'id="add-not-offered"' not in html
+
+    def _type_chosen(self, tab):
+        return self._html(tab).split('id="add-type" value="')[1].split('"')[0]
 
     # --- with no reference yet -----------------------------------------------
 
-    def test_reference_is_offered(self):
+    def test_the_reference_tab_establishes_one(self):
         self.assertTrue(self._offers_a_form("reference"))
-
-    def test_replace_annotation_says_it_needs_a_reference(self):
-        self.assertFalse(self._offers_a_form("replace_annotation"))
-        self.assertIn("reference genome first", self._html("replace_annotation"))
+        self.assertEqual("reference", self._type_chosen("reference"))
+        # The page's own words, not the embedded unscoped registry, which names every type.
+        self.assertIn("Sets the reference every sample", self._html("reference"))
 
     def test_genomediff_and_vcf_say_they_need_a_reference(self):
         for name in ("genomediff", "vcf"):
@@ -309,16 +310,15 @@ class ImportTypesOfferedTestCase(TestCase):
 
     # --- once a reference exists ---------------------------------------------
 
-    def test_reference_stops_being_offered_and_says_why(self):
+    def test_the_reference_tab_becomes_replace_annotation(self):
+        """The same tab, now the other handler: what it imports as says so, and the form is
+        still there."""
         self._establish_reference()
-        self.assertFalse(self._offers_a_form("reference"))
-        self.assertIn("already has a reference genome", self._html("reference"))
-
-    def test_replace_annotation_appears(self):
-        self._establish_reference()
-        self.assertTrue(self._offers_a_form("replace_annotation"))
+        self.assertTrue(self._offers_a_form("reference"))
+        self.assertEqual("replace_annotation", self._type_chosen("reference"))
         self.assertIn("Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
-                      self._html("replace_annotation"))
+                      self._html("reference"))
+        self.assertNotIn("already has a reference genome", self._html("reference"))
 
     def test_genomediff_becomes_available(self):
         self._establish_reference()

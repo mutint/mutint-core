@@ -3,7 +3,7 @@
 It was the Import data page, with a dropdown of import types. The dropdown is a strip of tabs now,
 from `mutint_common.import_tab_registry`: core registers one per type it ships, and a plugin
 registers its own -- which may be a page of its own that wears the same strip, the way
-mutint-breseq's Run breseq does. `?type=` names the tab; without one the first is shown.
+mutint-breseq's Run breseq does. `?tab=` names the tab; without one the first is shown.
 
 The page is scoped to one experiment by primary key, and what you drop on a tab is
 classified against that tab's type alone -- so a plugin's import type is reachable here, and
@@ -28,10 +28,10 @@ logger = logging.getLogger("mutint_import.add_views")
 
 @ensure_csrf_cookie
 def import_view(request):
-    """GET renders the drop page for `?experiment_id=<pk>`, on the tab `?type=` names.
+    """GET renders the drop page for `?experiment_id=<pk>`, on the tab `?tab=` names.
 
     Always scoped to one experiment; there is no unscoped form of this page. Without a
-    usable id it is a 404, and so is a type no tab offers.
+    usable id it is a 404, and so is a tab nothing registered.
 
     There is no POST here: uploads go through the chunked session endpoints, which is what
     lets a multi-GB drop work at all.
@@ -52,24 +52,30 @@ def import_view(request):
     has_reference = _has_reference(experiment)
 
     tabs = get_import_tabs(experiment.id)
-    type_tabs = [tab for tab in tabs if tab["import_type"]]
-    wanted = request.GET.get("type") or (type_tabs[0]["import_type"] if type_tabs else None)
-    active = next((tab for tab in type_tabs if tab["import_type"] == wanted), None)
+    type_tabs = [tab for tab in tabs if tab["import_types"]]
+    wanted = request.GET.get("tab") or (type_tabs[0]["key"] if type_tabs else None)
+    active = next((tab for tab in type_tabs if tab["key"] == wanted), None)
     if active is None:
-        raise Http404("No such import type.")
-    import_type = next(t for t in get_import_types() if t["name"] == wanted)
+        raise Http404("No such import tab.")
 
-    # Whether this tab can run now, and if not, why -- said on the tab rather than by
-    # hiding it. The dropdown used to leave a type out; a tab you can see that tells you
-    # what it is waiting for is the better way to say the same thing.
+    # The tab's first type the experiment can run now; failing that, its first type and
+    # why not -- said on the tab rather than by hiding it. The dropdown used to leave a
+    # type out; a tab you can see that tells you what it is waiting for is the better way
+    # to say the same thing. Reference Sequence is the tab this exists for: `reference`
+    # before there is one, `replace_annotation` after.
+    by_name = {t["name"]: t for t in get_import_types()}
     offered_names = {t["name"] for t in get_import_types_for(has_reference)}
-    offered = wanted in offered_names
+    names = [name for name in active["import_types"] if name in by_name]
+    if not names:
+        raise Http404("No such import type.")
+    chosen = next((name for name in names if name in offered_names), names[0])
+    import_type = by_name[chosen]
+    offered = chosen in offered_names
     if offered:
         reason = ""
     elif import_type["only_without_reference"]:
-        reason = ("This experiment already has a reference genome. To change its "
-                  "annotation, use Replace Annotation; swapping in a different genome "
-                  "is deliberately shell-only.")
+        reason = ("This experiment already has a reference genome. Swapping in a "
+                  "different genome is deliberately shell-only.")
     else:
         reason = ("This needs the experiment to have a reference genome first. Drop one "
                   "(GenBank, GFF3 or FASTA) on the Reference Sequence tab, or import a "
