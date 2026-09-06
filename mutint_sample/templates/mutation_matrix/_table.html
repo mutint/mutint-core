@@ -72,23 +72,23 @@
     {{ matrix.rows|json_script:rows_id }}
     {% if authenticated %}{{ preferences|json_script:prefs_id }}{% endif %}
 
-    {% comment %} The table scrolls inside this box rather than with the page, which is what
-       lets the header stick to the top and the descriptive columns to the left while the
-       sample columns scroll under them. The script sizes it to the bottom of the window.
-       Sample headers are written vertically so a column is only as wide as its cells. {% endcomment %}
-    <div class="mutation-matrix-scroll">
+    {% comment %} The script wraps the table in a scroll box (DataTables' `dom` option puts
+       the length, CSV, search, count and pager controls above it), sized to the bottom of the
+       window, in which the header sticks to the top and the descriptive columns to the left
+       while the sample columns scroll under them. Nothing sorts: the rows arrive in breseq's
+       order. A sample's header is written vertically, so the column is only as wide as its
+       cells, and links to that sample's own Mutations page. {% endcomment %}
     <table id="{{ matrix.dom_id }}" class="table breseq-table mutation-matrix-table">
         <thead>
             <tr>
                 {% for column in matrix.columns %}
-                    <th class="{{ column.css_class }}" data-key="{{ column.key }}"{% if column.sort_key %} data-sort-key="{{ column.sort_key }}"{% endif %}>{{ column.title }}</th>
+                    <th class="{{ column.css_class }}" data-key="{{ column.key }}">{{ column.title }}</th>
                 {% endfor %}
                 {% for sample in matrix.samples %}
-                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}" title="{{ sample.label }}"><span class="mutation-matrix-vertical">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</span></th>
+                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}"><a class="mutation-matrix-vertical" href="{{ sample.url }}" title="{{ sample.label }} &mdash; view this sample's mutations">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></th>
                 {% endfor %}
             </tr>
         </thead>
         <tbody></tbody>
     </table>
-    </div>
 </div>

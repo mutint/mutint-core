@@ -15,9 +15,12 @@
  *   - the Columns, Samples and Types menus are mutintSelectList in toggle mode, the genome
  *     browser's sample menu three times over, and every change is saved back where it was
  *     read from;
- *   - the table lives in a scroll box: the header sticks to its top and the descriptive
- *     columns to its left, each pinned column's `left` being the sum of the widths before it,
- *     recomputed after every draw because widths change with the data on the page.
+ *   - the table lives in a scroll box, with DataTables' own controls above it: the header
+ *     sticks to its top and the descriptive columns to its left, each pinned column's `left`
+ *     being the sum of the widths before it, recomputed after every draw and whenever the
+ *     table's size changes, because widths change with the data on the page;
+ *   - nothing sorts. The rows arrive in breseq's order, reference then position, and a
+ *     sample's header is a link to that sample's own page rather than a sort handle.
  *
  * Stored as the *hidden* set, not the visible one, so a column, sample or type that did not
  * exist when the choice was made shows by default rather than vanishing.
@@ -72,16 +75,15 @@
 
     function renderHtml(data) { return data === null || data === undefined ? "" : data; }
 
-    /* A sample cell by DataTables' four purposes: sort by frequency (absent last), filter and
-       type on the text, display a bare percentage -- `100`, `42` -- with the full text as the
-       title, so the column can be narrow. Linked when the server gave a URL. */
+    /* A sample cell: filter and export on the text, display a bare percentage -- `100`,
+       `42` -- with the full text as the title, so the column can be narrow. Linked when the
+       server gave a URL. */
     function compact(cell) {
         if (typeof cell.s !== "number" || cell.f.indexOf("%") < 0) { return cell.f; }
         return String(Math.round(cell.s * 100));
     }
     function renderSample(cell, type) {
-        if (!cell) { return type === "sort" ? -1 : ""; }
-        if (type === "sort") { return cell.s; }
+        if (!cell) { return ""; }
         if (type !== "display") { return cell.f; }
         var node = document.createElement(cell.u ? "a" : "span");
         if (cell.u) { node.href = cell.u; }
@@ -127,9 +129,9 @@
                     }
                 };
             }
-            var key = th.getAttribute("data-key"), sortKey = th.getAttribute("data-sort-key");
+            var key = th.getAttribute("data-key");
             var column = {
-                data: sortKey ? { _: key, sort: sortKey, filter: key, display: key } : key,
+                data: key,
                 defaultContent: "",
                 className: th.className,
                 visible: !hiddenColumns[key],
@@ -184,10 +186,6 @@
             return -1;
         }
 
-        var order = [];
-        if (indexOfKey("seq_id") >= 0) { order.push([indexOfKey("seq_id"), "asc"]); }
-        if (indexOfKey("position") >= 0) { order.push([indexOfKey("position"), "asc"]); }
-
         var dt = $(table).DataTable({
             data: rows,
             columns: columns,
@@ -197,8 +195,12 @@
             pagingType: "full_numbers",
             pageLength: 100,
             lengthMenu: [[50, 100, 500, 1000, -1], [50, 100, 500, 1000, "All"]],
-            order: order,
-            dom: 'l<"pull-left"B><"pull-right"f>rt<<"pull-left"i><"pull-right"p>>',
+            // The server's order, and no sort handles on the headers: a click on a sample's
+            // header follows its link instead.
+            ordering: false,
+            // Every control on one line above the table, and the table alone in the box that
+            // scrolls -- the box itself is DataTables' doing, so that it wraps only the table.
+            dom: '<"mutation-matrix-toolbar"lBfip>r<"mutation-matrix-scroll"t>',
             buttons: [{
                 extend: "csv",
                 text: "CSV",
@@ -218,7 +220,9 @@
 
         /* The descriptive columns stay put while the samples scroll. `position: sticky`
            needs each pinned column's `left` to be the width of everything pinned before it,
-           and widths change with the page's data, so this runs after every draw. */
+           and widths change with the page's data, so this runs after every draw -- and again
+           whenever the table's size changes, which is how a late font or a resized window
+           reach it. */
         var scrollBox = container.querySelector(".mutation-matrix-scroll");
         function pinColumns() {
             var left = 0;
@@ -235,15 +239,17 @@
             });
         }
 
-        /* The box reaches the bottom of the window, whatever sits above it on the page. */
+        /* The box reaches the bottom of the window, whatever sits above it on the page, so
+           its scrollbars sit at the window's edges (the stylesheet takes care of the sides). */
         function sizeScrollBox() {
             if (!scrollBox) { return; }
-            var top = scrollBox.getBoundingClientRect().top;
-            scrollBox.style.maxHeight = Math.max(240, window.innerHeight - top - 16) + "px";
+            var top = scrollBox.getBoundingClientRect().top + window.pageYOffset;
+            scrollBox.style.maxHeight = Math.max(240, window.innerHeight - top) + "px";
         }
         sizeScrollBox();
         window.addEventListener("resize", sizeScrollBox);
         pinColumns();
+        if (window.ResizeObserver) { new ResizeObserver(function () { pinColumns(); }).observe(table); }
 
         var counter = container.querySelector('[data-role="sample-count"]');
         var columnPicker = window.mutintSelectList(columnList, {

@@ -44,13 +44,11 @@ UNVERIFIED_TITLE = "This sequence has not been matched to an NCBI record yet"
 @dataclass(frozen=True)
 class Column:
     """One descriptive column: what the row key is, what the header says, which breseq class
-    styles it, whether it shows before anyone has chosen, and which row key it sorts by when
-    the display value is markup."""
+    styles it, and whether it shows before anyone has chosen."""
     key: str
     title: str
     css_class: str
     default_visible: bool = True
-    sort_key: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +59,8 @@ class SampleColumn:
     bam_stored: bool
     #: The sample's flags (`mutint_sample.flags.Flag`), drawn as badges in the header and menu.
     flags: tuple = ()
+    #: Where the sample's header links: its own Mutations page.
+    url: str = ""
 
 
 @dataclass
@@ -83,13 +83,21 @@ class MutationMatrix:
 #: prose, and the widest column by far.
 DESCRIPTIVE = (
     Column("type", "Type", "breseq-evidence"),
-    Column("seq_id", "Reference", "breseq-seq-id", sort_key="seq_id_text"),
-    Column("position", "Position", "breseq-position", sort_key="position_sort"),
+    Column("seq_id", "Reference", "breseq-seq-id"),
+    Column("position", "Position", "breseq-position"),
     Column("mutation", "Mutation", "breseq-mutation"),
     Column("annotation", "Annotation", "breseq-annotation"),
     Column("gene", "Gene", "breseq-gene"),
     Column("description", "Description", "breseq-description", default_visible=False),
 )
+
+
+def sample_page_url(sample, experiment=None):
+    """The sample's own Mutations page. The experiment is the one given when there is one --
+    every sample of a per-experiment page shares it, and asking each sample costs a query --
+    and the sample's own otherwise, for a page that spans experiments."""
+    experiment_id = experiment.id if experiment is not None else sample.population.experiment_id
+    return "/mutations/breseq?experiment_id=%d&sample_id=%d" % (experiment_id, sample.id)
 
 
 def browse_url_for(reseq_dict):
@@ -154,7 +162,8 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     A row is one mutation, and it is included when at least one listed sample carries it
     (`present is True`); a call in a sample that is not a column is ignored, and a call that
     says "looked for and absent" leaves its cell blank. Rows come out ordered by reference
-    then position, the order breseq's own report uses.
+    then position, the order breseq's own report uses, and that is the order they are shown
+    in: the table does not sort.
 
     `browse_url(call)` and `refseq_url(mutation)` -> `(url, title)` may be replaced; the
     defaults are `browse_url_for` and `refseq_url_for`.
@@ -162,7 +171,8 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     samples = [SampleColumn(id=sample.id,
                             label=sample.qualified_label if labels == "qualified" else sample.label,
                             index=index, bam_stored=bool(sample.bam_stored),
-                            flags=tuple(flags_of(sample)))
+                            flags=tuple(flags_of(sample)),
+                            url=sample_page_url(sample, experiment))
                for index, sample in enumerate(reseq_dict.values())]
     column_of = {sample.id: sample.index for sample in samples}
     browse_url = browse_url or browse_url_for(reseq_dict)

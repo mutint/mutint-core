@@ -245,11 +245,32 @@ table.dataTable.breseq-table thead .sorting_desc:after {
    because sticky offsets have to add up the widths of the columns before them. Pinned cells
    take their row's background so scrolled content does not show through; the header, which
    is both sticky-top and sticky-left at the corner, sits above both. */
+/* DataTables' own controls -- length, CSV, search, the count and the pager -- on one line
+   above the box, outside anything that scrolls. */
+.mutation-matrix-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em 1.5em;
+    margin-bottom: 0.5em;
+}
+
+div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_info {
+    padding-top: 0;
+}
+
+div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate ul.pagination {
+    margin: 0;
+}
+
+/* The box breaks out of #mutint-content's 25px of padding on the sides and at the foot, so
+   its scrollbars are the window's edges rather than lines somewhere inside the page; the
+   script sizes it to the bottom of the window. */
 .mutation-matrix-scroll {
     overflow: auto;
     max-height: 70vh;
-    border: 1px solid #ddd;
-    margin-bottom: 0.75em;
+    border-top: 1px solid #ddd;
+    margin: 0 -25px -25px;
 }
 
 .mutation-matrix-scroll .breseq-table {
@@ -264,16 +285,24 @@ table.dataTable.mutation-matrix-table thead > tr > th {
     position: sticky;
     top: 0;
     z-index: 2;
+    background-color: rgb(0, 130, 0);
 }
 
+/* A stuck cell has to be opaque, or what scrolls under it shows through: the row's stripe
+   is painted on the row, and a cell inherits nothing from that once it is positioned. */
 table.dataTable.mutation-matrix-table .pinned {
     position: sticky;
     z-index: 1;
-    background-color: inherit;
+    background-color: rgb(255, 255, 255);
+}
+
+table.dataTable.mutation-matrix-table tr.alternate_table_row_1 > td.pinned {
+    background-color: rgb(235, 235, 235);
 }
 
 table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     z-index: 3;
+    background-color: rgb(0, 130, 0);
 }
 
 /* Sample columns are the information; the point of the table is to fit as many of them
@@ -287,6 +316,8 @@ table.dataTable.mutation-matrix-table thead > tr > th.pinned {
 }
 
 .mutation-matrix-table .mutation-matrix-vertical {
+    color: inherit;
+    text-decoration: none;
     display: inline-block;
     writing-mode: vertical-rl;
     transform: rotate(180deg);
@@ -294,6 +325,12 @@ table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     line-height: 1.1;
     font-weight: normal;
     font-size: 10pt;
+}
+
+.mutation-matrix-table a.mutation-matrix-vertical:hover,
+.mutation-matrix-table a.mutation-matrix-vertical:focus {
+    color: inherit;
+    text-decoration: underline;
 }
 
 .mutation-matrix-table .mutation-matrix-vertical .sample-flag {
@@ -307,19 +344,6 @@ table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     min-width: 2.2em;
 }
 
-/* DataTables' Bootstrap theme reserves 30px on the right of every header for a sort arrow;
-   on a vertical header that is most of the column. The arrow goes, the click stays. */
 table.dataTable.mutation-matrix-table thead th.breseq-sample {
     padding-right: 3px;
-}
-
-table.dataTable.mutation-matrix-table thead th.breseq-sample.sorting:after,
-table.dataTable.mutation-matrix-table thead th.breseq-sample.sorting_asc:after,
-table.dataTable.mutation-matrix-table thead th.breseq-sample.sorting_desc:after {
-    display: none;
-}
-
-table.dataTable.mutation-matrix-table thead th.breseq-sample.sorting_asc,
-table.dataTable.mutation-matrix-table thead th.breseq-sample.sorting_desc {
-    background-color: rgb(0, 100, 0);
 }

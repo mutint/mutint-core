@@ -171,6 +171,14 @@ class RowsTestCase(_Fixture):
         matrix = mutation_matrix.build_matrix(self.calls, self.reseq_dict)
         self.assertIsNone(matrix.experiment_id)
 
+    def test_each_sample_links_to_its_own_mutations_page(self):
+        """The experiment given, when there is one; the sample's own when there is not --
+        the cross-experiment page has none to give, and the link must still be right."""
+        for matrix in (self.matrix(), mutation_matrix.build_matrix(self.calls, self.reseq_dict)):
+            for sample in matrix.samples:
+                self.assertEqual("/mutations/breseq?experiment_id=%d&sample_id=%d"
+                                 % (self.experiment.id, sample.id), sample.url)
+
 
 class PartialTestCase(_Fixture):
     def _render(self, user=None, **extra):
@@ -206,10 +214,16 @@ class PartialTestCase(_Fixture):
         self.assertIn('data-types="all"', html)
         self.assertIn('data-types="none"', html)
 
-    def test_the_table_sits_in_a_scroll_box_with_vertical_sample_headers(self):
+    def test_a_sample_header_is_a_vertical_link_to_its_mutations_page(self):
+        """The scroll box the table sits in is the script's (DataTables wraps the table in
+        it), so the markup carries none; what it carries is one vertical header per sample,
+        linking to that sample's page rather than sorting anything."""
         html = self._render()
-        self.assertIn('class="mutation-matrix-scroll"', html)
+        self.assertNotIn("mutation-matrix-scroll", html)
         self.assertEqual(len(self.reseq_dict), html.count('class="mutation-matrix-vertical"'))
+        for sample in self.reseq_dict.values():
+            self.assertIn('href="/mutations/breseq?experiment_id=%d&amp;sample_id=%d"'
+                          % (self.experiment.id, sample.id), html)
 
     def test_rows_travel_as_json_and_the_assets_are_linked(self):
         html = self._render()

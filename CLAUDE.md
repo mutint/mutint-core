@@ -103,8 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1927 run, 0 failures** standalone. They were **1925** before the matrix grew its
-Types menu and scroll box (two tests), **1929** before tagging was retired
+**Baseline: 1928 run, 0 failures** standalone. They were **1925** before the matrix grew its
+Types menu, scroll box and sample-header links (three tests), **1929** before tagging was retired
 (the endpoint tests went, the flag tests came), **1907** before the mutation matrix
 replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
 partial, the first Search tests, minus the old builder's), **1839** before the background-worker
@@ -2039,12 +2039,25 @@ sample, leaves the table through `$.fn.dataTable.ext.search`, so paging and the 
 what is visible, and the striping is redone per displayed row the way breseq stripes. The page
 length menu ends in All.
 
-**The table scrolls in its own box, and the samples are the point of it.** The box is sized to
-the bottom of the window; the header sticks to its top and the descriptive columns to its left,
-each pinned column's `left` written by the script after every draw as the sum of the pinned
-widths before it (`position: sticky` cannot add them up itself). Sample headers are written
-vertically and a cell shows the frequency as a bare percentage number with the full text as its
-title, so a sample column is as wide as `100` and forty of them fit where twelve did.
+**The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
+puts its length, CSV, search, count and pager controls on one line above the table and wraps the
+table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding with
+negative margins and the script sizes it to the bottom of the window, so its scrollbars are the
+window's edges. The header sticks to its top and the descriptive columns to its left, each
+pinned column's `left` written by the script after every draw, and again from a `ResizeObserver`
+on the table, as the sum of the pinned widths before it (`position: sticky` cannot add them up
+itself). A stuck cell is painted opaque -- white, the stripe grey, the header green -- because a
+positioned cell inherits nothing from the row's stripe and the sample cells would otherwise
+show through it. Two selector rules were found by measuring rather than reading: the sticky
+rules start with `table.dataTable.mutation-matrix-table`, because DataTables' theme sets
+`position: relative` on headers at a specificity a plain class loses to, and the header
+computed as `relative` until they did. Sample headers are written vertically and a cell shows
+the frequency as a bare percentage number with the full text as its title, so a sample column
+is as wide as `100` and forty of them fit where twelve did.
+
+**Nothing sorts.** `ordering: false`: the rows are shown in the order `build_matrix` produced
+them, reference then position, which is breseq's own; a header is not a sort handle, and a
+sample's header is a link to that sample's Mutations page (`SampleColumn.url`) instead.
 
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
 holds `mutation_matrix.columns` and `mutation_matrix.types` for the reader everywhere and
@@ -2056,7 +2069,7 @@ is public) gets the same from localStorage.
 
 What went with the old table, on purpose: tagging (rows, sample headers, the `tag_select`
 picker and the `request` parameter of `get_reseq_ordered_dict` that served it), the colvis
-button, "Column Sort from Right" (sample headers sort by frequency instead, absent last), the
+button, "Column Sort from Right" (and, since, sorting altogether), the
 `hidden_columns` query parameter, and the three column constants
 `REFSEQ_COLUMN_IN_MUT_TABLE` / `HTML_MUTATION_TABLE_HEADER` / `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE`.
 The CSV export (`mutint_export/util.py`) used to borrow the table's header and cell markup; it
