@@ -200,7 +200,7 @@ Or step by step, still through the entry script:
   needle plot and phylogeny are, and an assembled project gets them by listing them in
   `.gitmodules`. A component you do not install contributes nothing rather than an empty page.
 - `./mutint start` first-run setup, and the provisioned `env/` behind it
-- Auth slot — `mutint_accounts_noauth` is the only implementation shipped; swap in your own
+- Auth slot — `mutint_accounts` is the only implementation shipped; swap in your own
   by changing `INSTALLED_APPS` in your `config/settings.py` and setting `auth_app = True` on
   its `AppConfig`
 - The eight registries in `mutint_common/`, which are how an app contributes to a core page

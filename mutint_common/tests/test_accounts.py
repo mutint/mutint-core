@@ -232,9 +232,11 @@ class AuthSlotTestCase(TestCase):
     """The auth slot still resolves, with one occupant.
 
     This was `AuthAppParityTestCase`, which asserted that two apps served the same routes.
-    There is one app now: `mutint_accounts` existed to be the occupant carrying
-    django-defender's brute-force protection, and with defender gone it was byte-for-byte the
-    same behavior as the default -- an alternative that was not an alternative.
+    There is one app now, and it took the plain name `mutint_accounts` (it was
+    `mutint_accounts_noauth`): the original `mutint_accounts` existed to be the occupant
+    carrying django-defender's brute-force protection, and with defender gone it was
+    byte-for-byte the same behavior as the default -- an alternative that was not an
+    alternative.
 
     What the parity test was really guarding is still guarded, and by construction rather than
     by assertion: both apps had drifted into separate bugs (a `next_page` passed as `re_path`'s
@@ -254,10 +256,10 @@ class AuthSlotTestCase(TestCase):
                  if getattr(cfg, "auth_app", False)]
 
         self.assertEqual(1, len(slots), "the slot takes the first match, so two is ambiguous")
-        self.assertEqual("mutint_accounts_noauth", slots[0].name)
+        self.assertEqual("mutint_accounts", slots[0].name)
 
     def test_it_serves_the_four_routes_under_one_namespace(self):
-        from mutint_accounts_noauth import urls as installed
+        from mutint_accounts import urls as installed
 
         self.assertEqual("accounts", installed.app_name)
         self.assertEqual({"login", "logout", "password_change", "password_change_done"},

@@ -5,7 +5,7 @@
 what that app serves. Only one is installed at a time, so a deployment replacing
 authentication replaces the app and inherits these routes rather than restating them.
 
-`mutint_accounts_noauth` is the only occupant in this repo. There were two: `mutint_accounts`
+`mutint_accounts` is the only occupant in this repo. There were two: `mutint_accounts`
 existed to be the one carrying django-defender's brute-force protection, and when defender
 went it was left identical to the default -- an alternative that was not one.
 

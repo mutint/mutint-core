@@ -145,7 +145,7 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             # into base.html rather than registered -- nav_registry cannot express "only when
             # signed in". See mutint_jobs/apps.py.
             'mutint_jobs',
-            'mutint_accounts_noauth',
+            'mutint_accounts',
             'mutint_export',
             'mutint_common',
             'mutint_bibliome',

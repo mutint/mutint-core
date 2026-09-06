@@ -3271,7 +3271,7 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_search/`** — Cross-experiment search.
 - **`mutint_bibliome/`** — Publication/bibliography management.
 - **`mutint_dashboard/`** — Dashboard views and timeline events.
-- **`mutint_accounts_noauth/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
+- **`mutint_accounts/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
 - **`mutint_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
   model, `Job`, which stores no status of its own. See **Seeing and stopping background
   work** above.
@@ -3796,12 +3796,13 @@ policy, which already exist and are better at it.
 Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 **Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in
-its `urls.py` is auto-discovered by `config/urls.py`. `mutint_accounts_noauth` is the only
-occupant, and the resolver takes the **first** match, so a second installed one is ambiguous
-rather than additive.
+its `urls.py` is auto-discovered by `config/urls.py`. `mutint_accounts` is the only
+occupant -- it was `mutint_accounts_noauth` while there were two, and took the plain name
+once there was one -- and the resolver takes the **first** match, so a second installed one
+is ambiguous rather than additive.
 
 **There is no brute-force protection, and that is a gap rather than an omission.** There was a
-second app, `mutint_accounts`, whose entire reason to exist was carrying `django-defender`. It
+second app, the original `mutint_accounts`, whose entire reason to exist was carrying `django-defender`. It
 was in no settings module's `INSTALLED_APPS` and defender was in no `requirements.txt`, so the
 "production" auth app could not actually be installed — and once defender went, what remained
 was identical to the default. An alternative that is not an alternative is worse than one
@@ -3816,7 +3817,7 @@ occupies it next inherits them, rather than being expected to write them again.
 
 **That is the lesson the second app left behind, and it is why this is worth a paragraph.**
 When there were two hand-written lists they had already drifted into two live bugs nothing
-exercised: `mutint_accounts` passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict**
+exercised: the defender app passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict**
 rather than to `as_view()`, raising `TypeError` on the first login, and it had no
 `registration/login.html`, so swapping the slot also meant `TemplateDoesNotExist`. Neither was
 found by running it — nothing installed it. `mutint_common/tests/test_accounts.py` now asserts

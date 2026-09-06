@@ -33,7 +33,7 @@ setting a real deployment must think about — it holds the BAMs.
 Pluggable by changing `INSTALLED_APPS`. Any app with `auth_app = True` on its `AppConfig` and
 `app_name = 'accounts'` in its `urls.py` is discovered automatically.
 
-- `mutint_accounts_noauth` — the only one shipped. Django's built-in login, nothing enforced.
+- `mutint_accounts` — the only one shipped. Django's built-in login, nothing enforced.
 
 The routes and templates live in `mutint_common`, not in the app, so a replacement inherits
 login, logout and change-password rather than restating them. **MutInt ships no brute-force
