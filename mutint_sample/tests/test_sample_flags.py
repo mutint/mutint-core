@@ -1,11 +1,11 @@
 """The sample flags: hypermutator, contaminated, low coverage.
 
-Three booleans that replaced `Sample.tags`. What is pinned: the migration's reading of the old
-text, that every flag is edited on the sample page and drawn as a badge wherever a sample is
-named, and that nothing draws a badge for a sample with no flag set.
+Three booleans that replaced `Sample.tags`. What is pinned: that every flag is edited on the
+sample page and drawn as a badge wherever a sample is named, and that nothing draws a badge for
+a sample with no flag set. (The data migration that read the old comma-joined text, and the
+test that pinned its reading, went with the migration collapse.)
 """
 
-import importlib
 import shutil
 import tempfile
 
@@ -16,32 +16,6 @@ from mutint_import import breseq_folder
 from mutint_import.tests import breseq_fixture
 from mutint_sample import flags
 from mutint_sample.models import Sample
-
-split_tags = importlib.import_module(
-    "mutint_sample.migrations.0004_sample_flags_drop_tags").split_tags
-
-
-class SplitTagsTestCase(SimpleTestCase):
-    """What the data migration makes of the old comma-joined text."""
-
-    def test_the_two_flag_words_become_flags(self):
-        self.assertEqual((True, False, ""), split_tags("hypermutated"))
-        self.assertEqual((False, True, ""), split_tags("contaminated"))
-        self.assertEqual((True, True, ""), split_tags("contaminated,hypermutated"))
-
-    def test_case_and_spaces_do_not_matter(self):
-        self.assertEqual((True, True, ""), split_tags(" Hypermutated , CONTAMINATED "))
-
-    def test_fixating_is_dropped_and_anything_else_is_kept(self):
-        # `fixating` duplicated what the Fixed Mutations plugin computes; `resequenced` is
-        # somebody's note and is kept for them to find.
-        self.assertEqual((False, False, "resequenced"), split_tags("fixating,resequenced"))
-        self.assertEqual((True, False, "odd,second"), split_tags("odd,hypermutated,second"))
-
-    def test_nothing_is_nothing(self):
-        self.assertEqual((False, False, ""), split_tags(""))
-        self.assertEqual((False, False, ""), split_tags(None))
-        self.assertEqual((False, False, ""), split_tags(" , ,"))
 
 
 class VocabularyTestCase(SimpleTestCase):
