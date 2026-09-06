@@ -8,8 +8,11 @@
  *     the table appears already the way they left it, with no flash of hidden columns;
  *   - each <th> becomes a DataTables column that reads its cell by name, `data: "gene"` or
  *     `data: "samples.3"`, so no index anywhere depends on which columns are showing;
- *   - a sample cell renders as its frequency, linked into the genome browser when the server
- *     gave it a URL, and blank when the sample does not carry the mutation;
+ *   - a sample cell renders once, as its frequency carried in a CSS variable (`--f`) with the
+ *     number inside, linked into the genome browser when the server gave it a URL and blank
+ *     when the sample does not carry the mutation; the Frequency display menu only changes
+ *     the table's `freq-<format>` class, and the stylesheet draws the number, a bar, a heat
+ *     map or both from that one markup -- no redraw of a thousand rows;
  *   - a row whose mutation is in no *shown* sample is filtered out, through DataTables' own
  *     search hook rather than by hiding row nodes -- so paging and the row count stay honest;
  *   - the Columns, Samples and Types menus are mutintSelectList in toggle mode, the genome
@@ -33,6 +36,8 @@
 
     var COLUMNS_KEY = "mutation_matrix.columns";
     var TYPES_KEY = "mutation_matrix.types";
+    var FREQUENCY_KEY = "mutation_matrix.frequency";
+    var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
 
     /* One get/set pair over whichever store this reader has. */
@@ -77,7 +82,8 @@
 
     /* A sample cell: filter and export on the text, display a bare percentage -- `100`,
        `42` -- with the full text as the title, so the column can be narrow. Linked when the
-       server gave a URL. */
+       server gave a URL. The frequency rides along as `--f` for the bar and heat formats; a
+       present call with no frequency (a check mark) counts as 1 there. */
     function compact(cell) {
         if (typeof cell.s !== "number" || cell.f.indexOf("%") < 0) { return cell.f; }
         return String(Math.round(cell.s * 100));
@@ -87,8 +93,12 @@
         if (type !== "display") { return cell.f; }
         var node = document.createElement(cell.u ? "a" : "span");
         if (cell.u) { node.href = cell.u; }
+        node.className = "mutation-matrix-cell" + (cell.p ? " polymorphic" : "");
+        node.style.setProperty("--f", typeof cell.s === "number" ? String(cell.s) : "1");
         node.title = cell.f + (cell.u ? " \u2014 view the pileup at this position" : "");
-        node.textContent = compact(cell);
+        var text = document.createElement("span");
+        text.textContent = compact(cell);
+        node.appendChild(text);
         return node.outerHTML;
     }
 
@@ -109,6 +119,9 @@
         }
         var hiddenSamples = samplesKey ? hiddenSet(prefs.get(samplesKey, null)) : {};
         var hiddenTypes = hiddenSet(prefs.get(TYPES_KEY, null));
+        var stored = prefs.get(FREQUENCY_KEY, null);
+        var format = stored && FORMATS[stored.format] ? stored.format : "number";
+        table.classList.add("freq-" + format);
 
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
@@ -118,15 +131,15 @@
                 var index = parseInt(th.getAttribute("data-index"), 10);
                 var visible = !hiddenSamples[sample];
                 if (visible) { shownSampleIndexes[index] = true; }
+                // The header's population color, on every cell of the column too: the bar
+                // format draws in it.
+                var paletteClass = (th.className.match(/sample-palette-\d+/) || [""])[0];
                 return {
                     data: "samples." + index,
                     defaultContent: "",
-                    className: "breseq-sample",
+                    className: "breseq-sample " + paletteClass,
                     visible: visible,
-                    render: renderSample,
-                    createdCell: function (td, cell) {
-                        if (cell) { td.classList.add(cell.p ? "polymorphic" : "present"); }
-                    }
+                    render: renderSample
                 };
             }
             var key = th.getAttribute("data-key");
@@ -329,8 +342,35 @@
             });
         });
 
+        /* The Frequency display menu: rendered in the container, moved to the front of
+           DataTables' first toolbar row. Choosing a format swaps one class on the table. */
+        var frequencyControl = container.querySelector('[data-role="frequency-control"]');
+        var frequencyList = container.querySelector('[data-role="frequency"]');
+        var frequencyLabel = container.querySelector('[data-role="frequency-label"]');
+        var legend = container.querySelector('[data-role="frequency-legend"]');
+        var toolbar = container.querySelector(".mutation-matrix-toolbar");
+        if (toolbar && frequencyControl) { toolbar.insertBefore(frequencyControl, toolbar.firstChild); }
+        function showFormat(name) {
+            Object.keys(FORMATS).forEach(function (key) { table.classList.toggle("freq-" + key, key === name); });
+            if (frequencyLabel) { frequencyLabel.textContent = FORMATS[name]; }
+            if (legend) { legend.hidden = !(name === "heat" || name === "both"); }
+        }
+        Array.prototype.forEach.call(frequencyList.querySelectorAll("li[data-value]"), function (li) {
+            li.classList.toggle("active", li.getAttribute("data-value") === format);
+        });
+        showFormat(format);
+        var frequencyPicker = window.mutintSelectList(frequencyList, {
+            controls: null,
+            onChange: function () {
+                var chosen = frequencyList.querySelector("li.active");
+                format = chosen ? chosen.getAttribute("data-value") : "number";
+                showFormat(format);
+                prefs.set(FREQUENCY_KEY, { format: format });
+            }
+        });
+
         // For a harness or a console: the DataTable behind the container.
-        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker };
+        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, frequency: frequencyPicker };
     }
 
     $(function () {

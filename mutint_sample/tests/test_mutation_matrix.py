@@ -171,8 +171,13 @@ class RowsTestCase(_Fixture):
         matrix = mutation_matrix.build_matrix(self.calls, self.reseq_dict)
         self.assertIsNone(matrix.experiment_id)
 
-    def test_one_experiment_is_one_palette_color_and_search_cycles(self):
-        self.assertEqual({0}, {s.palette for s in self.matrix().samples})
+    def test_the_palette_colors_by_population_in_order_of_first_appearance(self):
+        seen, expected = [], []
+        for sample in self.reseq_dict.values():
+            if sample.population_id not in seen:
+                seen.append(sample.population_id)
+            expected.append(seen.index(sample.population_id))
+        self.assertEqual(expected, [s.palette for s in self.matrix().samples])
         self.assertEqual([0, 1, 0, 2], mutation_matrix.palette_indexes([5, 7, 5, 9]))
         size = mutation_matrix.PALETTE_SIZE
         self.assertEqual(list(range(size)) + [0],
@@ -220,6 +225,14 @@ class PartialTestCase(_Fixture):
         self.assertIn('<li data-value="AMP" class="active">', html)
         self.assertIn('data-types="all"', html)
         self.assertIn('data-types="none"', html)
+
+    def test_the_frequency_display_menu_offers_its_four_formats(self):
+        html = self._render()
+        self.assertIn('data-role="frequency"', html)
+        for value in ("number", "bars", "heat", "both"):
+            self.assertIn('<li data-value="%s"' % value, html)
+        self.assertIn('<li data-value="number" class="active">', html)
+        self.assertIn('data-role="frequency-legend"', html)
 
     def test_a_sample_header_is_a_vertical_link_to_its_mutations_page(self):
         """The scroll box the table sits in is the script's (DataTables wraps the table in

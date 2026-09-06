@@ -62,7 +62,7 @@ class SampleColumn:
     #: Where the sample's header links: its own Mutations page.
     url: str = ""
     #: Which of the header palette's colors the column wears: the same for every sample of
-    #: one experiment, the next for the next experiment met, wrapping after PALETTE_SIZE.
+    #: one population (ALE), the next for the next population met, wrapping after PALETTE_SIZE.
     palette: int = 0
 
 
@@ -99,15 +99,16 @@ DESCRIPTIVE = (
 PALETTE_SIZE = 8
 
 
-def palette_indexes(experiment_ids):
-    """One palette index per entry: experiments in order of first appearance, wrapping.
+def palette_indexes(population_ids):
+    """One palette index per entry: populations in order of first appearance, wrapping.
 
-    A page of one experiment is all one color -- the header's own, index 0 -- and the
-    cross-experiment Search page colors each experiment's columns alike.
+    The first population met wears the header's own blue, index 0, so an experiment of one
+    ALE is uniform and one of several reads as bands. Population ids are unique across
+    experiments, so the cross-experiment Search page needs no other rule.
     """
     seen = {}
-    return [seen.setdefault(experiment_id, len(seen)) % PALETTE_SIZE
-            for experiment_id in experiment_ids]
+    return [seen.setdefault(population_id, len(seen)) % PALETTE_SIZE
+            for population_id in population_ids]
 
 
 def experiment_id_of(sample, experiment=None):
@@ -190,7 +191,7 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     `browse_url(call)` and `refseq_url(mutation)` -> `(url, title)` may be replaced; the
     defaults are `browse_url_for` and `refseq_url_for`.
     """
-    palette = palette_indexes(experiment_id_of(s, experiment) for s in reseq_dict.values())
+    palette = palette_indexes(s.population_id for s in reseq_dict.values())
     samples = [SampleColumn(id=sample.id,
                             label=sample.qualified_label if labels == "qualified" else sample.label,
                             index=index, bam_stored=bool(sample.bam_stored),

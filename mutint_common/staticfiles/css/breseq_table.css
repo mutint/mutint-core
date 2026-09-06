@@ -211,8 +211,6 @@
     white-space: nowrap;
 }
 
-.breseq-table td.breseq-sample.present { background-color: rgba(0, 130, 0, 0.10); }
-.breseq-table td.breseq-sample.polymorphic { background-color: rgb(160, 255, 160); }
 
 /* The two menus and the presets sit on one line above the table, spaced the way the genome
    browser's control bar is. */
@@ -319,18 +317,24 @@ table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     background-color: #337ab7;
 }
 
-/* A sample column's header is colored by experiment: `sample-palette-<n>` from
-   mutation_matrix.palette_indexes, index 0 being the header's own blue so a page of one
-   experiment is uniform and Search tells its experiments apart. Eight colors, each dark
-   enough for white text and distinct from its neighbors; PALETTE_SIZE in mutation_matrix.py
-   must equal the count here. */
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-1 { background-color: #b35c00; }
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-2 { background-color: #2a8a3e; }
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-3 { background-color: #8e44ad; }
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-4 { background-color: #c0392b; }
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-5 { background-color: #0e8a8a; }
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-6 { background-color: #a0762b; }
-table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-7 { background-color: #5d6d7e; }
+/* A sample column is colored by population: `sample-palette-<n>` from
+   mutation_matrix.palette_indexes, on the header and on every cell of the column, index 0
+   being the header's own blue so an experiment of one ALE is uniform and one of several
+   reads as bands. The color is a variable so the header, the bars and the half tone of a
+   polymorphic bar all come from one place. Eight colors, each dark enough for white text and
+   distinct from its neighbors; PALETTE_SIZE in mutation_matrix.py must equal the count here. */
+.mutation-matrix-table .sample-palette-0 { --sample-color: #337ab7; }
+.mutation-matrix-table .sample-palette-1 { --sample-color: #b35c00; }
+.mutation-matrix-table .sample-palette-2 { --sample-color: #2a8a3e; }
+.mutation-matrix-table .sample-palette-3 { --sample-color: #8e44ad; }
+.mutation-matrix-table .sample-palette-4 { --sample-color: #c0392b; }
+.mutation-matrix-table .sample-palette-5 { --sample-color: #0e8a8a; }
+.mutation-matrix-table .sample-palette-6 { --sample-color: #a0762b; }
+.mutation-matrix-table .sample-palette-7 { --sample-color: #5d6d7e; }
+
+table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
+    background-color: var(--sample-color, #337ab7);
+}
 
 /* Sample columns are the information; the point of the table is to fit as many of them
    across the window as it can. The header is written vertically, bottom to top, so the
@@ -365,10 +369,110 @@ table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-7 { backgro
     margin-top: 0.4em;
 }
 
-.mutation-matrix-table td.breseq-sample {
-    padding: 2px 3px;
+/* Rows are 22px: the descriptive cells lose Bootstrap's 8px of padding and sit on a 20px
+   line, so a row is one line of a sample cell tall and forty rows fit where twenty did. */
+table.dataTable.mutation-matrix-table tbody > tr > td {
+    padding: 1px 6px;
+    line-height: 20px;
+    vertical-align: middle;
+}
+
+/* A sample cell is a fixed 22px by 32px box in every format, so choosing a format never
+   reflows the table, and its content is centered in it. No tint: in the number format the
+   number is the information, and in the other three the color is. (The selector outranks
+   the row rule above, which would otherwise pad this cell too.) */
+table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
+    padding: 0;
     font-size: 9pt;
-    min-width: 2.2em;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 22px;
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+}
+
+.mutation-matrix-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 100%;
+    height: 22px;
+    box-sizing: border-box;
+    color: inherit;
+    text-decoration: none;
+}
+
+.mutation-matrix-cell > span {
+    position: relative;
+    z-index: 1;
+    line-height: 1;
+}
+
+/* The Frequency display formats; `freq-number` needs no rule of its own. */
+
+/* Bars: the fraction of the cell's height, from a faint baseline, in the population's
+   color -- a half tone of it for a polymorphic call. */
+.freq-bars .mutation-matrix-cell > span { display: none; }
+.freq-bars .mutation-matrix-cell::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    bottom: 1px;
+    height: calc(var(--f, 0) * 20px);
+    background-color: var(--sample-color, #337ab7);
+}
+.freq-bars .mutation-matrix-cell.polymorphic::before {
+    background-color: color-mix(in srgb, var(--sample-color, #337ab7) 50%, white);
+}
+.freq-bars .mutation-matrix-cell::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    bottom: 1px;
+    height: 20px;
+    border-bottom: 1px solid #c8c8c8;
+    pointer-events: none;
+}
+
+/* Heat map: yellow through teal to blue (YlGnBu, which survives red-green color blindness),
+   two mixes because color-mix takes two colors. An absent cell keeps the row's ground, so
+   absence and 0% do not look alike. */
+.freq-heat .mutation-matrix-cell,
+.freq-both .mutation-matrix-cell {
+    --t1: clamp(0, var(--f, 0) * 2, 1);
+    --t2: clamp(0, var(--f, 0) * 2 - 1, 1);
+    background-color: color-mix(in oklab,
+        color-mix(in oklab, #ffffd4, #41b6c4 calc(var(--t1) * 100%)),
+        #253494 calc(var(--t2) * 100%));
+}
+.freq-heat .mutation-matrix-cell > span { display: none; }
+/* Number and heat map: the digits flip to white once the cell is dark enough. */
+.freq-both .mutation-matrix-cell > span {
+    color: hsl(0 0% calc(clamp(0, (var(--f, 0) - 0.55) * 1000, 1) * 100%));
+}
+
+.mutation-matrix-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #555;
+}
+.mutation-matrix-legend[hidden] { display: none; }
+.mutation-matrix-legend-bar {
+    width: 90px;
+    height: 10px;
+    border: 1px solid #bbb;
+    background: linear-gradient(to right, #ffffd4, #41b6c4, #253494);
+}
+.mutation-matrix-frequency {
+    display: inline-flex;
+    align-items: center;
+    gap: 1em;
 }
 
 table.dataTable.mutation-matrix-table thead th.breseq-sample {

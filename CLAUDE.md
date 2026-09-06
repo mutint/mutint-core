@@ -103,8 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1929 run, 0 failures** standalone. They were **1925** before the matrix grew its
-Types menu, scroll box, sample-header links and palette (four tests), **1929** before tagging was retired
+**Baseline: 1930 run, 0 failures** standalone. They were **1925** before the matrix grew its
+Types menu, scroll box, sample-header links, palette and Frequency display (five tests), **1929** before tagging was retired
 (the endpoint tests went, the flag tests came), **1907** before the mutation matrix
 replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
 partial, the first Search tests, minus the old builder's), **1839** before the background-worker
@@ -2056,19 +2056,35 @@ computed as `relative` until they did. Sample headers are written vertically and
 the frequency as a bare percentage number with the full text as its title, so a sample column
 is as wide as `100` and forty of them fit where twelve did.
 
-**Headers are the Apply button's blue, and a sample's header is colored by experiment.**
+**Headers are the Apply button's blue, and a sample's column is colored by population.**
 `.breseq-table th` is `#337ab7` (Bootstrap's `.btn-primary`) on every breseq-styled table, and
-the matrix gives each sample header `sample-palette-<n>` from `palette_indexes`: experiments in
-order of first appearance, 0 being the header blue, wrapping after `PALETTE_SIZE` (8, matched
-by hand to the rules in `breseq_table.css`). A page of one experiment is therefore uniform, and
-Search shows each experiment's columns in one color. Sample names are bold.
+the matrix gives each sample header, and every cell under it, `sample-palette-<n>` from
+`palette_indexes`: populations (ALEs) in order of first appearance, 0 being the header blue,
+wrapping after `PALETTE_SIZE` (8, matched by hand to the `--sample-color` rules in
+`breseq_table.css`). An experiment of one ALE is therefore uniform and one of several reads as
+bands; population ids are unique across experiments, so Search needs no other rule. (This was
+by experiment for one commit, which colored nothing on any per-experiment page.) Sample names
+are bold.
+
+**Frequency display.** A fourth menu, moved by the script to the front of the first toolbar
+row, chooses how a sample cell shows its frequency: Number (the default; no tint -- the number is
+the information),
+Bars (the fraction of the cell's height in the population's color, a half tone of it for a
+polymorphic call), Heat map (yellow through teal to blue, YlGnBu), or Number and heat map. A
+cell is rendered once, as a link carrying its frequency in a CSS variable (`--f`) with the
+number inside, and the menu only swaps the table's `freq-<format>` class: the stylesheet draws
+the rest, so a format change redraws nothing. Every cell is a fixed 22 by 32 pixel box so the
+formats never reflow the table -- the descriptive cells sit on a 20px line with 1px of padding
+for the same reason, so a row is 22px rather than Bootstrap's 38 -- and an absent cell stays
+blank in every format. The choice is
+`mutation_matrix.frequency`, remembered like the other three.
 
 **Nothing sorts.** `ordering: false`: the rows are shown in the order `build_matrix` produced
 them, reference then position, which is breseq's own; a header is not a sort handle, and a
 sample's header is a link to that sample's Mutations page (`SampleColumn.url`) instead.
 
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
-holds `mutation_matrix.columns` and `mutation_matrix.types` for the reader everywhere and
+holds `mutation_matrix.columns`, `mutation_matrix.types` and `mutation_matrix.frequency` for the reader everywhere and
 `mutation_matrix.samples.<exp>` per experiment, shared by the three experiment pages; Search has
 no experiment and its sample selection is transient. Stored as the *hidden* set, so a column or sample that did not exist when
 the choice was made shows by default. The tag embeds a signed-in reader's preferences in the page

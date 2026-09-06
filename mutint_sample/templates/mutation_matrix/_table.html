@@ -69,6 +69,26 @@
         </div>
     </div>
 
+    {% comment %} How a sample cell shows its frequency. The script moves this into
+       DataTables' first toolbar row, ahead of Show entries, once the table exists; the
+       legend beside it shows in the two heat-map formats. One choice at a time, so the
+       list runs in plain (replacing) mode. {% endcomment %}
+    <div class="mutation-matrix-frequency" data-role="frequency-control">
+        <div class="btn-group">
+            <button type="button" class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                Frequency display: <span data-role="frequency-label">Number</span> <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="frequency">
+                <li data-value="number" class="active"><a href="#">Number</a></li>
+                <li data-value="bars"><a href="#">Bars</a></li>
+                <li data-value="heat"><a href="#">Heat map</a></li>
+                <li data-value="both"><a href="#">Number and heat map</a></li>
+            </ul>
+        </div>
+        <span class="mutation-matrix-legend" data-role="frequency-legend" hidden>0% <span class="mutation-matrix-legend-bar"></span> 100%</span>
+    </div>
+
     {{ matrix.rows|json_script:rows_id }}
     {% if authenticated %}{{ preferences|json_script:prefs_id }}{% endif %}
 
