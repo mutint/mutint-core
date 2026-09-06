@@ -103,7 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1939 run, 0 failures** standalone. They were **1936** before the sidebar grew its
+**Baseline: 1935 run, 0 failures** standalone. They were **1939** before the interop API left for
+mutint-api with its four tests, **1936** before the sidebar grew its
 END_SECTION and Curate (three tests), **1931** before the matrix grew row
 sets and the page its two blocks (five tests), **1925** before the matrix grew its
 Types menu, scroll box, sample-header links, palette, Frequency display and View switch (six

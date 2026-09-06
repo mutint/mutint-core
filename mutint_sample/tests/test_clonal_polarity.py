@@ -102,16 +102,6 @@ class ClonalPolarityTestCase(TestCase):
 
     # --- the word a person reads ----------------------------------------------------------
 
-    def test_the_interop_payload_says_the_right_word_for_each(self):
-        """It was `/metadata`'s builder, shared with the interop API. That page and its app
-        are gone; the API is the one consumer left and owns the builder now."""
-        from mutint_interop_query.views import _sample_info_list
-
-        words = {row["label"]: row["sample_type"]
-                 for row in _sample_info_list(Sample.objects.order_by("name"))}
-        self.assertEqual(SAMPLE_TYPE_CLONAL, words[self.clone.label])
-        self.assertEqual(SAMPLE_TYPE_MIXED, words[self.mixed.label])
-
     # --- the checkbox ---------------------------------------------------------------------
 
     def test_the_checkbox_is_ticked_for_the_mixed_sample_only(self):

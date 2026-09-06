@@ -43,7 +43,6 @@ def get_core_urlpatterns():
         re_path(r'^export/', include('mutint_export.urls')),
         re_path(r'^import/', include('mutint_import.urls')),
         re_path(r'^jobs/', include('mutint_jobs.urls')),
-        re_path(r'^interop-query/', include('mutint_interop_query.urls')),
         re_path(r'^curate/', include('mutint_curate.urls')),
         re_path(r'^mutations/', include('mutint_sample.urls')),
         re_path(r'^search/', include('mutint_search.urls')),

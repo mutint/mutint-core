@@ -18,6 +18,7 @@ Several plugins exist today, and they are the worked examples this guide keeps p
 | `mutint-phylogeny` | a maximum-parsimony tree over an experiment's samples |
 | `mutint-needle` | the needle plot, as a panel on the Overview |
 | `mutint-breseq` | breseq runs on uploaded reads |
+| `mutint-api` | the public read API at `/api/` |
 
 ## What a plugin can add
 

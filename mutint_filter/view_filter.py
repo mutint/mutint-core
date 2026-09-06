@@ -63,7 +63,7 @@ MAX_REMEMBERED_EXPERIMENTS = 20
 #: recognize rather than guess. A session outlives a deploy.
 _SESSION_FORMAT = 1
 
-#: The names the form posts, the interop API accepts, and the URL carries. One spelling, so the
+#: The names the form posts, the API (mutint-api) accepts, and the URL carries. One spelling, so the
 #: page and the API cannot disagree about what `min_freq=20` means.
 MIN_PARAM = "min_freq"
 MAX_PARAM = "max_freq"
@@ -99,7 +99,7 @@ class ViewFilter:
         """The only place values are coerced. Raises `ValueError` on anything unusable.
 
         Raising rather than ignoring, because the two callers want to do different things and
-        both want to know: the interop API turns it into a 400, since an anonymous caller who
+        both want to know: the API plugin turns it into a 400, since an anonymous caller who
         sent `min_freq=abc` and got unfiltered results has a wrong answer dressed as a right
         one; the page catches it and re-renders saying so.
         """
@@ -116,7 +116,7 @@ class ViewFilter:
 
     @classmethod
     def from_params(cls, params):
-        """Parse from a `QueryDict` or dict -- the form's GET, or the interop API's."""
+        """Parse from a `QueryDict` or dict -- the form's GET, or the API's."""
         return cls.parse(min_freq=params.get(MIN_PARAM),
                          max_freq=params.get(MAX_PARAM),
                          genes=params.get(GENES_PARAM))

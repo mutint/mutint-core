@@ -258,7 +258,7 @@ class Sample(SupplementalDataMixin):
     @property
     def qualified_label(self):
         """The label with its experiment in front, for the places that show samples from
-        more than one -- the CSV export's column headings and the interop payload."""
+        more than one -- the CSV export's column headings."""
         return self.experiment.name + " " + self.label
 
 

@@ -121,7 +121,7 @@ def exclude_ancestry(mutation_call_queryset, experiment_id):
 def exclude_all_ancestry(mutation_call_queryset):
     """`exclude_ancestry` for a queryset that spans experiments.
 
-    Search, the public interop API and the dashboard's totals all query across experiments,
+    Search, mutint-api's cross-experiment lookup and the dashboard's totals all query across experiments,
     so there is no single ancestor to name -- and a query per experiment would be absurd on a
     page that is already scanning the installation.
 

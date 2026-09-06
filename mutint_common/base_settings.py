@@ -150,7 +150,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_common',
             'mutint_bibliome',
             'mutint_home',
-            'mutint_interop_query',
             'mutint_about',           # nav: About, in END_SECTION (the foot)
         ],
 
