@@ -198,12 +198,13 @@
             // The server's order, and no sort handles on the headers: a click on a sample's
             // header follows its link instead.
             ordering: false,
-            // Every control on one line above the table, and the table alone in the box that
-            // scrolls -- the box itself is DataTables' doing, so that it wraps only the table.
-            dom: '<"mutation-matrix-toolbar"lBfip>r<"mutation-matrix-scroll"t>',
+            // Two rows of controls above the table -- length and search; then the count, the
+            // pager and Export CSV -- and the table alone in the box that scrolls. The box
+            // itself is DataTables' doing, so that it wraps only the table.
+            dom: '<"mutation-matrix-toolbar"lf><"mutation-matrix-toolbar"ipB>r<"mutation-matrix-scroll"t>',
             buttons: [{
                 extend: "csv",
-                text: "CSV",
+                text: "Export CSV",
                 title: container.getAttribute("data-csv-title") || "mutations",
                 exportOptions: { columns: ":visible" }
             }],

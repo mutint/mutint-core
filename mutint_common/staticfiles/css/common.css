@@ -430,49 +430,11 @@ a:hover {
     z-index: 1001;
 }
 
-.dot {
-    cursor: pointer;
-    height: 15px;
-    width: 15px;
-    margin: 0 2px;
-    background-color: #bbb;
-    border-radius: 50%;
-    display: inline-block;
-    transition: background-color 0.6s ease;
-}
-
-/* `.dot.active`, not a bare `.active`. This was `.active, .dot:hover`, which is a rule about
-   carousel dots written so that it painted #717171 behind *any* element carrying the class --
-   and Bootstrap puts `active` on a selected nav tab, a selected dropdown row and the current
-   sidebar entry. Mostly the inner <a> covered the gray and nobody saw it. On a nav tab it did
-   not: `.nav-tabs > li > a` has `margin-right: 2px` and no bottom border, so the gray showed
-   as a hard edge down the right and along the foot of the selected tab, which reads as a
-   badly drawn drop shadow. Measured at 5x before believing it.
-
-   (No template renders `class="dot"` any more, so the block above is dead as it stands. Left
-   in place rather than deleted here -- narrowing the selector is the fix for the bug; the
-   carousel's removal is somebody else's commit.) */
-.dot.active, .dot:hover {
-    background-color: #717171;
-}
-
-.reject {
-    background-color: #f1f1f1;
-    color: #db3b5e;
-    padding: .5%;
-}
-
-.next {
-    background-color: #f1f1f1;
-    color: #0a8211;
-    padding: .5%;
-}
-
-.neighbor {
-    background-color: #f1f1f1;
-    color: black;
-    padding: .5%;
-}
+/* A carousel's `.dot`, `.dot.active`, `.reject`, `.next` and `.neighbor` rules stood here after
+   the carousel itself had gone. Bare class names collide: DataTables' pager marks its Next
+   button `li.next`, and the carousel's `.next { padding: .5% }` shifted it three pixels down
+   on every mutation matrix. Removed rather than narrowed, since nothing rendered any of the
+   five (`grep -r 'class="[^"]*\bnext\b'` over every component finds no user). */
 
 #footer {
     position: fixed;

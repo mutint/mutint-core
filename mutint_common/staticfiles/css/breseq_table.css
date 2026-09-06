@@ -222,12 +222,13 @@
     margin-bottom: 0.75em;
 }
 
+/* The pickers, the filter controls and Apply wrap like a .btn-row: air between the rows. */
 .mutation-matrix-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 0.5em;
     margin-bottom: 0.75em;
-}
-
-.mutation-matrix-form .form-control {
-    margin-right: 0.5em;
 }
 
 /* DataTables' Bootstrap theme wants the header sortable-arrows on a white ground; the breseq
@@ -245,14 +246,22 @@ table.dataTable.breseq-table thead .sorting_desc:after {
    because sticky offsets have to add up the widths of the columns before them. Pinned cells
    take their row's background so scrolled content does not show through; the header, which
    is both sticky-top and sticky-left at the corner, sits above both. */
-/* DataTables' own controls -- length, CSV, search, the count and the pager -- on one line
-   above the box, outside anything that scrolls. */
+/* DataTables' own controls, in two rows above the box, outside anything that scrolls: the
+   length menu and the search box; the count, the pager and Export CSV. The length menu is
+   given the search box's size rather than the theme's 75px. The row gap is the one every
+   wrapping control row has (.btn-row), so a narrow window stacks them with air between. */
 .mutation-matrix-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5em 1.5em;
+    gap: 5px 1.5em;
     margin-bottom: 0.5em;
+}
+
+.mutation-matrix div.dataTables_wrapper div.dataTables_length select,
+.mutation-matrix div.dataTables_wrapper div.dataTables_filter input {
+    width: 10em;
+    height: 30px;
 }
 
 div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_info {
@@ -265,16 +274,17 @@ div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate ul.pagin
 
 /* The box breaks out of #mutint-content's 25px of padding on the sides and at the foot, so
    its scrollbars are the window's edges rather than lines somewhere inside the page; the
-   script sizes it to the bottom of the window. */
+   script sizes it to the bottom of the window. No border and no table margin: the header
+   row is the top edge. */
 .mutation-matrix-scroll {
     overflow: auto;
     max-height: 70vh;
-    border-top: 1px solid #ddd;
     margin: 0 -25px -25px;
 }
 
 .mutation-matrix-scroll .breseq-table {
-    margin-bottom: 0;
+    /* !important because DataTables' theme sets `table.dataTable`'s margins with one. */
+    margin: 0 !important;
 }
 
 /* `table.dataTable ... > th` in the selectors, because DataTables' theme sets

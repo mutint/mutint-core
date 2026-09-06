@@ -2033,15 +2033,15 @@ definitions from those attributes. Rows travel as `json_script`.
 **The three menus are the genome browser's sample menu, three times**: `ul.dropdown-menu
 .mutint-menu.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being
 shown. Columns lists the descriptive columns (Description off by default: it is prose, and the
-widest column); Samples lists the samples and Types the mutation types the rows hold, each with
+widest column); Samples lists the samples and Mutation Types the types the rows hold, each with
 Show all / Hide all beside it. A row whose type is hidden, or whose mutation is in no shown
 sample, leaves the table through `$.fn.dataTable.ext.search`, so paging and the count describe
 what is visible, and the striping is redone per displayed row the way breseq stripes. The page
 length menu ends in All.
 
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
-puts its length, CSV, search, count and pager controls on one line above the table and wraps the
-table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding with
+puts its controls in two rows above the table -- length and search; count, pager and Export CSV
+-- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding with
 negative margins and the script sizes it to the bottom of the window, so its scrollbars are the
 window's edges. The header sticks to its top and the descriptive columns to its left, each
 pinned column's `left` written by the script after every draw, and again from a `ResizeObserver`
