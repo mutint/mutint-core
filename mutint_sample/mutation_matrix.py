@@ -61,6 +61,9 @@ class SampleColumn:
     flags: tuple = ()
     #: Where the sample's header links: its own Mutations page.
     url: str = ""
+    #: Which of the header palette's colors the column wears: the same for every sample of
+    #: one experiment, the next for the next experiment met, wrapping after PALETTE_SIZE.
+    palette: int = 0
 
 
 @dataclass
@@ -92,12 +95,31 @@ DESCRIPTIVE = (
 )
 
 
+#: How many colors breseq_table.css defines for `.sample-palette-<n>`.
+PALETTE_SIZE = 8
+
+
+def palette_indexes(experiment_ids):
+    """One palette index per entry: experiments in order of first appearance, wrapping.
+
+    A page of one experiment is all one color -- the header's own, index 0 -- and the
+    cross-experiment Search page colors each experiment's columns alike.
+    """
+    seen = {}
+    return [seen.setdefault(experiment_id, len(seen)) % PALETTE_SIZE
+            for experiment_id in experiment_ids]
+
+
+def experiment_id_of(sample, experiment=None):
+    """The experiment given when there is one -- every sample of a per-experiment page shares
+    it, and asking each sample costs a query -- and the sample's own otherwise."""
+    return experiment.id if experiment is not None else sample.population.experiment_id
+
+
 def sample_page_url(sample, experiment=None):
-    """The sample's own Mutations page. The experiment is the one given when there is one --
-    every sample of a per-experiment page shares it, and asking each sample costs a query --
-    and the sample's own otherwise, for a page that spans experiments."""
-    experiment_id = experiment.id if experiment is not None else sample.population.experiment_id
-    return "/mutations/breseq?experiment_id=%d&sample_id=%d" % (experiment_id, sample.id)
+    """The sample's own Mutations page."""
+    return "/mutations/breseq?experiment_id=%d&sample_id=%d" % (
+        experiment_id_of(sample, experiment), sample.id)
 
 
 def browse_url_for(reseq_dict):
@@ -168,11 +190,12 @@ def build_matrix(mutation_calls, reseq_dict, *, experiment=None, labels="plain",
     `browse_url(call)` and `refseq_url(mutation)` -> `(url, title)` may be replaced; the
     defaults are `browse_url_for` and `refseq_url_for`.
     """
+    palette = palette_indexes(experiment_id_of(s, experiment) for s in reseq_dict.values())
     samples = [SampleColumn(id=sample.id,
                             label=sample.qualified_label if labels == "qualified" else sample.label,
                             index=index, bam_stored=bool(sample.bam_stored),
                             flags=tuple(flags_of(sample)),
-                            url=sample_page_url(sample, experiment))
+                            url=sample_page_url(sample, experiment), palette=palette[index])
                for index, sample in enumerate(reseq_dict.values())]
     column_of = {sample.id: sample.index for sample in samples}
     browse_url = browse_url or browse_url_for(reseq_dict)

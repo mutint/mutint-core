@@ -198,10 +198,10 @@
             // The server's order, and no sort handles on the headers: a click on a sample's
             // header follows its link instead.
             ordering: false,
-            // Two rows of controls above the table -- length and search; then the count, the
+            // Two rows of controls above the table -- length, search and the count; then the
             // pager and Export CSV -- and the table alone in the box that scrolls. The box
             // itself is DataTables' doing, so that it wraps only the table.
-            dom: '<"mutation-matrix-toolbar"lf><"mutation-matrix-toolbar"ipB>r<"mutation-matrix-scroll"t>',
+            dom: '<"mutation-matrix-toolbar"lfi><"mutation-matrix-toolbar"pB>r<"mutation-matrix-scroll"t>',
             buttons: [{
                 extend: "csv",
                 text: "Export CSV",
@@ -244,13 +244,28 @@
            its scrollbars sit at the window's edges (the stylesheet takes care of the sides). */
         function sizeScrollBox() {
             if (!scrollBox) { return; }
+            var root = document.documentElement;
             var top = scrollBox.getBoundingClientRect().top + window.pageYOffset;
-            scrollBox.style.maxHeight = Math.max(240, window.innerHeight - top) + "px";
+            var height = Math.max(240, Math.floor(root.clientHeight - top));
+            scrollBox.style.maxHeight = height + "px";
+            // Anything left under the box -- a fraction of a pixel, something a deployment
+            // put at the page's foot -- gives the page a scrollbar of its own with nothing
+            // to scroll. Measure what is left and take it off the box instead.
+            var excess = root.scrollHeight - root.clientHeight;
+            if (excess > 0 && height - excess >= 240) { scrollBox.style.maxHeight = (height - excess) + "px"; }
         }
         sizeScrollBox();
         window.addEventListener("resize", sizeScrollBox);
+        // Once more when everything has loaded: an image above the box arriving after this
+        // ran moves the box's top, and a box sized before that overflows the page.
+        window.addEventListener("load", sizeScrollBox);
         pinColumns();
-        if (window.ResizeObserver) { new ResizeObserver(function () { pinColumns(); }).observe(table); }
+        if (window.ResizeObserver) {
+            new ResizeObserver(function () { pinColumns(); }).observe(table);
+            // Whatever moves the box's top after this ran -- a logo that loaded late, a
+            // filter summary that wrapped -- changes the body's height, and the box follows.
+            new ResizeObserver(function () { sizeScrollBox(); }).observe(document.body);
+        }
 
         var counter = container.querySelector('[data-role="sample-count"]');
         var columnPicker = window.mutintSelectList(columnList, {

@@ -20,8 +20,9 @@
     margin-bottom: 0.75em;
 }
 
+/* Header blue is Bootstrap's .btn-primary, the Apply button beside these tables. */
 .breseq-table th {
-    background-color: rgb(0, 130, 0);
+    background-color: #337ab7;
     color: rgb(255, 255, 255);
     font-weight: bold;
     white-space: nowrap;
@@ -247,9 +248,11 @@ table.dataTable.breseq-table thead .sorting_desc:after {
    take their row's background so scrolled content does not show through; the header, which
    is both sticky-top and sticky-left at the corner, sits above both. */
 /* DataTables' own controls, in two rows above the box, outside anything that scrolls: the
-   length menu and the search box; the count, the pager and Export CSV. The length menu is
-   given the search box's size rather than the theme's 75px. The row gap is the one every
-   wrapping control row has (.btn-row), so a narrow window stacks them with air between. */
+   length menu, the search box and the count; the pager and Export CSV. The length menu is
+   given the search box's size rather than the theme's 75px, and both the page's 14px type
+   rather than Bootstrap's 12px for a small input, which read as two sizes side by side. The
+   row gap is the one every wrapping control row has (.btn-row), so a narrow window stacks
+   them with air between. */
 .mutation-matrix-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -262,6 +265,7 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 .mutation-matrix div.dataTables_wrapper div.dataTables_filter input {
     width: 10em;
     height: 30px;
+    font-size: 14px;
 }
 
 div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_info {
@@ -295,7 +299,7 @@ table.dataTable.mutation-matrix-table thead > tr > th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background-color: rgb(0, 130, 0);
+    background-color: #337ab7;
 }
 
 /* A stuck cell has to be opaque, or what scrolls under it shows through: the row's stripe
@@ -312,8 +316,21 @@ table.dataTable.mutation-matrix-table tr.alternate_table_row_1 > td.pinned {
 
 table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     z-index: 3;
-    background-color: rgb(0, 130, 0);
+    background-color: #337ab7;
 }
+
+/* A sample column's header is colored by experiment: `sample-palette-<n>` from
+   mutation_matrix.palette_indexes, index 0 being the header's own blue so a page of one
+   experiment is uniform and Search tells its experiments apart. Eight colors, each dark
+   enough for white text and distinct from its neighbors; PALETTE_SIZE in mutation_matrix.py
+   must equal the count here. */
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-1 { background-color: #b35c00; }
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-2 { background-color: #2a8a3e; }
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-3 { background-color: #8e44ad; }
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-4 { background-color: #c0392b; }
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-5 { background-color: #0e8a8a; }
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-6 { background-color: #a0762b; }
+table.dataTable.mutation-matrix-table thead > tr > th.sample-palette-7 { background-color: #5d6d7e; }
 
 /* Sample columns are the information; the point of the table is to fit as many of them
    across the window as it can. The header is written vertically, bottom to top, so the
@@ -333,7 +350,7 @@ table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     transform: rotate(180deg);
     white-space: nowrap;
     line-height: 1.1;
-    font-weight: normal;
+    font-weight: bold;
     font-size: 10pt;
 }
 

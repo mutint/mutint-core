@@ -77,7 +77,7 @@
        window, in which the header sticks to the top and the descriptive columns to the left
        while the sample columns scroll under them. Nothing sorts: the rows arrive in breseq's
        order. A sample's header is written vertically, so the column is only as wide as its
-       cells, and links to that sample's own Mutations page. {% endcomment %}
+       cells, links to that sample's own Mutations page, and is colored by experiment. {% endcomment %}
     <table id="{{ matrix.dom_id }}" class="table breseq-table mutation-matrix-table">
         <thead>
             <tr>
@@ -85,7 +85,7 @@
                     <th class="{{ column.css_class }}" data-key="{{ column.key }}">{{ column.title }}</th>
                 {% endfor %}
                 {% for sample in matrix.samples %}
-                    <th class="breseq-sample" data-sample="{{ sample.id }}" data-index="{{ sample.index }}"><a class="mutation-matrix-vertical" href="{{ sample.url }}" title="{{ sample.label }} &mdash; view this sample's mutations">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></th>
+                    <th class="breseq-sample sample-palette-{{ sample.palette }}" data-sample="{{ sample.id }}" data-index="{{ sample.index }}"><a class="mutation-matrix-vertical" href="{{ sample.url }}" title="{{ sample.label }} &mdash; view this sample's mutations">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></th>
                 {% endfor %}
             </tr>
         </thead>

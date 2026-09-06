@@ -89,8 +89,9 @@ mutation types. Those choices are remembered for a signed-in reader through
 (everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by every matrix page of that
 experiment) — and in the browser's localStorage otherwise. The table scrolls inside its own box
 with the header and the descriptive columns pinned, in the order `build_matrix` produced the
-rows — nothing sorts — and each sample's header links to that sample's Mutations page. A plugin
-that wants to remember something of its own writes under its own prefix through the same
+rows — nothing sorts — and each sample's header links to that sample's Mutations page and is
+colored by experiment (`SampleColumn.palette`), so a page spanning experiments tells them apart.
+A plugin that wants to remember something of its own writes under its own prefix through the same
 `/preferences/` endpoint; nothing in core needs to know.
 
 The filter reaches the *derivation*, not the matrix: build your queryset through the reader's

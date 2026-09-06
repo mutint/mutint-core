@@ -51,7 +51,7 @@ class SearchPageTestCase(TestCase):
         html = response.content.decode()
         self.assertEqual(200, response.status_code)
         self.assertIn("data-mutation-matrix", html)
-        self.assertIn('class="breseq-sample"', html)
+        self.assertIn('class="breseq-sample sample-palette-0"', html)
         # Spans experiments, so the sample says which experiment it is from ...
         self.assertIn("e 1 / 1 / 1-1", html)
         # ... and there is no experiment for the matrix to remember a sample selection for.

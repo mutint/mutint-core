@@ -103,8 +103,8 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1928 run, 0 failures** standalone. They were **1925** before the matrix grew its
-Types menu, scroll box and sample-header links (three tests), **1929** before tagging was retired
+**Baseline: 1929 run, 0 failures** standalone. They were **1925** before the matrix grew its
+Types menu, scroll box, sample-header links and palette (four tests), **1929** before tagging was retired
 (the endpoint tests went, the flag tests came), **1907** before the mutation matrix
 replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
 partial, the first Search tests, minus the old builder's), **1839** before the background-worker
@@ -2040,10 +2040,11 @@ what is visible, and the striping is redone per displayed row the way breseq str
 length menu ends in All.
 
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
-puts its controls in two rows above the table -- length and search; count, pager and Export CSV
--- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding with
+puts its controls in two rows above the table -- length, search and the count; pager and Export
+CSV -- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding with
 negative margins and the script sizes it to the bottom of the window, so its scrollbars are the
-window's edges. The header sticks to its top and the descriptive columns to its left, each
+window's edges -- then measures whether the page still overflows and takes any excess off the
+box, because a fraction of a pixel under it gives the page a scrollbar with nothing to scroll. The header sticks to its top and the descriptive columns to its left, each
 pinned column's `left` written by the script after every draw, and again from a `ResizeObserver`
 on the table, as the sum of the pinned widths before it (`position: sticky` cannot add them up
 itself). A stuck cell is painted opaque -- white, the stripe grey, the header green -- because a
@@ -2054,6 +2055,13 @@ rules start with `table.dataTable.mutation-matrix-table`, because DataTables' th
 computed as `relative` until they did. Sample headers are written vertically and a cell shows
 the frequency as a bare percentage number with the full text as its title, so a sample column
 is as wide as `100` and forty of them fit where twelve did.
+
+**Headers are the Apply button's blue, and a sample's header is colored by experiment.**
+`.breseq-table th` is `#337ab7` (Bootstrap's `.btn-primary`) on every breseq-styled table, and
+the matrix gives each sample header `sample-palette-<n>` from `palette_indexes`: experiments in
+order of first appearance, 0 being the header blue, wrapping after `PALETTE_SIZE` (8, matched
+by hand to the rules in `breseq_table.css`). A page of one experiment is therefore uniform, and
+Search shows each experiment's columns in one color. Sample names are bold.
 
 **Nothing sorts.** `ordering: false`: the rows are shown in the order `build_matrix` produced
 them, reference then position, which is breseq's own; a header is not a sort handle, and a

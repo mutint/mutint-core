@@ -171,6 +171,13 @@ class RowsTestCase(_Fixture):
         matrix = mutation_matrix.build_matrix(self.calls, self.reseq_dict)
         self.assertIsNone(matrix.experiment_id)
 
+    def test_one_experiment_is_one_palette_color_and_search_cycles(self):
+        self.assertEqual({0}, {s.palette for s in self.matrix().samples})
+        self.assertEqual([0, 1, 0, 2], mutation_matrix.palette_indexes([5, 7, 5, 9]))
+        size = mutation_matrix.PALETTE_SIZE
+        self.assertEqual(list(range(size)) + [0],
+                         mutation_matrix.palette_indexes(range(size + 1)))
+
     def test_each_sample_links_to_its_own_mutations_page(self):
         """The experiment given, when there is one; the sample's own when there is not --
         the cross-experiment page has none to give, and the link must still be right."""
@@ -195,7 +202,7 @@ class PartialTestCase(_Fixture):
         self.assertEqual(7 + len(self.reseq_dict), html.count("<th "))
         for column in mutation_matrix.DESCRIPTIVE:
             self.assertIn('<th class="%s" data-key="%s"' % (column.css_class, column.key), html)
-        self.assertEqual(len(self.reseq_dict), html.count('class="breseq-sample"'))
+        self.assertEqual(len(self.reseq_dict), html.count('class="breseq-sample sample-palette-0"'))
 
     def test_the_menus_list_columns_and_samples(self):
         html = self._render()

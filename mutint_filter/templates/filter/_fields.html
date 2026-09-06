@@ -14,18 +14,21 @@ buttons that discard each other's edits.
 {% if experiment_id %}
     {% if standalone %}<form action="" method="get" class="form-inline" style="margin: 6px 0;">
         <input type="hidden" name="experiment_id" value="{{ experiment_id }}"/>{% endif %}
+    {% comment %} form-control, so the boxes stand as tall as the selects and the Apply
+       button beside them; the labels drop Bootstrap's 5px bottom margin for the same reason,
+       since a centered label carries its margin with it. {% endcomment %}
     <b>Showing: </b>
-    <label style="font-weight: normal; margin-left: 6px;">
+    <label style="font-weight: normal; margin: 0 0 0 6px;">
         frequency
-        <input type="text" name="{{ min_param }}" size="3" placeholder="0"
+        <input type="text" name="{{ min_param }}" size="3" placeholder="0" class="form-control"
                value="{% if view_filter.min_freq is not None %}{{ view_filter.min_freq }}{% endif %}"/>
         &ndash;
-        <input type="text" name="{{ max_param }}" size="3" placeholder="100"
+        <input type="text" name="{{ max_param }}" size="3" placeholder="100" class="form-control"
                value="{% if view_filter.max_freq is not None %}{{ view_filter.max_freq }}{% endif %}"/>%
     </label>
-    <label style="font-weight: normal; margin-left: 10px;">
+    <label style="font-weight: normal; margin: 0 0 0 10px;">
         ignoring genes
-        <input type="text" name="{{ genes_param }}" size="18" placeholder="none"
+        <input type="text" name="{{ genes_param }}" size="18" placeholder="none" class="form-control"
                value="{{ genes_text }}"/>
     </label>
     {% if standalone %}
