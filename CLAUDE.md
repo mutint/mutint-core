@@ -59,35 +59,23 @@ env/main/bin/pip install coverage && env/main/bin/coverage run ./mutint test && 
 
 ### Testing notes
 
-**The suite takes about two minutes.** Measured on PostgreSQL 18 under Python 3.13: 118s
-standalone, 121s assembled. It was 140s standalone on Python 3.9 and *57s* on 3.12 with
-Django 4.2 -- the interpreter made it two and a half times faster and Django 6.1 gave most of
-that back, which is what a framework raising its default password-hasher iterations looks like
-in a suite where two modules call `set_password` per user in `setUp`. Per-app it runs from 1.9s (`mutint_stats`, 32 tests) to 96s (`mutint_experiment`,
-416) -- and that one app is two thirds of the whole run. Inside it `test_access_views` is 57s
-and `test_groups` 34s, 90 of its 96 between them: both call `User.set_password` per user in
-setUp, and Django 4.2's default PBKDF2 hasher costs a few tenths of a second every time.
-Nothing else in the suite pays that, and a test-only `PASSWORD_HASHERS` override is the usual
-answer if it ever becomes worth fixing. The test database is `test_<name>` on the cluster the
-entry script starts under `env/`, created and dropped per run.
+**The suite takes about two minutes**: 118s standalone, 121s assembled, on PostgreSQL 18 under
+Python 3.13. Startup is a couple of seconds; the tests are the rest. Per app it runs from 1.9s
+(`mutint_stats`, 32 tests) to 96s (`mutint_experiment`, 416) -- that one app is two thirds of
+the whole run, and inside it `test_access_views` (57s) and `test_groups` (34s) are 90 of its
+96: both call `User.set_password` per user in `setUp`, and the default PBKDF2 hasher costs a
+few tenths of a second every time. A test-only `PASSWORD_HASHERS` override is the usual answer
+if it ever becomes worth fixing. The test database is `test_<name>` on the cluster the entry
+script starts under `env/`, created and dropped per run.
 
 **Tests refuse to run against a database this checkout does not manage.** `base_settings`
 raises `ImproperlyConfigured` unless `MUTINT_DB_MANAGED=1` (which only the entry script sets)
-or `MUTINT_ALLOW_REMOTE_TESTS=1`. The old guard swapped in SQLite, which is not a thing that
-can protect anything now: the suite creates and drops a real database on whatever server is
-configured, and that server could be a deployment's.
+or `MUTINT_ALLOW_REMOTE_TESTS=1`: the suite creates and drops a real database on whatever
+server is configured, and that server could be a deployment's.
 
-**This said "~13 seconds" for a long time, and was wrong by an order of magnitude** -- the
-same drift the test *count* above warns about, in the figure right beside it. What made it
-worth correcting is that the explanation travelled with it: *"most of that is Django starting
-up, not the tests"* was true at 13 seconds and is not true now. Startup is a couple of
-seconds; the tests are the rest. Measure it rather than adjusting it by what you think you
-added.
-
-**A full run outlasts a two-minute command timeout**, which is new and is the first thing to
-suspect when a run appears to die near the end having printed nothing. Give it a longer
-timeout, or run one app at a time -- everything except `mutint_experiment` finishes in under
-half a minute.
+**A full run outlasts a two-minute command timeout**, which is the first thing to suspect when
+a run appears to die near the end having printed nothing. Give it a longer timeout, or run one
+app at a time -- everything except `mutint_experiment` finishes in under half a minute.
 
 **If a test run appears to hang, that aside, it is almost certainly not the tests.** Two
 things cause it:
@@ -102,8 +90,8 @@ things cause it:
 **Baseline: 1930 run, 0 failures** standalone; **2227** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
-what you think you added**: this file carried a ledger of every past count, and every time a
-figure in it was arithmetic instead of a run it was later found wrong, by as much as sixty.
+what you think you added**: every figure here that was arithmetic instead of a run was later
+found wrong.
 
 **An assembled project's venv needs the genomediff pin too.** The entry script re-runs pip
 when `requirements.txt` changes, but every commit of that package reports itself as `0.4.2`,
@@ -114,50 +102,39 @@ wrong package.
 **A bare `test` runs the installed first-party apps, not whatever discovery finds.**
 `mutint_common/test_runner.py` substitutes them when no labels are given. Standalone this
 changes nothing; in an assembled project it is the difference between running the suite and
-not. `./mutint test` used to report `Ran 0 tests ... OK` — unittest discovery walks the
-working directory, and an assembled project's code lives in submodule directories named
-`mutint-core`, `mutint-compare` and so on, which can never be Python packages, so discovery
-could not descend into them however they were laid out. Renaming them would not have helped:
-a directory is skipped unless it holds an `__init__.py`, and giving one to a submodule root
-would make every app importable by two dotted paths at once — `mutint_sample.models` and
-`mutint_core.mutint_sample.models` are two module objects, which means two sets of model classes.
-
-The app set comes from `about_registry.first_party_app_configs()`, the same predicate the
-About page inventories with, so "which apps are ours" is stated once.
+not: unittest discovery walks the working directory, and an assembled project's code lives in
+submodule directories named `mutint-core`, `mutint-compare` and so on, which can never be
+Python packages. Giving a submodule root an `__init__.py` would not help either -- every app
+would then be importable by two dotted paths at once, and `mutint_sample.models` and
+`mutint_core.mutint_sample.models` are two module objects, which means two sets of model
+classes. The app set comes from `about_registry.first_party_app_configs()`, the same
+predicate the About page inventories with, so "which apps are ours" is stated once.
 
 **Core's tests must not assert on what is *absent* from a shared registry.** Nav entries,
 About sections and export types are contributed by whatever is installed, so
 `assertNotIn("Compare", nav_labels)` is a statement about the install set, not about core —
 it passes standalone and fails the moment a plugin is added. Assert core's own registrations,
-and leave a plugin's to the plugin. Three tests said otherwise and were wrong; the About one
-now counts entries per *checkout*, which is the invariant it always meant.
-
-It was not green for years. The last six were all in `mutint_metadata`, whose parser and tests
-had disagreed since two 2019 commits that changed code without migrating what depended on it.
-That app and the `Media` table it wrote are gone; the story is kept because it is the reason
-this file says a red suite is a regression rather than the weather.
+and leave a plugin's to the plugin; the About test counts entries per *checkout*, which is
+the invariant it means.
 
 ### Gotchas when writing tests
 
 - **`find_user()` prompts on stdin.** Anything reaching `try_creating_project` with an owner
   name that matches no `User` raises `EOFError` under the test runner. Create the `User` first,
   or use `gd_import.prepare_experiment_by_id`, which never resolves one.
-- **`Project.objects.create()` is enough now, and used to not be.** `can_view_project` read
-  the django-guardian grant and never `Project.user`, so a project could name an owner who
-  could not open it, and five test modules carried a `POST /project/create/` workaround
-  for it. `effective_role` reads `Project.user` directly, so that trap is gone. Call
-  `set_primary_owner(project, user)` when you want the grant row as well — it is what the
-  create view, the CLI importer and `load_example` all use.
-- **Access is explicit; staff have no blanket read.** `can_view_project` used to end
-  `return bool(user.is_staff)`. A test that gives someone `is_staff=True` and expects them to
-  see a project is asserting the old behavior.
-- **A `tests/` directory with no `__init__.py` is not run at all, and says nothing.**
-  `mutint_dashboard/tests/` had none, so its nine tests had never run in the suite -- and the
-  symptom is not a failure, it is a total that is quietly nineteen short. A bare `./mutint test`
-  runs *app labels* (see above), and label discovery cannot descend into a directory that is
-  not a package; naming the module explicitly (`./mutint test mutint_dashboard.tests.test_x`)
-  works fine, which is what makes it invisible when writing a new test. `./mutint test
-  <app_label>` reporting `Found 0 test(s)` for an app that plainly has tests is the tell.
+- **`Project.objects.create()` is enough.** `effective_role` reads `Project.user` directly, so
+  the owner can open the project with no grant row. Call `set_primary_owner(project, user)`
+  when you want the grant row as well — it is what the create view, the CLI importer and
+  `load_example` all use.
+- **Access is explicit; staff have no blanket read.** A test that gives someone
+  `is_staff=True` and expects them to see a project is asserting behavior that is gone.
+- **A `tests/` directory with no `__init__.py` is not run at all, and says nothing.** A bare
+  `./mutint test` runs *app labels* (see above), and label discovery cannot descend into a
+  directory that is not a package; naming the module explicitly
+  (`./mutint test mutint_dashboard.tests.test_x`) works fine, which is what makes it invisible
+  when writing a new test. The symptom is not a failure but a total that is quietly short;
+  `./mutint test <app_label>` reporting `Found 0 test(s)` for an app that plainly has tests is
+  the tell.
 - **Override the store.** Anything touching `MUTINT_STORE_DIR` needs
   `override_settings(MUTINT_STORE_DIR=tempfile.mkdtemp())`, or tests write into the repo.
 - **Template content outside a `{% block %}` is silently discarded** in a child template. A
@@ -183,10 +160,8 @@ page; the command is for bulk work and for a deployment being set up from a shel
 Migrations are tracked in version control. Commit the files generated by
 `./mutint makemigrations` alongside the model changes that produced them.
 
-**There is no Docker in this repo.** This section used to give
-`docker-compose -f docker-compose-prod-asgi-host-nginx.yml up`; that file does not exist here
-and neither does any other compose file, Dockerfile or Procfile. It described the pre-refactor
-deployment. See **Infrastructure (production)** below.
+**There is no Docker in this repo**: no compose file, Dockerfile or Procfile. See
+**Infrastructure (production)** below.
 
 ## Architecture
 
@@ -199,22 +174,19 @@ Neither the sidebar nor the content box has a fixed width, and neither should ge
 
 - `.sidebar` is `width: max-content` when open (set inline in `base.html`, and by
   `toggle_sidebar`), so it is as wide as its widest entry plus the 15px `.nav > li > a` padding
-  either side. `max-width: 17vw` -- what the fixed width used to be -- keeps a long experiment
+  either side. `max-width: 17vw` keeps a long experiment
   name from pushing the page over; `overflow-x: hidden` trims it instead. Collapsed, the inline
   width is cleared and `.sidebar`'s `width: 0` is what remains.
 - `#mutint-content` is `display: flow-root` and fills whatever is left beside the sidebar and the
-  collapse strip. It used to be `float: left; width: 77vw` beside a 17vw sidebar, with
-  `toggle_sidebar` swapping in a second guess of 95vw; neither added up, and several vw of every
-  page went unused down the right-hand side. With the sidebar sized to its own content, any
-  fixed width would be wrong by a different amount again.
+  collapse strip. With the sidebar sized to its own content, any fixed width would be wrong by
+  a different amount at every window size.
 
 `flow-root` rather than `overflow: hidden`: both establish the block formatting context that
 stops the box sliding under the floats, but `hidden` would clip a menu that opens past the edge
 -- the genome browser's sample menu is one.
 
 **The title and the page's content share one left edge, at `#mutint-content`'s 25px padding.**
-Two things used to break that, and they broke it in opposite directions, which is why the
-misalignment looked inconsistent rather than uniform:
+Two things push against that, in opposite directions:
 
 - The header block sits in a Bootstrap `.col-lg-12`, and a grid column carries a 15px gutter
   each side -- so the title alone stood 15px further in.
@@ -227,24 +199,19 @@ misalignment looked inconsistent rather than uniform:
 `common.css` flattens the gutters that have nothing to cancel them: the header's column, a
 row that is a direct child, and a column used outside a row. A genuine multi-column row keeps
 its inter-column gutters -- only the outermost edges go -- so the Overview page's three panels
-still breathe. Measured across twelve pages with headless Chrome, all now at the same x.
+still breathe.
 
 **The paginate control lays its buttons out with flex, not floats.** Bootstrap 3 builds
 `.pagination` as an inline-block `ul` whose `li`s are `display: inline` and whose `a`s are
-floated, and the shrink-to-fit width that gives the `ul` came out one button short -- so
-**"Last" sat on a second line** on every page with a paged table, at any window width, with
-any amount of empty space to its right. It is not a width problem and moving things around
-does not fix it; `display: inline-flex` on the `ul` sizes the row to its contents and takes
-the float arithmetic out of it.
-
-Worth knowing because it looks like a consequence of whatever was last changed nearby, and
-is not: it was measured identical before and after the alignment rules above.
+floated, and the shrink-to-fit width that gives the `ul` comes out one button short -- so
+"Last" wraps to a second line at any window width. It is not a width problem;
+`display: inline-flex` on the `ul` sizes the row to its contents and takes the float
+arithmetic out of it.
 
 **That `display: flow-root` is set inline in `base.html`, not in `common.css`, and must stay
 there.** It is the whole of what keeps the content box off the sidebar, so a browser holding a
-cached older copy of `common.css` renders every page with the header on top of the sidebar --
-which is exactly what happened when the rule lived only in the stylesheet. Layout this
-load-bearing ships with the markup that assumes it.
+cached older copy of `common.css` would render every page with the header on top of the
+sidebar. Layout this load-bearing ships with the markup that assumes it.
 
 For the same reason mutint-core's own CSS and JS are linked with `?v={{ mutint_version }}`. A
 release changes every one of those URLs, so a browser cannot serve half of one version and half
@@ -276,37 +243,29 @@ on the `<li>` is the selection; there is no checkbox anywhere to hold a second o
 The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
 toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range.
 
-**`{toggle: true}` is the other mode, and the genome browser's sample menu is why it exists.**
-There every click toggles the row it lands on and shift adds a range -- a list of checkboxes
-rather than a selection. The distinction is whether the rows are independent of one another:
-the mutation editor's three lists are choosing *a* set of samples to act on, where "only this
-one" is a useful gesture, while each row of the browser's menu is a BAM that is either loaded
-or not, and there a plain click silently unloaded every other sample to show one. Getting back
-then meant reloading each by hand. The default stays select-only, so nothing but the browser
-changed.
+**`{toggle: true}` is the other mode, for the genome browser's sample menu.** There every
+click toggles the row it lands on and shift adds a range -- a list of checkboxes rather than a
+selection. The distinction is whether the rows are independent: the mutation editor's three
+lists choose *a* set of samples to act on, where "only this one" is a useful gesture, while
+each row of the browser's menu is a BAM that is either loaded or not, and a plain click that
+unloaded every other sample would cost reloading each by hand.
 
 Two things the CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
 selection across the rows it is selecting; and the fill written on `> li.active > a` rather than
 on the `<li>`, for the reason in the next paragraph.
 
-**That reason was a live bug, not a hypothetical.** `common.css` carried
-`.active, .dot:hover { background-color: #717171 }` -- a rule about *carousel dots*, written so
-that it painted gray behind **any** element carrying the class. Bootstrap puts `active` on a
-selected nav tab, a selected dropdown row and the current sidebar entry. Mostly the inner `<a>`
-covered it and nobody saw it. On a nav tab it did not: `.nav-tabs > li > a` has
-`margin-right: 2px` and no bottom border, so 2px of gray showed down the right-hand side and
-along the foot of the *selected tab on every tabbed page in the suite* -- which reads as a badly
-drawn drop shadow, and was reported as one. It is `.dot.active` now. Nothing renders
-`class="dot"` any more, so the block it belongs to is dead as it stands; narrowing the selector
-is the fix for the bug, and removing the carousel is somebody else's commit.
+**That reason is a rule about `.active`.** Bootstrap puts `active` on a selected nav tab, a
+selected dropdown row and the current sidebar entry, so a bare `.active { background-color }`
+rule paints behind all of them -- and on a nav tab, whose `<a>` has `margin-right: 2px` and no
+bottom border, the fill shows as a stray edge. `common.css`'s carousel rule is `.dot.active`
+for that reason; never write a bare `.active` selector.
 
 **The gap from the column beside it is on the column, not on the list.** These pages lay a
 form or a table beside the sample list as two bare `col-lg-*` under `#mutint-content`, and the
 rule a few paragraphs up zeroes a bare column's gutter so its content lines up with the page
 title -- which leaves the list touching the form, measured at 0px. The column carrying the list
 puts 30px back on its left, which is what Bootstrap puts between two columns anyway. Doing it on
-the list instead would indent it away from whatever else the column holds, which on the Change
-page is the table underneath.
+the list instead would indent it away from whatever else the column holds.
 
 The browser's menu is a dropdown and gets its row box and fill from Bootstrap; the editor's
 three are not, and cannot borrow `.dropdown-menu` to get them -- `position: absolute; display:
@@ -353,15 +312,10 @@ silently fails validation forever. `test_accounts.HandWrittenFieldsTestCase` com
 `name=` attributes the rendered page posts against `set(PasswordChangeForm(user).fields)` and
 `set(AuthenticationForm().fields)`.
 
-**The login page was the one template following no house convention.** It was written against
-Bootstrap **4** class names -- `form-signin`, `form-label-group`, `align-content-lg-center` --
-which exist in no stylesheet here and in no version of the vendored Bootstrap 3.3.7. Being
-inert is exactly why it had no space between its two inputs: nothing supplied a margin, where
-`form-group` supplies 15px. Its button was the only `btn-lg btn-block` in the codebase, its
-`<div class="row ` never closed its quote (swallowing the spacer div after it), and it rendered
-`{{ form.errors }}` nowhere, so a wrong password silently re-rendered a blank form. The
-replacement is `group/new.html`'s shape. A test names each dead class, because "it looks
-like every other page" is a claim that rots quietly.
+**The login page follows the house shape** (`group/new.html`'s): Bootstrap 3 classes,
+`form-group` spacing, and `{{ form.errors }}` rendered, so a wrong password says so. A test
+names the Bootstrap 4 classes it must not carry, because "it looks like every other page" is a
+claim that rots quietly.
 
 **The sidebar's account block is the shell's own, not a nav entry.** Username, and under it
 Logout, Change Password, Jobs, Groups and -- for a superuser -- Django admin. It is written into
@@ -369,18 +323,17 @@ Logout, Change Password, Jobs, Groups and -- for a superuser -- Django admin. It
 and `base.html` already has `user`; adding a `visible_to=` predicate for one entry would be a
 mechanism with a single producer.
 
-**Groups joined it from `MAIN_SECTION`**, where it had been registered by
-`mutint_experiment.apps` beside Projects and Experiments as though it were data. What `/group/`
-lists is `visible_groups(user)` -- the groups you own or belong to, the way this is the password
-*you* change -- and registered it rendered for anonymous visitors too, who can see none.
+**Groups belongs here rather than in `MAIN_SECTION`**: what `/group/` lists is
+`visible_groups(user)` -- the groups you own or belong to, the way this is the password *you*
+change -- and a registered entry would render for anonymous visitors too, who can see none.
 
 **It collapses behind the username, and the mechanism is metisMenu's, not ours.** A nested
 `<ul class="nav nav-second-level">` inside the username's `<li>` is sb-admin-2's own sidebar
 submenu shape, and `sb-admin-2.min.js` already calls `$("#side-menu").metisMenu()` -- so the
 collapsing, the `active` class that flips the chevron (`.sidebar .active > a > .fa.arrow`) and
-the 37px indent on the nested links are all borrowed. Written by hand first, and that version
-is what the comment in `base.html` warns against: a toggle setting `hidden` beside a plugin
-that sets `collapse` on the same `<ul>` is two mechanisms with one opinion each.
+the 37px indent on the nested links are all borrowed. A hand-rolled toggle setting `hidden`
+beside a plugin that sets `collapse` on the same `<ul>` is two mechanisms with one opinion
+each, which is what the comment in `base.html` warns against.
 
 Three consequences worth knowing before moving anything in that block:
 
@@ -393,29 +346,20 @@ Three consequences worth knowing before moving anything in that block:
   second `<li>` and every link still renders while the mechanism silently stops applying.
   `test_accounts.test_the_entries_are_a_submenu_of_the_username` is what notices.
 
-Two smaller things went with it: the three `&nbsp;` that used to indent each entry (the
-theme's `padding-left` does it, and the Logout `<button>` gets that padding from a rule in
-`common.css` because it borrows `.nav > li > a`'s box rather than being an `<a>`), and the
-`.sidebar .arrow` float -- `float: right` contributes nothing to a `width: max-content` box, so
-the sidebar sized itself to the username and laid the chevron over its last letter.
-
 **The admin link is gated on `is_superuser`, not `is_staff`, and the difference is not
 pedantic.** Django's admin admits anyone with `is_staff`, so a staff gate would be the one that
-matches who gets in -- but `load_projects` creates every imported user with `is_staff=True`, so
-on a real deployment that is nearly everybody, most of whom would land in an admin with nothing
-in it. There is a test for the staff case specifically.
+matches who gets in -- but the retired `load_projects` importer created every user with
+`is_staff=True`, so on a real deployment that is nearly everybody, most of whom would land in
+an admin with nothing in it. There is a test for the staff case specifically.
 
-**Change Password used to link `/admin/password_change/`**, which is wrapped in
-`AdminSite.admin_view` -- so it bounced every non-staff user to the admin login with "Please
-enter the correct username and password for a staff account". It was broken for exactly the
-people most likely to click it, and for staff it worked by leaving the product.
+**Change Password is the local page, never `/admin/password_change/`**: that one is wrapped in
+`AdminSite.admin_view` and bounces every non-staff user to the admin login.
 
 ### Branding: mutint-core has none
 
 `/` is the project list, the sidebar carries no name or version, there is no icon upper-right,
-and no institution is credited. All of that was ALEdb's and now lives in the `aledb`
-repo. A deployment adds its own through three seams, none of which mutint-core knows the content
-of:
+and no institution is credited. A deployment adds its own through three seams, none of which
+mutint-core knows the content of:
 
 - `MUTINT_BRANDING` (`mutint_common/base_settings.py`) — `{'name', 'version', 'logo'}`, empty by
   default. `base.html` renders each only `{% if %}` it is set, so an unset value renders nothing
@@ -424,7 +368,7 @@ of:
   `mutint_experiment.views.projects` on `TemplateDoesNotExist`. Rendered in place, not
   redirected, so `/` stays `/`.
 - `templates/branding/footer.html` — the "hosted and maintained by…" footer, included by the
-  dashboard and About pages. Core ships it **empty**; it existed as four pasted copies before.
+  dashboard and About pages. Core ships it **empty**.
 
 More generally, `TEMPLATES['DIRS']` now leads with the project's `templates/` dir and
 `STATICFILES_DIRS` with its `staticfiles/`, so a deployment overrides any core template or asset
@@ -435,25 +379,21 @@ omitted when the directory is absent, or every `./mutint check` reports `staticf
 **The `Powered by ALEdb` watermark is not part of this** and has no setting. It is
 mutint-core's attribution and renders on every deployment, branded or not. Icon and words
 are one link to https://aledb.org/, in a new tab, muted in every state so it never reads as a
-nav entry. **It carries no version**, and used to read `Powered by ALEdb vX.Y.Z` -- which made an attribution read as a
-status line, at the foot of every page of a site people come to for the science. `./mutint
-version` and `/about` are where a version belongs, and About gives every installed component's
-rather than the platform's alone. `test_branding.test_the_watermark_carries_no_version` is the
-old test inverted rather than deleted, so putting it back has to be a decision.
+nav entry. **It carries no version**: a version there makes an attribution read as a status
+line at the foot of every page. `./mutint version` and `/about` are where a version belongs,
+and About gives every installed component's rather than the platform's alone.
+`test_branding.test_the_watermark_carries_no_version` pins it.
 
-**`navbar-brand` renders unbranded too, and links to `/dashboard`.** It used to be inside the
-`{% if branding %}`, which was right while it was only a name. It is now the only route to the
-dashboard -- `mutint_dashboard` registers no nav entry, because an inventory of the whole
-installation is what clicking a site's own name asks for and a second entry three rows below
-said the same thing twice. Unbranded the element carries the word **Dashboard**: the label of a
-link rather than a name this deployment has acquired, and the four things a deployment adds -- a
-name, a version, a logo, an institution -- are each still absent. The third option, where an
-unbranded checkout renders no brand at all, leaves the dashboard reachable from nowhere.
+**`navbar-brand` renders unbranded too, and links to `/dashboard`.** It is the only route to
+the dashboard -- `mutint_dashboard` registers no nav entry, because an inventory of the whole
+installation is what clicking a site's own name asks for. Unbranded the element carries the
+word **Dashboard**: the label of a link rather than a name this deployment has acquired. An
+unbranded checkout that rendered no brand at all would leave the dashboard reachable from
+nowhere.
 
 ### Versioning
 
-`mutint_common/version.py` is the single source of truth — before this it existed only as the
-literal `ALEdb 1.1.0` inside `base.html`. Bump with `./mutint version --bump patch|minor|major`,
+`mutint_common/version.py` is the single source of truth. Bump with `./mutint version --bump patch|minor|major`,
 which rewrites that file and leaves the `git tag v<version>` to you.
 
 `version` is a name Django reserves: `ManagementUtility.execute()` answers it with Django's own
@@ -474,8 +414,7 @@ browser when the sample has a stored alignment.
 The picker is the same menu as the genome browser's Samples control and the Metadata page's
 column menu, but picking one sample rather than any number, so the button carries the chosen
 name as its value and exactly one row is `active`. Its rows are **links, not a `<select>` in a
-form**: one request per sample either way, and links need no script at all, which is what the
-`<noscript>` submit button used to cover. The href is the same `?experiment_id&sample_id`
+form**: one request per sample either way, and links need no script at all. The href is the same `?experiment_id&sample_id`
 pair the form submitted.
 
 The cell markup is not a lookalike -- it is generated by `mutint_import.annotate.display`,
@@ -498,9 +437,9 @@ need it, because deciding that per page is what went wrong.
 the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
 silently.
 
-It is called **Mutations** in the nav and on the page. **Compare** used to sit beside it
-here; it is registered by the mutint-compare plugin now, so on a deployment without that
-plugin this page is the only mutation table core offers. The table markup
+It is called **Mutations** in the nav and on the page. **Compare** is the mutint-compare
+plugin's, so on a deployment without that plugin this page is the only mutation table core
+offers. The table markup
 itself lives in `mutint_sample/templates/breseq_table/_mutation_table.html`, shared with the genome
 browser, which renders the one mutation it is open at through the same `build_rows` — the two
 must not drift, because the cell contents come from `annotate.display` and mean nothing without
@@ -538,8 +477,8 @@ the Reference pages are generated from those; how to do something goes in a guid
 `mutint_common/tests/test_docs.py` guards two kinds of drift, by reading files rather than
 importing mkdocs or PyYAML -- neither is installed in a normal environment. It fails when a
 registry has no reference page, when a page names the wrong module, when the nav omits one,
-and when a public `register_*` is named nowhere in `docs/`. That last one caught five
-undocumented hooks the first time it ran. **Neither guard catches prose going out of date**,
+and when a public `register_*` is named nowhere in `docs/`. **Neither guard catches prose
+going out of date**,
 which is said out loud in `docs/contributing/docs.md`.
 
 **The same command builds a deployment's whole manual.** Both entry scripts end at
@@ -547,7 +486,7 @@ which is said out loud in `docs/contributing/docs.md`.
 building mutint-core's docs from inside the submodule, it builds MutInt's manual: MutInt's own
 pages plus every installed component's. `mutint_common/docs_manual.py` collects them.
 
-There is no eighth registry. A component contributes by having `docs/` and `mkdocs.yml`;
+There is no registry for this. A component contributes by having `docs/` and `mkdocs.yml`;
 discovery is `about_registry.first_party_app_configs()` → `component_dir()`, so an uninstalled
 submodule contributes nothing and the manual is an inventory of what is installed, the way the
 About page is.
@@ -574,7 +513,7 @@ dropped, so a component that has not thought about audience still builds.
 
 **Cross-component links are not supported and `--strict` catches them.** A page is at
 `mutint-core/plugin/testing/` in a manual and `plugin/testing/` when built alone, so such a link
-is broken in one of the two. One was written and caught this way.
+is broken in one of the two.
 
 Versioning is deliberately not configured. `mike` is the intended path and needs one block in
 `mkdocs.yml`; adding it now would render a version picker with nothing in it.
@@ -627,8 +566,8 @@ and an append-only edit log that makes all of them reversible. The toolbar is
 mutation's form the Edit tab links to.
 
 **Edit and Delete are two tabs over one listing**, and that is a split rather than a
-duplication. The page used to carry a checkbox column *and* a per-row link, so the next thing
-you clicked might have meant either -- and one of the two is destructive. `_listing(request,
+duplication: a page carrying a checkbox column *and* a per-row link leaves the next click
+meaning either -- and one of the two is destructive. `_listing(request,
 mode)` builds the rows once and the mode decides one column and one button; two views over two
 templates would be two places for the "listings here are unfiltered" rule to drift apart.
 
@@ -639,8 +578,8 @@ control at the far right is one nobody reaches without scrolling sideways. Both 
 exactly one leading column is also what lets the JavaScript hold one set of column indices
 rather than two.
 
-Every write is `<what>/apply` -- `delete/apply`, `add/apply`, `copy/apply`, `edit/apply`.
-Deleting used to be a bare `^delete$`, the odd one out, and the Delete *tab* needed that name.
+Every write is `<what>/apply` -- `delete/apply`, `add/apply`, `copy/apply`, `edit/apply` --
+so each tab's own name is free for the page.
 
 **What it deletes is an `MutationCall`, never a `Mutation`.** That distinction is the whole
 design. Mutation primary keys are stored as bare integers, with no foreign key and nothing that
@@ -653,10 +592,10 @@ call changes nothing any stored id means.
 
 **The rows are hard-deleted, and that is what kept every read path untouched.** An
 MutationCall is read by `mutation_matrix`, `breseq_table`, `mutint_export`,
-`mutint_stats`, `mutint_dashboard`, `mutint_search`, mutint-fixation and mutint-converge, and this
-repo's default managers are deliberately unfiltered. A soft-delete flag would have needed all
-eight taught to filter, and the one that was missed would have gone on showing deleted
-mutations in an export or a fixation table. Nothing was added to any query.
+`mutint_stats`, `mutint_dashboard`, `mutint_search` and mutint-compare's row sets, and this
+repo's default managers are deliberately unfiltered. A soft-delete flag would need every one
+of them taught to filter, and the one that was missed would go on showing deleted mutations
+in an export or a Fixed table.
 
 The log is two tables in `models.py`. A `MutationEditSet` is one user action against one
 experiment; a `MutationEdit` is one call it added or removed, carrying a **full
@@ -698,10 +637,6 @@ Rebuilds run through `history.rebuild_after_edit`, outside the transaction as
 because a renumber cannot change a mutation count. Adding or removing a call changes
 every registered rebuild.
 
-That used to have a sharper second reason -- mutint-fixation cached MutationCall *ids*, in a
-column only its delete-and-recompute rebuild cleared, and those are exactly the rows an edit
-hard-deletes. Fixation stores nothing now, so no registered rebuild holds a call id.
-
 **Two traps in the templates.** The selection tables are DataTables with the Select extension,
 which is safe here only because no cell is an input -- selection lives in DataTables' data
 model, so a row selected on another page or behind a search box still comes back from
@@ -718,31 +653,20 @@ class from the stylesheet, so it reads as a styling fault rather than a load-ord
 
 `rebuild_registry` splits marking from running on purpose -- `request_rebuild` is one UPDATE
 and safe from any request, `run_rebuilds` is expensive -- and the design says the page that
-reads the data closes the gap by calling **`ensure_fresh`**. For a long time exactly one reader
-did. Six rebuilders were registered; `mutint_stats.get_experiment_summary` was the only one that
-refreshed itself.
+reads the data closes the gap by calling **`ensure_fresh`**. Every reader of stored derived
+data does; a reader that forgets shows what was true under the previous state of the
+mutations, with nothing short of `./mutint rebuild` to correct it.
 
-So a filter edit, which deliberately marks and rebuilds nothing, left the needle plot, Fixed
-Mutations, Convergence and the dashboard showing what was true under the *previous* cutoff, with
-nothing short of `./mutint rebuild` that would ever correct them. The global filter view's own
-comment -- *"Each page rebuilds its own on next view"* -- described something that had never
-been implemented.
-
-The sharpest case was a single page: `/stats` renders `get_experiment_summary`, which
-refreshed, beside the needle plot's data, which did not -- two counts of the same mutations
-disagreeing in the same viewport. Every reader calls `ensure_fresh` now.
-
-**That page then went further and stopped storing either of them**, which is the better answer
-where it is available: an `ensure_fresh` closes the gap between two caches, and having no cache
-means there is no gap to close. `/stats` is two queries over the same rows now, so the two
-halves cannot disagree about how fresh they are. The remaining readers that do call
-`ensure_fresh` -- `mutint_dashboard` and `mutint-fixation` -- are the ones whose answer is
-genuinely expensive to produce.
+**Not storing is the better answer where it is available**: an `ensure_fresh` closes the gap
+between two caches, and having no cache means there is no gap to close. `/stats` is two
+queries over the same rows now, so its two halves cannot disagree about how fresh they are.
+What still calls `ensure_fresh` -- the dashboard's totals -- is what is genuinely expensive to
+produce.
 
 **A plugin must not spell its own rebuilder's name.** `register_post_experiment_hook` derives
-it from the app label, suffixes a second registration, and **returns** what it used;
-mutint-fixation captures that in `AppConfig.ready()` as `util.REBUILD_NAME`. A literal
-`'mutint_fixation'` would be a second opinion about a name `_candidate_names` owns.
+it from the app label, suffixes a second registration, and **returns** what it used; capture
+that in `AppConfig.ready()`. A literal would be a second opinion about a name
+`_candidate_names` owns.
 
 **`ensure_fresh` cannot raise**, which is what makes it safe on a read path: a rebuild that
 fails is logged, recorded in `last_error` and left stale, and the page renders whatever was
@@ -751,20 +675,13 @@ stored before. A broken plugin rebuild degrades its own page instead of 500ing i
 #### What the edit path pays for, and what it does not
 
 `rebuild_after_edit` is **unnarrowed by name and narrowed by scope**, and those are different
-questions. Never `only=`, unlike `rebuild_after_structural_change`: adding or removing an
-call changes every derived thing an experiment has. (It used to also be because
-mutint-fixation cached MutationCall ids that only its own rebuild cleared; it stores nothing
-now, and the first reason stands alone.) But `request_rebuild`
-marks the **site-scoped** totals stale too, correctly, and running them here made a single
-delete recount every MutationCall in the installation -- measured at 4.9s for the read half
-alone on about 75,000 rows, which is exactly the bill `rebuild_after_structural_change` refuses. They
-stay marked; the dashboard's own `ensure_fresh` pays it once on the next view. Ten deletes cost
-one recount rather than ten.
-
-**That 4.9s was measured on an implementation that no longer exists** -- `rebuild_mutation_counts`
-materialised every call as a model in order to filter it, and reads three columns as
-tuples now. The behavior above is unchanged and not up for revisiting on that account: it rests
-on ten deletes costing one recount rather than ten, which is true at any per-row price.
+questions. Never `only=`, unlike `rebuild_after_structural_change`: adding or removing a
+call changes every derived thing an experiment has. But `request_rebuild` marks the
+**site-scoped** totals stale too, correctly, and running them here would make a single delete
+recount every MutationCall in the installation -- exactly the bill
+`rebuild_after_structural_change` refuses. They stay marked; the dashboard's own
+`ensure_fresh` pays it once on the next view. Ten deletes cost one recount rather than ten,
+which is true at any per-row price.
 
 `run_rebuilds` takes `scope=` for this; `get_rebuilders` already did.
 
@@ -776,58 +693,16 @@ next expensive stored answer. The skip lives in `run_rebuilds`, not `get_rebuild
 `request_rebuild` and `./mutint rebuild --list` still see manual rebuilders. A page that opts
 out and then forgets to ask `is_stale` is worse off than one that never registered.
 
-### Being told without being rebuilt
-
-`register_rebuilder(..., auto=False)` is derived data that is **tracked and marked stale but
-never rebuilt on its own**. Until it existed the two were welded together -- you could only be
-told your data had gone stale by promising to recompute it -- and `mutint-phylogeny` refused
-that bargain and so registered nothing at all. Its stored tree was never invalidated by
-anything, and `/phylogeny` drew a topology inferred from mutations that had since been deleted.
-
-`force=True` does not override it. `run_post_experiment_hooks` forces on every import, so an
-import would otherwise build every opted-out thing there is. Being named in `only=` is what
-runs one.
-
-**Nothing registers `auto=False` today.** The plugin it was added for stopped needing it: what
-`mutint-phylogeny` registers now is a *deletion* of its cached trees, and a DELETE is cheap
-enough to run wherever any other rebuild does. The flag and its tests stay, because the next
-expensive stored answer will want them, but there is no live example to read.
-
-The skip lives in `run_rebuilds`, **not** in `get_rebuilders`: `request_rebuild` and
-`./mutint rebuild --list` both go through the latter and must still see manual rebuilders --
-one to mark them, the other to show them, tagged `(manual -- --only runs it)` so a stale marker
-beside one does not read as a failure.
-
-**Opting out is a new way to be wrong.** A page that registers `auto=False` and then forgets to
-ask `is_stale` is worse off than one that never registered: it has a staleness record nobody
-reads.
-
-#### A rebuild used to declare what it reads
-
-`inputs=` took `INPUT_MUTATIONS`, `INPUT_FILTERS` or both, and `request_rebuild(changed=...)`
-said which had moved, so a filter save marked only what read through the filter. It existed for
-`mutint_phylogeny`, which reads `MutationCall` directly: marked by a cutoff edit, its stored
-tree would have been thrown away and redrawn to the identical topology -- the false alarm that
-teaches people to ignore the real one.
-
-**All of it is gone**, because its only producer was the page that edited an experiment's shared
-filter row. Filtering belongs to the reader now and lives in their session, so there is no
-shared filter for anything to be invalidated by, and `INPUT_FILTERS` had nobody left to pass it.
-With one value remaining the mechanism could only ever have said "everything", which is the
-default -- so it went by its own rule: *a word nothing passes as `changed=` is a word with no
-meaning behind it.*
-
 #### Freshness belongs where the data is written
 
 `mutint_phylogeny.rebuild_phylogeny` settles its own staleness row rather than leaving it to the
 view. **A missing `DerivedDataState` row already counts as stale**, so anything built by a route
 other than the registry -- the page's own button, `load_example`, `./mutint rebuild_phylogeny` --
-is born stale and is thrown away by the very next read unless the write says otherwise. That is
-how it was found the first time: four of the example suite's branch tests started answering 409.
+is born stale and is thrown away by the very next read unless the write says otherwise.
 
-It is now the *first* thing `rebuild_phylogeny` does rather than the last, and it discards
+It is the *first* thing `rebuild_phylogeny` does rather than the last, and it discards
 rather than marking fresh -- `ensure_current`, which is `ensure_fresh` under a local name. The
-ordering is what matters and the reason is worth keeping: making the cache current *before*
+ordering is what matters: making the cache current *before*
 writing to it means a row written while a discard was still pending cannot end up sitting
 beside rows inferred from the mutations as they were, with the mark cleared afterwards to make
 the whole lot look current. Clear-at-the-end is the version of this that looks equivalent and
@@ -837,29 +712,14 @@ is not.
 
 Every write path marks what it invalidated. Nothing marks anything when the code that decides
 what counts changes instead -- no experiment moved, so no `request_rebuild` fires, and the
-tables sit there holding pre-change values while `stale_since` says they are fresh. Measured
-right after the frequency cutoff started filtering: the dashboard stored **about 75,000** calls
-where the filter yields **about 74,000**, marked fresh, so `ensure_fresh` would have left it
-indefinitely.
-
-`mutint_common.0002` stamps every `DerivedDataState` row stale for that reason -- one UPDATE, no
-rebuilding, and each page recomputes on its next view. Measured end to end on the dev database
-after migrating: the first `/dashboard` view took **5.4s** and corrected the stored total from
-about 75,000 to about 74,000; the second took **0.00s**. **Any future change to filtering or
-counting logic needs the same migration**, because there is no way for the data to work it out
-for itself. `./mutint rebuild --all --force` is the manual equivalent.
-
-**`mutint_common.0003` is that rule being followed**, and it moves the same total back: the
-dashboard stopped applying the filter, so about 74,000 becomes about 75,000 again. It marks only
-`mutation_counts`, because only that changed -- `0002` marked everything because the filter
-itself had changed and every derived table read through it.
-
-**`0004` is the third application**, when the functional-change buckets moved onto
-`Mutation.snp_type`. It marks `mutation_counts` for the same reason and **depends on
-`mutint_dashboard.0003`**, which adds the `nonsense` column the ensuing rebuild writes. That
-ordering is not tidiness: `ensure_fresh` cannot raise, so a rebuild scheduled before the column
-existed would log a `FieldError` into `last_error` and leave the dashboard stale indefinitely --
-the quiet failure the registry's isolation deliberately trades for.
+tables sit there holding pre-change values while `stale_since` says they are fresh. **Any
+change to filtering or counting logic therefore ships a migration that stamps every
+`DerivedDataState` row stale** -- one UPDATE, no rebuilding, and each page recomputes on its
+next view; `./mutint rebuild --all --force` is the manual equivalent. Mark only what changed
+where that is knowable. And such a migration must **depend on any migration that adds a
+column the ensuing rebuild writes**: `ensure_fresh` cannot raise, so a rebuild scheduled
+before the column existed would log a `FieldError` into `last_error` and leave the page stale
+indefinitely -- the quiet failure the registry's isolation deliberately trades for.
 
 #### The dashboard applies no filter
 
@@ -868,40 +728,26 @@ ignored-gene list is one person's view of one experiment, and a site-wide total 
 through every experiment's filters answers a question nobody asked. Under per-user filtering it
 stops being computable at all: a shared table cannot be keyed by user.
 
-So `mutation_counts` declares `inputs={INPUT_MUTATIONS}` and a filter save no longer marks it.
-That matters more than it sounds: a filter edit marks *every* experiment at once, and this is
-the most expensive rebuild registered, so being marked by one was both wrong and the costliest
-way to be wrong.
-
-Two things fell out of removing the filter, and both are worth knowing:
-
-- **Nothing has to be materialised any more.** Filtering needed the gene column parsed per row,
-  so every row had to be built; counting needs three columns, read as `values_list` tuples.
-- **`synonymous` and `nonsynonymous` had never been written.** The branch filling them tested
-  for `snp_type_synonymous`/`snp_type_nonsynonymous`, which are not tokens in
-  `FUNCTIONAL_CHANGE_TYPE_LIST`, so both columns sat at zero from the day they were added. They
-  are filled now, which is the second reason `0003` exists.
-
-They still read zero after that, though, because `protein_change` was the wrong column
-altogether -- which is the change described next.
+So a filter save does not mark `mutation_counts`. That matters more than it sounds: a filter
+edit marks *every* experiment at once, and this is the most expensive rebuild registered.
+Applying no filter is also what lets nothing be materialised: filtering needed the gene column
+parsed per row, so every row had to be built; counting needs three columns, read as
+`values_list` tuples.
 
 ### A gene list has two separators, and a ceiling
 
 `Mutation.gene` is written by `mutint_import.gene_annotation.get_annotated_gene_list` and read
-by `mutint_common.util.get_gene_list`, and for a long time the two disagreed about what
-separates a name.
+by `mutint_common.util.get_gene_list`, and the two must agree about what separates a name.
 
 - A mutation spanning a **gene range** stores every name breseq listed, and those come through
   `annotate.annotator`, which joins with a bare comma (`GENE_LIST_SEPARATOR = ','`).
 - Every other shape -- intergenic, single gene -- is joined by the import path with `", "`.
 
-`get_gene_list` split on `", "` only, so a 4,000-odd-gene inversion read back as **one gene name
-about 23,000 characters long**. Nothing about that was visible as an error: the Gene column's
-expander is gated on `len(...) > 10`, so it never appeared on any real mutation; ecocyc
-rendering made one broken link out of the whole string; and a reader's ignored-gene list could
-not name a single gene inside it. Measured on the dev database: 0 cells with an expander before,
-218 after. A reader typing `thrA,thrB` without the space had the same problem -- `_gene_tuple`
-parses with the same function, so the filter matched nothing.
+A reader splitting on `", "` alone reads a 4,000-odd-gene inversion back as one gene name
+about 23,000 characters long -- with no error anywhere: the Gene column's expander never
+appears, ecocyc rendering makes one broken link of the whole string, and an ignored-gene list
+cannot name a gene inside it. A reader typing `thrA,thrB` without the space meets the same
+thing, since `_gene_tuple` parses with the same function.
 
 `GENE_LIST_SPLIT` (`,\s*`) accepts both. **The writer is deliberately not corrected**, and
 that is the load-bearing part: `gene` is one of the seven fields
@@ -910,76 +756,62 @@ change the stored string for every range mutation and fork all of them on the ne
 column holds two spellings and the reader takes both.
 
 **Past `GENE_LIST_LIMIT` (1,000) genes the names are neither recorded nor rendered.** A
-structural variant can span most of a chromosome, and about 23,000 characters had already overflowed
-`gene`'s own `CharField(max_length=19000)` -- silently, because SQLite does not enforce it and
-Postgres would have refused the row. Over the limit the importer records the **range**
+structural variant can span most of a chromosome, and about 23,000 characters overflows
+`gene`'s own `CharField(max_length=19000)`, which PostgreSQL refuses. Over the limit the
+importer records the **range**
 (`mokC–[fimA]`, breseq's own Gene column for such a mutation) and both renderers show a count
 rather than a list, with no expander to open. The limit lives in `mutint_common/util.py` because
 the importer and the renderers have to agree: a row written under one limit and read under
 another would show a truncation nothing performed.
 
-`mutint_sample.0012` moves the rows written before the cap -- 7 of about 42,000 in the dev database. It
-is not tidying: a row left holding the long string no longer matches what the importer computes,
-so re-importing that sample would mint a second `Mutation` and split its calls across
-both. What it writes is `annotation['gene_name']`, which is exactly what
-`get_annotated_gene_list` now returns, and `mutint_sample/tests/test_gene_cap.py` asserts that equality
-rather than asserting the string merely got shorter.
+A migration moved the rows written before the cap, and that was not tidying: a row left
+holding the long string no longer matches what the importer computes, so re-importing that
+sample would mint a second `Mutation` and split its calls across both. What it wrote is
+`annotation['gene_name']`, exactly what `get_annotated_gene_list` returns, and
+`mutint_sample/tests/test_gene_cap.py` asserts that equality rather than that the string
+merely got shorter.
 
 ### Functional change is counted from `snp_type`
 
-`Mutation.snp_type` is breseq's own functional class, written by the annotator, promoted to an
-indexed column, and for a long time **read by nothing**. Both pages classified functional change
-by substring-matching `protein_change` instead -- a *display* string, `I34S (ATC→AGC)`,
-containing neither "synonymous" nor "nonsynonymous". On the dev database about 20,000 of about 24,000
-mutations bucketed as `unannotated`, including every one of the about 13,000 nonsynonymous and about 4,900
-synonymous SNPs. The comment on `FUNCTIONAL_CHANGE_TYPE_LIST` said as much all along: *"these
-names match with Breseq's HTML annotations"* -- they are `snp_type`'s vocabulary.
+`Mutation.snp_type` is breseq's own functional class, written by the annotator and promoted
+to an indexed column, and it is the column functional change is classified from. Not
+`protein_change`: that is a *display* string, `I34S (ATC→AGC)`, containing neither
+"synonymous" nor "nonsynonymous", and classifying by substring-matching it buckets nearly
+everything as `unannotated`. `FUNCTIONAL_CHANGE_TYPE_LIST` is `snp_type`'s vocabulary.
 
 `mutint_sample/functional_change.py` owns the vocabulary and the rule; `mutint_sample/views/common.py`
 re-exports both so no importer changed. Four things about it are load-bearing:
 
-- **`nonsense` was missing from the vocabulary**, though `annotator.py:470` has always written
-  it. 392 dev-DB SNPs carry it. Both dashboard count models gained a column.
+- **`nonsense` is in the vocabulary**, because the annotator writes it; the dashboard counts
+  carry a column for it.
 - **A compound resolves to its most severe token.** `annotator.py:508` joins one value per
   overlapping gene, so `nonsynonymous|synonymous` is one base in two reading frames. The order
   of `FUNCTIONAL_CHANGE_TYPE_LIST` *is* the hierarchy — `nonsense > nonsynonymous > synonymous >
   noncoding > pseudogene > intergenic > unannotated` — and there is deliberately no second
-  ordered tuple to keep in step. Splitting on `|` and comparing whole tokens is also what
-  removed the substring hazard that used to force `nonsynonymous` to precede `synonymous`.
+  ordered tuple to keep in step. Split on `|` and compare whole tokens; substring matching
+  would make `nonsynonymous` match `synonymous`.
 - **The breakdown is SNP-only.** breseq assigns `snp_type` for SNP and RA entries only, so every
-  DEL, INS, MOB, AMP, SUB and INV is `unannotated` — about 2,700 dev-DB mutations, of which 822 used
-  to borrow an `intergenic` bucket from `protein_change`. `annotation['gene_position']` could
+  DEL, INS, MOB, AMP, SUB and INV is `unannotated`. `annotation['gene_position']` could
   recover them, but it answers a different question (which feature it sits in, not what it did
-  to a protein), and about 1,600 non-SNPs are `coding`, a word with no bucket on this axis.
+  to a protein), and many non-SNPs are `coding`, a word with no bucket on this axis.
 - **`_count_in_sql` groups rather than matching.** `values('mutation__snp_type').annotate(...)`,
   then resolve each distinct value in Python. Summing per-group distinct counts is *exact*
   because the group key is a column of `Mutation` reached by a forward FK, so every call
   of a mutation lands in one group. Group by anything reached through a reverse or m2m relation
   and the sums silently exceed the true distinct count.
 
-**Both pages now render these counts**, which they never did: the four context keys
-`mutint_stats/views.py` pushes had no reader in `stats.html`, and the dashboard's six columns had
-none in `dashboard.html`. That is how two of them sat at zero unnoticed. The two apps also agree
-now — the Overview used to count a mutation under *every* token it matched, so its
-functional-change sums exceeded its mutation count; with one bucket per mutation they equal it,
-while the *type* sums remain lower because an unknown type is dropped rather than bucketed.
+**Both pages render these counts, and they agree**: one bucket per mutation, so the
+functional-change sums equal the mutation count, while the *type* sums stay lower because an
+unknown type is dropped rather than bucketed. A count no template reads sits at zero
+unnoticed, which is why every count pushed into a context has a reader.
 
-Gone with it: `SEQ_COLORS`, `GENE_COLORS`, `COLORS`, `DEFAULT_COLOR`, `_set_colors` and the
-`seq_color_set`/`protein_types` context keys — palettes for a chart never built, whose one live
-effect was that adding a token silently reshuffled a color list nobody rendered.
+#### The dashboard excludes what has been deleted
 
-#### The dashboard counted what had been deleted
-
-`rebuild_mutation_counts` read `MutationCall.objects.all()` and `rebuild_sample_counts`
-counted every `Population` and `Sample`, neither excluding soft-deleted rows -- and nothing
-marked the totals stale when a project or experiment was removed, so even a rebuild would have
-produced the same numbers. Both halves are fixed. Both conditions are needed: **deleting a
-project does not stamp its experiments**, so a check on `Experiment.deleted_at` alone would
-go on counting everything underneath it. `get_general_count_dict` counted deleted projects and
-experiments outright, behind a comment saying no filtering was needed.
-
-The two delete views mark only the aggregates by name: removing one experiment cannot make
-another's needle plot wrong, and `request_rebuild()` with no experiment would mark every one.
+`rebuild_mutation_counts` and `rebuild_sample_counts` exclude soft-deleted rows, and the two
+delete views mark the aggregates stale by name -- removing one experiment cannot make another's
+derived data wrong, and `request_rebuild()` with no experiment would mark every one. Both
+conditions are needed: **deleting a project does not stamp its experiments**, so a check on
+`Experiment.deleted_at` alone would go on counting everything underneath it.
 
 ### The frequency cutoff
 
@@ -1000,45 +832,41 @@ clicking. Per-sample stays the default: the grid is the more useful view of a la
 and also much the more expensive one.
 
 **It renders at most `GRID_ROW_LIMIT` (250) mutations, and narrows server-side.** That is not
-a display preference. The largest experiment in the dev database is about 5,000 mutations across 51
-samples, and laying all of it out produced a **32.8 MB** page -- built by the server in 1.6s,
-so the whole cost is what the browser is then handed. Capped it is 1.75 MB, and a real search
-(`q=thrA`) is 0.10 MB. The search box is a `GET` that re-renders rather than DataTables' own,
+a display preference: a few thousand mutations across fifty samples is a page of tens of
+megabytes, built quickly by the server and then handed whole to the browser. The search box
+is a `GET` that re-renders rather than DataTables' own,
 because a client-side filter still ships every row; the box decides what gets built. A number
 matches `position` exactly, since a substring match on a coordinate is never what anybody
 means.
 
 **Only mutations something observes are listed.** A `Mutation` is never deleted here, so
 removing its last call leaves the row behind -- and a grid keyed on
-`Mutation.objects.filter(experiment=...)` went on rendering it with every cell empty, which
-is what "the page does not update when I delete" turned out to be. The page reloads; the row was
-genuinely still there. Restricted to the *shown* samples rather than to the experiment, because
-`get_ordered_sample_dict` applies the sample tag filters and a mutation observed only in a hidden
-sample is an all-empty row for the same reason. This is not the filtering the editor forbids: a
+`Mutation.objects.filter(experiment=...)` would render it with every cell empty, which reads
+as "the page does not update when I delete". Restricted to the *shown* samples rather than to
+the experiment, because a mutation observed only in a sample not shown is an all-empty row for
+the same reason. This is not the filtering the editor forbids: a
 mutation no sample observes is stored in no sample, so there is nothing on its row to select and
 nothing on it to delete.
 
 **Selection lives in a `Set` of call ids and never in the DOM.** DataTables detaches
 the rows of undrawn pages, so `.selected` on `<td>`s can only ever see the current page. The
 page carries two maps through `json_script` -- `by_mutation` and `by_sample` -- and the row
-and column selectors read those, so they reach rows that do not currently exist. Measured in
-headless Chrome: one click on a sample header selected **66 calls, of which only 32
-were in the DOM**, split 32/23/11 across three pages, and the count survived paging back and
-forth. Walking the table would have found 32 and silently reported success.
+and column selectors read those, so they reach rows that do not currently exist. Walking the
+table instead would find only the current page's cells and silently report success.
 
 **The maps cover only the rendered rows, deliberately.** They could just as easily cover the
 whole experiment -- and then a column selector would put calls into the selection that
 the person cannot see and does not know about, on a page whose next button deletes them.
 
-Two smaller things the browser found:
+Two smaller things:
 
 - **A column header with nothing on the page is not a link.** An experiment's mutations
   concentrate in a subset of its samples, so several headers select nothing; one that looks
   live and silently does nothing reads as broken. Each header carries its own count and says
   it in the tooltip.
 - **The per-sample script guards on `#me-table`, not on `#me-apply`.** Both modes render a
-  Delete button with that id, so the old guard bound the per-sample handler on top of the
-  grid's and every delete went through whichever won.
+  Delete button with that id, so a guard on it would bind the per-sample handler on top of the
+  grid's.
 
 The grid is a **second** mutations-by-samples table beside Compare's, and that is allowed: this
 one is unfiltered, selectable, capped and shows uncalled calls, and Compare is none of
@@ -1062,12 +890,10 @@ every sample sharing the mutation would quietly change eleven of them. The grid'
 that was clicked; there the whole set is still the default. `?sample_id=all`, the editor's
 whole-experiment sentinel, lands on the default too rather than on an empty selection, because
 `int("all")` is not a sample -- and an empty selection would open the page on a Save button that
-refuses. **The scope is a
-chosen set of those samples**, which it did not use to be: the page refused a subset outright
-and said so, on the grounds that changing a mutation for some samples splits one mutation into
-two. It does split one into two. That is a thing worth being able to do -- a call right in eight
-samples and wrong in three should not mean deleting it from three and retyping it by hand -- and
-`apply_edits` could already do it.
+refuses. **The scope is a chosen set of those samples.** Changing a mutation for some of
+them splits one mutation into two, and that is a thing worth being able to do -- a call right
+in eight samples and wrong in three should not mean deleting it from three and retyping it by
+hand.
 
 **Which of two paths runs is decided by two independent questions**: does the whole set move,
 and do the new values already name a mutation this experiment has?
@@ -1086,11 +912,9 @@ every exported CSV, and nothing refreshes them.
 **The last three paths are one call, and it is the one that was already there.**
 `history.mutation_for_identity` `get_or_create`s on the six `MUTATION_KEY_FIELDS` -- which *is*
 "the existing row if these values name one, a new row otherwise", asked once rather than
-branched on -- and `apply_edits(removals=..., additions=...)` moves the calls. It was
-extracted from `_resolve_mutation`, which needed the same thing to put a swept mutation back, so
-there is still one definition of how a `Mutation` is minted from an identity. Nothing else in
-`history.py` changed: `KIND_EDIT` labels the edit set and its rows are `OP_ADD`/`OP_REMOVE`
-either way, so `state_after`, `plan_restore` and `restore` needed nothing.
+branched on -- and `apply_edits(removals=..., additions=...)` moves the calls.
+`_resolve_mutation` uses the same function to put a swept mutation back, so there is one
+definition of how a `Mutation` is minted from an identity.
 
 **A restore across a subset change reuses the original row**, which is the opposite of what a
 restore across a whole-set change does and is not arranged -- it falls out. The row never moved,
@@ -1098,33 +922,30 @@ so `_resolve_mutation` finds it still holding the old identity and hands the cal
 back to the same primary key. On the whole-set path the row *has* moved, so `get_or_create` from
 the logged identity finds nothing and mints one; see below.
 
-**A merge is allowed and is not announced as one.** `_refuse_collision` is gone. What the result
-names instead is the *samples*: a chosen sample that already carries the target gets the removal
+**A merge is allowed and is not announced as one.** What the result names is the *samples*: a chosen sample that already carries the target gets the removal
 and no addition, so it observes the mutation once rather than twice and keeps the frequency and
-read counts it already had. That is the same choice `_plan_add` and `_plan_copy` make, and it is
-the one part of the outcome a person cannot read off the page afterwards. Add and Copy report
-their skipped samples by name now too, for the same reason -- a count of skipped calls is
-not a thing anybody can act on.
+read counts it already had. That is the same choice `_plan_add` and `_plan_copy` make, and all
+three report skipped samples by name, because a count of skipped calls is not a thing anybody
+can act on.
 
 **An emptied row is left in place, not deleted.** That is the posture delete takes with a
 `Mutation` as well, and it is what lets the restore above resolve back to the same pk.
 `mutint_import.experiments._delete_all_orphaned_mutations` sweeps it if something else triggers
 a sweep.
 
-**The mutation the unchosen samples were left on is not re-annotated**, and that is a live trap
-rather than a call: the old code called `record_builder.apply_annotation(mutation, ...)`
-unconditionally after the edit, which is right only when the row itself moved. On the move path
-the annotation belongs to the row the calls landed on, and only when that row was minted
-by this request -- one that was already there keeps what it has.
+**The mutation the unchosen samples were left on is not re-annotated.** Calling
+`record_builder.apply_annotation(mutation, ...)` unconditionally after the edit is right only
+when the row itself moved. On the move path the annotation belongs to the row the calls landed
+on, and only when that row was minted by this request -- one that was already there keeps what
+it has.
 
 **The calls are logged as removed and re-added, and that is not bookkeeping.** The
 edit log is keyed on `(sample_id, mutation_key, source)` and `mutation_key` is derived from
 the six `MUTATION_KEY_FIELDS`. Move a Mutation without saying so and `live_state` starts
 computing a different key than every earlier entry recorded, with no edit set for
 `state_after` to undo -- so "restore to before the edit" would silently leave the edit in
-place. `KIND_EDIT` labels the *edit set*; its rows stay `OP_ADD` and `OP_REMOVE`, which is why
-`state_after`, `plan_restore` and `restore` needed no change at all -- and why the subset paths,
-which are `apply_edits` with removals and additions, needed nothing either.
+place. `KIND_EDIT` labels the *edit set*; its rows stay `OP_ADD` and `OP_REMOVE`, so
+`state_after`, `plan_restore` and `restore` know nothing of edits.
 
 **What the whole-set path does not re-create is the Mutation row.** `_resolve_mutation` returns
 the row it is handed, so the additions point back at the one the removals came off and the
@@ -1147,19 +968,16 @@ Two refusals, before anything is written:
 - **A sample that does not carry the mutation.** `target_sample_ids` is scoped to the samples
   observing it, for the reason the mutation is scoped to the experiment: a hand-typed id must
   not reach past what the page offered, and there is nothing to change in a sample that does not
-  have it. An **absent or empty** list means every carrying sample, which is what the page posted
-  before it could pick a subset -- so the endpoint's older contract still holds and most of
-  `test_change.py` still exercises it unchanged.
+  have it. An **absent or empty** list means every carrying sample.
 
 Two rows sharing the six-field `get_or_create` key is still a state `gd_import` cannot produce,
 and this still cannot reach it: `mutation_for_identity` joins the existing row rather than
 minting a second.
 
-**`_resolve_mutation` now checks that the row still *is* the identity**, not merely that its pk
-still exists. That is a consequence of reusing the row, and the bug it fixes was silent: a
-restore to before an edit arrives holding the old identity and a row that has since become
-something else, and the old code handed the calls back to the *edited* mutation and
-reported success having undone nothing.
+**`_resolve_mutation` checks that the row still *is* the identity**, not merely that its pk
+still exists. That is a consequence of reusing the row: a restore to before an edit arrives
+holding the old identity and a row that has since become something else, and handing the calls
+back by pk would restore them onto the *edited* mutation while reporting success.
 
 So **a restore to before a whole-set edit mints a new Mutation row** -- `get_or_create` from the
 logged identity finds nothing matching and creates it, leaving the edited row with no
@@ -1171,8 +989,8 @@ the row it is restoring to never moved, so the same check that rejects it here a
 **The two forms share their fields and their machinery.** `_mutation_fields.html` is every
 input any type can ask for, and `_mutation_form.js` -- a template inside `<script>`, the
 `table_template.js` idiom -- is the type switching, the values that survive a type change, and
-the per-field error display. `select_list.html` is now shared too: both pages pick a set of
-samples, and Add's "Add to" and Change's "Change in" are the same control over different lists.
+the per-field error display. `select_list.html` is shared too: both pages pick a set of samples, and Add's "Add to" and
+Change's "Change in" are the same control over different lists.
 Add and Change differ only in what they post. A field added to
 `genomediff.schema.TYPE_SPECIFIC_FIELDS` should need one edit, not two.
 
@@ -1220,8 +1038,8 @@ passes one.
 
 At `43a0f72` the parser stopped raising on a line it cannot fully read. Problems collect in
 `document.parse_errors` and the rest of the file loads. `gd_import.parse_warnings` carries them
-into the per-file import summary as `warnings`, beside the existing `error`, and the Add Data
-page lists them under the file — so a truncated line is named rather than silently worth fewer
+into the per-file import summary as `warnings`, beside the existing `error`, and the Import
+data page lists them under the file — so a truncated line is named rather than silently worth fewer
 mutations.
 
 **`strict=True` restores the old raise, and is deliberately not used.** It raises on *any*
@@ -1233,16 +1051,15 @@ parses with its missing fields set to `None`, and `Mutation.start_position` is N
 such a record on turns a reported bad line into an `IntegrityError` that rolls back the whole
 sample. `gd_import._is_storable` skips them, and the reason is already in `parse_warnings`.
 
-Two smaller changes from the same bump: an entry whose id column is `.` now parses with
-`id=None` instead of failing the file (18 of breseq's 306 test files could not be read at all
-before), and `Record.__str__` writes `.` back for an absent value where it used to write the
-literal string `None` — a file breseq cannot read. Both are fixes we get for free.
+Two smaller things from the same package: an entry whose id column is `.` parses with
+`id=None`, and `Record.__str__` writes `.` back for an absent value rather than the literal
+string `None`, which breseq cannot read.
 
 **Numeric notation does not survive the database.** The parser now returns `PreservedInt` /
 `PreservedFloat` for values whose text would not format back identically, so
 `frequency=8.39314286e-01` writes back byte-for-byte — but JSON has one number type, so storing
-it flattens the notation and an exported line says `frequency=0.839314286`. Verified, and
-unchanged from before the bump; the record is verbatim in content, not in bytes.
+it flattens the notation and an exported line says `frequency=0.839314286`. The record is
+verbatim in content, not in bytes.
 
 The sharp edge that comes with those wrappers: **`str()` on one returns the source text**, and
 `synthesize_sequence_change` formats parsed values into `sequence_change`, which is one of the
@@ -1258,8 +1075,7 @@ rather than move an existing one about.
 
 **The form's fields come from `genomediff.schema.TYPE_SPECIFIC_FIELDS`.** That table is what
 the parser fills a record from and what `Record.__str__` serializes in order, and it is
-mirrored from breseq's `genome_diff_entry.cpp`. (It used to live in `genomediff.records`, which
-still re-exports it.) `validation.form_schema()`
+mirrored from breseq's `genome_diff_entry.cpp`. `validation.form_schema()`
 hands it to the page through `json_script`, so the type dropdown, the visible inputs, the
 required-field check and the emitted `.gd` line read one table. Restating the field sets in the
 template would give the form a second opinion about what a MOB needs. The nine offered types
@@ -1321,62 +1137,28 @@ Fixing it means changing both paths at once plus a data migration, and is its ow
 
 ### There is one filter, and it belongs to the reader
 
-**A filter is a value a reader carries, not a row.** `AleExperimentFilter` held one frequency
-range and one ignored-gene list per experiment, edited at `/filter` by anyone with write access,
-and it was *shared*: changing your own view changed everybody's, silently, with no record of who
-did it. That conflated curating a dataset -- `mutint_curate`'s job, logged and
-reversible -- with choosing what you want to look at, which is nobody else's business.
-`mutint_filter.0006` drops the table, and logs what it discards, because there is nowhere to fold
-it forward to and "calls below 20% here are noise" is a fact about the data that somebody may
-have recorded in it.
+**A filter is a value a reader carries, not a row.** A frequency range and an ignored-gene
+list stored per experiment would be *shared*: changing your own view changes everybody's,
+silently, with no record of who did it. That conflates curating a dataset -- `mutint_curate`'s
+job, logged and reversible -- with choosing what you want to look at, which is nobody else's
+business.
 
 `mutint_filter/view_filter.py` is the value and where it lives; `util.py` is what applies it.
 Separate modules so a plugin importing the filter does not drag in `MutationCall`'s joins,
-and so the value's tests need no database -- pinning the gene-subset rule used to take six model
-rows. `ViewFilter` normalizes `0` and `100` to `None`, which collapses "configured" and
+and so the value's tests need no database. `ViewFilter` normalizes `0` and `100` to `None`, which collapses "configured" and
 "actually hides something" into one question: `is_empty`.
 
-**It lives in `request.session`**, the repo's first session write, and the traps are in that
-module's docstring rather than left to be rediscovered: the JSON serializer forbids sets,
+**It lives in `request.session`**, and the traps are in that module's docstring: the JSON serializer forbids sets,
 integer dict keys come back as strings, and mutating a nested dict leaves `session.modified`
 False and loses the write with no error. Query parameters win over the session and are
 remembered into it; presence is what is tested, not truthiness, which is how a URL says "no
 filter" and how the clear link works.
 
-**No permission gate and no lock check.** `can_add_experiment_filter` and the experiment lock
-guarded a shared setting; a reader's own view has nothing to protect. That absence is the
-clearest statement of what the change is for.
+**No permission gate and no lock check**: a reader's own view has nothing to protect.
 
 Two consequences worth knowing. **`/stats` and Search do not filter at all** -- neither is a page
-you read rows through, and the Overview summarizes a dataset the way the dashboard does; that is
-what made `_count_in_python` unreachable, since it existed only because the gene half of a filter
-has no SQL. And **core has no experiment-scoped rebuilder left**: `experiment_filter` was the
-last one, so several tests register their own rather than borrowing whatever was lying around.
-
-`GlobalFilter` was a still earlier layer: one row for the whole installation, superuser-only,
-reachable only by typing the URL, and empty in practice. `mutint_filter.0005` folded its genes
-into each experiment before dropping it -- convert, then drop, the posture
-`mutint_curate.0002` took with the ignored *mutation* lists.
-
-**`can_add_global_filter` became `can_curate`, which is gone too** -- its only caller was the
-tag endpoints (see **Sample flags**). The history stays because the lock-ordering lesson does.
-Two call sites gated the tag dropdowns on
-`can_add_global_filter(user) or can_add_experiment_filter(user, experiment)`. The left half was
-`is_superuser`, so the `or` short-circuited before the lock on the right was ever consulted --
-which is why `table_actions._may_curate` had to test the lock first and left a comment saying
-so.
-
-Deleting the left half outright looked safe because `effective_role` already answers `owner` to
-a superuser. It is not: the case it really covered is a **`Mutation` with no experiment**, where
-`can_edit_experiment(user, None)` returns False for everybody and an unscoped mutation becomes
-uncurateable by anyone. `mutint_sample.tests.test_table_actions` pins it. `can_curate` keeps that
-case and asks the question once, so the lock is no longer something to route around.
-
-Two things that fell out with it: `mutint_interop_query` had been assigning `global_filter_genes`
-and never reading it, and `mutint_stats._count_in_python` -- which carries its own copy of the
-gene loop -- lost both its cross-experiment `deleted_global_mutations` cache and the copied
-`and`/`or` precedence quirk, since a global gene meaning the same thing everywhere was the only
-reason either existed.
+you read rows through, and the Overview summarizes a dataset the way the dashboard does. And
+**core registers no experiment-scoped rebuilder**, so tests that need one register their own.
 
 ### The ancestor belongs to the dataset, not to the reader
 
@@ -1392,22 +1174,12 @@ in a click; this is shared, permanent, has no toggle and no query parameter, and
 mutint-phylogeny, which never touches the filter layer. Putting an unconditional exclusion inside
 that package would undo the distinction it exists to draw.
 
-**The idea was already here four times, and none of them subtracted anything.**
-`Population.starting_strain`, a FK to `Isolate` that no code path ever wrote. `filter_out_wt_reseq`
-and `get_wt_reseq_id`, helpers with no callers -- the subtraction that was meant to happen and
-never did. `STARTING_STRAIN_ALE_ID = "0"`, which kept ALE 0 out of four pickers and three
-dashboard counts while its samples went on landing in every analysis the moment no ALE was
-picked, *which is the bug that convention actually had*. And
-`AleExperimentFilter.starting_strain_mutations`, a hand-curated id list already migrated into
-delete edit sets. All four are gone; `mutint_experiment.0010` drops the columns and backfills
-the designation.
-
-**That migration is the load-bearing part of retiring the label.** Nothing reads `"0"`
-afterwards, so without a backfill every existing A0 starting strain would silently reappear
-everywhere. Each experiment with exactly one sample under ALE `0` gets it as `ancestor`;
-**ambiguity is skipped, not guessed** -- several samples under ALE 0 is a question about the
-data only whoever ran the experiment can answer, and choosing for them would be a silent wrong
-answer rather than a visible absent one.
+**A convention is not a subtraction.** The starting strain used to be "population `0`", a
+label that kept it out of some pickers while its mutations went on landing in every analysis
+the moment no population was picked. The migration that retired the label backfilled
+`ancestor` from each experiment with exactly one sample under population `0`;
+**ambiguity was skipped, not guessed**, because several samples there is a question only
+whoever ran the experiment can answer, and a visible absence beats a silent wrong answer.
 
 **Two defaults, pointing opposite ways, and the asymmetry is the reason.**
 `get_mutation_call_queryset` stays raw and `get_evolved_call_queryset` is the one
@@ -1416,9 +1188,8 @@ that subtracts; `get_ordered_sample_queryset` subtracts by default and takes
 is visible and gets reported the same day. Forgetting to opt *out* leaves ancestral data in an
 analysis, which is invisible and wrong. So each is defaulted to whichever mistake is louder.
 
-`calls_for_samples(sample_ids, experiment_id)` is what a plugin derives from -- it was
-`get_all_calls`, which had no callers because four repos had each written that one
-line out by hand. **Dropping the ancestor from a sample list is not enough**: that removes its
+`calls_for_samples(sample_ids, experiment_id)` is what a plugin derives from.
+**Dropping the ancestor from a sample list is not enough**: that removes its
 column while its mutations sit in every other sample, and since an ancestral mutation is in
 every ALE by construction, convergence reports all of them as convergent and fixation all of
 them as fixed. The subtraction has to reach the derivation, not the render.
@@ -1434,25 +1205,23 @@ id observed in one experiment's ancestor cannot appear in another's samples.
   called in one sample, not a conclusion drawn from it; a row silently missing would make the
   page disagree with the report it was imported from. And **nothing aggregates here**, so
   there is nothing for an ancestral call to contaminate -- while this is the only picker that
-  could reach the ancestor, so hiding it made the sample unreachable rather than merely
-  excluded. (It was hidden at first, on the general rule. One sample at a time is the case the
-  general rule does not fit.) It passes `{% view_filter_summary ancestor_subtracted=False %}`
+  could reach the ancestor, so hiding it would make the sample unreachable rather than merely
+  excluded. It passes `{% view_filter_summary ancestor_subtracted=False %}`
   so the shared summary does not claim a subtraction it did not do -- that rule cuts both ways.
   **Listed first is not selected first**: `_selected_sample` opens on the first *non*-ancestor
   sample, because this view reads as "what evolved in this sample" and the one sample whose
   answer is "nothing, by definition" is a poor first thing to show. Its scoped fallback stays,
-  for the ALE, sample-type and tag filters, which can still legitimately drop a requested id.
+  for the population and sample-type filters, which can still legitimately drop a requested id.
 - **The mutation editor and the Edit-samples page** pass `include_ancestor=True` everywhere.
   They curate; they must be able to change what they are hiding.
 - **The genome browser** keeps it, because the ancestor's own evidence link lands there and
   `is_current` would match nothing.
-- **The `mut` export does not subtract**; a derived export (`fixed_mut`, `converged_mut`) is
-  exactly what its page showed, because there is no un-subtracted version of "what converged".
+- **The `mut` export does not subtract**; Compare's CSV of a row set is exactly what its page
+  showed, because there is no un-subtracted version of "what converged".
 
 **Designating is attributed** (`ancestor_set_at` / `ancestor_set_by`) and gated on
 `can_edit_experiment`, so a locked experiment refuses it -- including refusing to *clear* it.
-This is the only setting in the product that changes what everyone sees, which is exactly what
-`AleExperimentFilter` got wrong.
+This is the only setting in the product that changes what everyone sees.
 
 Deleting the designated sample is the quiet failure: `SET_NULL` clears the column and the
 derived data does not notice. `ancestor.note_sample_deleted` is a `pre_delete` receiver --
@@ -1462,70 +1231,47 @@ rather than runs, since it can fire in the middle of a cascade destroying the wh
 ### Every table says what filtering produced it
 
 `{% view_filter_summary %}` renders a line under a mutation table naming the cutoffs and ignored
-genes behind it. It exists because filtering is shared state that nothing announced: the four
-plugins each chose differently what to do about it, and once the frequency cutoff started
-actually working, `Population tree` began rendering 1,002 fewer calls in the filtered
-views than phylogeny counts, with nothing to explain the difference.
+genes behind it. It exists because a table filtered by state nothing announces disagrees
+with the next table over, with nothing to explain the difference.
 
-**One resolution, two consumers**, and more directly than before: `describe_filters` and
-`filtered_mutation_call_queryset` take the *same* `ViewFilter`, where they used to read the
-same rows twice. Deriving the description separately would be a second opinion about what is
-being hidden, and a page confidently describing
-filtering it is not doing is worse than one saying nothing. Taking one value rather than reading
-one source twice is what makes drifting hard rather than merely tested against.
+**One resolution, two consumers**: `describe_filters` and `filtered_mutation_call_queryset`
+take the *same* `ViewFilter`. Deriving the description separately would be a second opinion
+about what is being hidden, and a page confidently describing filtering it is not doing is
+worse than one saying nothing.
 
 **`applied` is not "is a filter configured".** A 0-100 range with no ignored genes is
-configured and hides nothing; calling that "filtered" teaches people to ignore the word. It used
-to need care; `ViewFilter` normalizes those ends away at construction, so the two questions have
-become one and `applied` is simply `not is_empty`.
+configured and hides nothing; calling that "filtered" teaches people to ignore the word.
+`ViewFilter` normalizes those ends away at construction, so `applied` is simply `not is_empty`.
 
 **Template tags, not context keys**, and that is what makes them generic: they read
 `experiment_id` and the request out of the context every table page already sets, so
 including `{% view_filter_fields %}` and `{% view_filter_summary %}` once in
-`mutation_matrix/page.html` reaches mutint-compare, mutint-fixation and mutint-converge **without
-touching any of their repositories**. `{% view_filter_form %}` is the standalone variant, for a
+`mutation_matrix/page.html` reaches mutint-compare **without touching its repository**. `{% view_filter_form %}` is the standalone variant, for a
 page with no view-control form of its own to join -- the per-sample breseq table uses it.
 
-**The tags gate themselves**, rendering nothing without an `experiment_id`. That replaced a
-`show_filter_toggles` flag each page had to remember to set, which existed because a *Show
-Experiment Filtered* checkbox had rendered inert on three pages that never read it back. The
-rule it encoded still holds -- a control that does nothing is worse than no control -- but it is
-a property now rather than a thing to remember.
+**The tags gate themselves**, rendering nothing without an `experiment_id`: a control that
+does nothing is worse than no control, and a property is safer than a flag each page has to
+remember to set.
 
 A page filtering by its own rules passes `own_rules=` rather than rendering an empty summary
 that reads as "no filtering here" when the truth is "different filtering here". Search does,
 because it spans experiments; mutint-phylogeny does, because it encodes frequency in three
 states rather than excluding on it.
 
-**What it does not claim**: criteria a view hardcodes. `get_table_body` passes
-`filter_type='AMP'`, so amplifications are excluded from the fixation and converge tables and
-the summary does not say so. Widening it means every caller declaring what it passed.
-
-**"Show Experiment Filtered" is gone.** It offered to see through the *shared* filter -- what
-somebody else's setting was hiding from you -- which is not a question a reader has about their
-own, where clearing it is a click away.
+**What it does not claim**: criteria a view hardcodes. Widening it means every caller
+declaring what it passed.
 
 **A plugin gets both halves in two lines**, and `docs/plugin/filtering.md` is the page that says
-so; there was none before, and `quickstart.md`'s worked example queried unfiltered. The half
-worth repeating here: **a filter has to reach the derivation, not the render.** Fixation asks
-what is in an ALE's last two flasks and convergence asks which genes were hit in more than one
-ALE, so hiding a call changes the answer -- both plugins apply it when they compute their set
-and pass `view_filter=None` to `get_table_body`.
-
-Two things this shook out that are worth knowing:
-
-- **Removing the close icon shifted every column of the shared mutation table left by one**,
-  and the column constants that followed (`REFSEQ_COLUMN_IN_MUT_TABLE` 3 -> 2, later
-  `FIRST_SAMPLE_COLUMN_IN_MUT_TABLE`) are gone with that table: the mutation matrix reads cells
-  by name, so there is no index for four pages to agree about. See **The mutation matrix**.
+so. The half worth repeating here: **a filter has to reach the derivation, not the render.**
+The Fixed set asks what is in a population's last two time points and the Convergent set which
+genes were hit in more than one population, so hiding a call changes the answer -- Compare
+applies the filter when it computes each set.
 
 ### Creating and importing are pages, not dialogs
 
 `/project/new/`, `/experiment/new/` and `/import/` are all full pages. The
-first two were modals over the list tables and are not any more: a create form wants a
-heading, room to explain its fields and a URL you can link someone to. The modals were also
-where two bugs lived -- an inline panel overlapped the DataTable beneath it, and Bootstrap's
-data-api was bound twice so a dialog opened and closed in the same millisecond.
+first two are not modals over the list tables: a create form wants a heading, room to
+explain its fields and a URL you can link someone to.
 
 `?project=<pk>` on the experiment page fixes the project, so arriving from a project there
 is no picker to get wrong. Each page checks permission itself -- 403 signed out, 403 for a
@@ -1541,8 +1287,8 @@ All four gate on `can_edit_project` -- `Project.user` or a superuser -- so staff
 *view* every project, cannot edit one they do not own.
 
 The project summary on `project/detail.html` **stays read-only**; editing did not go
-back into it. It now shows `description` and `status` as well, which were editable-but-never-
-displayed before: a save has to be visible somewhere or it reads as having done nothing.
+back into it. It shows `description` and `status` as well: a save has to be visible somewhere
+or it reads as having done nothing.
 
 **Changing a sample's identity never writes a number.** A coordinate is
 `(population, time_point, label)`, and **half of it is on the sample and half is not**: the
@@ -1557,65 +1303,44 @@ need no file moves; no transient `unique_together` violation is possible, becaus
 only ever looked up; and a swap needs no ordering logic, since both samples move to freshly
 resolved targets and the rows they vacated are pruned at the end.
 
-**This was a four-row chain** -- `Population`, `TimePoint`, `Isolate`, `TechnicalReplicate` --
-and three of the four are the sample itself now. Two paragraphs of hazard went with them and
-cannot come back: `Isolate` had no `unique_together` while `gd_import` get_or_created it on six
-fields, so real databases held two rows at one coordinate and `get_or_create` raised
-`MultipleObjectsReturned`; and `TimePoint` was unique on `(population, value)` while
-`gd_import` passed `media=` as a *lookup* kwarg, raising `IntegrityError` against an existing
-time point carrying different media. `Media` is gone and so is the row it hung on.
+The chain was four rows once (`Population`, `TimePoint`, `Isolate`, `TechnicalReplicate`);
+three of the four are the sample itself now, and the hazards they carried went with them.
 
-One difference from `gd_import._get_or_create_chain` remains, and it is a correction rather
-than a preference: **a newly created `Population` copies species and strain but not
-description.** The first two are facts about the organizm and hold across ALEs; a description
-is what makes *this* ALE different from the others.
+One difference from `gd_import._get_or_create_chain`, and it is a correction rather than a
+preference: **a newly created `Population` copies species and strain but not description.**
+The first two are facts about the organism and hold across populations; a description is what
+makes *this* population different from the others.
 
 Two samples may not share a coordinate, and the save refuses it. There is no constraint saying
-so, but `mutint-fixation` builds `flask_isolate_mutation_dict[(time_point, label)] = qs` by
-plain assignment, so the second sample at a coordinate silently overwrites the first and its
-mutations vanish from fixation with no error. Emptied populations are pruned for the opposite
-reason: `rebuild_sample_counts` counts `Population` **rows**, and the ALE picker is built from
-them, so an emptied one would inflate the dashboard permanently and sit in the menu selecting
-nothing. Emptiness is re-queried rather than snapshotted, because a swap vacates and refills
-the same row.
+so, but Compare's Fixed set keys a dict on `(time_point, label)` by plain assignment, so the
+second sample at a coordinate would silently overwrite the first. Emptied populations are
+pruned for the opposite reason: `rebuild_sample_counts` counts `Population` **rows**, and the
+population picker is built from them, so an emptied one would inflate the dashboard
+permanently and sit in the menu selecting nothing. Emptiness is re-queried rather than
+snapshotted, because a swap vacates and refills the same row.
 
 A structural save calls `run_post_experiment_hooks` and `rebuild_sample_counts`, once per
-POST. It deliberately does **not** call `rebuild_dashboard_data`, which pulls every
-`MutationCall` in the database into Python -- nothing about a renumber changes a mutation
-count, and paying for the whole database on every rename is what would make this feel broken
-in production. A descriptive-only save rebuilds nothing.
+POST. It deliberately does **not** recount the dashboard's installation-wide totals --
+nothing about a renumber changes a mutation count, and paying for the whole database on every
+rename is what would make this feel broken in production. A descriptive-only save rebuilds
+nothing.
 
-**`Sample.time_point` is labeled "Time point" on the edit pages**, and was
-`TimePoint.flask_number` on a row of its own. It is the only ordinal in the schema that places
-a sample along an ALE -- fixation sorts by it and takes the last two
-to decide what has fixed -- and real data carries values like 30000, so it is plainly being
-used to record cumulative divisions rather than a count of flasks. The column keeps its name;
-only the UI changed, including the validation message, which is the one place the internal
-name would otherwise reach a user. Its input is plain text, not `type="number"`: steppers are
-useless on a five-figure value. **It is still an `IntegerField`, and is now the only member
-of the coordinate that is** -- the ALE and the isolate became text (`mutint_experiment.0008`)
-and this one deliberately did not, because it is the ordinal fixation reads. A fractional
-time point is therefore still refused.
+**`Sample.time_point` is the only numeric member of the coordinate**, because it is the
+ordinal that places a sample along a population -- the Fixed set sorts by it and takes the
+last two -- while the population and sample names are text. Real data carries values like
+30000, cumulative divisions rather than a count of flasks, so its input is plain text, not
+`type="number"`: steppers are useless on a five-figure value. It is a float, so half a
+generation is recordable and a value posted back as `500.0` is accepted.
 
-**`person` is gone from `Sample` and from `Experiment`**, deleted rather than moved when the
-other nine descriptive columns became `supplemental_data`. It was free text set from
-`user.get_username()` on create, editable by no form, and it looked like ownership without
-being it -- ownership is `ProjectAccess`, and the logged-in user is recorded everywhere it
-matters. Somebody who wants to note who handled a sample writes it in a description field.
-
-Two things went with it beyond the columns. `_prepare_experiment`'s `get_or_create` keyed on
-`(name, person, project)`, so **the same experiment name under a different person forked into
-a second experiment** -- a sharp edge `prepare_experiment_by_id`'s docstring existed to warn
-about, and now simply absent. And `person` had been threaded as an argument through six import
-functions whose only remaining use of it was writing `Sample.person`; that thread is dead code
-now and went too. What survives is `--owner` on `./mutint import`, which resolves a real `User`
-through `find_user` because a newly created project needs one -- it was never the free-text
-field, and is renamed from `--person` to stop reading like it.
+**Neither `Sample` nor `Experiment` carries a `person` column.** Free text that looks like
+ownership without being it is a trap; ownership is `ProjectAccess`, and the logged-in user is
+recorded everywhere it matters. `--owner` on `./mutint import` resolves a real `User` through
+`find_user`, because a newly created project needs one.
 
 **The trap to know about:** a renumber often changes no visible label.
 `label` returns `Sample.description` verbatim whenever it is set, and the
 import path fills it with the filename for every sample whose name is not `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
-keep the description editable in the same form. A duplicate `sample_name` within an
+keep the description editable in the same form. A duplicate source name within an
 experiment is refused for a related reason -- re-import finds an existing sample by name --
 but only when the name actually *changed*, or an experiment that already had a duplicate pair
 could never be saved at all.
@@ -1642,8 +1367,8 @@ so the column reads in `/admin/` and in a sqlite dump; `roles_at_least()` is wha
 the whole of *that* — every `can_*` is a comparison against it. Three things confer a role
 with no row: a superuser is owner everywhere, `Project.user` is owner of their own project,
 and `is_public` gives everyone `read`. **There is no blanket grant for staff**; that clause
-used to end `can_view_project` and, since `load_projects` marks every imported user staff, it
-made nearly everything readable by nearly everyone. `./mutint project_access` is the escape
+used to end `can_view_project` and, since the retired `load_projects` importer marked every
+user staff, it made nearly everything readable by nearly everyone. `./mutint project_access` is the escape
 hatch for a deployment that relied on it.
 
 **`ProjectAccess` is one row per (project, subject, role)**, where the subject is a user *or*
@@ -1657,20 +1382,16 @@ is read by `Project.owner()`, two templates, `ProjectAdmin`, `load_projects`,
 `try_creating_project` and `load_example` — which looks projects up *by* it. Multiple owners are
 allowed, so a project whose only owner leaves is not stranded.
 
-**The invariant is that `Project.user` always holds an owner grant**, and it is worth stating
-that way rather than as "one writer", which this said for a while and which was never true.
-Three functions write the field, and each has to maintain it: `set_primary_owner` (creation, and
+**The invariant is that `Project.user` always holds an owner grant.** Three functions write
+the field, and each has to maintain it: `set_primary_owner` (creation, and
 `ProjectAdmin`), `revoke_project_access` (removing the primary owner's row re-points at the
 longest-standing remaining owner) and `grant_project_access` (**demoting** the primary owner
 re-points the same way).
 
-That last one was missing, and its absence was not cosmetic. `effective_role` grants owner from
-`Project.user` **alone** and short-circuits past the grant query, so a demotion that left the
-field alone did nothing at all: the sharing page showed the new lesser role beside somebody the
-server still treated as an owner. It sat directly on the path the product recommends — the
-refusal an owner gets says *"Give ownership to someone else, then lower your own role"*, and
-lowering it was the no-op. The end-to-end transfer test walked through the state and asserted
-only the final one, because the third step happened to repair it.
+Demotion must re-point because `effective_role` grants owner from `Project.user` **alone**
+and short-circuits past the grant query: a demotion that leaves the field alone does nothing,
+while the sharing page shows the new lesser role. It sits directly on the path the product
+recommends -- *"Give ownership to someone else, then lower your own role"*.
 
 **`_remaining_owner_count` counts `Project.user` as an owner**, with or without the row, for the
 same reason: a guard reading `ProjectAccess` by itself would demote away the last owner of a
@@ -1678,49 +1399,30 @@ project whose owner is named only by the field — which is exactly what
 `Project.objects.create(user=...)` produces and what the suite deliberately blesses.
 
 `effective_role`'s shortcut stays. It is a safety net, not the source of truth: a missing mirror
-row should be a display bug rather than an owner locked out of their own project, which is the
-trap the guardian scheme had.
+row should be a display bug rather than an owner locked out of their own project.
 
-**`Project.user` is `on_delete=PROTECT`** (`mutint_experiment.0009`). The column is NOT NULL and
-carries a real FK, so deleting a project's primary owner always failed — but under `DO_NOTHING`
-it failed as an `IntegrityError` from SQLite at commit, after the admin's confirmation page had
-promised otherwise. PROTECT refuses up front and names the projects in the way. `ProjectAccess.user`
-stays `CASCADE`: a grant is disposable, and the primary owner always keeps theirs.
+**`Project.user` is `on_delete=PROTECT`.** Deleting a project's primary owner cannot succeed
+(the column is NOT NULL), and PROTECT refuses up front and names the projects in the way
+rather than failing at commit after the admin's confirmation page promised otherwise.
+`ProjectAccess.user` stays `CASCADE`: a grant is disposable, and the primary owner always
+keeps theirs.
 
 **`/admin/` goes through the same helpers.** `ProjectAdmin.save_model` calls `set_primary_owner`
 and `ProjectAccessAdmin` routes saves and deletes through `grant_project_access` /
 `revoke_project_access`, reporting an `AccessError` as a message. It is a superuser tool, but it
-should not be the one place able to express a state the application forbids — editing that table
-directly used to bypass the last-owner rule and the re-point together.
+should not be the one place able to express a state the application forbids.
 
-**The role cache is not an optimisation.** The old cross-sample table called
-`can_add_experiment_filter` once per sample column *and* once per mutation row, so a table of
-400 mutations across 20 samples asked 420 times (the mutation matrix asks nothing per row, but
-the per-sample and editor pages still ask per render). django-guardian absorbed that in its own
-per-user cache; `permissions.py` keeps a `{project_pk: (generation, role)}` dict on the `User`
-instance, whose lifetime is naturally one request. A module-level generation counter, bumped
-by every write helper, invalidates it — which is what stops a `User` object that outlives a
-grant (every test, and the CLI) from answering with a stale role.
+**The role cache is not an optimisation.** The per-sample and editor pages ask per render,
+so `permissions.py` keeps a `{project_pk: (generation, role)}` dict on the `User` instance,
+whose lifetime is naturally one request. A module-level generation counter, bumped by every
+write helper, invalidates it — which is what stops a `User` object that outlives a grant
+(every test, and the CLI) from answering with a stale role.
 `test_permissions.CacheTestCase` asserts the query count directly.
 
-**django-guardian is gone.** It stored a single `view_project` object permission and nothing
-else, and the two lookups built on it filtered on the app label `'ale'` while the real label
-is `mutint_experiment`, so they matched nothing. `0005` converts its grants to `read` rows and
-every `Project.user` to an `owner` row. It reads guardian's table with **raw SQL behind an
-introspection guard**, not `apps.get_model("guardian", ...)`: the ORM version only works while
-guardian is still in `INSTALLED_APPS`, which would have forced migrate-then-uninstall across
-two releases.
-
-**That rule about `0003_backfill_view_project_grants.py` is retired**, along with the whole
-migration history. It is worth one paragraph, because the shape of what it got wrong outlives
-it. The file was inert and had to stay under its name, because a dependency on an uninstalled
-app makes `migrate` fail with `NodeNotFoundError` on a fresh database — and this note listed
-the four apps that named it: `mutint_sample.0005`, `mutint_stats.0003`, `mutint_filter.0002`,
-`mutint_common.0001`. **There were five.** The fifth was
-`mutint-phylogeny/…/0001_initial.py`, invisible to a note written from inside this repo, and it
-is why the migration reset had to span four repositories at once. `./mutint check` passes
-with a broken migration graph, so the two checks the suite's rules prescribe after a bump are
-both blind to exactly that failure; only `migrate` or `test` finds it.
+**There is no django-guardian.** Access is explicit `ProjectAccess` rows and nothing else.
+One lesson from retiring it outlives the migration history: `./mutint check` passes with a
+broken migration graph, so the two checks the suite's rules prescribe after a bump are both
+blind to exactly that failure; only `migrate` or `test` finds it.
 
 ### Groups
 
@@ -1784,11 +1486,10 @@ and names the one it refused.
 is the flag, with no boolean beside it to disagree. `/experiment/<pk>/lock/` sets it,
 gated on `can_admin_project`.
 
-**There is no `locked_reason` any more** (`mutint_experiment.0007`). It was a third column fed
-by a text box on the lock dialog, which is a plain confirm now: the questions a lock has to
-answer are whether the dataset is closed and who to ask about it, and the two remaining
-columns carry both. `lock()` takes no `reason`, `lock_message()` is the experiment's name plus
-the way out, and the endpoint ignores a posted `reason` rather than 500ing on an old client.
+**There is no `locked_reason`.** The questions a lock has to answer are whether the dataset is
+closed and who to ask about it, and the two columns carry both. `lock()` takes no `reason`,
+`lock_message()` is the experiment's name plus the way out, and the endpoint ignores a posted
+`reason` rather than 500ing on an old client.
 
 **A lock is not a fifth role.** It answers "is this dataset still open", which outranks "who
 are you": a locked experiment refuses every web write from everyone, admins, owners and
@@ -1796,24 +1497,18 @@ superusers included. An admin unlocks, edits, and locks it again. That is the po
 permission tier protects a finished dataset from someone who legitimately has permission and
 did not mean to touch it.
 
-`can_edit_experiment(user, experiment)` is the predicate, and
-`can_add_experiment_filter` / `can_delete_experiment` delegate to it — which is what carries
-the lock into the mutation editor's four endpoints, both tag endpoints, the filter page and
-every `can_edit` context key without those files knowing about it. The nine call sites that
-used to ask `can_edit_project(user, experiment.project)` now pass the experiment, because a
-predicate handed the project cannot see a flag on the experiment.
+`can_edit_experiment(user, experiment)` is the predicate, and `can_delete_experiment`
+delegates to it — which is what carries the lock into the mutation editor's endpoints and
+every `can_edit` context key without those files knowing about it. Ask it with the
+experiment, never `can_edit_project(user, experiment.project)`: a predicate handed the project
+cannot see a flag on the experiment.
 
-Three places it would have silently not held, all now tested:
+Two places it would silently not hold, both tested:
 
-- **`_may_curate` short-circuits.** It reads `can_add_global_filter(user) or
-  can_add_experiment_filter(...)`, and the first is `is_superuser` — so a lock tested only on
-  the right-hand side is never reached for a superuser. The lock is tested *before* the
-  disjunction.
-- **`finalize_upload` had no permission check at all.** Permission was asked when the upload
-  session was created and never again, so a session opened before the lock would still ingest
-  after it. The backstop is in `import_registry.run_import`, the one funnel every import type
-  passes through including plugin-registered ones, plus a check at the view for a clean
-  refusal.
+- **`finalize_upload` checks again.** Permission asked when the upload session was created and
+  never again would let a session opened before the lock ingest after it. The backstop is in
+  `import_registry.run_import`, the one funnel every import type passes through including
+  plugin-registered ones, plus a check at the view for a clean refusal.
 - **`project_delete`** refuses while the project holds a locked experiment, naming them.
   Otherwise the lock is sidestepped by the most obvious adjacent button.
 
@@ -1827,7 +1522,7 @@ worse, not safer. That covers more than it looks: mutint-phylogeny's build butto
 and does not ask, because what it writes is a cached tree keyed by a selection one reader made.
 The test is whether the write is *shared*, not whether it is a write. Reading and exporting. Access changes, since locking is per experiment and
 access is per project. And **management commands**: the lock guards the web, so `./mutint
-upload` still writes to a locked experiment, matching by name as it always has.
+import` still writes to a locked experiment.
 
 An experiment with **no project can never be locked**: `effective_role` answers `None` for a
 null project before it reaches its superuser branch, so nobody holds admin on one. It cannot
@@ -2068,75 +1763,69 @@ The first carries every mutation type, `AMP` included: that used to appear solel
 `find_sample_dirs` walks, so `a/s1` and `b/s1` are both samples called `s1` -- and a sample is
 named by its directory's basename. That name is its identity: an A-F-I-R name parses to one
 coordinate, and an auto-numbered one reuses the `Sample` already matching it.
-So the second folder never arrived *beside* the first, it **replaced** it --
-`_database_gd_mutations` deletes the sample's calls before writing its own -- and both
-folders were reported as imported. Measured: two folders of two mutations each left two
-mutations, the first folder's gone, with nothing said.
-
-`_import_samples` now imports the first and reports every later one as an error naming both
-paths. **Renaming the second automatically would be worse**, which is why it is not done: the
-name is what `parse_sample_identity` reads the ALE, flask and isolate out of, so a name this
-code invented would file the sample at a coordinate nobody chose and the drop would import
-looking entirely successful. Which of the two was meant is a question only the person who made
+Imported blindly, the second folder would not arrive *beside* the first but **replace** it --
+`_database_gd_mutations` deletes the sample's calls before writing its own -- with both
+reported as imported. `_import_samples` imports the first and reports every later one as an
+error naming both paths. **Renaming the second automatically would be worse**: the name is
+what `parse_sample_identity` reads the population, time point and sample name out of, so a
+name this code invented would file the sample at a coordinate nobody chose and the drop would
+import looking entirely successful. Which of the two was meant is a question only the person who made
 them can answer.
 
 `mutint_import/sample_names.py` is the one place a filename becomes a coordinate, asked by
 `gd_import.import_document_as_sample` -- so a bare `.gd` and the breseq directory of the same
 sample cannot answer differently. Two shapes are read and anything else is auto-numbered:
 
-| name | ALE | flask | isolate | replicate |
+| name | population | time point | sample | replicate |
 |---|---|---|---|---|
 | `3-30000-1-1` | `3` | 30000 | `1` | 1 |
 | `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | 1 |
 
-**`Population.name` and `Sample.name` are `CharField`s** (`mutint_experiment.0008`), which is
-what makes the second row expressible at all: `Ara-1` and `Ara+1` are two LTEE populations
-that both end in 1, and `763A` and `763B` are two clones from one flask that differ only in
-the trailer. Any rule reducing either to an integer merges rows that are not the same sample
--- and a merge is invisible, because `mutint-fixation` builds a dict keyed by
-`(time_point, label)` by plain assignment, so the second sample's mutations simply vanish.
+**`Population.name` and `Sample.name` are `CharField`s**, which is what makes the second row
+expressible at all: `Ara-1` and `Ara+1` are two LTEE populations that both end in 1, and
+`763A` and `763B` are two clones from one time point that differ only in the trailer. Any rule
+reducing either to an integer merges rows that are not the same sample -- and a merge is
+invisible, because Compare's Fixed set keys a dict on `(time_point, label)` by plain
+assignment, so the second sample's mutations simply vanish.
 
-**`Sample.time_point` stays numeric**, and is the reason the middle field is the
-only one whose trailing text is stripped: `500gen` is 500 because a time point is a genuine
-ordinal that fixation sorts by. A middle field with no leading digit (`t0`) is not a time
+**`Sample.time_point` is numeric**, and is the reason the middle field is the only one whose
+trailing text is stripped: `500gen` is 500 because a time point is a genuine ordinal that the
+Fixed set sorts by. A middle field with no leading digit (`t0`) is not a time
 point, so the whole name falls through rather than being half-read.
 
 Three rules that look arbitrary and are not:
 
 - **Exactly three underscore-separated fields.** With two there is no telling whether
-  `Ara-2_500gen` omits the isolate or the ALE; with four, which extra field is the replicate.
+  `Ara-2_500gen` omits the sample or the population; with four, which extra field is the
+  replicate.
 - **A-F-I-R stays strict** -- all four dash-separated fields must be integers. It is checked
   first, so a name satisfying both shapes reads as A-F-I-R.
-- **A name of neither shape is auto-numbered**, as before: ALE `1`, time point 1, one sample
-  per distinct source name, and `Sample.description` set to the filename so it still displays
+- **A name of neither shape is auto-numbered**: population `1`, time point 1, one sample per
+  distinct source name, and `Sample.description` set to the filename so it still displays
   by name. `_next_sample_number` counts in Python because `Max()` over a text column answers
   `"9"` for a coordinate holding 1 to 10.
 
-`util.parse_ale_name` and `AleName` are **gone**. They read the same fields with a bare
-`except: return 1`, so every field they could not read became 1 and a whole drop of
-non-conforming files collapsed onto one sample. Nothing should reintroduce a lenient reader:
-answering None and auto-numbering is what keeps a misread name addressable.
+**Nothing should reintroduce a lenient reader** that turns a field it cannot read into `1`:
+a whole drop of non-conforming files then collapses onto one sample. Answering None and
+auto-numbering is what keeps a misread name addressable.
 
-**Ordering had to follow.** A text column sorts `10` before `2`, which on an auto-numbered
-import -- one isolate per sample, fifty-one of them in the dev database's largest experiment
--- reorders every mutation table's columns. `mutint_experiment/ordering.py` `sample_order()`
+**Ordering follows.** A text column sorts `10` before `2`, which on an auto-numbered import
+reorders every mutation table's columns. `mutint_experiment/ordering.py` `sample_order()`
 is what every sample listing orders by, in core and in mutint-phylogeny: it pads each text
 field with zeros for the comparison, so digits sort by value and labels still sort as text.
 
 ### Which import types the Import data page offers
 
 Two rules, because the reasons differ. Both are declared on the handler and applied by
-`get_import_types_for(has_reference)`, never in the template, so the dropdown and the JSON
-the page classifies a drop with cannot disagree:
+`get_import_types_for(has_reference)`, never in the template, so the tabs and the JSON the
+page classifies a drop with cannot disagree:
 
 - `only_without_reference` -- `reference` stops being offered once the experiment has one.
   Establishing a reference is a one-time act; replacing the *annotation* is
   `replace_annotation`, and swapping in a different genome is deliberately shell-only.
-- `requires_reference` -- `replace_annotation` and `genomediff` are **absent** until there is
-  a genome. There is no grayed-out presentation and no `unavailable` parameter; a dropdown
-  entry you can see and cannot pick is a dead end. The page's own banner carries the answer
-  instead, and names the bare-`.gd` case explicitly, so the short menu is explained whether
-  or not an entry is there to point at.
+- `requires_reference` -- `replace_annotation` and `genomediff` cannot run until there is a
+  genome. Their tabs stay on the strip and say what they are waiting for, so the page explains
+  itself rather than silently offering less.
 
 `breseq_folder` is never blocked: it brings its own reference. Auto-detect is unaffected --
 a reference dropped alongside data still runs first on `priority`, which is how a first drop
@@ -2145,21 +1834,20 @@ establishes one. `/import/types/` stays unscoped; it has no experiment to scope 
 **The order they are listed in is not the order they run in**, and `menu_order` is what
 separates the two. `priority` decides which handler runs first and is correctness -- a
 reference genome must be established before mutations that are hash-checked against it -- so
-it cannot be moved to make the menu read better without changing what a mixed drop does. Sorted
-by it, the menu led with the two reference types and put `genomediff` last, which is the
-commonest thing anybody opens this page to do. `menu_order` defaults to `priority`, so a type
-that says nothing keeps its position; core sets `.gd` first, breseq folders second, and
-`replace_annotation` last, that one being the rarest and least reversible entry. **Only
-`get_import_types_for` sorts by it** -- `get_import_types()` stays in priority order, because
-the page walks that list to name what an unrecognized file *looks* like and wants the handler
-that would really claim it named first.
+it cannot be moved to make the page read better without changing what a mixed drop does.
+`menu_order` defaults to `priority`, so a type that says nothing keeps its position; core
+lists `.gd` first, breseq folders second, and `replace_annotation` last, that one being the
+rarest and least reversible entry. **Only `get_import_types_for` sorts by it** --
+`get_import_types()` stays in priority order, because the page walks that list to name what
+an unrecognized file *looks* like and wants the handler that would really claim it named
+first.
 
-Because both the menu and the banner are rendered from `has_reference` at page load, a drop
+Because both the tabs and the banner are rendered from `has_reference` at page load, a drop
 that establishes one leaves the page stale. `finalize` therefore returns `has_reference`, and
-the page **reloads** when it flips rather than patching the menu and the banner in the client,
+the page **reloads** when it flips rather than patching the tabs and the banner in the client,
 where the two could drift from what the server would render. The import summary is the only
 record that the drop happened, so it rides across the reload in `sessionStorage` under
-`mutint-add-summary-<experiment>` and is re-rendered on the way back.
+`mutint-import-summary-<experiment>` and is re-rendered on the way back.
 
 ### An import reports itself, sample by sample
 
@@ -2221,49 +1909,36 @@ section is the history of a SQLite failure, and the suite is on PostgreSQL now; 
   "SQLite permits exactly one writer". What it actually buys, and buys more dearly now, is that
   it makes the suite's unconstrained `get_or_create` calls -- `Experiment` and `Project` --
   and `_next_sample_number`'s unlocked read-then-write **unreachable by two importers at
-  once**. (`Instrument`, `Media`, `FreezerBox` and `Isolate` were on this list and are gone
-  with their tables; the argument is unchanged, it just has fewer call sites to make it
-  about.) SQLite's whole-database lock hid that; MVCC does
-  not. Do not remove it on the grounds that its original justification expired.
+  once**. SQLite's whole-database lock hid that; MVCC does not. Do not remove it on the
+  grounds that its original justification expired.
 
-(Measured on SQLite before the move; the reason stands on PostgreSQL.) **A poll must not write, and that is a consequence of the above rather than a detail.** Under
-WAL a reader is never blocked, so a poll that only reads answers instantly however long the
-importer's transaction runs -- but `BEGIN IMMEDIATE` holds the write lock for the *whole* of
-each sample, so a poll that writes has to queue for it. `SESSION_SAVE_EVERY_REQUEST` made every
-poll write one `django_session` row, and that was enough. Measured on a 30-second three-sample
-drop:
-
-| | polls | median latency | table appeared |
-|---|---|---|---|
-| poll writes a session row | **2** | **30.4s** | after 30.6s -- the whole import |
-| poll reads only | **190** | **0.003s** | after 0.18s |
-
-It was not slow, it was starved: the poll never got the write lock until the importer was
-finished, so the page showed *Scanning the upload for samples…* for the entire run and the
-table arrived with the result. `mutint_common/session_middleware.py` is a `SessionMiddleware`
+**A poll must not write.** Measured on SQLite before the move, and the reason stands: a
+writing poll queues behind the importer's transaction, so with `SESSION_SAVE_EVERY_REQUEST`
+writing one `django_session` row per poll the page showed *Scanning the uploaded files for
+samples…* for the entire run and the table arrived with the result -- starved, not slow.
+`mutint_common/session_middleware.py` is a `SessionMiddleware`
 subclass that skips the save for a request that sets `mutint_skip_session_save`, and
 `upload_progress` is the only thing that sets it. **Deliberately not
 `SESSION_SAVE_EVERY_REQUEST = False`**: that would fix one endpoint by changing when everybody
 gets logged out.
 
 **What survives all three is reported, not silent** -- a sample that still cannot be written
-appears in the status table with its error, which is how the original five were found. That is
+appears in the status table with its error. That is
 the honest ceiling here: everything lives inside one request, so none of it survives a crash or
 a restart. A literal guarantee is durability of the *work item*, which means moving the ingest
 onto the queue -- see **What is still on the request path** in the suite `CLAUDE.md`.
 
 **A page must be able to end an import without being told.** The finalize response is the
 authority on the summary, and it can simply never arrive -- a dropped connection, a restarted
-server -- which used to leave the page polling a finished import for as long as it was left
+server -- which would leave the page polling a finished import for as long as it was left
 open. `upload_progress` reports the session's own state, so a snapshot reading `finalized` or
 `failed` ends the polling and renders what the snapshot holds. Deliberately *not* the success
 alert: the snapshot knows what this drop imported, not what the experiment now totals, and
 inventing that would be a second answer to what the summary already answers properly.
 
-**A late poll used to wipe the finished page.** `clearInterval` stops the next tick, not the
-one already in flight, so a poll that resolved after the summary had rendered redrew the table
-from a snapshot taken before the end -- taking the success alert with it, and leaving a page
-that looked like it had never finished. `stopPolling` bumps a generation counter and a poll
+**A late poll must not wipe the finished page.** `clearInterval` stops the next tick, not the
+one already in flight, so a poll that resolves after the summary has rendered would redraw the
+table from a snapshot taken before the end, success alert and all. `stopPolling` bumps a generation counter and a poll
 whose generation is stale discards its own result.
 
 **A re-import says what it displaced.** Importing a sample the experiment already holds is
@@ -2275,11 +1950,9 @@ name inside a single drop, which is refused outright: there, neither is an updat
 It is also deliberately not a `warnings` entry -- those are lines the parser could not read, and
 the page says so in as many words.
 
-**A reference genome has no mutation count, and reporting one said something false.** Every
-file result carries `mutations`, so the reference handler filled it with the 0 it truthfully
-imported -- and the Import data page rendered that twice, in the table's Mutations column and in
-*Added to E (#1): 0 mutations*, both of which read as a mutation file that landed nothing.
-The entry sets `mutations` to None and declares `kind=KIND_REFERENCE`
+**A reference genome has no mutation count, and reporting 0 says something false** -- it
+reads as a mutation file that landed nothing. The entry sets `mutations` to None and declares
+`kind=KIND_REFERENCE`
 (`mutint_common/import_registry.py`) instead; the page prints **Reference** in that column and
 uses it for the headline when the drop imported no mutations. The kind rides through
 `import_progress` onto the `UploadSession` snapshot as well, or the row would say one thing
@@ -2287,8 +1960,7 @@ while the import ran and another the moment it finished. Absent `kind` means the
 mutation count, which is every other handler -- so no plugin's handler changed.
 
 `replace_annotation` claims only GenBank and GFF3, not FASTA. A FASTA is sequence with no
-features, so there is nothing in one to install -- it used to be accepted and then rejected
-on the sequence check, which named the wrong reason.
+features, so there is nothing in one to install.
 
 ### A GenBank's contig names come from its LOCUS line
 
@@ -2297,7 +1969,7 @@ on the sequence check, which named the wrong reason.
 (`reference_sequence.cpp` `LoadGenBankFileHeader`), so every seq_id in a `.gd` it writes is
 the unversioned one — and `LoadedReferenceSequences.add` matches names **exactly**, on purpose, so
 a reference that called the contig `NC_000913.3` would reject every one of those `.gd` files.
-Taking VERSION here made a GenBank and breseq's own GFF3 of the same genome disagree about
+Taking VERSION would make a GenBank and breseq's own GFF3 of the same genome disagree about
 what its contigs are called, which is the one disagreement the whole normalization design
 exists to prevent.
 
@@ -2318,11 +1990,11 @@ those are the two things an experiment is made of, and each parser's own words f
 ("No GenBank records found in: ...") name what failed rather than what to do. Three layers,
 each catching what the one before it cannot:
 
-- **Before anything uploads**, `renderList()` in `import/add.html` groups the files the chosen
+- **Before anything uploads**, `renderList()` in `import/import.html` groups the files the chosen
   type declined by what they *do* look like, and names the type they belong to -- including a
   type this experiment cannot use yet ("...which needs this experiment to have a reference
   genome first"), which is why the page embeds the **unscoped** registry as
-  `all_import_types` alongside the scoped `import_types` that fills the dropdown.
+  `all_import_types` alongside the scoped `import_types` that fills the tabs.
 - **Server-side, by pattern**, `import_registry.identify()` turns `run_import`'s "not
   recognized as Reference genome" into "...it looks like GenomeDiff mutations, so import it
   with that type". Patterns only, never a handler's `detect`: the job is to name a likely
@@ -2341,8 +2013,7 @@ nothing is still the parser's to judge.
 
 `mutint_sample/views/browse.py` renders igv.js for one `MutationCall` at
 `/mutations/browse?mutation_call_id=<pk>`, linked from every mutation-table frequency cell whose
-sample has `bam_stored`. It is the first consumer of the alignment routes, which had been built
-and tested with nothing pointing at them.
+sample has `bam_stored`.
 
 Two things are easy to get wrong and fail *silently* — an empty track, no error:
 
@@ -2357,8 +2028,8 @@ only — it is ~1.4 MB and no other page needs it.
 
 ### A component can put a panel on the Overview
 
-`mutint_common/panel_registry.py` is the eighth registry, and the first that lets an app put
-**its own rendered content** on a core page rather than contribute a link, a heading, a handler
+`mutint_common/panel_registry.py` is the registry that lets an app put **its own rendered
+content** on a core page rather than contribute a link, a heading, a handler
 or a name. An app registers from `AppConfig.ready()`:
 
 ```python
@@ -2369,14 +2040,13 @@ register_overview_panel(self, name='needle_plot', title='Mutation Needle Plot',
 `/stats` draws the heading and the rule; the panel's template is the **body only**, so two
 components cannot disagree about what a section there looks like.
 
-**It exists because there was no seam for something that is one panel and not a page.** Every
-earlier way to be seen was `register_plugin_urlpatterns` plus `register_nav_item` -- which is
-what mutint-compare, mutint-fixation and mutint-converge are. `context_registry` gets *context*
-onto an experiment view and stops there: some template must already be written to render it,
-which is exactly the compile-time knowledge of a plugin core is built not to have. So the
-needle plot lived in `mutint_stats` beside the Overview's counts for no better reason than that
-`/stats` is where it is drawn. **It is the mutint-needle component now**, and standalone
-mutint-core has no needle plot at all -- see that repo's `CLAUDE.md` for the plot's own design.
+**It exists because a component that is one panel and not a page had no seam.** The other
+way to be seen is `register_plugin_urlpatterns` plus `register_nav_item`, which is what
+mutint-compare is. `context_registry` gets *context* onto an experiment view and stops there:
+some template must already be written to render it, which is exactly the compile-time
+knowledge of a plugin core is built not to have. The needle plot is the **mutint-needle**
+component through this seam, and standalone mutint-core has no needle plot at all -- see that
+repo's `CLAUDE.md` for the plot's own design.
 
 Four things about the mechanism:
 
@@ -2399,17 +2069,13 @@ Four things about the mechanism:
 Ordering is INSTALLED_APPS order with no parameter, as with `nav_registry` and
 `about_registry` -- a panel's position is cosmetic.
 
-**Core's own tests may only assert on the panels they register.** `test_panel_registry` was
-written comparing the rendered list outright; it passed standalone and failed four ways under
-`./mutint test`, because mutint-needle's panel is in that list too. Same rule as the About and
-nav tests, sprung again in a new place.
+**Core's own tests may only assert on the panels they register**: assembled, mutint-needle's
+panel is in the list too. Same rule as the About and nav tests.
 
 ### The mutations are drawn from the database, not from a file
 
-`mutint_sample/tracks.py` builds igv features out of database rows. Until it existed `browse.html`
-passed igv **`tracks: []`** -- the page drew the reference, the gene track and the reads, and
-not the calls the reads were opened to look at. The only thing the database contributed was
-the locus string that positioned the view.
+`mutint_sample/tracks.py` builds igv features out of database rows, so the browser draws the
+calls the reads were opened to look at, not only the reference, the gene track and the reads.
 
 igv takes features as an inline array, so this needs **no route, no store whitelist slot and
 no `EXTENSION_CONTENT_TYPES` entry**. The module is pure, in the shape `locus.py` and
@@ -2436,15 +2102,13 @@ clickable track without matching on the label a reader might reword.
 1-based inclusive. `start = start_1 - 1`, `end = end_1`. Wrong, it draws every mutation one
 base from where it is, beside the gene it is actually in, and nothing looks broken.
 
-**Both are reached through the calls, not through `Mutation.experiment`.**
-That column can be null -- the unscoped-mutation case `can_curate` exists for -- and two such
-rows in the dev database were observed in an experiment while owned by none, so filtering on
-it drew an empty Mutations track beside a populated per-sample one. Going through the
-calls also makes both ancestor-subtracted, which is correct: an ancestral mutation is
-in every sample by construction.
+**Both are reached through the calls, not through `Mutation.experiment`.** That column can
+be null, and a mutation observed in an experiment while owned by none would vanish from a
+track filtered on it. Going through the calls also makes both ancestor-subtracted, which is
+correct: an ancestral mutation is in every sample by construction.
 
 **The per-sample track marks presence, and deliberately does not encode frequency in color.**
-Three browser probes decided that. igv's `seg` scale is diverging around zero and built for
+igv's `seg` scale is diverging around zero and built for
 log2 copy ratios: raw frequencies in [0, 1] paint 5% and 100% the identical blue; mapped into
 [0.35, 1.5] they rendered *lighter* as frequency rose; a symmetric [-1.5, 1.5] track rendered
 *darker* toward both ends. Those are only consistent if the track **autoscales to its own data
@@ -2455,11 +2119,11 @@ where it is a number rather than a suggestion.
 
 `showSampleNames: true` is set on the browser, or a seg track draws its rows unlabeled.
 
-**The sample label cannot come out of `values_list`.** `label` is a property
-falling back through the isolate's description to a computed `A# F# I# R#`, so pulling
-`...isolate__description` instead -- which this did first -- yields NULL for every sample
-without one and collapses the whole experiment onto a single row named "sample". One small
-query for the samples and a dict; there are tens of them, not thousands.
+**The sample label cannot come out of `values_list`.** `label` is a property falling back
+from the sample's description to a computed coordinate, so pulling the description column
+instead yields NULL for every sample without one and collapses the whole experiment onto a
+single row. One small query for the samples and a dict; there are tens of them, not
+thousands.
 
 
 ### Coverage comes from a BigWig, not from igv
@@ -2476,16 +2140,13 @@ reads stop drawing above a 4 kb span while the BigWig keeps going at every zoom.
 
 The **Display menu decides which tracks are loaded**, not which rows of one track are shown.
 That distinction is the whole feature: *Display Coverage Only* does not load the alignment track
-at all, so **no BAM request is made** — measured, 0 BAM requests against 9 for the BigWig. It
-changes track identity rather than a flag, so choosing an item reloads whatever is showing.
+at all, so **no BAM request is made**. It changes track identity rather than a flag, so choosing an item reloads whatever is showing.
 
 **The alignment track's own coverage row is off wherever the BigWig replaces it**
-(`showCoverage: !t.coverageURL`). igv draws one inside every alignment track, so a sample was
-showing the same depth twice in one column -- measured in a browser as two histograms, the
-blue BigWig and a gray one directly beneath it, both scaled 0-169. Since coverage started
-weighting reads by `1/X1` the two no longer even agree: igv counts every alignment once, so
-its row still towers over a repeat while the track above it does not, and two coverage rows
-disagreeing is worse than either alone.
+(`showCoverage: !t.coverageURL`). igv draws one inside every alignment track, which would
+show the same depth twice in one column -- and since coverage weights reads by `1/X1` the two
+do not even agree: igv counts every alignment once, so its row towers over a repeat while the
+BigWig does not, and two coverage rows disagreeing is worse than either alone.
 
 Kept where there is *no* BigWig -- a sample imported before coverage existed, or one whose
 derivation failed -- because igv's row is then the only coverage that sample has. Unnormalized,
@@ -2502,10 +2163,8 @@ repeats. Weighting by 1/X1 is breseq's own rule -- `coverage_output.cpp` accumul
 sum -- so the browser now agrees with breseq's own coverage plots.
 
 **A read with no X1 counts 1**, which is breseq's rule too (`alignment.cpp`: *"Defaults to 1
-when custom breseq tag is missing"*). So a BAM from anything else is unaffected: there is a test
-asserting the derivation reproduces what the old `bedtools genomecov -ibam -bg` pipeline
-produced, and it was checked byte for byte against real bedtools output on a stored BAM before
-that pipeline was removed.
+when custom breseq tag is missing"*). So a BAM from anything else is unaffected, and a test
+asserts the derivation reproduces what `bedtools genomecov -ibam -bg` produces for one.
 
 Three things about it are load-bearing:
 
@@ -2549,11 +2208,9 @@ which will waste an afternoon if you do not know them:
 The **sample menu** is a dropdown over every sample in the experiment with an alignment, the
 one being viewed included: it is shown and hidden like the rest, so *Hide all samples* leaves
 only the reference and gene tracks. **Clicking a row toggles that one sample** -- it runs
-`mutintSelectList` in `{toggle: true}` mode, matching the Tracks menu beside it. It used to run
-the helper's default, where a plain click selects only the row it lands on: on a list of
-samples that meant showing one silently unloaded every other, and there is no gesture that
-puts them back except clicking each again. The four presets still set the whole selection,
-which is what makes them presets. It has the same shape as the column menu on the Metadata
+`mutintSelectList` in `{toggle: true}` mode, matching the Tracks menu beside it, because a
+plain click that showed one sample by unloading every other has no gesture that puts them
+back. The four presets set the whole selection, which is what makes them presets. It has the same shape as the column menu on the Metadata
 page -- DataTables' colvis collection -- a `ul.dropdown-menu` of `<li><a>` where a showing
 sample is `active` on its `<li>`, so Bootstrap's own `.dropdown-menu > .active > a` paints the
 row and there is nothing to restyle. (DataTables does put `#717171` on the active `<li>`, but
@@ -2582,8 +2239,7 @@ the menu would set it.
 
 **Do not copy igv's own height recipe** for that menu. It adds `coverageTrackHeight` to
 `alignmentTrack.height`, which is the reads' *current* box rather than the space they are owed,
-so a round trip through coverage-only ratchets a track down and leaves it there -- measured at
-300px becoming 100px. Remember the height the track had while its reads were showing and hand
+so a round trip through coverage-only ratchets a track down and leaves it there. Remember the height the track had while its reads were showing and hand
 igv that total instead; it divides the space itself.
 
 A `*` marks the samples the mutation is **in**, using the mutation table's own rule
@@ -2600,9 +2256,7 @@ own shrink-to-fit badge with centered text and has no column to align to.
 
 The Mutations track draws every mutation in the *experiment*, so a click on one is a request
 to look at that mutation -- which is exactly what the breseq row at the top of the page and
-the `*` flags in the sample menu are about. They used to go on describing whichever mutation
-the page was opened at, while `tracks.py` had been carrying a `mutationId` on every feature
-since the track was written, for a reader that did not exist.
+the `*` flags in the sample menu are about, so both follow the click.
 
 **Swapped in place, not navigated to.** A page load would rebuild igv and re-fetch the BAM in
 order to show a locus already on screen. `/mutations/browse/at` (`browse_at`) returns the new
@@ -2637,15 +2291,13 @@ igv's `trackclick` hands an annotation track the features actually under the cur
 return value decides the popup: `undefined`/`true` gives igv's own, a string replaces it, and
 **anything else suppresses it** -- so the popup is dropped for a mutation we switched to,
 where the row at the top of the page is the fuller answer, and left alone for every other
-track. Verified in a browser both ways: clicking the Mutations track switches with no popup,
-clicking the gene track still pops up the gene.
+track.
 
 #### The Tracks menu, because a removed track could not be got back
 
 Genes and the database tracks are handed to igv once, at `createBrowser`, and igv's own
-per-track gear menu has *Remove track*. Removing the Mutations track by accident meant
-reloading the page, with nothing on the page saying so. The samples had a menu that showed
-what was on screen and put it back; these had nothing.
+per-track gear menu has *Remove track*; without a menu of their own, removing the Mutations
+track by accident means reloading the page.
 
 `#track-menu` lists every non-sample track, ticked when it is on screen. It is built from
 `[GENE_TRACK].concat(dbTracks)` rather than hardcoded, so it lists what the page actually
@@ -2674,25 +2326,17 @@ Two things it gets right that are easy to get wrong:
   handler registered for an event and takes the first one's return, so this sits beside the
   sample menu's handler without either knowing about the other.
 
-All four margins round the browser measure the same 25px; the header trim that makes the top
-one work is in `common.css` and applies to every page (see **The shell's two widths**).
-
-The cell markup used to be coupled to two things that substring-tested it for the literal
-`true`; the mutation matrix carries presence as a field (`samples[i]` is an object or `null`),
-so that coupling is gone.
+All four margins round the browser are the same 25px; the header trim that makes the top one
+work is in `common.css` and applies to every page (see **The shell's two widths**).
 
 ### Everything the browser loads is served from here
 
 `mutint_common/staticfiles/vendor/` holds every third-party asset, with
 `vendor/VENDOR.md` recording the source URL and sha256 of each. **This is what makes "works
-with no outbound network" true**, and it was not true before: `base.html` could not render
-without jQuery from `ajax.googleapis.com`, while the suite pulled **22 assets from seven CDN
-hosts**. All of them were reachable at the time, so nothing was broken -- the claim was simply
-false, and the reason `igv.min.js` and phylotree are vendored had quietly stopped applying to
-anything else.
+with no outbound network" true.**
 
 **Versions are frozen at exactly what the CDNs were serving** -- jQuery 1.12.4, Bootstrap
-3.3.7, DataTables 1.10.x, select2 4.0.3, several of them long EOL. Making the app work offline
+3.3.7, DataTables 1.10.x, several of them long EOL. Making the app work offline
 and modernising a decade-old front end are separate problems; doing both at once leaves no way
 to tell which half broke a page.
 
@@ -2701,37 +2345,31 @@ external host in a first-party template. It matches **asset loads only** -- a pl
 `<a href="https://ncbi…">` is an ordinary link that costs nothing offline -- and it strips
 Django comments first, because a commented-out include is not a load (`dashboard.html` carries
 one). Two exemptions, each with its reason in the file: NCBI's sviewer (below), and Google
-Analytics, which is now inside `{% if GOOGLE_ANALYTICS_TAG %}`.
-
-**That analytics tag used to render unconditionally.** `GOOGLE_ANALYTICS_TAG` defaults to `''`,
-so every page of every deployment fetched `gtag.js` from Google and reported to an empty tag
-id, including deployments that had never asked for analytics.
+Analytics, which renders only inside `{% if GOOGLE_ANALYTICS_TAG %}` -- the setting defaults
+to `''`, and a deployment that never asked for analytics must not report to Google.
 
 Four things about the vendored layout are load-bearing:
 
 - **A stylesheet drags its fonts with it.** Font Awesome asks for `url('../fonts/…woff2')` and
   Bootstrap for `url(../fonts/glyphicons-…woff2)`, so each `css/` keeps a `fonts/` sibling.
   Flatten the layout and every icon becomes a blank box **with no error at all** -- the page
-  renders, the glyphs are simply gone. Verified in a browser with every host but this one
-  unresolvable: Font Awesome and glyphicons both paint.
+  renders, the glyphs are simply gone.
 - **The two DataTables bundles are the only files not byte-identical to their source.** They
   embed Bootstrap and reference glyphicons at an *absolute* `/Bootstrap-3.3.x/fonts/…`, which
   resolves against `cdn.datatables.net`'s root and would 404 from ours; their `url()` paths were
   rewritten to a `fonts/` directory beside each bundle. `VENDOR.md` says so, and its hashes are
   of the rewritten files.
-- **`sweetalert` had no version at all** -- `unpkg.com/sweetalert/dist/…`, resolving to whatever
-  was current (2.1.2 when vendored). A major release would have changed the `swal()` API under
-  ten templates with no commit here. Vendoring pinned it.
+- **`sweetalert` is pinned at 2.1.2.** It came from an unversioned `unpkg.com` URL, under
+  which a major release would have changed the `swal()` API under ten templates with no
+  commit here.
 - **The four DataTables bundles stay distinct.** The pages differ in which extensions they use,
   so consolidating them is a behavior change wearing a cleanup's clothes.
 
 `?v={{ mutint_version }}` is deliberately **not** applied to these: every vendored path already
 carries its version, so a release cannot serve half of one version and half of another.
 
-**Two tests located Bootstrap by searching `base.html` for a `cdn.datatables.net` URL.** When
-those strings vanished, one of them did not fail -- it began passing *vacuously*. `test_templates`
-now asserts it can still find its subject, which is the general lesson: a guard that cannot
-locate what it guards must say so rather than agree.
+`test_templates` asserts it can still find the asset it guards, and that is the general
+lesson: a guard that cannot locate its subject must say so rather than pass vacuously.
 
 
 ### The NCBI Sequence Viewer, and the check that has to come first
@@ -2778,8 +2416,7 @@ touch them.
 
 1. **esummary** -> `accessionversion` and `slen`. A length that differs is a definitive no,
    settled for one small request with **no genome downloaded** -- which matters, because a
-   wrong accession is the common case. Verified live: `NC_000913` against a about 48,500-base
-   contig is rejected after one call.
+   wrong accession is the common case.
 2. **efetch**, streamed, hashed incrementally, compared to the `sha256` already in
    `seq_ids`. Equal is VERIFIED and stores NCBI's *versioned* accession; unequal at equal
    length is MISMATCH, which is the interesting case.
@@ -2810,11 +2447,10 @@ does not change the bases. (Extra keys on `seq_ids[]` would have worked too, but
 carries `aliases` -- an invariant maintained by hand, in the function whose job is to rewrite
 that list.)
 
-**The key is `(database, sha256)`, and `sha256` alone was unique until it wasn't.** The model
-was `NcbiSequence`; nothing above is NCBI's, though -- a contig could be confirmed against
-ENA, DDBJ or an institutional archive and the digest key, the four failure states and "a name
-is never the evidence" would all read the same. What *is* NCBI's is the protocol and the
-viewer, so **the model is named for the concept and the module for the protocol**:
+**The key is `(database, sha256)`.** Nothing above is NCBI's: a contig could be confirmed
+against ENA, DDBJ or an institutional archive and the digest key, the four failure states and
+"a name is never the evidence" would all read the same. What *is* NCBI's is the protocol and
+the viewer, so **the model is named for the concept and the module for the protocol**:
 `DatabaseSequenceLink` beside `mutint_sample/ncbi.py`.
 
 `database` is a discriminator, **not a plugin seam**. There is one value,
@@ -2875,14 +2511,9 @@ NCBI record it is -- and carries the box that records an accession. It has a **n
 `EXPERIMENT_SECTION` called **Reference**, registered first, ahead of Mutations:
 an experiment reads top-down from what it was aligned to, then what was found in it.
 
-**Nothing showed any of this before.** The Import data page knew only `has_reference`, as a
-yes/no; the contigs, their lengths, their aliases and their NCBI status were visible nowhere
-in the product at all.
-
-**The nav entry is not decoration, it is the fix for a bootstrapping bug.** The link into the
-viewer was at first gated on the contig already being verified -- so the only page carrying
-the accession box could not be reached until the box had already been used. Two things
-corrected it, and both are load-bearing:
+**The nav entry is not decoration, and neither is linking every contig.** A viewer link gated
+on the contig already being verified would leave the only page carrying the accession box
+unreachable until the box had been used. Two things prevent that, and both are load-bearing:
 
 - this page, reachable from the sidebar with nothing configured; and
 - **every contig is linked from the mutation tables, verified or not.** That deliberately
@@ -2903,7 +2534,7 @@ knows both anyway. One endpoint, one contract.
 #### Three link sites, and what constrains the first
 
 1. **The mutation matrix's Reference column** -- `mutation_matrix.refseq_url_for`, reaching
-   Compare, Fixation, Converge and Search at once. The link and its title are fields on the
+   Compare and Search at once. The link and its title are fields on the
    row (`seq_id_url`, `seq_id_title`) and the script draws the anchor, so the cell's markup
    constrains nothing else; the CSV export re-derives `seq_id` itself and is unaffected.
    `test_ncbi_view.TableLinkTestCase` pins the URL and both titles.
@@ -2913,8 +2544,8 @@ knows both anyway. One endpoint, one contract.
    reads and annotation one click apart rather than two pages that do not know about each
    other.
 
-`verified_contig_names` is resolved **once per table**, not per row, and now decides only the
-link's wording rather than whether there is a link.
+`verified_contig_names` is resolved **once per table**, not per row, and decides only the
+link's wording, never whether there is a link.
 
 #### What is deliberately not handled
 
@@ -2931,22 +2562,18 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_experiment/`** — Core data models: `Project`, `Experiment`, `Population`, plus
   access control (`ProjectAccess`, `UserGroup`, `UserGroupMembership`) and the ORM join paths
   in `paths.py`. Central schema everything else references.
-- **`mutint_import/`** — Experiment upload pipeline. **Every path ends in `gd_import`**, so a
-  CLI upload and a web drop produce identical rows:
+- **`mutint_import/`** — The import pipeline. **Every path ends in `gd_import`**, so a CLI
+  import and a web drop produce identical rows:
   - `gd_import.py` parses with the external `genomediff` package (`GenomeDiff.read`) and is
     the one place mutations are stored. Each record is kept verbatim in
     `Mutation.supplemental_data["mutint_core"]["genome_diff"]` and round-tripped back out by
-    `Mutation.to_gd_line()` (`mutint_sample/models.py`) for `gdtools APPLY`. **That rule is
-    structural now rather than a convention**: `to_gd_line` splats every key of what it
-    reads, so while the record sat flat in the column anything a second writer put there
-    landed in an emitted `.gd` file. It reads the one key, the column is namespaced by
-    component, and a plugin may keep its own import records beside core's -- see
-    `Mutation.supplemental_data` for what belongs there and what does not.
+    `Mutation.to_gd_line()` (`mutint_sample/models.py`) for `gdtools APPLY`. `to_gd_line`
+    splats every key of what it reads, which is why the column is namespaced by component:
+    a plugin keeps its own import records beside core's without them landing in an emitted
+    `.gd` -- see `Mutation.supplemental_data` for what belongs there and what does not.
   - CLI import — `./mutint import <path>` resolves the target experiment from its options and
-    hands every path to the same `import_registry` handlers the Import data page uses, so the shell
-    and the web agree by construction. It was `./mutint upload`, which read the project,
-    experiment and owner out of `<exp>/metadata/*.csv` and was a second importer sharing no
-    code with the web paths; that is gone, along with `upload.py` and the metadata app.
+    hands every path to the same `import_registry` handlers the Import data page uses, so the
+    shell and the web agree by construction.
   - **Annotation is internal** (`annotation.py` + `annotate/`). Gene, codon and amino-acid
     fields are derived from the experiment's stored reference at import, not read out of
     the `.gd`, so breseq's plain `output.gd` is enough and `gdtools ANNOTATE` is not needed.
@@ -2962,17 +2589,17 @@ All apps use the `mutint_*` namespace. Key apps:
     rejects, and a folder import leaves the stored annotation alone so import order cannot
     redefine it; only the explicit `replace_annotation` import type refreshes it. A bare `.gd` is *skipped* here —
     it has no reference for that check to apply to.
-  - **References arrive with the data.** There is no separate reference page: the `reference`
+  - **References arrive with the data**, or through the Reference Sequence tab: the `reference`
     import type (priority 10) runs before anything hash-checked against it, so a GenBank,
     GFF3 or FASTA dropped alongside `.gd` files in one drop is established first whatever
     order the files are listed in. `import_gd_files` still raises `ReferenceRequired` for
     non-registry callers when the target experiment has none.
-  - **`replace_annotation`** (priority 11) is the narrow survivor of the retired
-    `/import/reference/` page: it refreshes an established reference's annotation while
-    holding the *sequence* fixed, and refuses a file whose sequence differs. It claims the
-    same files as `reference` and only its higher priority number keeps auto-detect from ever
-    picking it, so it is reachable only by being named explicitly. It is hidden from the Add
-    page's dropdown until the experiment has a reference (`requires_reference=True`).
+  - **`replace_annotation`** (priority 11) refreshes an established reference's annotation
+    while holding the *sequence* fixed, and refuses a file whose sequence differs. It claims
+    the same files as `reference` and only its higher priority number keeps auto-detect from
+    ever picking it, so it is reachable only by being named explicitly: the Reference Sequence
+    tab is `reference` until the experiment has one and `replace_annotation` after
+    (`requires_reference=True`).
     `establish_or_check(..., replace=True)`, which overwrites a *different* genome, is
     deliberately reachable from the shell only.
   - **Normalization is the linchpin** (`reference.py`, `reference_store.py`): every reference,
@@ -2995,21 +2622,22 @@ All apps use the `mutint_*` namespace. Key apps:
   the session (`view_filter.py`), applied by `util.py`, rendered by its template tags. **No
   models, no URLs, no nav** -- it is installed so its `templatetags` are found. See **There is
   one filter, and it belongs to the reader** below.
-- **`mutint_curate/`** — Adding, deleting and copying a sample's mutations, with an
+- **`mutint_curate/`** — Editing, adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
 - **`mutint_export/`** — Data export in various formats.
 - **`mutint_stats/`** — The `/stats` page: the Overview's mutation counts, the sample table,
-  and whatever the installed components register as panels. **It has no models.** Its counts
-  were stored as `ExperimentSummary` with its own rebuilder, and are computed by the request
-  that renders them now, in 0.07s on the largest experiment in the dev database — by reading
-  the three or four columns the answer needs as `values_list` tuples instead of materialising
-  every MutationCall as a model. The needle plot was the other half of this app, stored as
-  `StaticData` and then computed the same way; it is the **mutint-needle** component now and
-  reaches the page through `panel_registry`.
+  and whatever the installed components register as panels. **It has no models**: its counts
+  are computed by the request that renders them, reading the three or four columns the answer
+  needs as `values_list` tuples instead of materialising every MutationCall. The needle plot is
+  the **mutint-needle** component and reaches the page through `panel_registry`.
 - **`mutint_search/`** — Cross-experiment search.
-- **`mutint_bibliome/`** — `Publication` rows per experiment, listed on the Overview through
-  `context_registry`. (Its `/bibliome/` page was a hard-coded ALEdb bibliography and is gone.)
+- **`mutint_bibliome/`** — `Publication` rows per experiment: the one record of the papers an
+  experiment is described in, listed on the Overview through `context_registry` and as links on
+  the project and experiment lists. The experiment form's DOI box writes them
+  (`mutint_bibliome.publication.set_dois`); `Experiment.doi`, a space-separated string that
+  never agreed with this table, is gone and its DOIs were migrated into rows. (The `/bibliome/`
+  page was a hard-coded ALEdb bibliography and is gone.)
 - **`mutint_dashboard/`** — Dashboard views and timeline events.
 - **`mutint_accounts/`** — The auth slot's only occupant: Django's built-in login/logout, no enforcement. Swap in any other auth app by changing `INSTALLED_APPS`.
 - **`mutint_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
@@ -3032,10 +2660,8 @@ Creation and deletion are nested under the objects they act on:
   Both POST `/experiment/create/` and land on the new experiment's Import data page. The picker
   lists only projects `can_edit_project` allows, so it never offers one the POST would 403 on;
   a user with no editable project is shown **+ New project** instead.
-- **`/project/<pk>/` deletes selected experiments too**, which for a long time it could
-  not: it had the checkbox column all along — it includes the same
-  `experiment/_datatables.js` the flat list does — and nothing that consumed the selection
-  but Export. It is the page that shows a project's experiments in context, so it is where
+- **`/project/<pk>/` deletes selected experiments too** (it includes the same
+  `experiment/_datatables.js` the flat list does). It is the page that shows a project's experiments in context, so it is where
   somebody is standing when they decide one should go. Gated on `can_edit` (project write)
   rather than on being signed in, as the flat list is: that list spans projects and cannot
   tell, while this page knows exactly one. A **locked** experiment in the selection still
@@ -3043,12 +2669,7 @@ Creation and deletion are nested under the objects they act on:
   and only the experiment can answer for it.
 - Shared JS for those controls lives in `mutint_common/staticfiles/js/mutint_crud.js`, loaded
   from `base.html`: `mutintPost`, the two confirm dialogs below, and `mutintDeleteSelected` —
-  the whole gather-confirm-post-reload routine, which was inline in `project/list.html` and
-  `experiment/list.html` near enough byte for byte, and which the project page wanting it as
-  well turned from two copies into an argument for none. (`mutintTogglePanel` was a third
-  helper and is **gone**; the create forms are modals opened declaratively by Bootstrap. This
-  line listed it for a while after it had been deleted, and
-  `mutint_import/tests/test_import_page.py` asserts it is absent.) A page using `mutintPost` must
+  the whole gather-confirm-post-reload routine. A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
 - **Deleting data makes you type `DELETE`.** `mutintConfirmTypedDelete` is the dialog behind
@@ -3069,8 +2690,7 @@ Creation and deletion are nested under the objects they act on:
     The two cases are separated so only one of them says anything.
 - An experiment's page (`/stats?experiment_id=<pk>`) carries **+ Import data** and **Delete**,
   rendered through `{% block experiment_actions %}` in `mutint_common/templates/base.html`.
-  **Deleting lands on the experiment's project**, not on the flat experiment list it used to
-  go to — having just removed one experiment out of a project, the project is where the rest
+  **Deleting lands on the experiment's project**: having just removed one experiment out of a project, the project is where the rest
   of them are. The destination rides on the button as `data-after-delete` rather than being
   rebuilt in the handler, so it is decided where the template can see whether there is a
   project at all. Its else-branch is a guard and not a live path: `Experiment.project` is
@@ -3078,23 +2698,19 @@ Creation and deletion are nested under the objects they act on:
   superuser branch, so a projectless experiment is viewable by nobody and this page does not
   render for one — superuser included. There is a test pinning that, so the branch is not
   later read as a case somebody exercised.
-- There is no Amplifications page. `/mutations/amplifications` was a copy of `mutation_table`
-  differing in one argument, and it was the only page showing `AMP` mutations, because
-  Compare passed `filter_type="AMP"` — a value that means **exclude** AMP, not include it.
-  Both are gone and Compare now renders every mutation type. `AMP` was never a separate
-  feature: it is one of eight breseq/GenomeDiff types, first-class throughout the pipeline.
+- There is no Amplifications page. `AMP` is one of eight breseq/GenomeDiff types, first-class
+  throughout the pipeline, and Compare renders every type;
+  `mutint_sample/tests/test_amplifications_stay_visible.py` guards that.
 - `/import/?experiment_id=<pk>` is the one place data goes in. It is scoped to an
   experiment **by primary key**, so two experiments may share a name and two people may add to
   the same one — unlike `_prepare_experiment`, whose name lookup can only ever reach one of
   them. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
   There is **no unscoped form of this page and no sidebar entry for it** — `mutint_import`
-  registers no nav item. Both existed briefly and could only ever land on a page with no
-  experiment to add to; without a usable `experiment_id` the route is now a plain 404.
+  registers no nav item, and without a usable `experiment_id` the route is a plain 404.
 - Everything records the logged-in user; there are no person fields to fill in.
 - Editing lives beside all of this -- see **Editing is three pages** above. The controls in
-  `stats.html`'s `{% block experiment_actions %}` are now gated on `can_edit`; Add and Delete
-  used to render for everyone, which was a dead end dressed up as an action rather than a
-  hole, since the endpoints refused anyway.
+  `stats.html`'s `{% block experiment_actions %}` are gated on `can_edit`: a control that
+  renders for everyone and whose endpoint refuses is a dead end dressed up as an action.
 
 **Deletion is soft.** `Project` and `Experiment` carry `deleted_at`/`deleted_by`
 (`SoftDeleteMixin`); only those two are flagged, and children are reached by traversal when
@@ -3117,8 +2733,8 @@ register_import_handler(name='my_type', label='My measurements (.tsv)',
 
 Unlike `nav_registry`, this one **has explicit ordering**: `priority` decides which handler runs
 first, because a reference genome must be established before mutations that are hash-checked
-against it. Core registers `reference` (10), `breseq_folder` (50) and `genomediff` (60) in
-`mutint_import/handlers.py`. A handler whose shape is not a suffix match supplies its own
+against it. Core registers `reference` (10), `replace_annotation` (11), `breseq_folder`
+(50), `genomediff` (60) and `vcf` in `mutint_import/handlers.py`. A handler whose shape is not a suffix match supplies its own
 `detect` — breseq folders are directory-shaped, and both the reference and genomediff handlers
 exclude files that live inside one.
 
@@ -3129,16 +2745,15 @@ anything uploads — so a plugin gets both of those by registering, with no edit
 ### Serving breseq's report, which is the only HTML we did not write
 
 `mutint_sample/views/report.py` serves breseq's `output/` for one sample -- the mutation index,
-the run summary, and the read pileup behind each call. Core's importer keeps it now
-(`breseq_folder._store_report` -> `store.sample_report_dir`), so it is part of what a sample
-*is* rather than something the plugin that produced it happened to hang on to.
+the run summary, and the read pileup behind each call. Core's importer keeps it
+(`breseq_folder._store_report` -> `store.sample_report_dir`): it is part of what a sample *is*.
 
 **It is untrusted markup, and that is the whole design.** breseq is trusted software generating
 HTML from things a user supplied: the sample's name, its read filenames, the reference's gene
 names and products. Served plainly on our origin -- and `fileserve` already answers `.html`
 with `text/html; inline` -- a `<script>` smuggled through a gene name would run with the
-reader's session and read the CSRF token. There was no CSP, no `X-Frame-Options`, no
-`SecurityMiddleware` and no second origin to serve from, so the containment had to be built.
+reader's session and read the CSRF token. There is no second origin to serve from, so the
+containment is built here.
 
 **Three layers, and `SANDBOX_FLAGS` is one string used in two of them:**
 
@@ -3161,27 +2776,26 @@ base64 ZIP, unzipped client-side and rendered into a nested `srcdoc` frame with
 which never reaches the server -- so one route serves the whole evidence tree, and `.gd`-era
 `evidence/` directories work too because the route takes a path.
 
-- `allow-scripts` -- without it the page is blank. Verified in headless Chrome under exactly
-  this CSP: the ZIP decoded, a 72 KB read-alignment page rendered, images inlined as `data:`.
+- `allow-scripts` -- without it the page is blank.
 - `allow-top-navigation-by-user-activation` -- the evidence pages carry `<base target="_top">`,
   so their cross-links navigate the top window and without this every one silently does
   nothing. *By user activation* is what still refuses a script redirecting the page on its own.
 - `allow-downloads` -- `output.gd` and `log.txt` are linked from the report.
 
 **A report page loaded as the document goes back into the viewer.** `_top` inside our frame is
-MutInt's own window, so with that flag a click on *summary* or *marginal predictions* from an
-evidence page replaced the whole MutInt page with the bare file -- sandboxed, but with the
-chrome gone, which read as the report "breaking out of the frame". The browser says what it is
+MutInt's own window, so with that flag a click on *summary* from an evidence page would
+replace the whole MutInt page with the bare file -- sandboxed, but with the chrome gone. The
+browser says what it is
 loading: `Sec-Fetch-Dest: document` for a navigation, `iframe` for the frame's own loads. So
 `report_file` answers a top-level request for an `.html` with a redirect to
-`report/<id>/?page=<that file>`, the viewer now frames any `.html` the report holds (contained
+`report/<id>/?page=<that file>`, the viewer frames any `.html` the report holds (contained
 to its directory, not only the bar's three), and the `#RA_123.html` fragment -- which never
 reaches the server -- rides across the redirect in the browser and is handed to the frame by
 the viewer's script. Only `.html` is redirected, because a click on `output.gd` is a navigation
 too and wants the file. "Open in new tab" opens the viewer for the same reason. A browser too
 old to send `Sec-Fetch-Dest` gets the file as before.
 
-`serve_file` grew a `headers=` argument for this rather than the view patching the response
+`serve_file` takes a `headers=` argument for this rather than the view patching the response
 afterwards: it has three exit points, and a caller doing it by hand would eventually miss the
 range branch -- which for a security header is the whole of the failure.
 
@@ -3190,7 +2804,7 @@ already rmtrees `sample_dir`, reaps it with everything else and there is no seco
 forget. Storing it is best-effort, the posture coverage takes: a sample keeps its mutations
 whether or not its report stores, and a `.gd` drop has no report at all.
 
-**`register_import_handler` grew `directories=`** for the same feature, and it is the thing
+**`register_import_handler` has `directories=`** for the same feature, and it is the thing
 `patterns` cannot express: patterns are suffix matches and "everything under `output/`" is not
 a suffix -- breseq chooses the filenames and they differ between releases. It matters on the
 *client* as much as the server, because the Import data page decides what to upload from these
@@ -3267,9 +2881,7 @@ family -- matches the inserted sequence end to end on one strand, and `duplicati
 worse than an honest INS: it asserts a mechanism the data may not support, and because it lands
 in the same `get_or_create` key it forks the row against every other import of the same call.
 
-**And the `.gd` export now checks `can_view_project`**, which it never did -- a `.gd` for any
-sample id was downloadable by anyone, anonymous included. Its own test passed *because* of the
-hole. Fixed while the VCF export was being written beside it, rather than copied.
+**Both exports check `can_view_project`**, and each has a test that fails without the check.
 
 ### Staging a drop that is not an import
 
@@ -3280,7 +2892,7 @@ which needs a sample name and a command line beside them. `handle(experiment, st
 paths, user)` can carry neither, and the Import data page has no box to put either in.
 
 Registering an import handler anyway would have been the smaller change and is the wrong one
-— a dropdown entry that cannot carry what the entry needs. So the split is made one level
+— a tab that cannot carry what the entry needs. So the split is made one level
 down, and core keeps only the half that is about **bytes arriving safely**: the permission
 check, the manifest, path containment, the chunk endpoint and the TTL reaper. What the bytes
 are *for* belongs to the component.
@@ -3316,21 +2928,18 @@ means deleting the experiment reaches the files with nothing further written.
 
 **The uploader is shared JS now**, in `mutint_common/staticfiles/js/mutint_upload.js` and loaded
 from `base.html`: `mutintUpload(entries, {experimentId, importType|consumer, onProgress})`,
-plus `mutintCollectDropped` and `mutintFromFileList`. It was inline in `import/add.html`, which
-was the right place for it while there was one caller. `mutintPostJson` and `mutintCsrfHeader`
-moved into `mutint_crud.js` at the same time, so **reading the CSRF cookie has one definition**
-rather than the three it was about to have — `mutintPost` sends FormData and stringifies every
-value, so an endpoint taking a structure needs the JSON sibling rather than a fourth
-hand-rolled `fetch`.
+plus `mutintCollectDropped` and `mutintFromFileList`. `mutintPostJson` and `mutintCsrfHeader`
+live in `mutint_crud.js`, so **reading the CSRF cookie has one definition** — `mutintPost`
+sends FormData and stringifies every value, so an endpoint taking a structure needs the JSON
+sibling rather than a hand-rolled `fetch`.
 
 ### Seeing and stopping background work
 
 `mutint_jobs` is `/jobs/`: your queued and running work, everyone's if you are a superuser, with
 a Cancel button on anything that can take one. It exists because `django_tasks_db` records a
 status against a UUID nobody sees — no user column, no label, and no metadata field to put
-either in (one was added in its migration 0017 and removed again in 0019). That is enough for a
-worker and not for a person, and it stopped being tolerable when `mutint-breseq` put a
-twelve-hour job on the queue whose only remedy was killing the worker.
+either in. That is enough for a worker and not for a person, and `mutint-breseq` puts
+twelve-hour jobs on the queue.
 
 **`Job` is a side record, not a second queue**, and the distinction is the design:
 
@@ -3378,36 +2987,32 @@ section is superusers-only (with no owner and no label there is nothing to tell 
 and capped, because the only index on `status` is partial on READY and there is none on
 `enqueued_at`.
 
-**Coverage derivation is attributed now, and this was most of why four tasks went unnoticed.**
-`mutint_import/breseq_folder.py` enqueued it with a bare `task.enqueue`, so it created no `Job`
--- and a job with no `Job` appears only in the superuser-only unattributed panel, with no
-owner, no label and no Cancel button. The person whose import queued the work could not see it
-at all. It goes through `jobs.enqueue` now, with the importing user, a label naming the sample,
-and `cancellable=True`.
+**Coverage derivation is attributed**: `mutint_import/breseq_folder.py` enqueues it through
+`jobs.enqueue`, with the importing user, a label naming the sample, and `cancellable=True`. A
+bare `task.enqueue` creates no `Job`, and a job with no `Job` appears only in the
+superuser-only unattributed panel, with no owner, no label and no Cancel button -- invisible
+to the person whose import queued it.
 
-**That last flag needed `@task(takes_context=True)` to be honest.** `jobs.is_cancelled` takes
-the queue's own id, and `build_coverage(sample_id)` had no way to know its own -- unlike
-`mutint-breseq`, whose `BreseqRun` row stores `task_result_id`. Django 6.1 hands a
+**That last flag needs `@task(takes_context=True)` to be honest.** `jobs.is_cancelled` takes
+the queue's own id, and `build_coverage(sample_id)` has no other way to know its own --
+unlike `mutint-breseq`, whose `BreseqRun` row stores `task_result_id`. Django 6.1 hands a
 `TaskContext` whose `task_result.id` is exactly that. The check is polled **once, at entry**,
 which is the only place it would mean anything: the derivation is a single `build_for` call
 with no loop to check inside, and `request_cancel` deliberately never touches the queue row, so
 a job cancelled while queued is handed to a worker anyway.
 
-**`is_cancelled` cannot raise**, the posture `queue.status_of` takes beside it. Found the hard
-way: a dev database predating this app has no `mutint_jobs_job` table, and the coverage task --
-which now asks before it does anything -- failed with `UndefinedTable`, reported as a coverage
-failure whose message said nothing about coverage. "Cannot tell" means *not cancelled*, and
+**`is_cancelled` cannot raise**, the posture `queue.status_of` takes beside it: a database
+with no `mutint_jobs_job` table would otherwise fail every coverage task with an
+`UndefinedTable` that says nothing about coverage. "Cannot tell" means *not cancelled*, and
 that direction is deliberate: the cost is a cancellation ignored, which the person can see and
 ask for again, where the other way silently skips work nobody cancelled.
 
-**The unattributed list did not do what its own comment said.** The comment on
-`UNATTRIBUTED_LIMIT` claimed "unfinished rows first, then this many of the most recent finished
-ones"; the code was one `order_by("-enqueued_at")[:50]`. On any installation with more than
-fifty queue rows a stranded READY row from last month was pushed off the list by this morning's
-successes -- and for work enqueued without a `Job`, that panel is the only place it is visible
-at all. It is two queries now, and the split is cheaper as well as correct: the unfinished half
-rides `tasks_db_new_ordering_idx`, which is partial on READY, while a global sort on
-`enqueued_at` has no index behind it.
+**The unattributed list is two queries**: unfinished rows first, then `UNATTRIBUTED_LIMIT`
+of the most recent finished ones. One global `order_by("-enqueued_at")[:50]` would push a
+stranded READY row from last month off the list behind this morning's successes -- and for
+work enqueued without a `Job`, that panel is the only place it is visible at all. The split is
+cheaper as well as correct: the unfinished half rides `tasks_db_new_ordering_idx`, which is
+partial on READY, while a global sort on `enqueued_at` has no index behind it.
 
 **Deleting a queue row is dangerous, and `./mutint reap_jobs` is the one thing that does it.**
 The worker claims inside `SELECT ... FOR UPDATE SKIP LOCKED`, so a plain
@@ -3440,14 +3045,11 @@ queueing overrides `TASKS` to the database backend. `mutint_jobs/tests/test_jobs
 ### Running a worker with the dev server
 
 `./mutint start` spawns a `db_worker` alongside `runserver`, so in development the queue drains
-on its own. It used to refuse to, in a comment, and **the refusal named two real hazards and
-was right about both** -- which is why what replaced it answers them rather than deleting them:
+on its own. Two real hazards had to be answered first: *runserver re-executes this whole
+command line on every code change, so a spawned one becomes an orphan-management problem*, and
+*a background worker that dies silently is worse than one you can see*.
 
-> *"runserver re-executes this whole command line on every code change, so a spawned one
-> becomes an orphan-management problem, and a background worker that dies silently is worse
-> than one you can see."*
-
-The first is answered by `is_first_launch()`, the `RUN_MAIN` gate this module already carried
+The first is answered by `is_first_launch()`, the `RUN_MAIN` gate this module already carries
 for `migrate`: we are the reloader's *parent*, and it re-executes only the child. The second is
 answered three ways, below.
 
@@ -3459,7 +3061,7 @@ that table does not exist until `migrate --run-syncdb` has run. A missing relati
 `ProgrammingError`, which the worker loop does **not** catch -- it catches `OperationalError`
 only -- so an entry-script spawn would die in its first second on precisely the clone-and-run
 path this suite is built around. `test_start_command` asserts `migrate` precedes the spawn for
-that reason, rather than leaving it to a comment. The three entry scripts are untouched.
+that reason, rather than leaving it to a comment.
 
 **`--no-reload`, passed explicitly, is the least obvious decision here.** Its default is
 `settings.DEBUG`, so leaving it alone means *on* in dev, and `db_worker`'s own help says why
@@ -3539,17 +3141,13 @@ Some functionality is designed to be swapped by changing `INSTALLED_APPS`:
 
 **Auth slot** — any app with `auth_app = True` in its `AppConfig` and `app_name = 'accounts'` in
 its `urls.py` is auto-discovered by `config/urls.py`. `mutint_accounts` is the only
-occupant -- it was `mutint_accounts_noauth` while there were two, and took the plain name
-once there was one -- and the resolver takes the **first** match, so a second installed one
-is ambiguous rather than additive.
+occupant, and the resolver takes the **first** match, so a second installed one is ambiguous
+rather than additive.
 
-**There is no brute-force protection, and that is a gap rather than an omission.** There was a
-second app, the original `mutint_accounts`, whose entire reason to exist was carrying `django-defender`. It
-was in no settings module's `INSTALLED_APPS` and defender was in no `requirements.txt`, so the
-"production" auth app could not actually be installed — and once defender went, what remained
-was identical to the default. An alternative that is not an alternative is worse than one
-occupant and an honest sentence, which is what this is. Anything that replaces it inherits the
-routes below rather than restating them.
+**There is no brute-force protection, and that is a stated gap rather than an omission.** An
+alternative that is not an alternative -- a second auth app that could not actually be
+installed -- is worse than one occupant and an honest sentence. Anything that replaces it
+inherits the routes below rather than restating them.
 
 **The routes and templates are shared, and the slot is not where they live.**
 `mutint_common/account_urls.py` holds all four — login, logout, `password/` and
@@ -3557,14 +3155,9 @@ routes below rather than restating them.
 templates are `mutint_common/templates/accounts/`. Both sit outside the slot so that whatever
 occupies it next inherits them, rather than being expected to write them again.
 
-**That is the lesson the second app left behind, and it is why this is worth a paragraph.**
-When there were two hand-written lists they had already drifted into two live bugs nothing
-exercised: the defender app passed `{'next_page': '/'}` as `re_path`'s **extra-kwargs dict**
-rather than to `as_view()`, raising `TypeError` on the first login, and it had no
-`registration/login.html`, so swapping the slot also meant `TemplateDoesNotExist`. Neither was
-found by running it — nothing installed it. `mutint_common/tests/test_accounts.py` now asserts
-the *mechanism* instead: exactly one app declares the slot, and what it declares is what
-`/accounts/` actually reverses to.
+Two hand-written route lists drift into bugs nothing exercises, because nothing installs the
+second. `mutint_common/tests/test_accounts.py` asserts the *mechanism* instead: exactly one app
+declares the slot, and what it declares is what `/accounts/` actually reverses to.
 
 **Experiment context providers** — registered via `mutint_common.context_registry.register_experiment_context_provider()` in `AppConfig.ready()`. Used by `mutint_bibliome` to inject publication data into experiment views without a hard dependency.
 
@@ -3576,7 +3169,7 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 - Select with `DJANGO_SETTINGS_MODULE`. (A `settings_public` and four production/staging
   variants were here, selected by nothing; they are gone.)
 
-### Data Flow: Uploading an Experiment
+### Data Flow: Importing an experiment
 
 1. `./mutint import <path> --experiment-id <pk>` (or `--project`/`--experiment`/`--owner`)
    calls `mutint_import.experiments.resolve_experiment()` then `import_paths()`
@@ -3586,10 +3179,8 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 3. Creates `mutint_experiment` and `mutint_sample` model instances
 4. Ends in `gd_import.run_post_processing`, which asks the rebuild registry to recompute
    everything derived -- whatever the installed components registered, then the
-   dashboard's installation-wide totals. It asks for whatever is registered, so the needle
-   plot, the Overview's counts and convergence dropped off it by ceasing to be registered
-   rather than by an edit here. See **Derived data and rebuilds** in the suite `CLAUDE.md`;
-   none of it is the Django cache framework, which this repo does not use.
+   dashboard's installation-wide totals. See **Derived data and rebuilds** in the suite
+   `CLAUDE.md`; none of it is the Django cache framework, which this repo does not use.
 
 ### Infrastructure (production)
 
@@ -3599,8 +3190,8 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
 - File storage: `MUTINT_STORE_DIR`, keyed by database id (`mutint_common/store.py`)
 - Background work: **`./mutint start` runs one; everywhere else it has to be run.** `TASKS`
   names `django_tasks_db.DatabaseBackend`, and `./mutint db_worker` is what executes what has
-  been enqueued. The dev server now spawns one alongside itself (see **Running a worker with
-  the dev server** below), so a developer's queue drains on its own; a deployment does not use
+  been enqueued. The dev server spawns one alongside itself (see **Running a worker with
+  the dev server** above), so a developer's queue drains on its own; a deployment does not use
   `start` and runs its own under whatever supervises its web server. The only thing *this repo* enqueues is coverage
   derivation, whose degraded state is benign: an installation with no worker running imports
   correctly and simply has no coverage tracks until `./mutint coverage` is run. **A plugin's
@@ -3608,15 +3199,13 @@ the *mechanism* instead: exactly one app declares the slot, and what it declares
   nothing backfills, so with no worker it never happens at all. See **Background work** in the
   suite `CLAUDE.md`.
 
-There is still **no broker and no scheduler**; `./mutint reap_uploads` and the new
-`./mutint reap_jobs` are both still cron's job.
+There is **no broker and no scheduler**; `./mutint reap_uploads` and `./mutint reap_jobs` are
+both cron's job.
 
 **`reap_jobs` clears queue rows nothing will ever finish**, and it exists because nothing else
 can. `django_tasks_db` ships `prune_db_task_results`, and it filters
 `DBTaskResult.objects.finished()` -- SUCCESSFUL or FAILED -- so **a row no worker ever claimed
-is immortal by construction**. Four accumulated in this suite's two dev databases before
-anybody looked: three coverage tasks in MutInt's and one in mutint-core's, all READY, all from
-imports that ran while no worker existed.
+is immortal by construction**.
 
 Two shapes qualify, both meaning "a worker was supposed to deal with this and never will":
 READY past the window, by `enqueued_at`; and RUNNING past it, by `started_at`, which
@@ -3625,12 +3214,7 @@ twelve-hour breseq run. The delete is taken under `select_for_update(skip_locked
 **that is not optional** -- see **Seeing and stopping background work** in
 `mutint-core/CLAUDE.md` for what deleting a claimed row does to the worker.
 
-This section used to claim Daphne, Django Channels, nginx and Redis. **Nothing in
-`requirements.txt` supported any of it** and no compose file in this tree referenced it -- it
-was inherited from the pre-refactor deployment. It then said everything was synchronous
-in-request with no worker at all, which was true until the queue landed. That work is half
-done: the seam and the first task exist, and the enqueue-instead-of-call for the *rest* of
-`run_post_experiment_hooks` does not. **The suite `CLAUDE.md` carries the list of what is
-still on the request path**, which used to live in a `WORKERS.md` at the suite root -- deleted
-once the decisions in it were made and implemented, because a research note whose header is
-four stacked retractions is worse than no note.
+There is no ASGI server, no Channels, no nginx configuration and no Redis in this repo. The
+queue work is half done: the seam and the first task exist, and the enqueue-instead-of-call
+for the *rest* of `run_post_experiment_hooks` does not. **The suite `CLAUDE.md` carries the
+list of what is still on the request path.**

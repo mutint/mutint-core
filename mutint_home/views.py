@@ -26,7 +26,8 @@ SPLASH_TEMPLATE = "home/splash.html"
 
 
 def get_unique_publication_count():
-    return Experiment.objects.order_by().values('doi').distinct().count()
+    from mutint_bibliome.models import Publication
+    return Publication.objects.order_by().values('url').distinct().count()
 
 
 def home(request):

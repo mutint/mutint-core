@@ -63,8 +63,8 @@
                     <a href="/project/{{ project.id }}">{{ project.name }}</a>
                 </td>
                 <td>
-                    {% for doi in publications %}
-                        <a href="https://doi.org/{{ doi }}">{{ doi }}</a>
+                    {% for pub in publications %}
+                        <a href="{{ pub.url }}">{{ pub.title }}</a>
                     {% endfor %}
 
                 </td>

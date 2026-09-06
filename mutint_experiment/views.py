@@ -18,17 +18,17 @@ logger = logging.getLogger(__name__)
 def projects(request):
     project_list = get_user_projects(request.user)
     template_name = "project/list.html"
+    from mutint_bibliome.models import Publication
     project_dic = {}
     for project in project_list:
         project_experiments = live(project.experiment_set.all())
-        dois = []
-        for project_experiment in project_experiments:
-            if project_experiment.doi is not None:
-                experiment_dois = project_experiment.doi.split()
-            else:
-                experiment_dois = []
-            dois = dois + experiment_dois
-        project_dic[project] = list(set(dois))
+        # One entry per paper, however many of the project's experiments cite it.
+        seen, publications = set(), []
+        for pub in Publication.objects.filter(experiment__in=project_experiments).order_by("id"):
+            if pub.url not in seen:
+                seen.add(pub.url)
+                publications.append(pub)
+        project_dic[project] = publications
 
     return render(request, template_name, {'project_dic': project_dic.items()})
 
@@ -404,8 +404,10 @@ def experiment_edit(request, pk):
     if not can_edit_experiment(request.user, experiment):
         return render(request, "403.html", context, status=403)
 
+    from mutint_bibliome.publication import dois_for
     context.update({
         "experiment": experiment,
+        "dois": " ".join(dois_for(experiment)),
         "editable_projects": _editable_projects(request.user),
     })
     return render(request, "experiment/edit.html", context)
@@ -473,11 +475,12 @@ def experiment_update(request, pk):
             return JsonResponse({"error": "You cannot move it into that project."},
                                 status=403)
 
+    from mutint_bibliome.publication import set_dois
     experiment.name = name
     experiment.notes = (request.POST.get("notes") or "").strip()
-    experiment.doi = (request.POST.get("doi") or "").strip()
     experiment.project = project
-    experiment.save(update_fields=["name", "notes", "doi", "project"])
+    experiment.save(update_fields=["name", "notes", "project"])
+    set_dois(experiment, request.POST.get("doi") or "")
     return JsonResponse({"experiment_id": experiment.id,
                          "experiment": experiment.name,
                          "project_id": project.id if project else None})

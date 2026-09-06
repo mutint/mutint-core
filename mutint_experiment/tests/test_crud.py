@@ -827,7 +827,8 @@ class ExperimentEditTestCase(TestCase):
         self.experiment.refresh_from_db()
         self.assertEqual("Ara-1", self.experiment.name)
         self.assertEqual("ran hot", self.experiment.notes)
-        self.assertEqual(["10.1/abc", "10.1/def"], self.experiment.doi_as_list())
+        from mutint_bibliome.publication import dois_for
+        self.assertEqual(["10.1/abc", "10.1/def"], dois_for(self.experiment))
 
     def test_it_moves_between_projects_you_own(self):
         other = Project.objects.get(pk=self.client.post(

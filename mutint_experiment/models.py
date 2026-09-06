@@ -103,7 +103,6 @@ class Experiment(SoftDeleteMixin):
     date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(**blank_field)
     project = models.ForeignKey(Project, default=None, **blank_field, on_delete=models.DO_NOTHING)
-    doi = models.TextField(**blank_field)
 
     # --- the lock ---------------------------------------------------------------------
     #
@@ -208,11 +207,6 @@ class Experiment(SoftDeleteMixin):
             return ""
         return ("%s is locked, so it cannot be changed. An administrator of its project "
                 "can unlock it." % self.name)
-
-    def doi_as_list(self):
-        if self.doi is None:
-            return []
-        return self.doi.split(' ')
 
     def get_absolute_url(self):
         return reverse("experiment_detail", args=(self.pk,))

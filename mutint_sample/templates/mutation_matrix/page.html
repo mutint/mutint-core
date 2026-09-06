@@ -33,7 +33,7 @@
                 <option {% if sample_type == SAMPLE_TYPE_CLONAL %}selected="selected" {% endif %}
                         value="{{ SAMPLE_TYPE_CLONAL }}">Clonal samples</option>
                 <option {% if sample_type == SAMPLE_TYPE_MIXED %}selected="selected" {% endif %}
-                        value="{{ SAMPLE_TYPE_MIXED }}">Population samples</option>
+                        value="{{ SAMPLE_TYPE_MIXED }}">Mixed samples</option>
             </select>
             {% view_filter_fields %}
             {% comment %} A page that extends this one puts its own controls here -- what

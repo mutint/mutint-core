@@ -102,10 +102,7 @@ from mutint_common.urls import get_core_urlpatterns
 urlpatterns = get_core_urlpatterns()   # core's routes and every plugin's
 
 if settings.DEBUG:
-    import debug_toolbar
-    urlpatterns += [
-        re_path(r'^__debug__/', include(debug_toolbar.urls)),
-    ] + staticfiles_urlpatterns()
+    urlpatterns += staticfiles_urlpatterns()
 ```
 
 `get_core_urlpatterns()` returns the full set of mutint-core URL patterns. Append your

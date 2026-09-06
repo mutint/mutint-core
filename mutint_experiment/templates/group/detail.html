@@ -42,6 +42,7 @@
                 <th>Username</th>
                 <th>Name</th>
                 <th width="110">Standing</th>
+                <th width="150">Added</th>
                 <th width="120"></th>
             </tr>
             </thead>
@@ -64,6 +65,7 @@
                             {{ membership.is_manager|yesno:"Manager,Member" }}
                         {% endif %}
                     </td>
+                    <td>{{ membership.added_at|date:"Y-m-d" }}{% if membership.added_by %} by {{ membership.added_by.get_username }}{% endif %}</td>
                     <td>
                         {% if can_manage and membership.user_id != owner_id %}
                             {% if is_owner or not membership.is_manager %}

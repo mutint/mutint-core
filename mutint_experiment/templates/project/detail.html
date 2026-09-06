@@ -109,8 +109,8 @@
                         <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
                     </td>
                     <td>
-                        {% for doi in experiment.doi_as_list %}
-                            <a href="https://doi.org/{{ doi }}">{{ doi }}</a>
+                        {% for pub in experiment.publication_set.all %}
+                            <a href="{{ pub.url }}">{{ pub.title }}</a>
                         {% endfor %}
                     </td>
                     <td>{{ experiment.date }}</td>

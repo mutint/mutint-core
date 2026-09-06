@@ -211,4 +211,4 @@ MutInt grew out of ALEdb. If you use it in your work, please cite:
 
 ## License
 
-MutInt is released under the **MIT License** — free for any use, including educational, research, non-profit, and commercial. Copyright © 2015–2026 The Feist Lab. See [LICENSE](LICENSE) for full terms.
+MutInt is released under the **MIT License** — free for any use, including educational, research, non-profit, and commercial. Copyright © 2015–2026 The Feist Lab and © 2026 The Barrick Lab. See [LICENSE](LICENSE) for full terms.

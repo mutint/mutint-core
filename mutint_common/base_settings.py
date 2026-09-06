@@ -124,7 +124,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             # single `{% load render_table %}` never called the tag, and django_filters' two
             # FilterSet classes were imported by nothing. Four installed apps that had to be
             # re-verified against every framework upgrade in exchange for nothing.
-            'debug_toolbar',
             # The queue behind django.tasks. Django ships the API and no runner --
             # its own backends run tasks inline or not at all, and DEP 0014 keeps a
             # worker process out of core deliberately. See mutint_import/tasks.py.
@@ -201,7 +200,6 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             # must not write at all: a writing poll queues behind the import it is
             # reporting on. See mutint_common.session_middleware.
             'mutint_common.session_middleware.SkipSaveSessionMiddleware',
-            'debug_toolbar.middleware.DebugToolbarMiddleware',
             'django.middleware.csrf.CsrfViewMiddleware',
             'django.contrib.auth.middleware.AuthenticationMiddleware',
             'django.contrib.messages.middleware.MessageMiddleware',
