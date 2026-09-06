@@ -87,6 +87,7 @@ Three menus above the table let the reader show and hide descriptive columns, sa
 mutation types. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types` and
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both)
+and `mutation_matrix.view` (Normal or Condensed row spacing)
 (everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by every matrix page of that
 experiment) — and in the browser's localStorage otherwise. The table scrolls inside its own box
 with the header and the descriptive columns pinned, in the order `build_matrix` produced the

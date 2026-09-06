@@ -375,6 +375,33 @@ a:hover {
     gap: 5px;
 }
 
+/* Every table header on the site is the dark grey the mutation tables use, with white text:
+   Bootstrap's default is bare, and seven list pages used to wrap their thead in
+   `alert-success` for a light green one. The sort arrows DataTables draws in a header take
+   the text color, and its theme fades them to 0.2, which on grey is invisible; 0.6 reads. */
+.table > thead > tr > th {
+    background-color: #4b5158;
+    color: #fff;
+    border-bottom-color: #4b5158;
+}
+
+table.dataTable thead .sorting:after,
+table.dataTable thead .sorting_asc:after,
+table.dataTable thead .sorting_desc:after {
+    color: #fff;
+    opacity: 0.6;
+}
+
+/* A view-filter label: its words centered on the boxes it holds, no margin below, so it
+   lines up with the bold "Showing:" and the selects beside it in a centered flex row. */
+.view-filter-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: normal;
+    margin-bottom: 0;
+}
+
 .btn-row > .btn + .btn {
     margin-left: 0;
 }

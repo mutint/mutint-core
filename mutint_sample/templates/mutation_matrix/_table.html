@@ -89,6 +89,15 @@
         <span class="mutation-matrix-legend" data-role="frequency-legend" hidden>0% <span class="mutation-matrix-legend-bar"></span> 100%</span>
     </div>
 
+    {% comment %} Row spacing: Normal is the Mutations page's cell padding, Condensed is
+       one line per row. Moved by the script to the end of the second toolbar row. {% endcomment %}
+    <span class="mutation-matrix-view" data-role="view-control">View:
+        <span class="btn-group" role="group">
+            <button type="button" class="btn btn-default" data-view="normal">Normal</button>
+            <button type="button" class="btn btn-default active" data-view="condensed">Condensed</button>
+        </span>
+    </span>
+
     {{ matrix.rows|json_script:rows_id }}
     {% if authenticated %}{{ preferences|json_script:prefs_id }}{% endif %}
 

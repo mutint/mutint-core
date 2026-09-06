@@ -37,6 +37,8 @@
     var COLUMNS_KEY = "mutation_matrix.columns";
     var TYPES_KEY = "mutation_matrix.types";
     var FREQUENCY_KEY = "mutation_matrix.frequency";
+    var VIEW_KEY = "mutation_matrix.view";
+    var VIEWS = { normal: true, condensed: true };
     var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
 
@@ -122,6 +124,9 @@
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
+        var storedView = prefs.get(VIEW_KEY, null);
+        var view = storedView && VIEWS[storedView.view] ? storedView.view : "condensed";
+        table.classList.add("view-" + view);
 
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
@@ -367,6 +372,28 @@
                 showFormat(format);
                 prefs.set(FREQUENCY_KEY, { format: format });
             }
+        });
+
+        /* The View switch: Normal is the Mutations page's cell padding, Condensed one line
+           per row. One class on the table, and the pinned offsets recomputed, since the
+           descriptive columns' widths move with their padding. */
+        var viewControl = container.querySelector('[data-role="view-control"]');
+        var toolbars = container.querySelectorAll(".mutation-matrix-toolbar");
+        if (viewControl && toolbars.length > 1) { toolbars[1].appendChild(viewControl); }
+        function showView(name) {
+            Object.keys(VIEWS).forEach(function (key) { table.classList.toggle("view-" + key, key === name); });
+            Array.prototype.forEach.call(container.querySelectorAll("[data-view]"), function (button) {
+                button.classList.toggle("active", button.getAttribute("data-view") === name);
+            });
+            pinColumns();
+        }
+        showView(view);
+        Array.prototype.forEach.call(container.querySelectorAll("[data-view]"), function (button) {
+            button.addEventListener("click", function () {
+                view = button.getAttribute("data-view");
+                showView(view);
+                prefs.set(VIEW_KEY, { view: view });
+            });
         });
 
         // For a harness or a console: the DataTable behind the container.

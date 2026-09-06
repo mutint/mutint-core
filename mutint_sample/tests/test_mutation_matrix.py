@@ -234,6 +234,12 @@ class PartialTestCase(_Fixture):
         self.assertIn('<li data-value="number" class="active">', html)
         self.assertIn('data-role="frequency-legend"', html)
 
+    def test_the_view_switch_offers_normal_and_condensed(self):
+        html = self._render()
+        self.assertIn('data-role="view-control"', html)
+        self.assertIn('data-view="normal">Normal</button>', html)
+        self.assertIn('class="btn btn-default active" data-view="condensed">Condensed</button>', html)
+
     def test_a_sample_header_is_a_vertical_link_to_its_mutations_page(self):
         """The scroll box the table sits in is the script's (DataTables wraps the table in
         it), so the markup carries none; what it carries is one vertical header per sample,

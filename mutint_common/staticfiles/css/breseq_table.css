@@ -20,9 +20,10 @@
     margin-bottom: 0.75em;
 }
 
-/* Header blue is Bootstrap's .btn-primary, the Apply button beside these tables. */
+/* Headers are a dark grey on every breseq-styled table, so that the matrix's population
+   colors, whose first is the Apply button's blue, stand out against them. */
 .breseq-table th {
-    background-color: #337ab7;
+    background-color: #4b5158;
     color: rgb(255, 255, 255);
     font-weight: bold;
     white-space: nowrap;
@@ -270,24 +271,35 @@ div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_info {
     padding-top: 0;
 }
 
+/* The pager is an inline-block list in a block, which leaves a line box's descender space
+   under it: the pager sat at the top of a 39px box beside a 34px Export CSV button centered
+   on the row, three pixels lower. A flex box is exactly as tall as the list. */
+div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate {
+    display: flex;
+    align-items: center;
+}
+
 div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate ul.pagination {
     margin: 0;
 }
 
-/* The box breaks out of #mutint-content's 25px of padding on the sides and at the foot, so
+/* The box breaks out of #mutint-content's 25px of padding on the right and at the foot, so
    its scrollbars are the window's edges rather than lines somewhere inside the page; the
-   script sizes it to the bottom of the window. No border and no table margin: the header
-   row is the top edge. */
+   script sizes it to the bottom of the window. Not on the left: the table begins where
+   everything above it begins, header shade included. (It broke out on the left too for a
+   while, and the fix tried first -- padding the first cell -- left the shade at the edge.)
+   No border and no table margin: the header row is the top edge. */
 .mutation-matrix-scroll {
     overflow: auto;
     max-height: 70vh;
-    margin: 0 -25px -25px;
+    margin: 0 -25px -25px 0;
 }
 
 .mutation-matrix-scroll .breseq-table {
     /* !important because DataTables' theme sets `table.dataTable`'s margins with one. */
     margin: 0 !important;
 }
+
 
 /* `table.dataTable ... > th` in the selectors, because DataTables' theme sets
    `position: relative` on every sortable header for its arrow, at that specificity, and a
@@ -297,7 +309,7 @@ table.dataTable.mutation-matrix-table thead > tr > th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background-color: #337ab7;
+    background-color: #4b5158;
 }
 
 /* A stuck cell has to be opaque, or what scrolls under it shows through: the row's stripe
@@ -314,13 +326,13 @@ table.dataTable.mutation-matrix-table tr.alternate_table_row_1 > td.pinned {
 
 table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     z-index: 3;
-    background-color: #337ab7;
+    background-color: #4b5158;
 }
 
 /* A sample column is colored by population: `sample-palette-<n>` from
    mutation_matrix.palette_indexes, on the header and on every cell of the column, index 0
-   being the header's own blue so an experiment of one ALE is uniform and one of several
-   reads as bands. The color is a variable so the header, the bars and the half tone of a
+   being the Apply button's blue against the grey of the other headers, so an experiment of
+   one ALE is uniform and one of several reads as bands. The color is a variable so the header, the bars and the half tone of a
    polymorphic bar all come from one place. Eight colors, each dark enough for white text and
    distinct from its neighbors; PALETTE_SIZE in mutation_matrix.py must equal the count here. */
 .mutation-matrix-table .sample-palette-0 { --sample-color: #337ab7; }
@@ -369,12 +381,27 @@ table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     margin-top: 0.4em;
 }
 
-/* Rows are 22px: the descriptive cells lose Bootstrap's 8px of padding and sit on a 20px
-   line, so a row is one line of a sample cell tall and forty rows fit where twenty did. */
+/* Two views of the rows. Normal keeps the Mutations page's cell padding (Bootstrap's 8px,
+   a 38px row); Condensed drops it to 1px on a 20px line, so a row is one line tall and forty
+   rows fit where twenty did. The sample cell's height and the bar's reach follow the row
+   through two variables, so every Frequency display format draws right in both. */
+table.dataTable.mutation-matrix-table.view-normal {
+    --cell-height: 36px;
+    --bar-height: 34px;
+}
+
+table.dataTable.mutation-matrix-table.view-condensed {
+    --cell-height: 22px;
+    --bar-height: 20px;
+}
+
 table.dataTable.mutation-matrix-table tbody > tr > td {
+    vertical-align: middle;
+}
+
+table.dataTable.mutation-matrix-table.view-condensed tbody > tr > td {
     padding: 1px 6px;
     line-height: 20px;
-    vertical-align: middle;
 }
 
 /* A sample cell is a fixed 22px by 32px box in every format, so choosing a format never
@@ -387,7 +414,7 @@ table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
     width: 32px;
     min-width: 32px;
     max-width: 32px;
-    height: 22px;
+    height: var(--cell-height, 22px);
     vertical-align: middle;
     font-variant-numeric: tabular-nums;
 }
@@ -398,7 +425,7 @@ table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
     justify-content: center;
     position: relative;
     width: 100%;
-    height: 22px;
+    height: var(--cell-height, 22px);
     box-sizing: border-box;
     color: inherit;
     text-decoration: none;
@@ -421,7 +448,7 @@ table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
     left: 5px;
     right: 5px;
     bottom: 1px;
-    height: calc(var(--f, 0) * 20px);
+    height: calc(var(--f, 0) * var(--bar-height, 20px));
     background-color: var(--sample-color, #337ab7);
 }
 .freq-bars .mutation-matrix-cell.polymorphic::before {
@@ -433,7 +460,7 @@ table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
     left: 5px;
     right: 5px;
     bottom: 1px;
-    height: 20px;
+    height: var(--bar-height, 20px);
     border-bottom: 1px solid #c8c8c8;
     pointer-events: none;
 }
@@ -473,6 +500,12 @@ table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
     display: inline-flex;
     align-items: center;
     gap: 1em;
+}
+
+.mutation-matrix-view {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
 }
 
 table.dataTable.mutation-matrix-table thead th.breseq-sample {

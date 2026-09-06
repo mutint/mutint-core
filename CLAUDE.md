@@ -103,8 +103,9 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1930 run, 0 failures** standalone. They were **1925** before the matrix grew its
-Types menu, scroll box, sample-header links, palette and Frequency display (five tests), **1929** before tagging was retired
+**Baseline: 1931 run, 0 failures** standalone. They were **1925** before the matrix grew its
+Types menu, scroll box, sample-header links, palette, Frequency display and View switch (six
+tests), **1929** before tagging was retired
 (the endpoint tests went, the flag tests came), **1907** before the mutation matrix
 replaced the shared cross-sample table (which netted 22: a preference store, the matrix and its
 partial, the first Search tests, minus the old builder's), **1839** before the background-worker
@@ -2041,9 +2042,10 @@ length menu ends in All.
 
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
 puts its controls in two rows above the table -- length, search and the count; pager and Export
-CSV -- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding with
-negative margins and the script sizes it to the bottom of the window, so its scrollbars are the
-window's edges -- then measures whether the page still overflows and takes any excess off the
+CSV -- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding on
+the right and at the foot with negative margins (not on the left: the table, header shade
+included, begins where the controls above it begin) and the script sizes it to the bottom of the
+window, so its scrollbars are the window's edges -- then measures whether the page still overflows and takes any excess off the
 box, because a fraction of a pixel under it gives the page a scrollbar with nothing to scroll. The header sticks to its top and the descriptive columns to its left, each
 pinned column's `left` written by the script after every draw, and again from a `ResizeObserver`
 on the table, as the sum of the pinned widths before it (`position: sticky` cannot add them up
@@ -2056,10 +2058,13 @@ computed as `relative` until they did. Sample headers are written vertically and
 the frequency as a bare percentage number with the full text as its title, so a sample column
 is as wide as `100` and forty of them fit where twelve did.
 
-**Headers are the Apply button's blue, and a sample's column is colored by population.**
-`.breseq-table th` is `#337ab7` (Bootstrap's `.btn-primary`) on every breseq-styled table, and
-the matrix gives each sample header, and every cell under it, `sample-palette-<n>` from
-`palette_indexes`: populations (ALEs) in order of first appearance, 0 being the header blue,
+**Headers are dark grey, and a sample's column is colored by population.** `.breseq-table
+th` is `#4b5158` on every breseq-styled table (it was the Apply button's blue for a few
+commits, which left the population colors nothing to stand out against), and so, from
+`common.css`, is every Bootstrap `.table` header on the site -- the list pages' theads carried
+`alert-success` for a light green one, and no longer do. The matrix gives
+each sample header, and every cell under it, `sample-palette-<n>` from `palette_indexes`:
+populations (ALEs) in order of first appearance, 0 being the Apply button's blue, `#337ab7`,
 wrapping after `PALETTE_SIZE` (8, matched by hand to the `--sample-color` rules in
 `breseq_table.css`). An experiment of one ALE is therefore uniform and one of several reads as
 bands; population ids are unique across experiments, so Search needs no other rule. (This was
@@ -2074,17 +2079,23 @@ polymorphic call), Heat map (yellow through teal to blue, YlGnBu), or Number and
 cell is rendered once, as a link carrying its frequency in a CSS variable (`--f`) with the
 number inside, and the menu only swaps the table's `freq-<format>` class: the stylesheet draws
 the rest, so a format change redraws nothing. Every cell is a fixed 22 by 32 pixel box so the
-formats never reflow the table -- the descriptive cells sit on a 20px line with 1px of padding
-for the same reason, so a row is 22px rather than Bootstrap's 38 -- and an absent cell stays
-blank in every format. The choice is
+formats never reflow the table, and an absent cell stays blank in every format. The choice is
 `mutation_matrix.frequency`, remembered like the other three.
+
+**View: Normal or Condensed.** A two-button switch at the end of the second toolbar row.
+Normal keeps the Mutations page's cell padding (Bootstrap's 8px, a 38px row); Condensed, the
+default, drops it to 1px on a 20px line, one line per row. One class on the table
+(`view-<name>`) sets two variables, the sample cell's height and the bar's reach, so every
+Frequency display format draws right in both; the pinned offsets are recomputed, because the
+descriptive columns' widths move with their padding. Remembered as `mutation_matrix.view`.
 
 **Nothing sorts.** `ordering: false`: the rows are shown in the order `build_matrix` produced
 them, reference then position, which is breseq's own; a header is not a sort handle, and a
 sample's header is a link to that sample's Mutations page (`SampleColumn.url`) instead.
 
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
-holds `mutation_matrix.columns`, `mutation_matrix.types` and `mutation_matrix.frequency` for the reader everywhere and
+holds `mutation_matrix.columns`, `mutation_matrix.types`, `mutation_matrix.frequency` and
+`mutation_matrix.view` for the reader everywhere and
 `mutation_matrix.samples.<exp>` per experiment, shared by the three experiment pages; Search has
 no experiment and its sample selection is transient. Stored as the *hidden* set, so a column or sample that did not exist when
 the choice was made shows by default. The tag embeds a signed-in reader's preferences in the page
