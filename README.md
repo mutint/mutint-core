@@ -11,7 +11,7 @@ A Django web application for the mutations found by sequencing evolved microbial
 **Requirements:** a `python3` to run the entry script (3.9 or later; the script provisions its own pinned interpreter), Git
 
 ```bash
-git clone <repo-url> mutint-core
+git clone https://github.com/mutint/mutint-core.git
 cd mutint-core
 ./mutint start
 ```

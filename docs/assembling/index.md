@@ -60,7 +60,7 @@ mkdir config && touch config/__init__.py
 When cloning an existing assembled project:
 
 ```bash
-git clone --recurse-submodules <mutint-url>
+git clone --recurse-submodules https://github.com/mutint/mutint.git
 ```
 
 ---
