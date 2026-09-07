@@ -78,6 +78,13 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         # project, the same reason templates/ and staticfiles/ have to be re-pointed.
         # None when nothing exported it, and mutint_common.tools then falls back to PATH.
         'MUTINT_TOOLS_DIR': os.environ.get('MUTINT_TOOLS_DIR'),
+
+        # Whether /upgrade/ offers to move this installation onto a newer version. True is
+        # right for anything installed from a public repository; ALEdb sets it False in its
+        # own settings, being private and upgraded by hand. It cannot be a `.gitmodules`
+        # omission the way mutint-breseq is: the link lives in core's own account block, and
+        # a plugin has no seam into that.
+        'MUTINT_UPGRADE_ENABLED': True,
         # Chunked uploads staged but never finalized are reaped after this many hours.
         'MUTINT_UPLOAD_SESSION_TTL_HOURS': int(
             os.environ.get('MUTINT_UPLOAD_SESSION_TTL_HOURS', '24')),
@@ -152,6 +159,10 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_bibliome',
             'mutint_home',
             'mutint_about',           # nav: About, in END_SECTION (the foot)
+            # nav: none. /upgrade/ is reached from the sidebar's account block, which is
+            # written into base.html rather than registered -- nav_registry cannot express
+            # "superusers only". See mutint_upgrade/apps.py.
+            'mutint_upgrade',
         ],
 
         # PostgreSQL, and only PostgreSQL. The SQLite backend, its BEGIN IMMEDIATE

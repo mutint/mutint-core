@@ -13,10 +13,13 @@ import unittest
 from io import StringIO
 from unittest import mock
 
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from mutint_common.management.commands.version import bump, components, rewrite
+from mutint_common.management.commands.version import (
+    aggregator, bump, components, rewrite,
+)
 from mutint_common.version import __version__
 
 
@@ -134,6 +137,48 @@ class ComponentsTestCase(unittest.TestCase):
         names = [name for name, _m, _v in components()]
         self.assertEqual(len(names), len(set(names)))
         self.assertNotIn("mutint_common", names)
+
+
+class AggregatorTestCase(unittest.TestCase):
+    """The assembled project's own version, which is not an app's.
+
+    MutInt and ALEdb own only `config/`, so nothing in `apps.get_app_configs()` carries
+    their version and `./mutint version` reported every component except the one whose
+    name is on the sidebar. These pin the lookup that fixes it.
+    """
+
+    def test_standalone_mutint_core_has_no_aggregator(self):
+        """core's own config package deliberately has no version.py, so there is no
+        assembly to report -- and `--bump` stays unambiguous here as a result."""
+        self.assertIsNone(aggregator())
+
+    def test_it_reads_the_settings_package_not_a_hardcoded_name(self):
+        module = mock.Mock(__version__="9.9.9", NAME="Assembled")
+        with mock.patch.object(settings, "SETTINGS_MODULE", "someproject.settings"), \
+                mock.patch("importlib.import_module", return_value=module) as imported:
+            self.assertEqual(("Assembled", module, "9.9.9"), aggregator())
+        imported.assert_called_once_with("someproject.version")
+
+    def test_it_falls_back_to_the_package_name(self):
+        module = mock.Mock(__version__="9.9.9", spec=["__version__"])
+        with mock.patch.object(settings, "SETTINGS_MODULE", "config.settings"), \
+                mock.patch("importlib.import_module", return_value=module):
+            self.assertEqual("config", aggregator()[0])
+
+    def test_a_version_module_without_a_version_is_not_a_component(self):
+        module = mock.Mock(spec=[])
+        with mock.patch.object(settings, "SETTINGS_MODULE", "config.settings"), \
+                mock.patch("importlib.import_module", return_value=module):
+            self.assertIsNone(aggregator())
+
+    def test_the_aggregator_leads_the_component_list(self):
+        """It is the thing whose name is on the sidebar, so it reads first."""
+        top = ("Assembled", mock.Mock(__version__="9.9.9"), "9.9.9")
+        with mock.patch("mutint_common.management.commands.version.aggregator",
+                        return_value=top):
+            names = [name for name, _m, _v in components()]
+        self.assertEqual("Assembled", names[0])
+        self.assertEqual("mutint-core", names[-1])
 
 
 class BumpTargetTestCase(unittest.TestCase):

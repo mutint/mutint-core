@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1934 run, 0 failures** standalone; **2231** assembled, measured with `PYTHONPATH`
+**Baseline: 2001 run, 0 failures** standalone; **2298** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -413,11 +413,49 @@ so the published history is one migration per app per release rather than one pe
 along the way. Prove it by migrating a database built at the *previous* tag — a fresh database
 cannot fail the way an operator's will.
 
-It is vacuous today: no repo in the suite carries a `v<version>` tag, which is why the history
-could be collapsed wholesale twice. The first tag ends that. After it, folding published
+It was vacuous while no repo carried a `v<version>` tag, which is why the history could be
+collapsed wholesale twice. **The first tag ends that**, and MutInt now upgrades in place, so
+somebody's database really does hold rows naming these files. After the tag, folding published
 migrations means `squashmigrations` and `replaces`, and deleting the replaced files is a
 *later* release.
 
+Two things enforce it rather than trusting the reader. `mutint_common/upgrade.py` takes a
+`pg_dump` before applying an upgrade, and `start.py` refuses to migrate a database whose
+`django_migrations` names a migration the checkout no longer ships -- `applied_migrations -
+disk_migrations`, restricted to first-party apps, which is exactly the state a collapse
+creates. That check earns its place because `migrate --run-syncdb` runs **unattended on every
+`./mutint start`**, and `--run-syncdb` will cheerfully create tables for an app whose
+`migrations/` directory vanished, leaving a database that looks fine until it does not.
+
+
+### The page that upgrades this installation
+
+`mutint_upgrade` is `/upgrade/`, and it is two things at once: an inventory of what is running,
+and the one control that changes it. The table is `about_registry.get_about_sections()` -- the
+same entries `/about` renders as prose, keyed by *component checkout*, each with its version
+and a link to its revision on GitHub -- so there is one answer to "what is installed" and this
+page is it, made actionable.
+
+**It never blocks on the network**, the posture `mutint_sample/ncbi.py` established: the page
+renders from the stored verdict in `data/upgrade.json`, and only the Check button reaches the
+remote. `upgrade.Unreachable` keeps "could not ask" distinct from "nothing newer", because a
+reader told they are up to date when nobody managed to look is worse off than one shown an
+error.
+
+**Install stages; it does not upgrade.** The mechanism, the channels and the refusals all live
+in `mutint_common/upgrade.py` and are described under **Upgrading in place** in the suite
+`CLAUDE.md`. What is worth knowing here is the endpoint's own guard: it refuses a `ref` that is
+not the one the last check offered. Without it the endpoint takes an arbitrary string from a
+form field and hands it to `git checkout` on the next launch, which is a much larger promise
+than the page makes.
+
+Both POSTs re-check `is_superuser` rather than trusting the page that offered them -- the gate
+on a write endpoint is not the gate on the page it came from, the same rule `job_cancel` and
+`ncbi_check` follow. The view is `upgrade_page`, not `upgrade`, because this module imports
+`mutint_common.upgrade` and a view of that name would rebind it; the URL is still `upgrade`.
+
+**A deployment can decline the whole thing** with `MUTINT_UPGRADE_ENABLED = False`. The page
+still renders -- the inventory is worth having either way -- and offers no buttons.
 
 ### The per-sample mutation page
 
@@ -2660,6 +2698,9 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
   model, `Job`, which stores no status of its own. See **Seeing and stopping background
   work** above.
+- **`mutint_upgrade/`** — `/upgrade/`: what this installation is made of, and moving it onto
+  a newer version. Superusers only, reached from the account block. It **stages** and the
+  entry script applies -- see **Upgrading in place** in the suite `CLAUDE.md`. No models.
 - **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the nine
   registries (context, import, import_tab, plugin, nav, about, example, **panel** and
   **rebuild**), and

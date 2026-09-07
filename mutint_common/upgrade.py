@@ -1,0 +1,528 @@
+"""Moving this checkout onto a newer version of itself, in place.
+
+MutInt is installed as a git checkout and upgrades by fetching one. There is no release
+artifact and there deliberately is not: the data an upgrade must not lose -- the cluster in
+``data/db`` and the file store in ``data/store`` -- lives *inside* the directory an unpacked
+archive would replace. Git already knows to leave ignored files alone, which is the whole
+reason this works at all.
+
+**A tag is the unit of release.** ``git ls-remote`` reads tags off the remote directly, so
+none of this needs a GitHub Release object, an API token, or an API request that could be
+rate-limited. Two channels, and they are different in kind rather than degree: ``stable``
+takes the highest ``v*`` tag, ``main`` takes the tip of the development branch.
+
+**Not in the entry script**, though the entry script is what calls it -- the same bargain
+``pg.py`` makes, and for the same reason: that file is three byte-identical copies with no
+tests, and this is code that moves somebody's installation.
+
+**Parseable on Python 3.9, standard library only, no Django import.** The entry script loads
+this by path *before* the venv exists, under whatever ``python3`` the host has.
+``mutint_common/tests/test_upgrade.py`` asserts all three, because nothing else would catch
+them on a machine that has already upgraded.
+
+### Staged here, applied at the next launch
+
+A running process cannot safely replace its own source and rebuild its own virtualenv: the
+autoreloader would fire part-way through the checkout, a new ``requirements.txt`` cannot be
+installed into the environment currently executing, and migrations would run against
+half-swapped code. So ``/upgrade/`` **stages** a request into ``data/upgrade.json`` and the
+next ``./mutint start`` applies it before Django is importable.
+
+Everything after the checkout is machinery that already exists. The entry script's sentinels
+hash every component's ``requirements.txt`` and ``tools.txt``, so a version that changed
+either rebuilds the venv and re-solves the tools with nothing written here; ``start.py``
+then migrates. This module only has to move the working tree.
+
+### What it refuses
+
+The refusals matter more than the happy path, because this same entry script runs in the
+development checkouts of this suite, where an upgrade would be vandalism. It stops, naming
+what it found, on a dirty working tree, on a HEAD carrying commits the remote has not seen,
+and on a checkout with no ``origin``. Nothing is fetched until those pass.
+"""
+
+import json
+import os
+import re
+import subprocess
+
+#: Where the channel, the last check and any pending request live. Under ``data/`` because it
+#: is state this deployment owns and would miss, and because ``rm -rf env`` -- the documented
+#: way to reset the tools -- must not take a staged upgrade with it.
+STATE_NAME = os.path.join('data', 'upgrade.json')
+
+#: Where a pre-upgrade dump goes. Beside the database rather than inside it.
+BACKUP_DIR = os.path.join('data', 'backups')
+
+STABLE = 'stable'
+MAIN = 'main'
+CHANNELS = (STABLE, MAIN)
+
+#: The branch the development channel follows. Every repo in the suite is on `main`.
+MAIN_BRANCH = 'main'
+
+#: A release tag: `v` and a dotted number, nothing else. Deliberately strict -- `git describe`
+#: output, release candidates and `testdata-*` asset tags are all things a tag namespace
+#: accumulates, and an upgrade should move between reviewed points or not at all.
+TAG_RE = re.compile(r'^v(\d+)(?:\.(\d+))*$')
+
+#: How long any single git call may take. An upgrade check runs from a web request; one that
+#: hangs is worse than one that says it could not reach the remote.
+TIMEOUT = 60
+
+
+class UpgradeError(Exception):
+    """This checkout cannot be upgraded, and the message says why.
+
+    Distinct from `Unreachable` on purpose: "you have uncommitted work" is an answer about
+    this installation, and no amount of retrying changes it.
+    """
+
+
+class Unreachable(UpgradeError):
+    """The remote could not be asked. Distinct from any answer it might have given.
+
+    Mirrors `mutint_sample/ncbi.py`'s `_Unreachable`, and for the same reason: a page that
+    cannot tell "there is no update" from "I could not check" will eventually tell somebody
+    they are up to date when they are not.
+    """
+
+
+def project_root():
+    """The directory of the project being run, or None if no entry script exported it.
+
+    `MUTINT_TOOLS_DIR` is `<project root>/env/tools`, exported by the entry script before it
+    re-execs, and it is the only thing that knows: settings cannot, because an assembled
+    project reaches `get_base_settings()` through mutint-core's `config/defaults.py`, which
+    passes the *mutint-core* directory -- the same trap `templates/` and `staticfiles/` work
+    around. So an upgrade run from inside `mutint/` must move `mutint/`, not the submodule the
+    code happens to live in.
+
+    `mutint_common.docs_manual.project_root` is the same three lines, and they are deliberately
+    not shared: that module imports Django, and this one is loaded before Django exists.
+    """
+    tools_dir = os.environ.get('MUTINT_TOOLS_DIR')
+    if not tools_dir:
+        return None
+    return os.path.dirname(os.path.dirname(os.path.abspath(tools_dir)))
+
+
+def git_path(base_dir):
+    """The git to use: ``env/tools/bin/git`` first, then PATH, else None.
+
+    This repeats `mutint_common.tools.tool_path()` rather than calling it, and the duplication
+    is deliberate: this module is loaded before the venv exists, so it can import neither
+    Django nor anything that imports Django. Keeping the *order* the same as `tool_path`'s
+    matters more than sharing the code -- a checkout that resolved its own git differently
+    from every other tool would be a surprise waiting to happen.
+    """
+    managed = os.path.join(base_dir, 'env', 'tools', 'bin', 'git')
+    if os.path.isfile(managed) and os.access(managed, os.X_OK):
+        return managed
+    for directory in os.environ.get('PATH', '').split(os.pathsep):
+        if not directory:
+            continue
+        candidate = os.path.join(directory, 'git')
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def _git(base_dir, *args, **kwargs):
+    """Run git in `base_dir` and return stdout, or raise.
+
+    `check` is the caller's choice of which failures are interesting; a non-zero exit with
+    `check=False` comes back as an empty string, which is what the "is this even a
+    repository" probes want.
+    """
+    check = kwargs.pop('check', True)
+    exe = git_path(base_dir)
+    if exe is None:
+        raise UpgradeError(
+            "No git found. It is normally installed into env/tools by `./mutint install`; "
+            "a copy on PATH works too.")
+    try:
+        completed = subprocess.run(
+            [exe, '-C', base_dir] + list(args),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise Unreachable("git %s timed out after %d seconds." % (args[0], TIMEOUT))
+    except OSError as exc:
+        raise UpgradeError("Could not run git: %s" % exc)
+    if check and completed.returncode != 0:
+        message = completed.stderr.decode('utf-8', 'replace').strip()
+        raise UpgradeError("git %s failed: %s" % (args[0], message or 'no output'))
+    return completed.stdout.decode('utf-8', 'replace')
+
+
+# ── state ────────────────────────────────────────────────────────────────────────────────
+
+
+def state_path(base_dir):
+    return os.path.join(base_dir, STATE_NAME)
+
+
+def read_state(base_dir):
+    """The stored state, or an empty default. Never raises: a corrupt file is not worth
+    taking a launch down for, and the next write replaces it."""
+    try:
+        with open(state_path(base_dir)) as handle:
+            state = json.load(handle)
+    except (IOError, OSError, ValueError):
+        return {'channel': STABLE}
+    if not isinstance(state, dict):
+        return {'channel': STABLE}
+    state.setdefault('channel', STABLE)
+    return state
+
+
+def write_state(base_dir, state):
+    path = state_path(base_dir)
+    directory = os.path.dirname(path)
+    if not os.path.isdir(directory):
+        os.makedirs(directory)
+    # Written whole and renamed into place: a launch that reads this file half-written would
+    # act on a request nobody made.
+    temporary = path + '.tmp'
+    with open(temporary, 'w') as handle:
+        json.dump(state, handle, indent=2, sort_keys=True)
+        handle.write('\n')
+    os.replace(temporary, path)
+
+
+# ── inspecting the checkout ──────────────────────────────────────────────────────────────
+
+
+def is_git_checkout(base_dir):
+    return os.path.isdir(os.path.join(base_dir, '.git'))
+
+
+def current_ref(base_dir):
+    """What this checkout is on: a tag if HEAD is exactly one, else the short SHA."""
+    tag = _git(base_dir, 'tag', '--points-at', 'HEAD', check=False).strip().splitlines()
+    for line in tag:
+        if TAG_RE.match(line.strip()):
+            return line.strip()
+    return _git(base_dir, 'rev-parse', '--short=8', 'HEAD', check=False).strip() or None
+
+
+def origin_url(base_dir):
+    return _git(base_dir, 'remote', 'get-url', 'origin', check=False).strip() or None
+
+
+def changed_tracked_files(base_dir):
+    """Porcelain lines for tracked files that differ from HEAD. Untracked files are excluded.
+
+    **Excluding `??` is the difference between this working and not**, and it governs both
+    refusing an upgrade and verifying an adoption. Every installation accumulates untracked
+    files: `data/` and `env/` are gitignored so they never appear here, but an export somebody
+    downloaded into the directory does -- and an installation that stopped being upgradeable
+    the first time a file was saved beside it would be no installation at all.
+
+    It is not leniency about losing work, either. `git checkout` does not discard an untracked
+    file: it refuses and names it, which `apply` passes on as its own error. What a *tracked*
+    file differing means is the thing worth stopping for -- somebody is working in this
+    checkout, and moving it would throw their edits away.
+
+    Not `.strip()` on the output: porcelain's first two columns are the status and the third a
+    space, so stripping the whole output eats the first line's leading space and `line[3:]`
+    then slices into the filename. Split first, then take the path.
+    """
+    return [line for line in
+            _git(base_dir, 'status', '--porcelain', check=False).splitlines()
+            if line.strip() and not line.startswith('??')]
+
+
+def blockers(base_dir):
+    """Everything that stands between this checkout and an upgrade, as sentences.
+
+    Returned as a list rather than raised one at a time, so the page can show a reader every
+    reason at once instead of making them fix one and come back.
+    """
+    problems = []
+    if not is_git_checkout(base_dir):
+        problems.append(
+            "This is not a git checkout, so there is nothing to fetch into. "
+            "`./mutint upgrade --adopt` turns an unpacked archive into one without touching "
+            "your data.")
+        return problems
+
+    if origin_url(base_dir) is None:
+        problems.append("This checkout has no `origin` remote, so there is nowhere to ask.")
+
+    dirty = changed_tracked_files(base_dir)
+    if dirty:
+        names = [line[3:] for line in dirty[:5]]
+        more = len(dirty) - len(names)
+        problems.append(
+            "There are uncommitted changes here (%s%s). An upgrade would discard them, so it "
+            "will not run. This looks like a development checkout rather than an installation."
+            % (', '.join(names), ' and %d more' % more if more > 0 else ''))
+
+    # Commits the remote has never seen are the other mark of a working checkout. `@{upstream}`
+    # is absent on a detached HEAD, which is the normal state of an *installed* deployment --
+    # so its absence is not itself a problem, only unpushed work is.
+    ahead = _git(base_dir, 'rev-list', '--count', '@{upstream}..HEAD', check=False).strip()
+    if ahead.isdigit() and int(ahead) > 0:
+        problems.append(
+            "This checkout has %s commit(s) that the remote does not, which an upgrade would "
+            "leave unreachable." % ahead)
+    return problems
+
+
+# ── asking the remote ────────────────────────────────────────────────────────────────────
+
+
+def _version_key(tag):
+    """Sortable key for a `v1.2.3` tag. Missing parts sort low, so v1.2 < v1.2.1."""
+    return tuple(int(part) for part in tag[1:].split('.'))
+
+
+def remote_tags(base_dir):
+    """Every release tag on the remote, highest last.
+
+    `refs/tags/*^{}` entries are the dereferenced targets of annotated tags; both forms are
+    reduced to the tag name here, since what is wanted is the name to check out.
+    """
+    output = _git(base_dir, 'ls-remote', '--tags', 'origin', 'v*')
+    names = set()
+    for line in output.splitlines():
+        parts = line.split('\t')
+        if len(parts) != 2:
+            continue
+        name = parts[1].strip()
+        if name.startswith('refs/tags/'):
+            name = name[len('refs/tags/'):]
+        if name.endswith('^{}'):
+            name = name[:-3]
+        if TAG_RE.match(name):
+            names.add(name)
+    return sorted(names, key=_version_key)
+
+
+def remote_main(base_dir):
+    """The SHA at the tip of the development branch, or None if the remote has no such branch."""
+    output = _git(base_dir, 'ls-remote', 'origin', 'refs/heads/%s' % MAIN_BRANCH)
+    for line in output.splitlines():
+        parts = line.split('\t')
+        if len(parts) == 2:
+            return parts[0].strip()
+    return None
+
+
+def check(base_dir, channel=None):
+    """Ask the remote what is available. Returns the new state; never raises.
+
+    Failure is recorded as a sentence in the state rather than thrown, because this is called
+    from a web request and from a management command and neither wants a traceback for a
+    network that was busy. The distinction between "could not ask" and "nothing newer" is kept
+    all the way through -- see `Unreachable`.
+    """
+    state = read_state(base_dir)
+    if channel is not None:
+        state['channel'] = channel
+    channel = state.get('channel', STABLE)
+    state['checked_at'] = _now()
+    state.pop('error', None)
+
+    problems = blockers(base_dir)
+    if problems:
+        state['error'] = ' '.join(problems)
+        state['available'] = None
+        write_state(base_dir, state)
+        return state
+
+    try:
+        if channel == MAIN:
+            sha = remote_main(base_dir)
+            if sha is None:
+                raise Unreachable("The remote has no `%s` branch." % MAIN_BRANCH)
+            local = _git(base_dir, 'rev-parse', 'HEAD').strip()
+            newer = sha != local
+            state['available'] = {
+                'ref': MAIN_BRANCH, 'sha': sha[:8], 'kind': 'branch'} if newer else None
+        else:
+            tags = remote_tags(base_dir)
+            if not tags:
+                state['available'] = None
+                state['error'] = (
+                    "The remote has no release tags yet, so there is nothing to upgrade to. "
+                    "The development channel follows `%s` instead." % MAIN_BRANCH)
+                write_state(base_dir, state)
+                return state
+            latest = tags[-1]
+            here = current_ref(base_dir)
+            newer = here != latest and (
+                not (here or '').startswith('v')
+                or _version_key(latest) > _version_key(here))
+            state['available'] = {
+                'ref': latest, 'sha': None, 'kind': 'tag'} if newer else None
+    except UpgradeError as exc:
+        state['error'] = str(exc)
+        state['available'] = None
+
+    write_state(base_dir, state)
+    return state
+
+
+# ── applying ─────────────────────────────────────────────────────────────────────────────
+
+
+def request(base_dir, ref, by=None):
+    """Stage `ref` to be applied by the next launch."""
+    state = read_state(base_dir)
+    state['requested'] = {'ref': ref, 'at': _now(), 'by': by}
+    write_state(base_dir, state)
+    return state
+
+
+def clear_request(base_dir):
+    state = read_state(base_dir)
+    state.pop('requested', None)
+    write_state(base_dir, state)
+    return state
+
+
+def backup(base_dir, pg, label):
+    """`pg_dump` this checkout's database, returning the path, or None if there is nothing
+    to dump.
+
+    Best-effort by design: an upgrade that refused to proceed because a backup failed would
+    strand somebody on an old version for a reason that is not about the upgrade. The path is
+    recorded in the state either way, so a reader can see whether there is one.
+    """
+    if pg.is_external():
+        return None                      # somebody else's server; their backups
+    cluster = pg.Cluster(base_dir)
+    dump = cluster.bin('pg_dump')
+    if not os.path.isfile(dump) or not cluster.is_running():
+        return None
+    directory = os.path.join(base_dir, BACKUP_DIR)
+    if not os.path.isdir(directory):
+        os.makedirs(directory)
+    safe = re.sub(r'[^A-Za-z0-9._-]', '_', label)
+    path = os.path.join(directory, 'pre-%s-%s.sql' % (safe, _stamp()))
+    with open(path, 'wb') as handle:
+        completed = subprocess.run(
+            [dump, '-h', cluster.socket_dir, '-U', pg.USER, '-d', cluster.name],
+            stdout=handle, stderr=subprocess.PIPE)
+    if completed.returncode != 0:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return None
+    return path
+
+
+def apply(base_dir, ref, pg=None, take_backup=True):
+    """Move this checkout onto `ref`. Raises UpgradeError with a sentence if it will not.
+
+    Deliberately does *not* install dependencies or migrate. The entry script's sentinels
+    already rebuild the venv and the tools when a component's requirements change, and
+    `start.py` already migrates -- so the whole of an upgrade downstream of here is machinery
+    that predates it.
+    """
+    problems = blockers(base_dir)
+    if problems:
+        raise UpgradeError(' '.join(problems))
+
+    saved = None
+    if take_backup and pg is not None:
+        saved = backup(base_dir, pg, ref)
+
+    _git(base_dir, 'fetch', '--tags', 'origin')
+    # A branch has to be resolved through its remote-tracking ref: `git checkout main` in a
+    # deployment that has never had a local `main` would create one, and pin it here forever.
+    target = 'origin/%s' % ref if ref == MAIN_BRANCH else ref
+    _git(base_dir, 'checkout', '--detach', target)
+    _git(base_dir, 'submodule', 'sync', '--recursive')
+    _git(base_dir, 'submodule', 'update', '--init', '--recursive')
+    return {'ref': ref, 'at': _now(), 'ok': True, 'backup': saved,
+            'now': current_ref(base_dir)}
+
+
+def adopt(base_dir, url, ref):
+    """Turn a tree that has no `.git` into a real checkout of `ref`, in place.
+
+    For anyone who unpacked GitHub's source archive, or copied an installation without its
+    history. The tracked files at a tag are exactly what such a tree holds, so the reset is a
+    no-op on content and the ignored `data/` and `env/` are untouched -- but that is a claim
+    worth checking rather than asserting, which is what the status probe at the end does.
+    """
+    if is_git_checkout(base_dir):
+        raise UpgradeError("This is already a git checkout; there is nothing to adopt.")
+    _git(base_dir, 'init', '-q')
+    _git(base_dir, 'remote', 'add', 'origin', url)
+    _git(base_dir, 'fetch', '--tags', 'origin')
+
+    # A **mixed** reset: it moves HEAD and the index to `ref` and does not write a single file.
+    # `checkout` cannot be used here and neither can `checkout --force`. Plain checkout refuses
+    # -- every file of the tree is untracked and would be "overwritten", which is precisely the
+    # state being adopted -- and forcing it would overwrite them, which makes the check below
+    # vacuous: any difference would have been destroyed before it could be reported.
+    #
+    # After this, `git status` is exactly "how does this tree differ from `ref`", asked of the
+    # files already on disk. An empty answer means the tree *is* the release and adoption cost
+    # nothing; a non-empty one means this is something else, and it is reported with every file
+    # still where it was.
+    _git(base_dir, 'reset', '-q', ref)
+    dirty = changed_tracked_files(base_dir)
+    if dirty:
+        names = ", ".join(line[3:] for line in dirty[:5])
+        more = len(dirty) - min(len(dirty), 5)
+        raise UpgradeError(
+            "This tree does not match %s -- %d file(s) differ (%s%s). Nothing has been "
+            "changed and no files were touched; the git history added here can be removed by "
+            "deleting the .git directory. Adopt the release this actually is, or upgrade from "
+            "a fresh install."
+            % (ref, len(dirty), names, " and %d more" % more if more else ""))
+
+    # Clean, so this is a no-op on the files and only detaches HEAD -- which is where an
+    # installation belongs, pinned to a release rather than following a branch.
+    _git(base_dir, 'checkout', '--detach', ref)
+    _git(base_dir, 'submodule', 'sync', '--recursive')
+    _git(base_dir, 'submodule', 'update', '--init', '--recursive')
+    return {'ref': ref, 'at': _now(), 'ok': True, 'now': current_ref(base_dir)}
+
+
+def apply_staged(base_dir, pg=None):
+    """Apply a staged request if there is one. Returns the result, or None.
+
+    Called by the entry script on `start`, before anything reads a requirements.txt. Every
+    failure is recorded in the state and swallowed: a launch that refuses to start because an
+    upgrade did not work leaves somebody with no MutInt at all, which is strictly worse than
+    an old one plus a message.
+    """
+    state = read_state(base_dir)
+    pending = state.get('requested')
+    if not pending or not pending.get('ref'):
+        return None
+    ref = pending['ref']
+    print("Applying staged upgrade to %s..." % ref)
+    try:
+        result = apply(base_dir, ref, pg=pg)
+    except UpgradeError as exc:
+        result = {'ref': ref, 'at': _now(), 'ok': False, 'detail': str(exc)}
+        print("Upgrade to %s did not run: %s" % (ref, exc))
+    else:
+        print("Now on %s." % (result.get('now') or ref))
+
+    # Re-read: `apply` may have replaced the working tree, and the state file lives in
+    # `data/`, which git leaves alone -- but the request must be cleared whatever happened,
+    # or every launch would retry a failing upgrade for ever.
+    state = read_state(base_dir)
+    state.pop('requested', None)
+    state['last_result'] = result
+    write_state(base_dir, state)
+    return result
+
+
+def _now():
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _stamp():
+    import datetime
+    return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')

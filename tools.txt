@@ -16,3 +16,15 @@
 # build of it, so an Apple Silicon machine would need an --platform osx-64 environment under
 # Rosetta. This one builds natively everywhere.
 ucsc-bedgraphtobigwig
+
+# git, for `./mutint upgrade` and the /upgrade/ page: `mutint_common/upgrade.py` asks the
+# remote what is available with `git ls-remote` and moves this checkout onto it. It belongs
+# here rather than in a prefix of its own -- unlike postgresql, which this file's header
+# deliberately excludes -- because the test that file states is whether *application* code
+# resolves the binary through `mutint_common.tools.tool_path()`, and this one does.
+#
+# Unpinned: any git can do what is asked of it here, and pinning would mean re-solving the
+# tools every time conda-forge moves. Most machines already have one on PATH, which
+# `tool_path()` falls back to; this is what makes an upgrade work on a machine that does not.
+# `install.sh` has its own bootstrap copy for the moment before this file can be read at all.
+git

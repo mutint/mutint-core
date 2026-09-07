@@ -1,15 +1,24 @@
 """`./mutint version` -- print the versions in play, or bump one.
 
-mutint-core's own lives in mutint_common/version.py. An assembled project versions
-itself the same way: put a version.py exposing __version__ in one of its apps and
-it is discovered here, so `./mutint version` reports MutInt's alongside the core
-it runs on. Bumping is deliberate and paired with a `v<version>` git tag; this
-command only rewrites the file, because these repos do not commit on their own.
+mutint-core's own lives in mutint_common/version.py. Every other component versions
+itself the same way: put a version.py exposing __version__ in one of its apps and it
+is discovered here, with no registration, because the app being installed is already
+the statement that it is part of this project. Every plugin does, so an assembled
+project reports each of them alongside the core they run on.
+
+A component that also wants its version on `/about` passes it to
+`register_about_section` as well -- that page takes it as an argument rather than
+reading version.py, so the two surfaces are independent.
+
+Bumping is deliberate and paired with a `v<version>` git tag; this command only
+rewrites the file, because these repos do not commit on their own. With more than one
+component installed `--component` is required, which is every assembled project.
 """
 import importlib
 import re
 
 from django.apps import apps
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from mutint_common import version as version_module
@@ -48,14 +57,45 @@ def rewrite(path, new_version):
         handle.write(replaced)
 
 
+def aggregator():
+    """The assembled project's own (name, module, version), or None.
+
+    **An assembled project has no Django app of its own** -- `config/` is the whole of
+    what MutInt and ALEdb own -- so `apps.get_app_configs()` structurally cannot see it,
+    and both projects' versions were invisible to this command until it looked for them
+    directly. The docstring below has claimed "the assembled project's first" since before
+    that was true; this is what makes it so.
+
+    The package is taken from `SETTINGS_MODULE` rather than hardcoded as `config`, so a
+    project that names its settings package something else is still found. Standalone
+    mutint-core has a `config` package too and deliberately no `version.py` in it, which
+    gives the right answer by the same rule: there is no assembly, so there is no entry.
+    """
+    root = (getattr(settings, "SETTINGS_MODULE", None) or "").split(".")[0]
+    if not root:
+        return None
+    try:
+        module = importlib.import_module("%s.version" % root)
+    except ImportError:
+        return None
+    version = getattr(module, "__version__", None)
+    if not version:
+        return None
+    return (getattr(module, "NAME", root), module, version)
+
+
 def components():
     """Every versioned component, the assembled project's first.
 
     mutint-core always has one. An installed app contributes one by exposing
     `__version__` from a `version` submodule -- no registration, because the app
-    being installed is already the statement that it is part of this project.
+    being installed is already the statement that it is part of this project. The
+    assembled project itself is not an app and comes from `aggregator()`.
     """
     found = []
+    top = aggregator()
+    if top:
+        found.append(top)
     for config in apps.get_app_configs():
         if config.name == "mutint_common":
             continue

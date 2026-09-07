@@ -71,8 +71,23 @@ when it has gone stale.
 ## Versions and documentation
 
 ```bash
-./mutint version              # mutint-core's version, not Django's
-./mutint version --bump patch
+./mutint version              # every component's version, the assembly's first
+./mutint version --bump patch --component mutint-core
 ./mutint docs                 # build this project's manual
 ./mutint docs --serve         # and read it at :8001
 ```
+
+`version` reports each installed component, and an assembled project's own number leads the
+list. With more than one component installed `--component` is required -- bumping the wrong
+repository's version is quiet, and the mistake only surfaces at release.
+
+## Upgrading
+
+```bash
+./mutint upgrade --check      # what is available; change nothing
+./mutint upgrade              # move this installation onto it
+./mutint upgrade --to v1.4.0  # a particular version
+```
+
+`upgrade` moves the working tree and stops there, so run `./mutint start` afterwards: that is
+what installs new dependencies and applies new migrations. See [Upgrading](upgrading.md).

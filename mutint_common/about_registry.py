@@ -47,8 +47,11 @@ def register_about_section(app_config, name=None, version=None, template=None):
     app_config  the AppConfig itself, i.e. `self` at the call site. The entry is keyed by the
                 component the app belongs to, and this is what identifies it.
     name        heading, e.g. 'mutint-core'. Defaults to the component directory's name.
-    version     version string, shown beside the name. Omit it and only the git revision
-                shows -- most components have no version of their own.
+    version     version string, shown beside the name. Every first-party component passes
+                one, from its own `version.py` -- but the parameter stays optional, and
+                omitting it leaves the heading with its git revision alone. Note this is
+                a separate surface from `./mutint version`, which reads `version.py`
+                directly: a component has to do both to be versioned everywhere.
     template    template name whose content becomes the section's body, e.g.
                 'about/sections/mutint_core.html'. Omit it for a heading alone.
     """

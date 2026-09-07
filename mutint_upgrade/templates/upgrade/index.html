@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}Upgrade{% endblock %}
+
+{% block header %}Upgrade{% endblock %}
+
+{% block content %}
+<div class="col-lg-10">
+
+    <p>What this installation is made of, and whether there is a newer version of it.</p>
+
+    <table class="table table-condensed" id="upgrade-components">
+        <thead>
+            <tr>
+                <th>Component</th>
+                <th>Version</th>
+                <th>Revision</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for component in components %}
+                <tr>
+                    <td>{{ component.name }}</td>
+                    <td>{% if component.version %}{{ component.version }}{% else %}
+                        <span style="color: #999;">&mdash;</span>{% endif %}</td>
+                    <td>
+                        {% comment %} A plain link to github.com is fine here; loading an
+                           *asset* from an external host is what test_offline forbids, and
+                           this page loads none. {% endcomment %}
+                        {% if component.revision_url %}
+                            <a href="{{ component.revision_url }}" target="_blank"
+                               rel="noopener"><code>{{ component.revision }}</code></a>
+                        {% elif component.revision %}
+                            <code>{{ component.revision }}</code>
+                        {% else %}
+                            <span style="color: #999;">no git history</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not enabled %}
+
+        <p style="color: #666;">Upgrading is not enabled on this deployment. Its operator
+           updates it by hand.</p>
+
+    {% else %}
+
+        <h3 style="margin-top: 2em;">Updates</h3>
+
+        {% if requested %}
+            <div class="alert alert-info">
+                <strong>{{ requested.ref }} is staged.</strong>
+                Quit MutInt and start it again to apply it &mdash; the upgrade happens before
+                the server comes up, because a running MutInt cannot safely replace its own
+                code. Any new dependencies are installed and any new migrations applied on
+                that same launch.
+            </div>
+        {% elif last_result %}
+            {% if last_result.ok %}
+                <div class="alert alert-success">
+                    Upgraded to <strong>{{ last_result.now|default:last_result.ref }}</strong>.
+                    {% if last_result.backup %}The database was backed up first.{% endif %}
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <strong>The upgrade to {{ last_result.ref }} did not run.</strong>
+                    {{ last_result.detail }}
+                </div>
+            {% endif %}
+        {% endif %}
+
+        <p>
+            <strong>Installed:</strong>
+            {% if current %}<code>{{ current }}</code>{% else %}unknown{% endif %}
+        </p>
+
+        <div class="form-group">
+            <label for="upgrade-channel">Follow</label>
+            <select id="upgrade-channel" class="form-control" style="max-width: 24em;">
+                <option value="stable" {% if channel == "stable" %}selected{% endif %}>
+                    Releases &mdash; tagged versions only
+                </option>
+                <option value="main" {% if channel == "main" %}selected{% endif %}>
+                    Development &mdash; every change as it lands
+                </option>
+            </select>
+            <div class="help-block">
+                Development follows the <code>main</code> branch, so it carries work that has
+                not been released. Useful for trying a fix; not what a shared installation
+                should run.
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-default" id="upgrade-check">
+                Check for updates</button>
+            <button type="button" class="btn btn-primary" id="upgrade-install"
+                    {% if not available %}style="display: none;"{% endif %}>
+                Install {{ available.ref }}</button>
+        </div>
+
+        <div id="upgrade-status" style="margin-top: 1em;">
+            {% if blockers %}
+                <div class="alert alert-warning">
+                    {% for problem in blockers %}<p>{{ problem }}</p>{% endfor %}
+                </div>
+            {% elif error %}
+                <div class="alert alert-warning">{{ error }}</div>
+            {% elif available %}
+                <div class="alert alert-info">
+                    <strong>{{ available.ref }}</strong> is available.
+                </div>
+            {% elif checked_at %}
+                <p style="color: #666;">Up to date as of {{ checked_at }}.</p>
+            {% else %}
+                <p style="color: #666;">Not checked yet.</p>
+            {% endif %}
+        </div>
+
+    {% endif %}
+
+    {% csrf_token %}
+</div>
+
+<script type="text/javascript">
+(function () {
+    "use strict";
+
+    var checkButton = document.getElementById("upgrade-check");
+    if (!checkButton) { return; }          // upgrading is disabled on this deployment
+
+    var installButton = document.getElementById("upgrade-install");
+    var channel = document.getElementById("upgrade-channel");
+    var status = document.getElementById("upgrade-status");
+    var available = null;
+
+    function say(cls, html) {
+        status.innerHTML = '<div class="alert alert-' + cls + '">' + html + "</div>";
+    }
+
+    function busy(on, button, label) {
+        button.disabled = on;
+        button.textContent = on ? label : button.dataset.label;
+    }
+
+    checkButton.dataset.label = checkButton.textContent;
+    installButton.dataset.label = installButton.textContent;
+
+    checkButton.addEventListener("click", function () {
+        busy(true, checkButton, "Checking…");
+        // mutintPostJson reads real status codes, so a 409 arrives as a rejection carrying
+        // the sentence the server wrote rather than as a generic failure.
+        mutintPostJson("{% url 'upgrade_check' %}", {channel: channel.value})
+            .then(function (data) {
+                available = data.available;
+                if (data.error) {
+                    say("warning", data.error);
+                } else if (available) {
+                    say("info", "<strong>" + available.ref + "</strong> is available.");
+                } else {
+                    say("success", "Up to date.");
+                }
+                if (available) {
+                    installButton.textContent = "Install " + available.ref;
+                    installButton.dataset.label = installButton.textContent;
+                    installButton.style.display = "";
+                } else {
+                    installButton.style.display = "none";
+                }
+            })
+            .catch(function (error) {
+                say("danger", (error && error.message) || "Could not check for updates.");
+            })
+            .then(function () { busy(false, checkButton, null); });
+    });
+
+    installButton.addEventListener("click", function () {
+        var ref = available ? available.ref : "{{ available.ref|escapejs }}";
+        busy(true, installButton, "Staging…");
+        mutintPostJson("{% url 'upgrade_install' %}", {ref: ref})
+            .then(function () {
+                // Reloaded rather than patched: the staged banner, the buttons and the
+                // installed version are all rendered from state the server now holds, and
+                // rebuilding that here would be a second opinion about what it says.
+                window.location.reload();
+            })
+            .catch(function (error) {
+                say("danger", (error && error.message) || "Could not stage the upgrade.");
+                busy(false, installButton, null);
+            });
+    });
+}());
+</script>
+{% endblock %}

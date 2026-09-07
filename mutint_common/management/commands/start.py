@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
 
 # Django's autoreloader does not swap code into the running process -- it
@@ -167,6 +167,18 @@ class Command(BaseCommand):
             # first dies in its first second, on precisely the clone-and-run path this suite is
             # built around. It is also the reason the spawn lives here rather than in the entry
             # script, which has no `migrate` to be after.
+            # Before migrating, never after: a database that remembers migrations this
+            # checkout no longer ships cannot be migrated forward, and `migrate` would
+            # discover that several steps later as a relation-already-exists error naming
+            # nothing that explains it. Nobody is standing by when this runs, which is
+            # exactly why it has to say so itself. See mutint_common/migration_guard.py.
+            from django.db import connection
+
+            from mutint_common import migration_guard
+            refusal = migration_guard.check(connection)
+            if refusal:
+                raise CommandError(refusal)
+
             call_command('migrate', '--run-syncdb')
 
             from django.contrib.auth.models import User

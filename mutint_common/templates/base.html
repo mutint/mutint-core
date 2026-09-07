@@ -178,7 +178,15 @@
                                with is_staff=True, so a staff gate would offer this to nearly
                                everyone on a real deployment and land most of them in an empty
                                admin. {% endcomment %}
+                            {% comment %} Superusers only, and a narrower gate than any
+                               nav entry could express -- which is the same reason the whole
+                               block is written here rather than registered. Upgrading moves
+                               the code every reader of this deployment is served by.
+                               {% endcomment %}
                             {% if user.is_superuser %}
+                                <li>
+                                    <a href="{% url 'upgrade' %}" class="small">Upgrade</a>
+                                </li>
                                 <li>
                                     <a href="{% url 'admin:index' %}" class="small">Django admin</a>
                                 </li>
