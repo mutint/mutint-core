@@ -17,6 +17,9 @@ description = "MutInt-specific false positives"
 # — an E. coli K-12 reference, GenBank accession NC_000913) that
 # gitleaks' generic-api-key regex flags as high-entropy.
 # These are scientific reference data, not secrets.
+# Anchored on the extension rather than on a directory: the paths moved twice already
+# (builder/tests/ -> seq/tests/ -> mutint_import/tests/), and a full-history scan sees every
+# one of them. A .gd file is genome-diff data by definition and is never a credential.
 paths = [
-    '''^mutint_import/(tests/fixtures|tests/0-0-1-1|annotate/tests/fixtures)/.*\.gd$''',
+    '''.*\.gd$''',
 ]

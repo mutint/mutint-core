@@ -13,6 +13,13 @@ core
 
 # Python
 .venv
+__pycache__/
+
+# Environment / secrets. This repo's history once carried five .docker/*.env files holding
+# live MySQL, Redis and mail credentials; the history was rewritten to remove them, and this
+# is what stops the next one being committed. Every other repo in the suite already had it.
+.env
+.env.*
 
 # Managed environments: env/ holds the pinned interpreter, the venv (env/main), the
 # components' tools (env/tools) and the PostgreSQL server. `rm -rf env` is the reset.

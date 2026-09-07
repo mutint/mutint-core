@@ -160,7 +160,7 @@ dropped with a logged warning and the rest of the page renders — the same post
 entry whose route will not reverse.
 
 This is the seam to reach for when what you have is *one panel and not a page*.
-[`mutint-needle`](https://github.com/barricklab) — the mutation needle plot — is a component
+[`mutint-needle`](https://github.com/mutint/mutint-needle) — the mutation needle plot — is a component
 that registers a panel and an About section and nothing else whatever: no URL, no nav entry, no
 model, no migration. Before this registry existed it had to live in mutint-core, for no better
 reason than that `/stats` is where it is drawn.
