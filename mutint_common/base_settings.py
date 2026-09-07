@@ -156,7 +156,9 @@ def get_base_settings(base_dir, mutint_core_dir=None):
 
         # PostgreSQL, and only PostgreSQL. The SQLite backend, its BEGIN IMMEDIATE
         # setting and its WAL pragmas are all gone: two supported backends means two
-        # configurations, and with no CI only one of them was ever being run.
+        # configurations, and with no CI at the time only one of them was ever being run.
+        # (There is CI now -- see .github/workflows/tests.yml -- which does not revive the
+        # argument for a second backend, it only removes the excuse.)
         #
         # Every value comes from the environment, exported by the entry script before it
         # re-execs -- settings cannot work any of it out, because an assembled project
