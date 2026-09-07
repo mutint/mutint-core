@@ -1,0 +1,62 @@
+# The standalone suite. mutint-core runs on its own -- `./mutint start` on a clean machine
+# ends at a browser window -- so this job needs nothing installed on the runner beyond the
+# python3 that runs the entry script.
+#
+# Note what this job CANNOT see: anything that exists only once core is embedded in an
+# assembled project. Plugin URLs, INSTALLED_APPS auto-discovery, MUTINT_BRANDING rendering
+# and every plugin migration are invisible here. mutint/ and aledb/ have their own workflows
+# for that, and a green run here with a broken assembled project is a real combination.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: standalone suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # env/ is everything the entry script *installs*: a pinned interpreter (env/python),
+      # the venv (env/main), the components' conda tools (env/tools) and a PostgreSQL server
+      # (env/postgres), plus the micromamba that installs them. Restoring it turns a cold
+      # start of several minutes into seconds.
+      #
+      # Deliberately NOT cached: env/pg, env/pg.lock and env/pg.log, which are a running
+      # server's socket and state rather than anything installed -- and data/, which is the
+      # database cluster and the file store. The split between env/ and data/ exists exactly
+      # so that throwing the first away cannot touch the second.
+      #
+      # The key mirrors what the script's own `.installed` sentinels fingerprint: every
+      # requirements.txt and tools.txt, plus the entry script, which is where the interpreter
+      # spec lives. restore-keys is safe here *because* of those sentinels -- a stale cache
+      # restores, the fingerprint does not match, and the script reinstalls what changed
+      # instead of trusting the directory's existence.
+      - name: Restore the managed environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            env/python
+            env/main
+            env/tools
+            env/postgres
+            env/micromamba
+          key: env-${{ runner.os }}-${{ hashFiles('requirements.txt', 'tools.txt', 'mutint') }}
+          restore-keys: env-${{ runner.os }}-
+
+      # Provisions whatever the cache did not supply, starts a PostgreSQL server on a private
+      # unix socket, runs the suite, and stops the server again.
+      - run: ./mutint test

@@ -16,6 +16,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   scan:
     name: scan for secrets
