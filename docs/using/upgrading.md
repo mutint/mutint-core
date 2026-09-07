@@ -85,11 +85,15 @@ what the dump in `data/backups/` is for.
 
 !!! note "Migrations only ever go forward"
 
-    Once a version is released its migrations are fixed, and later versions add to them rather
-    than rewriting them — see [Releasing](../contributing/releasing.md). If your database ever
-    holds a migration the installed code does not ship, `./mutint start` refuses to migrate and
-    says so, instead of failing later with an error about a table that already exists. That
-    should not happen between releases; if it does, it is a bug worth reporting.
+    A migration is fixed the moment it is published, and later versions add to it rather than
+    rewriting it — see [Releasing](../contributing/releasing.md). That holds on the Development
+    channel too, which is what makes the channel safe to run with data: the migrations you take
+    part-way between releases are the same ones the release ships, so upgrading on to it never
+    asks you to start again.
+
+    If your database ever holds a migration the installed code does not ship, `./mutint start`
+    refuses to migrate and says so, instead of failing later with an error about a table that
+    already exists. It is a bug worth reporting.
 
 ## Installations that do not upgrade themselves
 

@@ -1,8 +1,11 @@
 """Refusing to migrate a database this version cannot migrate.
 
-**A migration becomes immutable the moment it ships in a tag**, and until the first tag the
-history here was thrown away and regenerated twice. `docs/contributing/releasing.md` is the
-rule and the procedure; this module is what stops the rule being merely written down.
+**A migration becomes immutable the moment it is pushed to `main`**, because the upgrade
+path's Development channel follows that branch -- so a migration pushed there is applied by
+real installations within a day. Before there was an upgrade path the rule was about tags and
+the history here was thrown away and regenerated twice.
+`docs/contributing/releasing.md` is the rule and the procedure; this module is what stops the
+rule being merely written down.
 
 The state a rewrite leaves behind is exact: `django_migrations` holds rows naming files that
 no longer exist. Django does not treat that as an error -- the graph loads, `migrate` finds
@@ -59,9 +62,10 @@ def describe(missing):
     return (
         "This database has applied migrations that this version of MutInt no longer ships: "
         "%s.\n\n"
-        "That happens when migration history is rewritten, which MutInt does not do after a "
-        "release. Migrating now would try to create tables that already exist, so it has been "
-        "stopped before anything ran -- nothing has been changed.\n\n"
+        "That happens when migration history is rewritten, which MutInt does not do once a "
+        "migration has been published -- on any channel. Migrating now would try to create "
+        "tables that already exist, so it has been stopped before anything ran; nothing has "
+        "been changed.\n\n"
         "If you upgraded, the version you came from is the one that can still read this "
         "database: `./mutint upgrade --to <that tag>` goes back, and any pre-upgrade dump is "
         "in data/backups/. If this is a development checkout, `./mutint db reset --yes` "

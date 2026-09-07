@@ -406,18 +406,18 @@ version before app commands are ever consulted, so the management command alone 
 starts printing Django's version instead — `mutint_common/tests/test_version.py` goes through
 `manage()` rather than `call_command` precisely to catch that.
 
-**A migration becomes immutable the moment it ships in a tag, and not one second before.**
+**A migration becomes immutable the moment it is pushed to `main`, and not one second before.**
 That is the whole of the release discipline, and `docs/contributing/releasing.md` is the
-procedure: before tagging, delete the migrations this release added and regenerate them as one,
-so the published history is one migration per app per release rather than one per decision made
-along the way. Prove it by migrating a database built at the *previous* tag — a fresh database
-cannot fail the way an operator's will.
+procedure. Prove a release by migrating a database built at the *previous* tag — a fresh
+database cannot fail the way an operator's will.
 
-It was vacuous while no repo carried a `v<version>` tag, which is why the history could be
-collapsed wholesale twice. **The first tag ends that**, and MutInt now upgrades in place, so
-somebody's database really does hold rows naming these files. After the tag, folding published
-migrations means `squashmigrations` and `replaces`, and deleting the replaced files is a
-*later* release.
+**It used to say *ships in a tag*, and the upgrade path is what changed it.** That rule allowed
+tidying the history before tagging, on the premise that no database had applied a draft
+migration. The **Development** channel follows `main`, so that premise is gone: a migration
+pushed there is applied within a day, and regenerating it at release time would strand exactly
+the people who help test. So the development history *is* the published history now, a release
+adds no migration step, and folding anything already pushed means `squashmigrations` with
+`replaces` — deleting the replaced files being a much later release. Nothing has needed it.
 
 Two things enforce it rather than trusting the reader. `mutint_common/upgrade.py` takes a
 `pg_dump` before applying an upgrade, and `start.py` refuses to migrate a database whose
