@@ -234,13 +234,16 @@
    The width is explicit and that is not a preference. The sidebar is `width: max-content`
    with `max-width: 260px` and `overflow-x: hidden`, so an image wider than the cap is
    **clipped, not scaled** -- it would simply lose its right-hand end with nothing to say so.
-   200px leaves room inside .navbar-brand's 15px padding either side and, on MutInt's
-   380.1x67.9 wordmark, comes to about 36px tall.
+   180px leaves room inside .navbar-brand's 15px padding either side and, on MutInt's
+   345.4x79.9 wordmark, comes to 42px tall in a sidebar of 210 -- comfortably inside the cap,
+   and narrow enough that the brand does not set the sidebar's width on its own. It sets that
+   wordmark's type at 31px against 14px nav links, which is the step this size is really
+   choosing: bigger reads as a masthead, smaller starts to sit among the navigation.
 
    `height: auto` because Bootstrap gives .navbar-brand a fixed 50px height; without it a
    tall logo is cropped by the anchor rather than sized by it. */
 .mutint-brand-logo {
-    width: 200px;
+    width: 180px;
     max-width: 100%;
     height: auto;
 }
