@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2001 run, 0 failures** standalone; **2298** assembled, measured with `PYTHONPATH`
+**Baseline: 2012 run, 0 failures** standalone; **2309** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -379,6 +379,30 @@ More generally, `TEMPLATES['DIRS']` now leads with the project's `templates/` di
 by path. The source dir is `staticfiles/`, not `static/` — `static/` is `STATIC_ROOT`, and
 Django raises `ImproperlyConfigured` if it appears in `STATICFILES_DIRS`. The entry is also
 omitted when the directory is absent, or every `./mutint check` reports `staticfiles.W004`.
+
+**Three of those four are templates as well as settings**, and the reason is that a value
+cannot express a layout. `branding/brand.html` is the sidebar brand and `branding/head.html`
+is whatever a deployment puts in every page's `<head>`; both are overridden by writing a file
+at the same path in the project's templates dir, exactly as `branding/footer.html` and
+`home/splash.html` are. `MUTINT_BRANDING` keys are the common case -- `brand_logo`,
+`brand_logo_alt`, `url` -- and the templates are for what the keys cannot say.
+
+**`branding/head.html` exists because the favicon could not otherwise be changed.** It was
+hardcoded to `img/fav.png`, and *the watermark uses that same file* -- so a deployment
+shadowing it in its own `staticfiles/` would have restyled mutint-core's attribution to ALEdb
+along with its own tab icon. The seam is what keeps those two apart, and there is a test that
+replacing the head leaves the watermark alone.
+
+**A `brand_logo` replaces the name and version rather than joining them.** A wordmark carries
+the name already, and a version under a logo turns it into a status line -- the same argument
+that took the version off the watermark. MutInt does exactly this; ALEdb sets no `brand_logo`
+and still reads `ALEdb v2.0.0`.
+
+**`url` moves the brand's link, and `mutint_dashboard` notices.** That app registers no nav
+entry precisely because the brand leads to the dashboard; a deployment pointing the brand
+elsewhere -- MutInt sends it to the source repository -- would leave the dashboard reachable
+from nowhere. So it registers one **when `MUTINT_BRANDING` names a `url`**, which is
+self-correcting in both directions rather than a rule somebody has to remember.
 
 **The `Powered by ALEdb` watermark is not part of this** and has no setting. It is
 mutint-core's attribution and renders on every deployment, branded or not. Icon and words

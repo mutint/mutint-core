@@ -41,8 +41,9 @@
     <link href="{% static "vendor/font-awesome-4.6.3/css/font-awesome.min.css" %}" rel="stylesheet"
           integrity="sha384-T8Gy5hrqNKT+hzMclPo118YTQO6cYprQmhrYwIiQ/3axmI1hQomh7Ud2hPOy8SP1" crossorigin="anonymous">
 
-    <!-- Favicon -->
-    <link rel="shortcut icon" type="image/png" href="{% static "img/fav.png" %}">
+    {% comment %} Icons, a manifest, a deployment's own stylesheet -- whatever it needs in
+       every page's head. Core ships one favicon link; see branding/head.html. {% endcomment %}
+    {% include "branding/head.html" %}
 
     <!-- Common CSS -->
     <link href="{% static "css/common.css" %}?v={{ mutint_version }}" rel="stylesheet">
@@ -93,21 +94,19 @@
     <div class="navbar-default sidebar-panel" role="navigation" style="z-index:999;">
         <div class="sidebar" style="width: max-content" id="sidebar">
             <div class="navbar-header">
-                {% comment %} The deployment's name, and the link to the dashboard -- which is
-                   an inventory of the whole installation, and so is what clicking the site's
-                   own name is asking for. It had a sidebar entry three rows below this as
-                   well, saying the same thing twice.
+                {% comment %} The deployment's name, and where clicking it leads -- by default
+                   the dashboard, which is an inventory of the whole installation and so is
+                   what clicking a site's own name is asking for. It had a sidebar entry three
+                   rows below this as well, saying the same thing twice.
 
-                   The fallback matters: mutint-core carries no branding, so on an unbranded
-                   deployment this element does not render at all, and without something here
-                   the dashboard would be reachable from nowhere. `Dashboard` is the label
-                   then -- not an invented product name, which is the thing mutint-core is
-                   careful not to have. {% endcomment %}
-                <a class="navbar-brand" href="/dashboard">
-                    {% if branding.name or branding.version %}
-                        {{ branding.name }} {{ branding.version }}
-                    {% else %}Dashboard{% endif %}
-                </a>
+                   A deployment that points its brand somewhere else instead -- MutInt sends
+                   it to the source repository -- leaves the dashboard reachable from nowhere,
+                   which is why `mutint_dashboard` puts its nav entry back when
+                   MUTINT_BRANDING names a `url`.
+
+                   The markup is branding/brand.html so a deployment can replace it outright.
+                   {% endcomment %}
+                {% include "branding/brand.html" %}
             </div>
             <ul class="nav in" id="side-menu">
                 {% if user.is_authenticated %}

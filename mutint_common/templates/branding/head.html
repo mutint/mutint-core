@@ -1,0 +1,15 @@
+{% load static %}{% comment %} What a deployment puts in every page's `<head>`: its icons, a
+   web-app manifest, a theme colour, a stylesheet of its own.
+
+   mutint-core ships the one favicon link it has always had. A deployment overrides this file
+   by putting `branding/head.html` in its templates dir, the same way it overrides
+   `branding/footer.html`.
+
+   **This exists so that a deployment's favicon is not `img/fav.png`.** That file is also the
+   icon in the "Powered by ALEdb" watermark, which is mutint-core's attribution and is not a
+   deployment's to restyle -- so shadowing it in a project's staticfiles would change the
+   watermark too. A deployment overriding this file changes only its own icons.
+
+   Anything referenced here must be served from this deployment: `test_offline` fails any
+   `<script>` or `<link>` naming an external host. {% endcomment %}
+<link rel="shortcut icon" type="image/png" href="{% static "img/fav.png" %}">

@@ -56,11 +56,24 @@ def get_base_settings(base_dir, mutint_core_dir=None):
 
         'GOOGLE_ANALYTICS_TAG': os.environ.get('GOOGLE_ANALYTICS_TAG', ''),
 
-        # The deployment's own identity: {'name': ..., 'version': ..., 'logo': ...},
-        # where logo is a path under a staticfiles dir. Empty by default, and an empty
-        # value renders nothing -- mutint-core carries no deployment branding of its own.
-        # Separate from mutint_common.version, which is the platform's version and is
-        # always shown in the "Powered by ALEdb" watermark.
+        # The deployment's own identity. Empty by default, and an empty value renders
+        # nothing -- mutint-core carries no deployment branding of its own. Separate from
+        # mutint_common.version, which is the platform's version.
+        #
+        #   name             shown in the sidebar brand, and in every error page's <title>
+        #   version          shown beside the name, unless brand_logo replaces both
+        #   logo             a static path, drawn in the *page header*, floated right
+        #   brand_logo       a static path, drawn as the *sidebar brand* in place of the
+        #                    name and version -- a wordmark usually says both already
+        #   brand_logo_alt   its alt text; falls back to `name`
+        #   url              where the brand links; defaults to /dashboard
+        #
+        # Two of these have a template behind them rather than only a value:
+        # `branding/brand.html` for the brand itself and `branding/head.html` for icons and
+        # anything else a deployment injects into <head>. Both are overridden by writing a
+        # file at the same path in the project's templates dir, exactly as
+        # `branding/footer.html` and `home/splash.html` are. The keys above are the common
+        # case; the templates are for what the keys cannot express.
         'MUTINT_BRANDING': {},
 
         # Managed store that mutint-core owns and operates: uploaded .gd, BAM/BAI, and the

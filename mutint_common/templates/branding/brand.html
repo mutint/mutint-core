@@ -1,0 +1,28 @@
+{% load static %}{% comment %} The sidebar brand: what a deployment calls itself, and where
+   clicking that leads.
+
+   mutint-core ships this rendering `MUTINT_BRANDING`'s name and version, and falling back to
+   the word **Dashboard** -- because core carries no branding, and without something here the
+   dashboard would be reachable from nowhere. `Dashboard` is the label of a link rather than
+   an invented product name, which is the thing mutint-core is careful not to have.
+
+   A deployment with a logo, a different link target or a different layout has two ways in,
+   and should reach for the first:
+
+   1. `MUTINT_BRANDING` keys -- `brand_logo` (a static path), `brand_logo_alt`, and `url` for
+      the link target. Enough for a logo in the sidebar without writing any template.
+   2. This file, overridden by putting `branding/brand.html` in the project's templates dir,
+      which is searched ahead of every app's -- the same mechanism as `branding/footer.html`
+      and `home/splash.html`. For anything the keys cannot express.
+
+   **One anchor, please.** `test_branding` reads from `navbar-brand` to the first `</a>` and
+   asserts the deployment's name is inside it; splitting the brand into two links truncates
+   that slice. It is also the plainer thing: one name, one destination. {% endcomment %}
+<a class="navbar-brand" href="{{ branding.url|default:"/dashboard" }}">
+    {% if branding.brand_logo %}
+        <img class="mutint-brand-logo" src="{% static branding.brand_logo %}"
+             alt="{{ branding.brand_logo_alt|default:branding.name }}">
+    {% elif branding.name or branding.version %}
+        {{ branding.name }} {{ branding.version }}
+    {% else %}Dashboard{% endif %}
+</a>

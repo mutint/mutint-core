@@ -10,10 +10,23 @@ class DashboardConfig(AppConfig):
         )
         from mutint_dashboard.util import rebuild_mutation_counts, rebuild_sample_counts
 
-        # No nav entry. The dashboard is what the sidebar's own brand links to -- it is an
-        # inventory of the whole installation, which is what somebody clicking the site's name
-        # is asking for, and a second entry three rows below it said the same thing twice.
-        # See `navbar-brand` in mutint_common/templates/base.html.
+        # **A nav entry only when the brand does not lead here.** The dashboard is normally
+        # what the sidebar's own brand links to -- an inventory of the whole installation is
+        # what somebody clicking the site's name is asking for -- and a second entry three
+        # rows below it said the same thing twice. But `MUTINT_BRANDING['url']` lets a
+        # deployment point that brand somewhere else (MutInt sends it to the source
+        # repository), and then the dashboard is reachable from nowhere at all.
+        #
+        # So the condition is exactly the thing that changed, asked once at startup: if the
+        # brand still leads here, no entry; if it has been pointed away, put the entry back.
+        # Self-correcting in both directions, and it keeps the original reasoning true rather
+        # than deleting it. See `navbar-brand` in mutint_common/templates/base.html.
+        from django.conf import settings
+
+        from mutint_common.nav_registry import MAIN_SECTION, register_nav_item
+
+        if getattr(settings, "MUTINT_BRANDING", {}).get("url"):
+            register_nav_item('Dashboard', url='/dashboard', section=MAIN_SECTION)
 
         # Site-scoped and last: both count rows across every experiment, so they are only
         # right once each experiment's own derived data is. Registered separately rather than

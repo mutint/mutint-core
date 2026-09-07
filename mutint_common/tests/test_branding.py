@@ -202,6 +202,146 @@ class LandingPageTestCase(TestCase):
         self.assertNotContains(response, "project_table")
 
 
+class BrandAreaTestCase(TestCase):
+    """The sidebar brand: what it shows, where it links, and how a deployment replaces it.
+
+    Two ways in, layered deliberately. `MUTINT_BRANDING` keys cover the common case -- a
+    logo, a link target -- and `branding/brand.html` is the override for anything they
+    cannot express, the same seam `branding/footer.html` and `home/splash.html` use.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(
+            username="tester", first_name="Test", last_name="User", email="t@e.com",
+            is_active=True, is_staff=True, is_superuser=True, date_joined=datetime.now())
+        self.client.force_login(self.user)
+
+    def _brand(self):
+        """The brand anchor, from `navbar-brand` to the first `</a>`."""
+        content = self.client.get(INTERNAL_PAGE).content.decode()
+        brand = content[content.index("navbar-brand"):]
+        return brand[:brand.index("</a>")]
+
+    @override_settings(MUTINT_BRANDING=dict(BRANDED, url="https://example.invalid/repo"))
+    def test_a_deployment_can_point_the_brand_somewhere_else(self):
+        self.assertIn("https://example.invalid/repo", self._brand())
+
+    @override_settings(MUTINT_BRANDING=BRANDED)
+    def test_without_a_url_it_still_goes_to_the_dashboard(self):
+        """The default is load-bearing: the dashboard has no other route to it unless a
+        deployment has pointed the brand away, which is what puts its nav entry back."""
+        self.assertIn("/dashboard", self._brand())
+
+    @override_settings(MUTINT_BRANDING=dict(BRANDED, brand_logo="img/fav.png"))
+    def test_a_brand_logo_replaces_the_name_and_version(self):
+        """A wordmark carries the name already, so printing it beside the image would say
+        the same thing twice -- and the version under a logo turns it into a status line."""
+        brand = self._brand()
+
+        self.assertIn("mutint-brand-logo", brand)
+        self.assertNotIn("9.9.9", brand)
+
+    @override_settings(MUTINT_BRANDING=dict(BRANDED, brand_logo="img/fav.png"))
+    def test_the_logo_still_carries_the_name_for_a_reader_who_cannot_see_it(self):
+        self.assertIn('alt="MutInt"', self._brand())
+
+    @override_settings(MUTINT_BRANDING=dict(
+        BRANDED, brand_logo="img/fav.png", brand_logo_alt="Something Else"))
+    def test_the_alt_text_can_be_given_separately(self):
+        self.assertIn('alt="Something Else"', self._brand())
+
+    def test_a_deployment_brand_template_is_picked_up(self):
+        brand_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, brand_dir, True)
+        os.makedirs(os.path.join(brand_dir, "branding"))
+        with open(os.path.join(brand_dir, "branding", "brand.html"), "w") as handle:
+            handle.write('<a class="navbar-brand" href="/somewhere">Entirely Ours</a>')
+
+        with override_settings(TEMPLATES=_templates_with(brand_dir)):
+            content = self.client.get(INTERNAL_PAGE).content.decode()
+
+        self.assertIn("Entirely Ours", content)
+
+    @override_settings(TEMPLATES=_core_templates_only(), MUTINT_BRANDING={})
+    def test_core_still_falls_back_to_the_word_dashboard(self):
+        """Unbranded, the brand element still renders -- otherwise the dashboard is
+        reachable from nowhere at all."""
+        brand = self._brand()
+
+        self.assertIn("/dashboard", brand)
+        self.assertIn("Dashboard", brand)
+
+
+class HeadInjectionTestCase(TestCase):
+    """`branding/head.html`: a deployment's icons and anything else it puts in <head>.
+
+    It exists because the favicon could not otherwise be changed without changing the
+    watermark: both were `img/fav.png`, and a project shadowing that file in its own
+    staticfiles would have restyled mutint-core's attribution to ALEdb.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(
+            username="tester", first_name="Test", last_name="User", email="t@e.com",
+            is_active=True, is_staff=True, is_superuser=True, date_joined=datetime.now())
+        self.client.force_login(self.user)
+
+    @override_settings(TEMPLATES=_core_templates_only())
+    def test_core_ships_its_own_favicon(self):
+        self.assertContains(self.client.get(INTERNAL_PAGE), "fav.png")
+
+    def test_a_deployment_can_replace_what_goes_in_the_head(self):
+        head_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, head_dir, True)
+        os.makedirs(os.path.join(head_dir, "branding"))
+        with open(os.path.join(head_dir, "branding", "head.html"), "w") as handle:
+            handle.write('<link rel="icon" href="/static/ours.svg">')
+
+        with override_settings(TEMPLATES=_templates_with(head_dir)):
+            content = self.client.get(INTERNAL_PAGE).content.decode()
+
+        self.assertIn("ours.svg", content)
+
+    def test_replacing_the_head_does_not_touch_the_watermark(self):
+        """The whole reason this seam exists. A deployment supplying its own icons must not
+        be able to change mutint-core's attribution, which shares the fav.png filename."""
+        head_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, head_dir, True)
+        os.makedirs(os.path.join(head_dir, "branding"))
+        with open(os.path.join(head_dir, "branding", "head.html"), "w") as handle:
+            handle.write('<link rel="icon" href="/static/ours.svg">')
+
+        with override_settings(TEMPLATES=_templates_with(head_dir)):
+            content = self.client.get(INTERNAL_PAGE).content.decode()
+
+        self.assertIn("Powered by ALEdb", content)
+        self.assertIn("fav.png", content)
+
+
+class DashboardReachabilityTestCase(TestCase):
+    """The dashboard must be reachable, whichever way the brand points.
+
+    `mutint_dashboard` registers a nav entry only when `MUTINT_BRANDING['url']` has pointed
+    the brand away from it. The registration happens once in `AppConfig.ready()`, so this
+    asserts the *invariant* rather than overriding settings -- which also makes it true
+    standalone, where core sets no url, and assembled under MutInt, where it does.
+    """
+
+    def test_a_nav_entry_exists_exactly_when_the_brand_leads_elsewhere(self):
+        from django.conf import settings
+
+        from mutint_common.nav_registry import MAIN_SECTION, get_nav_items
+
+        pointed_away = bool(getattr(settings, "MUTINT_BRANDING", {}).get("url"))
+        # `get_nav_items` returns dicts, not objects. Reading `item.url` off one finds
+        # nothing and quietly reports no entries, which passed standalone -- where there
+        # are none to find -- and failed the moment MutInt registered one.
+        entries = [item for item in get_nav_items(MAIN_SECTION)
+                   if item["url"] == "/dashboard"]
+
+        self.assertEqual(pointed_away, bool(entries))
+
+
 class InstitutionalFooterTestCase(TestCase):
     """Who hosts the deployment is the deployment's business.
 

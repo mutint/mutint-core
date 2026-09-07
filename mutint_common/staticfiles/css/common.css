@@ -216,10 +216,33 @@
 .sidebar .navbar-brand {
     float: none;
     display: block;
+    /* Bootstrap fixes .navbar-brand at 50px, which is right for a line of text and one
+       pixel short of a 36px logo between 15px paddings. Nothing clipped, because the
+       element has no background or border to clip against -- but the menu below was then
+       spaced from a box the logo had already grown out of. `auto` makes the anchor as tall
+       as whatever it holds, so the gap under it is the 0.5em #side-menu asks for either
+       way. */
+    height: auto;
 }
 
 #side-menu {
     padding-top: 0.5em;
+}
+
+/* A deployment's wordmark in the sidebar brand (MUTINT_BRANDING['brand_logo']).
+
+   The width is explicit and that is not a preference. The sidebar is `width: max-content`
+   with `max-width: 260px` and `overflow-x: hidden`, so an image wider than the cap is
+   **clipped, not scaled** -- it would simply lose its right-hand end with nothing to say so.
+   200px leaves room inside .navbar-brand's 15px padding either side and, on MutInt's
+   380.1x67.9 wordmark, comes to about 36px tall.
+
+   `height: auto` because Bootstrap gives .navbar-brand a fixed 50px height; without it a
+   tall logo is cropped by the anchor rather than sized by it. */
+.mutint-brand-logo {
+    width: 200px;
+    max-width: 100%;
+    height: auto;
 }
 
 /* The collapse strip beside the sidebar: one viewport tall, sticking alongside
