@@ -75,9 +75,16 @@ guessing which repository you meant.
 ### The assembled projects
 
 `mutint` and `aledb` are not released this way. They carry no code of their own — they are a
-set of submodule pointers — so "releasing" one is bumping its pointers and committing, and their
-own version strings (`mutint/config/version.py`; aledb has none and reuses core's) are bumped by
-hand when they mean something.
+set of submodule pointers — so "releasing" one is bumping its pointers and committing, and each
+carries a version string of its own (`mutint/config/version.py`, `aledb/config/version.py`),
+bumped by hand when it means something. ALEdb's is deliberately **not** mutint-core's number:
+it is a deployment with a history predating the platform's name, at 2.0.0 while every component
+sits at 0.0.1.
+
+**Tag an assembly all the same.** `mutint`'s tag is the whole of the **stable** upgrade channel
+— `mutint_common/upgrade.py` asks the project-root repo for tags and never a submodule — so
+pointers bumped and never tagged leave every installation on that channel told there is nothing
+to upgrade to. ALEdb's tag is a marker only, it having set `MUTINT_UPGRADE_ENABLED = False`.
 
 A bump that carries migrations is verified by migrating, not by looking at pages. See the
 suite `CLAUDE.md` under **How much to verify after a bump**.
