@@ -12,7 +12,9 @@ keep fresh, or to send anyone to a page to edit -- the `experiment_filter` rebui
 `Filter` nav entry went with the table.
 
 This model had already been shedding parts for the same reason the whole of it now goes: its
-three mutation-id hide-lists (`0003`) were a delete that kept the row, its two `frequency_gatk`
-cutoffs (`0004`) were compared against a column no import path ever wrote, and `GlobalFilter`
-(`0005`) was a second, installation-wide copy of the same idea. `0006` drops what is left.
+three mutation-id hide-lists were a delete that kept the row, its two `frequency_gatk` cutoffs
+were compared against a column no import path ever wrote, and `GlobalFilter` was a second,
+installation-wide copy of the same idea. Each left in its own migration and a last one dropped
+what remained; none of those files exists now, having gone with the migration collapse, so the
+order above is the history rather than something to read off the directory.
 """

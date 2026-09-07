@@ -1,10 +1,11 @@
 """`can_curate`, and that the shared filter has left no way back in.
 
-This module was `test_global_filter_removal`, which pinned `mutint_filter.0005` folding the
+This module was `test_global_filter_removal`, which pinned the migration that folded the
 installation-wide ignored-gene list into each experiment's row before dropping `GlobalFilter`.
-That fold-forward's *destination* is gone too now -- `0006` drops `AleExperimentFilter` and
-filtering belongs to the reader -- so the tests that stood a database up at `0004` and built
-rows with the ORM cannot run and have nothing left to assert.
+That fold-forward's *destination* is gone too now -- `AleExperimentFilter` was dropped in its
+turn and filtering belongs to the reader -- so the tests that stood a database up at an
+intermediate migration and built rows with the ORM cannot run and have nothing left to assert.
+None of those migrations exists today in any case; they went with the collapse.
 
 What survives is the part that was never about the table. `can_curate` replaced
 `can_add_global_filter(user) or can_add_experiment_filter(user, experiment)`, and the disjunction

@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 1926 run, 0 failures** standalone; **2223** assembled, measured with `PYTHONPATH`
+**Baseline: 1934 run, 0 failures** standalone; **2231** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -405,6 +405,18 @@ version before app commands are ever consulted, so the management command alone 
 `mutint_common/cli.py` dispatches it directly. Delete that branch and `./mutint version` silently
 starts printing Django's version instead — `mutint_common/tests/test_version.py` goes through
 `manage()` rather than `call_command` precisely to catch that.
+
+**A migration becomes immutable the moment it ships in a tag, and not one second before.**
+That is the whole of the release discipline, and `docs/contributing/releasing.md` is the
+procedure: before tagging, delete the migrations this release added and regenerate them as one,
+so the published history is one migration per app per release rather than one per decision made
+along the way. Prove it by migrating a database built at the *previous* tag — a fresh database
+cannot fail the way an operator's will.
+
+It is vacuous today: no repo in the suite carries a `v<version>` tag, which is why the history
+could be collapsed wholesale twice. The first tag ends that. After it, folding published
+migrations means `squashmigrations` and `replaces`, and deleting the replaced files is a
+*later* release.
 
 
 ### The per-sample mutation page

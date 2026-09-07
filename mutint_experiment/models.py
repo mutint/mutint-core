@@ -256,7 +256,7 @@ class Population(models.Model):
     as "two different LTEE populations" -- the biology had the word all along and the schema
     did not.
 
-    `name` is **text**, not a number (`0008`), and so is the sample's. Real lineage names are
+    `name` is **text**, not a number, and so is the sample's. Real lineage names are
     labels: `Ara-1` and `Ara+1` both end in 1, so any rule reducing them to an integer merges
     them. `Sample.time_point` is the one member of the coordinate that is genuinely numeric,
     because a time point is a real ordinal -- mutint-fixation sorts by it and takes a

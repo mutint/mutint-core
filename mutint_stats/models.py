@@ -19,6 +19,9 @@ failure mode particular to caching two halves of one page: `/stats` renders both
 the same mutations, and while both were stored they could disagree in the same viewport.
 Neither is stored now and both read `get_mutation_call_queryset`, so they cannot.
 
-The app keeps its migrations: `0004` drops both tables, and a deployment upgrading past it
-needs that migration to run.
+The app has no migrations left at all -- only an empty `migrations/__init__.py`. The one that
+dropped both tables went with the migration collapse, along with every other file that named a
+state no current database is in. A deployment that predates the collapse cannot migrate across
+it in any case; see `docs/contributing/releasing.md` for why that stops being true at the first
+release tag.
 """

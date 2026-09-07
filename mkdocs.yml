@@ -106,4 +106,5 @@ nav:
           - context_registry: reference/context_registry.md
           - panel_registry: reference/panel_registry.md
       - Assembling a project: assembling/index.md
+      - Cutting a release: contributing/releasing.md
       - Contributing to these docs: contributing/docs.md

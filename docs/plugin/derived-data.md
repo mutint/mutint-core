@@ -10,7 +10,40 @@ If your plugin computes anything expensive, it belongs in a model and in this sy
 
 ## Storing it
 
-Ordinary Django models in your app, with ordinary migrations. Two conventions worth following:
+Ordinary Django models in your app, with ordinary migrations — with one thing about the
+migration itself that Django will not do for you.
+
+!!! warning "Never depend on a core migration by filename"
+
+    A foreign key to `Experiment` or `Sample` makes `makemigrations` write a dependency on
+    whichever core migration was newest when you ran it:
+
+    ```python
+    dependencies = [('mutint_experiment', '0002_initial')]   # wrong
+    ```
+
+    Your plugin is a separate repository. Core is free to renumber, squash or collapse its
+    migrations without knowing your plugin exists, and a stale name raises `NodeNotFoundError`
+    when the graph loads — which takes down *every* management command in the assembled
+    project, not just `migrate`. Note that `./mutint check` passes anyway; only `migrate` or
+    `test` finds it.
+
+    Use Django's sentinel, which says what you actually need — that the table exists:
+
+    ```python
+    dependencies = [
+        ('mutint_experiment', '__first__'),
+        ('mutint_sample', '__first__'),
+    ]
+    ```
+
+    Core's models are created in their app's first migration; later ones only add fields and
+    constraints to core's own tables. `__first__` survives any renumbering, since a squash's
+    `replaces` makes the squashed migration the new first. **`makemigrations` will silently put
+    the filename back** whenever you regenerate, so keep a comment saying why the sentinel is
+    there. `mutint-phylogeny` and `mutint-breseq` are the worked examples.
+
+Conventions worth following:
 
 - **Rebuild whole, do not update incrementally.** Every plugin here deletes its rows for an
   experiment and recomputes them. A sample arriving out of order can change a result anywhere

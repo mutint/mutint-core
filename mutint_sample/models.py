@@ -129,8 +129,9 @@ class Sample(SupplementalDataMixin):
 
     #: Three facts a person records about a sample, shown as a badge wherever it is named.
     #: `mutint_sample.flags` describes them once for every page. They replaced `tags`, a
-    #: comma-joined text column that three pages wrote and nothing read; `0004` mapped the
-    #: words it held onto these and kept anything else under `curation["legacy_tags"]`.
+    #: comma-joined text column that three pages wrote and nothing read. The migration that
+    #: replaced it mapped the words it held onto these and kept anything else under
+    #: `curation["legacy_tags"]`; it has since gone with the migration collapse.
     #: Nothing computes over them yet -- see that module's docstring.
     is_hypermutator = models.BooleanField(default=False)
     is_contaminated = models.BooleanField(default=False)
