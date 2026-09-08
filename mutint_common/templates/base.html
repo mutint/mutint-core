@@ -86,6 +86,8 @@
     <!-- After mutint_crud.js, which owns the CSRF cookie read this uses. -->
     <script src="{% static "js/mutint_upload.js" %}?v={{ mutint_version }}"></script>
     <script src="{% static "js/mutint_select_list.js" %}?v={{ mutint_version }}"></script>
+    <!-- The client half of per-user preferences. After mutint_crud.js: saves go through mutintPostJson. -->
+    <script src="{% static "js/mutint_preferences.js" %}?v={{ mutint_version }}"></script>
 
     {% block scripts_and_style %}{% endblock %}
 </head>

@@ -144,7 +144,8 @@
     margin-bottom: 0.75em;
 }
 
-.breseq-picker .breseq-crosslink {
+.breseq-picker .breseq-crosslink,
+.breseq-picker .breseq-references {
     margin-left: 1.5em;
 }
 

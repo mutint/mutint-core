@@ -9,7 +9,7 @@
    are drawn by the script -- a thousand mutations by forty samples is not a table to render
    twice.
 
-   The Columns, Samples and Types menus are the genome browser's Samples menu, three times: a
+   The Columns, Samples, Types and References menus are the genome browser's Samples menu, four times: a
    Bootstrap dropdown whose rows are <li class="active"><a>, driven by mutintSelectList in
    toggle mode. Being active IS being shown. {% endcomment %}
 <div class="mutation-matrix" data-mutation-matrix
@@ -67,6 +67,7 @@
             <button type="button" class="btn btn-default" data-types="all">Show all types</button>
             <button type="button" class="btn btn-default" data-types="none">Hide all types</button>
         </div>
+        {% include "mutation_matrix/_reference_menu.html" with seq_ids=matrix.seq_ids %}
         {% comment %} Which of the caller's row sets to show -- All, or one of them. Only when
            the caller handed some over: a page with none to offer has no menu, rather than a
            menu of one entry. One choice at a time, so the list runs in plain mode. {% endcomment %}

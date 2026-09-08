@@ -12,6 +12,9 @@
        mutint_common.tests.test_templates keeps the pair together. {% endcomment %}
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
     <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+    {% comment %} The References menu is this page's alone, unlike the row handler above:
+       it hides rows by `data-seq-id` and re-stripes what is left. {% endcomment %}
+    <script src="{% static 'js/breseq_references.js' %}?v={{ mutint_version }}"></script>
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
@@ -47,6 +50,22 @@
                 {% endfor %}
             </ul>
         </div>
+        {% comment %} Which reference sequences the rows may be on: the matrix's References
+           menu, remembering the matrix's own key for this experiment, so a plasmid hidden
+           on Compare is hidden here and back. The container carries what the script needs
+           to read and save that choice; the csrf token is what sets the cookie the save
+           reads. {% endcomment %}
+        {% if selected_sample %}
+        <span class="breseq-references" data-breseq-references
+              data-experiment-id="{{ experiment_id }}"
+              data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+              data-preferences-url="{{ preferences_url }}"
+              data-empty-message="No mutations on the references shown.">
+            {% csrf_token %}
+            {% include "mutation_matrix/_reference_menu.html" with seq_ids=seq_ids %}
+            {% if user.is_authenticated %}{{ references_preferences|json_script:"breseq-references-prefs" }}{% endif %}
+        </span>
+        {% endif %}
         {% comment %} Compare lives in the mutint-compare plugin, which a deployment may
            not install. `{% url %}` with `as` sets an empty string instead of raising
            NoReverseMatch, so the link disappears rather than dangling -- the same posture

@@ -4,7 +4,7 @@
  * mutint_sample/mutation_matrix.py and mutation_matrix/_table.html). What happens here:
  *
  *   - the reader's remembered choices are read *before* the first draw -- from the page when
- *     they are signed in (the tag embedded them), from localStorage when they are not -- so
+ *     they are signed in (the tag embedded them), from the browser's own storage when they are not -- so
  *     the table appears already the way they left it, with no flash of hidden columns;
  *   - each <th> becomes a DataTables column that reads its cell by name, `data: "gene"` or
  *     `data: "samples.3"`, so no index anywhere depends on which columns are showing;
@@ -13,13 +13,13 @@
  *     when the sample does not carry the mutation; the Frequency display menu only changes
  *     the table's `freq-<format>` class, and the stylesheet draws the number, a bar, a heat
  *     map or both from that one markup -- no redraw of a thousand rows;
- *   - a row whose mutation is in no *shown* sample, or outside the row set the Show menu has
- *     chosen, is filtered out through DataTables' own search hook rather than by hiding row
- *     nodes -- so paging and the row count stay honest, and so Export's "Showing" is exactly
- *     what is on the screen;
- *   - the Columns, Samples and Types menus are mutintSelectList in toggle mode, the genome
- *     browser's sample menu three times over, and every change is saved back where it was
- *     read from;
+ *   - a row whose mutation is in no *shown* sample, whose type or reference is hidden, or
+ *     outside the row set the Show menu has chosen, is filtered out through DataTables' own
+ *     search hook rather than by hiding row nodes -- so paging and the row count stay honest,
+ *     and so Export's "Showing" is exactly what is on the screen;
+ *   - the Columns, Samples, Types and References menus are mutintSelectList in toggle mode,
+ *     the genome browser's sample menu four times over, and every change is saved back where
+ *     it was read from (the store itself is mutint_preferences.js);
  *   - a row the server marked `ancestral` -- observed in the designated ancestor, drawn
  *     because the reader asked -- is tinted red on every draw, the per-sample table's tint;
  *   - the table lives in a scroll box, with DataTables' own controls above it: the header
@@ -46,42 +46,20 @@
     var VIEWS = { normal: true, condensed: true };
     var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
+    // Per experiment, like samples: a contig name means something only within one reference
+    // genome. Shared with the per-sample Mutations page (breseq_references.js).
+    var REFERENCES_KEY_PREFIX = "mutation_matrix.references.";
 
-    /* One get/set pair over whichever store this reader has. */
+    /* The reader's store, from mutint_preferences.js: the embedded choices and the save
+       endpoint for a signed-in reader, the browser's own storage otherwise. */
     function storage(container, table) {
-        var authed = container.getAttribute("data-authenticated") === "1";
-        var url = container.getAttribute("data-preferences-url");
-        var embedded = {};
-        if (authed) {
-            var node = document.getElementById(table.id + "-prefs");
-            if (node) { try { embedded = JSON.parse(node.textContent) || {}; } catch (e) { embedded = {}; } }
-        }
-        return {
-            get: function (key, fallback) {
-                if (authed) { return Object.prototype.hasOwnProperty.call(embedded, key) ? embedded[key] : fallback; }
-                try {
-                    var raw = window.localStorage.getItem("mutint." + key);
-                    return raw ? JSON.parse(raw) : fallback;
-                } catch (e) { return fallback; }
-            },
-            set: function (key, value) {
-                if (authed) {
-                    // Fire and forget: the page already shows the choice, and a save that
-                    // failed costs a reload's worth of memory, not correctness.
-                    window.mutintPostJson(url, { key: key, value: value }).catch(function () {});
-                    return;
-                }
-                try { window.localStorage.setItem("mutint." + key, JSON.stringify(value)); } catch (e) { /* private mode, quota */ }
-            }
-        };
+        return window.mutintPreferences({
+            authenticated: container.getAttribute("data-authenticated") === "1",
+            url: container.getAttribute("data-preferences-url"),
+            embedded: window.mutintPreferences.embedded(table.id + "-prefs")
+        });
     }
-
-    function hiddenSet(stored) {
-        var hidden = stored && Array.isArray(stored.hidden) ? stored.hidden : [];
-        var set = {};
-        hidden.forEach(function (value) { set[String(value)] = true; });
-        return set;
-    }
+    var hiddenSet = window.mutintPreferences.hiddenSet;
 
     function keys(set) { return Object.keys(set); }
 
@@ -116,6 +94,7 @@
         var prefs = storage(container, table);
         var experimentId = container.getAttribute("data-experiment-id");
         var samplesKey = experimentId ? SAMPLES_KEY_PREFIX + experimentId : null;
+        var referencesKey = experimentId ? REFERENCES_KEY_PREFIX + experimentId : null;
 
         var hiddenColumns = hiddenSet(prefs.get(COLUMNS_KEY, null));
         if (prefs.get(COLUMNS_KEY, null) === null) {
@@ -126,6 +105,7 @@
         }
         var hiddenSamples = samplesKey ? hiddenSet(prefs.get(samplesKey, null)) : {};
         var hiddenTypes = hiddenSet(prefs.get(TYPES_KEY, null));
+        var hiddenReferences = referencesKey ? hiddenSet(prefs.get(referencesKey, null)) : {};
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
@@ -187,6 +167,7 @@
         var columnList = container.querySelector('[data-role="columns"]');
         var sampleList = container.querySelector('[data-role="samples"]');
         var typeList = container.querySelector('[data-role="types"]');
+        var referenceList = container.querySelector('[data-role="references"]');
         Array.prototype.forEach.call(columnList.querySelectorAll("li[data-value]"), function (li) {
             li.classList.toggle("active", !hiddenColumns[li.getAttribute("data-value")]);
         });
@@ -196,13 +177,17 @@
         Array.prototype.forEach.call(typeList.querySelectorAll("li[data-value]"), function (li) {
             li.classList.toggle("active", !hiddenTypes[li.getAttribute("data-value")]);
         });
+        Array.prototype.forEach.call(referenceList.querySelectorAll("li[data-value]"), function (li) {
+            li.classList.toggle("active", !hiddenReferences[li.getAttribute("data-value")]);
+        });
 
-        // Rows whose mutation is in no shown sample, or outside the chosen row set, leave the
-        // table -- through the search hook, so the count and the pager describe what is
-        // visible.
+        // Rows whose mutation is in no shown sample, whose type or reference is hidden, or
+        // outside the chosen row set, leave the table -- through the search hook, so the count
+        // and the pager describe what is visible.
         $.fn.dataTable.ext.search.push(function (settings, searchData, index, rowData) {
             if (settings.nTable !== table) { return true; }
             if (hiddenTypes[rowData.type]) { return false; }
+            if (hiddenReferences[rowData.seq_id_text]) { return false; }
             if (shownSet && (rowData.sets || []).indexOf(shownSet) < 0) { return false; }
             var cells = rowData.samples || [];
             for (var i = 0; i < cells.length; i++) {
@@ -353,6 +338,26 @@
                 typePicker.select(function () { return all; });
             });
         });
+        var referenceCounter = container.querySelector('[data-role="reference-count"]');
+        var referencePicker = window.mutintSelectList(referenceList, {
+            toggle: true, controls: null,
+            onChange: function (changed) {
+                changed.forEach(function (li) {
+                    var ref = li.getAttribute("data-value");
+                    if (referencePicker.isSelected(li)) { delete hiddenReferences[ref]; } else { hiddenReferences[ref] = true; }
+                });
+                if (referenceCounter) { referenceCounter.textContent = referencePicker.count(); }
+                dt.draw();
+                if (referencesKey) { prefs.set(referencesKey, { hidden: keys(hiddenReferences) }); }
+            }
+        });
+        if (referenceCounter) { referenceCounter.textContent = referencePicker.count(); }
+        Array.prototype.forEach.call(container.querySelectorAll("[data-references]"), function (button) {
+            button.addEventListener("click", function () {
+                var all = button.getAttribute("data-references") === "all";
+                referencePicker.select(function () { return all; });
+            });
+        });
         var samplePicker = window.mutintSelectList(sampleList, {
             toggle: true, controls: null,
             onChange: function (changed) {
@@ -456,7 +461,7 @@
         });
 
         // For a harness or a console: the DataTable behind the container.
-        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, frequency: frequencyPicker, show: showPicker };
+        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, references: referencePicker, frequency: frequencyPicker, show: showPicker };
     }
 
     $(function () {

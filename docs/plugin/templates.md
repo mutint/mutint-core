@@ -82,13 +82,16 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-Menus above the table let the reader show and hide descriptive columns, samples and
-mutation types. Those choices are remembered for a signed-in reader through
+Menus above the table let the reader show and hide descriptive columns, samples, mutation
+types and reference sequences. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
 `mutation_matrix.view` (Normal or Condensed row spacing) and `mutation_matrix.show` (which row
-set, below) (everywhere) and `mutation_matrix.samples.<experiment_id>` (shared by every matrix
-page of that experiment) — and in the browser's localStorage otherwise. Export CSV is a menu
+set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>` and
+`mutation_matrix.references.<experiment_id>` (shared by every matrix page of that experiment,
+the second by the per-sample Mutations page as well) — and in the browser's localStorage
+otherwise. The store's client half is `js/mutint_preferences.js`, loaded from `base.html`, and
+a page of your own may call `window.mutintPreferences(...)` the same way. Export CSV is a menu
 of two: the rows showing, after every menu and the search box, or every row the server
 produced; visible columns only, either way.
 

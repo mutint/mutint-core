@@ -167,6 +167,19 @@ class RowsTestCase(_Fixture):
     def test_the_types_are_the_rows_types_sorted(self):
         self.assertEqual(("AMP", "SNP"), self.matrix().types)
 
+    def test_the_references_are_the_rows_seq_ids_sorted(self):
+        """For the References menu: the contigs the rows are on, an empty name left out."""
+        self.assertEqual(("test_ref",), self.matrix().seq_ids)
+        first = list(self.sample_dict.values())[0]
+        for seq_id, position in (("a_plasmid", 7), ("", 8)):
+            mutation = Mutation.objects.create(
+                experiment=self.experiment, start_position=position, seq_id=seq_id,
+                mutation_type="SNP", sequence_change="A->G", gene="thrA")
+            MutationCall.objects.create(sample=first, mutation=mutation, present=True,
+                                        frequency=1.0)
+        self.calls = get_all_calls_filtered(self.experiment.id)
+        self.assertEqual(("a_plasmid", "test_ref"), self.matrix().seq_ids)
+
     def test_no_experiment_means_no_experiment_id(self):
         matrix = mutation_matrix.build_matrix(self.calls, self.sample_dict)
         self.assertIsNone(matrix.experiment_id)
@@ -253,6 +266,13 @@ class PartialTestCase(_Fixture):
         self.assertIn('<li data-value="AMP" class="active">', html)
         self.assertIn('data-types="all"', html)
         self.assertIn('data-types="none"', html)
+        # And the fourth: the reference sequences the rows are on, the same partial the
+        # per-sample Mutations page renders.
+        self.assertIn('data-role="references"', html)
+        self.assertIn('<li data-value="test_ref" class="active">', html)
+        self.assertIn('data-role="reference-count">1</span>', html)
+        self.assertIn('data-references="all"', html)
+        self.assertIn('data-references="none"', html)
 
     def test_the_frequency_display_menu_offers_its_four_formats(self):
         html = self._render()

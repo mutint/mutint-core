@@ -85,6 +85,12 @@ class RowSet:
         return len(self.mutation_ids)
 
 
+#: The References menu's choice, per experiment: `<prefix><experiment_id>` -> `{"hidden": [...]}`.
+#: The matrix owns the `mutation_matrix.` namespace; the per-sample Mutations page reads and
+#: writes this one key too, so hiding a contig on either page hides it on both.
+REFERENCES_PREFERENCE_PREFIX = "mutation_matrix.references."
+
+
 @dataclass
 class MutationMatrix:
     columns: list
@@ -95,6 +101,8 @@ class MutationMatrix:
     csv_title: str = "mutations"
     #: The mutation types the rows hold (SNP, DEL, ...), sorted, for the Types menu.
     types: tuple = ()
+    #: The reference sequences the rows are on, sorted, for the References menu.
+    seq_ids: tuple = ()
     #: The `RowSet`s the Show menu offers, each with the count of rows it holds. Empty for a
     #: page with nothing to offer, and then the menu is not rendered.
     sets: tuple = ()
@@ -258,6 +266,7 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,
                           types=tuple(sorted({row["type"] for row in rows if row["type"]})),
+                          seq_ids=tuple(sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]})),
                           sets=sets)
 
 

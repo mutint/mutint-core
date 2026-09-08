@@ -8,6 +8,7 @@ rendering of the cross-sample table.
 """
 
 import os
+import re
 import shutil
 import tempfile
 from datetime import datetime
@@ -272,3 +273,48 @@ class BreseqTablePermissionTestCase(TestCase):
         self.client.force_login(User.objects.get(username="tester"))
         response = self.client.get(PAGE, {"experiment_id": self.experiment.id})
         self.assertContains(response, "no samples")
+
+
+class ReferencesMenuTestCase(BreseqTablePageTestCase):
+    """The References menu, shared with the matrix: the same partial, the same key, over a
+    server-rendered table whose rows say which contig they are on."""
+
+    KEY = "mutation_matrix.references.%d"
+
+    def test_every_row_carries_its_reference_as_plain_text(self):
+        """`data-seq-id` is what the script hides by. The plain name, not breseq's HTML of it,
+        whose hyphens are non-breaking entities."""
+        content = self.content()
+        rows = re.findall(r'<tr class="[^"]*" data-seq-id="([^"]*)"', content)
+        self.assertEqual(len(rows), content.count("<tr class="))
+        self.assertEqual({"SYN001"}, set(rows))
+        self.assertNotIn("&#8209;", " ".join(rows))
+
+    def test_the_menu_lists_the_samples_references(self):
+        content = self.content()
+        self.assertIn("data-breseq-references", content)
+        self.assertIn('data-role="references"', content)
+        self.assertIn('<li data-value="SYN001" class="active">', content)
+        self.assertIn('data-role="reference-count">1</span>', content)
+        self.assertIn('data-references="all"', content)
+        self.assertIn('data-references="none"', content)
+        self.assertIn('data-experiment-id="%d"' % self.experiment.id, content)
+
+    def test_the_script_is_loaded(self):
+        """Rendered HTML, not the template: a script outside a block is discarded silently."""
+        self.assertIn("js/breseq_references.js", self.content())
+
+    def test_a_signed_in_readers_choice_is_embedded(self):
+        from mutint_common.preferences import set_preference
+        key = self.KEY % self.experiment.id
+        set_preference(self.user, key, {"hidden": ["SYN001"]})
+        content = self.content()
+        self.assertIn('id="breseq-references-prefs"', content)
+        self.assertIn(key, content)
+        self.assertIn('data-authenticated="1"', content)
+        self.assertIn('data-preferences-url="/preferences/"', content)
+
+    def test_nothing_is_embedded_before_a_choice_is_made(self):
+        content = self.content()
+        self.assertIn('id="breseq-references-prefs"', content)
+        self.assertIn(">{}</script>", content)

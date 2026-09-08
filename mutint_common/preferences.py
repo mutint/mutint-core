@@ -1,8 +1,9 @@
 """Per-user preferences: what a page remembers about how one person likes to see things.
 
-Two things are stored here today, both by the mutation matrix (`mutint_sample.mutation_matrix`):
-which descriptive columns a reader has hidden, everywhere, and which samples they have turned off
-in a particular experiment. Neither belongs in the view filter, which is per session and shapes
+What is stored here today is the mutation matrix's menus (`mutint_sample.mutation_matrix`):
+which descriptive columns and mutation types a reader has hidden, everywhere, and which samples
+and reference sequences they have turned off in a particular experiment -- the last shared with
+the per-sample Mutations page, which offers the same References menu. Neither belongs in the view filter, which is per session and shapes
 *which rows* a page shows; these shape how the same rows are laid out, and a person wants them
 to follow them from one experiment to the next and from one machine to another.
 
@@ -13,7 +14,8 @@ what it means is the key owner's business, and nothing here validates it beyond 
 
 **Anonymous readers have no row here**, and that is a fact the endpoint states with a 403 rather
 than something a page has to guess: ALEdb is a public deployment, so a page that remembers things
-keeps a localStorage fallback for readers who are not signed in. `mutation_matrix.js` does.
+keeps a localStorage fallback for readers who are not signed in. `mutint_preferences.js`, the
+client half of this module, does that for every page that uses it.
 
 The endpoint answers plain JSON with real HTTP statuses rather than the `@ajax` envelope the tag
 endpoints use, because `mutintPostJson` -- the one client that calls it -- reads the status.

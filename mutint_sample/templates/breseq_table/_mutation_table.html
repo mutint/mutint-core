@@ -25,7 +25,9 @@
     </thead>
     <tbody>
     {% for row in rows %}
-        <tr class="{{ row.row_class }}{% if row.ancestral %} ancestral_table_row{% endif %}">
+        {% comment %} `data-seq-id` is what the Mutations page's References menu hides rows
+           by (breseq_references.js); the browser and NCBI pages render it and ignore it. {% endcomment %}
+        <tr class="{{ row.row_class }}{% if row.ancestral %} ancestral_table_row{% endif %}" data-seq-id="{{ row.seq_id_text }}">
             <td class="breseq-evidence">
                 {% if row.evidence_url %}
                     <a href="{{ row.evidence_url }}"

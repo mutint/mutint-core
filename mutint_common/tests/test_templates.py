@@ -247,3 +247,38 @@ class ExperimentSidebarLabelTestCase(TestCase):
         for name, url in pages.items():
             with self.subTest(page=name):
                 self.assertEqual("Proj: Exp", self._sidebar_label(url))
+
+
+class PreferencesScriptTestCase(unittest.TestCase):
+    """The client half of per-user preferences is one script, `mutint_preferences.js`.
+
+    It was private to `mutation_matrix.js` until a second page -- the per-sample Mutations
+    page's References menu -- needed to remember something, and two copies of the store
+    would be two opinions about where a choice lives. Same rule as the CSRF cookie read in
+    `mutint_crud.js`: one definition.
+    """
+
+    STATIC = os.path.join(CORE, "mutint_common", "staticfiles", "js")
+    STORE = "mutint_preferences.js"
+    CALLERS = ("mutation_matrix.js", "breseq_references.js")
+
+    def read(self, name):
+        with open(os.path.join(self.STATIC, name)) as handle:
+            return handle.read()
+
+    def test_base_loads_it_after_the_script_that_owns_the_save(self):
+        with open(os.path.join(CORE, "mutint_common", "templates", "base.html")) as handle:
+            base = handle.read()
+        self.assertIn(self.STORE, base)
+        self.assertLess(base.index("mutint_crud.js"), base.index(self.STORE))
+        self.assertIn(self.STORE + '" %}?v={{ mutint_version }}', base)
+
+    def test_the_store_is_defined_once(self):
+        store = self.read(self.STORE)
+        for marker in ("localStorage", "mutintPostJson", "window.mutintPreferences ="):
+            self.assertIn(marker, store)
+        for caller in self.CALLERS:
+            script = self.read(caller)
+            self.assertIn("window.mutintPreferences(", script, caller)
+            for marker in ("localStorage", "mutintPostJson"):
+                self.assertNotIn(marker, script, "%s carries its own store" % caller)

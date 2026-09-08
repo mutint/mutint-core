@@ -6,7 +6,7 @@
 {% block scripts_and_style %}
     {% comment %} Three assets that travel together: breseq_table.css styles the cells the
        display layer generates, breseq_table.js drives the Show button on a collapsed gene
-       list, and mutation_matrix.js draws the table and its two menus.
+       list, and mutation_matrix.js draws the table and its menus.
        mutint_common.tests.test_templates keeps them together. {% endcomment %}
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
     <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>

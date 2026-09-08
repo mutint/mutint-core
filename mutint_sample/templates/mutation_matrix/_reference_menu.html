@@ -1,0 +1,24 @@
+{% comment %} The References menu: which reference sequences the rows may be on. One partial
+   for the two tables that offer it -- the mutation matrix (Compare, Search) and the
+   per-sample Mutations page -- so the two cannot drift. The same shape as the Samples and
+   Types menus: mutintSelectList in toggle mode, active is shown, with Show all / Hide all
+   beside it. Only the references this table's rows are on are offered; a hidden one that is
+   absent here is still remembered for the next table. Driven by mutation_matrix.js on the
+   matrix and breseq_references.js on the per-sample page, both remembering
+   `mutation_matrix.references.<experiment>`. Takes `seq_ids`. {% endcomment %}
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle"
+            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        References (<span data-role="reference-count">{{ seq_ids|length }}</span>
+        of {{ seq_ids|length }}) <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="references">
+        {% for seq_id in seq_ids %}
+            <li data-value="{{ seq_id }}" class="active"><a href="#">{{ seq_id }}</a></li>
+        {% endfor %}
+    </ul>
+</div>
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-default" data-references="all">Show all references</button>
+    <button type="button" class="btn btn-default" data-references="none">Hide all references</button>
+</div>

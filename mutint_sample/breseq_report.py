@@ -123,6 +123,9 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
         frequency_text, is_polymorphism = _frequency(call)
         row["freq"] = frequency_text
         row["mutation_type"] = call.mutation.mutation_type or ""
+        # The plain name, for the row's `data-seq-id`: `seq_id` above is breseq's HTML of it,
+        # with hyphens rewritten as non-breaking ones.
+        row["seq_id_text"] = call.mutation.seq_id or ""
         row["mutation_id"] = call.mutation_id
         # The call, not the mutation: the editor addresses rows by what it deletes,
         # and one mutation is observed in many samples. Unused by the read-only tables.

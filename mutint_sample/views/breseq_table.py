@@ -20,6 +20,7 @@ from django.urls import reverse
 
 import mutint_sample.views.common
 from mutint_common.logger import join_extras, user_extra
+from mutint_common.preferences import get_preference
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_project
@@ -27,6 +28,7 @@ from mutint_filter.util import filter_mutation_calls
 from mutint_filter.view_filter import get_view_filter
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.models import ReferenceSequences, MutationCall
+from mutint_sample.mutation_matrix import REFERENCES_PREFERENCE_PREFIX
 from mutint_experiment.ancestor import (ancestral_mutation_ids, ancestral_shown,
                                         describe_ancestor)
 from mutint_sample.util import get_ordered_sample_dict
@@ -88,6 +90,11 @@ def breseq_table(request):
             "ancestor": describe_ancestor(experiment.id),
             "rows": rows,
             "unannotated_count": sum(1 for row in rows if not row["annotated"]),
+            # The References menu: the contigs this sample's rows are on, and the reader's
+            # remembered choice -- the matrix's own key, so Compare and this page agree.
+            "seq_ids": sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]}),
+            "references_preferences": _references_preference(request.user, experiment.id),
+            "preferences_url": reverse("preferences"),
             "reference": _reference(experiment),
             "title": "%s mutations" % experiment.name,
             "template_header": "Mutations",
@@ -110,6 +117,19 @@ def breseq_table(request):
         context["err_message"] = str(error)
         template = loader.get_template("500.html")
         return HttpResponse(template.render(context, request), content_type="text/html")
+
+
+def _references_preference(user, experiment_id):
+    """`{key: value}` for the one preference this page embeds, or `{}`.
+
+    The same shape the matrix embeds its whole prefix in, so the script reads it through the
+    same `get(key)`; one key rather than the prefix, because this page has one experiment.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return {}
+    key = REFERENCES_PREFERENCE_PREFIX + str(experiment_id)
+    stored = get_preference(user, key)
+    return {key: stored} if stored is not None else {}
 
 
 def _ancestor_first(sample_dict, ancestor_id):

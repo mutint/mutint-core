@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2058 run, 0 failures** standalone; **2365** assembled, measured with `PYTHONPATH`
+**Baseline: 2088 run, 0 failures** standalone; **2395** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -514,6 +514,17 @@ need it, because deciding that per page is what went wrong.
 `mutint_common/tests/test_templates.py` keeps the pair together, and the three pages each assert
 the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
 silently.
+
+**It carries the matrix's References menu**, beside the sample picker, and the choice is
+the matrix's own key (`mutation_matrix.references.<exp>`), so a contig hidden on Compare is
+hidden here and back. Each row carries its contig as `data-seq-id`, and
+`js/breseq_references.js` -- this page's alone, since the menu is -- sets `hidden` on the rows
+and re-stripes what is left by visible index, with `build_rows`'s own rule: a polymorphic row
+keeps its green and takes no stripe but still counts, and the ancestral red is a separate
+class it never touches. It is not in `breseq_table.js`, which is the *row markup's* handler
+and loads on three pages that have no menu. A signed-in reader's rows show for one paint
+before the script hides them, because the table is server-rendered; the matrix reads its
+preferences before its first draw and does not.
 
 It is called **Mutations** in the nav and on the page. **Compare** is the mutint-compare
 plugin's, so on a deployment without that plugin this page is the only mutation table core
@@ -1682,14 +1693,18 @@ server-rendered -- one `th[data-key]` per descriptive column, one `th.breseq-sam
 [data-index]` per sample -- so a test can count and read it, and the script builds its column
 definitions from those attributes. Rows travel as `json_script`.
 
-**The three menus are the genome browser's sample menu, three times**: `ul.dropdown-menu
+**The four menus are the genome browser's sample menu, four times**: `ul.dropdown-menu
 .mutint-menu.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being
 shown. Columns lists the descriptive columns (Description off by default: it is prose, and the
-widest column); Samples lists the samples and Mutation Types the types the rows hold, each with
-Show all / Hide all beside it. A row whose type is hidden, or whose mutation is in no shown
-sample, leaves the table through `$.fn.dataTable.ext.search`, so paging and the count describe
-what is visible, and the striping is redone per displayed row the way breseq stripes. The page
-length menu ends in All.
+widest column); Samples lists the samples, Mutation Types the types the rows hold and
+References the reference sequences they are on, each with Show all / Hide all beside it. A row
+whose type or reference is hidden, or whose mutation is in no shown sample, leaves the table
+through `$.fn.dataTable.ext.search`, so paging and the count describe what is visible, and the
+striping is redone per displayed row the way breseq stripes. The page length menu ends in All.
+**References is one partial for two tables** (`mutation_matrix/_reference_menu.html`): the
+per-sample Mutations page renders the same menu over its server-rendered rows and remembers
+the same key, so a plasmid hidden on Compare is hidden there and back -- see **The per-sample
+mutation page**.
 
 **Row sets are the seam for a page that wants a subset of its rows without being a second
 page.** `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))` annotates each row with
@@ -1778,9 +1793,11 @@ sample's header is a link to that sample's Mutations page (`SampleColumn.url`) i
 
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
 holds `mutation_matrix.columns`, `mutation_matrix.types`, `mutation_matrix.frequency` and
-`mutation_matrix.view` for the reader everywhere and
-`mutation_matrix.samples.<exp>` per experiment, shared by the three experiment pages; Search has
-no experiment and its sample selection is transient. Stored as the *hidden* set, so a column or sample that did not exist when
+`mutation_matrix.view` for the reader everywhere, and `mutation_matrix.samples.<exp>` and
+`mutation_matrix.references.<exp>` per experiment -- a sample id or a contig name means
+something only within one experiment; Search has no experiment and both selections are
+transient there. The store's client half is `js/mutint_preferences.js`, loaded from
+`base.html`, so the second page that remembers something did not need a copy of it. Stored as the *hidden* set, so a column or sample that did not exist when
 the choice was made shows by default. The tag embeds a signed-in reader's preferences in the page
 and the script reads them before the first draw, so nothing flashes; an anonymous reader (ALEdb
 is public) gets the same from localStorage.
@@ -1825,7 +1842,12 @@ the history was regenerated from scratch, not because there is a rule against th
 `mutint_common.preferences` is a key/value store per signed-in user -- `UserPreference(user,
 key, value JSON)`, one row per key, `get_preference` / `get_preferences(prefix)` /
 `set_preference` -- with an endpoint at `/preferences/` (GET `?prefix=`, POST `{key, value}`,
-403 for anonymous, plain `JsonResponse` because `mutintPostJson` reads real statuses). It exists
+403 for anonymous, plain `JsonResponse` because `mutintPostJson` reads real statuses). The
+client half is `js/mutint_preferences.js`, from `base.html`: a page embeds a signed-in
+reader's choices as a `json_script` and the script reads them synchronously and saves changes
+fire-and-forget; an anonymous reader gets localStorage. `mutation_matrix.js` and
+`breseq_references.js` are its two callers, and `test_templates` asserts the store is defined
+in it alone. It exists
 for how somebody likes to *see* things, which neither the view filter (per session, and about
 which rows) nor localStorage (one browser) can carry across experiments and machines. Keys are
 dotted names owned by whoever writes them, so a plugin remembers something by picking a prefix;
