@@ -93,7 +93,7 @@ def breseq_table(request):
             # The References menu: the contigs this sample's rows are on, and the reader's
             # remembered choice -- the matrix's own key, so Compare and this page agree.
             "seq_ids": sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]}),
-            "references_preferences": _references_preference(request.user, experiment.id),
+            "embedded_preferences": _embedded_preferences(request.user, experiment.id),
             "preferences_url": reverse("preferences"),
             "reference": _reference(experiment),
             "title": "%s mutations" % experiment.name,
@@ -119,17 +119,25 @@ def breseq_table(request):
         return HttpResponse(template.render(context, request), content_type="text/html")
 
 
-def _references_preference(user, experiment_id):
-    """`{key: value}` for the one preference this page embeds, or `{}`.
+#: The tab the reader left open on this page, remembered by mutint_control_tabs.js.
+TAB_PREFERENCE_KEY = "breseq_table.tab"
 
-    The same shape the matrix embeds its whole prefix in, so the script reads it through the
-    same `get(key)`; one key rather than the prefix, because this page has one experiment.
+
+def _embedded_preferences(user, experiment_id):
+    """`{key: value}` for the two preferences this page embeds, each only when stored.
+
+    The same shape the matrix embeds its whole prefix in, so the scripts read them through
+    the same `get(key)`; named keys rather than a prefix, because this page has one experiment
+    and one strip.
     """
     if not getattr(user, "is_authenticated", False):
         return {}
-    key = REFERENCES_PREFERENCE_PREFIX + str(experiment_id)
-    stored = get_preference(user, key)
-    return {key: stored} if stored is not None else {}
+    embedded = {}
+    for key in (REFERENCES_PREFERENCE_PREFIX + str(experiment_id), TAB_PREFERENCE_KEY):
+        stored = get_preference(user, key)
+        if stored is not None:
+            embedded[key] = stored
+    return embedded
 
 
 def _ancestor_first(sample_dict, ancestor_id):

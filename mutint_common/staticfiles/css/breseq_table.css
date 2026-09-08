@@ -144,8 +144,7 @@
     margin-bottom: 0.75em;
 }
 
-.breseq-picker .breseq-crosslink,
-.breseq-picker .breseq-references {
+.breseq-picker .breseq-crosslink {
     margin-left: 1.5em;
 }
 
@@ -296,6 +295,19 @@ div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate ul.pagin
     overflow: auto;
     max-height: 70vh;
     margin: 0 -25px -25px 0;
+    /* As wide as the table and no wider than the window: with two samples the vertical
+       scrollbar sits at the table's right edge, with forty the box reaches the window's edge
+       and scrolls sideways. `fit-content` shrinks to the table (whose `width: auto` below is
+       what gives the box a size to shrink to). The clamp is load-bearing: when the table's
+       narrowest layout is wider than the space, fit-content alone grows the box and hands the
+       *page* the horizontal scrollbar; the containing block plus the 25px margin is the
+       window's edge, where the box then stops and scrolls. `scrollbar-gutter` counts a classic
+       scrollbar into that width, or it takes 15px from the table and a second, sideways
+       scrollbar appears for exactly that much; overlay scrollbars make it a no-op. */
+    width: -moz-fit-content;
+    width: fit-content;
+    max-width: calc(100% + 25px);
+    scrollbar-gutter: stable;
 }
 
 .mutation-matrix-scroll .breseq-table {

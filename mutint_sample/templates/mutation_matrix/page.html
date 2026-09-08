@@ -6,19 +6,30 @@
 {% block scripts_and_style %}
     {% comment %} Three assets that travel together: breseq_table.css styles the cells the
        display layer generates, breseq_table.js drives the Show button on a collapsed gene
-       list, and mutation_matrix.js draws the table and its menus.
+       list, and mutation_matrix.js draws the table and drives the menus in the tabs above it.
        mutint_common.tests.test_templates keeps them together. {% endcomment %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
-    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
-    <script src="{% static 'js/mutation_matrix.js' %}?v={{ mutint_version }}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
+    <script src="{% static 'js/mutation_matrix.js' %}?v={{ asset_version }}"></script>
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 {% block content %}
     {% if experiment_id %}
+        {% comment %} The controls are four tabs -- Filter, Samples, Rows, Display -- and this
+           page owns the strip and the one `.tab-content` every pane must share, because the
+           Filter pane's form carries blocks a page that extends this one fills, and a block
+           cannot cross the {% mutation_matrix %} tag; the tag is told `controls=False` and
+           renders the table alone. The strip is the Import data page's, client-side; the
+           chosen tab is remembered as `mutation_matrix.tab`, which the tag embeds with the
+           rest of its prefix. {% endcomment %}
+        {% url 'preferences' as preferences_url %}
+        {% include "control_tabs.html" with page="mutation_matrix" active="filter" prefs_id=matrix.dom_id|add:"-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=True samples=True rows=True display=True %}
+        <div class="tab-content" data-mutation-matrix-controls="{{ matrix.dom_id }}">
+        <div class="tab-pane active" id="mutation_matrix-pane-filter">
         {% comment %} One GET form for every control that changes which rows and columns the
            server produces -- ALE, sample type, the reader's filter -- behind one Apply. What
            the reader shows or hides of what was produced is the matrix's own business, in the
-           menus below the form, and needs no round trip. {% endcomment %}
+           other tabs, and needs no round trip. {% endcomment %}
         <form action="" method="get" class="form-inline mutation-matrix-form">
             <input type="hidden" name="experiment_id" value="{{ experiment_id }}"/>
             <select name="{{ PARAM_POPULATION }}" class="form-control">
@@ -50,6 +61,9 @@
            that does nothing, and Search never gets one. {% endcomment %}
         {% view_filter_summary ancestral=ancestral_mode|default:"subtracted" %}
         {% block matrix_summary %}{% endblock %}
-        {% mutation_matrix matrix empty_message=empty_message %}
+        </div>
+        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active="filter" %}
+        </div>
+        {% mutation_matrix matrix empty_message=empty_message controls=False %}
     {% endif %}
 {% endblock %}

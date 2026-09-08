@@ -6,8 +6,8 @@
     {% comment %} breseq's own cell styling, borrowed so this table reads exactly like the
        Samples page it is the editable counterpart of -- and its script with it, which is what
        makes the Show button on a wide deletion's gene list work here too. {% endcomment %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
-    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
     {% comment %} base.html does not load sweetalert; every page that confirms something has
        to pull it in. {% endcomment %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>

@@ -62,6 +62,21 @@ class TestUtil(unittest.TestCase):
         self.assertIsNone(_github_repository_url("../mutint-core"))
         self.assertIsNone(_github_repository_url(None))
 
+    def test_the_asset_version_changes_with_the_code(self):
+        """The version plus a digest of every component's revision, so a Development-channel
+        upgrade changes every asset URL; the bare version where no revision is known."""
+        import re
+        from unittest import mock
+        from mutint_common.util import compute_asset_version, get_asset_version
+        from mutint_common.version import __version__
+
+        value = get_asset_version()
+        self.assertTrue(value.startswith(__version__))
+        self.assertRegex(value, r"^\d+\.\d+\.\d+\+[0-9a-f]{8}$")
+        self.assertEqual(value, compute_asset_version())
+        with mock.patch("mutint_common.util.get_revision", return_value=None):
+            self.assertEqual(__version__, compute_asset_version())
+
     def test_a_revision_carries_its_repository_beside_its_commit(self):
         revision = get_revision(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))))

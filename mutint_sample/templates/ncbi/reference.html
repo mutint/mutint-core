@@ -3,7 +3,7 @@
 
 {% block title %}{{ title }}{% endblock %}
 {% block scripts_and_style %}
-    <link href="{% static "css/ncbi_view.css" %}?v={{ mutint_version }}" rel="stylesheet">
+    <link href="{% static "css/ncbi_view.css" %}?v={{ asset_version }}" rel="stylesheet">
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b>{% endblock %}
 

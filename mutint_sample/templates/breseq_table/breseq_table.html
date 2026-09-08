@@ -10,16 +10,55 @@
        the stylesheet and the Show button's handler. The handler was inline here once, and the
        button was inert on the other two pages that render the same rows.
        mutint_common.tests.test_templates keeps the pair together. {% endcomment %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
-    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
     {% comment %} The References menu is this page's alone, unlike the row handler above:
        it hides rows by `data-seq-id` and re-stripes what is left. {% endcomment %}
-    <script src="{% static 'js/breseq_references.js' %}?v={{ mutint_version }}"></script>
+    <script src="{% static 'js/breseq_references.js' %}?v={{ asset_version }}"></script>
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
 {% block content %}
-    <div class="row breseq-picker">
+    {% if is_ancestor %}
+        {% comment %} Reached by URL rather than by the picker's default. Says what
+           designating it did, and offers the way back. A warning, not a control, so it sits
+           above the strip. {% endcomment %}
+        <div class="alert alert-warning" style="margin-bottom: 10px;">
+            <strong>This is the designated ancestor.</strong>
+            It is excluded from every view and analysis of this experiment, and the
+            mutations below are subtracted from every other sample before anything is
+            computed.
+            <a href="/experiment/{{ experiment_id }}/ancestor/">Change</a>
+        </div>
+    {% endif %}
+    {% comment %} The same strip as Compare's, minus Display: Filter for the reader's own
+       filter, Samples for the picker, Rows for the References menu. The chosen tab is
+       remembered as `breseq_table.tab`, embedded beside the References choice in the
+       json_script below. {% endcomment %}
+    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True rows=selected_sample %}
+    <div class="tab-content">
+    {% if selected_sample %}
+    <div class="tab-pane active" id="breseq_table-pane-filter">
+        {% comment %} This page honours the reader's filter like the shared tables do, so it
+           carries the same controls and says the same thing about itself. The *form* variant,
+           not the bare fields: this page has no view-control form of its own to drop them
+           into, and inputs with no way to submit are the control-that-does-nothing this
+           design is trying to avoid. {% endcomment %}
+        {% view_filter_form %}
+        {% comment %} The ancestral rows are the reader's to show or hide, and the summary
+           sentence carries the button, so it says which state is in force rather than
+           claiming a subtraction the page may not have done -- a page describing filtering
+           it did not do is the failure `mutint_filter` is built to prevent, and it cuts
+           both ways. The ancestor's own page has nothing to subtract and the banner above
+           already says what it is. {% endcomment %}
+        {% if is_ancestor %}
+            {% view_filter_summary ancestral="own" %}
+        {% else %}
+            {% view_filter_summary ancestral="toggle" ancestral_count=ancestral_count %}
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="tab-pane{% if not selected_sample %} active{% endif %} breseq-picker" id="breseq_table-pane-samples">
         <b>Sample:</b>
         {% comment %} The same menu as the genome browser's Samples control and the Metadata
            page's column menu, but picking one sample rather than any number of them, so the
@@ -50,22 +89,6 @@
                 {% endfor %}
             </ul>
         </div>
-        {% comment %} Which reference sequences the rows may be on: the matrix's References
-           menu, remembering the matrix's own key for this experiment, so a plasmid hidden
-           on Compare is hidden here and back. The container carries what the script needs
-           to read and save that choice; the csrf token is what sets the cookie the save
-           reads. {% endcomment %}
-        {% if selected_sample %}
-        <span class="breseq-references" data-breseq-references
-              data-experiment-id="{{ experiment_id }}"
-              data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
-              data-preferences-url="{{ preferences_url }}"
-              data-empty-message="No mutations on the references shown.">
-            {% csrf_token %}
-            {% include "mutation_matrix/_reference_menu.html" with seq_ids=seq_ids %}
-            {% if user.is_authenticated %}{{ references_preferences|json_script:"breseq-references-prefs" }}{% endif %}
-        </span>
-        {% endif %}
         {% comment %} Compare lives in the mutint-compare plugin, which a deployment may
            not install. `{% url %}` with `as` sets an empty string instead of raising
            NoReverseMatch, so the link disappears rather than dangling -- the same posture
@@ -93,38 +116,31 @@
            class="breseq-crosslink">edit this sample &raquo;</a>
         {% endif %}
     </div>
+    {% if selected_sample %}
+    <div class="tab-pane" id="breseq_table-pane-rows">
+        <div class="mutation-matrix-controls">
+            {% comment %} Which reference sequences the rows may be on: the matrix's References
+               menu, remembering the matrix's own key for this experiment, so a plasmid hidden
+               on Compare is hidden here and back. The container carries what the script needs
+               to read and save that choice; the csrf token is what sets the cookie the save
+               reads. {% endcomment %}
+            <span class="breseq-references" data-breseq-references
+                  data-experiment-id="{{ experiment_id }}"
+                  data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+                  data-preferences-url="{{ preferences_url }}"
+                  data-empty-message="No mutations on the references shown.">
+                {% csrf_token %}
+                {% include "mutation_matrix/_reference_menu.html" with seq_ids=seq_ids %}
+                {% if user.is_authenticated %}{{ embedded_preferences|json_script:"breseq-references-prefs" }}{% endif %}
+            </span>
+        </div>
+    </div>
+    {% endif %}
+    </div>
 
     {% if not selected_sample %}
         <p>This experiment has no samples to show.</p>
     {% else %}
-        {% comment %} This page honours the reader's filter like the shared tables do, so it
-           carries the same controls and says the same thing about itself. The *form* variant,
-           not the bare fields: this page has no view-control form of its own to drop them
-           into, and inputs with no way to submit are the control-that-does-nothing this
-           design is trying to avoid. {% endcomment %}
-        {% if is_ancestor %}
-            {% comment %} Reached by URL rather than by the picker, which does not list it.
-               Says what designating it did, and offers the way back. {% endcomment %}
-            <div class="alert alert-warning" style="margin-bottom: 10px;">
-                <strong>This is the designated ancestor.</strong>
-                It is excluded from every view and analysis of this experiment, and the
-                mutations below are subtracted from every other sample before anything is
-                computed.
-                <a href="/experiment/{{ experiment_id }}/ancestor/">Change</a>
-            </div>
-        {% endif %}
-        {% view_filter_form %}
-        {% comment %} The ancestral rows are the reader's to show or hide, and the summary
-           sentence carries the button, so it says which state is in force rather than
-           claiming a subtraction the page may not have done -- a page describing filtering
-           it did not do is the failure `mutint_filter` is built to prevent, and it cuts
-           both ways. The ancestor's own page has nothing to subtract and the banner above
-           already says what it is. {% endcomment %}
-        {% if is_ancestor %}
-            {% view_filter_summary ancestral="own" %}
-        {% else %}
-            {% view_filter_summary ancestral="toggle" ancestral_count=ancestral_count %}
-        {% endif %}
         <div class="row">
             {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." %}
         </div>

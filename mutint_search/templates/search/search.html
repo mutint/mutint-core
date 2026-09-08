@@ -7,9 +7,9 @@
     {% comment %} The results are the mutation matrix -- see mutation_matrix/page.html for why
        these three assets travel together. DataTables itself comes from base.html; this page
        used to load a second copy of a different version in the head. {% endcomment %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
-    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
-    <script src="{% static 'js/mutation_matrix.js' %}?v={{ mutint_version }}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
+    <script src="{% static 'js/mutation_matrix.js' %}?v={{ asset_version }}"></script>
     <style type="text/css" title="currentStyle">
             .input-group-addon {
                 min-width: 150px;

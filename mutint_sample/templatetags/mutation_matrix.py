@@ -24,13 +24,17 @@ PREFERENCE_PREFIX = "mutation_matrix."
 
 
 @register.inclusion_tag("mutation_matrix/_table.html", takes_context=True)
-def mutation_matrix(context, matrix, empty_message="No mutations to show."):
+def mutation_matrix(context, matrix, empty_message="No mutations to show.", controls=True):
+    """`controls=False` for a page that renders the tab strip itself -- `mutation_matrix/page.html`
+    does, to put a Filter tab holding its form in front of the matrix's three; the tag then
+    renders the table alone and the script finds the menus through the page's strip."""
     request = context.get("request")
     user = getattr(request, "user", None)
     authenticated = bool(user is not None and user.is_authenticated)
     return {
         "matrix": matrix,
         "empty_message": empty_message,
+        "controls": controls,
         "authenticated": authenticated,
         "preferences": get_preferences(user, PREFERENCE_PREFIX) if authenticated else {},
         "preferences_url": reverse("preferences"),

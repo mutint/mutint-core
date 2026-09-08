@@ -10,12 +10,20 @@ def branding(request):
     whatever MUTINT_BRANDING says and is empty by default, so an unconfigured
     mutint-core renders no name and no icon at all.
 
-    `mutint_version` is mutint-core's own version, which is not configurable: it
-    feeds the "Powered by ALEdb" watermark that every deployment carries.
+    `mutint_version` is mutint-core's own version, which is not configurable, for
+    prose: the About page says which mutint-core this is.
+
+    `asset_version` is what every first-party asset is linked with, as `?v=`: the
+    version plus a digest of every installed component's git revision, so the URLs
+    change with every commit and not only with every release -- a Development-channel
+    upgrade keeps the version, and a browser must still refetch the scripts. See
+    `mutint_common.util.compute_asset_version`.
     """
+    from mutint_common.util import get_asset_version
     return {
         'branding': getattr(settings, 'MUTINT_BRANDING', {}),
         'mutint_version': __version__,
+        'asset_version': get_asset_version(),
     }
 
 

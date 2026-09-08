@@ -1,0 +1,20 @@
+{% comment %} The tab strip above a mutation table: Filter, Samples, Rows, Display, in that
+   order, and a page passes only the ones it has content for. The same shape as the Import
+   data page's strip (import/_tabs.html) and the curate toolbar, but client-side: Bootstrap's
+   tab plugin -- inside the DataTables bundle at the end of body, never bootstrap.min.js on its
+   own -- switches the panes, and js/mutint_control_tabs.js restores and remembers the tab as
+   `<page>.tab` through the preference store. Every pane must sit in one `.tab-content`,
+   because the plugin deactivates only the target's siblings.
+
+   Takes `page` (the pane ids' prefix and the preference key's), `active`, and `prefs_id`,
+   `authenticated`, `preferences_url` spelled out -- an include from inside an inclusion tag
+   has no `request` to read them from. {% endcomment %}
+<ul class="nav nav-tabs" style="margin-bottom: 16px;" data-control-tabs="{{ page }}"
+    data-prefs-id="{{ prefs_id }}"
+    data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
+    data-preferences-url="{{ preferences_url }}">
+    {% if filter %}<li{% if active == "filter" %} class="active"{% endif %}><a data-toggle="tab" data-tab="filter" href="#{{ page }}-pane-filter">Filter</a></li>{% endif %}
+    {% if samples %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Samples</a></li>{% endif %}
+    {% if rows %}<li{% if active == "rows" %} class="active"{% endif %}><a data-toggle="tab" data-tab="rows" href="#{{ page }}-pane-rows">Rows</a></li>{% endif %}
+    {% if display %}<li{% if active == "display" %} class="active"{% endif %}><a data-toggle="tab" data-tab="display" href="#{{ page }}-pane-display">Display</a></li>{% endif %}
+</ul>

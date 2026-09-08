@@ -35,7 +35,7 @@
     <link href="{% static "vendor/metismenu-2.5.2/metisMenu.min.css" %}" rel="stylesheet">
 
     <!-- SBAdmin 2 Theme CSS -->
-    <link href="{% static "css/sb-admin-2.css" %}?v={{ mutint_version }}" rel="stylesheet">
+    <link href="{% static "css/sb-admin-2.css" %}?v={{ asset_version }}" rel="stylesheet">
 
     <!-- Font Awesome CSS -->
     <link href="{% static "vendor/font-awesome-4.6.3/css/font-awesome.min.css" %}" rel="stylesheet"
@@ -46,7 +46,7 @@
     {% include "branding/head.html" %}
 
     <!-- Common CSS -->
-    <link href="{% static "css/common.css" %}?v={{ mutint_version }}" rel="stylesheet">
+    <link href="{% static "css/common.css" %}?v={{ asset_version }}" rel="stylesheet">
 
     <!-- Jquery JS -->
     <script src="{% static "vendor/jquery-1.12.4/jquery.min.js" %}" type="text/javascript"></script>
@@ -82,12 +82,14 @@
     <!-- Shared create/delete helpers: mutintPost and mutintConfirmDelete.
          In <head> deliberately: it only defines window functions, and a page's own
          inline script may call them at parse time, before the end of <body>. -->
-    <script src="{% static "js/mutint_crud.js" %}?v={{ mutint_version }}"></script>
+    <script src="{% static "js/mutint_crud.js" %}?v={{ asset_version }}"></script>
     <!-- After mutint_crud.js, which owns the CSRF cookie read this uses. -->
-    <script src="{% static "js/mutint_upload.js" %}?v={{ mutint_version }}"></script>
-    <script src="{% static "js/mutint_select_list.js" %}?v={{ mutint_version }}"></script>
+    <script src="{% static "js/mutint_upload.js" %}?v={{ asset_version }}"></script>
+    <script src="{% static "js/mutint_select_list.js" %}?v={{ asset_version }}"></script>
     <!-- The client half of per-user preferences. After mutint_crud.js: saves go through mutintPostJson. -->
-    <script src="{% static "js/mutint_preferences.js" %}?v={{ mutint_version }}"></script>
+    <script src="{% static "js/mutint_preferences.js" %}?v={{ asset_version }}"></script>
+    <!-- The tab strip above a mutation table: restores and remembers the tab, through the store above. -->
+    <script src="{% static "js/mutint_control_tabs.js" %}?v={{ asset_version }}"></script>
 
     {% block scripts_and_style %}{% endblock %}
 </head>
@@ -282,7 +284,7 @@
 </div>
 
 <script src="{% static "vendor/metismenu-2.5.2/metisMenu.min.js" %}"></script>
-<script src="{% static "js/sb-admin-2.min.js" %}?v={{ mutint_version }}"></script>
+<script src="{% static "js/sb-admin-2.min.js" %}?v={{ asset_version }}"></script>
 
 
 <!-- DataTables Bootstrap JS -->

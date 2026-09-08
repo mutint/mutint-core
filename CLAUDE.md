@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2094 run, 0 failures** standalone; **2395** assembled, measured with `PYTHONPATH`
+**Baseline: 2130 run, 0 failures** standalone; **2437** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -217,9 +217,14 @@ there.** It is the whole of what keeps the content box off the sidebar, so a bro
 cached older copy of `common.css` would render every page with the header on top of the
 sidebar. Layout this load-bearing ships with the markup that assumes it.
 
-For the same reason mutint-core's own CSS and JS are linked with `?v={{ mutint_version }}`. A
-release changes every one of those URLs, so a browser cannot serve half of one version and half
-of another. Third-party CDN assets are already versioned in their paths.
+For the same reason mutint-core's own CSS and JS are linked with `?v={{ asset_version }}`:
+the version plus a short digest of every installed component's git revision
+(`util.get_asset_version`, computed once per process; the bare version where no `.git` is
+present). A release changes every one of those URLs, and so does any commit -- which matters
+because the Development channel follows `main` without a version bump, and a browser that
+kept `mutation_matrix.js` from the previous commit under the same URL drew new rows with old
+code. `mutint_version` stays for prose: the About page says which mutint-core this is.
+Third-party assets are already versioned in their paths.
 
 `common.css` also trims the header block on every page: `.page-header`'s 40px top margin (and
 the `h2`'s own, which collapses through it, since `.page-header` has no top padding or border),
@@ -515,7 +520,13 @@ need it, because deciding that per page is what went wrong.
 the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
 silently.
 
-**It carries the matrix's References menu**, beside the sample picker, and the choice is
+**Its controls are the matrix's strip minus Display** -- Filter (the reader's filter form and
+the summary line with the ancestral toggle), Samples (the picker and the crosslinks), Rows
+(the References menu) -- from `control_tabs.html`, remembered as `breseq_table.tab`; the
+view embeds that key beside the References choice. The ancestor banner stays above the
+strip: it is a warning, not a control.
+
+**It carries the matrix's References menu**, in the Rows tab, and the choice is
 the matrix's own key (`mutation_matrix.references.<exp>`), so a contig hidden on Compare is
 hidden here and back. Each row carries its contig as `data-seq-id`, and
 `js/breseq_references.js` -- this page's alone, since the menu is -- sets `hidden` on the rows
@@ -1706,6 +1717,22 @@ per-sample Mutations page renders the same menu over its server-rendered rows an
 the same key, so a plasmid hidden on Compare is hidden there and back -- see **The per-sample
 mutation page**.
 
+**The controls are four tabs -- Filter, Samples, Rows, Display -- and the page owns the
+strip.** `mutint_common/templates/control_tabs.html` is the Import data page's strip made
+client-side: Bootstrap's tab plugin switches the panes (it arrives inside the DataTables
+bundle at the end of body; `bootstrap.min.js` on its own would bind every handler twice), and
+`mutint_control_tabs.js` restores and remembers the tab as `<page>.tab` through the
+preference store. Two facts decide the structure: the plugin deactivates only the target
+pane's *siblings*, so every pane must sit in one `.tab-content`; and a `{% block %}` cannot
+cross an inclusion tag, so the Filter pane's form -- with the two blocks Compare fills --
+has to stay in `page.html`. So `page.html` renders the strip, the Filter pane and the tag's
+three panes (`_panes.html`), and calls the tag with `controls=False`; a page that renders the
+tag alone, as Search does, gets the three client-side tabs from the tag. The script finds
+its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
+`.tab-content`. The DataTables toolbars -- length, search, count, pager, Export CSV -- sit
+under the strip on every tab; the Frequency display menu and the View switch are in the
+Display pane, not in those toolbars.
+
 **Row sets are the seam for a page that wants a subset of its rows without being a second
 page.** `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))` annotates each row with
 the keys of the sets holding it, and `_table.html` renders a **Show** menu -- All, then one
@@ -1740,11 +1767,17 @@ the box scrolls as before; with fewer, the header shade ends at the last sample.
 
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
 puts its controls in two rows above the table -- length, search and the count; pager and Export
-CSV -- and wraps the table alone in `.mutation-matrix-scroll`; the box breaks out of `#mutint-content`'s padding on
-the right and at the foot with negative margins (not on the left: the table, header shade
-included, begins where the controls above it begin) and the script sizes it to the bottom of the
-window, so its scrollbars are the window's edges -- then measures whether the page still overflows and takes any excess off the
-box, because a fraction of a pixel under it gives the page a scrollbar with nothing to scroll. The header sticks to its top and the descriptive columns to its left, each
+CSV -- and wraps the table alone in `.mutation-matrix-scroll`. The box is `fit-content` wide,
+clamped to `calc(100% + 25px)`: as wide as the table, so with two samples its vertical
+scrollbar sits at the table's right edge, and no wider than the window, which the negative
+right margin (breaking out of `#mutint-content`'s padding; not on the left, where the table,
+header shade included, begins where the strip above it begins) makes exactly the clamp. The
+clamp is load-bearing rather than belt-and-braces: past it, `fit-content` alone would grow
+the box and hand the *page* the horizontal scrollbar. `scrollbar-gutter: stable` counts a
+classic scrollbar into that width, or the table overflows sideways by its 15px. The script
+sizes the box to the bottom of the window, so its bottom edge is the window's, then measures
+whether the page still overflows and takes any excess off the box, because a fraction of a
+pixel under it gives the page a scrollbar with nothing to scroll. The header sticks to its top and the descriptive columns to its left, each
 pinned column's `left` written by the script after every draw, and again from a `ResizeObserver`
 on the table, as the sum of the pinned widths before it (`position: sticky` cannot add them up
 itself). A stuck cell is painted opaque -- white, the stripe grey, the header green -- because a
@@ -1769,8 +1802,7 @@ bands; population ids are unique across experiments, so Search needs no other ru
 by experiment for one commit, which colored nothing on any per-experiment page.) Sample names
 are bold.
 
-**Frequency display.** A fourth menu, moved by the script to the front of the first toolbar
-row, chooses how a sample cell shows its frequency: Number (the default; no tint -- the number is
+**Frequency display.** A menu in the Display tab chooses how a sample cell shows its frequency: Number (the default; no tint -- the number is
 the information),
 Bars (the fraction of the cell's height in the population's color, a half tone of it for a
 polymorphic call), Heat map (yellow through teal to blue, YlGnBu), or Number and heat map. A
@@ -1780,7 +1812,7 @@ the rest, so a format change redraws nothing. Every cell is a fixed 22 by 32 pix
 formats never reflow the table, and an absent cell stays blank in every format. The choice is
 `mutation_matrix.frequency`, remembered like the other three.
 
-**View: Normal or Condensed.** A two-button switch at the end of the second toolbar row.
+**View: Normal or Condensed.** A two-button switch in the Display tab.
 Normal keeps the Mutations page's cell padding (Bootstrap's 8px, a 38px row); Condensed, the
 default, drops it to 1px on a 20px line, one line per row. One class on the table
 (`view-<name>`) sets two variables, the sample cell's height and the bar's reach, so every
@@ -1845,9 +1877,9 @@ key, value JSON)`, one row per key, `get_preference` / `get_preferences(prefix)`
 403 for anonymous, plain `JsonResponse` because `mutintPostJson` reads real statuses). The
 client half is `js/mutint_preferences.js`, from `base.html`: a page embeds a signed-in
 reader's choices as a `json_script` and the script reads them synchronously and saves changes
-fire-and-forget; an anonymous reader gets localStorage. `mutation_matrix.js` and
-`breseq_references.js` are its two callers, and `test_templates` asserts the store is defined
-in it alone. It exists
+fire-and-forget; an anonymous reader gets localStorage. `mutation_matrix.js`,
+`breseq_references.js` and `mutint_control_tabs.js` are its callers, and `test_templates`
+asserts the store is defined in it alone. It exists
 for how somebody likes to *see* things, which neither the view filter (per session, and about
 which rows) nor localStorage (one browser) can carry across experiments and machines. Keys are
 dotted names owned by whoever writes them, so a plugin remembers something by picking a prefix;
@@ -2493,7 +2525,7 @@ Four things about the vendored layout are load-bearing:
 - **The four DataTables bundles stay distinct.** The pages differ in which extensions they use,
   so consolidating them is a behavior change wearing a cleanup's clothes.
 
-`?v={{ mutint_version }}` is deliberately **not** applied to these: every vendored path already
+`?v={{ asset_version }}` is deliberately **not** applied to these: every vendored path already
 carries its version, so a release cannot serve half of one version and half of another.
 
 `test_templates` asserts it can still find the asset it guards, and that is the general

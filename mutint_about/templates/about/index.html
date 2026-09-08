@@ -3,7 +3,7 @@
 {% block title %}About{% endblock %}
 {% block header %}About{% endblock %}
 {% block scripts_and_style %}
-    <link href="{% static "css/about.css" %}?v={{ mutint_version }}" rel="stylesheet">
+    <link href="{% static "css/about.css" %}?v={{ asset_version }}" rel="stylesheet">
 {% endblock %}
 {% block content %}
     {% comment %} The page is assembled from whatever is installed: every component gets a

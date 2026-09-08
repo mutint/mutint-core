@@ -260,7 +260,7 @@ class PreferencesScriptTestCase(unittest.TestCase):
 
     STATIC = os.path.join(CORE, "mutint_common", "staticfiles", "js")
     STORE = "mutint_preferences.js"
-    CALLERS = ("mutation_matrix.js", "breseq_references.js")
+    CALLERS = ("mutation_matrix.js", "breseq_references.js", "mutint_control_tabs.js")
 
     def read(self, name):
         with open(os.path.join(self.STATIC, name)) as handle:
@@ -271,7 +271,7 @@ class PreferencesScriptTestCase(unittest.TestCase):
             base = handle.read()
         self.assertIn(self.STORE, base)
         self.assertLess(base.index("mutint_crud.js"), base.index(self.STORE))
-        self.assertIn(self.STORE + '" %}?v={{ mutint_version }}', base)
+        self.assertIn(self.STORE + '" %}?v={{ asset_version }}', base)
 
     def test_the_store_is_defined_once(self):
         store = self.read(self.STORE)
@@ -282,3 +282,61 @@ class PreferencesScriptTestCase(unittest.TestCase):
             self.assertIn("window.mutintPreferences(", script, caller)
             for marker in ("localStorage", "mutintPostJson"):
                 self.assertNotIn(marker, script, "%s carries its own store" % caller)
+
+
+class AssetVersionTestCase(unittest.TestCase):
+    """Every first-party asset is linked with `asset_version`, never the bare version.
+
+    The bare version changes at a release; an install on the Development channel moves
+    between commits without one, and a browser then keeps the previous commit's script under
+    an unchanged URL -- the matrix drew new rows with old code for exactly that reason.
+    `asset_version` folds every component's git revision in.
+    """
+
+    def test_no_template_links_an_asset_with_the_bare_version(self):
+        names, users = set(), 0
+        for path in _templates():
+            with open(path, errors="ignore") as handle:
+                text = handle.read()
+            found = re.findall(r"\?v=\{\{\s*(\w+)\s*\}\}", text)
+            if found:
+                users += 1
+            names.update(found)
+        self.assertGreater(users, 1, "expected several templates to version their assets")
+        self.assertEqual({"asset_version"}, names)
+
+
+class ControlTabsScriptTestCase(unittest.TestCase):
+    """The tab strip above a mutation table: one partial, one script, Bootstrap's plugin."""
+
+    def read(self, *parts):
+        with open(os.path.join(CORE, *parts)) as handle:
+            return handle.read()
+
+    def test_base_loads_the_script_after_the_store(self):
+        base = self.read("mutint_common", "templates", "base.html")
+        self.assertIn('mutint_control_tabs.js" %}?v={{ asset_version }}', base)
+        self.assertLess(base.index("mutint_preferences.js"), base.index("mutint_control_tabs.js"))
+
+    def test_the_script_restores_and_saves(self):
+        script = self.read("mutint_common", "staticfiles", "js", "mutint_control_tabs.js")
+        self.assertIn("[data-control-tabs]", script)
+        self.assertIn("shown.bs.tab", script)
+
+    def test_every_strip_is_the_shared_partial(self):
+        """A second hand-written strip is how two pages come to disagree about the tabs."""
+        for path in _templates():
+            with open(path, errors="ignore") as handle:
+                text = handle.read()
+            if 'data-toggle="tab"' in text and not path.endswith("control_tabs.html"):
+                self.fail("%s writes its own tab strip; include control_tabs.html"
+                          % os.path.relpath(path, CORE))
+
+    def test_no_template_loads_bootstrap_on_its_own(self):
+        """The plugin arrives inside the DataTables bundle; a second copy binds every
+        data-api handler twice -- see the comment in base.html."""
+        for path in _templates():
+            with open(path, errors="ignore") as handle:
+                text = handle.read()
+            self.assertNotRegex(text, r"bootstrap-[\d.]+/js/bootstrap\.min\.js",
+                                os.path.relpath(path, CORE))

@@ -82,8 +82,12 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-Menus above the table let the reader show and hide descriptive columns, samples, mutation
-types and reference sequences. Those choices are remembered for a signed-in reader through
+The controls above the table are four tabs -- Filter (the page's form), Samples, Rows
+(mutation types, reference sequences, row sets) and Display (columns, frequency display, row
+spacing) -- from `control_tabs.html`; a page rendering the tag alone gets the three
+client-side tabs from the tag, and a page that renders its own strip, as
+`mutation_matrix/page.html` does, passes `controls=False`. The menus let the reader show and
+hide descriptive columns, samples, mutation types and reference sequences. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
 `mutation_matrix.view` (Normal or Condensed row spacing) and `mutation_matrix.show` (which row

@@ -4,6 +4,7 @@ Built from an imported breseq folder, the way the rest of this app's tests are, 
 come out of the same importer every page reads.
 """
 
+import re
 import shutil
 import tempfile
 from collections import OrderedDict
@@ -303,6 +304,60 @@ class PartialTestCase(_Fixture):
         self.assertLess(source.index("{% block matrix_form_fields %}"), source.index('value="Apply"'))
         self.assertLess(source.index("{% view_filter_summary"), source.index("{% block matrix_summary %}"))
 
+    def test_the_controls_are_four_tabs_in_order(self):
+        """Filter, Samples, Rows, Display: the Import data page's strip, client-side, with
+        the page's Filter pane first and the tag's three after it."""
+        html = self._render()
+        self.assertIn('class="nav nav-tabs"', html)
+        self.assertIn('data-control-tabs="mutation_matrix"', html)
+        self.assertEqual(["filter", "samples", "rows", "display"],
+                         re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
+        for key in ("filter", "samples", "rows", "display"):
+            self.assertIn('id="mutation_matrix-pane-%s"' % key, html)
+        self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', html)
+        self.assertIn('class="tab-pane active" id="mutation_matrix-pane-filter"', html)
+        self.assertIn('data-mutation-matrix-controls="mutation-matrix"', html)
+
+    def test_each_control_sits_in_its_own_pane(self):
+        html = self._render()
+        def pane(key, next_marker):
+            start = html.index('id="mutation_matrix-pane-%s"' % key)
+            return html[start:html.index(next_marker, start)]
+        filter_pane = pane("filter", 'id="mutation_matrix-pane-samples"')
+        self.assertIn("<form", filter_pane)
+        self.assertIn('value="Apply"', filter_pane)
+        self.assertIn('data-role="samples"', pane("samples", 'id="mutation_matrix-pane-rows"'))
+        rows = pane("rows", 'id="mutation_matrix-pane-display"')
+        self.assertIn('data-role="types"', rows)
+        self.assertIn('data-role="references"', rows)
+        display = pane("display", "<table")
+        for role in ("columns", "frequency-control", "view-control"):
+            self.assertIn('data-role="%s"' % role, display)
+        # The page rendered the panes; the tag did not render them again.
+        self.assertEqual(1, html.count('data-role="columns"'))
+
+    def test_the_tag_alone_renders_the_three_client_side_tabs(self):
+        """Search renders the tag with no page around it and still gets a strip."""
+        from django.template import engines
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        SessionMiddleware(lambda r: None).process_request(request)
+        html = engines["django"].from_string(
+            "{% load mutation_matrix %}{% mutation_matrix matrix %}").render(
+            {"matrix": self.matrix()}, request)
+        self.assertEqual(["samples", "rows", "display"],
+                         re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
+        self.assertIn('<li class="active"><a data-toggle="tab" data-tab="samples"', html)
+        self.assertNotIn("pane-filter", html)
+        self.assertIn('data-mutation-matrix-controls="mutation-matrix"', html)
+
+    def test_a_signed_in_readers_tab_is_embedded(self):
+        from mutint_common.preferences import set_preference
+        set_preference(self.user, "mutation_matrix.tab", {"tab": "rows"})
+        html = self._render(user=self.user)
+        self.assertIn("mutation_matrix.tab", html)
+        self.assertIn('data-prefs-id="mutation-matrix-prefs"', html)
+
     def test_the_ancestral_button_needs_a_view_that_honours_it(self):
         """The page draws the Show/Hide button only for a view that put `ancestral_mode` in
         the context -- a button whose view ignores it is a control that does nothing."""
@@ -340,7 +395,8 @@ class PartialTestCase(_Fixture):
         set_preference(self.user, "mutation_matrix.columns", {"hidden": ["gene"]})
         anonymous = self._render()
         self.assertIn('data-authenticated="0"', anonymous)
-        self.assertNotIn("mutation-matrix-prefs", anonymous)
+        # The strip names the json_script it would read; only a signed-in reader gets it.
+        self.assertNotIn('<script id="mutation-matrix-prefs"', anonymous)
         signed_in = self._render(user=self.user)
         self.assertIn('data-authenticated="1"', signed_in)
         self.assertIn('id="mutation-matrix-prefs"', signed_in)

@@ -22,10 +22,14 @@
  *     it was read from (the store itself is mutint_preferences.js);
  *   - a row the server marked `ancestral` -- observed in the designated ancestor, drawn
  *     because the reader asked -- is tinted red on every draw, the per-sample table's tint;
- *   - the table lives in a scroll box, with DataTables' own controls above it: the header
- *     sticks to its top and the descriptive columns to its left, each pinned column's `left`
- *     being the sum of the widths before it, recomputed after every draw and whenever the
- *     table's size changes, because widths change with the data on the page;
+ *   - the menus sit in a tab strip above the table (Filter, Samples, Rows, Display), found
+ *     through `[data-mutation-matrix-controls]` because the page may own the strip; the
+ *     DataTables toolbars -- length, search, count, pager, Export CSV -- stay under the strip
+ *     on every tab;
+ *   - the table lives in a scroll box as wide as itself and no wider than the window: the
+ *     header sticks to its top and the descriptive columns to its left, each pinned column's
+ *     `left` being the sum of the widths before it, recomputed after every draw and whenever
+ *     the table's size changes, because widths change with the data on the page;
  *   - nothing sorts. The rows arrive in breseq's order, reference then position, and a
  *     sample's header is a link to that sample's own page rather than a sort handle.
  *
@@ -89,6 +93,9 @@
 
     function init(container) {
         var table = container.querySelector("table");
+        // The menus sit in the tab strip's panes: the page's own when it rendered the strip
+        // (mutation_matrix/page.html, with a Filter tab in front), the container's otherwise.
+        var controls = document.querySelector('[data-mutation-matrix-controls="' + table.id + '"]') || container;
         var rowsNode = document.getElementById(table.id + "-rows");
         var rows = rowsNode ? JSON.parse(rowsNode.textContent) : [];
         var prefs = storage(container, table);
@@ -99,7 +106,7 @@
         var hiddenColumns = hiddenSet(prefs.get(COLUMNS_KEY, null));
         if (prefs.get(COLUMNS_KEY, null) === null) {
             // Nothing remembered yet: the server's defaults, read off the menu it rendered.
-            Array.prototype.forEach.call(container.querySelectorAll('[data-role="columns"] li[data-value]'), function (li) {
+            Array.prototype.forEach.call(controls.querySelectorAll('[data-role="columns"] li[data-value]'), function (li) {
                 if (!li.classList.contains("active")) { hiddenColumns[li.getAttribute("data-value")] = true; }
             });
         }
@@ -114,7 +121,7 @@
         table.classList.add("view-" + view);
         // The row set to show, when this table offers the remembered one; All otherwise --
         // a choice made on a page that has sets must not empty one that has none.
-        var showList = container.querySelector('[data-role="show"]');
+        var showList = controls.querySelector('[data-role="show"]');
         var storedShow = prefs.get(SHOW_KEY, null);
         var shownSet = "";
         if (showList && storedShow && storedShow.set &&
@@ -164,10 +171,10 @@
         });
 
         // The menus reflect the remembered state before anything is drawn.
-        var columnList = container.querySelector('[data-role="columns"]');
-        var sampleList = container.querySelector('[data-role="samples"]');
-        var typeList = container.querySelector('[data-role="types"]');
-        var referenceList = container.querySelector('[data-role="references"]');
+        var columnList = controls.querySelector('[data-role="columns"]');
+        var sampleList = controls.querySelector('[data-role="samples"]');
+        var typeList = controls.querySelector('[data-role="types"]');
+        var referenceList = controls.querySelector('[data-role="references"]');
         Array.prototype.forEach.call(columnList.querySelectorAll("li[data-value]"), function (li) {
             li.classList.toggle("active", !hiddenColumns[li.getAttribute("data-value")]);
         });
@@ -278,7 +285,8 @@
         }
 
         /* The box reaches the bottom of the window, whatever sits above it on the page, so
-           its scrollbars sit at the window's edges (the stylesheet takes care of the sides). */
+           its bottom scrollbar is the window's edge; its side is the table's own edge or the
+           window's, whichever is nearer (the stylesheet's fit-content and its clamp). */
         function sizeScrollBox() {
             if (!scrollBox) { return; }
             var root = document.documentElement;
@@ -304,7 +312,7 @@
             new ResizeObserver(function () { sizeScrollBox(); }).observe(document.body);
         }
 
-        var counter = container.querySelector('[data-role="sample-count"]');
+        var counter = controls.querySelector('[data-role="sample-count"]');
         var columnPicker = window.mutintSelectList(columnList, {
             toggle: true, controls: null,
             onChange: function (changed) {
@@ -318,7 +326,7 @@
                 prefs.set(COLUMNS_KEY, { hidden: keys(hiddenColumns) });
             }
         });
-        var typeCounter = container.querySelector('[data-role="type-count"]');
+        var typeCounter = controls.querySelector('[data-role="type-count"]');
         var typePicker = window.mutintSelectList(typeList, {
             toggle: true, controls: null,
             onChange: function (changed) {
@@ -332,13 +340,13 @@
             }
         });
         if (typeCounter) { typeCounter.textContent = typePicker.count(); }
-        Array.prototype.forEach.call(container.querySelectorAll("[data-types]"), function (button) {
+        Array.prototype.forEach.call(controls.querySelectorAll("[data-types]"), function (button) {
             button.addEventListener("click", function () {
                 var all = button.getAttribute("data-types") === "all";
                 typePicker.select(function () { return all; });
             });
         });
-        var referenceCounter = container.querySelector('[data-role="reference-count"]');
+        var referenceCounter = controls.querySelector('[data-role="reference-count"]');
         var referencePicker = window.mutintSelectList(referenceList, {
             toggle: true, controls: null,
             onChange: function (changed) {
@@ -352,7 +360,7 @@
             }
         });
         if (referenceCounter) { referenceCounter.textContent = referencePicker.count(); }
-        Array.prototype.forEach.call(container.querySelectorAll("[data-references]"), function (button) {
+        Array.prototype.forEach.call(controls.querySelectorAll("[data-references]"), function (button) {
             button.addEventListener("click", function () {
                 var all = button.getAttribute("data-references") === "all";
                 referencePicker.select(function () { return all; });
@@ -379,21 +387,18 @@
         });
         if (counter) { counter.textContent = samplePicker.count(); }
 
-        Array.prototype.forEach.call(container.querySelectorAll("[data-samples]"), function (button) {
+        Array.prototype.forEach.call(controls.querySelectorAll("[data-samples]"), function (button) {
             button.addEventListener("click", function () {
                 var all = button.getAttribute("data-samples") === "all";
                 samplePicker.select(function () { return all; });
             });
         });
 
-        /* The Frequency display menu: rendered in the container, moved to the front of
-           DataTables' first toolbar row. Choosing a format swaps one class on the table. */
-        var frequencyControl = container.querySelector('[data-role="frequency-control"]');
-        var frequencyList = container.querySelector('[data-role="frequency"]');
-        var frequencyLabel = container.querySelector('[data-role="frequency-label"]');
-        var legend = container.querySelector('[data-role="frequency-legend"]');
-        var toolbar = container.querySelector(".mutation-matrix-toolbar");
-        if (toolbar && frequencyControl) { toolbar.insertBefore(frequencyControl, toolbar.firstChild); }
+        /* The Frequency display menu, in the Display tab. Choosing a format swaps one class
+           on the table. */
+        var frequencyList = controls.querySelector('[data-role="frequency"]');
+        var frequencyLabel = controls.querySelector('[data-role="frequency-label"]');
+        var legend = controls.querySelector('[data-role="frequency-legend"]');
         function showFormat(name) {
             Object.keys(FORMATS).forEach(function (key) { table.classList.toggle("freq-" + key, key === name); });
             if (frequencyLabel) { frequencyLabel.textContent = FORMATS[name]; }
@@ -415,7 +420,7 @@
 
         /* The Show menu: All, or one of the row sets the server offered. One class of row
            filter beside the samples' and the types', through the same search hook. */
-        var showLabel = container.querySelector('[data-role="show-label"]');
+        var showLabel = controls.querySelector('[data-role="show-label"]');
         var showPicker = null;
         if (showList) {
             Array.prototype.forEach.call(showList.querySelectorAll("li[data-value]"), function (li) {
@@ -438,21 +443,18 @@
             });
         }
 
-        /* The View switch: Normal is the Mutations page's cell padding, Condensed one line
-           per row. One class on the table, and the pinned offsets recomputed, since the
-           descriptive columns' widths move with their padding. */
-        var viewControl = container.querySelector('[data-role="view-control"]');
-        var toolbars = container.querySelectorAll(".mutation-matrix-toolbar");
-        if (viewControl && toolbars.length > 1) { toolbars[1].appendChild(viewControl); }
+        /* The View switch, in the Display tab: Normal is the Mutations page's cell padding,
+           Condensed one line per row. One class on the table, and the pinned offsets
+           recomputed, since the descriptive columns' widths move with their padding. */
         function showView(name) {
             Object.keys(VIEWS).forEach(function (key) { table.classList.toggle("view-" + key, key === name); });
-            Array.prototype.forEach.call(container.querySelectorAll("[data-view]"), function (button) {
+            Array.prototype.forEach.call(controls.querySelectorAll("[data-view]"), function (button) {
                 button.classList.toggle("active", button.getAttribute("data-view") === name);
             });
             pinColumns();
         }
         showView(view);
-        Array.prototype.forEach.call(container.querySelectorAll("[data-view]"), function (button) {
+        Array.prototype.forEach.call(controls.querySelectorAll("[data-view]"), function (button) {
             button.addEventListener("click", function () {
                 view = button.getAttribute("data-view");
                 showView(view);

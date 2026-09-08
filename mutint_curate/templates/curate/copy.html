@@ -6,8 +6,8 @@
     {% comment %} The script goes with the stylesheet everywhere, exception-free -- this tab
        has no Description column to collapse a gene list into today, and remembering which
        pages do is how the handler came to be missing from two of them. {% endcomment %}
-    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ mutint_version }}"/>
-    <script src="{% static 'js/breseq_table.js' %}?v={{ mutint_version }}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}

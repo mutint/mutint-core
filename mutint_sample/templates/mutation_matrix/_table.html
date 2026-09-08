@@ -9,9 +9,11 @@
    are drawn by the script -- a thousand mutations by forty samples is not a table to render
    twice.
 
-   The Columns, Samples, Types and References menus are the genome browser's Samples menu, four times: a
-   Bootstrap dropdown whose rows are <li class="active"><a>, driven by mutintSelectList in
-   toggle mode. Being active IS being shown. {% endcomment %}
+   The menus live in a tab strip (control_tabs.html) with three panes (_panes.html). A page
+   that renders the tag alone -- Search -- gets the strip from here; mutation_matrix/page.html
+   renders its own, with a Filter tab for its form in front, and passes `controls=False`,
+   because every pane has to sit in one `.tab-content` and a block cannot cross an inclusion
+   tag. {% endcomment %}
 <div class="mutation-matrix" data-mutation-matrix
      data-experiment-id="{{ matrix.experiment_id|default_if_none:'' }}"
      data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
@@ -19,102 +21,12 @@
      data-csv-title="{{ matrix.csv_title }}"
      data-empty-message="{{ empty_message }}">
     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-    <div class="mutation-matrix-controls">
-        <div class="btn-group">
-            <button type="button" class="btn btn-default dropdown-toggle"
-                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Columns <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="columns">
-                {% for column in matrix.columns %}
-                    <li data-value="{{ column.key }}"{% if column.default_visible %} class="active"{% endif %}>
-                        <a href="#">{{ column.title }}</a>
-                    </li>
-                {% endfor %}
-            </ul>
+    {% if controls %}
+        {% include "control_tabs.html" with page="mutation_matrix" active="samples" prefs_id=prefs_id authenticated=authenticated preferences_url=preferences_url samples=True rows=True display=True %}
+        <div class="tab-content" data-mutation-matrix-controls="{{ matrix.dom_id }}">
+            {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active="samples" %}
         </div>
-        <div class="btn-group">
-            <button type="button" class="btn btn-default dropdown-toggle"
-                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Samples (<span data-role="sample-count">{{ matrix.samples|length }}</span>
-                of {{ matrix.samples|length }}) <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="samples">
-                {% for sample in matrix.samples %}
-                    <li data-value="{{ sample.id }}" class="active"><a href="#">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
-        <div class="btn-group" role="group">
-            <button type="button" class="btn btn-default" data-samples="all">Show all samples</button>
-            <button type="button" class="btn btn-default" data-samples="none">Hide all samples</button>
-        </div>
-        {% comment %} Which mutation types the rows may be. Only the types this table holds are
-           offered; a hidden one that is absent here is still remembered for the next table. {% endcomment %}
-        <div class="btn-group">
-            <button type="button" class="btn btn-default dropdown-toggle"
-                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Mutation Types (<span data-role="type-count">{{ matrix.types|length }}</span>
-                of {{ matrix.types|length }}) <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="types">
-                {% for type in matrix.types %}
-                    <li data-value="{{ type }}" class="active"><a href="#">{{ type }}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
-        <div class="btn-group" role="group">
-            <button type="button" class="btn btn-default" data-types="all">Show all types</button>
-            <button type="button" class="btn btn-default" data-types="none">Hide all types</button>
-        </div>
-        {% include "mutation_matrix/_reference_menu.html" with seq_ids=matrix.seq_ids %}
-        {% comment %} Which of the caller's row sets to show -- All, or one of them. Only when
-           the caller handed some over: a page with none to offer has no menu, rather than a
-           menu of one entry. One choice at a time, so the list runs in plain mode. {% endcomment %}
-        {% if matrix.sets %}
-            <div class="btn-group">
-                <button type="button" class="btn btn-default dropdown-toggle"
-                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Show: <span data-role="show-label">All</span> <span class="caret"></span>
-                </button>
-                <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="show">
-                    <li data-value="" class="active"><a href="#">All ({{ matrix.rows|length }})</a></li>
-                    {% for set in matrix.sets %}
-                        <li data-value="{{ set.key }}"><a href="#">{{ set.label }} ({{ set.count }})</a></li>
-                    {% endfor %}
-                </ul>
-            </div>
-        {% endif %}
-    </div>
-
-    {% comment %} How a sample cell shows its frequency. The script moves this into
-       DataTables' first toolbar row, ahead of Show entries, once the table exists; the
-       legend beside it shows in the two heat-map formats. One choice at a time, so the
-       list runs in plain (replacing) mode. {% endcomment %}
-    <div class="mutation-matrix-frequency" data-role="frequency-control">
-        <div class="btn-group">
-            <button type="button" class="btn btn-default dropdown-toggle"
-                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Frequency display: <span data-role="frequency-label">Number</span> <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="frequency">
-                <li data-value="number" class="active"><a href="#">Number</a></li>
-                <li data-value="bars"><a href="#">Bars</a></li>
-                <li data-value="heat"><a href="#">Heat map</a></li>
-                <li data-value="both"><a href="#">Number and heat map</a></li>
-            </ul>
-        </div>
-        <span class="mutation-matrix-legend" data-role="frequency-legend" hidden>0% <span class="mutation-matrix-legend-bar"></span> 100%</span>
-    </div>
-
-    {% comment %} Row spacing: Normal is the Mutations page's cell padding, Condensed is
-       one line per row. Moved by the script to the end of the second toolbar row. {% endcomment %}
-    <span class="mutation-matrix-view" data-role="view-control">View:
-        <span class="btn-group" role="group">
-            <button type="button" class="btn btn-default" data-view="normal">Normal</button>
-            <button type="button" class="btn btn-default active" data-view="condensed">Condensed</button>
-        </span>
-    </span>
+    {% endif %}
 
     {{ matrix.rows|json_script:rows_id }}
     {% if authenticated %}{{ preferences|json_script:prefs_id }}{% endif %}

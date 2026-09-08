@@ -83,6 +83,53 @@ def get_revision(directory):
     return _revisions[directory]
 
 
+_asset_version = None
+
+
+def compute_asset_version():
+    """The `?v=` every first-party asset is linked with: the version, plus a digest of every
+    installed component's git revision when any is known.
+
+    A release changes the version and so every URL; that used to be the whole rule, and it
+    stopped being enough the moment the Development channel existed -- an upgrade to the
+    next `main` commit keeps the version, so a browser kept the previous commit's script
+    under the same URL and rendered new rows with old code. Every component's HEAD is in the
+    digest, in INSTALLED_APPS order, so a plugin's commit changes the URLs too. Uncached,
+    so a test can drive it with `get_revision` patched; `get_asset_version` is the cached
+    form a request reads.
+
+    `__version__` alone where no revision is known -- an unpacked archive with no `.git` --
+    which is the rule a release relied on before, and still holds there.
+    """
+    import hashlib
+
+    from mutint_common.about_registry import component_dir, first_party_app_configs
+    from mutint_common.version import __version__
+
+    shas, seen = [], set()
+    for app_config in first_party_app_configs():
+        directory = component_dir(app_config)
+        if directory in seen:
+            continue
+        seen.add(directory)
+        revision = get_revision(directory)
+        if revision:
+            shas.append(revision['full'])
+    if not shas:
+        return __version__
+    return '%s+%s' % (__version__, hashlib.sha256('\n'.join(shas).encode()).hexdigest()[:8])
+
+
+def get_asset_version():
+    """`compute_asset_version`, once per process: the code under a running process does not
+    change, and it is asked for on every request. Lazy rather than at import, because the app
+    registry it walks is not ready then."""
+    global _asset_version
+    if _asset_version is None:
+        _asset_version = compute_asset_version()
+    return _asset_version
+
+
 def get_git_hash():
     """mutint-core's own revision in full, as a string; empty outside a repository.
 
