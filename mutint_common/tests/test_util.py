@@ -44,11 +44,32 @@ class TestUtil(unittest.TestCase):
             _github_commit_url("git@github.com:mutint/mutint-core.git", sha), expected)
 
     def test_a_remote_that_is_not_github_gets_no_link(self):
-        """This suite's submodules point at relative local paths, so they render plain."""
+        """A checkout whose remote is a relative local path renders plain."""
         from mutint_common.util import _github_commit_url
 
         self.assertIsNone(_github_commit_url("../mutint-core", "a" * 40))
         self.assertIsNone(_github_commit_url(None, "a" * 40))
+
+    def test_the_repository_page_is_read_off_the_remote(self):
+        """Under whichever owner the remote names: nothing assumes `mutint`."""
+        from mutint_common.util import _github_repository_url
+
+        self.assertEqual("https://github.com/someone-else/their-plugin",
+                         _github_repository_url("https://github.com/someone-else/their-plugin.git"))
+        self.assertEqual("https://github.com/someone-else/their-plugin",
+                         _github_repository_url("git@github.com:someone-else/their-plugin.git"))
+        self.assertIsNone(_github_repository_url("https://gitlab.com/someone/thing.git"))
+        self.assertIsNone(_github_repository_url("../mutint-core"))
+        self.assertIsNone(_github_repository_url(None))
+
+    def test_a_revision_carries_its_repository_beside_its_commit(self):
+        revision = get_revision(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))))
+        self.assertIn("repository", revision)
+        if revision["url"]:
+            self.assertTrue(revision["url"].startswith(revision["repository"] + "/commit/"))
+        else:
+            self.assertIsNone(revision["repository"])
 
 
 class GeneListParsingTestCase(unittest.TestCase):

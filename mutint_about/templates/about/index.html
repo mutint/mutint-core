@@ -23,8 +23,11 @@
     {% endif %}
 
     {% for section in sections %}
+        {% comment %} The name links to the component's repository when its checkout came
+           from GitHub -- read off its origin remote, so a component published under another
+           owner links to its own home. The revision beside it links to the commit. {% endcomment %}
         <h3 id="{{ section.anchor }}" class="about-section">
-            {{ section.name }}
+            {% if section.repository_url %}<a href="{{ section.repository_url }}">{{ section.name }}</a>{% else %}{{ section.name }}{% endif %}
             <small>
                 {% if section.version %}{{ section.version }}{% endif %}
                 {% if section.revision %}

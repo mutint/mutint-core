@@ -20,7 +20,8 @@
         <tbody>
             {% for component in components %}
                 <tr>
-                    <td>{{ component.name }}</td>
+                    <td>{% if component.repository_url %}<a href="{{ component.repository_url }}"
+                           target="_blank" rel="noopener">{{ component.name }}</a>{% else %}{{ component.name }}{% endif %}</td>
                     <td>{% if component.version %}{{ component.version }}{% else %}
                         <span style="color: #999;">&mdash;</span>{% endif %}</td>
                     <td>

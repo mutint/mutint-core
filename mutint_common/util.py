@@ -32,12 +32,12 @@ def _git(directory, *args):
     return finished.stdout.decode('utf-8', 'replace').strip() or None
 
 
-def _github_commit_url(remote, sha):
-    """A github.com commit URL for `remote`, or None when it is not a GitHub remote.
+def _github_repository_url(remote):
+    """The github.com page of the repository `remote` names, or None when it is not on GitHub.
 
-    A hash is only worth clicking if it resolves somewhere. This suite's submodules point at
-    relative local paths (`../mutint-core`), so their revisions render as plain text; a
-    deployment cloned from GitHub gets links. Both the https:// and the git@ forms count.
+    Read off the remote rather than assumed: a component's home is wherever its checkout was
+    cloned from, under whichever owner, and one published elsewhere gets no link rather than a
+    wrong one. Both the https:// and the git@ forms count.
     """
     if not remote:
         return None
@@ -50,22 +50,35 @@ def _github_commit_url(remote, sha):
     if path.endswith('.git'):
         path = path[:-len('.git')]
     path = path.strip('/')
-    return 'https://github.com/%s/commit/%s' % (path, sha) if path else None
+    return 'https://github.com/%s' % path if path else None
+
+
+def _github_commit_url(remote, sha):
+    """A github.com commit URL for `remote`, or None when it is not a GitHub remote.
+
+    A hash is only worth clicking if it resolves somewhere. A checkout whose remote is a
+    relative local path (`../mutint-core`) renders its revision as plain text; one cloned
+    from GitHub gets a link.
+    """
+    repository = _github_repository_url(remote)
+    return repository + '/commit/' + sha if repository else None
 
 
 def get_revision(directory):
-    """``{'short', 'full', 'url'}`` for the repository at `directory`, or None.
+    """``{'short', 'full', 'url', 'repository'}`` for the repository at `directory`, or None.
 
-    `url` is None unless the origin remote is on GitHub. The result is cached per directory
-    for the life of the process.
+    `url` is the commit's page and `repository` the repository's own, both None unless the
+    origin remote is on GitHub. The result is cached per directory for the life of the process.
     """
     directory = os.path.abspath(directory)
     if directory not in _revisions:
         full = _git(directory, 'rev-parse', 'HEAD')
+        remote = _git(directory, 'remote', 'get-url', 'origin') if full else None
         _revisions[directory] = None if full is None else {
             'short': full[:7],
             'full': full,
-            'url': _github_commit_url(_git(directory, 'remote', 'get-url', 'origin'), full),
+            'url': _github_commit_url(remote, full),
+            'repository': _github_repository_url(remote),
         }
     return _revisions[directory]
 

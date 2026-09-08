@@ -65,11 +65,14 @@ def register_about_section(app_config, name=None, version=None, template=None):
 def get_about_sections():
     """One entry per installed component, in INSTALLED_APPS order.
 
-    Returns [{'name', 'version', 'template', 'revision', 'revision_url', 'anchor'}, ...].
+    Returns [{'name', 'version', 'template', 'revision', 'revision_url', 'repository_url',
+    'anchor'}, ...].
 
     A component that registered nothing still appears, with its directory's name and whatever
     revision git can tell us: the page is an inventory of what is running as much as it is
-    prose about it.
+    prose about it. `repository_url` is where the checkout was cloned from, when that is on
+    GitHub -- read off its origin remote, not assumed from its name, so a component published
+    under another owner links to its own home and one published nowhere links to nothing.
     """
     from django.apps import apps
     from django.utils.text import slugify
@@ -95,6 +98,7 @@ def get_about_sections():
             'template': _loadable(entry.get('template')),
             'revision': revision['short'] if revision else None,
             'revision_url': revision['url'] if revision else None,
+            'repository_url': revision['repository'] if revision else None,
             'anchor': slugify(name),
         })
     return sections

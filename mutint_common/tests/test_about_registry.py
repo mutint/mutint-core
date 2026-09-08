@@ -139,3 +139,40 @@ class AboutPageTestCase(TestCase):
         page, which would hide every component."""
         html = self.client.get("/about").content.decode("utf-8")
         self.assertIn("mutint-core", html)
+
+
+class RepositoryLinkTestCase(TestCase):
+    """A component's name links to its repository, and the URL comes from its checkout.
+
+    Patched rather than read from this checkout's own remote, which differs between a
+    developer's clone, CI and an unpacked archive -- the rule is what is under test, not
+    where this copy happened to come from.
+    """
+
+    def revision(self, repository):
+        return {"short": "abcdef0", "full": "abcdef0" * 5 + "abcde",
+                "url": repository + "/commit/abcdef0" if repository else None,
+                "repository": repository}
+
+    def test_the_sections_carry_the_repository_url(self):
+        from unittest import mock
+        with mock.patch("mutint_common.util.get_revision",
+                        return_value=self.revision("https://github.com/someone-else/mutint-core")):
+            sections = get_about_sections()
+        self.assertEqual({"https://github.com/someone-else/mutint-core"},
+                         {s["repository_url"] for s in sections})
+
+    def test_the_name_links_to_the_repository_wherever_it_lives(self):
+        from unittest import mock
+        with mock.patch("mutint_common.util.get_revision",
+                        return_value=self.revision("https://github.com/someone-else/mutint-core")):
+            html = self.client.get("/about").content.decode("utf-8")
+        self.assertIn('<a href="https://github.com/someone-else/mutint-core">mutint-core</a>', html)
+
+    def test_a_component_from_nowhere_is_a_plain_name(self):
+        from unittest import mock
+        with mock.patch("mutint_common.util.get_revision", return_value=self.revision(None)):
+            html = self.client.get("/about").content.decode("utf-8")
+        # The heading is plain; the section's prose may link wherever it likes.
+        self.assertNotIn(">mutint-core</a>", html)
+        self.assertIn('class="about-section">\n            mutint-core', html)

@@ -59,6 +59,19 @@ class UpgradePageTestCase(TestCase):
         self.assertEqual(200, response.status_code)
         self.assertContains(response, "mutint-core")
 
+    def test_a_components_name_links_to_its_repository(self):
+        """Read off its checkout's remote, whichever owner that names."""
+        self.client.force_login(self.superuser)
+        revision = {"short": "abcdef0", "full": "a" * 40,
+                    "url": "https://github.com/someone-else/mutint-core/commit/" + "a" * 40,
+                    "repository": "https://github.com/someone-else/mutint-core"}
+
+        with mock.patch("mutint_common.util.get_revision", return_value=revision):
+            response = self.client.get(reverse("upgrade"))
+
+        self.assertContains(response, 'href="https://github.com/someone-else/mutint-core"')
+        self.assertContains(response, ">mutint-core</a>")
+
     def test_it_renders_without_ever_having_been_checked(self):
         """A fresh installation has no state file, and must not need one seeded."""
         self.client.force_login(self.superuser)
