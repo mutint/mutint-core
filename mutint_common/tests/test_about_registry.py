@@ -173,6 +173,9 @@ class RepositoryLinkTestCase(TestCase):
         from unittest import mock
         with mock.patch("mutint_common.util.get_revision", return_value=self.revision(None)):
             html = self.client.get("/about").content.decode("utf-8")
-        # The heading is plain; the section's prose may link wherever it likes.
-        self.assertNotIn(">mutint-core</a>", html)
-        self.assertIn('class="about-section">\n            mutint-core', html)
+        # The heading is plain. Scoped to it: the section's prose may link wherever it
+        # likes, and an assembled project's contents list links every name to its anchor.
+        start = html.index('<h3 id="mutint-core"')
+        heading = html[start:html.index("</h3>", start)]
+        self.assertIn("mutint-core", heading)
+        self.assertNotIn("<a ", heading)
