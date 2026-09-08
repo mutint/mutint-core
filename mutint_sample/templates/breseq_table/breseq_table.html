@@ -34,11 +34,12 @@
             </button>
             <ul class="dropdown-menu mutint-menu">
                 {% comment %} The designated ancestor is listed, first, and tinted the same
-                   red its mutations are in the table below. One sample at a time is exactly
-                   the view where there is no reason to hide it: nothing aggregates here, so
-                   nothing is contaminated, and it is the row the others are read against.
-                   The tint is the same color as `ancestral_table_row` so the two read as
-                   one statement rather than two coincidences. {% endcomment %}
+                   red its mutations are in the table below once the reader asks to see
+                   them. One sample at a time is exactly the view where there is no reason
+                   to hide the sample: nothing aggregates here, so nothing is contaminated,
+                   and it is the row the others are read against. The tint is the same color
+                   as `ancestral_table_row` so the two read as one statement rather than two
+                   coincidences. {% endcomment %}
                 {% for sample in sample_list %}
                     <li class="{% if sample.id == selected_sample_id %}active {% endif %}{% if sample.id == experiment_ancestor_id %}sample-ancestor{% endif %}">
                         <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">{{ sample.label }}{% if sample.id == experiment_ancestor_id %} <span class="sample-ancestor-tag">ancestor</span>{% endif %} {% sample_flag_badges sample %}</a>
@@ -94,11 +95,17 @@
             </div>
         {% endif %}
         {% view_filter_form %}
-        {% comment %} `ancestor_subtracted=False`: this is the one page in the suite that does
-           *not* subtract the designated ancestor, so the shared summary must not claim it did.
-           A page describing filtering it did not do is the failure `mutint_filter` is built to
-           prevent, and it cuts both ways. {% endcomment %}
-        {% view_filter_summary ancestor_subtracted=False %}
+        {% comment %} The ancestral rows are the reader's to show or hide, and the summary
+           sentence carries the button, so it says which state is in force rather than
+           claiming a subtraction the page may not have done -- a page describing filtering
+           it did not do is the failure `mutint_filter` is built to prevent, and it cuts
+           both ways. The ancestor's own page has nothing to subtract and the banner above
+           already says what it is. {% endcomment %}
+        {% if is_ancestor %}
+            {% view_filter_summary ancestral="own" %}
+        {% else %}
+            {% view_filter_summary ancestral="toggle" ancestral_count=ancestral_count %}
+        {% endif %}
         <div class="row">
             {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." %}
         </div>
@@ -130,8 +137,9 @@
             </div>
             {% comment %} Its own row rather than trailing the color key above: this one is
                not about how a cell is rendered, it is about rows being excluded everywhere
-               else, and it names the sample responsible. {% endcomment %}
-            {% if ancestral_count %}
+               else, and it names the sample responsible. Only when red rows are on the page;
+               hidden, the summary line above the table already says so. {% endcomment %}
+            {% if ancestral_count and ancestral_shown or ancestral_count and is_ancestor %}
                 <div>
                     <span style="background-color: rgb(255, 218, 218);">Rows shaded red</span>
                     ({{ ancestral_count }}) are in this experiment's designated ancestor{% if ancestor %}

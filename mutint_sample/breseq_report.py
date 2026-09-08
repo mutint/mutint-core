@@ -102,9 +102,10 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
     no stored alignment renders its type as plain text.
 
     ``ancestral_mutation_ids`` tints the rows observed in the experiment's designated
-    ancestor. **This is the one page that shows them**: everything that analyzes the data
-    subtracts them, but this table is what breseq called in one sample, and a row silently
-    missing from it would make the page disagree with the report it was imported from.
+    ancestor. Everything that analyzes the data subtracts them; this table draws them, tinted,
+    when the reader asks to see them, because it is what breseq called in one sample and a
+    row that is red says why it is missing everywhere else. The caller decides which rows to
+    hand over; this only colors what it is given.
 
     A separate key rather than a third `row_class`: that one is a choice between breseq's
     striping and its green polymorphism fill, and folding a tint into it would cost whichever

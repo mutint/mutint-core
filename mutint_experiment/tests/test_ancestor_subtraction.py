@@ -10,8 +10,9 @@ from mutint_experiment.ancestor import (ancestral_mutation_ids, describe_ancesto
                                        exclude_all_ancestry, exclude_ancestry, get_ancestor)
 from mutint_curate.tests.base import EditorTestCase
 from mutint_sample.models import MutationCall
-from mutint_sample.util import (get_evolved_call_queryset, get_mutation_call_queryset,
-                            get_ordered_sample_dict, calls_for_samples)
+from mutint_sample.util import (get_all_calls_filtered, get_evolved_call_queryset,
+                            get_mutation_call_queryset, get_ordered_sample_dict,
+                            calls_for_samples)
 
 
 class SubtractionTestCase(EditorTestCase):
@@ -62,6 +63,14 @@ class TestSubtraction(SubtractionTestCase):
         the export, the editor and the per-sample page all depend on that."""
         self.designate_a()
         self.assertEqual(get_mutation_call_queryset(self.experiment.id).count(), 4)
+
+    def test_the_filtered_calls_subtract_unless_told_they_are_for_display(self):
+        """`include_ancestral=True` is the rows a table draws when the reader asked to see
+        them, and nothing else; the default is what everything derives from."""
+        self.designate_a()
+        self.assertEqual(0, len(get_all_calls_filtered(self.experiment.id)))
+        self.assertEqual(4, len(get_all_calls_filtered(self.experiment.id,
+                                                       include_ancestral=True)))
 
     def test_a_mutation_missing_from_a_sample_subtracts_cleanly(self):
         """The miscall case, stated in the requirement: nothing requires an ancestral mutation

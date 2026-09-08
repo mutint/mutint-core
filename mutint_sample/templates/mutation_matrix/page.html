@@ -43,7 +43,12 @@
             {% block matrix_form_fields %}{% endblock %}
             <input type="submit" class="btn btn-primary" value="Apply"/>
         </form>
-        {% view_filter_summary %}
+        {% comment %} A view that draws the designated ancestor's rows on request -- Compare
+           does, through `ancestral_shown` -- puts `ancestral_mode = "toggle"` in its context
+           and gets the Show/Hide button in the sentence below. Absent, the sentence says the
+           rows are excluded and offers nothing: a button whose view ignores it is a control
+           that does nothing, and Search never gets one. {% endcomment %}
+        {% view_filter_summary ancestral=ancestral_mode|default:"subtracted" %}
         {% block matrix_summary %}{% endblock %}
         {% mutation_matrix matrix empty_message=empty_message %}
     {% endif %}

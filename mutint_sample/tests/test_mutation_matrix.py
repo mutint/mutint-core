@@ -202,6 +202,15 @@ class RowsTestCase(_Fixture):
         self.assertEqual((), matrix.sets)
         self.assertNotIn("sets", self.row(matrix, 100))
 
+    def test_ancestral_ids_mark_the_rows_and_filter_nothing(self):
+        """The script tints from the mark; the rows are whatever the caller handed in."""
+        snp = Mutation.objects.get(start_position=100)
+        matrix = self.matrix(ancestral_mutation_ids=frozenset({snp.id}))
+        self.assertTrue(self.row(matrix, 100)["ancestral"])
+        self.assertFalse(self.row(matrix, 120)["ancestral"])
+        self.assertEqual(len(self.matrix().rows), len(matrix.rows))
+        self.assertNotIn("ancestral", self.row(self.matrix(), 100))
+
     def test_each_sample_links_to_its_own_mutations_page(self):
         """The experiment given, when there is one; the sample's own when there is not --
         the cross-experiment page has none to give, and the link must still be right."""
@@ -272,7 +281,15 @@ class PartialTestCase(_Fixture):
         self.assertIn("{% block matrix_form_fields %}{% endblock %}", source)
         self.assertIn("{% block matrix_summary %}{% endblock %}", source)
         self.assertLess(source.index("{% block matrix_form_fields %}"), source.index('value="Apply"'))
-        self.assertLess(source.index("{% view_filter_summary %}"), source.index("{% block matrix_summary %}"))
+        self.assertLess(source.index("{% view_filter_summary"), source.index("{% block matrix_summary %}"))
+
+    def test_the_ancestral_button_needs_a_view_that_honours_it(self):
+        """The page draws the Show/Hide button only for a view that put `ancestral_mode` in
+        the context -- a button whose view ignores it is a control that does nothing."""
+        from mutint_sample.models import Sample
+        self.experiment.set_ancestor(Sample.objects.order_by("pk").first(), self.user)
+        self.assertNotIn('data-role="ancestral-toggle"', self._render())
+        self.assertIn('data-role="ancestral-toggle"', self._render(ancestral_mode="toggle"))
 
     def test_the_view_switch_offers_normal_and_condensed(self):
         html = self._render()

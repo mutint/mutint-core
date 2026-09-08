@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2012 run, 0 failures** standalone; **2309** assembled, measured with `PYTHONPATH`
+**Baseline: 2058 run, 0 failures** standalone; **2365** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -1249,9 +1249,22 @@ sample itself leaves every listing. `mutint_experiment/ancestor.py` is the whole
 
 **It sits next to the section above and is the opposite of it on every count**, which is why it
 is not in `mutint_filter`. A `ViewFilter` is per-person, session-scoped, ephemeral and clearable
-in a click; this is shared, permanent, has no toggle and no query parameter, and reaches
+in a click; this is shared, permanent, cannot be turned off for anything derived, and reaches
 mutint-phylogeny, which never touches the filter layer. Putting an unconditional exclusion inside
 that package would undo the distinction it exists to draw.
+
+**What a reader can choose is whether the two mutation tables draw the subtracted rows.**
+`ancestral_shown(request, experiment_id)`, at the foot of `ancestor.py`, is one choice per
+experiment, remembered in the session the way `get_view_filter` remembers the filter and for
+the same reason -- the sidebar's links carry no parameters -- hidden by default, and shared by
+`/mutations/breseq` and Compare. It is **display only**: the rows come back tinted
+`ancestral_table_row`, and nothing computed reads the flag -- the sets, the counts, the
+trees and the exports subtract whatever the reader is looking at. The button sits in the
+`{% view_filter_summary %}` sentence, because that is where the state is described, and only
+for a page passing `ancestral="toggle"`; `mutation_matrix/page.html` passes it when the view
+put `ancestral_mode` in the context, so a view that ignores the flag draws no button.
+`get_all_calls_filtered(include_ancestral=True)` and `build_matrix(ancestral_mutation_ids=)`
+are the two display-only seams a page uses to honour it.
 
 **A convention is not a subtraction.** The starting strain used to be "population `0`", a
 label that kept it out of some pickers while its mutations went on landing in every analysis
@@ -1279,15 +1292,18 @@ id observed in one experiment's ancestor cannot appear in another's samples.
 
 **Four deliberate exceptions**, and each one is stated where it is taken:
 
-- **`/mutations/breseq` keeps the ancestor entirely** -- its rows tinted `ancestral_table_row`,
-  and the sample itself listed in the picker, first, tinted the same red. It is what breseq
-  called in one sample, not a conclusion drawn from it; a row silently missing would make the
-  page disagree with the report it was imported from. And **nothing aggregates here**, so
-  there is nothing for an ancestral call to contaminate -- while this is the only picker that
-  could reach the ancestor, so hiding it would make the sample unreachable rather than merely
-  excluded. It passes `{% view_filter_summary ancestor_subtracted=False %}`
-  so the shared summary does not claim a subtraction it did not do -- that rule cuts both ways.
-  **Listed first is not selected first**: `_selected_sample` opens on the first *non*-ancestor
+- **`/mutations/breseq` keeps the ancestor sample**, listed in the picker, first, tinted the
+  same red its rows take -- and draws those rows, tinted `ancestral_table_row`, when the
+  reader asks (`ancestral_shown`; hidden by default, dropped before `build_rows` so the
+  striping still starts at the first drawn row). It is what breseq called in one sample, not
+  a conclusion drawn from it; a red row says why it is missing everywhere else. **Nothing
+  aggregates here**, so there is nothing for an ancestral call to contaminate -- while this
+  is the only picker that could reach the ancestor, so hiding the sample would make it
+  unreachable rather than merely excluded. It passes `{% view_filter_summary
+  ancestral="toggle" %}` so the summary states which of the two states is in force rather
+  than claiming a subtraction it may not have done -- that rule cuts both ways -- and the
+  ancestor's own page passes `ancestral="own"` and always shows its rows, there being nothing
+  else on it. **Listed first is not selected first**: `_selected_sample` opens on the first *non*-ancestor
   sample, because this view reads as "what evolved in this sample" and the one sample whose
   answer is "nothing, by definition" is a poor first thing to show. Its scoped fallback stays,
   for the population and sample-type filters, which can still legitimately drop a requested id.
@@ -1296,7 +1312,8 @@ id observed in one experiment's ancestor cannot appear in another's samples.
 - **The genome browser** keeps it, because the ancestor's own evidence link lands there and
   `is_current` would match nothing.
 - **The `mut` export does not subtract**; Compare's CSV of a row set is exactly what its page
-  showed, because there is no un-subtracted version of "what converged".
+  showed, because there is no un-subtracted version of "what converged" -- which is also why
+  that CSV includes the ancestral rows when the reader has them showing.
 
 **Designating is attributed** (`ancestor_set_at` / `ancestor_set_by`) and gated on
 `can_edit_experiment`, so a locked experiment refuses it -- including refusing to *clear* it.
@@ -1687,6 +1704,16 @@ every menu and the search box, `search: "applied"`) or every row the server prod
 "export what I am looking at" and "export the experiment" are both one click and neither is
 a page. `page.html` has two blocks, `matrix_form_fields` and `matrix_summary`, so such a page
 can extend it rather than copy it.
+
+**Ancestral rows are marked, not filtered.** `build_matrix(ancestral_mutation_ids=...)` puts
+`ancestral: true|false` on each row, `rowCallback` toggles `ancestral_table_row` from it on
+every draw (toggled, because `deferRender` reuses row nodes), and a rule after the pinned
+stripe rule paints the pinned cells the same red -- a positioned cell inherits nothing from
+its row, the reason the stripe grey is written twice in `breseq_table.css`, and the two
+copies of that grey (`rgb(245, 245, 245)`, a shade off white) move together. Such a row is
+in no row set, so choosing one in the Show menu drops it, and both Export CSV entries include
+it because it is a row the server produced. Compare is the producer; see **The ancestor
+belongs to the dataset** for the toggle that decides whether it hands those rows over.
 
 **The table is as wide as its columns, not the box.** `.breseq-table` is `width: 100%` for
 the per-sample table, and inside the scroll box the matrix overrides it to `auto`. With every

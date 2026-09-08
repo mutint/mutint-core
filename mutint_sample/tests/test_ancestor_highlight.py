@@ -1,16 +1,17 @@
-"""The one page that shows ancestral mutations instead of hiding them.
+"""The per-sample page's ancestral rows: hidden by default, tinted red on request.
 
 `/mutations/breseq` is what breseq called in one sample. Every page that analyzes the data
-subtracts the designated ancestor; this one tints those rows red, because a row silently
-missing here would make the page disagree with the report it was imported from -- and the
-reader would have no way to find out why.
+subtracts the designated ancestor; this one draws those rows when the reader asks, tinted
+red, because a row silently missing would make the page disagree with the report it was
+imported from -- and the tint says why it is missing everywhere else.
 
-That exception is only safe if it is *stated*, which is what most of these tests are about.
+Whichever state is in force has to be *stated*, which is what most of these tests are about.
 """
 
 from mutint_curate.tests.base import EditorTestCase
 
 BRESEQ = "/mutations/breseq"
+BUTTON = 'data-role="ancestral-toggle"'
 
 
 class BreseqAncestorTestCase(EditorTestCase):
@@ -19,8 +20,53 @@ class BreseqAncestorTestCase(EditorTestCase):
         params.setdefault("experiment_id", self.experiment.id)
         return self.client.get(BRESEQ, params)
 
+    def evolved_only(self):
+        """A second row on sample_b that the ancestor does not carry. At 100%, so it takes a
+        stripe rather than the polymorphism green."""
+        mutation = self.make_mutation(position=999, sequence_change="T>C")
+        self.observe(self.sample_b, mutation, frequency="1.0000")
+        return mutation
+
+
+class TestHiddenByDefault(BreseqAncestorTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.evolved_only()
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+
+    def test_the_ancestral_row_is_not_on_the_page(self):
+        body = self.get(sample_id=self.sample_b.id).content.decode()
+        self.assertNotIn("ancestral_table_row", body)
+        self.assertNotIn(">%d<" % self.mut_1.start_position, body)
+        self.assertIn(">999<", body)
+
+    def test_the_summary_says_so_and_counts(self):
+        body = self.get(sample_id=self.sample_b.id).content.decode()
+        self.assertIn("are hidden", body)
+        self.assertIn(BUTTON, body)
+        self.assertIn("Show 1 ancestral mutation<", body)
+        self.assertNotIn("Rows shaded red", body)
+
+    def test_striping_starts_from_the_first_drawn_row(self):
+        """Dropped before `build_rows`, so the remaining row is shaded as the first row and
+        not as the second of two."""
+        body = self.get(sample_id=self.sample_b.id).content.decode()
+        self.assertIn("alternate_table_row_0", body)
+        self.assertNotIn("alternate_table_row_1", body)
+
+    def test_the_button_keeps_the_sample(self):
+        body = self.get(sample_id=self.sample_b.id).content.decode()
+        button = body[body.index(BUTTON) - 200:body.index(BUTTON)]
+        self.assertIn("sample_id=%d" % self.sample_b.id, button)
+        self.assertIn("ancestral=show", button)
+
 
 class TestTheTint(BreseqAncestorTestCase):
+
+    def get(self, **params):
+        params.setdefault("ancestral", "show")
+        return super().get(**params)
 
     def test_an_ancestral_row_is_tinted(self):
         self.experiment.set_ancestor(self.sample_a, self.owner)
@@ -31,18 +77,55 @@ class TestTheTint(BreseqAncestorTestCase):
         self.assertNotContains(self.get(sample_id=self.sample_b.id), "ancestral_table_row")
 
     def test_a_non_ancestral_row_is_not_tinted(self):
-        evolved_only = self.make_mutation(position=999, sequence_change="T>C")
-        self.observe(self.sample_b, evolved_only)
+        self.evolved_only()
         self.experiment.set_ancestor(self.sample_a, self.owner)
 
         response = self.get(sample_id=self.sample_b.id)
         # Two rows on this sample, exactly one of them ancestral.
         self.assertEqual(response.content.decode().count("ancestral_table_row"), 1)
 
-    def test_the_rows_are_still_there(self):
-        """Tinted, not hidden -- the whole point of the exception."""
+    def test_the_rows_are_there(self):
+        """Tinted, not hidden, once asked for."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
         self.assertContains(self.get(sample_id=self.sample_b.id), str(self.mut_1.start_position))
+
+    def test_the_summary_offers_hide(self):
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+        body = self.get(sample_id=self.sample_b.id).content.decode()
+        self.assertIn("shaded red", body)
+        self.assertIn("ancestral=hide", body)
+
+
+class TestTheMemory(BreseqAncestorTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+
+    def test_show_survives_a_reload_without_the_parameter(self):
+        self.get(sample_id=self.sample_b.id, ancestral="show")
+        self.assertContains(self.get(sample_id=self.sample_b.id), "ancestral_table_row")
+
+    def test_hide_is_remembered_too(self):
+        self.get(sample_id=self.sample_b.id, ancestral="show")
+        self.get(sample_id=self.sample_b.id, ancestral="hide")
+        self.assertNotContains(self.get(sample_id=self.sample_b.id), "ancestral_table_row")
+
+
+class TestTheAncestorsOwnPage(BreseqAncestorTestCase):
+    """Every row is ancestral there, so the toggle would empty the page: it always shows
+    them, tinted, and offers no button."""
+
+    def setUp(self):
+        super().setUp()
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+
+    def test_every_row_is_tinted_whatever_the_state(self):
+        for params in ({}, {"ancestral": "hide"}):
+            body = self.get(sample_id=self.sample_a.id, **params).content.decode()
+            self.assertEqual(3, body.count("ancestral_table_row"))
+            self.assertNotIn(BUTTON, body)
+            self.assertIn("Rows shaded red", body)
 
 
 class TestReachingTheAncestor(BreseqAncestorTestCase):
@@ -113,8 +196,12 @@ class TestReachingTheAncestor(BreseqAncestorTestCase):
 
 class TestWhatThePageClaims(BreseqAncestorTestCase):
 
+    def get(self, **params):
+        params.setdefault("ancestral", "show")
+        return super().get(**params)
+
     def test_it_does_not_claim_to_have_subtracted(self):
-        """This page passes `ancestor_subtracted=False`. A page describing filtering it did not
+        """The sentence says which state is in force. A page describing filtering it did not
         do is the failure `mutint_filter` is built to prevent, and it cuts both ways."""
         self.experiment.set_ancestor(self.sample_a, self.owner)
         self.assertNotContains(self.get(sample_id=self.sample_b.id),

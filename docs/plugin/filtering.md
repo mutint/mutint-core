@@ -65,8 +65,9 @@ sample itself leaves every listing.
 
 **This is the opposite of everything above.** The reader's filter is theirs, lives in their
 session, dies with their browser and is one click from cleared. This belongs to the dataset, is
-the same for everyone, and **there is no opting out** — no toggle, no query parameter, no
-`ancestor=None` to pass. If you are deriving something, you subtract it.
+the same for everyone, and **if you are deriving something, you subtract it** — there is no
+`ancestor=None` to pass. What a reader can choose is only whether the two mutation tables
+*draw* the subtracted rows, tinted red; see the end of this section.
 
 ```python
 from mutint_sample.util import calls_for_samples
@@ -95,9 +96,22 @@ observed in one experiment's ancestor cannot turn up in another's samples.
 
 `{% view_filter_summary %}` names the ancestor for you. A page passing `own_rules=` still gets
 that sentence — `own_rules` says you have a different *frequency* rule, not that you skipped the
-subtraction. The one page that genuinely does not subtract passes
-`{% view_filter_summary ancestor_subtracted=False %}`, and it is the per-sample breseq table,
-which tints those rows red instead of hiding them.
+subtraction.
+
+**Showing the subtracted rows is display, not data.** The per-sample Mutations page and
+Compare draw the ancestor's mutations, shaded red, when the reader asks — one choice per
+experiment, remembered in the session like the filter, hidden by default
+(`mutint_experiment.ancestor.ancestral_shown(request, experiment_id)`). Nothing computed reads
+it. A page that wants the same behaviour does three things: builds its rows from
+`get_all_calls_filtered(experiment_id, view_filter=..., include_ancestral=True)` when
+`ancestral_shown` says so, hands `build_matrix(..., ancestral_mutation_ids=
+ancestral_mutation_ids(experiment_id))` the ids so the script tints them, and puts
+`ancestral_mode = "toggle"` in its context so `mutation_matrix/page.html` renders the
+Show/Hide button in the summary sentence. Convergent, Fixed and anything else derived are
+still computed from the evolved calls, so an ancestral row belongs to no row set. A page
+rendering the tag itself passes `{% view_filter_summary ancestral="toggle" %}`; the ancestor's
+own sample page passes `ancestral="own"`, which says nothing about a subtraction there is
+nothing to make.
 
 ## Filter *before* you analyze, not after
 

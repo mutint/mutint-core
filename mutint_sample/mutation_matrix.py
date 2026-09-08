@@ -197,7 +197,7 @@ def _sample_cell(call, browse_url):
 
 def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain",
                  browse_url=None, refseq_url=None, csv_title="mutations",
-                 dom_id="mutation-matrix", sets=()):
+                 dom_id="mutation-matrix", sets=(), ancestral_mutation_ids=frozenset()):
     """Lay `mutation_calls` out against the samples in `sample_dict`.
 
     `sample_dict` is `{sample_id: Sample}` in the order the columns should appear -- what
@@ -216,6 +216,13 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     `sets` is a sequence of `RowSet`s. Each row is annotated with the keys of the sets that
     hold its mutation, and the sets are offered in the Show menu, counted by the rows they
     hold here rather than by the ids handed in: an id no listed sample carries is no row.
+
+    `ancestral_mutation_ids` marks the rows observed in the experiment's designated ancestor,
+    for the script to tint the way the per-sample table tints them -- the same argument
+    `build_rows` takes, for the same reason. Display only: the matrix filters nothing and
+    asks nothing about why a row is ancestral. A page that wants those rows drawn hands the
+    raw calls in and the ids alongside; one that does not hands the evolved calls in and
+    nothing here changes.
     """
     palette = palette_indexes(s.population_id for s in sample_dict.values())
     samples = [SampleColumn(id=sample.id,
@@ -244,6 +251,9 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
             row["sets"] = [s.key for s in sets if row["id"] in s.mutation_ids]
         sets = tuple(RowSet(s.key, s.label, frozenset(s.mutation_ids & by_mutation.keys()))
                      for s in sets)
+    if ancestral_mutation_ids:
+        for row in rows:
+            row["ancestral"] = row["id"] in ancestral_mutation_ids
     return MutationMatrix(columns=list(DESCRIPTIVE), samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,

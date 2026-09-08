@@ -19,7 +19,7 @@ is not connected to anything.
 
 from django import template
 
-from mutint_experiment.ancestor import describe_ancestor
+from mutint_experiment.ancestor import ancestral_shown, ancestral_toggle_url, describe_ancestor
 from mutint_filter.util import describe_filters
 from mutint_filter.view_filter import GENES_PARAM, MAX_PARAM, MIN_PARAM, get_view_filter
 
@@ -67,8 +67,15 @@ def view_filter_form(context):
     return _fields_context(context, standalone=True)
 
 
+#: What a page says about the designated ancestor, the `ancestral=` argument below.
+ANCESTRAL_SUBTRACTED = "subtracted"   # the default: its rows are gone, and the page says so
+ANCESTRAL_TOGGLE = "toggle"           # the page draws them on request, and offers the button
+ANCESTRAL_OWN = "own"                 # the ancestor's own sample page: nothing to subtract
+
+
 @register.inclusion_tag("filter/_summary.html", takes_context=True)
-def view_filter_summary(context, own_rules=None, ancestor_subtracted=True):
+def view_filter_summary(context, own_rules=None, ancestral=ANCESTRAL_SUBTRACTED,
+                        ancestral_count=None):
     """Say what filtering shaped the rows on this page.
 
     `own_rules` is for a page filtering by rules of its own -- mutint-phylogeny encodes frequency
@@ -76,26 +83,46 @@ def view_filter_summary(context, own_rules=None, ancestor_subtracted=True):
     filter applies. A sentence says so, where an empty summary would read as "no filtering here"
     when the truth is "different filtering here".
 
-    `ancestor_subtracted` is the designated ancestor, and it is **not** part of the reader's
-    filter -- it is a fact about the dataset that nobody reading can turn off. It gets a
+    The designated ancestor is **not** part of the reader's filter -- it is a fact about the
+    dataset, subtracted from everything computed, that no reader can turn off. It gets a
     sentence of its own for the same reason everything else here does: without one, the empty
     branch below claims "every stored mutation for this experiment is shown", which stops being
     true the moment an ancestor exists.
 
     It is resolved and stated **independently of `own_rules`**, because the pages that pass
     `own_rules` -- phylogeny and search -- are describing a *different frequency rule*, not
-    opting out of the subtraction. Only `ancestor_subtracted=False` says a page did not
-    subtract, and exactly one page passes it: the per-sample breseq table, which tints those
-    rows rather than hiding them.
+    opting out of the subtraction. `ancestral` says which of three things the page does:
+
+    - `"subtracted"`, the default: the rows are gone and the sentence says so.
+    - `"toggle"`: the page draws the subtracted rows, tinted red, when the reader asks
+      (`ancestral_shown`), and the sentence carries the Show/Hide button. The view has to
+      honour the same call, or the button is a control that does nothing -- which is why the
+      matrix page renders this mode only when its view put `ancestral_mode` in the context.
+      Two pages pass it: the per-sample breseq table and Compare. `ancestral_count` is how
+      many rows the button would reveal, when the page knows cheaply.
+    - `"own"`: the ancestor's own sample page, where there is nothing to subtract and the
+      banner above already says what the page is.
     """
     experiment_id, view_filter = _resolved(context)
-    ancestor = describe_ancestor(experiment_id) if ancestor_subtracted else None
+    ancestor = describe_ancestor(experiment_id) if ancestral != ANCESTRAL_OWN else None
+    shown, toggle_url = False, None
+    if ancestral == ANCESTRAL_TOGGLE and ancestor is not None:
+        request = context.get("request")
+        shown = ancestral_shown(request, experiment_id)
+        toggle_url = ancestral_toggle_url(request, shown)
 
+    about_ancestor = {
+        "experiment_id": experiment_id,
+        "ancestor": ancestor,
+        "ancestral": ancestral,
+        "ancestral_shown": shown,
+        "ancestral_toggle_url": toggle_url,
+        "ancestral_count": ancestral_count,
+    }
     if own_rules:
         # `experiment_id` is carried even here: the ancestor sentence links to that sample,
         # and phylogeny passes `own_rules` while still subtracting.
-        return {"own_rules": own_rules, "summary": None, "experiment_id": experiment_id,
-                "ancestor": ancestor}
+        return {"own_rules": own_rules, "summary": None, **about_ancestor}
 
     return {
         "own_rules": None,
@@ -103,6 +130,5 @@ def view_filter_summary(context, own_rules=None, ancestor_subtracted=True):
         # disagree -- a page confidently describing filtering it is not doing is worse than one
         # that says nothing.
         "summary": describe_filters(view_filter),
-        "experiment_id": experiment_id,
-        "ancestor": ancestor,
+        **about_ancestor,
     }

@@ -13,9 +13,9 @@ def get_mutation_call_queryset(experiment_id):
 
     **Usually not what you want.** An experiment may designate an ancestor, whose mutations
     are the starting line rather than evolution; anything analyzing or summarizing the data
-    wants `get_evolved_call_queryset` below. This raw form is for the three places
-    that mean "what is stored": the CSV export, the mutation editor, and the per-sample
-    breseq page, which tints ancestral rows rather than hiding them.
+    wants `get_evolved_call_queryset` below. This raw form is for the places that mean "what
+    is stored": the CSV export, the mutation editor, and the two mutation tables when the
+    reader has asked to see the ancestral rows, tinted, rather than have them hidden.
     """
     return mutint_sample.models.MutationCall.objects.filter(**{paths.to_experiment_id(paths.FROM_CALL): experiment_id})
 
@@ -31,15 +31,23 @@ def get_evolved_call_queryset(experiment_id):
     return exclude_ancestry(get_mutation_call_queryset(experiment_id), experiment_id)
 
 
-def get_all_calls_filtered(experiment_id, *, filter_type=None, view_filter=None):
+def get_all_calls_filtered(experiment_id, *, filter_type=None, view_filter=None,
+                           include_ancestral=False):
     """An experiment's calls, through the reader's filter.
 
     `view_filter` comes from `mutint_filter.view_filter.get_view_filter(request, experiment_id)`
     and is the reader's own; None means unfiltered. It replaced `skip_experiment_filter`, which
     asked to see through a *shared* filter -- a question that stops meaning anything once the
     filter is yours to clear.
+
+    `include_ancestral=True` is for **display only** -- the rows a table draws when the reader
+    has asked to see the designated ancestor's mutations (`ancestral_shown`). It is the raw
+    queryset, so the ancestor sample's own calls come along too; `build_matrix` drops those
+    for want of a column. Never hand it to anything that derives: the sets, the counts and
+    the trees subtract, whatever the reader is looking at.
     """
-    queryset = get_evolved_call_queryset(experiment_id)
+    queryset = (get_mutation_call_queryset(experiment_id) if include_ancestral
+                else get_evolved_call_queryset(experiment_id))
     return filter_mutation_calls(queryset, filter_type=filter_type, view_filter=view_filter)
 
 

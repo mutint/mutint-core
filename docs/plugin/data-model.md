@@ -120,7 +120,8 @@ from mutint_sample.util import (calls_for_samples, get_mutation_call_queryset,
 `Experiment.ancestor` names one sample whose mutations are the starting line rather than
 evolution; they are removed from every other sample before anything is computed, and the
 sample itself leaves every listing. This is not the reader's filter — it is shared, permanent,
-and has no toggle.
+and cannot be turned off for anything derived; the Mutations and Compare tables can *show* the
+subtracted rows, tinted, on request, and nothing computed changes when they do.
 
 Four repos each hand-wrote `MutationCall.objects.filter(sample_id__in=...)` before these
 existed. The failure is quiet and severe: an ancestral mutation is in every ALE by

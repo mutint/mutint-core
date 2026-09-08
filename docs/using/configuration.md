@@ -81,8 +81,11 @@ mutation tables. Search says so too, because it spans experiments and no one fil
     If an experiment designates an ancestral sample, its mutations are subtracted from every
     other sample before anything is computed, and the sample itself leaves most listings. That
     is a fact about the dataset rather than a view of it: it is shared, it is permanent, and
-    **there is no toggle** — so the summary line names it separately from your own filtering,
-    and links to the sample it is about.
+    **nothing computed can be asked to include them** — so the summary line names it
+    separately from your own filtering, and links to the sample it is about. What you can do,
+    on the Mutations page and on Compare, is press **Show ancestral mutations** in that line
+    to see the subtracted rows shaded red; nothing counted or computed changes, and the choice
+    is remembered for you per experiment.
 
 Filtering is not deleting. A filtered mutation is still stored and comes back when the filter
 changes; a deleted one is removed from the sample, recorded against whoever did it, and

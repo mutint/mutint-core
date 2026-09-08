@@ -27,7 +27,8 @@ from mutint_filter.util import filter_mutation_calls
 from mutint_filter.view_filter import get_view_filter
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.models import ReferenceSequences, MutationCall
-from mutint_experiment.ancestor import ancestral_mutation_ids, describe_ancestor
+from mutint_experiment.ancestor import (ancestral_mutation_ids, ancestral_shown,
+                                        describe_ancestor)
 from mutint_sample.util import get_ordered_sample_dict
 
 logger = logging.getLogger(__name__)
@@ -52,12 +53,18 @@ def breseq_table(request):
                                             sample_type, include_ancestor=True)
         sample_dict = _ancestor_first(sample_dict, experiment.ancestor_id)
         sample = _selected_sample(request, sample_dict, experiment)
+        is_ancestor = sample is not None and sample.id == experiment.ancestor_id
 
         view_filter = get_view_filter(request, experiment.id)
         # Resolved once for the whole page: the tint is a membership test per rendered row.
         ancestral_ids = ancestral_mutation_ids(experiment.id)
-        rows = (_rows_for(experiment, sample, view_filter, ancestral_ids)
-                if sample is not None else [])
+        # The reader's choice, remembered per experiment and shared with Compare. The
+        # ancestor's own page shows its rows whatever the choice says: they are all it has.
+        shown = ancestral_shown(request, experiment.id)
+        rows, ancestral_count = (
+            _rows_for(experiment, sample, view_filter, ancestral_ids,
+                      show_ancestral=shown or is_ancestor)
+            if sample is not None else ([], 0))
 
         context.update(experiment.experiment_context())
         context.update({
@@ -71,8 +78,10 @@ def breseq_table(request):
             "selected_sample": sample,
             "selected_sample_id": sample.id if sample is not None else None,
             "is_mixed": is_mixed(sample),
-            "is_ancestor": sample is not None and sample.id == experiment.ancestor_id,
-            "ancestral_count": sum(1 for row in rows if row["ancestral"]),
+            "is_ancestor": is_ancestor,
+            "ancestral_shown": shown,
+            # Counted before the toggle drops them, so the Show button can say how many.
+            "ancestral_count": ancestral_count,
             # The name and pk, so the legend can link the tinted rows to the sample they
             # came from. `describe_ancestor` is what the summary line under every other
             # table already uses, rather than a second way of spelling the same thing.
@@ -158,12 +167,18 @@ def _selected_sample(request, sample_dict, experiment):
     return None
 
 
-def _rows_for(experiment, sample, view_filter=None, ancestral_ids=frozenset()):
-    """This sample's rows, ancestor included.
+def _rows_for(experiment, sample, view_filter=None, ancestral_ids=frozenset(), *,
+              show_ancestral=False):
+    """This sample's rows, and how many of them the designated ancestor also carries.
 
-    Deliberately the raw call queryset. Every page that analyzes the data subtracts the
-    designated ancestor; this one tints those rows instead, because it is a view of what
-    breseq called in one sample rather than a conclusion drawn from it.
+    The raw call queryset, through the reader's filter. What happens to the ancestral calls
+    is the reader's other choice: hidden they are dropped here, before `build_rows`, because
+    breseq stripes by row index and a row hidden afterwards would leave two neighbours the
+    same shade; shown they stay, and `build_rows` tints them. The count is taken before the
+    drop, so the Show button can say what it would reveal.
+
+    In Python rather than by `.exclude(mutation_id__in=...)`: the set is already in hand for
+    the tint, and `ancestral_mutation_ids` says why it should not go back to the database.
     """
     call = filter_mutation_calls(
         MutationCall.objects.filter(sample=sample).select_related("mutation"),
@@ -171,9 +186,13 @@ def _rows_for(experiment, sample, view_filter=None, ancestral_ids=frozenset()):
     # filter_mutation_calls orders across samples; within one sample breseq
     # orders by reference then position.
     call.sort(key=lambda o: (o.mutation.seq_id or "", o.mutation.start_position))
-    return build_rows(call, browse_url=_browse_url(sample),
+    ancestral_count = sum(1 for o in call if o.mutation_id in ancestral_ids)
+    if not show_ancestral:
+        call = [o for o in call if o.mutation_id not in ancestral_ids]
+    rows = build_rows(call, browse_url=_browse_url(sample),
                       ancestral_mutation_ids=ancestral_ids,
                       refseq_url=_refseq_url())
+    return rows, ancestral_count
 
 
 def _browse_url(sample):

@@ -20,6 +20,8 @@
  *   - the Columns, Samples and Types menus are mutintSelectList in toggle mode, the genome
  *     browser's sample menu three times over, and every change is saved back where it was
  *     read from;
+ *   - a row the server marked `ancestral` -- observed in the designated ancestor, drawn
+ *     because the reader asked -- is tinted red on every draw, the per-sample table's tint;
  *   - the table lives in a scroll box, with DataTables' own controls above it: the header
  *     sticks to its top and the descriptive columns to its left, each pinned column's `left`
  *     being the sum of the widths before it, recomputed after every draw and whenever the
@@ -236,7 +238,9 @@
             dom: '<"mutation-matrix-toolbar"lfi><"mutation-matrix-toolbar"pB>r<"mutation-matrix-scroll"t>',
             // Export is a menu of two: the rows showing -- after the Show menu, the hidden
             // samples and types, and the search box, which is what `search: "applied"` means
-            // -- or every row the server produced. Visible columns only, either way.
+            // -- or every row the server produced. Visible columns only, either way. Ancestral
+            // rows the reader asked to see are rows the server produced, so both include them;
+            // they are in no row set, so choosing one in the Show menu drops them.
             buttons: [{
                 extend: "collection",
                 text: "Export CSV",
@@ -255,9 +259,12 @@
             }],
             language: { emptyTable: container.getAttribute("data-empty-message") || "No mutations to show." },
             // breseq shades by displayed row, so a filtered table stripes like a full one.
+            // A row the server marked ancestral gets the per-sample table's red -- toggled
+            // rather than added, because deferRender reuses row nodes across draws.
             rowCallback: function (row, data, displayIndex) {
                 row.classList.remove("alternate_table_row_0", "alternate_table_row_1", "odd", "even");
                 row.classList.add("alternate_table_row_" + (displayIndex % 2));
+                row.classList.toggle("ancestral_table_row", !!data.ancestral);
             },
             // `dt` is not assigned until the constructor returns, and the first draw happens
             // inside it; the explicit call below covers that draw.

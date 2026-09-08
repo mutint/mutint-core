@@ -22,8 +22,10 @@ click. This is the opposite on every count.
 
 - **It belongs to the dataset, not the reader.** Two people looking at one experiment see the
   same subtraction.
-- **It is not optional.** There is no toggle and no query parameter. `filter_mutation_calls`
-  takes `view_filter=None` to mean unfiltered; there is no equivalent here.
+- **The subtraction is not optional.** `filter_mutation_calls` takes `view_filter=None` to
+  mean unfiltered; nothing that derives has an equivalent here. What a reader *can* choose is
+  whether the two mutation tables **draw** the subtracted rows -- see `ancestral_shown` at
+  the foot of this module -- and nothing computed reads that choice.
 - **It reaches further.** mutint-phylogeny never touches the filter layer, and this still
   applies to it.
 
@@ -212,3 +214,71 @@ def note_sample_deleted(sender, instance, **kwargs):
         logger.info("experiment %s is losing its designated ancestor to a deletion",
                     experiment_id)
         request_rebuild(experiment_id, reason="ancestor sample deleted")
+
+
+# ---- The reader's display toggle ---------------------------------------------------------
+#
+# Whether the two mutation tables -- the per-sample page and Compare -- draw the rows the
+# subtraction removed, tinted red. Display only: convergence, fixation, the phylogeny, the
+# Overview, the dashboard and the exports subtract exactly as above whatever this says. It is
+# remembered the way `mutint_filter.view_filter.get_view_filter` remembers the reader's filter,
+# and for the same reason: the sidebar's links carry no parameters, so the choice has to follow
+# the reader from page to page. Hidden by default, because the rows are the starting line
+# rather than evolution, and a page that opens showing them reads as one that did not subtract.
+
+#: The link's query parameter and its two values. Present in the URL it wins and is remembered;
+#: absent, the session decides; absent there too, hidden.
+ANCESTRAL_PARAM = "ancestral"
+ANCESTRAL_SHOW = "show"
+ANCESTRAL_HIDE = "hide"
+#: `{"<experiment_id>": True}` for every experiment this reader has chosen to show. Hiding
+#: forgets the entry, the way an empty filter is forgotten. String keys, because the session's
+#: JSON serializer hands integer keys back as strings.
+ANCESTRAL_SESSION_KEY = "mutint_ancestral_shown"
+MAX_REMEMBERED_EXPERIMENTS = 20
+
+
+def ancestral_shown(request, experiment_id):
+    """Whether this reader wants the subtracted rows drawn on this experiment's tables.
+
+    Resolution, in `get_view_filter`'s order: the parameter when it is in the query string,
+    remembered into the session; otherwise the session; otherwise False. Memoised on the
+    request, so the view that builds the rows and the summary tag that describes them cannot
+    disagree.
+
+    The GET-write is the one `get_view_filter` already makes, with the same argument -- what is
+    written is idempotent, carries no authority, and is a display preference the page states
+    out loud. The one difference is direction: this *widens* what is drawn rather than
+    narrowing it, but only to rows the reader can already open on the ancestor's own page.
+    """
+    cache = getattr(request, "_mutint_ancestral_shown_cache", None)
+    if cache is None:
+        cache = request._mutint_ancestral_shown_cache = {}
+    key = str(experiment_id)
+    if key in cache:
+        return cache[key]
+
+    stored = request.session.get(ANCESTRAL_SESSION_KEY)
+    stored = dict(stored) if isinstance(stored, dict) else {}
+    if ANCESTRAL_PARAM in request.GET:
+        shown = request.GET.get(ANCESTRAL_PARAM) == ANCESTRAL_SHOW
+        # Rebuild and reassign the top-level dict: assigning into the nested one leaves
+        # `session.modified` False and loses the write with no error.
+        stored.pop(key, None)
+        if shown:
+            stored[key] = True
+        while len(stored) > MAX_REMEMBERED_EXPERIMENTS:
+            del stored[next(iter(stored))]
+        request.session[ANCESTRAL_SESSION_KEY] = stored
+    else:
+        shown = bool(stored.get(key))
+
+    cache[key] = shown
+    return shown
+
+
+def ancestral_toggle_url(request, shown):
+    """The link that flips the state, keeping every other parameter of the page it is on."""
+    params = request.GET.copy()
+    params[ANCESTRAL_PARAM] = ANCESTRAL_HIDE if shown else ANCESTRAL_SHOW
+    return "?" + params.urlencode()

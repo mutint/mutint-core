@@ -16,16 +16,21 @@ from django.test import RequestFactory
 from mutint_curate.tests.base import EditorTestCase
 
 TEMPLATE = Template("{% load view_filter %}{% view_filter_summary %}")
-NO_SUBTRACTION = Template(
-    "{% load view_filter %}{% view_filter_summary ancestor_subtracted=False %}")
+OWN_PAGE = Template(
+    "{% load view_filter %}{% view_filter_summary ancestral='own' %}")
+TOGGLE = Template(
+    "{% load view_filter %}{% view_filter_summary ancestral='toggle' %}")
+TOGGLE_COUNTED = Template(
+    "{% load view_filter %}{% view_filter_summary ancestral='toggle' ancestral_count=3 %}")
 OWN_RULES = Template(
     "{% load view_filter %}{% view_filter_summary own_rules='Different rules here.' %}")
+BUTTON = 'data-role="ancestral-toggle"'
 
 
 class SummaryTestCase(EditorTestCase):
 
-    def render(self, template=TEMPLATE):
-        request = RequestFactory().get("/")
+    def render(self, template=TEMPLATE, query=""):
+        request = RequestFactory().get("/" + ("?" + query if query else ""))
         request.session = {}
         return template.render(Context({"experiment_id": self.experiment.id,
                                         "request": request}))
@@ -58,9 +63,9 @@ class TestWithAnAncestor(SummaryTestCase):
     def test_it_links_to_the_ancestor(self):
         self.assertIn("sample_id=%d" % self.sample_a.id, self.render())
 
-    def test_a_page_that_does_not_subtract_can_say_so(self):
-        """Exactly one page passes this: the per-sample breseq table, which tints instead."""
-        self.assertNotIn("designated ancestor", self.render(NO_SUBTRACTION))
+    def test_the_ancestors_own_page_says_nothing(self):
+        """There is nothing to subtract there, and the banner above already says what it is."""
+        self.assertNotIn("designated ancestor", self.render(OWN_PAGE))
 
     def test_own_rules_does_not_suppress_it(self):
         """phylogeny and search pass `own_rules` to describe a different *frequency* rule --
@@ -68,3 +73,41 @@ class TestWithAnAncestor(SummaryTestCase):
         rendered = self.render(OWN_RULES)
         self.assertIn("Different rules here.", rendered)
         self.assertIn("designated ancestor", rendered)
+
+    def test_the_bare_tag_offers_no_button(self):
+        """A button whose view ignores it is a control that does nothing."""
+        self.assertNotIn(BUTTON, self.render())
+        self.assertNotIn(BUTTON, self.render(OWN_RULES))
+        self.assertIn("are excluded, and so is that sample", self.render())
+
+
+class TestTheToggle(SummaryTestCase):
+    """A page that draws the subtracted rows on request says which state is in force and
+    offers the other one."""
+
+    def setUp(self):
+        super().setUp()
+        self.experiment.set_ancestor(self.sample_a, self.owner)
+
+    def test_hidden_by_default_and_offers_show(self):
+        rendered = self.render(TOGGLE)
+        self.assertIn("are hidden", rendered)
+        self.assertIn(BUTTON, rendered)
+        self.assertIn("ancestral=show", rendered)
+        self.assertIn("Show ancestral mutations", rendered)
+        self.assertNotIn("are excluded, and so is that sample", rendered)
+
+    def test_shown_says_so_and_offers_hide(self):
+        rendered = self.render(TOGGLE, query="ancestral=show")
+        self.assertIn("shaded red", rendered)
+        self.assertIn("still leaves them out", rendered)
+        self.assertIn("ancestral=hide", rendered)
+
+    def test_the_button_can_count(self):
+        self.assertIn("Show 3 ancestral mutations", self.render(TOGGLE_COUNTED))
+
+    def test_no_button_without_a_designation(self):
+        self.experiment.clear_ancestor()
+        rendered = self.render(TOGGLE)
+        self.assertNotIn(BUTTON, rendered)
+        self.assertIn("every stored mutation", rendered)

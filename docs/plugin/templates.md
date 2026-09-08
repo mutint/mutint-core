@@ -100,6 +100,14 @@ does not filter and asks nothing about what a set means; how the ids were chosen
 page's business. Compare computes convergent and fixed mutations this way, from the same
 filtered calls its rows are built from, so a page with no sets to offer gets no menu.
 
+**Ancestral rows are tinted, not filtered.** Pass `build_matrix(...,
+ancestral_mutation_ids=ancestral_mutation_ids(experiment_id))` and each row gains
+`ancestral: true|false`, which the script turns into the per-sample table's red. It is the
+display half of the toggle described in [filtering](filtering.md): build the rows from
+`get_all_calls_filtered(..., include_ancestral=True)` when `ancestral_shown` says so, and set
+`ancestral_mode = "toggle"` in the context so the page offers the button. Such a row is in no
+row set, so the Show menu drops it.
+
 **Extending the page rather than copying it.** `mutation_matrix/page.html` has two blocks:
 `matrix_form_fields`, inside the GET form before Apply, for controls of your own that change
 which rows the server produces; and `matrix_summary`, under the reader's filter sentence, to

@@ -13,13 +13,28 @@ by everyone; the controls are on this page now, a few lines above.
 <div class="row" style="margin: 6px 0 10px 0; color: #666; font-size: 12px;">
     {% if ancestor %}
         {% comment %} Stated first, and stated separately from everything below. The reader's
-           filter is theirs and clearable in a click; this is a property of the dataset that
-           nobody reading can turn off, so folding the two into one sentence would suggest it
-           is one more thing they chose. {% endcomment %}
+           filter is theirs and clearable in a click; the subtraction is a property of the
+           dataset that nobody reading can turn off, so folding the two into one sentence would
+           suggest it is one more thing they chose. What a reader can choose, on a page that
+           passes `ancestral="toggle"`, is whether the subtracted rows are drawn -- tinted red,
+           and changing nothing computed -- and the button for that sits in this sentence
+           because this is where the state is described. {% endcomment %}
         <div>
             Mutations in the designated ancestor
             (<a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ ancestor.sample_id }}">{{ ancestor.name }}</a>)
-            are excluded, and so is that sample.
+            {% if ancestral == "toggle" %}
+                {% if ancestral_shown %}
+                    are shown, shaded red; everything computed from this experiment still leaves them out.
+                    <a href="{{ ancestral_toggle_url }}" class="btn btn-default btn-xs"
+                       data-role="ancestral-toggle">Hide ancestral mutations</a>
+                {% else %}
+                    are hidden.
+                    <a href="{{ ancestral_toggle_url }}" class="btn btn-default btn-xs"
+                       data-role="ancestral-toggle">Show{% if ancestral_count is None %} ancestral mutations{% else %} {{ ancestral_count }} ancestral mutation{{ ancestral_count|pluralize }}{% endif %}</a>
+                {% endif %}
+            {% else %}
+                are excluded, and so is that sample.
+            {% endif %}
         </div>
     {% endif %}
     {% if own_rules %}

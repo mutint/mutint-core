@@ -34,16 +34,18 @@
 }
 
 /* breseq alternates row shading by row index rather than striping with
-   :nth-child, so a filtered table shades the same way an unfiltered one does. */
+   :nth-child, so a filtered table shades the same way an unfiltered one does. The grey is
+   a shade off white; the matrix's pinned-cell rule further down repeats it and the two
+   move together. */
 .breseq-table tr.alternate_table_row_0 { background-color: rgb(255, 255, 255); }
-.breseq-table tr.alternate_table_row_1 { background-color: rgb(235, 235, 235); }
+.breseq-table tr.alternate_table_row_1 { background-color: rgb(245, 245, 245); }
 
 /* A sub-100% call in a population sample. */
 .breseq-table tr.polymorphism_table_row { background-color: rgb(160, 255, 160); }
 
 /* Observed in this experiment's designated ancestor, and therefore subtracted from every
-   analysis. Shown here because this page is what breseq called in one sample, not what we
-   conclude from it. Declared last on purpose: it has the same specificity as the two rules
+   analysis. Drawn on the per-sample table and on the matrix when the reader asks to see
+   those rows. Declared last on purpose: it has the same specificity as the two rules
    above, so anything earlier would leave an ancestral polymorphic call green. */
 .breseq-table tr.ancestral_table_row { background-color: rgb(255, 218, 218); }
 
@@ -328,7 +330,14 @@ table.dataTable.mutation-matrix-table .pinned {
 }
 
 table.dataTable.mutation-matrix-table tr.alternate_table_row_1 > td.pinned {
-    background-color: rgb(235, 235, 235);
+    background-color: rgb(245, 245, 245);
+}
+
+/* An ancestral row's pinned cells, for the same reason: the red is on the row and a
+   positioned cell does not inherit it. After the stripe rule, which it has to beat at
+   equal specificity. */
+table.dataTable.mutation-matrix-table tr.ancestral_table_row > td.pinned {
+    background-color: rgb(255, 218, 218);
 }
 
 table.dataTable.mutation-matrix-table thead > tr > th.pinned {
