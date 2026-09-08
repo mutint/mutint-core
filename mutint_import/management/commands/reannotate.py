@@ -9,6 +9,7 @@ stale until this recomputes them.
     ./mutint reannotate 4                      # against the reference it has
     ./mutint reannotate 4 --ref REL606.gbk     # attach a new one, then re-annotate
     ./mutint reannotate 4 --ref new.gbk -n     # report what would change
+    ./mutint reannotate 4 --ref chr.gbk plasmid.gbk   # a reference of several files
 
 Mutations carry the .gd record they were imported from
 (``Mutation.genome_diff``), so
@@ -34,8 +35,10 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", type=int,
                             help="Experiment primary key")
-        parser.add_argument("--ref", dest="reference_path", default=None,
-                            help="GenBank, GFF3 or FASTA to establish before re-annotating")
+        parser.add_argument("--ref", dest="reference_paths", default=None, nargs="+",
+                            metavar="FILE",
+                            help="GenBank, GFF3 or FASTA file(s) to establish before "
+                                 "re-annotating; several files are one reference")
         parser.add_argument("--replace", action="store_true",
                             help="With --ref, accept a reference whose *sequence* differs. "
                                  "This is a different genome; mutation coordinates may no "
@@ -50,7 +53,7 @@ class Command(BaseCommand):
         experiment = self._experiment(options["experiment_id"])
         dry_run = options["dry_run"]
 
-        references = self._reference(experiment, options["reference_path"],
+        references = self._reference(experiment, options["reference_paths"],
                                      options["replace"], dry_run)
 
         mutations = list(Mutation.objects.filter(experiment=experiment))
@@ -93,11 +96,11 @@ class Command(BaseCommand):
         except Experiment.DoesNotExist:
             raise CommandError("No experiment with primary key %s" % experiment_id)
 
-    def _reference(self, experiment, reference_path, replace, dry_run):
-        """Establish `reference_path` if given, then load what we will annotate against."""
+    def _reference(self, experiment, reference_paths, replace, dry_run):
+        """Establish `reference_paths` if given, then load what we will annotate against."""
         annotation.clear_cache()
 
-        if not reference_path:
+        if not reference_paths:
             references = annotation.reference_sequences_for(experiment)
             if references is None:
                 raise CommandError(
@@ -107,24 +110,30 @@ class Command(BaseCommand):
                               % experiment.name)
             return references
 
-        if not os.path.isfile(reference_path):
-            raise CommandError("Reference file not found: %s" % reference_path)
+        for reference_path in reference_paths:
+            if not os.path.isfile(reference_path):
+                raise CommandError("Reference file not found: %s" % reference_path)
+        files = [(path, os.path.basename(path)) for path in reference_paths]
+        names = ", ".join(name for _path, name in files)
 
         try:
-            gff3_text, sequences = reference_io.normalize_reference(
-                reference_path, os.path.basename(reference_path))
+            gff3_text, sequences, duplicates = reference_io.normalize_references(files)
         except reference_io.ReferenceFormatError as error:
             raise CommandError(str(error))
+        for duplicate in duplicates:
+            self.stdout.write(self.style.WARNING("  %s" % (duplicate,)))
 
         before = ReferenceSequences.objects.filter(
             experiment=experiment).values_list("gff3_sha256", flat=True).first()
 
         if dry_run:
-            # Annotate against the file itself rather than establishing it, so a
-            # dry run really does leave the store untouched.
+            # Annotate against the files themselves rather than establishing them, so a
+            # dry run really does leave the store untouched. Merged the way the real run
+            # merges, so the two cannot disagree about what the reference is.
             self.stdout.write("Would establish %s and re-annotate %r."
-                              % (os.path.basename(reference_path), experiment.name))
-            return annotation.load_reference(reference_path)
+                              % (names, experiment.name))
+            references, _duplicates = reference_io.load_references(files)
+            return references
 
         try:
             reference_store.establish_or_check(
@@ -138,13 +147,13 @@ class Command(BaseCommand):
         after = ReferenceSequences.objects.get(experiment=experiment).gff3_sha256
         if before is None:
             self.stdout.write("Established %s as the reference for %r."
-                              % (os.path.basename(reference_path), experiment.name))
+                              % (names, experiment.name))
         elif before == after:
             self.stdout.write("%s matches the stored reference; re-annotating anyway."
-                              % os.path.basename(reference_path))
+                              % names)
         else:
             self.stdout.write("Stored annotation refreshed from %s."
-                              % os.path.basename(reference_path))
+                              % names)
 
         annotation.clear_cache()
         references = annotation.reference_sequences_for(experiment)

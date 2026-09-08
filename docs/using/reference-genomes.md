@@ -8,6 +8,29 @@ There is no separate page for this. A GenBank, GFF3 or FASTA dropped alongside `
 one drop is established first, whatever order the files are listed in, because the reference
 import type runs at a higher priority than anything checked against it.
 
+## A reference may be several files
+
+A chromosome in one GenBank and a plasmid or a synthetic construct in another, dropped
+together on the **Reference Sequence** tab, are one reference. The files are combined before
+anything is stored or hashed, so a genome split across files is indistinguishable from the
+same genome in one file. Formats may be mixed: a GenBank chromosome and a FASTA plasmid is
+fine. From the shell, put the files in one directory and import that.
+
+Three rules apply across the files of one drop:
+
+- **The same sequence in two files is one contig.** A chromosome uploaded as a GenBank and
+  again as a FASTA is not two chromosomes; the copy carrying annotation is kept, and the
+  skipped one is reported under its file's row. Within a single file two identical contigs
+  stay two contigs -- one file is one statement of the genome.
+- **One name for two different sequences is refused**, naming both files.
+- **A file that cannot be read stops the whole set**, and nothing is established. A reference
+  missing its plasmid could not be completed from this page afterwards, since the tab is
+  withdrawn once the experiment has a reference and *Replace annotation* refuses a different
+  sequence.
+
+**Replace annotation** takes several files the same way -- and, as with one file, the files
+together must carry the whole genome.
+
 ## Sequence is the sole invariant
 
 Two samples belong to the same experiment when their reference **sequence** is identical.

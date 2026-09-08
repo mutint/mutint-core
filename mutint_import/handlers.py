@@ -232,7 +232,8 @@ def _rename_payload(experiment, plan, filename):
     }
     payload = dict(plan.as_payload(counts), kind="rename", file=filename)
     payload["message"] = (
-        "%s is this experiment's genome under different contig names." % filename)
+        "%s %s this experiment's genome under different contig names."
+        % (filename, "are" if ", " in filename else "is"))
     payload["warnings"] = [
         "Stored alignments keep their current contig names and go on working -- igv is given "
         "an alias table so reads and coverage still resolve.",
@@ -243,6 +244,20 @@ def _rename_payload(experiment, plan, filename):
 
 
 def _ingest_reference(experiment, staged_root, paths, annotation_only, options=None):
+    """Establish (or refresh) the reference from every file the drop carries, at once.
+
+    The files are one reference -- a chromosome in one GenBank, a plasmid in another -- so
+    they are merged by `reference.normalize_references` and `establish_or_check` is called
+    **once**. Establishing them one at a time was the bug this replaced: the first file
+    became the reference and every later one was refused as a different genome.
+
+    All or nothing. A file that cannot be read stops the whole set and nothing is
+    established, because a partial reference is a trap: the Reference Sequence tab is gone
+    once the experiment has one, and `replace_annotation` refuses a different sequence, so an
+    experiment left holding the chromosome alone could not be completed from the page.
+    Every file's row therefore carries the same error, whose text names the file at fault.
+    The rows stay one per file, since `run_import` announced them by name.
+    """
     from mutint_common.import_registry import ConfirmationRequired
     from mutint_import import reference as reference_io
     from mutint_import import reference_store
@@ -256,36 +271,51 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
             import_progress.report(entry)
         return {"files": refusals, "total_mutations": 0}
 
+    for relative in paths:
+        import_progress.begin(relative)
+
+    error = None
+    warnings = {relative: [] for relative in paths}
+    try:
+        gff3_text, sequences, duplicates = reference_io.normalize_references(
+            [(os.path.join(staged_root, relative), os.path.basename(relative))
+             for relative in paths])
+        for duplicate in duplicates:
+            # On the row of the file whose contig was skipped, by basename -- which is the
+            # name normalize_references was given for it.
+            for relative in paths:
+                if os.path.basename(relative) == duplicate.skipped_file:
+                    warnings[relative].append(str(duplicate))
+        reference_store.establish_or_check(
+            experiment, gff3_text, sequences, update_annotation=True,
+            allow_rename=bool((options or {}).get("confirm_rename")))
+    except reference_store.RenameRequired as ask:
+        # Not an error and not a per-file result: the same genome arrived under different
+        # contig names, and renaming rewrites every mutation in the experiment. It
+        # propagates out of run_import as a question about the whole drop.
+        raise ConfirmationRequired(_rename_payload(experiment, ask.plan, ", ".join(paths)))
+    except reference_store.ReferenceMismatch:
+        # Named separately from the blanket handler below: this is the one failure a user
+        # can act on, and the hash-vs-hash text establish_or_check raises does not say so.
+        logger.info("reference refused for %s: sequence differs", ", ".join(paths))
+        if annotation_only:
+            error = ("the sequence in this file is not this experiment's reference "
+                     "genome; annotation can only be replaced for the same sequence")
+        else:
+            # Reachable only through auto-detect, dropping a genome beside data into an
+            # experiment that already has one: the tab itself is withdrawn by then.
+            error = ("the sequence in this file is not this experiment's reference genome, "
+                     "which cannot be changed from here")
+        if len(paths) > 1:
+            error = error.replace("in this file", "in these files")
+    except Exception as exc:
+        logger.exception("reference import failed for %s", ", ".join(paths))
+        error = str(exc)
+
     results = []
     for relative in paths:
-        full = os.path.join(staged_root, relative)
-        import_progress.begin(relative)
-        try:
-            gff3_text, sequences = reference_io.normalize_reference(
-                full, os.path.basename(relative))
-            reference_store.establish_or_check(
-                experiment, gff3_text, sequences, update_annotation=True,
-                allow_rename=bool((options or {}).get("confirm_rename")))
-            entry = {"file": relative, "mutations": None,
-                     "kind": KIND_REFERENCE, "error": None}
-        except reference_store.RenameRequired as ask:
-            # Not an error and not a per-file result: the same genome arrived under different
-            # contig names, and renaming rewrites every mutation in the experiment. It
-            # propagates out of run_import as a question about the whole drop.
-            raise ConfirmationRequired(_rename_payload(experiment, ask.plan, relative))
-        except reference_store.ReferenceMismatch:
-            # Named separately from the blanket handler below: this is the one failure a user
-            # can act on, and the hash-vs-hash text establish_or_check raises does not say so.
-            logger.info("annotation replacement refused for %s: sequence differs", relative)
-            entry = {"file": relative, "mutations": None,
-                     "kind": KIND_REFERENCE,
-                     "error": ("the sequence in this file is not this experiment's "
-                               "reference genome; annotation can only be replaced "
-                               "for the same sequence")}
-        except Exception as exc:
-            logger.exception("reference import failed for %s", relative)
-            entry = {"file": relative, "mutations": None,
-                     "kind": KIND_REFERENCE, "error": str(exc)}
+        entry = {"file": relative, "mutations": None, "kind": KIND_REFERENCE,
+                 "error": error, "warnings": warnings[relative]}
         results.append(entry)
         import_progress.report(entry)
     return {"files": results, "total_mutations": 0}
@@ -498,7 +528,9 @@ def register_core_import_handlers():
         # (deliberately shell-only). Auto-detect still routes a reference dropped
         # alongside data, which is how a first drop establishes one.
         only_without_reference=True,
-        description="Sets the reference every sample in the experiment is checked against.")
+        description="Sets the reference every sample in the experiment is checked against. "
+                    "A chromosome and its plasmids may arrive as separate files; they are "
+                    "combined into one reference.")
     register_import_handler(
         name="replace_annotation",
         label="Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",

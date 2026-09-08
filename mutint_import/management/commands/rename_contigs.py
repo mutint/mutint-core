@@ -2,6 +2,7 @@
 
     ./mutint rename_contigs 4 --ref REL606.gbk          # show the plan, change nothing
     ./mutint rename_contigs 4 --ref REL606.gbk --yes    # do it
+    ./mutint rename_contigs 4 --ref chr.gbk plasmid.fa  # a reference of several files
     ./mutint rename_contigs 4 --repair                  # recompute identity from the store
 
 The same operation the Import data page offers, and the same gate: without `--yes` it prints
@@ -27,8 +28,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("experiment_id", type=int)
-        parser.add_argument("--ref", dest="reference_path", default=None,
-                            help="GenBank, GFF3 or FASTA carrying the intended names")
+        parser.add_argument("--ref", dest="reference_paths", default=None, nargs="+",
+                            metavar="FILE",
+                            help="GenBank, GFF3 or FASTA file(s) carrying the intended "
+                                 "names; several files are one reference")
         parser.add_argument("--yes", action="store_true",
                             help="perform the rename instead of describing it")
         parser.add_argument("--repair", action="store_true",
@@ -44,14 +47,19 @@ class Command(BaseCommand):
         if options["repair"]:
             return self._repair(reference)
 
-        if not options["reference_path"]:
-            raise CommandError("Pass --ref <file>, or --repair.")
-        path = options["reference_path"]
-        if not os.path.isfile(path):
-            raise CommandError("No such file: %s" % path)
+        if not options["reference_paths"]:
+            raise CommandError("Pass --ref <file>..., or --repair.")
+        for path in options["reference_paths"]:
+            if not os.path.isfile(path):
+                raise CommandError("No such file: %s" % path)
 
-        gff3_text, sequences = reference_io.normalize_reference(
-            path, os.path.basename(path))
+        try:
+            gff3_text, sequences, duplicates = reference_io.normalize_references(
+                [(path, os.path.basename(path)) for path in options["reference_paths"]])
+        except reference_io.ReferenceFormatError as error:
+            raise CommandError(str(error))
+        for duplicate in duplicates:
+            self.stdout.write(self.style.WARNING("  %s" % (duplicate,)))
 
         try:
             plan = reference_rename.plan_rename(reference, sequences)

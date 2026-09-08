@@ -11,6 +11,7 @@ Two things live here:
 GenBank input is handled by ``mutint_import.annotate``, which normalization delegates to.
 """
 
+import collections
 import hashlib
 import io
 import os
@@ -341,3 +342,153 @@ def render_fasta(sequences):
         for offset in range(0, len(sequence), NORMALIZED_LINE_LENGTH):
             lines.append(sequence[offset:offset + NORMALIZED_LINE_LENGTH])
     return "\n".join(lines) + "\n"
+
+
+# --- several files, one reference --------------------------------------------------------
+#
+# A reference is often more than one file: the chromosome in one GenBank, a plasmid or a
+# synthetic construct in another. The store keeps exactly one canonical pair per experiment,
+# so the files are merged *here*, before anything is hashed or written -- and merged at the
+# level of the loaded annotation model rather than by concatenating text, so that two files
+# render to precisely the bytes one file holding both records would. The shared-reference
+# hash must not depend on how a genome happened to be split up.
+
+
+DuplicateContig = collections.namedtuple(
+    "DuplicateContig", "skipped_id skipped_file kept_id kept_file")
+DuplicateContig.__str__ = lambda self: (
+    "contig %s in %s duplicates %s in %s and was ignored" % self)
+
+
+def load_references(files):
+    """Load ``[(path, original_name), ...]`` into one ``LoadedReferenceSequences``.
+
+    Returns ``(references, duplicates)``, the second a list of ``DuplicateContig``. Each file is loaded on its own -- a bare FASTA into
+    feature-less contigs, GenBank and GFF3 through the annotation loader -- so formats may be
+    mixed across files even though one load of the annotation loader refuses to mix them.
+
+    Two rules govern the merge, and they answer different mistakes:
+
+    * **The same bases arriving twice is a duplicate, not a second contig.** A chromosome
+      uploaded as a GenBank and again as a FASTA is one contig; the copy that carries
+      annotation is kept when only one does, and otherwise the earlier file's. The skip is
+      returned as a ``DuplicateContig`` so the caller can say so. This is deliberately only *across*
+      files: within one file two identical contigs stay two contigs (the multiset rule in
+      ``sequence_set_digest``), because a single file is one author's statement of the genome.
+    * **One name for two different sequences is refused**, naming both files. Silently keeping
+      either would hide exactly the mistake worth surfacing.
+    """
+    from mutint_import.annotate.model import LoadedReferenceSequences
+
+    merged = LoadedReferenceSequences()
+    # sha256 of the bases -> (contig, file it came from); how a duplicate is recognized.
+    by_digest = {}
+    # every key registered on `merged` -> file it came from; how a name clash is described.
+    key_owner = {}
+    duplicates = []
+
+    for path, original_name in files:
+        display_name = original_name or os.path.basename(path)
+        loaded = _load_one(path, display_name)
+        # Indexed only once the whole file is in, so two identical contigs *within* a file
+        # are never read as one duplicating the other.
+        this_file = []
+        for contig, keys in _distinct_contigs(loaded):
+            found = by_digest.get(sequence_digest(contig.sequence))
+            if found is not None:
+                kept, kept_file = found
+                if contig.features and not kept.features:
+                    # The annotated copy wins whatever order the files came in: dropping it
+                    # would establish a genome with no genes while a file full of them sat
+                    # in the same drop.
+                    _forget(merged, key_owner, kept)
+                    duplicates.append(DuplicateContig(
+                        kept.seq_id, kept_file, contig.seq_id, display_name))
+                else:
+                    duplicates.append(DuplicateContig(
+                        contig.seq_id, display_name, kept.seq_id, kept_file))
+                    continue
+            for key in keys:
+                if key in key_owner:
+                    raise ReferenceFormatError(
+                        "%s and %s both define contig %s with different sequences; every "
+                        "contig may be named once across the files of one reference"
+                        % (key_owner[key], display_name, key))
+            for key in keys:
+                merged.sequences[key] = contig
+                key_owner[key] = display_name
+            this_file.append(contig)
+        for contig in this_file:
+            by_digest[sequence_digest(contig.sequence)] = (contig, display_name)
+
+    return merged, duplicates
+
+
+def normalize_references(files):
+    """``[(path, original_name), ...]`` -> ``(gff3_text, sequences, duplicates)``.
+
+    The several-file form of ``normalize_reference``: the genome the files make up together,
+    in the same canonical form. ``duplicates`` lists every contig skipped as a duplicate of
+    one in another file, as ``DuplicateContig`` (see ``load_references``).
+
+    One file delegates to ``normalize_reference`` outright, so a single file normalizes to
+    exactly the bytes it always has -- a multi-record bare FASTA keeps its file order there,
+    where the merge below sorts, and there is no reason to churn stored hashes for that.
+    """
+    files = list(files)
+    if len(files) == 1:
+        path, original_name = files[0]
+        gff3_text, sequences = normalize_reference(path, original_name)
+        return gff3_text, sequences, []
+
+    references, duplicates = load_references(files)
+    sequences = _sequences_of(references)
+    if not sequences:
+        raise ReferenceFormatError("the files carry no sequence")
+    return annotate_gff3.render_breseq_gff3(references), sequences, duplicates
+
+
+def _load_one(path, display_name):
+    """One file as a ``LoadedReferenceSequences``, whatever its format."""
+    from mutint_import.annotate.model import AnnotatedSequence, LoadedReferenceSequences
+
+    fmt = detect_format(path, display_name)
+    if fmt != FORMAT_FASTA:
+        try:
+            return annotate_loader.load_reference(path, original_name=display_name)
+        except (annotate_loader.UnsupportedReferenceFormat, ValueError) as error:
+            raise ReferenceFormatError(str(error))
+
+    references = LoadedReferenceSequences()
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for seq_id, sequence in parse_fasta(handle):
+            contig = AnnotatedSequence(seq_id, sequence.upper())
+            contig.update_feature_lists()
+            references.add(contig)
+    if not references.sequences:
+        raise ReferenceFormatError("%s carries no sequence" % (display_name,))
+    return references
+
+
+def _distinct_contigs(references):
+    """``[(contig, [every key it is registered under]), ...]`` in file order.
+
+    A GenBank contig is registered under its LOCUS name and, as an alias, its VERSION
+    accession; both have to travel with it, and neither may count as a second contig.
+    """
+    keys_of = {}
+    order = []
+    for key, contig in references.sequences.items():
+        if id(contig) not in keys_of:
+            keys_of[id(contig)] = []
+            order.append(contig)
+        keys_of[id(contig)].append(key)
+    return [(contig, keys_of[id(contig)]) for contig in order]
+
+
+def _forget(references, key_owner, contig):
+    """Unregister `contig` from `references` under every key it holds."""
+    for key in [k for k, c in references.sequences.items() if c is contig]:
+        del references.sequences[key]
+        key_owner.pop(key, None)
+

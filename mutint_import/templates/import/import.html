@@ -709,12 +709,15 @@
             statusTd.textContent = f.error;
             statusTd.style.color = "#a00";
         } else if ((f.warnings || []).length) {
-            // Not an error: these mutations imported. The parser could not read some
-            // lines of the file, so what landed is less than the file appears to hold,
-            // and saying nothing would make that silent.
+            // Not an error: this file imported. For a mutation file the parser could not
+            // read some lines, so what landed is less than the file appears to hold; for
+            // a reference, a contig was skipped as a duplicate of one in another file of
+            // the same drop. Saying nothing would make either silent.
             statusTd.style.color = "#8a6d3b";
             statusTd.appendChild(document.createTextNode(
-                "imported, with " + f.warnings.length + " unreadable line(s):"));
+                f.kind === "reference"
+                    ? "imported, with " + f.warnings.length + " note(s):"
+                    : "imported, with " + f.warnings.length + " unreadable line(s):"));
             var list = document.createElement("ul");
             list.style.marginBottom = "0";
             f.warnings.forEach(function (warning) {

@@ -239,6 +239,101 @@ class ImportRegistryRoutingTestCase(TestCase):
         self.assertIsNone(summary["files"][0]["error"])
         self.assertEqual(before, ReferenceSequences.objects.get().gff3_sha256)
 
+    # --- a reference of several files -----------------------------------------------
+
+    PLASMID = [("plasmid", breseq_fixture.SEQUENCE_B)]
+
+    def _chromosome_and_plasmid(self):
+        write_genbank(os.path.join(self.drop, "chr.gbk"))
+        write_genbank(os.path.join(self.drop, "plasmid.gbk"), self.PLASMID)
+
+    def test_several_reference_files_are_one_reference(self):
+        """The reported bug: the first file became the reference and the second was
+        refused as a different genome."""
+        self._chromosome_and_plasmid()
+        summary = self._run(import_type="reference")
+        results = {r["file"]: r for r in summary["files"]}
+
+        for name in ("chr.gbk", "plasmid.gbk"):
+            self.assertIsNone(results[name]["error"], name)
+            self.assertEqual(results[name]["kind"], import_registry.KIND_REFERENCE)
+            self.assertEqual(results[name]["warnings"], [])
+        reference = ReferenceSequences.objects.get()
+        self.assertEqual([s["id"] for s in reference.seq_ids], ["plasmid", "test_ref"])
+        self.assertEqual(reference.total_length,
+                         len(breseq_fixture.SEQUENCE_A) + len(breseq_fixture.SEQUENCE_B))
+
+    def test_a_bad_file_stops_the_whole_reference(self):
+        """All or nothing: a partial reference could not be completed from the page."""
+        write_genbank(os.path.join(self.drop, "chr.gbk"))
+        self._write("broken.gbk", "this is not a GenBank record\n")
+
+        summary = self._run(import_type="reference")
+        results = {r["file"]: r for r in summary["files"]}
+
+        for name in ("chr.gbk", "broken.gbk"):
+            self.assertIn("broken.gbk", results[name]["error"] or "", name)
+        self.assertEqual(ReferenceSequences.objects.count(), 0)
+
+    def test_a_duplicate_across_files_is_reported_on_its_own_row(self):
+        write_genbank(os.path.join(self.drop, "chr.gbk"))
+        self._write("copy.fasta", breseq_fixture.fasta_text(
+            [("chr", breseq_fixture.SEQUENCE_A)]))
+
+        summary = self._run(import_type="reference")
+        results = {r["file"]: r for r in summary["files"]}
+
+        self.assertIsNone(results["chr.gbk"]["error"])
+        self.assertIsNone(results["copy.fasta"]["error"])
+        self.assertEqual(results["chr.gbk"]["warnings"], [])
+        self.assertEqual(len(results["copy.fasta"]["warnings"]), 1)
+        self.assertIn("chr", results["copy.fasta"]["warnings"][0])
+        self.assertEqual([s["id"] for s in ReferenceSequences.objects.get().seq_ids],
+                         ["test_ref"])
+
+    def test_replace_annotation_across_several_files(self):
+        self._write("genome.fasta", breseq_fixture.fasta_text(SEQUENCES + self.PLASMID))
+        self._run(import_type="reference")
+        before = ReferenceSequences.objects.get()
+        os.remove(os.path.join(self.drop, "genome.fasta"))
+
+        self._chromosome_and_plasmid()
+        summary = self._run(import_type="replace_annotation")
+
+        self.assertEqual([r["error"] for r in summary["files"]], [None, None])
+        after = ReferenceSequences.objects.get()
+        self.assertEqual(after.pk, before.pk)
+        self.assertEqual(after.sequence_sha256, before.sequence_sha256)  # same genome
+        self.assertNotEqual(after.gff3_sha256, before.gff3_sha256)      # now annotated
+
+    def test_a_mixed_drop_imports_the_gd_against_the_merged_reference(self):
+        self._chromosome_and_plasmid()
+        self._write("Ara-1_500gen_762B.gd", breseq_fixture.GD_TEXT)
+
+        summary = self._run()
+        results = {r["file"]: r for r in summary["files"]}
+
+        self.assertIsNone(results["Ara-1_500gen_762B.gd"]["error"])
+        self.assertGreater(summary["total_mutations"], 0)
+        self.assertEqual(len(ReferenceSequences.objects.get().seq_ids), 2)
+
+    def test_breseq_folders_are_checked_against_a_loose_reference_not_merged_into_it(self):
+        """A sample folder's own reference never reaches the reference handler. The loose
+        files establish the genome first, on priority, and the sample is then checked
+        against it -- and refused here, since it carries only the chromosome."""
+        self._chromosome_and_plasmid()
+        breseq_fixture.write_sample(self.drop, "s1")
+
+        summary = self._run()
+        results = {r["file"]: r for r in summary["files"]}
+
+        self.assertIsNone(results["chr.gbk"]["error"])
+        self.assertIsNone(results["plasmid.gbk"]["error"])
+        self.assertIn("not the same set of sequences", results["s1"]["error"])
+        self.assertEqual(len(ReferenceSequences.objects.get().seq_ids), 2)
+        self.assertEqual(Sample.objects.count(), 0)
+
+
 
 class PluggableImportTypeTestCase(TestCase):
     """A third-party app must be able to add an import type without touching core."""

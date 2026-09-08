@@ -2656,7 +2656,7 @@ All apps use the `mutint_*` namespace. Key apps:
   - **Annotation is internal** (`annotation.py` + `annotate/`). Gene, codon and amino-acid
     fields are derived from the experiment's stored reference at import, not read out of
     the `.gd`, so breseq's plain `output.gd` is enough and `gdtools ANNOTATE` is not needed.
-    `./mutint reannotate <id> [--ref FILE]` recomputes them when a better reference arrives.
+    `./mutint reannotate <id> [--ref FILE...]` recomputes them when a better reference arrives (several files are one reference).
     The annotator is a port of breseq's own, checked against `gdtools` output.
   - Web breseq **folder** upload — `upload_session.py` (chunked: `POST /import/uploads/`,
     `.../chunk`, `.../finalize`) stages the drop, then `breseq_folder.py` imports it. Takes
@@ -2673,6 +2673,25 @@ All apps use the `mutint_*` namespace. Key apps:
     GFF3 or FASTA dropped alongside `.gd` files in one drop is established first whatever
     order the files are listed in. `import_gd_files` still raises `ReferenceRequired` for
     non-registry callers when the target experiment has none.
+  - **Several reference files in one drop are one reference.** A chromosome in one GenBank
+    and a plasmid in another are merged by `reference.normalize_references` and
+    `establish_or_check` is called **once** (`handlers._ingest_reference`); establishing
+    them one at a time made the first file the reference and refused every later one as a
+    different genome. The merge is at the `LoadedReferenceSequences` level rather than by
+    concatenating text, so two files render to precisely the bytes one file holding both
+    records would and the shared-reference hash cannot depend on how a genome was split up;
+    it also lets formats mix across files, since each file is its own load. **All or
+    nothing**: a file that cannot be read establishes nothing and every row carries the
+    error, because a partial reference cannot be completed from the page (the tab is
+    withdrawn once there is a reference, and `replace_annotation` refuses a different
+    sequence). The same bases in two files is a duplicate rather than a second contig -- the
+    annotated copy is kept and the skip lands in that file's `warnings` -- but only *across*
+    files; within one file identical contigs stay two, the multiset rule
+    `sequence_set_digest` states. One name for two different sequences is refused naming
+    both files. A single file still goes through `normalize_reference`, untouched, so
+    nothing already stored hashes differently. **Breseq folders are not merged**: each
+    sample's own `data/reference.gff3` is checked one sample at a time through that
+    single-file path, and never reaches the reference handler at all.
   - **`replace_annotation`** (priority 11) refreshes an established reference's annotation
     while holding the *sequence* fixed, and refuses a file whose sequence differs. It claims
     the same files as `reference` and only its higher priority number keeps auto-detect from

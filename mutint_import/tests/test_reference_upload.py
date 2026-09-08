@@ -202,6 +202,142 @@ class NormalizationTestCase(TestCase):
         self.assertEqual(reference_io.normalize_reference(a),
                          reference_io.normalize_reference(b))
 
+    # --- several files ---------------------------------------------------------------
+
+    PLASMID = [("plasmid", breseq_fixture.SEQUENCE_B)]
+
+    def _chromosome_and_plasmid(self):
+        chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
+        plasmid = write_genbank(os.path.join(self.tmp, "plasmid.gbk"), self.PLASMID)
+        return [(chromosome, "chr.gbk"), (plasmid, "plasmid.gbk")]
+
+    def test_two_genbanks_normalize_as_one_genbank_holding_both(self):
+        """The hash must not depend on how the genome was split into files."""
+        both = write_genbank(os.path.join(self.tmp, "both.gbk"), SEQUENCES + self.PLASMID)
+
+        gff3_text, sequences, duplicates = reference_io.normalize_references(
+            self._chromosome_and_plasmid())
+
+        self.assertEqual((gff3_text, sequences), reference_io.normalize_reference(both))
+        self.assertEqual([seq_id for seq_id, _ in sequences], ["plasmid", "test_ref"])
+        self.assertEqual(duplicates, [])
+
+    def test_a_genbank_and_a_fasta_may_be_mixed(self):
+        chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
+        plasmid = self._write("plasmid.fasta", breseq_fixture.fasta_text(self.PLASMID))
+
+        gff3_text, sequences, _ = reference_io.normalize_references(
+            [(chromosome, "chr.gbk"), (plasmid, "plasmid.fasta")])
+
+        self.assertEqual(sequences, self.PLASMID + SEQUENCES)
+        annotation = gff3_text.split("##FASTA", 1)[0]
+        rows = [line for line in annotation.splitlines()
+                if line and not line.startswith("#")]
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0].startswith("test_ref\t"))
+        self.assertIn("##sequence-region\tplasmid\t1\t%d" % len(breseq_fixture.SEQUENCE_B),
+                      gff3_text)
+
+    def test_a_gff3_and_a_genbank_may_be_mixed(self):
+        """The annotation loader refuses to mix formats in one load; each file is its own
+        load here, so the refusal never applies."""
+        chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
+        plasmid_sequences = [("plasmid", "TTGA" * 40)]
+        plasmid = self._write("plasmid.gff3", breseq_fixture.gff3_text(plasmid_sequences))
+
+        _, sequences, _ = reference_io.normalize_references(
+            [(chromosome, "chr.gbk"), (plasmid, "plasmid.gff3")])
+
+        self.assertEqual(sequences, plasmid_sequences + SEQUENCES)
+
+    def test_the_same_bases_in_two_files_are_one_contig_and_the_annotated_copy_wins(self):
+        """A chromosome uploaded as a GenBank and again as a FASTA is one contig, and the
+        FASTA sorting first must not cost the annotation."""
+        copy = self._write("a.fasta", breseq_fixture.fasta_text(
+            [("chr", breseq_fixture.SEQUENCE_A)]))
+        annotated = write_genbank(os.path.join(self.tmp, "ref.gbk"))
+
+        gff3_text, sequences, duplicates = reference_io.normalize_references(
+            [(copy, "a.fasta"), (annotated, "ref.gbk")])
+
+        self.assertEqual(sequences, SEQUENCES)
+        self.assertIn("Name=thrA", gff3_text)
+        self.assertNotIn("chr", [seq_id for seq_id, _ in sequences])
+        self.assertEqual(duplicates, [reference_io.DuplicateContig(
+            "chr", "a.fasta", "test_ref", "ref.gbk")])
+        self.assertEqual(str(duplicates[0]),
+                         "contig chr in a.fasta duplicates test_ref in ref.gbk and was ignored")
+
+    def test_the_same_bases_in_two_featureless_files_keep_the_first_name(self):
+        first = self._write("first.fasta", breseq_fixture.fasta_text(
+            [("chr1", breseq_fixture.SEQUENCE_A)]))
+        second = self._write("second.fasta", breseq_fixture.fasta_text(
+            [("chr2", breseq_fixture.SEQUENCE_A)]))
+
+        _, sequences, duplicates = reference_io.normalize_references(
+            [(first, "first.fasta"), (second, "second.fasta")])
+
+        self.assertEqual(sequences, [("chr1", breseq_fixture.SEQUENCE_A)])
+        self.assertEqual([d.skipped_id for d in duplicates], ["chr2"])
+
+    def test_the_same_name_with_the_same_bases_is_one_contig(self):
+        annotated = write_genbank(os.path.join(self.tmp, "ref.gbk"))
+        plain = self._write("ref.fasta", breseq_fixture.fasta_text(SEQUENCES))
+
+        gff3_text, sequences, duplicates = reference_io.normalize_references(
+            [(annotated, "ref.gbk"), (plain, "ref.fasta")])
+
+        self.assertEqual(sequences, SEQUENCES)
+        self.assertIn("Name=thrA", gff3_text)
+        self.assertEqual(len(duplicates), 1)
+
+    def test_one_name_for_two_different_sequences_is_refused_naming_both_files(self):
+        chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
+        other = self._write("other.fasta", breseq_fixture.fasta_text(
+            [("test_ref", breseq_fixture.SEQUENCE_B)]))
+
+        with self.assertRaises(reference_io.ReferenceFormatError) as caught:
+            reference_io.normalize_references(
+                [(chromosome, "chr.gbk"), (other, "other.fasta")])
+
+        message = str(caught.exception)
+        self.assertIn("chr.gbk", message)
+        self.assertIn("other.fasta", message)
+        self.assertIn("test_ref", message)
+
+    def test_identical_contigs_inside_one_file_stay_two(self):
+        """Deduplication is across files only: one file is one author's statement of the
+        genome, and two identical plasmids in it are two plasmids."""
+        chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
+        plasmids = [("p1", breseq_fixture.SEQUENCE_B), ("p2", breseq_fixture.SEQUENCE_B)]
+        twice = self._write("plasmids.fasta", breseq_fixture.fasta_text(plasmids))
+
+        _, sequences, duplicates = reference_io.normalize_references(
+            [(chromosome, "chr.gbk"), (twice, "plasmids.fasta")])
+
+        self.assertEqual([seq_id for seq_id, _ in sequences], ["p1", "p2", "test_ref"])
+        self.assertEqual(duplicates, [])
+
+    def test_a_genomediff_among_the_files_is_refused(self):
+        chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
+        gd = self._write("sample.gd", breseq_fixture.GD_TEXT)
+
+        with self.assertRaises(reference_io.ReferenceFormatError) as caught:
+            reference_io.normalize_references([(chromosome, "chr.gbk"), (gd, "sample.gd")])
+        self.assertIn("GenomeDiff", str(caught.exception))
+
+    def test_one_file_delegates_to_normalize_reference(self):
+        """A single file must normalize to exactly the bytes it always has. A multi-record
+        bare FASTA is the case that would differ: the merge sorts, the single path keeps
+        file order."""
+        unsorted = [("zeta", breseq_fixture.SEQUENCE_A), ("alpha", breseq_fixture.SEQUENCE_B)]
+        path = self._write("ref.fasta", breseq_fixture.fasta_text(unsorted))
+
+        self.assertEqual(
+            reference_io.normalize_references([(path, "ref.fasta")]),
+            reference_io.normalize_reference(path, "ref.fasta") + ([],))
+
+
 
 class ReferenceStoreTestCase(TestCase):
     """What `/import/reference/` used to assert over HTTP, asserted on the store directly.

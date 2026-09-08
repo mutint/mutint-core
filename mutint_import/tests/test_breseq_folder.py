@@ -124,6 +124,21 @@ class BreseqFolderImportTestCase(TestCase):
 
         self.assertEqual(ReferenceSequences.objects.get().gff3_sha256, original_gff3)
 
+    def test_samples_sharing_a_reference_are_checked_not_merged(self):
+        """Every sample folder carries the same reference, and that is checked one sample
+        at a time -- never merged, so no sample is told its contig duplicates another's."""
+        breseq_fixture.write_sample(self.drop, "s1")
+        breseq_fixture.write_sample(self.drop, "s2")
+        summary = self._import()
+
+        results = {f["file"]: f for f in summary["files"]}
+        for name in ("s1", "s2"):
+            self.assertIsNone(results[name]["error"], name)
+            self.assertEqual(results[name]["warnings"], [], name)
+        reference = ReferenceSequences.objects.get()
+        self.assertEqual([s["id"] for s in reference.seq_ids], ["test_ref"])
+        self.assertEqual(Sample.objects.count(), 2)
+
     def test_mismatched_reference_rejects_only_that_sample(self):
         breseq_fixture.write_sample(self.drop, "s1")
         breseq_fixture.write_sample(self.drop, "s2", sequences=OTHER_SEQUENCES)

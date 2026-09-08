@@ -24,6 +24,7 @@ from mutint_import import breseq_folder
 from mutint_import.models import STATE_FAILED, STATE_FINALIZED, UploadSession
 from mutint_sample.models import MutationCall, Sample
 from mutint_import.tests import breseq_fixture
+from mutint_import.tests.test_reference_upload import write_genbank
 
 
 class Recorder:
@@ -177,6 +178,19 @@ class AnnouncedNamesTestCase(ImportProgressTestCase):
 
         self.assertEqual(recorder.announced, ["3-30000-1-1.gd"])
         self.assert_announcement_matches_reports(recorder)
+
+    def test_several_reference_files_are_announced_and_reported_one_each(self):
+        """They are merged into one reference, and still one row per file: the rows
+        were announced by name before anything ran."""
+        write_genbank(os.path.join(self.drop, "chr.gbk"))
+        write_genbank(os.path.join(self.drop, "plasmid.gbk"),
+                      [("plasmid", breseq_fixture.SEQUENCE_B)])
+
+        recorder, summary = self.run_drop(import_type="reference")
+
+        self.assertEqual(recorder.announced, ["chr.gbk", "plasmid.gbk"])
+        self.assert_announcement_matches_reports(recorder)
+        self.assertEqual([r["error"] for r in summary["files"]], [None, None])
 
     def test_a_genomediff_refused_for_want_of_a_reference_still_matches(self):
         """The early return keys its rows the same way the happy path does. It did not:

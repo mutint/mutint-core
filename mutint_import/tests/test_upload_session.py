@@ -231,6 +231,43 @@ class UploadSessionEndpointTestCase(TestCase):
 
         self.assertTrue(response.json()["has_reference"])
 
+    def test_finalize_combines_several_reference_files_into_one_reference(self):
+        """The Reference Sequence tab end to end: a chromosome and a plasmid uploaded
+        together, plus a FASTA copy of the chromosome, are one reference of two contigs,
+        and the skipped copy is reported as a note on its own row."""
+        from mutint_import.tests.test_reference_upload import write_genbank
+
+        source = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, source, True)
+        write_genbank(os.path.join(source, "chr.gbk"))
+        write_genbank(os.path.join(source, "plasmid.gbk"),
+                      [("plasmid", breseq_fixture.SEQUENCE_B)])
+        with open(os.path.join(source, "copy.fasta"), "w") as handle:
+            handle.write(breseq_fixture.fasta_text([("chr", breseq_fixture.SEQUENCE_A)]))
+
+        entries = []
+        for name in ("chr.gbk", "plasmid.gbk", "copy.fasta"):
+            with open(os.path.join(source, name), "rb") as handle:
+                entries.append((name, handle.read()))
+        created = self._create([{"path": p, "size": len(b)} for p, b in entries],
+                               import_type="reference")
+        self.assertEqual(created.status_code, 200, created.content)
+        upload_id = created.json()["upload_id"]
+        for path, payload in entries:
+            self.assertEqual(self._chunk(upload_id, path, 0, payload).status_code, 200)
+
+        response = self.client.post("/import/uploads/%s/finalize" % upload_id, {})
+
+        self.assertEqual(response.status_code, 200, response.content)
+        summary = response.json()
+        results = {r["file"]: r for r in summary["files"]}
+        self.assertEqual([r["error"] for r in summary["files"]], [None, None, None])
+        self.assertEqual(results["chr.gbk"]["warnings"], [])
+        self.assertEqual(len(results["copy.fasta"]["warnings"]), 1)
+        self.assertTrue(summary["has_reference"])
+        reference = ReferenceSequences.objects.get()
+        self.assertEqual([s["id"] for s in reference.seq_ids], ["plasmid", "test_ref"])
+
     def test_a_finalized_session_cannot_be_reused(self):
         upload_id = self._upload_sample_folder()
         self.client.post("/import/uploads/%s/finalize" % upload_id, {})

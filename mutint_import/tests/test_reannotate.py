@@ -97,7 +97,7 @@ class ReannotateTestCase(TestCase):
         self.assertEqual({"intergenic"}, snp_types)
 
     def test_a_new_reference_annotates_everything(self):
-        output = self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
+        output = self.run_command(reference_paths=[SYNTHETIC_GFF3], skip_rebuilds=True)
 
         self.assertIn("annotated:  36 (36 changed)", output)
         self.assertNotIn(None, self.categories())
@@ -112,7 +112,7 @@ class ReannotateTestCase(TestCase):
 
     def test_the_new_reference_is_stored(self):
         before = ReferenceSequences.objects.get().gff3_sha256
-        self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
+        self.run_command(reference_paths=[SYNTHETIC_GFF3], skip_rebuilds=True)
 
         stored = ReferenceSequences.objects.get()
         self.assertNotEqual(before, stored.gff3_sha256)
@@ -123,18 +123,18 @@ class ReannotateTestCase(TestCase):
             self.experiment.id, store.REFERENCE_GFF3)))
 
     def test_genbank_gives_the_same_result_as_gff3(self):
-        self.run_command(reference_path=SYNTHETIC_GBK, skip_rebuilds=True)
+        self.run_command(reference_paths=[SYNTHETIC_GBK], skip_rebuilds=True)
         from_genbank = {m.start_position: (m.gene_name, m.snp_type, m.annotation)
                         for m in Mutation.objects.all()}
 
-        self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
+        self.run_command(reference_paths=[SYNTHETIC_GFF3], skip_rebuilds=True)
         from_gff3 = {m.start_position: (m.gene_name, m.snp_type, m.annotation)
                      for m in Mutation.objects.all()}
 
         self.assertEqual(from_genbank, from_gff3)
 
     def test_running_again_changes_nothing(self):
-        self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
+        self.run_command(reference_paths=[SYNTHETIC_GFF3], skip_rebuilds=True)
         output = self.run_command(skip_rebuilds=True)
 
         self.assertIn("annotated:  36 (0 changed)", output)
@@ -142,7 +142,7 @@ class ReannotateTestCase(TestCase):
 
     def test_dry_run_reports_but_writes_nothing(self):
         before = ReferenceSequences.objects.get().gff3_sha256
-        output = self.run_command(reference_path=SYNTHETIC_GFF3, dry_run=True)
+        output = self.run_command(reference_paths=[SYNTHETIC_GFF3], dry_run=True)
 
         self.assertIn("36 (36 changed)", output)
         self.assertIn("Dry run", output)
@@ -150,7 +150,7 @@ class ReannotateTestCase(TestCase):
         self.assertLessEqual(self.gene_names(), {None, "", "–/–"})
 
     def test_gd_data_is_left_verbatim(self):
-        self.run_command(reference_path=SYNTHETIC_GFF3, skip_rebuilds=True)
+        self.run_command(reference_paths=[SYNTHETIC_GFF3], skip_rebuilds=True)
         gd_data = self.mutation_at(130).genome_diff
         self.assertEqual("A", gd_data["new_seq"])
         for key in ("gene_name", "snp_type", "html_mutation"):
@@ -162,7 +162,7 @@ class ReannotateTestCase(TestCase):
             handle.write(">SYN001\nACGTACGTACGT\n")
 
         with self.assertRaises(CommandError) as caught:
-            self.run_command(reference_path=other, skip_rebuilds=True)
+            self.run_command(reference_paths=[other], skip_rebuilds=True)
         self.assertIn("--replace", str(caught.exception))
 
     def test_a_different_genome_is_accepted_with_replace(self):
@@ -170,7 +170,7 @@ class ReannotateTestCase(TestCase):
         with open(other, "w") as handle:
             handle.write(">SYN001\nACGTACGTACGT\n")
 
-        self.run_command(reference_path=other, replace=True, skip_rebuilds=True)
+        self.run_command(reference_paths=[other], replace=True, skip_rebuilds=True)
         self.assertEqual(reference_store.digest(reference.render_fasta(
             [("SYN001", "ACGTACGTACGT")])),
             ReferenceSequences.objects.get().fasta_sha256)
@@ -181,7 +181,7 @@ class ReannotateTestCase(TestCase):
 
     def test_missing_reference_file(self):
         with self.assertRaises(CommandError) as caught:
-            self.run_command(reference_path="/nonexistent/ref.gbk")
+            self.run_command(reference_paths=["/nonexistent/ref.gbk"])
         self.assertIn("not found", str(caught.exception))
 
 
@@ -243,7 +243,7 @@ class ReannotateOtherExperimentsTestCase(TestCase):
         other = os.path.join(self.store, "other.fasta")
         with open(other, "w") as handle:
             handle.write(">SYN001\n%s\n" % ("ACGT" * 40))
-        call_command("reannotate", self.first.id, reference_path=other,
+        call_command("reannotate", self.first.id, reference_paths=[other],
                      replace=True, skip_rebuilds=True, stdout=StringIO())
 
         for pk, before in untouched.items():
