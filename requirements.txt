@@ -24,12 +24,24 @@ beautifulsoup4>=4.12.3
 # what breseq accepts. It also stops a malformed line costing the whole file: problems
 # collect in gd.parse_errors, which the import summary now reports per file.
 #
-# The SHA is the whole pin: every commit here reports itself as 0.4.2, so pip will not
-# upgrade an already-installed 0.4.2 on the strength of the requirement alone. An
+# The SHA is the whole pin, and it is the *full* one: every commit here reports itself as
+# 0.4.2, so the commit is the only exact identity this dependency has, and an abbreviation is
+# a prefix rather than an identity. `direct_url.json` records the full hash either way.
+#
+# **Pinning does not make pip act on a change, and no flag here does.** Measured against this
+# venv with a different SHA: `pip install -r requirements.txt` plans **zero** installs, and so
+# does `--upgrade` -- pip clones the new revision, builds its metadata, sees 0.4.2 already
+# installed and calls the requirement satisfied, ignoring the recorded revision. The entry
+# script's venv fingerprint does notice the edit and re-runs pip; pip is what declines. So an
 # existing environment needs
-#   pip install --force-reinstall --no-deps 'git+https://github.com/barricklab/genomediff-python.git@43a0f72'
+#   pip install --force-reinstall --no-deps 'git+https://github.com/barricklab/genomediff-python.git@<sha>'
 # (dev: `pip install -e /path/to/genomediff`)
-genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72
+#
+# This is the same class of problem as breseq-prerelease in mutint-breseq/tools.txt, where
+# every build also reports one version -- and there it *is* fixable, because conda publishes
+# the git hash as the build string and a spec can pin that. pip has no equivalent: a direct
+# URL carries no version for a requirement to match on.
+genomediff @ git+https://github.com/barricklab/genomediff-python.git@43a0f72697f39eca1f2d63de0a3815b38a62d630
 # GenBank/FASTA parsing for uploaded reference genomes (mutint_import/reference.py).
 # Note Biopython has no GFF3 reader -- that lives in the separate bcbio-gff package -- so
 # breseq's data/reference.gff3 is read by a small in-repo parser instead.
