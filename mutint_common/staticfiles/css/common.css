@@ -144,6 +144,20 @@
     white-space: nowrap;
 }
 
+/* The two bolded rows -- the selected project and the selected experiment -- are the
+   exception, and they are the only entries whose text this repo did not choose. Every other
+   label is one this codebase wrote and can keep short; a project or experiment name is the
+   reader's own, and the rule above plus the 260px cap trimmed a long one mid-letter with
+   nothing to say so. So these wrap instead. `overflow-wrap` for a name with no spaces in
+   it, which nothing else would break.
+
+   The sidebar is `width: max-content` under that cap, so a long name still pushes it to the
+   full 260px and then wraps inside -- the width it already reached, minus the clipping. */
+.sidebar .nav > li > a.mutint-sidebar-selection {
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
 .nav > li > a:focus, .nav > li > a:hover {
     text-decoration: none;
     background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
@@ -610,8 +624,10 @@ table.dataTable thead .sorting_desc:after {
 /* Logout posts rather than links, because LogoutView is POST-only from Django 5.0. The
    control still has to read as the two links either side of it, so the button borrows
    `.nav > li > a`'s box (10px 15px) and its hover rather than looking like a button --
-   the same thing .mutint-watermark does, and for the same reason. font-family only, so
-   `.small` on the element still decides the size. */
+   the same thing .mutint-watermark does, and for the same reason. Nothing sets a size:
+   Bootstrap's normalize gives a button `font: inherit`, so it takes the sidebar's own
+   14px like the links beside it. These entries carried Bootstrap's `.small` (85%) and
+   were the only rows in the sidebar rendered at a different size from the rest. */
 .sidebar .mutint-logout {
     margin: 0;
 }
@@ -622,17 +638,23 @@ table.dataTable thead .sorting_desc:after {
     padding: 10px 15px;
     border: 0;
     background: none;
-    color: inherit;
     font-family: inherit;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
+    /* Bootstrap 3's `@link-color`, which the five entries beside this one get from its `a`
+       rule and a <button> cannot. It was `color: inherit`, so Logout rendered in the body's
+       near-black among five blue links -- easy to miss at the 85% these entries used to be
+       set at, and plainly wrong once they took the sidebar's own 14px. The hover pair below
+       is `a:focus, a:hover`, for the same reason. */
+    color: #337ab7;
 }
 
 .sidebar .mutint-logout button:focus,
 .sidebar .mutint-logout button:hover {
     text-decoration: none;
     background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);
+    color: #23527c;
 }
 
 /* The account submenu, which is sb-admin-2's own sidebar idiom -- see base.html. Two

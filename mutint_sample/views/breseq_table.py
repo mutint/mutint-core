@@ -73,8 +73,6 @@ def breseq_table(request):
             "population_names": mutint_sample.views.common.get_population_names(experiment.id),
             "population": population,
             "experiment_name": experiment.name,
-            "project_name": experiment.project.name if experiment.project else "",
-            "project_id": experiment.project_id,
             "sample_type": sample_type,
             "sample_list": list(sample_dict.values()),
             "selected_sample": sample,

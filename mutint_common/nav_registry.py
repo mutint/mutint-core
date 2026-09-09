@@ -16,7 +16,7 @@ EXPERIMENT_SECTION = 'experiment'
 END_SECTION = 'end'
 
 
-def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION):
+def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION, key=None):
     """Register a sidebar entry (called from AppConfig.ready()).
 
     Entries render in registration order: apps in INSTALLED_APPS order, and
@@ -31,6 +31,13 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION):
               when an experiment is selected and rendered with
               ?experiment_id=... appended; or END_SECTION, always shown,
               after the experiment section
+    key       an identifier base.html can anchor something of its own to. It is
+              identity, not ordering and not behaviour: the shell renders the
+              selected project's name directly under the Projects entry, and had
+              no way to say which entry that is. Matching on the entry's URL
+              would have worked until the URL changed; a key the owning app
+              supplies survives that. `projects` is the only one today, and an
+              entry needs one only when the shell reaches for it by name.
     """
     if (url is None) == (url_name is None):
         raise ValueError("register_nav_item() needs exactly one of url or url_name")
@@ -39,11 +46,12 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION):
         'url': url,
         'url_name': url_name,
         'section': section,
+        'key': key,
     })
 
 
 def get_nav_items(section=MAIN_SECTION):
-    """Return [{'label', 'url'}, ...] for one section, in registration order.
+    """Return [{'label', 'url', 'key'}, ...] for one section, in registration order.
 
     url_name entries are reversed here rather than at registration time: the
     URLconf is not loaded while AppConfig.ready() runs. An entry whose route is
@@ -62,5 +70,5 @@ def get_nav_items(section=MAIN_SECTION):
                 url = reverse(item['url_name'])
             except NoReverseMatch:
                 continue
-        items.append({'label': item['label'], 'url': url})
+        items.append({'label': item['label'], 'url': url, 'key': item['key']})
     return items

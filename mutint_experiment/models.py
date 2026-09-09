@@ -84,6 +84,20 @@ class Project(SoftDeleteMixin):
             return self.date.strftime("%Y-%m-%d")
         return ''
 
+    def project_context(self) -> dict:
+        """The two things base.html needs to render this project in the sidebar.
+
+        The same two keys `Experiment.experiment_context()` supplies, deliberately: the
+        sidebar draws the selected project's row under the Projects entry without knowing
+        whether it is on a page scoped to one project or to one of its experiments. A
+        project-scoped page calls this after its permission check -- a 403 body should not
+        name the project it refused.
+        """
+        return {
+            "project_name": self.name,
+            "project_id": self.pk,
+        }
+
 
 class Experiment(SoftDeleteMixin):
     # The primary key is Django's implicit `id`, and used to be an explicit
@@ -229,6 +243,10 @@ class Experiment(SoftDeleteMixin):
         Every experiment-scoped view was carrying its own workaround for that, and the two
         that were not carried the bug: the sample edit pages had the leading colon, the
         genome browser and the Import data page had the doubled name.
+
+        **This is now the only supplier of those keys.** Seven views went on re-setting
+        `project_name` and `project_id` to the same values immediately after calling this,
+        long after the composed string they were working around was gone.
 
         `project` is nullable, so the project name can be empty; the template renders the
         colon regardless, which is a template question rather than this one's.

@@ -364,6 +364,47 @@ an admin with nothing in it. There is a test for the staff case specifically.
 **Change Password is the local page, never `/admin/password_change/`**: that one is wrapped in
 `AdminSite.admin_view` and bounces every non-staff user to the admin login.
 
+**The entries are sized like every other row in the sidebar**, and nothing in `common.css`
+sizes them: they carried Bootstrap's `.small` -- 85%, so 11.9px against the sidebar's 14px --
+and were the only rows rendered at a size of their own. The Logout `<button>` needs no rule
+for it either, because normalize gives a button `font: inherit`.
+`test_accounts.test_the_entries_are_sized_like_every_other_sidebar_row` asserts the class's
+absence, which is the whole of the mechanism.
+
+### The selected project and experiment are rows, not nav entries
+
+Two bolded rows name what a request has selected: the **project**, under the Projects entry,
+and the **experiment**, heading its own pages. They are the third thing in this sidebar that
+`nav_registry` does not produce, after the brand and the account block, and for a reason of
+the same kind -- a name a request happens to have selected is not something an app can
+register in `ready()`.
+
+**They were one row**, reading `{{ project_name }}: {{ experiment_name }}`, which meant the
+selected project was named only when an *experiment* was: `/project/<pk>/` lists a project's
+experiments and had no bolded row at all.
+
+**`register_nav_item(key=...)` is how the shell says which entry the project's row goes
+under.** Projects is third in `MAIN_SECTION` (Dashboard, Search, Projects, Experiments), so
+the row is spliced into the middle of `base.html`'s loop and *some* literal has to encode
+where. A key the owning app supplies survives a URL change, which matching on `/project/`
+would not, and `key` is already this codebase's idiom for entry identity --
+`import_tab_registry`. It is identity, not ordering and not behaviour: there is still no
+`order=` and no `visible_to=`. `test_nav_sections` asserts the key, because without it the
+`{% if %}` matches no entry and the row silently stops rendering everywhere.
+
+**Both `project_id` and `project_name` come from the view.** `Experiment.experiment_context()`
+supplies them on every experiment-scoped page, and `Project.project_context()` on the three
+scoped to one project -- `project_detail`, `project_edit` and `project_access`, each **after**
+its permission check, so a 403 body never names the project it refused. An experiment whose
+`project` is null gets no row rather than an empty one.
+
+**These two rows wrap; every other entry does not.** `.sidebar .nav > li > a` is
+`white-space: nowrap` and the sidebar is capped at 260px, so a long name was trimmed
+mid-letter by `overflow-x: hidden` with nothing to say so. `.mutint-sidebar-selection` takes
+`white-space: normal` and `overflow-wrap: break-word` instead. The distinction is whose text
+it is: every other label is one this repo wrote and can keep short, and these two are the
+reader's own.
+
 ### Branding: mutint-core has none
 
 `/` is the project list, the sidebar carries no name or version, there is no icon upper-right,

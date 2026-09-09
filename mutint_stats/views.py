@@ -75,8 +75,6 @@ def stats(request):
         context.update({"experiment_name": exp_name,
                         "population": population,
                         "experiment_id": experiment_id,
-                        "project_name": experiment.project.name,
-                        "project_id": experiment.project.id,
                         "protein_change_type_count_dict": protein_change_type_count_dict,
                         "protein_change_sum": sum(protein_change_type_count_dict.values()),
                         "call_protein_change_type_count_dict": call_protein_change_type_count_dict,

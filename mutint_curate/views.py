@@ -244,8 +244,6 @@ def _page_context(request, experiment):
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
-        "project_name": experiment.project.name if experiment.project else "",
-        "project_id": experiment.project_id,
         "can_edit": can_add_experiment_filter(request.user, experiment),
     })
     return context

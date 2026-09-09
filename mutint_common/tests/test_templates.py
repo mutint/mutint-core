@@ -193,14 +193,19 @@ class ButtonsAreNotFloatedTestCase(unittest.TestCase):
 
 
 class ExperimentSidebarLabelTestCase(TestCase):
-    """base.html joins the two names itself: `{{ project_name }}: {{ experiment_name }}`.
+    """The sidebar names the project and the experiment on two rows of its own.
 
-    `Experiment.experiment_context()` used to return a *composed* "project: experiment"
-    under the experiment key and no project key at all, so a view that simply trusted it
-    rendered a stray leading colon, and one that added the project name without also
-    overriding the composed one rendered the project twice. Every experiment-scoped view
-    carried its own workaround; the ones that did not carried the bug -- the sample edit
-    pages had the colon, the genome browser and the Import data page had the doubled name.
+    The project's row sits under the Projects entry and the experiment's heads its pages,
+    and each is bold. They were one row reading `{{ project_name }}: {{ experiment_name }}`.
+
+    The two names have to stay apart in the context for either row to be right, and that is
+    the older bug these tests were written for: `Experiment.experiment_context()` used to
+    return a *composed* "project: experiment" under the experiment key and no project key at
+    all, so a view that simply trusted it rendered a stray leading colon, and one that added
+    the project name without also overriding the composed one rendered the project twice.
+    Every experiment-scoped view carried its own workaround; the ones that did not carried
+    the bug -- the sample edit pages had the colon, the genome browser and the Import data
+    page had the doubled name.
     """
 
     def setUp(self):
@@ -228,17 +233,27 @@ class ExperimentSidebarLabelTestCase(TestCase):
 
         self.assertEqual("", self.experiment.experiment_context()["project_name"])
 
-    def _sidebar_label(self, url):
+    def _html(self, url):
+        return self.client.get(url, follow=True).content.decode()
+
+    def _sidebar_label(self, html):
         import re
 
-        html = self.client.get(url, follow=True).content.decode()
         match = re.search(
-            r'<a href="/stats\?experiment_id=%d"><b>(.*?)</b>' % self.experiment.id,
+            r'<a href="/stats\?experiment_id=%d"[^>]*><b>(.*?)</b>' % self.experiment.id,
             html)
         return match.group(1).strip() if match else None
 
+    def _project_row(self, html):
+        import re
+
+        match = re.search(
+            r'<a href="/project/%d/"[^>]*><b>(.*?)</b>' % self.experiment.project_id, html)
+        return match.group(1).strip() if match else None
+
     def test_every_experiment_page_labels_it_the_same_way(self):
-        """No leading colon, no doubled project -- on the pages that used to have each."""
+        """The experiment's name alone. No leading colon, no doubled project -- on the pages
+        that used to have each -- and no project prefix, which every page had."""
         pages = {
             "edit samples": "/experiment/%d/samples/" % self.experiment.id,
             "add data": "/import/?experiment_id=%d" % self.experiment.id,
@@ -246,7 +261,27 @@ class ExperimentSidebarLabelTestCase(TestCase):
         }
         for name, url in pages.items():
             with self.subTest(page=name):
-                self.assertEqual("Proj: Exp", self._sidebar_label(url))
+                self.assertEqual("Exp", self._sidebar_label(self._html(url)))
+
+    def test_the_project_row_sits_between_projects_and_experiments(self):
+        """Position is the whole point of the `key` base.html matches on: the row belongs to
+        the entry that lists projects, not to the end of the main section."""
+        html = self._html("/stats/?experiment_id=%d" % self.experiment.id)
+
+        self.assertEqual("Proj", self._project_row(html))
+        menu = html[html.index('id="side-menu"'):]
+        self.assertLess(menu.index('href="/project/"'),
+                        menu.index('href="/project/%d/"' % self.experiment.project_id))
+        self.assertLess(menu.index('href="/project/%d/"' % self.experiment.project_id),
+                        menu.index('href="/experiment/"'))
+
+    def test_a_project_page_names_the_project_and_no_experiment(self):
+        """`project_detail` supplies the two keys itself -- nothing else on that page would,
+        and before it did the sidebar named the selected project nowhere."""
+        html = self._html("/project/%d/" % self.experiment.project_id)
+
+        self.assertEqual("Proj", self._project_row(html))
+        self.assertIsNone(self._sidebar_label(html))
 
 
 class PreferencesScriptTestCase(unittest.TestCase):

@@ -135,8 +135,6 @@ def browse_mutation(request):
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
-        "project_name": experiment.project.name if experiment.project else "",
-        "project_id": experiment.project_id,
         "title": "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.start_position),
         "template_header": "Alignments",
         "mutation": mutation,

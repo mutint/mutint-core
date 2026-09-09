@@ -62,9 +62,6 @@ def ncbi_view(request):
     if experiment is not None:
         context.update(experiment.experiment_context())
     context.update({
-        "project_name": (experiment.project.name
-                             if experiment is not None and experiment.project else ""),
-        "project_id": experiment.project_id if experiment is not None else None,
         "title": "%s %s:%s" % (experiment.name if experiment is not None else "Mutation",
                                mutation.seq_id, mutation.start_position),
         "template_header": "Reference annotation",
@@ -236,8 +233,6 @@ def reference_view(request):
     contigs = ncbi.contig_states(experiment)
     context.update(experiment.experiment_context())
     context.update({
-        "project_name": experiment.project.name if experiment.project else "",
-        "project_id": experiment.project_id,
         "title": "%s reference" % experiment.name,
         "template_header": "Reference",
         "contigs": contigs,

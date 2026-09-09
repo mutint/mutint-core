@@ -105,6 +105,7 @@ def project_access(request, pk):
         "can_grant_owner": can_own_project(request.user, project),
         "my_groups": manageable_groups(request.user),
     })
+    context.update(project.project_context())
     return render(request, "project/access.html", context)
 
 

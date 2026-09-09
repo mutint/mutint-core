@@ -56,12 +56,16 @@ def project_detail(request, pk):
     project = get_object_or_404(Project, pk=pk)
     if can_view_project(request.user, project):
         experiments = live(project.experiment_set.all())
-        return render(request, "project/detail.html", {
+        context = {
             "project": project,
             "experiments": experiments,
             "can_edit": can_edit_project(request.user, project),
             "can_admin": can_admin_project(request.user, project),
-        })
+        }
+        # After the permission check, so the 403 below never names the project. This is what
+        # puts the project's bolded row in the sidebar with no experiment selected.
+        context.update(project.project_context())
+        return render(request, "project/detail.html", context)
     # `status=403`, as every other refusal on this page does. Without it a refused project
     # rendered the 403 body under an HTTP 200, so anything reading the status -- a test, a
     # link checker, a client -- was told the request had succeeded.
@@ -386,6 +390,7 @@ def project_edit(request, pk):
         return render(request, "403.html", context, status=403)
 
     context.update({"project": project, "statuses": Project.PROJECT_STATUS})
+    context.update(project.project_context())
     return render(request, "project/edit.html", context)
 
 

@@ -86,8 +86,6 @@ def import_view(request):
     context.update({
         "experiment": experiment,
         "experiment_id": experiment.id,
-        "project_name": experiment.project.name if experiment.project else "",
-        "project_id": experiment.project_id,
         "active_tab": active["key"],
         "import_type": import_type,
         "offered": offered,

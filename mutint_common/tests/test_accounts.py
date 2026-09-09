@@ -385,6 +385,21 @@ class SidebarAccountBlockTestCase(TestCase):
 
         self.assertLess(block.index('class="nav nav-second-level"'), block.index("</li>"))
 
+    def test_the_entries_are_sized_like_every_other_sidebar_row(self):
+        """They carried Bootstrap's `.small` -- 85%, so 11.9px against the sidebar's 14px.
+
+        Nothing in common.css sizes them, so the class was the whole of it and putting one
+        back would shrink these six rows and nothing else. There is no visual assertion to
+        make here beyond the class's absence.
+        """
+        html = self.sidebar(self.superuser)
+        block = html[html.index('class="nav nav-second-level"'):]
+        block = block[:block.index("</ul>")]
+
+        self.assertIn("Logout", block)
+        self.assertIn("Django admin", block)
+        self.assertNotIn('class="small"', block)
+
     def test_the_sidebar_is_balanced_markup(self):
         """The username's <li> was left open and a stray </li> closed it two entries later; a
         new entry added to that block would have inherited it.

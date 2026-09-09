@@ -152,7 +152,7 @@
                                    something else entirely. {% endcomment %}
                                 <form method="post" action="{% url 'accounts:logout' %}" class="mutint-logout">
                                     {% csrf_token %}
-                                    <button type="submit" class="small">Logout</button>
+                                    <button type="submit">Logout</button>
                                 </form>
                             </li>
                             <li>
@@ -160,13 +160,13 @@
                                    /admin/password_change/, which is wrapped in admin_view and
                                    so bounced every non-staff user to the admin login.
                                    {% endcomment %}
-                                <a href="{% url 'accounts:password_change' %}" class="small">Change Password</a>
+                                <a href="{% url 'accounts:password_change' %}">Change Password</a>
                             </li>
                             <li>
                                 {% comment %} These are the jobs *you* asked for, the way this
                                    is the password *you* change. A superuser sees everyone's on
                                    the same page. {% endcomment %}
-                                <a href="{% url 'jobs' %}" class="small">Jobs</a>
+                                <a href="{% url 'jobs' %}">Jobs</a>
                             </li>
                             <li>
                                 {% comment %} And these are the groups you own or belong to.
@@ -174,7 +174,7 @@
                                    Experiments as though it were data -- while what the page
                                    lists is `visible_groups(user)`, and it rendered for
                                    anonymous visitors who could see none. {% endcomment %}
-                                <a href="/group/" class="small">Groups</a>
+                                <a href="/group/">Groups</a>
                             </li>
                             {% comment %} Superusers, not staff. Django's admin admits anyone
                                with is_staff -- but the retired `load_projects` importer created every user
@@ -188,10 +188,10 @@
                                {% endcomment %}
                             {% if user.is_superuser %}
                                 <li>
-                                    <a href="{% url 'upgrade' %}" class="small">Upgrade</a>
+                                    <a href="{% url 'upgrade' %}">Upgrade</a>
                                 </li>
                                 <li>
-                                    <a href="{% url 'admin:index' %}" class="small">Django admin</a>
+                                    <a href="{% url 'admin:index' %}">Django admin</a>
                                 </li>
                             {% endif %}
                         </ul>
@@ -201,15 +201,37 @@
                 {% endif %}
                 {% for item in nav_main_items %}
                     <li><a href="{{ item.url }}">{{ item.label }}</a></li>
+                    {% comment %} The selected project, under the entry that lists them --
+                       the third thing in this sidebar that is not a nav entry, after the
+                       brand and the account block above. A name a request happens to have
+                       selected is not something an app can register in `ready()`, so the
+                       shell draws it; `key` is how nav_registry says which entry it goes
+                       under (matching on the URL would work until the URL changed).
+
+                       Every experiment-scoped page carries `project_id` and `project_name`
+                       from `Experiment.experiment_context()`, and the three pages scoped to
+                       one project get them from `Project.project_context()`. An experiment
+                       whose `project` is null has no row rather than an empty one.
+                       {% endcomment %}
+                    {% if item.key == 'projects' and project_id %}
+                        <li>
+                            <a href="/project/{{ project_id }}/" class="mutint-sidebar-selection"><b>{{ project_name }}</b></a>
+                        </li>
+                    {% endif %}
                 {% endfor %}
 
                 {% if experiment_id %}
                     <li>
-                        {% comment %} The padlock goes here rather than in the page header,
-                           because `{% block header %}` is overridden by almost every
-                           experiment page and a badge added to the default would render on
-                           none of them. This block is not overridden anywhere. {% endcomment %}
-                        <a href="/stats?experiment_id={{ experiment_id }}"><b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ project_name }}: {{ experiment_name }}</b></a>
+                        {% comment %} The experiment's own name, and the project's is not
+                           repeated here: it has its own row under Projects above. This read
+                           `{{ project_name }}: {{ experiment_name }}` when it was the only
+                           place either name appeared in the sidebar.
+
+                           The padlock goes here rather than in the page header, because
+                           `{% block header %}` is overridden by almost every experiment page
+                           and a badge added to the default would render on none of them.
+                           This block is not overridden anywhere. {% endcomment %}
+                        <a href="/stats?experiment_id={{ experiment_id }}" class="mutint-sidebar-selection"><b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ experiment_name }}</b></a>
                     </li>
                     {% for item in nav_experiment_items %}
                         <li>
