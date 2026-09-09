@@ -26,6 +26,7 @@
     <title>{% block title %}{% endblock %}</title>
 
     {% load static %}
+    {% load nav %}
 
     <!-- Bootstrap CSS -->
     <link href="{% static "vendor/bootstrap-3.3.7/css/bootstrap.min.css" %}" rel="stylesheet"
@@ -233,7 +234,13 @@
                            This block is not overridden anywhere. {% endcomment %}
                         <a href="/stats?experiment_id={{ experiment_id }}" class="mutint-sidebar-selection"><b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ experiment_name }}</b></a>
                     </li>
-                    {% for item in nav_experiment_items %}
+                    {% comment %} Through the tag, not the raw list: an entry marked
+                       `requires_edit` is left out for a reader with no write role on this
+                       project, because those pages have nothing to offer them. Only the
+                       template knows which experiment is selected, which is why the registry
+                       carries the flag and does not apply it. {% endcomment %}
+                    {% experiment_nav_items as visible_experiment_items %}
+                    {% for item in visible_experiment_items %}
                         <li>
                             <a href="{{ item.url }}?experiment_id={{ experiment_id }}">&nbsp;&nbsp;&nbsp;{{ item.label }}</a>
                         </li>
@@ -288,7 +295,11 @@
                                it is the section's landing page, always first. {% endcomment %}
                             <a href="/stats?experiment_id={{ experiment_id }}" class="btn-primary2"
                                role="button">Overview</a>
-                            {% for item in nav_experiment_items %}
+                            {% comment %} The same filtered list as the sidebar's: two
+                               renderings of one set of entries, and a button bar offering
+                               what the sidebar hides would be the worse half. {% endcomment %}
+                            {% experiment_nav_items as visible_experiment_items %}
+                            {% for item in visible_experiment_items %}
                                 | <a href="{{ item.url }}?experiment_id={{ experiment_id }}"
                                      class="btn-primary2" role="button">{{ item.label }}</a>
                             {% endfor %}

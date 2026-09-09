@@ -131,7 +131,7 @@ class ImportRegistryRoutingTestCase(TestCase):
         error = summary["files"][0]["error"]
 
         self.assertIn("not recognized as Reference genome", error)
-        self.assertIn("GenomeDiff mutations", error)
+        self.assertIn("Mutations in GenomeDiff format", error)
 
     def test_a_file_no_type_claims_is_still_just_unrecognized(self):
         """There is nothing to point at, and inventing a suggestion would be worse."""

@@ -61,12 +61,17 @@ register_import_tab('yourthing', 'Your measurements', import_type='yourthing')
 ```
 
 The tab lands on the Import data page with your type chosen. `import_types=(...)` names
-several in preference order, and the page takes the first the experiment can run -- core's
-Reference Sequence tab is `("reference", "replace_annotation")`. A tab may instead be a page of
-your own -- `register_import_tab('run_thing', 'Run thing', url_name='your_route')` -- when a
-drop needs something the Import page has no box for; mutint-breseq's Run breseq tab is that,
-and its page renders `{% import_tabs 'run_thing' %}` so it wears the same strip. Tabs render
-in `INSTALLED_APPS` order, after core's five.
+several in preference order, and the page takes the first the experiment can run. A tab may
+instead be a page of your own -- `register_import_tab('run_thing', 'Run thing',
+url_name='your_route')` -- when a drop needs something the Import page has no box for;
+mutint-breseq's Run breseq tab is that, and its page renders `{% import_tabs 'run_thing' %}`
+so it wears the same strip. Tabs render in `INSTALLED_APPS` order, after core's five, except
+`last=True` ones, which sort after everything -- core's Update Annotation tab is the only one.
+
+**The strip only offers tabs that can run now.** A tab naming import types is hidden while
+none of them can, which the registry works out for you. A tab that is a page of your own is
+opaque to it, so say `requires_reference=True` if your page needs the experiment to have a
+reference genome -- mutint-breseq's does, because breseq calls mutations against one.
 
 `priority` is real ordering, not a preference: a reference genome must be established before
 anything hash-checked against it, so core registers `reference` at 10, `breseq_folder` at 50

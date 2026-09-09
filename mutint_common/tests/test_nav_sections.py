@@ -19,8 +19,8 @@ class NavSectionsTestCase(TestCase):
     def test_the_end_section_renders_after_the_experiment_section(self):
         source = loader.get_template("base.html").template.source
         self.assertLess(source.index("{% for item in nav_main_items %}"),
-                        source.index("{% for item in nav_experiment_items %}"))
-        self.assertLess(source.index("{% for item in nav_experiment_items %}"),
+                        source.index("{% experiment_nav_items as visible_experiment_items %}"))
+        self.assertLess(source.index("{% experiment_nav_items as visible_experiment_items %}"),
                         source.index("{% for item in nav_end_items %}"))
         self.assertLess(source.index("{% for item in nav_end_items %}"),
                         source.index("mutint-watermark"))

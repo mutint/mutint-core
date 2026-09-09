@@ -528,9 +528,11 @@ def register_core_import_handlers():
         # (deliberately shell-only). Auto-detect still routes a reference dropped
         # alongside data, which is how a first drop establishes one.
         only_without_reference=True,
-        description="Sets the reference every sample in the experiment is checked against. "
-                    "A chromosome and its plasmids may arrive as separate files; they are "
-                    "combined into one reference.")
+        description="Sets the nucleotide sequence and feature annotations every sample in the "
+                    "experiment defines its mutations against. Multiple files uploaded at "
+                    "the same time will be combined (e.g., for a chromosome and a plasmid). "
+                    "Once you set the reference sequence, you will not be able to change the "
+                    "nucleotide sequences but you can upload updated feature annotations.")
     register_import_handler(
         name="replace_annotation",
         label="Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
@@ -547,11 +549,12 @@ def register_core_import_handlers():
         # Last, deliberately. It rewrites the genome every sample in the experiment is
         # checked against, and is the rarest and least reversible thing on the menu.
         menu_order=MENU_REPLACE_ANNOTATION,
-        description="Refresh the gene annotation from a new GenBank or GFF3. The sequence "
-                    "must be identical; only the features are replaced.")
+        description="The nucleotide sequences in the files you upload must match existing "
+                    "reference sequences. When they do, they will be used to update their "
+                    "sequence identifiers and feature annotations.")
     register_import_handler(
         name="breseq_folder",
-        label="breseq data folders",
+        label="Data folders (e.g., folders containing breseq output)",
         patterns=BRESEQ_PATTERNS,
         directories=BRESEQ_DIRECTORIES,
         priority=PRIORITY_DATA,
@@ -559,11 +562,13 @@ def register_core_import_handlers():
         handle=handle_breseq_folders,
         list_units=list_breseq_units,
         menu_order=MENU_BRESEQ,
-        description="One or more sample folders, each with a data/ holding output.gd, the "
-                    "reference and the alignment. breseq's own output/ report is kept too.")
+        description="Upload one or more output folders containing *.gd, *.vcf, *.bam, *.gbk, "
+                    "*.gff, and/or *.fasta files.<br>"
+                    "For <i>breseq</i> output folders, references, mutations, read "
+                    "alignments, and HTML files are imported.")
     register_import_handler(
         name="genomediff",
-        label="GenomeDiff mutations (.gd)",
+        label="Mutations in GenomeDiff format (*.gd)",
         patterns=GENOMEDIFF_PATTERNS,
         priority=PRIORITY_DATA + 10,
         detect=detect_genomediff,
@@ -580,10 +585,11 @@ def register_core_import_handlers():
         # banner, which says exactly that and names .gd as the case it does not cover.
         # An entry you can see and cannot pick is a worse way to say the same thing.
         requires_reference=True,
-        description="Mutations only. Needs the experiment to already have a reference.")
+        description='<a href="https://breseq.barricklab.org/latest/genomediff-file-format/" '
+                    'target="_blank" rel="noopener">Format specification</a>')
     register_import_handler(
         name="vcf",
-        label="VCF variant calls (.vcf)",
+        label="Mutations in Variant Call Format (*.vcf)",
         patterns=VCF_PATTERNS,
         # Beside genomediff: both are mutations against a reference that must already exist,
         # and neither can run before the reference handler.
@@ -593,5 +599,5 @@ def register_core_import_handlers():
         list_units=list_vcf_units,
         menu_order=MENU_VCF,
         requires_reference=True,
-        description="Variant calls from any caller. Normalized and converted to GenomeDiff "
-                    "on the way in, so they share rows with breseq's own calls.")
+        description='<a href="https://samtools.github.io/hts-specs/" target="_blank" '
+                    'rel="noopener">Format specification</a>')

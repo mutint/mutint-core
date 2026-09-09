@@ -16,7 +16,14 @@
 <div class="col-lg-8">
     <p>Everything you drop here goes into <b>{{ experiment.name }}</b> (experiment
        #{{ experiment.id }}) as <b>{{ import_type.label }}</b>.
-       {% if import_type.description %}{{ import_type.description }}{% endif %}</p>
+       {% comment %} `safe`, and only here. A description is prose written in
+          `handlers.py` beside the handler, never anything a person typed, and it carries a
+          little markup -- a line break, an emphasis, a link to the format's specification.
+          **The label is not treated this way and must not be**: it is also handed to the
+          page's JavaScript, which puts it in a sentence and in a file-list row through
+          `textContent`, where markup would read as garbage. So a link belongs here.
+          {% endcomment %}
+       {% if import_type.description %}{{ import_type.description|safe }}{% endif %}</p>
 
     {% if not offered %}
         {% comment %} The tab stays, and says what it is waiting for. The dropdown this page

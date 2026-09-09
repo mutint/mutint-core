@@ -204,7 +204,7 @@ def detect_format(path, original_name=None):
         raise ReferenceFormatError(
             "%s is a GenomeDiff (.gd) file, not a reference genome. A .gd holds mutations "
             "called against a reference and carries no sequence of its own -- import it "
-            "with the 'GenomeDiff mutations' type, once the experiment has a reference."
+            "from the Genome Diff tab, once the experiment has a reference."
             % (display_name,))
 
     name = display_name.lower()

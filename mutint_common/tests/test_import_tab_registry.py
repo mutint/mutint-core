@@ -10,18 +10,40 @@ class ImportTabRegistryTestCase(TestCase):
         self.before = list(registry._tabs)
         self.addCleanup(registry._tabs.__setitem__, slice(None), self.before)
 
-    def test_core_registers_its_four_tabs_in_the_pages_order(self):
+    def test_only_the_ways_in_that_work_are_offered(self):
+        """An experiment with no reference can establish one, or drop a results folder --
+        which brings its own. The tabs that would refuse are not shown at all."""
         tabs = registry.get_import_tabs(7)
-        self.assertEqual(["reference", "genomediff", "vcf", "breseq_folder"],
-                         [t["key"] for t in tabs][:4])
-        self.assertEqual(["reference", "replace_annotation"], tabs[0]["import_types"],
-                         "one tab, two handlers, in preference order")
+
+        self.assertEqual(["reference", "breseq_folder"], [t["key"] for t in tabs])
 
     def test_a_type_tab_lands_on_the_import_page_by_its_key(self):
-        registry.register_import_tab("t", "T", import_type="vcf")
+        # `breseq_folder`, because a tab is only shown where its type can run and this is the
+        # one that needs no reference.
+        registry.register_import_tab("t", "T", import_type="breseq_folder")
         tab = [t for t in registry.get_import_tabs(7) if t["key"] == "t"][0]
-        self.assertEqual({"key": "t", "label": "T", "import_types": ["vcf"],
+        self.assertEqual({"key": "t", "label": "T", "import_types": ["breseq_folder"],
                           "url": "/import/?experiment_id=7&tab=t"}, tab)
+
+    def test_a_tab_whose_type_cannot_run_is_not_shown(self):
+        registry.register_import_tab("t", "T", import_type="vcf")
+
+        self.assertNotIn("t", [t["key"] for t in registry.get_import_tabs(7)])
+
+    def test_last_puts_a_tab_after_every_other(self):
+        """Including a plugin's, which INSTALLED_APPS order cannot express: plugins are
+        appended after every core app."""
+        registry.register_import_tab("tail", "Tail", import_type="breseq_folder", last=True)
+        registry.register_import_tab("p", "P", url="/somewhere/")
+
+        self.assertEqual("tail", [t["key"] for t in registry.get_import_tabs(7)][-1])
+
+    def test_a_page_tab_that_needs_a_reference_waits_for_one(self):
+        """A tab naming an import type is hidden by asking the registry; a tab that is a page
+        of its own is opaque, so it declares."""
+        registry.register_import_tab("p", "P", url="/somewhere/", requires_reference=True)
+
+        self.assertNotIn("p", [t["key"] for t in registry.get_import_tabs(7)])
 
     def test_a_page_tab_carries_the_experiment_and_a_dead_one_is_skipped(self):
         registry.register_import_tab("p", "P", url_name="reference_view")

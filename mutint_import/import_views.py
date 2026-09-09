@@ -13,12 +13,13 @@ in auto-detect, without this module knowing it exists. It replaced the two-page 
 
 import logging
 
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from mutint_common.import_registry import get_import_types, get_import_types_for
 from mutint_common.import_tab_registry import get_import_tabs
+from mutint_import.templatetags.import_tabs import remembered_tab
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_experiment
@@ -53,10 +54,27 @@ def import_view(request):
 
     tabs = get_import_tabs(experiment.id)
     type_tabs = [tab for tab in tabs if tab["import_types"]]
-    wanted = request.GET.get("tab") or (type_tabs[0]["key"] if type_tabs else None)
-    active = next((tab for tab in type_tabs if tab["key"] == wanted), None)
-    if active is None:
-        raise Http404("No such import tab.")
+    if not type_tabs:
+        raise Http404("There is nothing this experiment can import.")
+    wanted = request.GET.get("tab")
+    if wanted is None:
+        # No tab named, so open the one this reader used last -- including a plugin's, which
+        # is a page of its own and therefore a redirect rather than a selection. Only ever on
+        # a bare visit: a link that names a tab always wins, so nothing a person clicks can be
+        # overridden by what they did yesterday.
+        remembered = remembered_tab(request.user)
+        if remembered and remembered != (type_tabs[0]["key"] if type_tabs else None):
+            elsewhere = next((tab for tab in tabs
+                              if tab["key"] == remembered and not tab["import_types"]), None)
+            if elsewhere is not None:
+                return HttpResponseRedirect(elsewhere["url"])
+            wanted = remembered
+    # **A tab that is no longer on the strip falls back to the first one** rather than 404ing.
+    # Reference Sequence and Update Annotation each exist in only one of two states now, so a
+    # bookmark or a browser's back button holds a `?tab=` that stops being valid the moment a
+    # reference is established -- which is a normal thing to happen, not a broken link. The
+    # same fallback covers a remembered tab that has since left the strip.
+    active = next((tab for tab in type_tabs if tab["key"] == wanted), type_tabs[0])
 
     # The tab's first type the experiment can run now; failing that, its first type and
     # why not -- said on the tab rather than by hiding it. The dropdown used to leave a
@@ -79,7 +97,7 @@ def import_view(request):
     else:
         reason = ("This needs the experiment to have a reference genome first. Drop one "
                   "(GenBank, GFF3 or FASTA) on the Reference Sequence tab, or import a "
-                  "breseq output folder, which brings its own.")
+                  "Results Folder that includes a reference genome.")
 
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())

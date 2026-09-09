@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2130 run, 0 failures** standalone; **2437** assembled, measured with `PYTHONPATH`
+**Baseline: 2213 run, 0 failures** standalone; **2537** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -328,9 +328,11 @@ claim that rots quietly.
 
 **The sidebar's account block is the shell's own, not a nav entry.** Username, and under it
 Logout, Change Password, Jobs, Groups and -- for a superuser -- Django admin. It is written into
-`base.html` rather than registered, because `nav_registry` has no per-user visibility concept
-and `base.html` already has `user`; adding a `visible_to=` predicate for one entry would be a
-mechanism with a single producer.
+`base.html` rather than registered, because `nav_registry`'s one per-user gate --
+`requires_edit`, write access to the selected experiment's project -- is not the question any
+of these asks, and `base.html` already has `user`. A `visible_to=` predicate for one entry
+would be a mechanism with a single producer; `requires_edit` exists only because Import Data
+and Curate both wanted exactly the same gate.
 
 **Groups belongs here rather than in `MAIN_SECTION`**: what `/group/` lists is
 `visible_groups(user)` -- the groups you own or belong to, the way this is the password *you*
@@ -2081,9 +2083,14 @@ page classifies a drop with cannot disagree:
 - `only_without_reference` -- `reference` stops being offered once the experiment has one.
   Establishing a reference is a one-time act; replacing the *annotation* is
   `replace_annotation`, and swapping in a different genome is deliberately shell-only.
-- `requires_reference` -- `replace_annotation` and `genomediff` cannot run until there is a
-  genome. Their tabs stay on the strip and say what they are waiting for, so the page explains
-  itself rather than silently offering less.
+- `requires_reference` -- `replace_annotation`, `genomediff` and `vcf` cannot run until there
+  is a genome, so **their tabs are not on the strip at all** until there is one. They used to
+  stay and say what they were waiting for, on the reasoning that this teaches the order to do
+  things in; on a new experiment that is a strip of mostly-dead tabs, each of which errors when
+  opened. What is left with no reference is Reference Sequence and Results Folder -- the two
+  things that genuinely work then. The page still explains itself: the banner names `.gd` as
+  the case it does not cover, and the drop's own file list names the type a stray file belongs
+  to, out of the *unscoped* registry, so it can point at a type this experiment cannot use yet.
 
 `breseq_folder` is never blocked: it brings its own reference. Auto-detect is unaffected --
 a reference dropped alongside data still runs first on `priority`, which is how a first drop
@@ -2766,8 +2773,13 @@ the two pages disagree about what a deletion covers while both looking correct.
 `/mutations/reference?experiment_id=<pk>` (`ncbi_view.reference_view`) lists every
 sequence in an experiment's reference -- name, length, the names it used to have, and which
 NCBI record it is -- and carries the box that records an accession. It has a **nav entry** in
-`EXPERIMENT_SECTION` called **Reference**, registered first, ahead of Mutations:
-an experiment reads top-down from what it was aligned to, then what was found in it.
+`EXPERIMENT_SECTION` called **Reference**, registered by `mutint_sample` after Mutations. It
+led that section for a while, on the reading that an experiment goes top-down from what it was
+aligned to and then to what was found in it; what people actually open an experiment for is
+its mutations, and a section whose first row is the thing nobody came for costs every reader a
+click. The order in that section now is Mutations, Reference, Import Data, Curate, then the
+plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
+always. There is still no `order=`.
 
 **The nav entry is not decoration, and neither is linking every contig.** A viewer link gated
 on the contig already being verified would leave the only page carrying the accession box
@@ -2874,9 +2886,11 @@ All apps use the `mutint_*` namespace. Key apps:
   - **`replace_annotation`** (priority 11) refreshes an established reference's annotation
     while holding the *sequence* fixed, and refuses a file whose sequence differs. It claims
     the same files as `reference` and only its higher priority number keeps auto-detect from
-    ever picking it, so it is reachable only by being named explicitly: the Reference Sequence
-    tab is `reference` until the experiment has one and `replace_annotation` after
-    (`requires_reference=True`).
+    ever picking it, so it is reachable only by being named explicitly: the **Update
+    Annotation** tab, which is `requires_reference=True` and therefore appears exactly when
+    the Reference Sequence tab has gone. It is also `last=True` on the strip -- after the
+    plugins' tabs -- being a correction to an experiment already set up rather than a way of
+    starting one.
     `establish_or_check(..., replace=True)`, which overwrites a *different* genome, is
     deliberately reachable from the shell only.
   - **Normalization is the linchpin** (`reference.py`, `reference_store.py`): every reference,
@@ -2985,8 +2999,10 @@ Creation and deletion are nested under the objects they act on:
   experiment **by primary key**, so two experiments may share a name and two people may add to
   the same one — unlike `_prepare_experiment`, whose name lookup can only ever reach one of
   them. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
-  There is **no unscoped form of this page and no sidebar entry for it** — `mutint_import`
-  registers no nav item, and without a usable `experiment_id` the route is a plain 404.
+  There is **no unscoped form of this page**: without a usable `experiment_id` the route is a
+  plain 404. Its sidebar entry is therefore in `EXPERIMENT_SECTION`, which is the only section
+  whose links carry one — **Import Data**, registered with `requires_edit=True`, since a
+  read-only reader can do nothing here.
 - Everything records the logged-in user; there are no person fields to fill in.
 - Editing lives beside all of this -- see **Editing is three pages** above. The controls in
   `stats.html`'s `{% block experiment_actions %}` are gated on `can_edit`: a control that
@@ -3353,12 +3369,13 @@ renders through it. `jobs/list.html` carries the same mapping in JavaScript beca
 its rows client-side; the two are kept in step by hand, and the failure to avoid is one
 surface calling a status `unknown` while the other calls it "No longer on the queue".
 
-**The sidebar link is in `base.html`'s account block, not `nav_registry`.** That registry has no
-per-user visibility concept, so a registered entry renders for anonymous visitors and leads to a
-403 — the dead end `project/list.html`'s comment refuses. It reads as an account entry anyway:
-these are the jobs *you* asked for, beside the password *you* change. Adding `visible_to=` for
-one entry would be a mechanism with a single producer, which is the reasoning already recorded
-for the account block itself.
+**The sidebar link is in `base.html`'s account block, not `nav_registry`.** That registry's one
+per-user gate is `requires_edit` — write access to the selected experiment's project — and this
+is not that question: a registered entry would render for anonymous visitors and lead to a 403,
+the dead end `project/list.html`'s comment refuses. It reads as an account entry anyway: these
+are the jobs *you* asked for, beside the password *you* change. Adding `visible_to=` for one
+entry would be a mechanism with a single producer, which is the reasoning already recorded for
+the account block itself.
 
 **A trap when testing:** `ImmediateBackend.supports_get_result` is False, so under the suite's
 own settings every job's status reads as unknown and the page shows "no longer on the queue".

@@ -63,9 +63,10 @@ class ImportPageTestCase(TestCase):
         from mutint_common.import_tab_registry import get_import_tabs
         self.assertEqual([tab["label"] for tab in get_import_tabs(self.experiment.id)],
                          [t[1] for t in tabs])
-        self.assertEqual(["Reference Sequence", "Genome Diff", "Variant Call Format",
-                          "Results Folder"], [t[1] for t in tabs][:4])
-        self.assertEqual("/import/?experiment_id=%d&amp;tab=genomediff" % self.experiment.id,
+        # Only the ways in that work: this experiment has no reference, so it can establish
+        # one or drop a results folder, which brings its own.
+        self.assertEqual(["Reference Sequence", "Results Folder"], [t[1] for t in tabs])
+        self.assertEqual("/import/?experiment_id=%d&amp;tab=breseq_folder" % self.experiment.id,
                          tabs[1][0])
         self.assertIn('id="import-type" value="reference"', html)
         active = html.split('<li class="active">')[1].split("</li>")[0]
@@ -75,13 +76,19 @@ class ImportPageTestCase(TestCase):
         html = self.client.get("/import/", {"experiment_id": self.experiment.id,
                                             "tab": "breseq_folder"}).content.decode("utf-8")
         self.assertIn('id="import-type" value="breseq_folder"', html)
-        self.assertIn("breseq data folders", html)
+        self.assertIn("folders containing breseq output", html)
         active = html.split('<li class="active">')[1].split("</li>")[0]
         self.assertIn("Results Folder", active)
 
-    def test_an_unknown_tab_is_a_404(self):
-        self.assertEqual(404, self.client.get(
-            "/import/", {"experiment_id": self.experiment.id, "tab": "nonsense"}).status_code)
+    def test_a_tab_that_is_not_on_the_strip_falls_back_to_the_first(self):
+        """Rather than 404ing. Reference Sequence and Update Annotation each exist in only one
+        of two states, so a bookmark holds a `?tab=` that stops being valid the moment a
+        reference is established -- a normal thing to happen, not a broken link."""
+        response = self.client.get(
+            "/import/", {"experiment_id": self.experiment.id, "tab": "nonsense"})
+
+        self.assertEqual(200, response.status_code)
+        self.assertIn("Reference Sequence", response.content.decode("utf-8"))
 
     def test_a_plugin_tab_reaches_the_strip_and_a_page_of_its_own_is_linked(self):
         """A plugin registers a tab: for a type of its own, landing here; or for a page of
@@ -301,13 +308,19 @@ class ImportTypesOfferedTestCase(TestCase):
         self.assertTrue(self._offers_a_form("reference"))
         self.assertEqual("reference", self._type_chosen("reference"))
         # The page's own words, not the embedded unscoped registry, which names every type.
-        self.assertIn("Sets the reference every sample", self._html("reference"))
+        self.assertIn("Sets the nucleotide sequence and feature annotations",
+                      self._html("reference"))
 
-    def test_genomediff_and_vcf_say_they_need_a_reference(self):
-        for name in ("genomediff", "vcf"):
-            with self.subTest(type=name):
-                self.assertFalse(self._offers_a_form(name))
-                self.assertIn("Reference Sequence tab", self._html(name))
+    def test_genomediff_and_vcf_are_not_offered_at_all(self):
+        """They used to stay on the strip saying what they were waiting for. That taught the
+        order to do things in and produced a strip of mostly-dead tabs on a new experiment,
+        each of which errors when opened; the tab is simply absent now."""
+        from mutint_common.import_tab_registry import get_import_tabs
+
+        keys = [tab["key"] for tab in get_import_tabs(self.experiment.id)]
+
+        self.assertNotIn("genomediff", keys)
+        self.assertNotIn("vcf", keys)
 
     def test_breseq_folders_stay_available(self):
         """A breseq folder carries its own reference, so it is never blocked."""
@@ -315,15 +328,20 @@ class ImportTypesOfferedTestCase(TestCase):
 
     # --- once a reference exists ---------------------------------------------
 
-    def test_the_reference_tab_becomes_replace_annotation(self):
-        """The same tab, now the other handler: what it imports as says so, and the form is
-        still there."""
+    def test_reference_sequence_gives_way_to_update_annotation(self):
+        """Two tabs for one question at two moments, and never both at once. Update Annotation
+        is last, after the plugins' tabs: correcting an experiment that is already set up is
+        not a way of getting data into one."""
+        from mutint_common.import_tab_registry import get_import_tabs
+
         self._establish_reference()
-        self.assertTrue(self._offers_a_form("reference"))
-        self.assertEqual("replace_annotation", self._type_chosen("reference"))
-        self.assertIn("Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
-                      self._html("reference"))
-        self.assertNotIn("already has a reference genome", self._html("reference"))
+        tabs = get_import_tabs(self.experiment.id)
+        keys = [tab["key"] for tab in tabs]
+
+        self.assertNotIn("reference", keys)
+        self.assertEqual("update_annotation", keys[-1])
+        self.assertTrue(self._offers_a_form("update_annotation"))
+        self.assertEqual("replace_annotation", self._type_chosen("update_annotation"))
 
     def test_genomediff_becomes_available(self):
         self._establish_reference()

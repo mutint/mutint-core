@@ -16,7 +16,8 @@ EXPERIMENT_SECTION = 'experiment'
 END_SECTION = 'end'
 
 
-def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION, key=None):
+def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION, key=None,
+                      requires_edit=False):
     """Register a sidebar entry (called from AppConfig.ready()).
 
     Entries render in registration order: apps in INSTALLED_APPS order, and
@@ -31,6 +32,20 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION, key=
               when an experiment is selected and rendered with
               ?experiment_id=... appended; or END_SECTION, always shown,
               after the experiment section
+    requires_edit
+              hide this entry from a reader who cannot write to the selected experiment.
+              **Only for EXPERIMENT_SECTION**, and only about the *role*: it asks
+              `can_edit_project`, not `can_edit_experiment`, so a **locked** experiment still
+              shows its editing pages -- they render a sentence saying the experiment is
+              locked, and hiding them would leave a person unable to find out why.
+
+              This is the per-user visibility this registry deliberately did without for a
+              long time, on the grounds that adding it for one producer would be a mechanism
+              with a single user. There are two now -- Curate and Import Data -- and both lead
+              a reader to a page they cannot act on. It is a flag rather than a predicate
+              because "can this person write here" is the only question the sidebar has ever
+              needed to ask, and a callable would invite others.
+
     key       an identifier base.html can anchor something of its own to. It is
               identity, not ordering and not behaviour: the shell renders the
               selected project's name directly under the Projects entry, and had
@@ -47,11 +62,16 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION, key=
         'url_name': url_name,
         'section': section,
         'key': key,
+        'requires_edit': requires_edit,
     })
 
 
 def get_nav_items(section=MAIN_SECTION):
-    """Return [{'label', 'url', 'key'}, ...] for one section, in registration order.
+    """Return [{'label', 'url', 'key', 'requires_edit'}, ...] for one section, in
+    registration order.
+
+    **Unfiltered**: `requires_edit` is carried, not applied. Only the template knows which
+    experiment is selected, so `mutint_common.templatetags.nav` is where it is honoured.
 
     url_name entries are reversed here rather than at registration time: the
     URLconf is not loaded while AppConfig.ready() runs. An entry whose route is
@@ -70,5 +90,6 @@ def get_nav_items(section=MAIN_SECTION):
                 url = reverse(item['url_name'])
             except NoReverseMatch:
                 continue
-        items.append({'label': item['label'], 'url': url, 'key': item['key']})
+        items.append({'label': item['label'], 'url': url, 'key': item['key'],
+                      'requires_edit': item['requires_edit']})
     return items
