@@ -512,6 +512,29 @@ remote. `upgrade.Unreachable` keeps "could not ask" distinct from "nothing newer
 reader told they are up to date when nobody managed to look is worse off than one shown an
 error.
 
+**What is offered is described, not merely named.** The page said `main is available.` and
+nothing else -- not which commit, not when it was made, and not what installing it would do to
+the components, which is most of what a version *is* here: a release is a commit of the
+assembled project, and what that commit contains is a pinned SHA per component, which
+`apply`'s `submodule update --init --recursive` then moves. So `upgrade.describe` fetches the
+target and reads its tree, `component_changes` diffs the gitlinks against HEAD, and
+`summarize` composes one sentence naming the commit, its timestamp, how far ahead it is and
+which components move.
+
+Three things about that are deliberate:
+
+- **It is best effort.** Everything beyond the ref and the SHA needs the target commit's own
+  objects, so it fetches -- and a fetch that fails must leave the answer poorer rather than
+  turn "there is a new version" into an error. Every field can be absent and the sentence
+  shortens accordingly.
+- **`^{commit}`, because a release tag is annotated.** `rev-parse v0.0.1` answers the tag
+  object's SHA, which appears in no log and is not what an upgrade moves to, and `show -s
+  --format=%cI` on one prints its header -- the page said *dated tag v0.0.1* until this was
+  peeled.
+- **The sentence is composed on the server** and rendered as text by both the initial page and
+  its poll, so the two cannot word it differently and neither has to escape a component name.
+  `say()` builds nodes rather than concatenating HTML for the same reason.
+
 **Install stages; it does not upgrade.** The mechanism, the channels and the refusals all live
 in `mutint_common/upgrade.py` and are described under **Upgrading in place** in the suite
 `CLAUDE.md`. What is worth knowing here is the endpoint's own guard: it refuses a `ref` that is

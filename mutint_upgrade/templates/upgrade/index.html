@@ -111,9 +111,21 @@
             {% elif error %}
                 <div class="alert alert-warning">{{ error }}</div>
             {% elif available %}
-                <div class="alert alert-info">
-                    <strong>{{ available.ref }}</strong> is available.
-                </div>
+                {% comment %} The sentence is composed server-side (`upgrade.summarize`) so
+                   this and the poll below cannot word it differently, and so that what it
+                   says about components is decided where the components are known.
+                   {% endcomment %}
+                <div class="alert alert-info">{{ available.summary }}</div>
+                {% if available.components %}
+                    <ul style="color: #666; margin-top: 0.5em;">
+                        {% for entry in available.components %}
+                            <li><code>{{ entry.name }}</code>
+                                {% if entry.change == "moved" %}
+                                    {{ entry.from }} &rarr; {{ entry.to }}
+                                {% else %}{{ entry.change }}{% endif %}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
             {% elif checked_at %}
                 <p style="color: #666;">Up to date as of {{ checked_at }}.</p>
             {% else %}
@@ -138,8 +150,37 @@
     var status = document.getElementById("upgrade-status");
     var available = null;
 
-    function say(cls, html) {
-        status.innerHTML = '<div class="alert alert-' + cls + '">' + html + "</div>";
+    // `text`, not html: every caller passes a sentence the server composed, and a version
+    // string or a component name has no business being markup.
+    function say(cls, text, extra) {
+        status.innerHTML = "";
+        var box = document.createElement("div");
+        box.className = "alert alert-" + cls;
+        box.textContent = text;
+        status.appendChild(box);
+        if (extra) { status.appendChild(extra); }
+    }
+
+    // The per-component from/to, under the sentence. Built rather than concatenated so a
+    // component name cannot be markup either.
+    function componentList(available) {
+        var changes = (available && available.components) || [];
+        if (!changes.length) { return null; }
+        var list = document.createElement("ul");
+        list.style.color = "#666";
+        list.style.marginTop = "0.5em";
+        changes.forEach(function (entry) {
+            var item = document.createElement("li");
+            var name = document.createElement("code");
+            name.textContent = entry.name;
+            item.appendChild(name);
+            item.appendChild(document.createTextNode(
+                entry.change === "moved"
+                    ? " " + entry.from + " \u2192 " + entry.to
+                    : " " + entry.change));
+            list.appendChild(item);
+        });
+        return list;
     }
 
     function busy(on, button, label) {
@@ -160,7 +201,10 @@
                 if (data.error) {
                     say("warning", data.error);
                 } else if (available) {
-                    say("info", "<strong>" + available.ref + "</strong> is available.");
+                    // The server's sentence, as text: it is prose about commits and
+                    // component names, and nothing in it wants to be markup.
+                    say("info", available.summary || (available.ref + " is available."),
+                        componentList(available));
                 } else {
                     say("success", "Up to date.");
                 }

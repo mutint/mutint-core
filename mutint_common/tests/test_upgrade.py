@@ -387,3 +387,130 @@ class CheckTestCase(TestCase):
 
         self.assertEqual(upgrade.MAIN, state["channel"])
         self.assertEqual(upgrade.MAIN, upgrade.read_state(self.base)["channel"])
+
+
+class SummarizeTestCase(TestCase):
+    """The sentence the upgrade page shows.
+
+    It said `main is available.` and nothing else -- not which commit, not when, and not what
+    installing it would do to the components, which is most of what an upgrade *is*. A pure
+    function over what `describe` managed to find out, so every field is optional.
+    """
+
+    def test_the_bare_case_is_what_it_always_said(self):
+        """`describe` answers nothing when the fetch failed, and the version is still
+        available and still installable."""
+        self.assertEqual("main is available.", upgrade.summarize("main", "abc12345", {}))
+
+    def test_it_names_the_commit_and_when_it_was_made(self):
+        sentence = upgrade.summarize("main", "abc12345", {
+            "sha": "def67890", "date": "2026-09-07T11:53:23-04:00", "commits": 12})
+
+        self.assertIn("commit def67890", sentence)
+        # The time, not just the day: `main` moves several times a day on a project being
+        # worked on, and a date alone cannot say whether this is the commit you just pushed.
+        self.assertIn("committed 2026-09-07 11:53 -04:00", sentence)
+        self.assertIn("12 commits newer than abc12345", sentence)
+
+    def test_one_commit_is_not_pluralised(self):
+        self.assertIn("1 commit newer",
+                      upgrade.summarize("main", "abc12345", {"commits": 1}))
+
+    def test_it_says_when_no_component_moves(self):
+        sentence = upgrade.summarize("main", "abc12345", {
+            "sha": "def67890", "components": [], "component_total": 6})
+
+        self.assertIn("No component changes", sentence)
+        self.assertIn("6", sentence)
+
+    def test_it_names_every_component_that_moves(self):
+        sentence = upgrade.summarize("main", "abc12345", {
+            "sha": "def67890", "component_total": 6, "components": [
+                {"name": "mutint-core", "from": "1111aaaa", "to": "2222bbbb",
+                 "change": "moved"},
+                {"name": "mutint-needle", "from": None, "to": "3333cccc",
+                 "change": "added"}]})
+
+        self.assertIn("moves 2 of 6 components", sentence)
+        self.assertIn("mutint-core (1111aaaa to 2222bbbb)", sentence)
+        self.assertIn("mutint-needle (added)", sentence)
+
+    def test_a_timestamp_of_another_shape_is_shown_as_it_came(self):
+        """Rather than sliced into nonsense by a rule written for `%cI`."""
+        self.assertIn("whenever", upgrade.summarize("main", None, {"date": "whenever"}))
+
+
+class ComponentChangesTestCase(TestCase):
+    """Which components an upgrade would move, read out of the target commit's own tree.
+
+    Against a real repository with a real submodule: the question is entirely about what
+    `git ls-tree` prints for a gitlink, which no mock of it would establish.
+    """
+
+    def setUp(self):
+        if shutil.which("git") is None:
+            self.skipTest("no git available")
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.base = os.path.join(self.root, "super")
+        self.child = os.path.join(self.root, "child")
+
+        for path in (self.base, self.child):
+            os.makedirs(path)
+            _run(path, "init", "-q", "-b", "main")
+            _run(path, "config", "user.email", "t@example.com")
+            _run(path, "config", "user.name", "T")
+
+        self._commit(self.child, "a.txt", "one")
+        # Local file transport, as every submodule in this suite is added.
+        _run(self.base, "-c", "protocol.file.allow=always",
+             "submodule", "add", "-q", self.child, "child")
+        _run(self.base, "commit", "-qm", "add child")
+
+    def _commit(self, path, name, text):
+        with open(os.path.join(path, name), "w") as handle:
+            handle.write(text + "\n")
+        _run(path, "add", name)
+        _run(path, "commit", "-qm", text)
+
+    def test_a_component_that_moved_is_reported_with_both_shas(self):
+        before = upgrade._tree_components(self.base, "HEAD")["child"]
+        self._commit(self.child, "a.txt", "two")
+        _run(os.path.join(self.base, "child"), "fetch", "-q", "origin")
+        _run(os.path.join(self.base, "child"), "checkout", "-q", "origin/main")
+        _run(self.base, "commit", "-qam", "bump child")
+        after = upgrade._tree_components(self.base, "HEAD")["child"]
+
+        changes = upgrade.component_changes(self.base, "HEAD~1")
+
+        self.assertEqual(1, len(changes))
+        self.assertEqual("child", changes[0]["name"])
+        self.assertEqual("moved", changes[0]["change"])
+        self.assertEqual(after[:8], changes[0]["from"])
+        self.assertEqual(before[:8], changes[0]["to"])
+
+    def test_a_component_the_target_does_not_have_is_removed(self):
+        changes = upgrade.component_changes(self.base, "HEAD~1")
+
+        self.assertEqual([{"name": "child", "from": upgrade._tree_components(
+            self.base, "HEAD")["child"][:8], "to": None, "change": "removed"}], changes)
+
+    def test_nothing_changed_is_an_empty_list_rather_than_a_claim(self):
+        self.assertEqual([], upgrade.component_changes(self.base, "HEAD"))
+
+    def test_a_checkout_with_no_submodules_has_no_components(self):
+        """Standalone mutint-core. The sentence then says nothing about components at all."""
+        self.assertEqual({}, upgrade._tree_components(self.child, "HEAD"))
+
+    def test_an_annotated_tag_is_described_by_the_commit_it_points_at(self):
+        """`rev-parse v0.0.1` answers the *tag object*, which appears in no log and is not
+        what an upgrade moves to; `show -s` on one prints its header rather than a date."""
+        _run(self.base, "tag", "-a", "v1.0.0", "-m", "release")
+        _run(self.base, "remote", "add", "origin", self.child)
+
+        described = upgrade.describe(self.base, "v1.0.0", "tag")
+
+        commit = upgrade._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
+        self.assertEqual(commit, described["sha"])
+        self.assertNotIn("tag", (described.get("date") or ""))
+        self.assertRegex(described["date"], r"^\d{4}-\d{2}-\d{2}T")

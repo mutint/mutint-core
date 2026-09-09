@@ -310,6 +310,156 @@ def remote_main(base_dir):
     return None
 
 
+#: A submodule entry in `git ls-tree`. Gitlinks are mode 160000, which is the only thing
+#: distinguishing "a component pinned at a commit" from an ordinary directory.
+_GITLINK_MODE = '160000'
+
+
+def _tree_components(base_dir, ref):
+    """`{name: sha}` for the components an assembled project pins at `ref`.
+
+    Empty for standalone mutint-core, which has no submodules -- and for anything else this
+    cannot read, since it is asked only to describe an upgrade and never to permit one.
+    """
+    output = _git(base_dir, 'ls-tree', ref, check=False)
+    found = {}
+    for line in output.splitlines():
+        head, _, name = line.partition('\t')
+        fields = head.split()
+        if len(fields) == 3 and fields[0] == _GITLINK_MODE:
+            found[name.strip()] = fields[2]
+    return found
+
+
+def component_changes(base_dir, target):
+    """Which components installing `target` would move, as a list of dicts.
+
+    **This is the half of an upgrade nobody could see.** A version is a commit of the
+    assembled project, and what that commit *contains* is a pinned SHA per component -- so
+    `apply`'s `submodule update --init --recursive` moves the plugins along with it, and
+    "main is available" said nothing about which. Each entry is `{name, from, to, change}`,
+    where `change` is `moved`, `added` or `removed`.
+    """
+    here = _tree_components(base_dir, 'HEAD')
+    there = _tree_components(base_dir, target)
+
+    changes = []
+    for name in sorted(set(here) | set(there)):
+        before, after = here.get(name), there.get(name)
+        if before == after:
+            continue
+        changes.append({
+            'name': name,
+            'from': before[:8] if before else None,
+            'to': after[:8] if after else None,
+            'change': 'moved' if before and after else ('added' if after else 'removed'),
+        })
+    return changes
+
+
+def describe(base_dir, ref, kind):
+    """What installing `ref` would actually do, as far as the remote will say.
+
+    **Best effort by design.** Everything here needs the target commit's own objects, so it
+    fetches -- and a fetch that fails must leave the answer poorer rather than turn "there is
+    a new version" into an error. Every field can therefore be absent, and `check` keeps the
+    ref and the SHA it already had either way.
+
+    `git ls-remote` alone can name the tip and nothing else: not its date, not how far ahead
+    it is, and not which components it pins. That is why this is a second network call rather
+    than more parsing of the first.
+    """
+    described = {}
+    try:
+        _git(base_dir, 'fetch', '--tags', '--quiet', 'origin')
+        # A branch is read through its remote-tracking ref for the reason `apply` checks one
+        # out that way: a local `main` may not exist, and creating one here would be a lie
+        # about what this checkout is on.
+        target = 'origin/%s' % ref if kind == 'branch' else ref
+        # `^{commit}` throughout, because a release tag is **annotated**: `rev-parse v0.0.1`
+        # answers the tag object's own SHA and `show -s --format=%cI` prints its header, so
+        # the page said "commit <tag object>, dated tag v0.0.1". Peeling asks about the commit
+        # the tag points at, which is what an upgrade actually moves to.
+        target = target + '^{commit}'
+        described['sha'] = _git(base_dir, 'rev-parse', '--short=8', target).strip() or None
+        described['date'] = _git(
+            base_dir, 'show', '-s', '--format=%cI', target).strip() or None
+        ahead = _git(base_dir, 'rev-list', '--count', 'HEAD..%s' % target,
+                     check=False).strip()
+        described['commits'] = int(ahead) if ahead.isdigit() else None
+        described['components'] = component_changes(base_dir, target)
+        described['component_total'] = len(_tree_components(base_dir, target))
+    except (UpgradeError, ValueError, OSError):
+        # Recorded as nothing rather than as a failure: the version is still available and
+        # still installable, and this only ever added detail to saying so.
+        pass
+    return described
+
+
+def _readable_time(iso):
+    """`2026-09-07T11:53:23-04:00` as `2026-09-07 11:53 -04:00`.
+
+    The whole timestamp rather than the date: "main" moves several times a day on a project
+    being worked on, so a date alone cannot tell you whether what is offered is the commit you
+    just pushed. The offset is kept because it is the committer's and dropping it would make
+    two commits an hour apart look simultaneous.
+
+    Anything not of that shape is returned as it came -- `%cI` is strict ISO 8601, and a
+    version of git that answered otherwise should show its answer rather than a mangling.
+    """
+    if len(iso) >= 19 and iso[10:11] == 'T' and iso[13:14] == ':':
+        return "%s %s %s" % (iso[:10], iso[11:16], iso[19:])
+    return iso
+
+
+def summarize(ref, current, described):
+    """The sentence the page shows. Composed here so the page and its poll cannot word it
+    differently, and plain text so neither has to escape it."""
+    where = "%s is available" % ref
+    detail = []
+    if described.get('sha'):
+        detail.append("commit %s" % described['sha'])
+    if described.get('date'):
+        detail.append("committed %s" % _readable_time(described['date']))
+    commits = described.get('commits')
+    if commits:
+        detail.append("%d commit%s newer than %s"
+                      % (commits, "" if commits == 1 else "s", current or "what you have"))
+    first = "%s: %s." % (where, ", ".join(detail)) if detail else "%s." % where
+
+    if 'components' not in described:
+        return first
+
+    changes = described['components']
+    if not changes:
+        total = described.get('component_total') or 0
+        return first + (" No component changes: every one of the %d stays where it is."
+                        % total if total else " No component changes.")
+
+    moved = ", ".join(
+        "%s (%s)" % (entry['name'],
+                     "%s to %s" % (entry['from'], entry['to']) if entry['change'] == 'moved'
+                     else entry['change'])
+        for entry in changes)
+    total = described.get('component_total') or len(changes)
+    return "%s It also moves %d of %d components: %s." % (first, len(changes), total, moved)
+
+
+def _available(base_dir, ref, kind, sha):
+    """The `available` record: what it is, and what installing it would do.
+
+    The ref and the SHA come from `ls-remote` and are always known; everything `describe`
+    adds needs the commit itself and may be missing. `summary` is composed here so the page
+    and its poll say the same sentence.
+    """
+    described = describe(base_dir, ref, kind)
+    record = {'ref': ref, 'kind': kind, 'sha': described.get('sha') or sha}
+    record.update(described)
+    record['sha'] = record.get('sha') or sha
+    record['summary'] = summarize(ref, current_ref(base_dir), described)
+    return record
+
+
 def check(base_dir, channel=None):
     """Ask the remote what is available. Returns the new state; never raises.
 
@@ -339,8 +489,8 @@ def check(base_dir, channel=None):
                 raise Unreachable("The remote has no `%s` branch." % MAIN_BRANCH)
             local = _git(base_dir, 'rev-parse', 'HEAD').strip()
             newer = sha != local
-            state['available'] = {
-                'ref': MAIN_BRANCH, 'sha': sha[:8], 'kind': 'branch'} if newer else None
+            state['available'] = _available(
+                base_dir, MAIN_BRANCH, 'branch', sha[:8]) if newer else None
         else:
             tags = remote_tags(base_dir)
             if not tags:
@@ -355,8 +505,8 @@ def check(base_dir, channel=None):
             newer = here != latest and (
                 not (here or '').startswith('v')
                 or _version_key(latest) > _version_key(here))
-            state['available'] = {
-                'ref': latest, 'sha': None, 'kind': 'tag'} if newer else None
+            state['available'] = _available(
+                base_dir, latest, 'tag', None) if newer else None
     except UpgradeError as exc:
         state['error'] = str(exc)
         state['available'] = None
