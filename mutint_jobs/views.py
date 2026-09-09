@@ -2,15 +2,16 @@
 
 import logging
 
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from mutint_common.util import get_user_context
 from mutint_jobs import jobs as jobs_api
-from mutint_jobs import queue
+from mutint_jobs import logs, queue
 from mutint_jobs.models import Job
 
 logger = logging.getLogger("mutint_jobs.views")
@@ -40,6 +41,11 @@ def _row(job):
         # A button only where pressing it would do something: the job must still be running,
         # and its task must have promised to poll. Anything else is a control that lies.
         "cancellable": bool(job.cancellable) and not finished and not job.cancel_requested,
+        # A link only where there is something to read. One `os.path.exists` per row, over a
+        # list already capped at 200 -- and cheaper than the `status_of` above it, which is a
+        # query. A job whose task ran no tool never gets one.
+        "log": (reverse("job_log", args=(job.pk,))
+                if logs.exists(job.task_result_id) else ""),
     }
 
 
@@ -135,3 +141,66 @@ def job_cancel(request, pk):
 
     jobs_api.request_cancel(job, by=request.user)
     return JsonResponse({"cancelled": True, "jobs": _rows(request.user)})
+
+
+def _job_for_reading(request, pk):
+    """The job, if this reader may see it. 404 otherwise, never 403.
+
+    Same posture as `job_cancel` and the breseq report viewer: a 403 tells the caller the id
+    exists, and job ids are sequential.
+    """
+    job = Job.objects.select_related("user", "experiment").filter(pk=pk).first()
+    if job is None or not jobs_api.may_view(request.user, job):
+        raise Http404("Unknown job.")
+    return job
+
+
+@require_GET
+def job_log(request, pk):
+    """`/jobs/<pk>/log` -- what this job's commands printed.
+
+    Deliberately not polled. `/jobs/` and mutint-breseq's run list already poll the *status*,
+    which is the thing that changes meaningfully on its own; a log is read when somebody wants
+    to read it, and a Refresh they press is both cheaper and easier to reason about than a
+    page that moves under them while they are reading it.
+    """
+    job = _job_for_reading(request, pk)
+    text, truncated = logs.read_tail(job.task_result_id)
+
+    context = get_user_context(request.user)
+    context.update({
+        "job": job,
+        "job_label": job.label or job.task_path,
+        # Asked of the queue here as everywhere else, so this page cannot say "running" about a
+        # job that finished an hour ago -- the reason `Job` stores no status at all. Rendered
+        # through the same labels `/jobs/` uses, or this page would be the one surface calling
+        # it `unknown` rather than "No longer on the queue".
+        "status": queue.label_for(queue.status_of(job.task_result_id, job.task_path)),
+        "log_text": text,
+        "log_truncated": truncated,
+        "has_log": bool(text) or logs.exists(job.task_result_id),
+        "tail_kb": logs.TAIL_BYTES // 1024,
+        "download_url": reverse("job_log_download", args=(job.pk,)),
+    })
+    return render(request, "jobs/log.html", context)
+
+
+@require_GET
+def job_log_download(request, pk):
+    """The whole log, however much of it there is.
+
+    Not `mutint_common.fileserve.serve_file`: the stored file may be gzipped and a reader
+    wants text either way, so there is nothing for its `Range` support to be right about. The
+    filename is derived from the job's id rather than its label, which is a person's free text.
+    """
+    job = _job_for_reading(request, pk)
+    if not logs.exists(job.task_result_id):
+        raise Http404("This job has no log.")
+
+    response = StreamingHttpResponse(logs.stream(job.task_result_id),
+                                     content_type="text/plain; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="job-%d.log"' % job.pk
+    # A log is a tool's output plus names a person chose. Nothing should sniff it into a
+    # document -- the same rule the breseq report is served under.
+    response["X-Content-Type-Options"] = "nosniff"
+    return response

@@ -10,11 +10,13 @@ Cron's job, like `./mutint reap_uploads` and `./mutint purge_deleted`; nothing r
     ./mutint reap_jobs                  # older than 14 days
     ./mutint reap_jobs --older-than 30
     ./mutint reap_jobs --dry-run        # say what would go, remove nothing
+
+It also sweeps job **logs** that belong to no job row -- see `mutint_jobs.logs.orphans`.
 """
 
 from django.core.management.base import BaseCommand
 
-from mutint_jobs import jobs
+from mutint_jobs import jobs, logs
 
 
 class Command(BaseCommand):
@@ -34,3 +36,15 @@ class Command(BaseCommand):
         verb = "Would reap" if options["dry_run"] else "Reaped"
         self.stdout.write("%s %d stranded queue row(s) and %d job row(s)."
                           % (verb, rows, orphans))
+
+        # Logs whose `Job` never existed. A row's own log goes with it through the
+        # `post_delete` receiver, but work enqueued with a bare `task.enqueue` leaves one
+        # nothing else can reach -- and this is the command that exists for exactly that
+        # class of litter.
+        stray = logs.orphans()
+        if stray:
+            if not options["dry_run"]:
+                for task_result_id in stray:
+                    logs.discard(task_result_id)
+            self.stdout.write("%s %d job log(s) belonging to no job row."
+                              % (verb, len(stray)))

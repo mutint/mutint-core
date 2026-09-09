@@ -3253,6 +3253,42 @@ library's pruner already discarded is not litter -- it is the ordinary end of a 
 which `STATUS_UNKNOWN` exists to render, and deleting it would throw away the installation's
 record of work it did, which is what every `SET_NULL` on that model is there to preserve.
 
+**A job's log is a file, and `/jobs/<pk>/log` is where it is read.** `mutint_jobs.logs` owns
+it and `mutint_jobs.processes.run_tool` writes it: a command's stdout and stderr go straight
+into an open file rather than into a `PIPE`, which is what makes a running job's output
+readable at all. The page renders the last `TAIL_BYTES` in a viewport-tall box that opens
+scrolled to the end, with Refresh, Top, Bottom and a download of the whole log. Deliberately
+not polled -- `/jobs/` and mutint-breseq's run list already poll the *status*, which is what
+changes on its own.
+
+Four things about it are load-bearing:
+
+- **It is keyed by the queue's result id, not by `Job.pk`.** A `Job` row is created *after*
+  `task.enqueue` returns, so under an immediate backend -- which the whole test suite runs on
+  -- the task executes before its row exists, and a pk-keyed log would be written nowhere,
+  silently. `store.component_dir` therefore takes a generated id as well as a primary key,
+  under a pattern with no separator in it; the type check beside that pattern is not
+  redundant, because `str(None)` is `"None"` and would otherwise be a perfectly good directory
+  name shared by every caller that lost its key.
+- **A task learns its own id from `TaskContext`**, for the same reason -- its own row's copy
+  is not set yet. `mutint_breseq.tasks._queue_id` prefers the context and falls back to the
+  row; `build_coverage` has taken the context all along.
+- **`task_finished` gzips it**, one receiver in `mutint_jobs/receivers.py` covering every job
+  with no line in any task. It fires on the failure path too, and under `ImmediateBackend`. A
+  worker killed outright never fires it, so every reader accepts an uncompressed file as well.
+- **The cost of keying by the queue's id** is that work enqueued with a bare `task.enqueue`
+  leaves a log no `post_delete` can reach. `logs.orphans` finds those and `./mutint reap_jobs`
+  sweeps them, which is the command that already exists for exactly that class of litter.
+
+How promptly output appears is the **child's** choice: a tool whose stdout is not a terminal
+block-buffers, and a refresh shows what it has flushed. A pipe would behave identically -- the
+buffering is on the far side of it -- and only a pty would change that.
+
+**`queue.STATUS_LABELS` is what a status is called in front of a person**, and the log page
+renders through it. `jobs/list.html` carries the same mapping in JavaScript because it builds
+its rows client-side; the two are kept in step by hand, and the failure to avoid is one
+surface calling a status `unknown` while the other calls it "No longer on the queue".
+
 **The sidebar link is in `base.html`'s account block, not `nav_registry`.** That registry has no
 per-user visibility concept, so a registered entry renders for anonymous visitors and leads to a
 403 — the dead end `project/list.html`'s comment refuses. It reads as an account entry anyway:

@@ -15,4 +15,6 @@ class JobsConfig(AppConfig):
         # Adding `visible_to=` to nav_registry for one entry would be a mechanism with a
         # single producer, which is the reasoning mutint-core/CLAUDE.md already records for the
         # account block itself.
-        pass
+        #
+        # What it does do is connect two receivers, both about a job's log file.
+        from mutint_jobs import receivers  # noqa: F401

@@ -90,6 +90,7 @@ def staging_dir(upload_session_id):
 
 
 _COMPONENT_NAME = re.compile(r"^[A-Za-z0-9_]+$")
+_COMPONENT_KEY = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def component_dir(component, key):
@@ -102,12 +103,27 @@ def component_dir(component, key):
     caller cannot reach out of the store by passing a crafted key any more than it can by
     passing one to ``sample_dir``.
 
+    ``key`` is a primary key or another **server-generated** identifier -- ``mutint_jobs``
+    keys a job's log by the queue's own result id, which is a UUID the queue made and the only
+    handle that exists while the task is running. Both are checked against the pattern below,
+    which admits digits, letters, ``_`` and ``-`` and nothing else: no dot, no separator, so
+    the "no client-supplied path component reaches the filesystem" rule above still holds. It
+    was ``int(key)``, which said the same thing about a primary key and could say nothing at
+    all about a UUID.
+
     Unlike ``staging_dir``, nothing here reaps this. A component that creates one owns
     deleting it, which for a row-keyed directory means a ``post_delete`` receiver on the row.
     """
     if not _COMPONENT_NAME.match(str(component)):
         raise ValueError("component must be an app label: %r" % (component,))
-    return os.path.join(store_root(), "components", str(component), str(int(key)))
+    # The type check is not redundant beside the pattern: `str(None)` is ``"None"``, which
+    # matches it, so a caller that lost its key would get a directory called ``None`` shared
+    # by every such caller rather than an error.
+    if isinstance(key, bool) or not isinstance(key, (int, str)):
+        raise TypeError("component key must be a primary key or a generated id: %r" % (key,))
+    if not _COMPONENT_KEY.match(str(key)):
+        raise ValueError("component key must be a primary key or a generated id: %r" % (key,))
+    return os.path.join(store_root(), "components", str(component), str(key))
 
 
 def ensure_dir(path):

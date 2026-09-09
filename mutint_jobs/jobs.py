@@ -30,7 +30,7 @@ import logging
 
 from django.utils import timezone
 
-from mutint_jobs import queue
+from mutint_jobs import logs, queue
 from mutint_jobs.models import Job
 
 logger = logging.getLogger("mutint_jobs")
@@ -157,6 +157,42 @@ def may_cancel(user, job):
     if user.is_superuser:
         return True
     return job.user_id == user.id
+
+
+def may_view(user, job):
+    """Whether `user` may read `job` -- its log, and anything else about it.
+
+    The same rule as `may_cancel`, and deliberately the same rule: what a job's log contains is
+    a tool's account of work somebody asked for, and standing to read it comes from having
+    asked. A caller who may not gets a **404 rather than a 403**, the posture `job_cancel`
+    takes, so a route cannot be used to find out which job ids exist.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    return job.user_id == user.id
+
+
+def log_urls(task_result_ids):
+    """`{task_result_id: url}` for those queue results whose job has a log.
+
+    For a component that holds queue ids rather than `Job` rows -- mutint-breseq's run list is
+    the first -- so it can link to the log without querying this app's model itself. One query,
+    however many ids, and ids with no job or no log are simply absent.
+    """
+    from django.urls import reverse
+
+    ids = [str(one) for one in task_result_ids if one]
+    if not ids:
+        return {}
+
+    found = {}
+    for task_result_id, pk in Job.objects.filter(
+            task_result_id__in=ids).values_list("task_result_id", "pk"):
+        if logs.exists(task_result_id):
+            found[task_result_id] = reverse("job_log", args=(pk,))
+    return found
 
 
 #: How long a queue row may sit before `reap_stranded` calls it abandoned rather than pending.

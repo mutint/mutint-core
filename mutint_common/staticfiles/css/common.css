@@ -720,3 +720,45 @@ table.dataTable thead .sorting_desc:after {
 .mutint-picker {
     margin-bottom: 0.75em;
 }
+
+/* A job's log page (`/jobs/<pk>/log`). The box is the page: it is as tall as what is left of
+   the viewport under the header and the controls, and it scrolls rather than the document, so
+   the Top and Bottom buttons stay put instead of scrolling away with the text they act on.
+
+   `100vh` minus what sits above it, measured rather than guessed: the page header block and
+   the meta and controls lines come to ~145px, the truncation notice adds ~30 more when it is
+   there, and #mutint-content pads 25px at the foot. 220px covers all of that with enough
+   slack for a job label that wraps -- measured both with the notice and without. A viewport unit is right here where it was wrong for the
+   sidebar -- this box genuinely wants to be a fraction of the window, because the window is
+   what a reader is reading through.
+
+   **In pixels, not rem.** Bootstrap sets `html { font-size: 10px }`, so `rem` here is 10px
+   and not the 16 anybody reading it would assume -- a `14rem` written meaning 224px silently
+   meant 140. */
+.mutint-job-log-box {
+    height: calc(100vh - 220px);
+    min-height: 12em;
+    overflow: auto;
+    /* A log's own line breaks are the ones that matter, and breseq draws progress bars out of
+       characters. Wrapping is still better than a horizontal scrollbar under a vertical one:
+       a long line is rare and a reader who meets one wants to read it, not chase it. */
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.mutint-job-log-meta {
+    color: #777;
+}
+
+.mutint-job-log-controls {
+    margin-bottom: 0.5em;
+}
+
+/* Said in the page's own voice rather than the tool's, so it must not read as a log line. */
+.mutint-job-log-cut,
+.mutint-job-log-empty {
+    color: #777;
+    font-size: 13px;
+}

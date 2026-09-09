@@ -233,10 +233,20 @@ class ComponentDirTestCase(TestCase):
             store.component_dir("mutint_breseq", 7),
             os.path.join(self.store, "components", "mutint_breseq", "7"))
 
-    def test_a_key_that_is_not_a_number_is_refused(self):
-        for bad in ("../..", "7/../..", "", None):
+    def test_a_key_that_is_not_a_plain_token_is_refused(self):
+        """A key is a primary key or another server-generated id -- `mutint_jobs` uses the
+        queue's own result id. Anything with a separator in it, and anything that is not a
+        number or a string, is refused: `str(None)` is `"None"`, which would otherwise be a
+        perfectly good directory name shared by every caller that lost its key."""
+        for bad in ("../..", "7/../..", "a.b", "", None, 1.5, object()):
             with self.assertRaises((ValueError, TypeError), msg="accepted %r" % (bad,)):
                 store.component_dir("mutint_breseq", bad)
+
+    def test_a_generated_id_is_accepted(self):
+        self.assertEqual(
+            store.component_dir("mutint_jobs", "WwHVICCxKY6CdJx6WFlDmA0Y"),
+            os.path.join(self.store, "components", "mutint_jobs",
+                         "WwHVICCxKY6CdJx6WFlDmA0Y"))
 
     def test_a_component_name_with_a_separator_is_refused(self):
         for bad in ("../etc", "a/b", "a.b", ""):

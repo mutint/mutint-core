@@ -67,6 +67,8 @@
         return isNaN(when.getTime()) ? "" : when.toLocaleString();
     }
 
+    // Mirrors `queue.STATUS_LABELS`, which the log page renders server-side. Two copies
+    // because these rows are built here in JavaScript; keep them in step.
     var LABELS = {
         READY: ["default", "Queued"],
         RUNNING: ["info", "Running"],
@@ -107,6 +109,21 @@
             '<code>db_worker</code>, or restart the server.</div>';
     }
 
+    // Log first, then Cancel: reading what a job is doing is the commoner thing to want, and
+    // the destructive control should not be the one under the cursor by default. A job that
+    // ran no external command has no `log` and gets no link -- see views._row.
+    function actionCell(job) {
+        var parts = [];
+        if (job.log) {
+            parts.push('<a class="btn btn-xs btn-default" href="' + esc(job.log) + '">Log</a>');
+        }
+        if (job.cancellable) {
+            parts.push('<button class="btn btn-xs btn-default js-cancel" data-id="' +
+                       job.id + '">Cancel</button>');
+        }
+        return parts.join(" ");
+    }
+
     function renderJobs(jobs) {
         if (!jobs.length) {
             tableEl.innerHTML = '<p style="color: #666;">Nothing to show.</p>';
@@ -123,10 +140,7 @@
             html.push("<td>" + esc(job.experiment) + "</td>",
                       "<td><small>" + esc(whenLocal(job.created_at)) + "</small></td>",
                       "<td>" + statusCell(job) + "</td>",
-                      "<td>" + (job.cancellable
-                          ? '<button class="btn btn-xs btn-default js-cancel" data-id="' +
-                            job.id + '">Cancel</button>'
-                          : "") + "</td>",
+                      "<td>" + actionCell(job) + "</td>",
                       "</tr>");
         });
         html.push("</tbody></table>");

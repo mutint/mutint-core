@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ job_label }} &mdash; log{% endblock %}
+
+{% block header %}<b>{{ job_label }}</b> &mdash; log{% endblock %}
+
+{% block content %}
+<div class="mutint-job-log">
+
+    <p class="mutint-job-log-meta">
+        {% if job.component %}<code>{{ job.component }}</code> &middot; {% endif %}
+        {% if job.experiment %}{{ job.experiment.name }} &middot; {% endif %}
+        started {{ job.created_at }}
+        {% if status %} &middot; {{ status }}{% endif %}
+    </p>
+
+    {% comment %} The controls sit above the box rather than below it, because the box is as
+       tall as the viewport and a control under it would be off the screen. {% endcomment %}
+    <p class="mutint-job-log-controls">
+        <a href="" class="btn-primary2" role="button">Refresh</a>
+        <button type="button" class="btn-primary2" id="job-log-top">&uarr; Top</button>
+        <button type="button" class="btn-primary2" id="job-log-bottom">&darr; Bottom</button>
+        {% if has_log %}
+            <a href="{{ download_url }}" class="btn-primary2" role="button">Download</a>
+        {% endif %}
+    </p>
+
+    {% if log_truncated %}
+        {% comment %} Said out loud, because the Top button would otherwise jump to a
+           beginning that is not the log's. {% endcomment %}
+        <p class="mutint-job-log-cut">Showing the last {{ tail_kb }} KB. Download the log
+            for all of it.</p>
+    {% endif %}
+
+    {% if has_log %}
+        <pre class="mutint-job-log-box" id="job-log">{{ log_text }}</pre>
+    {% else %}
+        <p class="mutint-job-log-empty">This job has not printed anything. A job that runs no
+            external command never will; one that is still waiting for a worker has not
+            started yet.</p>
+    {% endif %}
+
+</div>
+
+{% if has_log %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+
+    var box = document.getElementById("job-log");
+    if (!box) { return; }
+
+    // Opened at the end, which is where a log's news is. Done here rather than with the
+    // `flex-direction: column-reverse` trick, which reverses what the arrow keys and the
+    // scroll wheel do and leaves find-in-page scrolling the wrong way.
+    box.scrollTop = box.scrollHeight;
+
+    // Jumps, not smooth scrolls: this is "take me to the other end", and animating a
+    // viewport-tall box full of text is slower than the thing it is illustrating.
+    document.getElementById("job-log-top").addEventListener("click", function () {
+        box.scrollTop = 0;
+    });
+    document.getElementById("job-log-bottom").addEventListener("click", function () {
+        box.scrollTop = box.scrollHeight;
+    });
+}());
+</script>
+{% endif %}
+{% endblock %}

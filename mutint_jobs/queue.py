@@ -40,6 +40,23 @@ FINISHED_STATUSES = ("SUCCESSFUL", "FAILED")
 # than an error.
 STATUS_UNKNOWN = "unknown"
 
+#: What each status is called in front of a person. The queue's own vocabulary is for the
+#: queue: `READY` reads as a state of readiness rather than of waiting, and `unknown` is this
+#: module's word rather than anything a reader should have to learn. `jobs/list.html` carries
+#: the same mapping in JavaScript because it renders its rows client-side; keep them in step.
+STATUS_LABELS = {
+    "READY": "Queued",
+    "RUNNING": "Running",
+    "SUCCESSFUL": "Finished",
+    "FAILED": "Failed",
+    STATUS_UNKNOWN: "No longer on the queue",
+}
+
+
+def label_for(status):
+    """`status` as a person should read it. An unrecognised one is returned unchanged."""
+    return STATUS_LABELS.get(status, status or "")
+
 # The backend and queue a bare `@task()` enqueues onto, and the ones `db_worker` reads by
 # default. Spelled here rather than imported from the package's `compat` module, which is
 # private to it -- and `unattributed()` already answers [] rather than raising when some other

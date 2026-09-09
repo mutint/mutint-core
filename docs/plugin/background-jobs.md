@@ -71,13 +71,24 @@ is worse than no button.
 
 ### If your task runs a subprocess
 
-Two things, and both are easy to get wrong in ways that look fine:
+**Do not write the loop.** `mutint_jobs.processes.run_tool` runs a command, polls the
+cancellation flag while it runs, kills the whole process group when somebody asks, and writes
+everything the command prints into the job's log:
 
 ```python
-process = subprocess.Popen(argv, ..., start_new_session=True)
-...
-os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+from mutint_jobs import jobs, logs, processes
+
+with logs.open_log(task_result_id) as log:
+    logs.write(log, "trimming %s" % name)          # your own commentary
+    code = processes.run_tool(argv, log, env=env, timeout=3600,
+                              is_cancelled=lambda: jobs.is_cancelled(task_result_id),
+                              what="my-tool")
 ```
+
+It returns a returncode and nothing else; the output is in the log. It raises
+`processes.Cancelled` when the job was stopped, and `subprocess.TimeoutExpired` on the budget.
+
+Two things it is doing for you, both easy to get wrong in ways that look fine:
 
 - **`subprocess.run` cannot be cancelled.** It blocks until the process exits, so there is no
   moment at which anything can ask whether the job is still wanted. `Popen` plus a poll loop
@@ -87,7 +98,28 @@ os.killpg(os.getpgid(process.pid), signal.SIGTERM)
   the job reports itself stopped while the machine stays busy. `start_new_session=True` makes
   the whole run one group with one thing to signal.
 
-`mutint_breseq/runner.py::run_breseq_process` is the worked example.
+`mutint_breseq/tasks.py` is the worked example.
+
+### The log, and how a task reaches its own
+
+`logs.open_log` takes the **queue's result id** — the same handle `jobs.is_cancelled` takes —
+and the log is written at `<store>/components/mutint_jobs/<id>/job.log` while the job runs,
+gzipped when it finishes. `/jobs/<pk>/log` renders the tail with a Refresh button and offers
+the whole thing as a download; `/jobs/` links every job that has one.
+
+**Get the id from the task context, not from your own row.** A row's copy is written after
+`jobs.enqueue` returns, so a backend that runs the task inside `enqueue` — which is what the
+test suite uses — executes the whole thing before that column is set:
+
+```python
+@task(takes_context=True)
+def analyze(context, row_id):
+    task_result_id = context.task_result.id
+```
+
+There is nothing to opt into: a task that runs no command writes no log, and `/jobs/` links
+only the jobs that have one. Nothing here can fail your task — an unwritable log is logged and
+skipped, the posture `is_cancelled` takes.
 
 ### Cancellation is not failure
 
@@ -116,7 +148,9 @@ code as of launch. Restart the server after editing a task, or your edit is not 
 
 `./mutint reap_jobs` clears queue rows that were never claimed — the library's own
 `prune_db_task_results` only removes *finished* ones, so an unclaimed row is otherwise
-immortal.
+immortal. It also sweeps job logs belonging to no job row, which is what a bare
+`task.enqueue` leaves behind: a job's own log goes with its row, and work that never made one
+has nothing to go with.
 
 Decide, before you enqueue anything, **which kind of task yours is**:
 
