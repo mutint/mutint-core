@@ -546,6 +546,23 @@ Three things about that are deliberate:
   its poll, so the two cannot word it differently and neither has to escape a component name.
   `say()` builds nodes rather than concatenating HTML for the same reason.
 
+**What a check found is a comparison, and moving the checkout voids it.** `available` means
+*this ref is newer than the one you are on*, so the right-hand side of it changes the moment an
+upgrade is applied -- whichever ref was installed. `upgrade.void_verdict` drops it, and every
+path that moves the checkout calls it: `apply_staged` on success only (a failed upgrade leaves
+you where you were, and what you were offered is still on offer), `./mutint upgrade`, and
+`--adopt`. Without it the page went on describing a version this installation now *was* and
+kept a live Install button for it, past the upgrade and past every reload -- the green *Upgraded
+to* banner sitting directly above the offer it had just satisfied.
+
+`checked_at` goes with it, which looks like over-deletion and is the same rule: the page falls
+back to *Up to date as of <time>* whenever there is a timestamp and no `available`, and after an
+upgrade that names a check which ran against the previous version. **Not checked yet** is what
+is true, and it is the same refusal `Unreachable` exists for -- a reader told they are up to
+date when nobody has looked is worse off than one told nobody has looked. A stored `error` is
+about that same check and goes too; blockers are recomputed on every render and come back on
+their own.
+
 **Install stages; it does not upgrade.** The mechanism, the channels and the refusals all live
 in `mutint_common/upgrade.py` and are described under **Upgrading in place** in the suite
 `CLAUDE.md`. What is worth knowing here is the endpoint's own guard: it refuses a `ref` that is

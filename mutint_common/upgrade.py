@@ -537,6 +537,32 @@ def clear_request(base_dir):
     return state
 
 
+def void_verdict(base_dir):
+    """Forget what the last check found, because this checkout has moved.
+
+    `available` is not a fact about the remote, it is a **comparison**: this ref is newer than
+    the one we are on. Move the checkout and the right-hand side of it has changed, so the
+    verdict is void whichever ref was installed -- and left in place it is worse than stale,
+    because `/upgrade/` renders the Install button from it and would go on offering a version
+    this installation now *is*, past the upgrade and past every reload after it.
+
+    `checked_at` goes with it rather than being kept, which is the part that looks like
+    over-deletion and is not. The page falls back to *Up to date as of <time>* when there is a
+    timestamp and no `available`, and that sentence after an upgrade is a claim nobody made:
+    the check it names ran against the previous version. **Not checked yet** is simply true
+    here, and this module refuses the reassuring-but-unverified answer everywhere else --
+    `Unreachable` exists for the same reason.
+
+    A stored `error` is about that same check, so it goes too. Blockers are recomputed by the
+    view on every render and come back on their own.
+    """
+    state = read_state(base_dir)
+    for key in ('available', 'checked_at', 'error'):
+        state.pop(key, None)
+    write_state(base_dir, state)
+    return state
+
+
 def backup(base_dir, pg, label):
     """`pg_dump` this checkout's database, returning the path, or None if there is nothing
     to dump.
@@ -661,6 +687,10 @@ def apply_staged(base_dir, pg=None):
         print("Upgrade to %s did not run: %s" % (ref, exc))
     else:
         print("Now on %s." % (result.get('now') or ref))
+        # We are on something else now, so what the last check found is void -- see
+        # `void_verdict`. Only on success: a failed upgrade leaves this checkout where it was,
+        # and the version it was offered is still genuinely on offer.
+        void_verdict(base_dir)
 
     # Re-read: `apply` may have replaced the working tree, and the state file lives in
     # `data/`, which git leaves alone -- but the request must be cleared whatever happened,

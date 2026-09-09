@@ -86,6 +86,10 @@ class Command(BaseCommand):
         except upgrade.UpgradeError as exc:
             raise CommandError(str(exc))
 
+        # The checkout has moved, so the stored verdict is void: without this, `/upgrade/`
+        # goes on offering the version this shell just installed. See `upgrade.void_verdict`.
+        upgrade.void_verdict(base_dir)
+
         if result.get("backup"):
             self.stdout.write("Backed up the database to %s"
                               % os.path.relpath(result["backup"], base_dir))
@@ -110,6 +114,9 @@ class Command(BaseCommand):
             result = upgrade.adopt(base_dir, url, ref)
         except upgrade.UpgradeError as exc:
             raise CommandError(str(exc))
+        # Whatever was stored was recorded about a tree that was not a checkout -- an error
+        # from a check that could not run, most likely. It says nothing about this one.
+        upgrade.void_verdict(base_dir)
         self.stdout.write(self.style.SUCCESS(
             "Adopted as a checkout of %s. Upgrades will work from here." % result["ref"]))
 

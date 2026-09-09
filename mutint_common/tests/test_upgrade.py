@@ -368,6 +368,98 @@ class ApplyStagedTestCase(TestCase):
         self.assertFalse(state["last_result"]["ok"])
 
 
+class VoidVerdictTestCase(TestCase):
+    """What a check found is a comparison -- *this ref is newer than the one you are on* -- so
+    moving the checkout voids it.
+
+    Left in place it was worse than stale: `/upgrade/` renders its Install button from
+    `available`, so after an upgrade the page went on describing a version this installation
+    now *was*, and offering to install it again, past every reload.
+    """
+
+    def setUp(self):
+        if shutil.which("git") is None:
+            self.skipTest("no git available")
+        self.origin = tempfile.mkdtemp()
+        self.parent = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.origin, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, self.parent, ignore_errors=True)
+
+        _run(self.origin, "init", "-q")
+        _run(self.origin, "config", "user.email", "t@example.com")
+        _run(self.origin, "config", "user.name", "T")
+        with open(os.path.join(self.origin, "code.txt"), "w") as handle:
+            handle.write("one\n")
+        _run(self.origin, "add", "-A")
+        _run(self.origin, "commit", "-qm", "one")
+        _run(self.origin, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
+
+        subprocess.run(["git", "clone", "-q", self.origin, "install"], cwd=self.parent,
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.base = os.path.join(self.parent, "install")
+        _run(self.base, "checkout", "-q", "--detach", "v1.0.0")
+
+        # A newer release for it to move onto.
+        with open(os.path.join(self.origin, "code.txt"), "w") as handle:
+            handle.write("two\n")
+        _run(self.origin, "commit", "-aqm", "two")
+        _run(self.origin, "tag", "-a", "v1.1.0", "-m", "v1.1.0")
+
+    def _offer(self, ref="v1.1.0"):
+        """The state a check leaves behind."""
+        state = upgrade.read_state(self.base)
+        state["checked_at"] = "2026-09-09T12:00:00Z"
+        state["available"] = {"ref": ref, "kind": "tag", "summary": "%s is available." % ref}
+        upgrade.write_state(self.base, state)
+
+    def test_a_successful_upgrade_forgets_what_was_on_offer(self):
+        self._offer()
+        upgrade.request(self.base, "v1.1.0")
+
+        result = upgrade.apply_staged(self.base)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("v1.1.0", upgrade.current_ref(self.base))
+        state = upgrade.read_state(self.base)
+        self.assertNotIn("available", state)
+        self.assertTrue(state["last_result"]["ok"])
+
+    def test_it_does_not_then_claim_to_be_up_to_date(self):
+        """The page falls back to *Up to date as of <time>* on a timestamp with no `available`,
+        and that check ran against the previous version. **Not checked yet** is what is true."""
+        self._offer()
+        upgrade.request(self.base, "v1.1.0")
+
+        upgrade.apply_staged(self.base)
+
+        self.assertNotIn("checked_at", upgrade.read_state(self.base))
+
+    def test_a_failed_upgrade_keeps_the_offer(self):
+        """The checkout did not move, so the version it was offered is still on offer. This is
+        what makes the rule a consequence of moving rather than of pressing Install."""
+        self._offer(ref="v9.9.9")
+        upgrade.request(self.base, "v9.9.9")
+
+        result = upgrade.apply_staged(self.base)
+
+        self.assertFalse(result["ok"])
+        state = upgrade.read_state(self.base)
+        self.assertEqual("v9.9.9", state["available"]["ref"])
+        self.assertEqual("2026-09-09T12:00:00Z", state["checked_at"])
+
+    def test_the_chosen_channel_survives_it(self):
+        """It forgets a verdict, not the operator's settings -- `channel` is how a deployment
+        says it follows `main`, and throwing it away would silently move it back to `stable`."""
+        upgrade.write_state(self.base, {"channel": upgrade.MAIN,
+                                        "available": {"ref": "main"},
+                                        "checked_at": "2026-09-09T12:00:00Z"})
+
+        state = upgrade.void_verdict(self.base)
+
+        self.assertEqual(upgrade.MAIN, state["channel"])
+        self.assertNotIn("available", state)
+
+
 class CheckTestCase(TestCase):
 
     def setUp(self):

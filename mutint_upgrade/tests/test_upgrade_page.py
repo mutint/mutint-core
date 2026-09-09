@@ -128,6 +128,32 @@ class UpgradePageTestCase(TestCase):
         self.assertContains(response, "v1.2.3 is staged")
         self.assertContains(response, "start it again")
 
+    def test_an_applied_upgrade_is_not_still_offered(self):
+        """The green banner says what happened; nothing beside it should still be selling the
+        version it happened to.
+
+        This pins the page's half -- given no `available`, it offers nothing, whatever
+        `last_result` says -- and not the voiding that produces that state, which is
+        `test_upgrade.VoidVerdictTestCase`'s. The two were one bug: the state kept the verdict
+        and the page rendered its Install button from it, so after an upgrade this page went on
+        describing v1.1.0 and offering to install it, past every reload."""
+        upgrade.write_state(self.base, {
+            "channel": upgrade.STABLE,
+            "last_result": {"ref": "v1.1.0", "ok": True, "now": "v1.1.0"},
+        })
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(reverse("upgrade"))
+
+        self.assertContains(response, "Upgraded to")
+        html = response.content.decode("utf-8")
+        # The button is rendered either way and hidden by style, so its *label* is what says
+        # whether the page is offering anything: "Install v1.1.0" would be. What fills the
+        # status box instead is not asserted here -- this fixture's base is not a git
+        # checkout, so it is the blocker warning rather than "Not checked yet".
+        self.assertNotIn("Install v1.1.0", html)
+        self.assertNotIn("v1.1.0 is available", html)
+
     def test_a_failed_apply_is_reported_on_the_page(self):
         """`apply_staged` swallows the failure so the launch survives, which means this page
         is the only place it is ever seen."""
