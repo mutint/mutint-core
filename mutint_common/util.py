@@ -65,18 +65,27 @@ def _github_commit_url(remote, sha):
 
 
 def get_revision(directory):
-    """``{'short', 'full', 'url', 'repository'}`` for the repository at `directory`, or None.
+    """``{'short', 'full', 'committed', 'url', 'repository'}`` for the repository at
+    `directory`, or None.
 
     `url` is the commit's page and `repository` the repository's own, both None unless the
-    origin remote is on GitHub. The result is cached per directory for the life of the process.
+    origin remote is on GitHub. `committed` is the commit's own timestamp in strict ISO 8601,
+    which is what lets a reader see *how old* what they are running is rather than only which
+    hash it is -- a SHA says nothing about age, and on the Development channel that is the
+    question being asked. None wherever the revision itself is unknown.
+
+    The result is cached per directory for the life of the process, so the third git command
+    costs nothing beyond the first render.
     """
     directory = os.path.abspath(directory)
     if directory not in _revisions:
         full = _git(directory, 'rev-parse', 'HEAD')
         remote = _git(directory, 'remote', 'get-url', 'origin') if full else None
+        committed = _git(directory, 'show', '-s', '--format=%cI', 'HEAD') if full else None
         _revisions[directory] = None if full is None else {
             'short': full[:7],
             'full': full,
+            'committed': committed,
             'url': _github_commit_url(remote, full),
             'repository': _github_repository_url(remote),
         }

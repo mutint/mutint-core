@@ -15,6 +15,10 @@
                 <th>Component</th>
                 <th>Version</th>
                 <th>Revision</th>
+                {% comment %} A hash says which commit and nothing about how old it is, and
+                   how old is the question this page exists to answer. The available version
+                   is described the same way, by the same formatter. {% endcomment %}
+                <th>Committed</th>
             </tr>
         </thead>
         <tbody>
@@ -37,6 +41,8 @@
                             <span style="color: #999;">no git history</span>
                         {% endif %}
                     </td>
+                    <td>{% if component.committed %}<small>{{ component.committed }}</small>
+                        {% else %}<span style="color: #999;">&mdash;</span>{% endif %}</td>
                 </tr>
             {% endfor %}
         </tbody>

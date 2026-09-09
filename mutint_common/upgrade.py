@@ -396,8 +396,12 @@ def describe(base_dir, ref, kind):
     return described
 
 
-def _readable_time(iso):
+def readable_time(iso):
     """`2026-09-07T11:53:23-04:00` as `2026-09-07 11:53 -04:00`.
+
+    Public because the component table on the same page formats each installed revision's
+    date with it. This module imports nothing from `mutint_common`, so anything there may
+    import this without a cycle.
 
     The whole timestamp rather than the date: "main" moves several times a day on a project
     being worked on, so a date alone cannot tell you whether what is offered is the commit you
@@ -420,7 +424,7 @@ def summarize(ref, current, described):
     if described.get('sha'):
         detail.append("commit %s" % described['sha'])
     if described.get('date'):
-        detail.append("committed %s" % _readable_time(described['date']))
+        detail.append("committed %s" % readable_time(described['date']))
     commits = described.get('commits')
     if commits:
         detail.append("%d commit%s newer than %s"

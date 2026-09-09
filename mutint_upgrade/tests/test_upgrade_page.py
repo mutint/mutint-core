@@ -59,6 +59,34 @@ class UpgradePageTestCase(TestCase):
         self.assertEqual(200, response.status_code)
         self.assertContains(response, "mutint-core")
 
+    def test_the_table_says_when_each_component_was_committed(self):
+        """A hash says which commit and nothing about how old it is, which is the question
+        this page exists to answer -- especially on the Development channel, where `main`
+        moves several times a day."""
+        self.client.force_login(self.superuser)
+        revision = {"short": "abcdef0", "full": "a" * 40,
+                    "committed": "2026-09-07T11:53:23-04:00",
+                    "url": None, "repository": None}
+
+        with mock.patch("mutint_common.util.get_revision", return_value=revision):
+            response = self.client.get(reverse("upgrade"))
+
+        self.assertContains(response, "<th>Committed</th>", html=False)
+        # Formatted by the same helper that describes the available version, so the two
+        # timestamps on this page cannot be written differently.
+        self.assertContains(response, "2026-09-07 11:53 -04:00")
+
+    def test_a_component_with_no_git_history_shows_no_date(self):
+        """A deployment shipped without its `.git` -- production images usually are -- has
+        no revision and therefore no date, and says so rather than showing an empty cell that
+        reads as a bug."""
+        self.client.force_login(self.superuser)
+
+        with mock.patch("mutint_common.util.get_revision", return_value=None):
+            response = self.client.get(reverse("upgrade"))
+
+        self.assertContains(response, "no git history")
+
     def test_a_components_name_links_to_its_repository(self):
         """Read off its checkout's remote, whichever owner that names."""
         self.client.force_login(self.superuser)

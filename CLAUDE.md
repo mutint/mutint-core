@@ -506,6 +506,15 @@ same entries `/about` renders as prose, keyed by *component checkout*, each with
 and a link to its revision on GitHub -- so there is one answer to "what is installed" and this
 page is it, made actionable.
 
+**Each row says when its revision was committed**, through the same `upgrade.readable_time`
+that describes the available version, so the two timestamps on the page cannot be written
+differently. A hash says *which* commit and nothing about how old it is, and how old is the
+question this page exists to answer -- on the Development channel `main` moves several times a
+day, and a table of seven hashes cannot show that one component is a fortnight behind the rest.
+`util.get_revision` carries the date now and is cached per directory, so the extra `git show`
+costs nothing beyond the first render. `/about` has the field available and does not render it;
+that page is prose about each component rather than a comparison across them.
+
 **It never blocks on the network**, the posture `mutint_sample/ncbi.py` established: the page
 renders from the stored verdict in `data/upgrade.json`, and only the Check button reaches the
 remote. `upgrade.Unreachable` keeps "could not ask" distinct from "nothing newer", because a

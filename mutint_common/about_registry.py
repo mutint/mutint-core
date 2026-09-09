@@ -65,7 +65,8 @@ def register_about_section(app_config, name=None, version=None, template=None):
 def get_about_sections():
     """One entry per installed component, in INSTALLED_APPS order.
 
-    Returns [{'name', 'version', 'template', 'revision', 'revision_url', 'repository_url',
+    Returns [{'name', 'version', 'template', 'revision', 'committed', 'revision_url',
+    'repository_url',
     'anchor'}, ...].
 
     A component that registered nothing still appears, with its directory's name and whatever
@@ -77,6 +78,7 @@ def get_about_sections():
     from django.apps import apps
     from django.utils.text import slugify
 
+    from mutint_common.upgrade import readable_time
     from mutint_common.util import get_revision
 
     sections = []
@@ -97,6 +99,11 @@ def get_about_sections():
             'version': entry.get('version'),
             'template': _loadable(entry.get('template')),
             'revision': revision['short'] if revision else None,
+            # When that revision was committed, as a person reads a time. A hash says which
+            # commit and nothing about how old it is, which is the question somebody looking
+            # at an upgrade page is actually asking.
+            'committed': (readable_time(revision['committed'])
+                          if revision and revision.get('committed') else None),
             'revision_url': revision['url'] if revision else None,
             'repository_url': revision['repository'] if revision else None,
             'anchor': slugify(name),
