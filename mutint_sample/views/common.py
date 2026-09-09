@@ -88,6 +88,29 @@ def get_population_names(experiment_id):
             .values_list("name", flat=True))
 
 
+def get_time_points(experiment_id):
+    """The time points this experiment already has, in order, as a person writes them.
+
+    The counterpart to `get_population_names` above, and new: nothing needed a list of these
+    until a form offered to complete one. Asked of the samples for the same reason -- the
+    question is "which time points are in use here", which only the samples can answer.
+
+    Nulls are dropped rather than offered: a sample with no time point is one nobody has
+    placed, and "unplaced" is expressed by leaving the box empty rather than by picking it
+    out of a list. Each value goes through `format_time_point`, so an option reads `500` and
+    not `500.0` -- the column is a float and almost every value in it is whole.
+    """
+    from mutint_sample.util import get_ordered_sample_queryset
+    from mutint_experiment.coordinates import format_time_point
+
+    values = (get_ordered_sample_queryset(experiment_id)
+              .order_by()
+              .exclude(**{paths.to_time_point_value() + "__isnull": True})
+              .values_list(paths.to_time_point_value(), flat=True)
+              .distinct())
+    return [format_time_point(value) for value in sorted(set(values))]
+
+
 def get_population(request):
     """The ALE picked in the query string, or None for "all".
 

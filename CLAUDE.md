@@ -1980,7 +1980,23 @@ sample cannot answer differently. Two shapes are read and anything else is auto-
 | name | population | time point | sample | replicate |
 |---|---|---|---|---|
 | `3-30000-1-1` | `3` | 30000 | `1` | 1 |
-| `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | 1 |
+| `Ara-2_500gen_763A` | `Ara-2` | 500 | `763A` | *none* |
+
+**`compose_sample_name` is the inverse and lives in the same module**, because a form that
+offers three boxes has to turn them back into the one string every import path reads. It
+always joins with `_`, refuses a population without a time point (no name can spell that) and
+**checks its answer by parsing it back** -- which is what catches an underscore inside a part,
+where the join would silently produce four fields, and a sample named `x_5_y` with nothing else
+filled in, which would otherwise read as a whole coordinate. No rule about characters catches
+either, and the round trip cannot disagree with the parser by construction.
+
+**There is a copy of the parser in JavaScript**, `mutint_common/staticfiles/js/
+mutint_sample_names.js`, so the breseq launcher can show what a name means while it is typed.
+The Python is authoritative and the preview cannot misplace anything; `test_sample_names_js.py`
+reads the JS case table and asserts Python agrees with it, which catches the two *specs*
+drifting apart but not the JS implementation. Running the JS in a browser against the same
+table is a verification step, and is how the two divergences recorded in that file's header
+were found.
 
 **`Population.name` and `Sample.name` are `CharField`s**, which is what makes the second row
 expressible at all: `Ara-1` and `Ara+1` are two LTEE populations that both end in 1, and
@@ -2001,10 +2017,19 @@ Three rules that look arbitrary and are not:
   replicate.
 - **A-F-I-R stays strict** -- all four dash-separated fields must be integers. It is checked
   first, so a name satisfying both shapes reads as A-F-I-R.
-- **A name of neither shape is auto-numbered**: population `1`, time point 1, one sample per
-  distinct source name, and `Sample.description` set to the filename so it still displays
-  by name. `_next_sample_number` counts in Python because `Max()` over a text column answers
-  `"9"` for a coordinate holding 1 to 10.
+- **A name of neither shape is auto-numbered**: population **`Unspecified`**, **no time
+  point**, one sample per distinct source name, and `Sample.description` set to the filename
+  so it still displays by name. `_next_sample_number` counts in Python because `Max()` over a
+  text column answers `"9"` for a coordinate holding 1 to 10.
+
+  It was population `1` at time point 1, and both were lies that looked like data: `1` sorts
+  among the real populations and reads as one of them, and a time point of 1 is a point on an
+  axis nobody measured -- Compare would order such a sample against genuine ones.
+  `Sample.time_point` is nullable and `ordering.sample_order` already sorted a null one first,
+  calling it "a sample nobody has placed yet", which is exactly what this is. **Nothing
+  migrates**: samples already on `1` stay there. `samples._optional_time_point` had to learn
+  to accept a blank at the same time, or such a sample could be opened in the editor and not
+  saved back unchanged.
 
 **Nothing should reintroduce a lenient reader** that turns a field it cannot read into `1`:
 a whole drop of non-conforming files then collapses onto one sample. Answering None and

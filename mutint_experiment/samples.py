@@ -189,14 +189,23 @@ def _truthy(raw):
     return bool(raw)
 
 
-def _positive_int(raw, label, row_label):
-    """A whole number, also when it arrives as `500.0`.
+def _optional_time_point(raw, label, row_label):
+    """A whole number, also when it arrives as `500.0` -- or **None** for a blank.
 
     `Sample.time_point` is a float, so a coordinate read back from a row and posted again
     comes back as `500.0` -- and `int("500.0")` raises. That is how a bulk save of a page
     that had merely been *opened* failed with "must be a whole number", and how a test that
     refreshed its sample between two saves found it.
+
+    **A blank is a time point nobody has set**, which the column has always allowed and which
+    `gd_import` now writes for a sample whose name carries no coordinate. This used to refuse
+    one, on the reasoning that a sample has to sit somewhere -- true of the population, and
+    not of the ordinal: `ordering.sample_order` sorts a null time point first precisely
+    because such a sample has not been placed yet. Refusing it here meant an auto-numbered
+    sample could be opened in the editor and not saved back unchanged.
     """
+    if raw is None or not str(raw).strip():
+        return None
     try:
         number = float(str(raw).strip())
         if not number.is_integer():
@@ -220,8 +229,10 @@ def _label(raw, label, row_label):
     """One text part of a coordinate: `Ara-1`, `763A`, `1-2`, or plain `2`.
 
     Stripped, because a trailing space is invisible in the input and would make two
-    coordinates that read identically point at different rows. Refused when empty for the
-    same reason `_positive_int` refuses a blank: a sample has to sit somewhere.
+    coordinates that read identically point at different rows. Refused when empty because a
+    sample has to sit *somewhere*: the population and the label are what say which sample
+    this is, where the time point is an ordinal that may genuinely not be known --
+    `_optional_time_point` takes a blank for that reason and this does not.
     """
     value = ("" if raw is None else str(raw)).strip()
     if not value:
@@ -291,7 +302,7 @@ def parse_rows(rows, samples_by_id):
                 # so, but that is not what anyone calls it, and a refusal is the one place
                 # the internal name would surface to a user. Still the one member of the
                 # coordinate that must be a number -- fixation orders ALEs by it.
-                _positive_int(row.get("time_point"), "time point", row_label),
+                _optional_time_point(row.get("time_point"), "time point", row_label),
                 # One label where there were two. A replicate was never a level of
                 # anything -- `1-2` is what the sample is called, and the form has one box
                 # for it.

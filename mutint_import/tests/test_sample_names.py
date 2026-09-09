@@ -7,7 +7,8 @@ No database: this is a pure function over a string, and the import path's own te
 import unittest
 
 from mutint_import.sample_names import (
-    SHAPE_AFIR, SHAPE_TRIPLE, parse_sample_identity, sample_label,
+    SHAPE_AFIR, SHAPE_TRIPLE, SampleNameError, compose_sample_name, parse_sample_identity,
+    sample_label,
 )
 
 
@@ -136,3 +137,78 @@ class SampleLabelTestCase(unittest.TestCase):
                 identity = parse_sample_identity(name)
                 self.assertEqual(sample_label(identity.name, identity.replicate),
                                  expected)
+
+
+class ComposeTestCase(unittest.TestCase):
+    """`compose_sample_name`, the inverse of the parser above.
+
+    A form hands it three parts rather than a joined string, so the convention for turning
+    them into a name lives here and can change without the form changing with it.
+    """
+
+    def test_the_three_parts_become_a_name_the_parser_reads_back(self):
+        for parts, expected in ((("Ara-2", "500", "763A"), "Ara-2_500_763A"),
+                                (("3", "30000", "1-1"), "3_30000_1-1"),
+                                (("Ara+1", "0", "763A"), "Ara+1_0_763A")):
+            with self.subTest(parts=parts):
+                name = compose_sample_name(*parts)
+                self.assertEqual(name, expected)
+                identity = parse_sample_identity(name)
+                self.assertEqual(
+                    (identity.population, str(identity.time_point),
+                     sample_label(identity.name, identity.replicate)),
+                    parts)
+
+    def test_a_sample_alone_is_left_unplaced(self):
+        """No population and no time point is the auto-numbered case: the name is the sample,
+        and it carries no coordinate for the importer to read."""
+        for sample in ("s1", "my_clone", "Ara-2-500"):
+            with self.subTest(sample=sample):
+                self.assertEqual(compose_sample_name("", "", sample), sample)
+                self.assertIsNone(parse_sample_identity(sample))
+
+    def test_a_population_without_a_time_point_is_refused(self):
+        """There is no spelling for one: the triple shape needs digits in the middle."""
+        for parts, field in ((("Ara-2", "", "763A"), "time_point"),
+                             (("", "500", "763A"), "population")):
+            with self.subTest(parts=parts):
+                with self.assertRaises(SampleNameError) as caught:
+                    compose_sample_name(*parts)
+                self.assertEqual(caught.exception.field, field)
+
+    def test_a_sample_name_is_required(self):
+        with self.assertRaises(SampleNameError) as caught:
+            compose_sample_name("Ara-2", "500", "  ")
+        self.assertEqual(caught.exception.field, "sample")
+
+    def test_a_space_is_refused_and_says_which_field(self):
+        """A composed name is a directory name in mutint-breseq. The column would hold a
+        space -- a dropped folder can create a population with one -- and a name must not."""
+        for parts, field in ((("Ara 2", "500", "763A"), "population"),
+                             (("Ara-2", "500", "763 A"), "sample")):
+            with self.subTest(parts=parts):
+                with self.assertRaises(SampleNameError) as caught:
+                    compose_sample_name(*parts)
+                self.assertEqual(caught.exception.field, field)
+
+    def test_a_fractional_time_point_is_refused(self):
+        """`Sample.time_point` is a float and holds 12.5; the *name* cannot, because the
+        parser reads leading digits only and would silently file it under 12."""
+        with self.assertRaises(SampleNameError) as caught:
+            compose_sample_name("Ara-2", "12.5", "763A")
+        self.assertEqual(caught.exception.field, "time_point")
+
+    def test_an_underscore_in_a_part_is_caught_by_reading_the_name_back(self):
+        """No rule about characters catches this -- `Ara_2` is a fine population name, and
+        `Ara_2_500_763A` is four fields, so the coordinate would be lost."""
+        with self.assertRaises(SampleNameError) as caught:
+            compose_sample_name("Ara_2", "500", "763A")
+        self.assertIn("would not be read back", str(caught.exception))
+
+    def test_an_unplaced_name_that_would_parse_is_refused(self):
+        """The other half of the round trip: `x_5_y` alone would be read as a whole
+        coordinate, placing the sample somewhere nobody asked for."""
+        with self.assertRaises(SampleNameError) as caught:
+            compose_sample_name("", "", "x_5_y")
+        self.assertEqual(caught.exception.field, "sample")
+        self.assertIn("would be read as population x", str(caught.exception))

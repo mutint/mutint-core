@@ -52,7 +52,8 @@
                     <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-population-{{ sample.id }}" value="{{ sample.population }}"></td>
                     <td><input type="text" class="form-control input-sm"
-                               id="sb-time-point-{{ sample.id }}" value="{{ sample.time_point }}"></td>
+                               id="sb-time-point-{{ sample.id }}"
+                               value="{{ sample.time_point|default_if_none:'' }}"></td>
                     <td><input type="text" class="form-control input-sm" maxlength="100"
                                id="sb-sample-{{ sample.id }}" value="{{ sample.name }}"></td>
                     <td style="text-align: center;">

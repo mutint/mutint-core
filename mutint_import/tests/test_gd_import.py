@@ -322,12 +322,15 @@ class GdImportTestCase(TestCase):
         summary = self._import_named(self.UNPARSEABLE_NAMES)
         self.assertIsNone(summary["files"][0]["error"])
 
-        # One sample per file, each its own label, all under ALE 1 / flask 1.
+        # One sample per file, each its own label, all under `Unspecified` with **no** time
+        # point. Both used to be numbers -- population "1" and time point 1 -- which looked
+        # like data: "1" sorts among the real populations and reads as one of them, and a
+        # time point of 1 is a point on an axis nobody measured.
         self.assertEqual(Sample.objects.count(), len(self.UNPARSEABLE_NAMES))
         self.assertEqual(Population.objects.count(), 1)
-        self.assertEqual(Population.objects.get().name, "1")
+        self.assertEqual(Population.objects.get().name, "Unspecified")
         self.assertEqual(1, Sample.objects.values("population", "time_point").distinct().count())
-        self.assertEqual({1}, set(Sample.objects.values_list('time_point', flat=True)))
+        self.assertEqual({None}, set(Sample.objects.values_list('time_point', flat=True)))
         self.assertEqual(
             sorted(Sample.objects.values_list("name", flat=True)),
             ["1", "2"])

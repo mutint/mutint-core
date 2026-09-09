@@ -320,12 +320,25 @@ def _get_or_create_chain(context, document, population_name, time_point,
     return seq_experiment
 
 
+#: Where a sample whose name carries no coordinate is filed. A word rather than a number,
+#: because `1` sorted among the real populations and read as one of them.
+UNSPECIFIED_POPULATION = "Unspecified"
+
+
 def _get_or_create_autonumbered_chain(context, document, sample_name):
     """Chain for a sample whose filename carries no identity at all.
 
-    Everything hangs off ALE 1 / time point 1, but each distinct sample gets its own label so
-    the samples stay individually addressable. Re-importing a sample must not allocate a
-    second one, so an existing sample of this name is reused."""
+    Everything hangs off the `Unspecified` population with **no time point**, and each distinct
+    sample gets its own label so the samples stay individually addressable. Re-importing a
+    sample must not allocate a second one, so an existing sample of this name is reused.
+
+    **It was population `1`, time point 1**, and both were lies that looked like data: `1` sorts
+    among the real populations and reads as one, and a time point of 1 is a point on an axis
+    nobody measured -- `mutint-compare` would order such a sample against genuine ones.
+    `Sample.time_point` is nullable and `mutint_experiment.ordering.sample_order` already sorts
+    a null one first, calling it "a sample with no time point is one nobody has placed yet",
+    which is exactly what this is. Nothing migrates: samples already on `1` stay there.
+    """
     experiment = context["experiment"]
 
     existing = Sample.objects.filter(
@@ -335,12 +348,13 @@ def _get_or_create_autonumbered_chain(context, document, sample_name):
         return existing
 
     metadata = document.metadata
-    population, _ = Population.objects.get_or_create(experiment=experiment, name="1")
+    population, _ = Population.objects.get_or_create(
+        experiment=experiment, name=UNSPECIFIED_POPULATION)
 
     return Sample.objects.create(
         population=population,
-        time_point=1,
-        name=_next_sample_number(population, 1),
+        time_point=None,
+        name=_next_sample_number(population, None),
         # label() prefers the description, so this is what makes the
         # sample show up as "Ara-1_500gen_762B" rather than a generic "A1 F1 I3".
         description=sample_name[:300],
@@ -360,6 +374,10 @@ def _next_sample_number(population, time_point):
     coordinate holding 1..10, and the next sample would collide with 10. Labels that are not
     numbers are skipped rather than counted -- a sample called `763A`, or one called `1-2`,
     says nothing about which numbers are free.
+
+    `time_point` may be None, which is the auto-numbered coordinate: Django turns
+    `filter(time_point=None)` into `IS NULL`, so the unplaced samples are counted among
+    themselves rather than against a time point of 1.
 
     It took a `TimePoint` row and takes the pair that replaced it. Same question either way:
     the coordinate is what a name has to be unique within.

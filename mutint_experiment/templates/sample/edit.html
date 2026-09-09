@@ -44,7 +44,11 @@
                    Plain text rather than type="number": the steppers are meaningless on a
                    value that runs to five figures. {% endcomment %}
                 <label for="se-time-point">Time point</label>
-                <input type="text" class="form-control" id="se-time-point" value="{{ sample.time_point }}">
+                {% comment %} `default_if_none`, because a sample nobody has placed has no time point
+                   and Django renders None as the word "None" -- which would then be saved
+                   back as a time point of that name. {% endcomment %}
+                <input type="text" class="form-control" id="se-time-point"
+                       value="{{ sample.time_point|default_if_none:'' }}">
             </div>
             {% comment %} One box where there were two. A replicate was never a level of
                 anything: `3-30000-1-2` is a sample called `1-2` in flask 30000, so the

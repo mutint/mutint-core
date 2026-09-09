@@ -51,7 +51,11 @@ class SampleEditTestCase(TestCase):
         from mutint_experiment.samples import sample_coordinate
         population, time_point, name = sample_coordinate(sample)
         row = {"id": str(sample.pk), "source_name": sample.source_name or "",
-               "population": population, "time_point": time_point, "name": name,
+               "population": population,
+               # An empty box, which is what a browser posts for a sample nobody has placed.
+               # The test client refuses to encode None at all.
+               "time_point": "" if time_point is None else time_point,
+               "name": name,
                "is_mixed": 1 if sample.is_mixed else 0,
                "description": sample.description or ""}
         row.update(overrides)
@@ -67,6 +71,16 @@ class SampleEditTestCase(TestCase):
         data = self.row(sample, **overrides)
         data.pop("id")
         return self.client.post("/sample/%d/update/" % sample.pk, data)
+
+    def time_point_box(self, sample):
+        """The value rendered into the Time point input. Read by slicing the tag out rather
+        than by matching `id=... value=...` adjacently, which broke the moment the attribute
+        moved to its own line."""
+        import re
+
+        body = self.client.get("/sample/%d/edit/" % sample.pk).content.decode()
+        tag = body[body.index('id="se-time-point"'):]
+        return re.search(r'value="([^"]*)"', tag).group(1)
 
     def coordinate(self, sample):
         from mutint_experiment.samples import sample_coordinate
@@ -240,9 +254,37 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.sample.refresh_from_db()
         response = self.single(self.sample, time_point="1.0", source_name="renamed")
         self.assertEqual(200, response.status_code, response.content)
-        body = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
-        self.assertIn('id="se-time-point" value="1"', body)
-        self.assertNotIn('value="1.0"', body)
+        self.assertEqual("1", self.time_point_box(self.sample))
+
+    def test_a_time_point_can_be_cleared(self):
+        """A blank is a sample nobody has placed, which the column has always allowed and
+        which `gd_import` now writes for a name carrying no coordinate. The editor used to
+        refuse one, so such a sample could be opened and not saved back unchanged."""
+        response = self.single(self.sample, time_point="")
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.sample.refresh_from_db()
+        self.assertIsNone(self.sample.time_point)
+
+    def test_an_unplaced_sample_survives_being_opened_and_saved(self):
+        """The regression the change above exists for."""
+        self.sample.time_point = None
+        self.sample.save(update_fields=["time_point"])
+
+        self.assertEqual("", self.time_point_box(self.sample))
+
+        response = self.single(self.sample)
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.sample.refresh_from_db()
+        self.assertIsNone(self.sample.time_point)
+
+    def test_a_time_point_that_is_given_is_still_a_whole_number(self):
+        """Blank is the only thing newly accepted; text and negatives are refused as before."""
+        for bad in ("t0", "12.5", "-1"):
+            with self.subTest(time_point=bad):
+                response = self.single(self.sample, time_point=bad)
+                self.assertEqual(400, response.status_code)
 
     def test_the_edit_page_offers_every_flag_and_shows_the_medium_description(self):
         self.sample.set_record(Sample.COMPONENT, Sample.CURATION,

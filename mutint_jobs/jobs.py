@@ -136,6 +136,33 @@ def request_cancel(job, by=None):
     return job
 
 
+def request_cancel_for(task_result_ids, by=None):
+    """Ask every job with one of these queue ids to stop. Returns how many were asked.
+
+    For a component superseding its own earlier work: mutint-breseq launches a run for a
+    sample that already has one queued or running, and the old run's output is about to be
+    overwritten by the new one, so finishing it is waste.
+
+    **The ground for cancelling here is not that the job is yours.** `may_cancel` asks that,
+    and is the right question for a person pressing a button on `/jobs/`; this is a component
+    saying that work it started has been superseded by work it is starting now, which it is
+    entitled to say about its own jobs whoever asked for them. A caller must therefore be
+    sure the ids are its own.
+
+    Already-cancelled jobs are skipped rather than re-flagged, so the count is what this call
+    actually changed.
+    """
+    ids = [str(one) for one in task_result_ids if one]
+    if not ids:
+        return 0
+
+    asked = 0
+    for job in Job.objects.filter(task_result_id__in=ids, cancel_requested_at__isnull=True):
+        request_cancel(job, by=by)
+        asked += 1
+    return asked
+
+
 def for_user(user):
     """The jobs `user` may see: their own, or everything for a superuser."""
     jobs = Job.objects.select_related("user", "experiment", "cancel_requested_by")

@@ -47,7 +47,7 @@ Identity comes from the **filename**, and two shapes are read:
 
 ```
 3-30000-1-1.gd          population 3,     time point 30000, sample 1,    replicate 1
-Ara-2_500gen_763A.gd    population Ara-2, time point 500,   sample 763A, replicate 1
+Ara-2_500gen_763A.gd    population Ara-2, time point 500,   sample 763A
 ```
 
 The first is four whole numbers separated by dashes. The second is three fields separated by
@@ -58,15 +58,17 @@ field is read as a number, because a time point is one: `500gen` is time point 5
 that does not start with a digit (`t0`) is not a time point, and the name falls through to
 auto-numbering.
 
-Anything else — `REL606_clone.gd` — gets its own auto-numbered sample under ALE 1 at time
-point 1, with the filename kept as its description so it displays by name.
+Anything else — `REL606_clone.gd` — gets its own sample under a population called
+**Unspecified**, with **no time point**, and the filename kept as its description so it
+displays by name. Both say plainly that nobody has placed the sample: an unspecified sample
+sorts before the placed ones and is left out of anything that reads the time point as an axis.
 
-!!! warning "Auto-numbering has a consequence worth knowing before you import"
+!!! warning "Being unplaced has a consequence worth knowing before you import"
 
-    A 51-timepoint series imported under names of neither shape becomes 51 samples at one
-    time point. Analyses that read the *time point* as the time axis then have nothing to work
-    with — the Fixed Mutations analysis intersects an ALE's last two time points, so an ALE
-    with one time point can never fix anything.
+    A 51-timepoint series imported under names of neither shape becomes 51 samples with no
+    time point at all. Analyses that read the *time point* as the time axis then have nothing
+    to work with — the Fixed Mutations analysis intersects an ALE's last two time points, so a
+    population whose samples have no time point can never fix anything.
 
     (Named rather than linked: a component's pages sit at a different path depending on
     whether it is being built alone or as part of a deployment's manual, so a link between

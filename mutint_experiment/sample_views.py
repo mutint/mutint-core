@@ -87,7 +87,8 @@ def _row_context(sample):
         "label": sample.label,
         "population": coordinate[0],
         # Through the formatter, so an integral float shows as `500` in the box and not
-        # `500.0` -- see `samples._positive_int` for what the latter used to do on save.
+        # `500.0` -- see `samples._optional_time_point` for what the latter used to do on
+        # save. None renders as an empty box, which is a sample nobody has placed.
         "time_point": format_time_point(coordinate[1]),
         "name": coordinate[2],
         "is_mixed": sample.is_mixed,

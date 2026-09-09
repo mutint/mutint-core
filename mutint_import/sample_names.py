@@ -119,3 +119,116 @@ def sample_label(name, replicate):
     if replicate is None:
         return str(name)
     return "%s-%s" % (name, replicate)
+
+
+class SampleNameError(ValueError):
+    """The three parts cannot make a name. Carries the field at fault, for a form to point at."""
+
+    def __init__(self, field, message):
+        super().__init__(message)
+        self.field = field
+
+
+#: What a part of a coordinate may contain when a *name* has to carry it.
+#:
+#: The same characters `mutint_breseq.views.SAMPLE_NAME_RE` allows in a whole name, applied to
+#: each part: a composed name is a directory name in that plugin, and no part of one should be
+#: able to introduce a space, a separator or a leading dot. It is narrower than the column --
+#: `Population.name` is a CharField and a dropped folder can create one with a space in it --
+#: because what is narrow here is the *name*, not the place it is stored.
+#:
+#: Underscores are allowed, and the round-trip check below is what makes that safe.
+_NAME_PART = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+
+
+def compose_sample_name(population, time_point, sample):
+    """The three parts as the one name every import path reads back. The inverse of
+    `parse_sample_identity`, and the reason both live here.
+
+    **A name carries all three parts or none of them.** There is no spelling for a population
+    with no time point -- the triple shape needs digits in the middle field -- so:
+
+        Ara-2, 500, 763A    ->  "Ara-2_500_763A"   placed
+        (none), (none), s1  ->  "s1"               auto-numbered: Unspecified, no time point
+        Ara-2, (none), 763A ->  SampleNameError
+
+    **Underscores, always.** The dash shape would need a fourth integer field and would only
+    ever apply to a wholly numeric coordinate; one composer is worth more than a label that
+    reads `3 / 30000 / 1-1` for some samples and `3_30000_1-1` for others.
+
+    **The answer is checked by reading it back**, which is what lets a part contain an
+    underscore at all: `x_5_y` as a sample name with nothing else filled in composes to a
+    string the parser would read as a whole coordinate, and `Ara_2` as a population composes
+    to four fields and loses one. Neither is caught by any rule about characters, and both are
+    caught by asking `parse_sample_identity` what the composed name says and refusing when
+    that is not what was asked for. The two can therefore never disagree.
+
+    Callers pass the parts, not a joined string, so this convention can change without every
+    form changing with it.
+    """
+    parts = {
+        "population": ("" if population is None else str(population)).strip(),
+        "time_point": ("" if time_point is None else str(time_point)).strip(),
+        "sample": ("" if sample is None else str(sample)).strip(),
+    }
+
+    if not parts["sample"]:
+        raise SampleNameError("sample", "A sample name is required.")
+
+    labels = {"population": "population", "time_point": "time point", "sample": "sample name"}
+    for field in ("population", "sample"):
+        if parts[field] and not _NAME_PART.match(parts[field]):
+            raise SampleNameError(
+                field,
+                "A %s may use letters, digits, dot, underscore, plus and hyphen, and must "
+                "start with a letter or digit. It becomes part of this sample's name, which "
+                "is also a directory name." % labels[field])
+
+    if parts["time_point"] and not parts["time_point"].isdigit():
+        # Leading digits are all `parse_sample_identity` reads, so `12.5` would come back as
+        # 12 and `t0` would lose the coordinate altogether. `Sample.time_point` is a float and
+        # holds more than this -- what is narrower is the name, not the column.
+        raise SampleNameError(
+            "time_point",
+            "A time point in a name must be a whole number. Leave it empty for a sample "
+            "nobody has placed yet.")
+
+    if bool(parts["population"]) != bool(parts["time_point"]):
+        missing = "time point" if parts["population"] else "population"
+        raise SampleNameError(
+            "time_point" if parts["population"] else "population",
+            "A name carries a population and a time point together or neither: give a %s "
+            "as well, or clear both to leave the sample unplaced." % missing)
+
+    placed = bool(parts["population"])
+    name = ("_".join((parts["population"], parts["time_point"], parts["sample"]))
+            if placed else parts["sample"])
+
+    _check_round_trip(name, parts, placed)
+    return name
+
+
+def _check_round_trip(name, parts, placed):
+    """Refuse a name that does not say what the parts said. See `compose_sample_name`."""
+    identity = parse_sample_identity(name)
+
+    if not placed:
+        if identity is not None:
+            raise SampleNameError(
+                "sample",
+                "%r would be read as population %s, time point %s and sample %s. Fill the "
+                "population and time point in, or take the underscores out of the name."
+                % (name, identity.population, identity.time_point,
+                   sample_label(identity.name, identity.replicate)))
+        return
+
+    read_back = None if identity is None else (
+        identity.population, str(identity.time_point),
+        sample_label(identity.name, identity.replicate))
+    wanted = (parts["population"], str(int(parts["time_point"])), parts["sample"])
+    if read_back != wanted:
+        raise SampleNameError(
+            "population",
+            "%r would not be read back as this coordinate -- an underscore in the population "
+            "or the sample splits the name into the wrong parts. Use a hyphen instead."
+            % name)
