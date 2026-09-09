@@ -3284,6 +3284,13 @@ How promptly output appears is the **child's** choice: a tool whose stdout is no
 block-buffers, and a refresh shows what it has flushed. A pipe would behave identically -- the
 buffering is on the far side of it -- and only a pty would change that.
 
+**Both readers prefer the plain log to the gzip, and that is not arbitrary.** Two files can
+exist at once in two ways: while `compress` runs -- where the plain one is complete and
+untouched until the gzip beside it is finished -- and when a job **writes again** after being
+compressed, which opens a new plain file beside the old gzip. Preferring the gzip was right for
+the first and wrong for the second: it showed the previous run's log and hid the one in
+progress. Preferring the plain file is correct for both.
+
 **`queue.STATUS_LABELS` is what a status is called in front of a person**, and the log page
 renders through it. `jobs/list.html` carries the same mapping in JavaScript because it builds
 its rows client-side; the two are kept in step by hand, and the failure to avoid is one

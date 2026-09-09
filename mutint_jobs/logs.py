@@ -85,12 +85,16 @@ def log_path(task_result_id, compressed=False):
 
 
 def stored_path(task_result_id):
-    """The log that is actually there, compressed one preferred, or None.
+    """The log that is actually there, the **plain** one preferred, or None.
 
-    Both can exist for a moment while `compress` is writing; the compressed one is complete
-    before the plain one is unlinked, so preferring it is also the safe order.
+    Both can exist, in two ways, and preferring the plain file is right for each. While
+    `compress` runs, the plain file is complete and untouched until the gzip beside it is
+    finished, so a reader that takes it loses nothing. And a job that writes *again* after
+    being compressed -- a retry, or a task called a second time against the same row -- opens
+    a new plain file beside the old gzip, and its output is the current one. Preferring the
+    gzip showed the previous run's log and hid the one that was happening.
     """
-    for compressed in (True, False):
+    for compressed in (False, True):
         path = log_path(task_result_id, compressed=compressed)
         if path is not None and os.path.isfile(path):
             return path

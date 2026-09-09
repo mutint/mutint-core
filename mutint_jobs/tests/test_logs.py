@@ -385,3 +385,29 @@ class StatusLabelTestCase(LogTestCaseBase):
 
         self.assertEqual("something-new", queue.label_for("something-new"))
         self.assertEqual("", queue.label_for(""))
+
+
+class WritingAgainTestCase(LogTestCaseBase):
+    """A job that writes after its log was compressed.
+
+    Reachable through a retry, or a task called a second time against the same row. The new
+    output goes to a fresh plain file beside the gzip, and the reader has to show *that* --
+    preferring the gzip showed the previous run's log and hid the one in progress.
+    """
+
+    def test_the_newer_plain_log_wins_over_an_older_gzip(self):
+        self.write("the first attempt")
+        logs.compress("result-1")
+
+        self.write("the second attempt")
+
+        text, _ = logs.read_tail("result-1")
+        self.assertIn("the second attempt", text)
+        self.assertNotIn("the first attempt", text)
+
+    def test_a_compressed_log_alone_still_reads(self):
+        self.write("only attempt")
+        logs.compress("result-1")
+
+        text, _ = logs.read_tail("result-1")
+        self.assertEqual("only attempt\n", text)
