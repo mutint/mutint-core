@@ -31,11 +31,13 @@
             <a href="/experiment/{{ experiment_id }}/ancestor/">Change</a>
         </div>
     {% endif %}
-    {% comment %} The same strip as Compare's, minus Display: Filter for the reader's own
-       filter, Samples for the picker, Rows for the References menu. The chosen tab is
-       remembered as `breseq_table.tab`, embedded beside the References choice in the
-       json_script below. {% endcomment %}
-    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True rows=selected_sample %}
+    {% comment %} The same strip as Compare's, minus Display: Sample for the picker, Filter
+       for the reader's own filter, Rows for the References menu. `single_sample` puts the
+       picker first and names it in the singular -- this page shows one sample and the tab
+       that chooses it decides what everything else is about. The chosen tab is remembered as
+       `breseq_table.tab`, embedded beside the References choice in the json_script below.
+       {% endcomment %}
+    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True rows=selected_sample %}
     <div class="tab-content">
     {% if selected_sample %}
     <div class="tab-pane active" id="breseq_table-pane-filter">

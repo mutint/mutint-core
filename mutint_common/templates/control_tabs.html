@@ -1,5 +1,12 @@
 {% comment %} The tab strip above a mutation table: Filter, Samples, Rows, Display, in that
-   order, and a page passes only the ones it has content for. The same shape as the Import
+   order, and a page passes only the ones it has content for.
+
+   **`single_sample` changes two things at once, and they are one fact.** Where the picker
+   chooses exactly one sample -- the per-sample Mutations page, whose whole subject is that
+   sample -- the tab is called **Sample** and comes first. Plural would promise a multi-select
+   the pane does not offer, and the tab that decides what the rest of the page is *about*
+   belongs before the tabs that adjust how it is shown. Everywhere else the menu is a
+   multi-select and the strip reads as it always has. The same shape as the Import
    data page's strip (import/_tabs.html) and the curate toolbar, but client-side: Bootstrap's
    tab plugin -- inside the DataTables bundle at the end of body, never bootstrap.min.js on its
    own -- switches the panes, and js/mutint_control_tabs.js restores and remembers the tab as
@@ -13,8 +20,9 @@
     data-prefs-id="{{ prefs_id }}"
     data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
     data-preferences-url="{{ preferences_url }}">
+    {% if samples and single_sample %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Sample</a></li>{% endif %}
     {% if filter %}<li{% if active == "filter" %} class="active"{% endif %}><a data-toggle="tab" data-tab="filter" href="#{{ page }}-pane-filter">Filter</a></li>{% endif %}
-    {% if samples %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Samples</a></li>{% endif %}
+    {% if samples and not single_sample %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Samples</a></li>{% endif %}
     {% if rows %}<li{% if active == "rows" %} class="active"{% endif %}><a data-toggle="tab" data-tab="rows" href="#{{ page }}-pane-rows">Rows</a></li>{% endif %}
     {% if display %}<li{% if active == "display" %} class="active"{% endif %}><a data-toggle="tab" data-tab="display" href="#{{ page }}-pane-display">Display</a></li>{% endif %}
 </ul>

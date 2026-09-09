@@ -321,7 +321,12 @@ class ReferencesMenuTestCase(BreseqTablePageTestCase):
 
 
 class ControlTabsTestCase(BreseqTablePageTestCase):
-    """The same strip as Compare's, minus Display: Filter, Samples, Rows."""
+    """The same strip as Compare's, minus Display -- and with the picker first.
+
+    This page shows **one** sample, so its picker is called `Sample` and leads: the tab that
+    decides what the page is about belongs before the ones that adjust how it is shown.
+    Compare's menu is a multi-select and keeps the plural, and its own order.
+    """
 
     def pane(self, content, key, next_marker):
         start = content.index('id="breseq_table-pane-%s"' % key)
@@ -331,9 +336,18 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         content = self.content()
         self.assertIn('data-control-tabs="breseq_table"', content)
         self.assertIn('data-prefs-id="breseq-references-prefs"', content)
-        self.assertEqual(["filter", "samples", "rows"],
+        self.assertEqual(["samples", "filter", "rows"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', content))
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', content)
+
+    def test_the_picker_is_singular_here(self):
+        """Only one sample can be chosen on this page, and a plural tab would promise a
+        multi-select the pane does not offer."""
+        content = self.content()
+
+        self.assertIn('data-tab="samples" href="#breseq_table-pane-samples">Sample</a>',
+                      content)
+        self.assertNotIn(">Samples</a>", content)
 
     def test_each_control_sits_in_its_own_pane(self):
         content = self.content()
