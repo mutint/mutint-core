@@ -58,13 +58,24 @@
         <h3 style="margin-top: 2em;">Updates</h3>
 
         {% if requested %}
+            {% comment %} Restart is offered *here* and nowhere else, because staged is the
+               one state where restarting is the obvious next thing rather than a button
+               somebody might wonder about. It finishes this upgrade; a control that sat in
+               the row above permanently would read as a general "restart the server", which
+               is not a thing this page is for. {% endcomment %}
             <div class="alert alert-info">
                 <strong>{{ requested.ref }} is staged.</strong>
-                {% if can_restart %}Press <strong>Restart MutInt</strong> below to apply it
+                {% if can_restart %}Restart MutInt to apply it
                 {% else %}Quit MutInt and start it again to apply it{% endif %} &mdash; the
                 upgrade happens before the server comes up, because a running MutInt cannot
                 safely replace its own code. Any new dependencies are installed and any new
                 migrations applied on that same launch.
+                {% if can_restart %}
+                    <p style="margin-top: 1em; margin-bottom: 0;">
+                        <button type="button" class="btn btn-primary" id="upgrade-restart">
+                            Restart MutInt</button>
+                    </p>
+                {% endif %}
             </div>
         {% elif last_result %}
             {% if last_result.ok %}
@@ -108,10 +119,6 @@
             <button type="button" class="btn btn-primary" id="upgrade-install"
                     {% if not available %}style="display: none;"{% endif %}>
                 Install {{ available.ref }}</button>
-            {% if can_restart %}
-                <button type="button" class="btn btn-default" id="upgrade-restart">
-                    Restart MutInt</button>
-            {% endif %}
         </div>
 
         <div id="upgrade-status" style="margin-top: 1em;">

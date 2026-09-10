@@ -583,6 +583,13 @@ launch applies it, so finishing an upgrade was always an instruction somebody ha
 `mutint_upgrade/restart.py` does the same quit and the same start on their behalf, and three
 things about it are load-bearing:
 
+- **It is offered in one state only: an upgrade is staged.** Restarting is what finishes that
+  upgrade, and staged is the moment where it is the obvious next thing rather than a button
+  somebody has to wonder about -- one sitting permanently beside *Check for updates* reads as a
+  general "restart the server", which is not what this page is for. The **endpoint** stays
+  willing either way, and that asymmetry is deliberate: `./mutint upgrade` from a shell moves
+  the checkout and leaves the running server on the old code, so restarting is a legitimate
+  thing to ask for. What narrows is the offer, not the operation.
 - **Nothing in core knows what launched MutInt.** The launcher exports
   `MUTINT_RELAUNCH_COMMAND`; where nothing did, there is no button and the endpoint refuses.
   MutInt.app sets it to an `open` of its own bundle and a systemd unit could set

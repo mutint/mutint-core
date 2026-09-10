@@ -11,12 +11,15 @@ here and fail there.
 """
 
 import os
+import shutil
+import tempfile
 from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from mutint_common import upgrade
 from mutint_upgrade import restart
 
 RELAUNCH = "/usr/bin/open '/Applications/MutInt.app'"
@@ -157,25 +160,58 @@ class RestartEndpointTestCase(TestCase):
 
 @override_settings(MUTINT_UPGRADE_ENABLED=True)
 class RestartButtonTestCase(TestCase):
-    """A control that does nothing is worse than no control, so the button is rendered only
-    where the endpoint would accept it."""
+    """**Offered in one state only: an upgrade is staged.**
+
+    Restarting is what finishes that upgrade, and staged is the one moment where it is the
+    obvious next thing to do. A button sitting in the row above permanently would read as a
+    general "restart the server" -- which is not what this page is for, and is a strange thing
+    to put a click away on a page that is otherwise an inventory.
+
+    The endpoint stays willing either way. It is a legitimate thing to ask for -- `./mutint
+    upgrade` from a shell moves the checkout and leaves the running server on the old code,
+    and restarting is exactly the fix -- so what narrows here is the offer, not the operation.
+    """
 
     def setUp(self):
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
+        root = mock.patch("mutint_upgrade.views.upgrade_root", return_value=self.base)
+        root.start()
+        self.addCleanup(root.stop)
         self.superuser = User.objects.create_superuser("root", "root@example.com", "pw")
         self.client.force_login(self.superuser)
 
-    def test_no_button_when_nothing_can_start_it_again(self):
-        env = {k: v for k, v in os.environ.items() if k != restart.RELAUNCH_ENV}
-        with mock.patch.dict(os.environ, env, clear=True):
-            html = self.client.get(reverse("upgrade")).content.decode("utf-8")
+    def _html(self):
+        return self.client.get(reverse("upgrade")).content.decode("utf-8")
 
-        # `id="..."`, not the bare name: the script looks the button up by id whether or
-        # not it was rendered, so the bare string is in the page either way.
+    def test_no_button_with_nothing_staged(self):
+        with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
+            html = self._html()
+
+        # `id="..."`, not the bare name: the script looks the button up by id whether or not
+        # it was rendered, so the bare string is in the page either way.
         self.assertNotIn('id="upgrade-restart"', html)
 
-    def test_the_button_is_there_when_something_can(self):
+    def test_the_button_appears_with_the_staged_message(self):
+        upgrade.request(self.base, "v1.2.3", by="root")
+
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
-            html = self.client.get(reverse("upgrade")).content.decode("utf-8")
+            html = self._html()
 
         self.assertIn('id="upgrade-restart"', html)
         self.assertIn("Restart MutInt", html)
+        # Beside the message it finishes, not somewhere else on the page.
+        self.assertIn("v1.2.3 is staged", html)
+        self.assertLess(html.index("is staged"), html.index('id="upgrade-restart"'))
+
+    def test_no_button_when_nothing_can_start_it_again(self):
+        """Staged, but launched from a terminal: the page says to quit and start it again,
+        which is the same two steps by hand."""
+        upgrade.request(self.base, "v1.2.3", by="root")
+        env = {k: v for k, v in os.environ.items() if k != restart.RELAUNCH_ENV}
+
+        with mock.patch.dict(os.environ, env, clear=True):
+            html = self._html()
+
+        self.assertNotIn('id="upgrade-restart"', html)
+        self.assertIn("Quit MutInt and start it again", html)
