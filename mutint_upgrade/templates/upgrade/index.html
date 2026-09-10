@@ -7,7 +7,7 @@
 {% block content %}
 <div class="col-lg-10">
 
-    <p>What this installation is made of, and whether there is a newer version of it.</p>
+    <h3 style="margin-top: 0;">Installed Components</h3>
 
     <table class="table table-condensed" id="upgrade-components">
         <thead>
@@ -98,19 +98,19 @@
 
         <div class="form-group">
             <label for="upgrade-channel">Follow</label>
-            <select id="upgrade-channel" class="form-control" style="max-width: 24em;">
+            {% comment %} `width: auto` so the control sizes to its longest option rather
+               than to a guess about how long the options are. `.form-control` is
+               `width: 100%`, and the fixed cap that used to override it was measured against
+               wording these labels no longer use -- it clipped them mid-word. {% endcomment %}
+            <select id="upgrade-channel" class="form-control"
+                    style="width: auto; max-width: 100%;">
                 <option value="stable" {% if channel == "stable" %}selected{% endif %}>
-                    Releases &mdash; tagged versions only
+                    Official Releases &mdash; numbered version updates only
                 </option>
                 <option value="main" {% if channel == "main" %}selected{% endif %}>
-                    Development &mdash; every change as it lands
+                    Development Releases &mdash; newest features from every GitHub push
                 </option>
             </select>
-            <div class="help-block">
-                Development follows the <code>main</code> branch, so it carries work that has
-                not been released. Useful for trying a fix; not what a shared installation
-                should run.
-            </div>
         </div>
 
         <div class="btn-row">
@@ -126,8 +126,8 @@
                 <div class="alert alert-warning">
                     {% for problem in blockers %}<p>{{ problem }}</p>{% endfor %}
                 </div>
-            {% elif error %}
-                <div class="alert alert-warning">{{ error }}</div>
+            {% elif upgrade_error %}
+                <div class="alert alert-warning">{{ upgrade_error }}</div>
             {% elif available %}
                 {% comment %} The sentence is composed server-side (`upgrade.summarize`) so
                    this and the poll below cannot word it differently, and so that what it

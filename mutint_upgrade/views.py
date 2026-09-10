@@ -92,7 +92,12 @@ def upgrade_page(request):
         "channels": upgrade.CHANNELS,
         "checked_at": state.get("checked_at"),
         "available": state.get("available"),
-        "error": state.get("error"),
+        # **Not `error`.** `base.html` renders `<h2>{{ error }}</h2>` unguarded, so a page
+        # putting that name in its context gets it as a page heading -- and this one is None
+        # whenever no upgrade has failed, which printed the literal word "None" above the
+        # component table. The alert this feeds is a different thing from a page-level error
+        # anyway: it reports the last *upgrade attempt*, not a problem with the request.
+        "upgrade_error": state.get("error"),
         "last_result": state.get("last_result"),
         "requested": state.get("requested"),
         "current": upgrade.current_ref(base_dir) if base_dir else None,
