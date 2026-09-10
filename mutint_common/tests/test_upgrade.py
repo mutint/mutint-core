@@ -125,6 +125,78 @@ class ReadableTimeTestCase(TestCase):
             self.assertEqual(value, upgrade.readable_time(value))
 
 
+class PruneBackupsTestCase(TestCase):
+    """`data/backups/` is the one thing under `data/` that grows on its own.
+
+    Each dump is the whole database and the Development channel can upgrade daily, so
+    without a cap the backups outgrow what they are backing up. Nothing else in the suite
+    prunes anything here -- `reap_uploads` and `reap_jobs` are about rows, not this.
+    """
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.directory, True)
+
+    def _dump(self, name, age_seconds=0):
+        """A file of the shape `backup` writes, `age_seconds` old."""
+        path = os.path.join(self.directory, name)
+        with open(path, "w") as handle:
+            handle.write("-- PostgreSQL database dump\n")
+        stamp = time.time() - age_seconds
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def _remaining(self):
+        return sorted(os.listdir(self.directory))
+
+    def test_it_keeps_the_newest_five(self):
+        for index in range(8):
+            self._dump("pre-main-2026090%d-120000.sql" % index, age_seconds=(8 - index) * 60)
+
+        upgrade._prune_backups(self.directory)
+
+        self.assertEqual(["pre-main-2026090%d-120000.sql" % index for index in range(3, 8)],
+                         self._remaining())
+
+    def test_it_leaves_five_or_fewer_alone(self):
+        for index in range(5):
+            self._dump("pre-main-2026090%d-120000.sql" % index, age_seconds=index * 60)
+
+        self.assertEqual([], upgrade._prune_backups(self.directory))
+        self.assertEqual(5, len(self._remaining()))
+
+    def test_it_goes_by_age_rather_than_by_name(self):
+        """The name carries the ref as well as the stamp, so sorting by it would run
+        `pre-main-*` and `pre-v0.0.2-*` as separate sequences and keep five of each."""
+        newest = self._dump("pre-main-20260101-000000.sql", age_seconds=1)
+        for index in range(6):
+            self._dump("pre-v9.9.9-2026123%d-000000.sql" % index, age_seconds=1000 + index)
+
+        upgrade._prune_backups(self.directory)
+
+        # Alphabetically last and by its stamp the oldest, but it is the newest file here.
+        self.assertIn(os.path.basename(newest), self._remaining())
+        self.assertEqual(5, len(self._remaining()))
+
+    def test_it_does_not_touch_what_it_did_not_write(self):
+        """A dump the operator took by hand and named themselves is theirs."""
+        for index in range(7):
+            self._dump("pre-main-2026090%d-120000.sql" % index, age_seconds=(7 - index) * 60)
+        self._dump("before-the-big-import.sql", age_seconds=99999)
+        self._dump("notes.txt", age_seconds=99999)
+
+        upgrade._prune_backups(self.directory)
+
+        remaining = self._remaining()
+        self.assertIn("before-the-big-import.sql", remaining)
+        self.assertIn("notes.txt", remaining)
+
+    def test_a_directory_that_is_not_there_is_not_an_error(self):
+        """It runs after a dump lands, but nothing should turn a missing directory into a
+        failed upgrade -- the dump itself is best-effort for the same reason."""
+        self.assertEqual([], upgrade._prune_backups(os.path.join(self.directory, "nope")))
+
+
 class GitPathTestCase(TestCase):
     """`env/tools/bin` first, then PATH -- the order `mutint_common.tools.tool_path` uses."""
 

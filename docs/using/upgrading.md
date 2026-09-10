@@ -64,6 +64,17 @@ chance to notice.
 moves, named for the version you are leaving. `--no-backup` skips it. A deployment pointed at
 its own PostgreSQL server (`MUTINT_DB_HOST`) is skipped too — backups there are the operator's.
 
+**The database, and only the database.** `data/store` — the reads, the BAMs, the coverage
+BigWigs, breseq's reports — is not in the dump. It does not need to be: an upgrade never
+touches it, so the rows a restore brings back still point at files that are still there. It is
+also typically hundreds of times the size of the dump, which is what makes keeping several of
+these affordable.
+
+**The last five are kept.** Each dump is the whole database, and the Development channel can
+upgrade daily, so the newest five are kept and older ones are deleted as each new dump lands.
+Only files this wrote are eligible — a dump you took yourself and named yourself stays. If you
+want one kept indefinitely, rename it.
+
 **It refuses to touch a checkout somebody is working in.** If there are uncommitted changes, or
 commits the remote has not seen, the upgrade stops and names what it found rather than
 discarding it. That is a development checkout, and `git pull` is the right tool for one.

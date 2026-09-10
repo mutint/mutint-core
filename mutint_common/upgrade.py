@@ -54,6 +54,17 @@ STATE_NAME = os.path.join('data', 'upgrade.json')
 #: Where a pre-upgrade dump goes. Beside the database rather than inside it.
 BACKUP_DIR = os.path.join('data', 'backups')
 
+#: How many pre-upgrade dumps to keep. Nothing else in the suite prunes anything under
+#: `data/`, and this is the one part of it that grows without anybody asking for it: each
+#: dump is the whole database, and the Development channel follows `main`, so an upgrade
+#: can happen daily. Five reaches back past a bad upgrade nobody noticed for a few days,
+#: and keeps the backups from quietly outgrowing the database they came from.
+BACKUP_KEEP = 5
+
+#: The shape `backup` writes, and the only shape `_prune_backups` will delete. Anything
+#: else in that directory was put there by the operator and is theirs.
+_BACKUP_NAME = re.compile(r'^pre-.+-\d{8}-\d{6}\.sql$')
+
 STABLE = 'stable'
 MAIN = 'main'
 CHANNELS = (STABLE, MAIN)
@@ -609,6 +620,40 @@ def take_restart_note(base_dir):
     return True
 
 
+def _prune_backups(directory, keep=BACKUP_KEEP):
+    """Delete all but the newest `keep` dumps in `directory`. Returns what it removed.
+
+    **By modification time, not by the timestamp in the name.** The name carries the ref as
+    well, so sorting by it runs `pre-main-*` and `pre-v0.0.2-*` as separate sequences and
+    would keep `keep` of each -- which is the bug this would most plausibly have.
+
+    Best-effort, like the dump it follows: a file that will not delete is not a reason to
+    fail an upgrade that has otherwise worked. Only files matching `_BACKUP_NAME` are
+    candidates, so a dump an operator took by hand and named themselves survives.
+    """
+    try:
+        names = [name for name in os.listdir(directory) if _BACKUP_NAME.match(name)]
+    except OSError:
+        return []
+
+    dated = []
+    for name in names:
+        path = os.path.join(directory, name)
+        try:
+            dated.append((os.path.getmtime(path), name, path))
+        except OSError:                  # removed underneath us; nothing to keep or drop
+            continue
+
+    removed = []
+    for _, _, path in sorted(dated, reverse=True)[keep:]:
+        try:
+            os.remove(path)
+            removed.append(path)
+        except OSError:
+            pass
+    return removed
+
+
 def backup(base_dir, pg, label):
     """`pg_dump` this checkout's database, returning the path, or None if there is nothing
     to dump.
@@ -616,6 +661,16 @@ def backup(base_dir, pg, label):
     Best-effort by design: an upgrade that refused to proceed because a backup failed would
     strand somebody on an old version for a reason that is not about the upgrade. The path is
     recorded in the state either way, so a reader can see whether there is one.
+
+    **The database only.** `data/store` -- the reads, the BAMs, the coverage BigWigs, breseq's
+    reports -- is not in here and is not what this protects: it is two orders of magnitude
+    larger, and an upgrade does not touch it, so the rows this restores still point at files
+    that are still there.
+
+    Older dumps are pruned once this one lands, so the directory keeps `BACKUP_KEEP` and not
+    a copy of the database per upgrade. Pruning after the new dump rather than before it is
+    deliberate: a prune that ran first would drop the oldest to make room for a dump that
+    then failed.
     """
     if pg.is_external():
         return None                      # somebody else's server; their backups
@@ -638,6 +693,8 @@ def backup(base_dir, pg, label):
         except OSError:
             pass
         return None
+
+    _prune_backups(directory)
     return path
 
 
