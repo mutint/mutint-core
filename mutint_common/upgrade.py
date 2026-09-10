@@ -563,6 +563,37 @@ def void_verdict(base_dir):
     return state
 
 
+def note_restart(base_dir):
+    """Record that the next launch is a restart somebody asked for from the web page.
+
+    `start.py` opens a browser at the site root on every launch, which is right for somebody
+    who double-clicked an icon and wrong for this: the person is already looking at MutInt in a
+    browser, and that window is polling for the server to come back. Opening another navigates
+    them away from the page they pressed the button on.
+
+    Kept in the state file rather than a marker of its own -- `requested` and `last_result`
+    already live there, and this is the same kind of thing: a note from one launch to the next.
+    """
+    state = read_state(base_dir)
+    state['restarting'] = True
+    write_state(base_dir, state)
+    return state
+
+
+def take_restart_note(base_dir):
+    """Whether this launch is that restart -- once. Reading it clears it.
+
+    Cleared on read because it describes one launch. A note left behind by a restart that never
+    happened costs exactly one browser window that does not open, on a launch where the Dock
+    icon is there and clicking it opens one.
+    """
+    state = read_state(base_dir)
+    if not state.pop('restarting', False):
+        return False
+    write_state(base_dir, state)
+    return True
+
+
 def backup(base_dir, pg, label):
     """`pg_dump` this checkout's database, returning the path, or None if there is nothing
     to dump.

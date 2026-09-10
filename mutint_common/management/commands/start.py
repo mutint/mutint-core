@@ -148,6 +148,26 @@ def _watch_worker(process, stopping, write):
           % (code, os.path.basename(_entry_script())))
 
 
+def _asked_for_this_restart():
+    """Whether /upgrade/'s Restart button is what started this launch.
+
+    Cannot raise: an installation whose `data/` is unreadable should still start, and the cost
+    of answering no is a browser window somebody did not need.
+    """
+    try:
+        from mutint_common import upgrade
+        root = upgrade.project_root()
+        # No root means nothing exported one, which under the entry script cannot happen --
+        # and guessing `dirname(sys.argv[0])` would read, and clear, the state file of whatever
+        # checkout the process happens to be standing in. Under the test runner that is this
+        # repository's own.
+        if not root:
+            return False
+        return upgrade.take_restart_note(root)
+    except Exception:
+        return False
+
+
 class Command(BaseCommand):
     help = 'Run migrations, create default admin user, and start the development server'
 
@@ -190,9 +210,15 @@ class Command(BaseCommand):
 
             worker = self._start_worker(options.get('no_worker'))
 
-            threading.Timer(1.0, lambda: subprocess.run(
-                ['open', url], capture_output=True
-            )).start()
+            # **Not on a restart asked for from the page.** Opening a browser is right for
+            # somebody who double-clicked an icon, and wrong here: they are already looking at
+            # MutInt in a window that is polling for the server to come back, and `open`
+            # navigates it to the site root instead -- so pressing Restart on /upgrade/ took
+            # them away from the page that said it would reload. See `upgrade.note_restart`.
+            if not _asked_for_this_restart():
+                threading.Timer(1.0, lambda: subprocess.run(
+                    ['open', url], capture_output=True
+                )).start()
 
             self.stdout.write(f'\nStarting MutInt at {url}')
             self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)')

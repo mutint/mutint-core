@@ -87,11 +87,30 @@ class ScriptTestCase(TestCase):
 
 
 class RequestRestartTestCase(TestCase):
+    def setUp(self):
+        # See RestartEndpointTestCase.setUp: the note must not land in this checkout's own
+        # state file, where another test reads and clears it.
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
+        root = mock.patch.object(upgrade, "project_root", return_value=self.base)
+        root.start()
+        self.addCleanup(root.stop)
+
     def test_it_refuses_when_nothing_said_how_to_start_it_again(self):
         env = {k: v for k, v in os.environ.items() if k != restart.RELAUNCH_ENV}
         with mock.patch.dict(os.environ, env, clear=True):
             with self.assertRaises(RuntimeError):
                 restart.request_restart()
+
+    def test_it_leaves_a_note_for_the_launch_it_is_asking_for(self):
+        """So the relaunched MutInt does not open a browser over the window that is polling
+        for it. The note has to be on disk before the helper runs: the launch it describes is
+        started by a detached process, which no environment variable of ours reaches."""
+        with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}), \
+                mock.patch.object(restart, "_spawn"):
+            restart.request_restart()
+
+        self.assertTrue(upgrade.take_restart_note(self.base))
 
     def test_it_spawns_the_helper_with_the_pid_it_will_signal(self):
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}), \
@@ -105,6 +124,16 @@ class RequestRestartTestCase(TestCase):
 @override_settings(MUTINT_UPGRADE_ENABLED=True)
 class RestartEndpointTestCase(TestCase):
     def setUp(self):
+        # **The state file is patched for the whole class, not per test.** `request_restart`
+        # leaves a note in it, and unpatched that is *this checkout's* `data/upgrade.json` --
+        # which another test then reads and clears, so the damage shows up somewhere else, once,
+        # depending on the order tests ran in.
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
+        root = mock.patch.object(upgrade, "project_root", return_value=self.base)
+        root.start()
+        self.addCleanup(root.stop)
+
         self.superuser = User.objects.create_superuser("root", "root@example.com", "pw")
         self.ordinary = User.objects.create_user("reader", "r@example.com", "pw")
 

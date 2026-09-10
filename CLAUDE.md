@@ -612,6 +612,22 @@ things about it are load-bearing:
 The page polls **twice**: for the server to go down, then to come back. A poll that only asked
 "is it back" would be answered yes by the server that has not stopped yet.
 
+**And the restarted MutInt opens no browser**, which is what makes *"this page reloads when it
+is back"* true rather than nearly true. `start.py` opens one at the site root on every launch --
+right for somebody who double-clicked an icon, wrong here, because the person is already looking
+at MutInt in a window that is polling for it. What they saw was that window navigate to the
+dashboard, which is not a reload and not the page they pressed the button on.
+`upgrade.note_restart` leaves a note in the state file and `start.py` takes it once; an
+environment variable could not carry this, because the launch it is about is started by a
+detached helper. A note left by a restart that never happened costs one browser window that
+does not open, on a launch where clicking the Dock icon opens one.
+
+Two traps in testing it, both found by it happening. `start.py` must **still migrate** on such a
+launch -- applying a staged upgrade is the whole point of the restart. And a test that reaches
+`request_restart` without patching `upgrade.project_root` writes that note into *this
+checkout's* `data/upgrade.json`, where another test reads and clears it: an order-dependent
+failure in a different test, with nothing pointing at the cause.
+
 ### The per-sample mutation page
 
 `mutint_sample/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own

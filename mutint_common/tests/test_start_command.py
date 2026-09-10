@@ -56,6 +56,22 @@ class StartCommandTestCase(TestCase):
         self.assertIn("migrate", commands)
         self.assertEqual(1, timers)
 
+    def test_a_restart_from_the_page_opens_no_browser_and_still_migrates(self):
+        """Pressing Restart on /upgrade/ is how a staged upgrade gets applied, so the migrate
+        has to survive the gate -- that launch is the whole point. What must not happen is a
+        second browser window, navigating the page that is polling for the server away to the
+        site root. See `upgrade.note_restart`."""
+        command = start.Command()
+        command.stdout = StringIO()
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(start, "call_command") as call, \
+                mock.patch.object(start, "_asked_for_this_restart", return_value=True), \
+                mock.patch.object(start.threading, "Timer") as timer:
+            command.handle()
+
+        self.assertIn("migrate", [c.args[0] for c in call.call_args_list])
+        self.assertEqual(0, timer.call_count)
+
     def test_a_reload_does_neither(self):
         commands, timers = self._run({"RUN_MAIN": "true"})
         self.assertNotIn("migrate", commands)

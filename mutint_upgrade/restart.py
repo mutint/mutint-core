@@ -94,6 +94,20 @@ def _script(pid, command):
     ])
 
 
+def _note_restart():
+    """Tell the next launch not to open a browser -- see `upgrade.note_restart`. Best effort:
+    a restart that works and opens an extra window beats one that refuses over a state file."""
+    try:
+        from mutint_common import upgrade
+        root = upgrade.project_root()
+        # No root means nothing told us which installation this is, and `.` would write a
+        # state file wherever the process happens to be standing.
+        if root:
+            upgrade.note_restart(root)
+    except Exception:
+        pass
+
+
 def _spawn(script):
     """Run the helper, detached. Separated so tests can watch it without one running."""
     subprocess.Popen(["/bin/sh", "-c", script], start_new_session=True,
@@ -110,5 +124,8 @@ def request_restart():
     if not command:
         raise RuntimeError("Nothing told MutInt how to start itself again.")
     pid = server_pid()
+    # Before spawning, so it is on disk whatever happens next: the launch this note is for is
+    # started by a detached helper, and an environment variable could not reach it.
+    _note_restart()
     _spawn(_script(pid, command))
     return pid

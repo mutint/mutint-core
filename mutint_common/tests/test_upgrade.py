@@ -368,6 +368,42 @@ class ApplyStagedTestCase(TestCase):
         self.assertFalse(state["last_result"]["ok"])
 
 
+class RestartNoteTestCase(TestCase):
+    """One launch telling the next not to open a browser.
+
+    `start.py` opens one on every launch, which is right for a double-clicked icon and wrong
+    for a restart asked for from `/upgrade/`: that person is already looking at MutInt in a
+    window which is polling for the server to come back, and `open` would navigate it to the
+    site root -- so the page that said it would reload took them somewhere else instead.
+    """
+
+    def setUp(self):
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
+
+    def test_no_note_by_default(self):
+        self.assertFalse(upgrade.take_restart_note(self.base))
+
+    def test_a_note_is_read_once(self):
+        """It describes one launch, so the second launch must not inherit it."""
+        upgrade.note_restart(self.base)
+
+        self.assertTrue(upgrade.take_restart_note(self.base))
+        self.assertFalse(upgrade.take_restart_note(self.base))
+
+    def test_it_leaves_the_rest_of_the_state_alone(self):
+        """It shares the file with `requested` and the channel, and a restart happens while an
+        upgrade is staged -- taking the note must not be how that gets lost."""
+        upgrade.write_state(self.base, {"channel": upgrade.MAIN,
+                                        "requested": {"ref": "v1.2.3"}})
+        upgrade.note_restart(self.base)
+        upgrade.take_restart_note(self.base)
+
+        state = upgrade.read_state(self.base)
+        self.assertEqual(upgrade.MAIN, state["channel"])
+        self.assertEqual("v1.2.3", state["requested"]["ref"])
+
+
 class VoidVerdictTestCase(TestCase):
     """What a check found is a comparison -- *this ref is newer than the one you are on* -- so
     moving the checkout voids it.
