@@ -311,7 +311,20 @@
             </div>
 
         </div>
-        <h2>{{ error }}</h2>
+        {% comment %} A page-level failure, above whatever the page still managed to render.
+
+           **Guarded, because unguarded it is never absent.** Django renders an undefined
+           variable as the empty string, and almost no view here sets `error` -- so every
+           page in the suite drew an empty `<h2>`, and any view that passed the name with a
+           None in it drew the word None as a heading. `mutint_upgrade` did exactly that,
+           on every visit but the rare failed one, which is what found this.
+
+           It costs no layout either way: measured before and after on /about and /project,
+           the two renders are pixel-identical, because an empty block's margins collapse
+           through it. What it costs is an empty heading in the document -- which is a
+           landmark to anything reading the page structure rather than looking at it, and
+           announces nothing when it is reached. {% endcomment %}
+        {% if error %}<h2>{{ error }}</h2>{% endif %}
         {% block content %}{% endblock %}
     </div>
 </div>
