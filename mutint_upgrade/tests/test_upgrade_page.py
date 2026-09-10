@@ -74,7 +74,8 @@ class UpgradePageTestCase(TestCase):
         self.assertContains(response, "<th>Committed</th>", html=False)
         # Formatted by the same helper that describes the available version, so the two
         # timestamps on this page cannot be written differently.
-        self.assertContains(response, "2026-09-07 11:53 -04:00")
+        self.assertContains(response,
+                            upgrade.readable_time("2026-09-07T11:53:23-04:00"))
 
     def test_a_component_with_no_git_history_shows_no_date(self):
         """A deployment shipped without its `.git` -- production images usually are -- has

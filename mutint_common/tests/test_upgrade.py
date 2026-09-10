@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 
 from django.test import TestCase
 
@@ -69,6 +70,59 @@ class ParseabilityTestCase(TestCase):
                 roots.add(node.module.split(".")[0])
 
         self.assertEqual(set(), roots - STDLIB)
+
+
+class ReadableTimeTestCase(TestCase):
+    """`%cI` carries the *committer's* offset; this column carries the reader's clock.
+
+    The zone is pinned here rather than left to the machine, because that is the whole of
+    what these assert -- and because CI runs in UTC and this project is developed four hours
+    behind it, so a literal expectation would pass in exactly one of the two places.
+    """
+
+    def setUp(self):
+        self._tz = os.environ.get("TZ")
+        self.addCleanup(self._restore_zone)
+
+    def _restore_zone(self):
+        if self._tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = self._tz
+        time.tzset()
+
+    def _in_zone(self, zone, iso):
+        os.environ["TZ"] = zone
+        time.tzset()
+        return upgrade.readable_time(iso)
+
+    def test_it_converts_to_the_hosts_zone(self):
+        """11:53 at -04:00 is 15:53 in UTC, and ten minutes to one the next morning in
+        Tokyo. The same instant, told by the clock the reader is sitting next to."""
+        stamp = "2026-09-07T11:53:23-04:00"
+
+        self.assertEqual("2026-09-07 15:53", self._in_zone("UTC", stamp))
+        self.assertEqual("2026-09-08 00:53", self._in_zone("Asia/Tokyo", stamp))
+
+    def test_commits_an_hour_apart_read_an_hour_apart(self):
+        """The reason for converting rather than printing the offset alongside. These two
+        commits are an hour apart; raw, they both say 11:53 and look simultaneous."""
+        first = self._in_zone("UTC", "2026-09-07T11:53:00-04:00")
+        second = self._in_zone("UTC", "2026-09-07T11:53:00-05:00")
+
+        self.assertEqual("2026-09-07 15:53", first)
+        self.assertEqual("2026-09-07 16:53", second)
+
+    def test_the_offset_is_not_shown(self):
+        """Converted, it is noise: it describes where the committer was sitting, and the
+        reader has to subtract it to answer the question the column is asked."""
+        self.assertNotIn("-04:00", self._in_zone("UTC", "2026-09-07T11:53:23-04:00"))
+
+    def test_anything_that_is_not_a_timestamp_comes_back_as_it_came(self):
+        """`%cI` is strict ISO 8601. A git that answered otherwise should show its answer
+        rather than a mangling of it."""
+        for value in ("", "whenever", "2026-09-07"):
+            self.assertEqual(value, upgrade.readable_time(value))
 
 
 class GitPathTestCase(TestCase):
@@ -537,7 +591,10 @@ class SummarizeTestCase(TestCase):
         self.assertIn("commit def67890", sentence)
         # The time, not just the day: `main` moves several times a day on a project being
         # worked on, and a date alone cannot say whether this is the commit you just pushed.
-        self.assertIn("committed 2026-09-07 11:53 -04:00", sentence)
+        # Through the helper rather than as a literal, because it renders in the host's zone
+        # -- see ReadableTimeTestCase, which is where the formatting itself is pinned down.
+        self.assertIn("committed %s" % upgrade.readable_time("2026-09-07T11:53:23-04:00"),
+                      sentence)
         self.assertIn("12 commits newer than abc12345", sentence)
 
     def test_one_commit_is_not_pluralised(self):

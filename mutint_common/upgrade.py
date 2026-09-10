@@ -397,23 +397,38 @@ def describe(base_dir, ref, kind):
 
 
 def readable_time(iso):
-    """`2026-09-07T11:53:23-04:00` as `2026-09-07 11:53 -04:00`.
+    """`2026-09-07T11:53:23-04:00` as `2026-09-07 11:53`, in the reader's own time zone.
 
     Public because the component table on the same page formats each installed revision's
-    date with it. This module imports nothing from `mutint_common`, so anything there may
-    import this without a cycle.
+    date with it, and `about_registry` formats /about's with it too. This module imports
+    nothing from `mutint_common`, so anything there may import this without a cycle.
 
     The whole timestamp rather than the date: "main" moves several times a day on a project
     being worked on, so a date alone cannot tell you whether what is offered is the commit you
-    just pushed. The offset is kept because it is the committer's and dropping it would make
-    two commits an hour apart look simultaneous.
+    just pushed.
+
+    **Converted to local time, and the offset then dropped.** `%cI` carries the *committer's*
+    offset, which is a fact about where they were sitting rather than about when the commit
+    happened; printed raw it makes two commits an hour apart look simultaneous, and printed
+    with the offset showing it asks the reader to do the arithmetic. Converting answers the
+    question the column is actually asked -- how old is this -- against the clock on the wall
+    behind the screen. `astimezone()` with no argument reads the host's zone, which is the
+    server's, and for the single-machine installation this page upgrades that is the reader's.
 
     Anything not of that shape is returned as it came -- `%cI` is strict ISO 8601, and a
     version of git that answered otherwise should show its answer rather than a mangling.
+    The shape is checked *before* parsing rather than left to `fromisoformat`, which accepts
+    a bare `2026-09-07` and answers midnight: a time this commit was not made at, printed
+    with the same confidence as one it was.
     """
-    if len(iso) >= 19 and iso[10:11] == 'T' and iso[13:14] == ':':
-        return "%s %s %s" % (iso[:10], iso[11:16], iso[19:])
-    return iso
+    import datetime
+
+    if not (len(iso or '') >= 19 and iso[10:11] == 'T' and iso[13:14] == ':'):
+        return iso
+    try:
+        return datetime.datetime.fromisoformat(iso).astimezone().strftime('%Y-%m-%d %H:%M')
+    except ValueError:
+        return iso
 
 
 def summarize(ref, current, described):
