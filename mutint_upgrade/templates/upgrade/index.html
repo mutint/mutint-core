@@ -60,10 +60,11 @@
         {% if requested %}
             <div class="alert alert-info">
                 <strong>{{ requested.ref }} is staged.</strong>
-                Quit MutInt and start it again to apply it &mdash; the upgrade happens before
-                the server comes up, because a running MutInt cannot safely replace its own
-                code. Any new dependencies are installed and any new migrations applied on
-                that same launch.
+                {% if can_restart %}Press <strong>Restart MutInt</strong> below to apply it
+                {% else %}Quit MutInt and start it again to apply it{% endif %} &mdash; the
+                upgrade happens before the server comes up, because a running MutInt cannot
+                safely replace its own code. Any new dependencies are installed and any new
+                migrations applied on that same launch.
             </div>
         {% elif last_result %}
             {% if last_result.ok %}
@@ -107,6 +108,10 @@
             <button type="button" class="btn btn-primary" id="upgrade-install"
                     {% if not available %}style="display: none;"{% endif %}>
                 Install {{ available.ref }}</button>
+            {% if can_restart %}
+                <button type="button" class="btn btn-default" id="upgrade-restart">
+                    Restart MutInt</button>
+            {% endif %}
         </div>
 
         <div id="upgrade-status" style="margin-top: 1em;">
@@ -227,6 +232,50 @@
             })
             .then(function () { busy(false, checkButton, null); });
     });
+
+    // Restart, where the launcher said how. Two waits rather than one: the server is still
+    // up for a moment after it answers -- it waits deliberately, so this response arrives --
+    // and a poll that only asked "is it back" would be answered yes by the server that is
+    // about to stop, and reload the page onto it.
+    var restartButton = document.getElementById("upgrade-restart");
+    if (restartButton) {
+        restartButton.dataset.label = restartButton.textContent;
+        restartButton.addEventListener("click", function () {
+            busy(true, restartButton, "Restarting\u2026");
+            mutintPostJson("/upgrade/restart", {})
+                .then(function () {
+                    say("info", "MutInt is restarting. This page reloads when it is back.");
+                    waitForRestart();
+                })
+                .catch(function (error) {
+                    say("danger", (error && error.message) || "Could not restart MutInt.");
+                    busy(false, restartButton, null);
+                });
+        });
+    }
+
+    function waitForRestart() {
+        var wentDown = false;
+        var tries = 0;
+        var timer = setInterval(function () {
+            tries += 1;
+            if (tries > 240) {          // four minutes; a first launch after an upgrade
+                clearInterval(timer);   // installs dependencies and migrates
+                say("warning", "MutInt has not come back yet. It may still be installing " +
+                               "this version's dependencies; the window showing its log will " +
+                               "say. Reload this page to check.");
+                return;
+            }
+            fetch(window.location.pathname, {method: "HEAD", cache: "no-store"})
+                .then(function (response) {
+                    if (wentDown && response.ok) {
+                        clearInterval(timer);
+                        window.location.reload();
+                    }
+                })
+                .catch(function () { wentDown = true; });
+        }, 1000);
+    }
 
     installButton.addEventListener("click", function () {
         var ref = available ? available.ref : "{{ available.ref|escapejs }}";

@@ -26,6 +26,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
 from mutint_common import upgrade
+from mutint_upgrade import restart
 from mutint_common.about_registry import get_about_sections
 from mutint_common.logger import user_extra
 from mutint_common.util import get_user_context
@@ -96,6 +97,10 @@ def upgrade_page(request):
         "requested": state.get("requested"),
         "current": upgrade.current_ref(base_dir) if base_dir else None,
         "blockers": upgrade.blockers(base_dir) if base_dir else [],
+        # Only where something said how to start MutInt again -- see `restart`. From a
+        # terminal nothing does, and a Restart button there would offer to kill the
+        # server and nothing else.
+        "can_restart": restart.relaunch_command() is not None,
     })
     return render(request, "upgrade/index.html", context)
 
@@ -171,3 +176,31 @@ def upgrade_install(request):
     upgrade.request(base_dir, ref, by=request.user.get_username())
     logger.info("upgrade_staged", extra=user_extra(request))
     return JsonResponse({"staged": ref})
+
+
+@require_POST
+def upgrade_restart(request):
+    """Stop MutInt and start it again, so a staged upgrade is applied.
+
+    The last step of an upgrade was an instruction -- quit MutInt, start it again -- because
+    the page cannot replace the code it is running on. It still cannot: what this does is the
+    same quit and the same start, asked for from the page instead of remembered by a person.
+    """
+    if not request.user.is_superuser:
+        # Re-checked rather than trusted: the gate on a write endpoint is not the gate on the
+        # page that offered it.
+        return JsonResponse({"error": "Not permitted."}, status=403)
+    if not _enabled():
+        return JsonResponse({"error": "Upgrades are not enabled on this deployment."},
+                            status=409)
+    if restart.relaunch_command() is None:
+        return JsonResponse(
+            {"error": "This copy of MutInt was not started by anything that can start it "
+                      "again, so it can only be stopped from where it was started."},
+            status=409)
+
+    pid = restart.request_restart()
+    logger.info("upgrade_restart", extra=user_extra(request))
+    # Answered before it happens, because the process writing this is one of the ones about
+    # to be stopped -- `restart` waits for that reason.
+    return JsonResponse({"restarting": True, "pid": pid})

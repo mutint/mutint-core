@@ -578,6 +578,33 @@ on a write endpoint is not the gate on the page it came from, the same rule `job
 **A deployment can decline the whole thing** with `MUTINT_UPGRADE_ENABLED = False`. The page
 still renders -- the inventory is worth having either way -- and offers no buttons.
 
+**Restart is the last step of an upgrade, as a button.** Staging writes a request and the next
+launch applies it, so finishing an upgrade was always an instruction somebody had to follow.
+`mutint_upgrade/restart.py` does the same quit and the same start on their behalf, and three
+things about it are load-bearing:
+
+- **Nothing in core knows what launched MutInt.** The launcher exports
+  `MUTINT_RELAUNCH_COMMAND`; where nothing did, there is no button and the endpoint refuses.
+  MutInt.app sets it to an `open` of its own bundle and a systemd unit could set
+  `systemctl restart mutint`, which is why the seam is an environment variable rather than
+  anything about macOS. From a terminal nothing sets it -- correctly, because the process that
+  would run the command is the one being killed.
+- **A view cannot stop MutInt by stopping itself.** Under `runserver` the reloader parent and
+  the child serving requests are two processes and views run in the child, so a view that
+  exits is restarted a moment later by the reloader. `server_pid` tells them apart on
+  `RUN_MAIN`, which Django sets in the child and nowhere else, and answers the parent -- or
+  ourselves where `DEBUG` is false and there is no reloader at all.
+- **A detached helper does the work**, in its own session (`start_new_session`) so it sits
+  outside the process group the deadman supervisor tears down. It waits before signalling, so
+  the response reaches the browser that asked; polls `kill -0` until the process is gone rather
+  than waiting on the port, since `runserver` sets SO_REUSEADDR and what actually needs the
+  window is the supervisor stopping the worker and the cluster; and insists with SIGKILL past a
+  bound, because an upgrade half-applied by something ignoring SIGTERM is worse than an
+  ungraceful stop.
+
+The page polls **twice**: for the server to go down, then to come back. A poll that only asked
+"is it back" would be answered yes by the server that has not stopped yet.
+
 ### The per-sample mutation page
 
 `mutint_sample/views/breseq_table.py` renders one sample at `/mutations/breseq` in breseq's own

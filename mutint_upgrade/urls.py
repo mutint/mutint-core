@@ -6,4 +6,5 @@ urlpatterns = [
     re_path(r'^$', views.upgrade_page, name="upgrade"),
     re_path(r'^check$', views.upgrade_check, name="upgrade_check"),
     re_path(r'^install$', views.upgrade_install, name="upgrade_install"),
+    re_path(r'^restart$', views.upgrade_restart, name="upgrade_restart"),
 ]
