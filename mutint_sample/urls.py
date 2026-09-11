@@ -60,4 +60,8 @@ urlpatterns = [
             mutint_sample.views.alignments.reference_gff3, name='reference_gff3'),
     re_path(r'^reference/(?P<experiment_id>\d+)/chromalias$',
             mutint_sample.views.alignments.reference_chromalias, name='reference_chromalias'),
+    # The reference, or the contigs somebody ticked on the Reference page, as a download in
+    # a chosen format -- rendered, not served from the store, so a subset and GenBank exist.
+    re_path(r'^reference/(?P<experiment_id>\d+)/download$',
+            mutint_sample.views.alignments.reference_download, name='reference_download'),
 ]

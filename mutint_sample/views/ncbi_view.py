@@ -25,6 +25,7 @@ from django.views.decorators.http import require_POST
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_experiment, can_view_project
+from mutint_import import reference_export
 from mutint_sample import ncbi
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.locus import buffered_extent, mutation_extent
@@ -240,6 +241,10 @@ def reference_view(request):
         "total_length": format(sum(contig["length"] for contig in contigs), ",d"),
         "verified_count": sum(1 for contig in contigs if contig["is_verified"]),
         "may_check": _may_check(request.user, experiment),
+        # The download row's menu is rendered from the table the endpoint dispatches on,
+        # so the page cannot offer a format the endpoint would refuse.
+        "download_formats": list(reference_export.FORMATS.values()),
+        "default_format": reference_export.DEFAULT_FORMAT,
     })
 
     template = loader.get_template("ncbi/reference.html")

@@ -41,3 +41,23 @@
 .ncbi-check-status {
     margin-left: 10px;
 }
+
+/* The Reference page's download row: a format menu and a button above the contig table.
+   `form-control` is 100% wide in Bootstrap and would take the whole flex row for itself. */
+.reference-download {
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.reference-download select.form-control {
+    width: auto;
+    display: inline-block;
+}
+
+.reference-download label {
+    margin-bottom: 0;
+}
+
+.reference-select {
+    width: 1%;
+}

@@ -32,9 +32,27 @@
                 {% endif %}
             </p>
 
+            {% comment %} A sibling of the table, not a wrapper: every row below carries a
+               form of its own for the NCBI check, and HTML drops a form nested in a form.
+               The checkboxes claim this one through `form=`, so it works with no script. {% endcomment %}
+            <form id="reference-download" class="btn-row reference-download" method="get"
+                  action="{% url 'reference_download' experiment_id %}">
+                <label for="reference-format">Download selected as</label>
+                <select id="reference-format" name="format" class="form-control input-sm">
+                    {% for fmt in download_formats %}
+                    <option value="{{ fmt.key }}"{% if fmt.key == default_format %} selected{% endif %}>{{ fmt.label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-default btn-sm" id="reference-download-button">Download</button>
+            </form>
+
             <table class="table table-condensed reference-table">
                 <thead>
                     <tr>
+                        <th class="reference-select">
+                            <input type="checkbox" id="reference-select-all" checked
+                                   title="Select all sequences">
+                        </th>
                         <th>Sequence</th>
                         <th class="reference-length">Length</th>
                         <th>Previously named</th>
@@ -44,6 +62,11 @@
                 <tbody>
                 {% for contig in contigs %}
                     <tr>
+                        <td class="reference-select">
+                            <input type="checkbox" name="seq_id" value="{{ contig.id }}"
+                                   form="reference-download" checked
+                                   title="Include {{ contig.id }} in the download">
+                        </td>
                         <td><code>{{ contig.id }}</code></td>
                         <td class="reference-length">{{ contig.length_display }}</td>
                         <td>
@@ -91,6 +114,13 @@
                 </tbody>
             </table>
 
+            <p class="ncbi-footnote">
+                Downloads are generated from the stored reference, which keeps the sequence
+                and the genes breseq annotates against; the file it was imported from is not
+                kept. A GenBank download therefore carries CDS, RNA and repeat features with
+                their names, locus tags and products, and no translations or source record.
+            </p>
+
             {% if may_check %}
                 <p class="ncbi-check-help">
                     An accession is never guessed from a sequence name &mdash; a contig called
@@ -105,6 +135,34 @@
         {% endif %}
     </div>
 </div>
+
+{% if has_reference %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+    // The download form itself needs no script: the checkboxes belong to it through
+    // `form=`. This only keeps the header box in step and refuses an empty download.
+    var all = document.getElementById("reference-select-all");
+    var button = document.getElementById("reference-download-button");
+    var boxes = Array.prototype.slice.call(
+        document.querySelectorAll('input[name="seq_id"][form="reference-download"]'));
+
+    function refresh() {
+        var checked = boxes.filter(function (box) { return box.checked; }).length;
+        all.checked = checked === boxes.length;
+        all.indeterminate = checked > 0 && checked < boxes.length;
+        button.disabled = checked === 0;
+    }
+
+    all.addEventListener("change", function () {
+        boxes.forEach(function (box) { box.checked = all.checked; });
+        refresh();
+    });
+    boxes.forEach(function (box) { box.addEventListener("change", refresh); });
+    refresh();
+}());
+</script>
+{% endif %}
 
 {% if may_check and has_reference %}
 <script type="text/javascript">

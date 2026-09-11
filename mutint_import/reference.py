@@ -256,7 +256,7 @@ def normalize_reference(path, original_name=None):
     except (annotate_loader.UnsupportedReferenceFormat, ValueError) as error:
         raise ReferenceFormatError(str(error))
 
-    sequences = _sequences_of(references)
+    sequences = sequences_of(references)
     if not sequences:
         raise ReferenceFormatError(
             "%s carries no sequence; a GFF3 needs an inline ##FASTA section"
@@ -265,7 +265,7 @@ def normalize_reference(path, original_name=None):
     return annotate_gff3.render_breseq_gff3(references), sequences
 
 
-def _sequences_of(references):
+def sequences_of(references):
     """``[(seq_id, sequence), ...]`` for the distinct contigs, in a stable order."""
     contigs = []
     seen = set()
@@ -311,7 +311,7 @@ def sequence_set_digest(sequences):
     genome carrying both.
 
     Sorting also settles an asymmetry that predates this: the GenBank/GFF3 path sorts
-    contigs by seq_id (`_sequences_of`) while the bare-FASTA path keeps file order, so the
+    contigs by seq_id (`sequences_of`) while the bare-FASTA path keeps file order, so the
     same genome could hash two ways depending on which format it arrived in.
     """
     joined = "".join(sorted(sequence_digest(sequence) for _seq_id, sequence in sequences))
@@ -442,7 +442,7 @@ def normalize_references(files):
         return gff3_text, sequences, []
 
     references, duplicates = load_references(files)
-    sequences = _sequences_of(references)
+    sequences = sequences_of(references)
     if not sequences:
         raise ReferenceFormatError("the files carry no sequence")
     return annotate_gff3.render_breseq_gff3(references), sequences, duplicates

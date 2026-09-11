@@ -13,7 +13,8 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from mutint_import import breseq_folder
+from mutint_experiment.models import Experiment
+from mutint_import import breseq_folder, reference_export
 from mutint_import.tests import breseq_fixture
 from mutint_sample.models import (ReferenceSequences, Mutation, DatabaseSequenceLink, MutationCall,
                               Sample)
@@ -23,6 +24,10 @@ SVIEWER_SCRIPT = "sviewer/js/sviewer.js"
 
 class _Fixture(TestCase):
     """A real imported breseq sample, so the reference and its per-contig digests are real."""
+
+    #: The reference the sample is written against; a subclass overrides it to get
+    #: several contigs. None means `breseq_fixture`'s one-contig default.
+    SEQUENCES = None
 
     def setUp(self):
         self.user = User.objects.create(
@@ -39,7 +44,7 @@ class _Fixture(TestCase):
         patcher.enable()
         self.addCleanup(patcher.disable)
 
-        breseq_fixture.write_sample(self.drop, "s1")
+        breseq_fixture.write_sample(self.drop, "s1", sequences=self.SEQUENCES)
         breseq_folder.import_breseq_folders(
             self.drop, project_name="P", experiment_name="e", owner_name="tester")
 
@@ -355,6 +360,31 @@ class ReferencePageTestCase(_Fixture):
         self.assertIn("ncbi.nlm.nih.gov/nuccore/NC_000913.3", html)
         self.assertIn("1 confirmed against NCBI", html)
         self.assertNotIn('name="accession"', html)
+
+    def test_it_offers_a_download_of_the_selected_sequences(self):
+        """A form beside the table, not around it: each row carries the NCBI check's own
+        form, and a form inside a form is dropped by the parser."""
+        html = self._get_ref().content.decode("utf-8")
+        self.assertIn('<form id="reference-download"', html)
+        self.assertIn('method="get"', html)
+        self.assertIn('action="/mutations/reference/%d/download"' % self.experiment.id, html)
+        self.assertLess(html.index("</form>"), html.index("<table"))
+        self.assertIn('name="seq_id" value="%s"' % self.entry["id"], html)
+        self.assertIn('form="reference-download" checked', html)
+        self.assertEqual(html.count('form="reference-download" checked'),
+                         len(self.reference.seq_ids))
+
+    def test_the_format_menu_is_the_endpoint_s_table(self):
+        html = self._get_ref().content.decode("utf-8")
+        self.assertIn('<select id="reference-format" name="format"', html)
+        offered = re.findall(r'<option value="([a-z0-9]+)"', html)
+        self.assertEqual(offered, list(reference_export.FORMATS))
+        self.assertIn('value="%s" selected' % reference_export.DEFAULT_FORMAT, html)
+
+    def test_no_reference_means_no_download(self):
+        bare = Experiment.objects.create(name="bare", project=self.experiment.project)
+        html = self._get_ref(experiment_id=bare.id).content.decode("utf-8")
+        self.assertNotIn("reference-download", html)
 
     def test_previous_names_are_shown(self):
         """A renamed contig keeps its old names, and stored BAMs still carry them."""

@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2328 run, 0 failures** standalone; **2721** assembled, measured with `PYTHONPATH`
+**Baseline: 2375 run, 0 failures** standalone; **2768** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3004,6 +3004,31 @@ that reason.
 `ncbi_check` is keyed on `(experiment_id, seq_id)`, not on a mutation: an accession
 belongs to the reference, the Reference page has no mutation to name, and the mutation page
 knows both anyway. One endpoint, one contract.
+
+**It is also where the reference is downloaded**, one contig or any set of them, as FASTA,
+GFF3 or GenBank: a checkbox per row, a format menu and a Download button, at
+`/mutations/reference/<id>/download?format=&seq_id=...`. Every format is **rendered** from the
+loaded annotation model by `mutint_import/reference_export.py`, never served from the store --
+the store holds the whole genome in two formats and this offers any subset in three. That the
+whole reference in FASTA or GFF3 comes out byte-identical to the stored file is asserted rather
+than relied on, and is why there is no streaming shortcut for that case. Three things about it
+are worth knowing before touching it:
+
+- **The download form is a sibling of the table, not a wrapper round it**, and the
+  checkboxes reach it through the HTML5 `form=` attribute. Every contig row already holds the
+  NCBI check's own `<form>`, and a form inside a form is silently dropped by the parser --
+  every Check button would have submitted the download instead.
+- **GenBank is the format the store never held.** The writer is Biopython's, fed from the
+  same model the suite's GenBank *reader* fills, and the qualifier mapping is that reader's
+  inverted; the test that matters is that `load_genbank` of what it wrote renders to the same
+  canonical GFF3. It is a reduced GenBank by construction -- genes-only, no `/translation`,
+  no `source` -- and the page's footnote says so. `/gene` is deliberately omitted when the
+  name would only repeat the locus tag, because the GFF3 loader names a nameless gene by its
+  locus tag and writing that back as `/gene` would mint a gene symbol the annotation never
+  had.
+- **It is a plain GET gated on `can_view_project` alone**, so an anonymous reader of a public
+  project can take the sequence they can already see. An unknown `seq_id` is a 400 naming it;
+  404 on these routes already means no experiment or no reference.
 
 #### Three link sites, and what constrains the first
 

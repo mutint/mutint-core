@@ -3,16 +3,21 @@
 Every path here is derived from a primary key, so no client-supplied path component reaches
 the filesystem, and authorization uses the model that actually exists -- ``can_view_project``.
 
-The streaming and byte-range machinery lives in ``mutint_common.fileserve``.
+The streaming and byte-range machinery lives in ``mutint_common.fileserve``. One route here,
+``reference_download``, renders rather than streams: it is the Reference page's download of
+some or all contigs in a chosen format, which no stored file answers.
 """
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.utils.http import content_disposition_header
+from django.views.decorators.http import require_GET
 
 from mutint_common import store
 from mutint_common.fileserve import serve_file
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_view_project
+from mutint_import import annotation, reference_export
 from mutint_sample.models import Sample
 
 
@@ -88,6 +93,51 @@ def chromalias_text(seq_ids):
         for alias in entry["aliases"]:
             lines.append("%s\t%s" % (entry["id"], alias))
     return "\n".join(lines) + "\n"
+
+
+@require_GET
+def reference_download(request, experiment_id):
+    """The reference, or the contigs named by ``seq_id=``, as an attachment in ``format=``.
+
+    A plain GET with no sign-in beyond ``can_view_project``, because the Reference page is
+    readable on a public project by anybody and a download of what that page shows should
+    be too. Rendered from the loaded annotation model rather than served from the store:
+    the store holds the whole genome in two formats and this offers any subset in three.
+    See ``mutint_import.reference_export`` for what each format carries.
+
+    No ``seq_id`` means every contig. An unknown one is a 400 naming it -- 404 on these
+    routes already means no experiment or no reference, and the two are worth telling apart.
+    """
+    try:
+        experiment = Experiment.objects.get(pk=experiment_id)
+    except Experiment.DoesNotExist:
+        raise Http404("No such experiment.")
+
+    if not _may_view(request.user, experiment):
+        return HttpResponseForbidden("You do not have access to this experiment.")
+
+    references = annotation.reference_sequences_for(experiment)
+    if references is None:
+        raise Http404("This experiment has no reference genome.")
+
+    fmt = request.GET.get("format") or reference_export.DEFAULT_FORMAT
+    if fmt not in reference_export.FORMATS:
+        return HttpResponseBadRequest(
+            "Unknown format %r; one of %s." % (fmt, ", ".join(reference_export.FORMATS)))
+
+    seq_ids = request.GET.getlist("seq_id")
+    try:
+        chosen = reference_export.subset(references, seq_ids)
+    except reference_export.UnknownSequence as error:
+        return HttpResponseBadRequest(str(error))
+
+    complete = reference_export.is_complete(references, chosen)
+    text = reference_export.render(chosen, fmt, definition=experiment.name)
+    name = reference_export.filename(experiment.name, chosen.seq_ids(), fmt, complete)
+
+    response = HttpResponse(text, content_type=reference_export.FORMATS[fmt].content_type)
+    response["Content-Disposition"] = content_disposition_header(True, name)
+    return response
 
 
 def _serve_sample(request, sample_id, filename):

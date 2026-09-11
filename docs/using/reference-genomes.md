@@ -118,3 +118,32 @@ out of the `.gd`. breseq's plain `output.gd` is enough; `gdtools ANNOTATE` is no
 A mutation imported before a reference existed has no annotation and renders through a plainer
 fallback. Nothing is lost — the verbatim record is kept — and `./mutint reannotate <id>`
 recomputes annotations in place once a reference arrives. Re-importing is not needed.
+
+## Downloading the reference
+
+The experiment's **Reference** page lists every sequence in the stored reference, and each
+row has a checkbox. Tick the ones you want, choose a format from the menu above the table
+and press **Download**. Everything is ticked to begin with, so one click gets the whole
+reference.
+
+Three formats are offered:
+
+| format | what you get |
+|---|---|
+| **FASTA** | the sequence alone, one record per contig |
+| **GFF3** | breseq's own dialect, gene and repeat features with the sequence inline under `##FASTA` — the form the store keeps, and the one breseq and `./mutint reannotate` read directly |
+| **GenBank** | the same features as GenBank records, one per contig |
+
+What every format carries is the **stored** reference, described under *Normalization*
+above: the sequence, and the CDS, RNA and repeat features breseq annotates against, with
+their names, locus tags and products. The file the reference was imported from is not kept,
+so a GenBank download is generated from that, not returned from it. It has no `/translation`,
+no `source` feature and no organism, and its date is a placeholder.
+
+The download is a plain address, so a script can fetch it with the same access a browser has:
+
+```
+/mutations/reference/<experiment id>/download?format=genbank&seq_id=NC_000913&seq_id=pXYZ
+```
+
+`format` is `fasta`, `gff3` or `genbank`, and leaving out every `seq_id` means every contig.
