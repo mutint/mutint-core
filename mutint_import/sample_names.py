@@ -50,8 +50,20 @@ SHAPE_TRIPLE = "triple"
 SampleIdentity = collections.namedtuple(
     "SampleIdentity", "population time_point name replicate shape")
 
-#: Leading digits, then whatever the person appended: `500gen`, `1500`, `30000cd`.
-_LEADING_NUMBER = re.compile(r"^(\d+)")
+#: The number in a time-point field, with the unit on either side of it: `500gen`, `1500`,
+#: `30000cd`, `day7`, `t12`, `h24`.
+#:
+#: **A unit in front used to mean the name did not place at all**, and that was deliberate:
+#: this read leading digits only, so `t0` was not a time point and the whole name fell through
+#: to auto-numbering rather than being half-read. The reasoning was that a field with no
+#: leading digit is not a number -- true, and it turns out the field is often a number wearing
+#: its unit on the left. Time points are recorded in days, generations, transfers and hours,
+#: and `day7` is as clear as `7d`.
+#:
+#: **The unit is still discarded either way**, on both sides: `Sample.time_point` is one
+#: unit-less number and always was, so this widens what is *recognized* rather than what is
+#: stored. A field with no digits at all is still not a time point.
+_LEADING_NUMBER = re.compile(r"^[A-Za-z]*(\d+)")
 
 
 def parse_sample_identity(sample_name):
@@ -132,13 +144,21 @@ class SampleNameError(ValueError):
 #: What a part of a coordinate may contain when a *name* has to carry it.
 #:
 #: The same characters `mutint_breseq.views.SAMPLE_NAME_RE` allows in a whole name, applied to
-#: each part: a composed name is a directory name in that plugin, and no part of one should be
-#: able to introduce a space, a separator or a leading dot. It is narrower than the column --
-#: `Population.name` is a CharField and a dropped folder can create one with a space in it --
-#: because what is narrow here is the *name*, not the place it is stored.
+#: each part: a composed name is a directory name in that plugin, so no part of one should be
+#: able to introduce a separator or a leading dot.
 #:
-#: Underscores are allowed, and the round-trip check below is what makes that safe.
-_NAME_PART = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+#: **A space is allowed, and used not to be.** The rule it enforced was never the parser's --
+#: `parse_sample_identity` has no character rule at all and reads `Ara 2_500gen_763 A` as
+#: population `Ara 2` -- nor the column's, `Population.name` being a plain CharField, nor the
+#: sample editor's, which checks strip, non-empty and length and nothing else. So a name a
+#: person could type into the sample edit page was one this could never spell, and the
+#: asymmetry was the bug. What still cannot appear is a *leading* space, which the anchor
+#: refuses, or a trailing one, which `compose_sample_name` strips before it gets here.
+#:
+#: Underscores are allowed too, and the round-trip check below is what makes both safe: a part
+#: whose spacing or underscores would make the name read back as a different coordinate is
+#: refused by construction rather than by a list of characters.
+_NAME_PART = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+ -]*$")
 
 
 def compose_sample_name(population, time_point, sample):
@@ -180,9 +200,9 @@ def compose_sample_name(population, time_point, sample):
         if parts[field] and not _NAME_PART.match(parts[field]):
             raise SampleNameError(
                 field,
-                "A %s may use letters, digits, dot, underscore, plus and hyphen, and must "
-                "start with a letter or digit. It becomes part of this sample's name, which "
-                "is also a directory name." % labels[field])
+                "A %s may use letters, digits, spaces, dot, underscore, plus and hyphen, and "
+                "must start with a letter or digit. It becomes part of this sample's name, "
+                "which is also a directory name." % labels[field])
 
     if parts["time_point"] and not parts["time_point"].isdigit():
         # Leading digits are all `parse_sample_identity` reads, so `12.5` would come back as

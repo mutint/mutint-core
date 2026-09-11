@@ -59,7 +59,7 @@ env/main/bin/pip install coverage && env/main/bin/coverage run ./mutint test && 
 
 ### Testing notes
 
-**The suite takes about two minutes**: 118s standalone, 121s assembled, on PostgreSQL 18 under
+**The suite takes about three minutes**: 157s standalone, 188s assembled, on PostgreSQL 18 under
 Python 3.13. Startup is a couple of seconds; the tests are the rest. Per app it runs from 1.9s
 (`mutint_stats`, 32 tests) to 96s (`mutint_experiment`, 416) -- that one app is two thirds of
 the whole run, and inside it `test_access_views` (57s) and `test_groups` (34s) are 90 of its
@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2213 run, 0 failures** standalone; **2537** assembled, measured with `PYTHONPATH`
+**Baseline: 2253 run, 0 failures** standalone; **2616** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -2107,9 +2107,24 @@ invisible, because Compare's Fixed set keys a dict on `(time_point, label)` by p
 assignment, so the second sample's mutations simply vanish.
 
 **`Sample.time_point` is numeric**, and is the reason the middle field is the only one whose
-trailing text is stripped: `500gen` is 500 because a time point is a genuine ordinal that the
-Fixed set sorts by. A middle field with no leading digit (`t0`) is not a time
-point, so the whole name falls through rather than being half-read.
+*unit* is stripped: `500gen` is 500 because a time point is a genuine ordinal that the Fixed
+set sorts by. The unit may sit on either side of the digits -- `500gen`, `day7`, `t12`, `h24`
+-- and is discarded from both, because the column is one unit-less number. A middle field with
+**no digits at all** (`gen`) is not a time point, so the whole name falls through rather than
+being half-read.
+
+**A leading unit used to mean the whole name fell through**, and `t0` is the example this file
+carried. The reasoning was that a field with no leading digit is not a number; what it missed
+is that a field is often a number wearing its unit on the left, and time points are recorded in
+days, generations, transfers and hours. What was widened is where the digits may sit, not
+whether there have to be any.
+
+**Spaces are allowed in a population or a sample name.** The parser never had a character rule
+-- `Ara 2_500gen_763 A` has always read as population `Ara 2` -- and neither do the columns or
+the sample editor, which checks strip, non-empty and length. Only `compose_sample_name` refused
+one, so a coordinate somebody could type on the edit page was one no *name* could spell. The
+separator is `_`, and `_check_round_trip` still refuses any part whose spacing or underscores
+would make the name read back as a different coordinate.
 
 Three rules that look arbitrary and are not:
 

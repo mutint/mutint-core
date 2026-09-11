@@ -67,9 +67,21 @@ class UnderscoreTripleTestCase(unittest.TestCase):
         to exist."""
         self.assertIsNone(parse_sample_identity("Ara-2_500gen_763A").replicate)
 
-    def test_a_time_point_with_no_leading_digit_is_not_one(self):
-        """`t0` is a label, and a flask number is genuinely a number."""
-        self.assertIsNone(parse_sample_identity("Ara-2_t0_763A"))
+    def test_a_unit_may_sit_on_either_side_of_the_number(self):
+        """`t0` used to be a label rather than a time point, and the whole name fell through.
+
+        Time points are recorded in days, generations, transfers and hours, and `day7` is as
+        clear as `7d` -- so a unit in front no longer costs the coordinate. The unit is
+        discarded from both sides either way: `Sample.time_point` is one unit-less number.
+        """
+        for name, expected in (("Ara-2_t0_763A", 0), ("pop3_day7_clone2", 7),
+                               ("Ara-2_500gen_763A", 500), ("Ara-2_h24_763A", 24)):
+            with self.subTest(name=name):
+                self.assertEqual(parse_sample_identity(name).time_point, expected)
+
+    def test_a_middle_field_with_no_digits_is_still_not_a_time_point(self):
+        """What was widened is where the digits may sit, not whether there have to be any."""
+        self.assertIsNone(parse_sample_identity("Ara-2_gen_763A"))
 
     def test_two_fields_are_refused(self):
         """No telling whether the ALE or the isolate is the one missing."""
@@ -181,15 +193,30 @@ class ComposeTestCase(unittest.TestCase):
             compose_sample_name("Ara-2", "500", "  ")
         self.assertEqual(caught.exception.field, "sample")
 
-    def test_a_space_is_refused_and_says_which_field(self):
-        """A composed name is a directory name in mutint-breseq. The column would hold a
-        space -- a dropped folder can create a population with one -- and a name must not."""
-        for parts, field in ((("Ara 2", "500", "763A"), "population"),
-                             (("Ara-2", "500", "763 A"), "sample")):
+    def test_a_space_inside_a_part_is_allowed_and_survives_the_round_trip(self):
+        """It used to be refused, and the rule was never the parser's or the column's.
+
+        `parse_sample_identity` has no character rule, `Population.name` is a plain CharField,
+        and the sample editor checks only strip/non-empty/length -- so a coordinate somebody
+        could type on the edit page was one no name could spell. The separator is `_`, so a
+        space inside a part is unambiguous.
+        """
+        for parts in (("Ara 2", "500", "763A"), ("Ara-2", "500", "763 A")):
             with self.subTest(parts=parts):
-                with self.assertRaises(SampleNameError) as caught:
-                    compose_sample_name(*parts)
-                self.assertEqual(caught.exception.field, field)
+                name = compose_sample_name(*parts)
+                identity = parse_sample_identity(name)
+                self.assertIsNotNone(identity, name)
+                self.assertEqual(
+                    (identity.population, str(identity.time_point),
+                     sample_label(identity.name, identity.replicate)),
+                    parts)
+
+    def test_a_leading_space_is_still_refused(self):
+        """Stripped rather than refused, in fact -- and what is left has to stand on its own."""
+        self.assertEqual(compose_sample_name(" Ara-2 ", "500", "763A"), "Ara-2_500_763A")
+        with self.assertRaises(SampleNameError) as caught:
+            compose_sample_name("Ara-2", "500", " ")
+        self.assertEqual(caught.exception.field, "sample")
 
     def test_a_fractional_time_point_is_refused(self):
         """`Sample.time_point` is a float and holds 12.5; the *name* cannot, because the

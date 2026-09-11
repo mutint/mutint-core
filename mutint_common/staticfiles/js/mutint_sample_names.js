@@ -27,8 +27,11 @@
 (function () {
     "use strict";
 
-    /* Leading digits, then whatever the person appended: `500gen`, `1500`, `30000cd`. */
-    var LEADING_NUMBER = /^(\d+)/;
+    /* The number in a time-point field, with the unit on either side: `500gen`, `1500`,
+     * `30000cd`, `day7`, `t12`, `h24`. A leading unit used to mean the name did not place at
+     * all; see `_LEADING_NUMBER` in sample_names.py for why that changed. The unit is
+     * discarded either way -- a time point is one unit-less number. */
+    var LEADING_NUMBER = /^[A-Za-z]*(\d+)/;
 
     /* The strict four-integer form. Strict on purpose: a lenient reader turns a name it
      * cannot read into 1-1-1-1 and lands a whole drop on one sample. */
@@ -130,7 +133,9 @@
             ["1-2-3-x_500gen_y", "1-2-3-x", 500, "y"],
             ["9-83-1", null],
             ["3-30000-1-A", null],
-            ["Ara-2_t0_763A", null],
+            ["Ara-2_t0_763A", "Ara-2", 0, "763A"],
+            ["pop3_day7_clone2", "pop3", 7, "clone2"],
+            ["Ara-2_gen_763A", null],
             ["Ara-2_500gen", null],
             ["Ara-2_500gen_763A_rerun", null],
             ["_500gen_763A", null],
