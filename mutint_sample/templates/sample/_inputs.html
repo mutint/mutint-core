@@ -1,0 +1,34 @@
+{% load sample_inputs %}{% comment %} What this sample is, and what it was made from.
+
+   Rendered from the sample alone, so every page that has one can include it -- the Mutations
+   page, where `selected_sample` is already in the context, and the sample edit page.
+
+   The coordinate comes first because it is what the sample *is* everywhere else in MutInt,
+   and the inputs under it because that is the question this box was added to answer. A
+   sample imported before any of this was recorded has no inputs, and then the box says only
+   what it always could.
+{% endcomment %}
+<div class="sample-inputs">
+    <div class="sample-inputs-coordinate">
+        <b>{{ sample.population_name }}</b> / <b>{{ sample.time_point|time_point }}</b> /
+        <b>{{ sample.name }}</b>
+        {% if sample.source_name %}<span class="sample-inputs-source">imported as
+            {{ sample.source_name }}</span>{% endif %}
+    </div>
+    {% with entries=sample.inputs %}{% if entries %}
+        <div class="sample-inputs-list">
+            {% for group in entries|by_group %}
+                <div>
+                    <span class="sample-inputs-kind">{{ group.label }}</span>
+                    {% comment %} The mate number is deliberately not drawn beside each file:
+                       the names already say `_R1` and `_R2` in every case anybody meets, so a
+                       marker after them reads as stutter. That the two *are* mates is the part
+                       a filename cannot say on its own, and `paired` says it once.
+                       {% endcomment %}
+                    {% for entry in group.entries %}{% if not forloop.first %}, {% endif %}{% if entry.url %}<a href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.value }}</a>{% else %}{{ entry.value }}{% endif %}{% endfor %}
+                    {% if group.paired %}<span class="sample-inputs-paired">paired</span>{% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}{% endwith %}
+</div>

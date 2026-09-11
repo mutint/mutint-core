@@ -18,6 +18,7 @@ from django.conf import settings
 
 from mutint_import import vcf
 from mutint_import.annotation import reference_sequences_for
+from mutint_sample import inputs
 
 logger = logging.getLogger("mutint_import.vcf_import")
 
@@ -271,6 +272,10 @@ def import_sample(document, sample_name, context, experiment):
         _AsGenomeDiff(converted.records, metadata_for(document)), sample_name, context)
 
     sample.set_record(sample.COMPONENT, VCF_RECORD, header_record(document))
+    # What it was made from, beside the header it was made from. A VCF names no read files --
+    # `_AsGenomeDiff` carries a plain dict with no `READSEQ` in it -- so the file itself is
+    # the answer.
+    inputs.record_inputs(sample, [inputs.Input(inputs.KIND_VCF, sample_name)])
     _attach_lines(sample, converted)
     return count, replaced, converted.problems
 

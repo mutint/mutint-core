@@ -27,6 +27,13 @@
             <b>{{ sample.label }}</b>.
         </p>
 
+        {% comment %} What it was made from, read-only, under the sentence about what it is
+           called -- the same box the Mutations page shows. A sample imported before this was
+           recorded has none, and the list is simply absent. {% endcomment %}
+        {% if sample.sample.inputs %}
+            {% include "sample/_inputs.html" with sample=sample.sample %}
+        {% endif %}
+
         <div class="row">
             <div class="col-sm-3 form-group">
                 {% comment %} Text, not type="number": an ALE is named, not counted --

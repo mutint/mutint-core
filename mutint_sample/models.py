@@ -193,6 +193,7 @@ class Sample(SupplementalDataMixin):
     BRESEQ = "breseq"
     SEQUENCING = "sequencing"
     CURATION = "curation"
+    INPUTS = "inputs"
 
     @property
     def breseq(self):
@@ -218,6 +219,24 @@ class Sample(SupplementalDataMixin):
         column widths that used to back that check are gone; the check is now all there is.
         """
         return self.record(self.CURATION)
+
+    @property
+    def inputs(self):
+        """What this sample was made from: the read files, accession, `.gd` or folder.
+
+        A list of `{kind, value, group, mate}` dicts -- `mutint_sample.inputs` owns the shape
+        and is what writes them, so no caller assembles one by hand. `kind` says what sort of
+        thing `value` names; mates of a pair share a `group`.
+
+        **Nothing before this existed has any**, deliberately: there was nothing to backfill
+        from for most samples, and a page that shows no box is honest about that where an
+        invented one would not be.
+
+        `source_name` is the nearest older thing and is not this. That column is *identity* --
+        what a re-import matches on -- and is one string; this is information, is several, and
+        nothing filters on it, which is what lets it live in the supplemental column at all.
+        """
+        return self.record(self.INPUTS).get("items") or []
 
     @property
     def is_mixed(self):

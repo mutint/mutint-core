@@ -188,6 +188,52 @@
 /* On the matrix's green header the badge would vanish; keep it legible there. */
 .breseq-table th .sample-flag { color: rgba(255, 255, 255, 0.85); font-weight: normal; }
 
+/* What a sample is and what it was made from, at the top of the pages that show one.
+   Small and tinted rather than a Bootstrap `.alert`, which is the house box and is sized for
+   a warning -- this is a statement, and it sits above a control strip it must not shout over.
+   The left rule is what makes it read as one block without a full border. */
+.sample-inputs {
+    background: #f5f8fa;
+    border-left: 3px solid #9cb3c9;
+    padding: 0.5em 0.8em;
+    margin-bottom: 10px;
+    font-size: 9pt;
+    color: #444;
+}
+
+.sample-inputs-coordinate {
+    font-size: 10pt;
+}
+
+.sample-inputs-source,
+.sample-inputs-kind,
+.sample-inputs-paired {
+    color: #777;
+}
+
+.sample-inputs-source {
+    margin-left: 0.6em;
+}
+
+.sample-inputs-list {
+    margin-top: 0.3em;
+}
+
+/* The kind names the line: "Read file a_R1.fastq, a_R2.fastq". Small caps like the sample
+   flags, which are the other small tag beside a sample's name. */
+.sample-inputs-kind {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 85%;
+    margin-right: 0.4em;
+}
+
+.sample-inputs-paired {
+    font-size: 85%;
+    margin-left: 0.4em;
+    font-style: italic;
+}
+
 .breseq-legend {
     color: #666;
     font-size: 9pt;

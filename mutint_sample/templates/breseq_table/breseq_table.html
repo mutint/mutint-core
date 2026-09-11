@@ -31,6 +31,12 @@
             <a href="/experiment/{{ experiment_id }}/ancestor/">Change</a>
         </div>
     {% endif %}
+    {% comment %} What this sample is and what it was made from. Above the strip for the same
+       reason the ancestor warning is: it states what you are looking at rather than offering a
+       control over it. {% endcomment %}
+    {% if selected_sample %}
+        {% include "sample/_inputs.html" with sample=selected_sample %}
+    {% endif %}
     {% comment %} The same strip as Compare's, minus Display: Sample for the picker, Filter
        for the reader's own filter, Rows for the References menu. `single_sample` puts the
        picker first and names it in the singular -- this page shows one sample and the tab

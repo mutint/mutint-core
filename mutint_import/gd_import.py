@@ -34,6 +34,7 @@ from mutint_import import sniff
 from mutint_import.gene_annotation import get_annotated_gene_list
 from mutint_import import sample_names
 from mutint_import.sample_names import parse_sample_identity
+from mutint_sample import inputs
 from mutint_sample.models import (
     Mutation,
     MutationCall,
@@ -178,9 +179,30 @@ def parse_warnings(document):
 def _import_one_file(uploaded, filename, context):
     document = _parse_document(uploaded)
     sample_name = filename[:-3] if filename.lower().endswith(".gd") else filename
-    _, count, _replaced = import_document_as_sample(
+    sample, count, _replaced = import_document_as_sample(
         document, sample_name, context)
+    # The sample used to be discarded here. What a bare `.gd` drop was made from is the `.gd`
+    # -- and if breseq wrote it, the file itself names the reads it was called from.
+    record_document_inputs(sample, document, filename)
     return count, parse_warnings(document)
+
+
+def record_document_inputs(sample, document, filename, kind=inputs.KIND_GENOMEDIFF):
+    """Record what this sample was made from, preferring what the document itself says.
+
+    breseq names its read files in `#=READSEQ`, so a `.gd` it wrote -- or a folder somebody
+    analysed elsewhere and uploaded -- can say what the reads were called rather than only what
+    the file was called. Falls back to the file or folder handed in, which is all a `.gd` from
+    anywhere else can offer.
+
+    Called after the sample exists, never through `get_or_create(defaults=...)`: those do not
+    run for a sample the experiment already holds, and a re-import is exactly when the answer
+    changes.
+    """
+    reads = read_files_named_by(document)
+    entries = (inputs.read_entries(reads) if reads
+               else [inputs.Input(kind, filename)])
+    inputs.record_inputs(sample, entries)
 
 
 def import_document_as_sample(document, sample_name, context):
@@ -265,6 +287,25 @@ def _parse_document(uploaded):
             % (sniff.describe(kind),))
     lines = [line for line in raw.splitlines() if line.strip()]
     return GenomeDiff.read(iter(lines))
+
+
+def read_files_named_by(document):
+    """The read files a `.gd` says it was made from, in file order.
+
+    breseq writes one `#=READSEQ` line per read file, which is a better answer than picking
+    them out of `#=COMMAND` -- that is a command line, and telling a read file from an option's
+    value in one means knowing every breseq flag that takes an argument.
+
+    **Every value, not the last.** The header is multi-valued and `genomediff` kept only the
+    final line of a repeated name until `MetadataDict`; a document from anywhere else -- the VCF
+    importer hands over a plain dict -- may still answer scalar, so `getlist` is asked for and
+    not assumed.
+    """
+    metadata = getattr(document, "metadata", None) or {}
+    if hasattr(metadata, "getlist"):
+        return [name for name in metadata.getlist("READSEQ") if name]
+    single = metadata.get("READSEQ")
+    return [single] if single else []
 
 
 def _get_or_create_chain(context, document, population_name, time_point,

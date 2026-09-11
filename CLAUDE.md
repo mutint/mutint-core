@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2253 run, 0 failures** standalone; **2616** assembled, measured with `PYTHONPATH`
+**Baseline: 2265 run, 0 failures** standalone; **2658** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -627,6 +627,41 @@ launch -- applying a staged upgrade is the whole point of the restart. And a tes
 `request_restart` without patching `upgrade.project_root` writes that note into *this
 checkout's* `data/upgrade.json`, where another test reads and clears it: an order-dependent
 failure in a different test, with nothing pointing at the cause.
+
+### What a sample was made from
+
+`Sample.inputs` is a fourth core group in `supplemental_data`, beside `breseq`, `sequencing`
+and `curation`: a list of `{kind, value, group, mate}` saying what produced the sample — read
+files, an SRA accession, the `.gd` or folder it was imported from. `mutint_sample/inputs.py`
+owns the shape and is the only writer; `record_inputs` is what core's importers and any plugin
+call.
+
+**Nothing recorded this before.** `Sample.source_name` is the nearest older thing and is
+explicitly *identity rather than information* — one string, the basename a re-import matches on.
+`mutint-breseq` kept the read filenames on its own row, which is a plugin's, is deletable, and
+is not reachable from the sample.
+
+**The supplemental column rather than a table**, which is that column's own test: it arrives
+with the import, dies with the sample, and is read whole. The cost is that *which samples came
+from SRR37077254* is a scan rather than an index — nothing asks, and `record_inputs` being the
+one writer is what would make moving it later a contained change.
+
+**breseq names its own read files in `#=READSEQ`**, one line per file, so a manually uploaded
+folder can say what the reads were called and not merely what the folder was. That needed a fix
+in `genomediff`: `GenomeDiff.read` assigned into a plain dict, so the last of a repeated header
+won and the rest were lost — and `write` had the same hole in reverse. `records.MetadataDict` is
+multi-valued now, with the scalar view deliberately unchanged (`__getitem__` still answers the
+last value, which is what the dict assignment already meant), so no reader here had to change.
+`gd_import.read_files_named_by` asks `getlist` and falls back to `get`, because
+`vcf_import._AsGenomeDiff` hands over a plain dict.
+
+**Pairing is asymmetric and that is honest.** breseq's rule for which files are mates lives in
+mutint-breseq, so core's folder import records read files **ungrouped**; a run launched through
+that plugin records the grouping the tools actually used — including a pair its mate check took
+apart. Moving `pairing.py` into core is the eventual right home and has not been done.
+
+**A sample imported before any of this has none, and nothing backfills.** The box then shows the
+coordinate alone, which is the truth about it.
 
 ### The per-sample mutation page
 

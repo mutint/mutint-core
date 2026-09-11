@@ -82,12 +82,46 @@ Core's own groups, for reading:
 | `sample.breseq` | `version`, `reads`, `average_read_length`, `mean_coverage`, `percentage_mapped` |
 | `sample.sequencing` | `date`, `library_prep`, `reference_genome` |
 | `sample.curation` | `medium_description`; `legacy_tags`, whatever free text the retired `tags` column held |
+| `sample.inputs` | what the sample was made from — see below. A **list**, where the others are dicts |
 | `mutation.genome_diff` | the GenomeDiff record the import parsed, which `to_gd_line()` writes back |
 | `call.vcf` | the VCF line this call arrived on, when it came from one |
 
 Each answers `{}` when nothing was recorded, so a sample nobody has filled in renders rather
 than raising. **Every one of these keys may be absent** — they were columns until recently and
 several never had a writer at all.
+
+## Saying what a sample was made from
+
+A component that produces a sample should record what produced it — read files, an SRA
+accession, the `.gd` or folder it was imported from. `mutint_sample.inputs` is the one writer:
+
+```python
+from mutint_sample import inputs
+
+inputs.record_inputs(sample, [
+    inputs.Input(inputs.KIND_READS, "a_R1.fastq.gz", group=1, mate=1),
+    inputs.Input(inputs.KIND_READS, "a_R2.fastq.gz", group=1, mate=2),
+])
+```
+
+Mates share a `group`; anything that is not half of a pair takes a group of its own and no
+`mate`. An accession is **one** entry even though it yields two files, because the accession is
+what was given.
+
+Three things about it are worth knowing before calling it:
+
+- **It writes under `mutint_core`, not your component's key**, which is the one exception to
+  the rule above. This is a core-defined record you are contributing facts to, and the box that
+  renders it reads one place rather than walking every component's key and merging.
+- **It replaces rather than appends**, because a re-import supersedes a sample rather than
+  adding to it — the same reason `_database_gd_mutations` clears a sample's calls first.
+- **Call it after the sample exists**, never as a `get_or_create(defaults=...)` key: `defaults`
+  does not run for a sample the experiment already holds, and a re-import is exactly when the
+  answer changes.
+
+`KIND_*` is a fixed vocabulary in that module rather than something you register — a new kind is
+a constant there, because nothing enumerates them and the label a page shows has to live
+somewhere anyway.
 
 **`MutationCall` carries `supplemental_data` as well as `evidence`, and they are different
 things.** `evidence` is breseq's read counts in breseq's own shape, read by the mutation table

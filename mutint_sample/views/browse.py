@@ -139,7 +139,10 @@ def browse_mutation(request):
         "template_header": "Alignments",
         "mutation": mutation,
         "mutation_call": call,
-        "source_name": sample.label,
+        # `sample_name`, which is the key `browse.html` reads. It was `source_name`, which
+        # nothing set on the template side -- so the page's heading and its "no alignment is
+        # stored for sample X" warning have both been rendering an empty name.
+        "sample_name": sample.label,
         # For the way back: the per-sample page, on the sample this browser is showing,
         # rather than the cross-experiment comparison it used to land on.
         "sample_id": sample.id,

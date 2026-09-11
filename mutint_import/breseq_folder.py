@@ -40,8 +40,10 @@ from mutint_import import reference as reference_io
 from mutint_import.breseq_summary import read_breseq_summary
 from mutint_sample.models import Sample
 from mutint_import import reference_store
+from mutint_sample import inputs
 from mutint_import.gd_import import (
     _parse_document,
+    record_document_inputs,
     _prepare_experiment,
     parse_warnings,
     run_post_processing,
@@ -304,6 +306,12 @@ def _import_one_sample(sample_dir, sample_name, context):
     seq_experiment, count, replaced = import_document_as_sample(
         document, sample_name, context)
     warnings = parse_warnings(document)
+
+    # What this sample was made from. breseq names its own read files in `#=READSEQ`, so an
+    # uploaded folder can say what the reads were called and not merely what the folder was --
+    # falling back to the folder's name for a `data/` tree assembled by hand.
+    record_document_inputs(seq_experiment, document, sample_name,
+                           kind=inputs.KIND_FOLDER)
 
     sample_store = store.ensure_dir(store.sample_dir(seq_experiment.id))
     shutil.copyfile(gd_path, os.path.join(sample_store, store.SAMPLE_GD))
