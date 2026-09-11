@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2375 run, 0 failures** standalone; **2768** assembled, measured with `PYTHONPATH`
+**Baseline: 2412 run, 0 failures** standalone; **2827** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3457,6 +3457,59 @@ plus `mutintCollectDropped` and `mutintFromFileList`. `mutintPostJson` and `muti
 live in `mutint_crud.js`, so **reading the CSRF cookie has one definition** — `mutintPost`
 sends FormData and stringifies every value, so an endpoint taking a structure needs the JSON
 sibling rather than a hand-rolled `fetch`.
+
+### Reads by accession come from ENA
+
+`mutint_import/sra.py` and `mutint_import/sra_fetch.py` fetch sequencing reads from the SRA by
+accession -- a run, a sample, an experiment or a study -- and they are the reads counterpart
+of `accessions.py` and `ncbi_fetch.py`: a pure module for the rules and a networked one for
+the asking, `resolve` before anything is written, one `FetchError` because every caller shows
+the sentence, every `requests` exception through `mutint_sample.ncbi.redact`. Core has no
+page that uses them. The consumer is `mutint-breseq`, whose launch page takes accessions
+beside or instead of a FASTQ drop, and the guide for the next consumer is **Reads by
+accession** in `docs/plugin/staging.md`.
+
+**ENA, over HTTPS, and no tool.** EBI's mirror of the archive answers one portal query with a
+row per run for whichever kind of accession was asked about, and serves each run's reads as
+plain `fastq.gz` with an MD5 and a size beside each -- so the whole cost is `requests`, which
+was already here for NCBI. `sra-tools` would have been a conda package, a `prefetch` cache and
+an SRA-to-FASTQ conversion as long as the download; it covers the runs ENA has not mirrored
+or that were submitted as alignments, and those are refused with a sentence naming the run
+instead. `library_layout` is carried for display and decides nothing: which files are mates
+is breseq's filename rule, and ENA's names (`<run>_1.fastq.gz`, `_2`) already pair under it.
+
+**A shape check is safe here where `accessions.kind()` says it is not.** An SRA accession is
+a fixed prefix and digits in a namespace NCBI controls; a token fitting none of the four
+shapes is not going to be found under any of them, so refusing it by shape costs nothing a
+lookup would have recovered and buys a sentence naming the kinds instead of ENA's empty `[]`.
+
+**Resolve is where the refusals live, because refusing there costs nothing.** An accession
+ENA does not know, a run with no FASTQ, one run reached by two tokens (a study and one of its
+runs -- it would download one filename twice and, in a mode naming a sample per accession,
+name two samples for one set of reads), and the two caps: `MUTINT_SRA_MAX_RUNS` and
+`MUTINT_SRA_MAX_BYTES`, which are what stop a pasted BioProject from becoming a day of
+downloads and a hundred breseq runs. Both name themselves in the sentence.
+
+**The download is written for a worker, not a request**, which is the one way it differs
+from `ncbi_fetch`: a reference is kilobytes inside a finalize, a run is gigabytes and hours.
+It streams to `<name>.part`, hashes as it goes, and renames only when MD5 and size both match;
+a failure or a cancellation unlinks the part-file so nothing that looks like a whole read file
+is left where a tool could pick it up, while completed files stay because a failed run keeps
+everything. `report=` is for `logs.write`, `is_cancelled=` is asked between chunks at most
+every `CANCEL_POLL_SECONDS` and raises `mutint_jobs.processes.Cancelled` -- the class the
+tool runner raises, so a task downloading and a task shelling out are cancelled the same way.
+No `Range` resume: nothing re-enters a failed run and a cancelled one deletes its reads
+directory anyway. `MUTINT_SRA_TIMEOUT` bounds *silence* per socket read, not the transfer.
+
+**Which runs are one sample is decided in `sra.samples_in`**: every run under a sample or
+experiment accession is one sample with several read files (a lane split, in effect), and a
+study is one sample per BioSample in it. `sra.sample_name_for` names it by ENA's
+`sample_alias` -- the submitter's own name, `REL768A` for the LTEE's clones -- falling back to
+the accession when the alias is blank or fails the `usable` test the consumer passes, because
+what may be a sample name is the consumer's rule and this module has none. A sample records
+the **run** as its input, one `KIND_SRA` entry per run, which is what `inputs.py` promised
+the day the kind was reserved; the NCBI link that constant carries works for a run and for a
+BioSample.
 
 ### Seeing and stopping background work
 

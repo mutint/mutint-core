@@ -122,6 +122,25 @@ redacts them out of anything derived from a failed request, because the HTTP cli
 whole URL — query string included — into its exception strings, and those are rendered on the
 Reference page.
 
+## SRA reads
+
+Running breseq on reads named by SRA accession (see *Running breseq* in the mutint-breseq
+plugin's pages) fetches them from ENA, the European mirror of the archive, which serves each
+run's FASTQ files over plain HTTPS with a checksum beside each. ENA needs no key and asks for
+no identification, so there is nothing to set for it to work; the three settings are limits.
+
+| setting | default | for |
+|---|---|---|
+| `MUTINT_SRA_MAX_RUNS` | `50` | the most runs one launch may resolve to — a study accession can mean hundreds |
+| `MUTINT_SRA_MAX_BYTES` | `20000000000` | the most one launch will download, over every file of every run it names |
+| `MUTINT_SRA_TIMEOUT` | `60` | seconds a download may go with no bytes arriving before it is given up on |
+
+All three are read from the environment. The two caps are checked when the accession is
+resolved, before anything is downloaded, and the refusal names the setting; the timeout bounds
+silence rather than duration, so a multi-gigabyte file may take as long as it takes while a
+stalled mirror fails with a sentence. The download itself runs on the background worker, is
+written to the job's log as each file arrives, and can be cancelled from the Jobs page.
+
 ## Access
 
 Four ordered roles, granted on a **project** and nowhere else:

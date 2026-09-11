@@ -116,6 +116,16 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         # Refuse to stream a record larger than this rather than pulling a human chromosome
         # through a verification that was designed around bacterial genomes.
         'MUTINT_NCBI_MAX_BASES': int(os.environ.get('MUTINT_NCBI_MAX_BASES', str(50_000_000))),
+        # Reads fetched from the SRA by accession, through ENA's mirror -- see
+        # mutint_import.sra_fetch. ENA needs no key. The two caps are what stop a pasted
+        # BioProject from becoming a day of downloads and a hundred breseq runs; a study that
+        # genuinely is that big is what raising them is for.
+        'MUTINT_SRA_MAX_RUNS': int(os.environ.get('MUTINT_SRA_MAX_RUNS', '50')),
+        'MUTINT_SRA_MAX_BYTES': int(
+            os.environ.get('MUTINT_SRA_MAX_BYTES', str(20_000_000_000))),
+        # Seconds of *silence*, not of transfer: a requests timeout bounds each socket read,
+        # so this turns a stalled mirror into a sentence rather than a worker held for ever.
+        'MUTINT_SRA_TIMEOUT': float(os.environ.get('MUTINT_SRA_TIMEOUT', '60')),
 
         'ALLOWED_HOSTS': [os.environ.get('DJANGO_SERVER_HOST', 'localhost'), 'localhost', '127.0.0.1'],
         'SESSION_EXPIRE_AT_BROWSER_CLOSE': True,

@@ -119,3 +119,64 @@ if error:
 It answers 404 for an unknown id, 409 for a session belonging to another component or to an
 ordinary import, and 403 for one belonging to another person. Written by hand, the middle one
 is the check that gets left out.
+
+## Reads by accession
+
+A drop is not the only way reads arrive. `mutint_import.sra_fetch` fetches a run's FASTQ files
+from the SRA by accession — a run (`SRR…`), a sample (`SRS…`, `SAMN…`), an experiment (`SRX…`)
+or a study (`SRP…`, `PRJNA…`) — through ENA's mirror, over HTTPS, verified against the
+checksum ENA publishes. It needs no tool on the host and no key. Two calls, at two moments:
+
+```python
+from mutint_import import accessions, sra, sra_fetch
+
+# In the view, after the permission check and before you claim anything:
+try:
+    plans = sra_fetch.resolve(accessions.parse(payload.get("accessions")))
+except (accessions.AccessionError, sra_fetch.FetchError) as refusal:
+    return JsonResponse({"error": str(refusal), "field": "accessions"}, status=400)
+row.accessions = [plan.as_dict() for plan in plans]
+
+# In the task, inside the job's log:
+with logs.open_log(queue_id) as log:
+    try:
+        downloaded = sra_fetch.download(
+            store.component_dir("my_plugin", row.pk),
+            row.accessions,
+            report=lambda message: logs.write(log, message),
+            is_cancelled=lambda: jobs.is_cancelled(queue_id))
+    except processes.Cancelled:
+        ...   # the person pressed Cancel; the part-file is already gone
+    except sra_fetch.FetchError as failed:
+        ...   # record str(failed); it names the run
+```
+
+**Resolve in the request, download in the task.** `resolve` is one small query per accession
+and refuses everything a launch would later trip over — an accession ENA does not know, a run
+it holds no FASTQ for, a run reached by two tokens, more runs or bytes than
+`MUTINT_SRA_MAX_RUNS` and `MUTINT_SRA_MAX_BYTES` allow — while the answer is still "fix the
+box". Do it after your permission check: a reader who may not write to the experiment must
+not be able to make the installation ask ENA on their behalf. What you store on your row is
+the resolved plan (`plan.as_dict()`), not the text, so the download does not get a second
+opinion about what was meant.
+
+`download` is gigabytes and belongs on the worker. It streams each file to `<name>.part`,
+hashes it as it arrives, and renames it only when the MD5 and size match; a failure or a
+cancellation removes the part-file, so nothing that looks like a whole read file is left where
+a tool could pick it up. `report` is for `logs.write`, so `/jobs/<pk>/log` shows which file is
+arriving, and `is_cancelled` is asked between chunks, raising the same `Cancelled` the tool
+runner does.
+
+**What ENA calls the files is what breseq's mate rule expects** — `<run>_1.fastq.gz` and
+`<run>_2.fastq.gz` for a pair, `<run>.fastq.gz` for single reads — so downloaded files and
+dropped files can sit in one directory and be treated alike from there. `download` returns
+`{filename: run_accession}` so you can tell the two apart afterwards: record the **run** as
+the sample's input (`Input(inputs.KIND_SRA, run_accession, group)`), one entry per run rather
+than one per file, because the accession is what was given.
+
+`sra.samples_in(plans)` says which runs are one sample — every run under a sample or
+experiment accession, one sample per BioSample in a study — and `sra.sample_name_for(sample,
+usable=...)` names it by the submitter's alias, falling back to the accession when the alias
+is blank or fails the `usable` test you pass, which is your rule for what a sample may be
+called. mutint-breseq's launch page is the worked example.
+
