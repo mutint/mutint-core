@@ -354,3 +354,107 @@ class ImportTypesOfferedTestCase(TestCase):
         self.assertIn("reference", names)
         self.assertIn("replace_annotation", names)
         self.assertIn("genomediff", names)
+
+
+class AccessionBoxTestCase(TestCase):
+    """Which tabs offer the NCBI box, and why the page never names an import type to decide.
+
+    The box is drawn from `accepts_accessions` on the registry entry, so a plugin could offer
+    one and core's template would need no edit -- the same rule the rest of this page follows.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(MUTINT_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+        created = self.client.post(
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
+        from mutint_experiment.models import Experiment
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
+
+    def _establish_reference(self):
+        from mutint_import import reference_store
+        from mutint_import.tests import breseq_fixture
+        sequences = [("test_ref", breseq_fixture.SEQUENCE_A)]
+        reference_store.establish_or_check(
+            self.experiment, breseq_fixture.gff3_text(sequences), sequences)
+
+    def _html(self, tab):
+        return self.client.get(
+            "/import/", {"experiment_id": self.experiment.id, "tab": tab}
+        ).content.decode("utf-8")
+
+    def test_the_reference_tab_offers_it(self):
+        html = self._html("reference")
+        self.assertIn('id="import-accessions"', html)
+        self.assertIn("GCF_", html)
+
+    def test_update_annotation_offers_it_too(self):
+        # The same question at the other moment: a newer annotation of a genome already
+        # established is exactly the thing NCBI has and a checkout does not.
+        self._establish_reference()
+        self.assertIn('id="import-accessions"', self._html("update_annotation"))
+
+    def test_a_tab_that_takes_files_and_nothing_else_does_not(self):
+        self._establish_reference()
+        for tab in ("genomediff", "vcf", "breseq_folder"):
+            self.assertNotIn('id="import-accessions"', self._html(tab), tab)
+
+    def test_the_flag_reaches_the_client_through_the_registry(self):
+        """`accepts_options` is server-side only; this one has to be serialized.
+
+        Asserted on core's own two entries rather than on the whole registry, which an
+        installed plugin may legitimately add to.
+        """
+        by_name = {entry["name"]: entry for entry in import_registry.get_import_types()}
+        self.assertTrue(by_name["reference"]["accepts_accessions"])
+        self.assertTrue(by_name["replace_annotation"]["accepts_accessions"])
+        self.assertFalse(by_name["genomediff"]["accepts_accessions"])
+        self.assertFalse(by_name["breseq_folder"]["accepts_accessions"])
+
+
+class SummaryHeadlineTestCase(TestCase):
+    """The headline above the result table has three states, not one.
+
+    Asserted on the rendered script, which is the only pin available -- there is no JS test
+    runner in this repo -- and is the same way `test_the_page_polls_for_import_progress` and
+    its neighbours pin page behaviour. It is a guard against the headline going back to being
+    unconditionally green, which is what it was: a drop in which *every* file failed announced
+    itself as "Imported … : 0 mutations." in green, and a reference import is all-or-nothing,
+    so one refusal is reported on every row.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(self.user)
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(MUTINT_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+        created = self.client.post(
+            "/project/create/", {"name": "P", "experiment": "E"}).json()
+        from mutint_experiment.models import Experiment
+        self.experiment = Experiment.objects.get(pk=created["experiment_id"])
+
+    def _html(self):
+        return self.client.get(
+            "/import/", {"experiment_id": self.experiment.id, "tab": "reference"}
+        ).content.decode("utf-8")
+
+    def test_the_page_can_say_that_nothing_was_imported(self):
+        html = self._html()
+        self.assertIn("summaryAlert", html)
+        self.assertIn("Nothing was imported into", html)
+        self.assertIn("alert alert-danger", html)
+
+    def test_the_page_can_say_that_some_of_it_landed(self):
+        self.assertIn("alert alert-warning", self._html())
+
+    def test_success_is_no_longer_unconditional(self):
+        # The exact line this replaced. Its return would put the old bug back.
+        self.assertNotIn('alert.className = "alert alert-success";', self._html())

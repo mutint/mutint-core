@@ -246,3 +246,87 @@ class DatabaseScopeTestCase(TestCase):
         self.assertIsNone(ncbi.record_for(DIGEST))
         self.assertEqual({}, ncbi.records_for([DIGEST]))
         self.assertIsNotNone(ncbi.record_for(DIGEST, database=self.OTHER))
+
+
+class RedactTestCase(TestCase):
+    """The deployment's NCBI credentials must not survive into a message.
+
+    `requests` puts the whole URL, query string and all, into its exception strings -- and
+    `verify` writes those strings into `DatabaseSequenceLink.detail`, which is a column, is
+    rendered on `/mutations/reference` and is printed by `./mutint ncbi_accessions --list`. So
+    before this, a deployment whose network was down published its own API key.
+    """
+
+    URL = ("HTTPSConnectionPool(host='eutils.ncbi.nlm.nih.gov', port=443): Max retries "
+           "exceeded with url: /entrez/eutils/esummary.fcgi?tool=mutint&api_key=SECRET123"
+           "&email=someone@example.edu&db=nuccore&id=NC_000913 (Caused by ...)")
+
+    def test_the_api_key_is_taken_out(self):
+        redacted = ncbi.redact(self.URL)
+        self.assertNotIn("SECRET123", redacted)
+        self.assertIn("api_key=[redacted]", redacted)
+
+    def test_the_operators_email_is_taken_out_too(self):
+        # It identifies the deployment to NCBI as surely as the key does, and it is somebody's
+        # address.
+        redacted = ncbi.redact(self.URL)
+        self.assertNotIn("someone@example.edu", redacted)
+
+    def test_everything_that_says_what_went_wrong_is_kept(self):
+        redacted = ncbi.redact(self.URL)
+        self.assertIn("Max retries exceeded", redacted)
+        self.assertIn("id=NC_000913", redacted)
+        self.assertIn("eutils.ncbi.nlm.nih.gov", redacted)
+
+    @override_settings(MUTINT_NCBI_API_KEY="SECRET123",
+                       MUTINT_NCBI_EMAIL="someone@example.edu")
+    def test_a_failed_check_does_not_store_the_key(self):
+        """End to end, through the path that writes the column."""
+        import requests as requests_module
+
+        with mock.patch("mutint_sample.ncbi.requests.get",
+                        side_effect=requests_module.ConnectionError(self.URL)):
+            record = ncbi.check_and_store(DIGEST, LENGTH, "NC_000913.3")
+
+        self.assertEqual(record.status, DatabaseSequenceLink.ERROR)
+        self.assertNotIn("SECRET123", record.detail)
+        self.assertNotIn("someone@example.edu", record.detail)
+
+
+class RecordDownloadedTestCase(TestCase):
+    """A contig whose bases came *from* a record needs no verifying against it.
+
+    The evidence is stronger than the check `verify` performs, not weaker: `verify` fetches
+    NCBI's copy and compares it with what is stored, and here what is stored *is* NCBI's copy.
+    """
+
+    DETAIL = "Downloaded from NCBI as NC_000913.3 when this reference was imported."
+
+    def test_it_records_verified_without_asking_ncbi_anything(self):
+        with mock.patch("mutint_sample.ncbi.requests.get") as get:
+            record = ncbi.record_downloaded(DIGEST, LENGTH, "NC_000913.3", self.DETAIL)
+
+        get.assert_not_called()
+        self.assertEqual(record.status, DatabaseSequenceLink.VERIFIED)
+        self.assertEqual(record.accession, "NC_000913.3")
+        self.assertEqual(record.sha256, DIGEST)
+        self.assertEqual(record.detail, self.DETAIL)
+        self.assertIsNotNone(record.checked_at)
+
+    def test_it_supersedes_a_verdict_reached_from_a_typed_name(self):
+        """A MISMATCH about *these bases* is what direct provenance replaces.
+
+        The key is the digest, so whatever is being overwritten was a verdict about this same
+        sequence -- reached by somebody guessing at a name, which is exactly the weaker
+        evidence.
+        """
+        DatabaseSequenceLink.objects.create(
+            sha256=DIGEST, length=LENGTH, accession="U00096.2",
+            status=DatabaseSequenceLink.MISMATCH, detail="not the same sequence")
+
+        ncbi.record_downloaded(DIGEST, LENGTH, "NC_000913.3", self.DETAIL)
+
+        record = DatabaseSequenceLink.objects.get(sha256=DIGEST)
+        self.assertEqual(record.status, DatabaseSequenceLink.VERIFIED)
+        self.assertEqual(record.accession, "NC_000913.3")
+        self.assertEqual(1, DatabaseSequenceLink.objects.count())

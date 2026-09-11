@@ -34,7 +34,7 @@ from mutint_common.import_registry import (
 )
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
-from mutint_import import import_lock, reference_store
+from mutint_import import accessions, import_lock, ncbi_fetch, reference_store
 from mutint_import.import_lock import ImportInProgress
 from mutint_import.models import (
     STATE_FAILED,
@@ -100,14 +100,18 @@ def staged_path(session, raw_path):
     return candidate
 
 
-def build_manifest(files):
+def build_manifest(files, allow_empty=False):
     """``[{path, size}, ...]`` from what the client declared, sanitized. Raises UploadError.
 
     Shared with ``mutint_import.staging``, which opens sessions for components rather than for
     the import registry: the two differ in what they route to and in nothing else, and a
     second copy of this is a second opinion about which paths are acceptable.
+
+    ``allow_empty`` is for the one drop that legitimately carries no files: an import that
+    names NCBI accessions and nothing else. It is opt-in rather than the default because a
+    component staging zero files is still a caller that has got something wrong.
     """
-    if not isinstance(files, list) or not files:
+    if not isinstance(files, list) or (not files and not allow_empty):
         raise UploadError("No files were declared.")
     if len(files) > MAX_MANIFEST_ENTRIES:
         raise UploadError("Too many files (%d)." % len(files))
@@ -126,7 +130,15 @@ def build_manifest(files):
 
 @require_POST
 def create_upload_session(request):
-    """Open a session. Body: {experiment_id, import_type, files:[{path,size}]}."""
+    """Open a session.
+
+    Body: `{experiment_id, import_type, files: [{path, size}], accessions: "<text>"}`.
+
+    `accessions` is optional and only for a type that declared `accepts_accessions`. It is
+    **resolved here**, against NCBI, which is the one thing in this endpoint that reaches the
+    network -- so that a typo is refused while there is still nothing to lose, and so that a
+    drop naming accessions alone can open a session with no files in it.
+    """
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
     except ValueError:
@@ -149,21 +161,62 @@ def create_upload_session(request):
     if not import_type:
         return JsonResponse(
             {"error": "Choose what you are importing."}, status=400)
-    if get_import_handler(import_type) is None:
+    handler = get_import_handler(import_type)
+    if handler is None:
         return JsonResponse(
             {"error": "Unknown import type: %s" % import_type}, status=400)
 
+    # NCBI accessions, resolved here and not at finalize. **Deliberately after the permission
+    # check**: resolving talks to NCBI, and a visitor who may not write to this experiment must
+    # not be able to make the installation do that on their behalf.
+    raw_accessions = (payload.get("accessions") or "").strip()
+    if raw_accessions and not handler.get("accepts_accessions"):
+        return JsonResponse(
+            {"error": "%s does not take NCBI accessions." % handler["label"]}, status=400)
+
+    plans = []
+    if raw_accessions:
+        try:
+            plans = ncbi_fetch.resolve(accessions.parse(raw_accessions))
+        except (accessions.AccessionError, ncbi_fetch.FetchError) as exc:
+            # No session row, no staging directory, nothing uploaded. That is the whole point
+            # of resolving here: a typo costs the round trip that caught it and no more.
+            return JsonResponse({"error": str(exc)}, status=400)
+
+    files = payload.get("files") or []
+    if not files and not plans:
+        # Asked before `build_manifest`, which would otherwise answer "No files were
+        # declared." -- true, and no longer the whole of what this page accepts.
+        return JsonResponse(
+            {"error": ("Choose files, or type an NCBI accession."
+                       if handler.get("accepts_accessions") else "No files were declared.")},
+            status=400)
+
     try:
-        manifest, declared = build_manifest(payload.get("files") or [])
+        manifest, declared = build_manifest(files, allow_empty=bool(plans))
     except (UploadError, TypeError, ValueError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+    # A dropped file may not sit where a download is about to go. Named at create, while the
+    # answer is still "rename it or drop it on its own" rather than "your import failed".
+    #
+    # Only when something is actually being downloaded: with no accessions nothing writes into
+    # that directory, and a drop that happens to contain a folder called `ncbi/` is then a
+    # perfectly ordinary drop.
+    if plans and any(
+            entry["path"].startswith(ncbi_fetch.STAGED_SUBDIR + os.sep)
+            for entry in manifest):
+        return JsonResponse(
+            {"error": "A file in this drop would land where the accessions are downloaded. "
+                      "Rename it, or drop it on its own."}, status=409)
 
     session = UploadSession.objects.create(
         user=request.user if request.user.is_authenticated else None,
         experiment=experiment,
         import_type=import_type,
         manifest=manifest,
-        declared_bytes=declared)
+        declared_bytes=declared,
+        accessions=[plan.as_dict() for plan in plans])
     store.ensure_dir(store.staging_dir(session.id))
 
     return JsonResponse({
@@ -288,6 +341,25 @@ def finalize_upload(request, upload_id):
     options = {"confirm_rename": _payload(request).get("confirm_rename")}
     progress = _SessionProgress(session.id)
 
+    # **Before the lock, deliberately.** The download writes only into this session's own
+    # staging directory, so it needs no lock at all -- and `import_lock` is one-at-a-time for
+    # the whole installation, so holding it across a genome download would stop everybody
+    # else's drop for the length of somebody's network. It has its own `reporting` block
+    # because `stage()` is a no-op with no sink installed, and this is the stretch with
+    # nothing else to show.
+    downloaded = {}
+    if session.accessions:
+        try:
+            with import_progress.reporting(progress):
+                downloaded = ncbi_fetch.download(
+                    root, session.accessions, report=import_progress.stage)
+        except ncbi_fetch.FetchError as exc:
+            logger.info("NCBI download failed for session %s: %s", session.id, exc)
+            return _fail(session, root, progress, str(exc), status=502)
+        except Exception as exc:  # noqa: BLE001 -- same posture as the finalize failure path
+            logger.exception("NCBI download failed for session %s", session.id)
+            return _fail(session, root, progress, str(exc), status=500)
+
     # One import at a time. Refused rather than queued: this is a request, and holding it
     # open for however long somebody else's drop takes would look like the hang the progress
     # reporting exists to prevent. The staged files are untouched, so trying again costs
@@ -298,7 +370,7 @@ def finalize_upload(request, upload_id):
         return JsonResponse({"error": str(busy)}, status=409)
 
     try:
-        return _finalize_holding_lock(session, request, root, options, progress)
+        return _finalize_holding_lock(session, request, root, options, progress, downloaded)
     finally:
         # One release covering every way out of the function below, including the ones that
         # return a refusal. A lock stranded here would block every later import until it
@@ -306,7 +378,62 @@ def finalize_upload(request, upload_id):
         import_lock.release()
 
 
-def _finalize_holding_lock(session, request, root, options, progress):
+def _fail(session, root, progress, message, status):
+    """Fail a session the way the finalize path does, from anywhere in it.
+
+    Shared by the download step and by the ingest, so a drop that dies before `run_import` is
+    left in exactly the state a drop that dies inside it would be: the sentence on the
+    progress snapshot, the session FAILED, the staging cleared. A retry is a new session,
+    which `_open_session`'s state check already insists on.
+    """
+    progress.fail(message)
+    session.state = STATE_FAILED
+    session.save(update_fields=["state", "updated"])
+    shutil.rmtree(root, ignore_errors=True)
+    return JsonResponse({"error": message}, status=status)
+
+
+def _record_downloads(experiment, downloaded, user):
+    """Record what each downloaded record turned out to be, for the contigs that landed.
+
+    **The gate is `seq_ids`**, and it is exactly the right one. A digest that is not in the
+    established reference did not become part of it -- a `replace_annotation` against the wrong
+    genome, an establish that failed, a contig dropped as a duplicate of one already there --
+    so there is nothing about it to record. That one intersection subsumes every "did the
+    import succeed" question, which is why no import handler had to learn about any of this.
+
+    **Twinned accessions resolve to the first typed.** `NC_000913.3` and `U00096.3` are the
+    same bases under two accessions, and `DatabaseSequenceLink` is unique on
+    `(database, sha256)`, so only one row can exist for them. Both statements are true; the
+    rule is simply that the first one typed is the one kept, which is deterministic and which
+    somebody reading the Reference page can act on. Silently letting the last write win would
+    be the same outcome with no rule behind it.
+
+    Never allowed to fail the import. The mutations are committed by now, and provenance is
+    commentary on them -- the posture `_SessionProgress` takes for the same reason.
+    """
+    from mutint_sample import ncbi
+    from mutint_sample.models import ReferenceSequences
+
+    try:
+        reference = ReferenceSequences.objects.filter(experiment=experiment).first()
+        if reference is None:
+            return
+        stored = {entry.get("sha256") for entry in (reference.seq_ids or [])
+                  if entry.get("sha256")}
+        for digest, entry in downloaded.items():
+            if digest not in stored:
+                continue
+            ncbi.record_downloaded(digest, entry["length"], entry["accession"],
+                                   entry["detail"], user=user)
+            # First typed wins: `downloaded` is in the order the accessions were resolved.
+            stored.discard(digest)
+    except Exception:
+        logger.exception("could not record NCBI provenance for experiment %s",
+                         getattr(experiment, "id", None))
+
+
+def _finalize_holding_lock(session, request, root, options, progress, downloaded=None):
     """The body of `finalize_upload`, run with the import lock held."""
     try:
         # The registry decides what each file is and which handler takes it, so a plugin's
@@ -332,11 +459,10 @@ def _finalize_holding_lock(session, request, root, options, progress):
         logger.exception("breseq folder finalize failed for session %s", session.id)
         # Before the state change, so the last poll shows which unit it died on rather than
         # a table frozen mid-import with nothing saying why.
-        progress.fail(str(exc))
-        session.state = STATE_FAILED
-        session.save(update_fields=["state", "updated"])
-        shutil.rmtree(root, ignore_errors=True)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _fail(session, root, progress, str(exc), status=500)
+
+    if downloaded:
+        _record_downloads(session.experiment, downloaded, request.user)
 
     progress.finish()
     shutil.rmtree(root, ignore_errors=True)

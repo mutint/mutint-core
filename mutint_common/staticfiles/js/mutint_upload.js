@@ -124,6 +124,11 @@
             url = "/import/uploads/";
             body = { experiment_id: options.experimentId,
                      import_type: options.importType, files: manifest };
+            // NCBI accessions travel with the manifest rather than with the finalize, so the
+            // server can resolve them against NCBI and refuse a typo before a byte goes up.
+            // An entries list of nothing then uploads nothing and still yields an id, which
+            // is what an accessions-only import is.
+            if (options.accessions) { body.accessions = options.accessions; }
         }
 
         var uploadId = null;

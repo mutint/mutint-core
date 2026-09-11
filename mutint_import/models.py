@@ -107,6 +107,14 @@ class UploadSession(models.Model):
     declared_bytes = models.BigIntegerField(default=0)
     received_bytes = models.BigIntegerField(default=0)
 
+    # NCBI accessions this drop also imports, as `ncbi_fetch.Resolved.as_dict()` entries --
+    # the *resolved* plan rather than the raw text, so finalize does not get a second opinion
+    # about what was meant. They are resolved when the session is created, which is what lets
+    # a typo be refused before anything is uploaded, and downloaded into the staging directory
+    # at finalize, where they become ordinary staged files. Empty is every session that has
+    # only files, which is every session that existed before this field.
+    accessions = models.JSONField(default=list, blank=True)
+
     # How far `finalize_upload` has got, as {"state", "stage", "units": [...]}, written by
     # `upload_session._SessionProgress` and served by `upload_session.upload_progress`. It
     # lives here rather than in its own table so it is reaped with the session it describes,

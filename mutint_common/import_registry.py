@@ -51,6 +51,7 @@ def register_import_handler(name, label, patterns, handle,
                             priority=PRIORITY_DATA, detect=None, description="",
                             requires_reference=False,
                             only_without_reference=False, accepts_options=False,
+                            accepts_accessions=False,
                             list_units=None, menu_order=None, directories=()):
     """Register an import type.
 
@@ -79,6 +80,20 @@ def register_import_handler(name, label, patterns, handle,
                 dict, e.g. an answer to a ConfirmationRequired it raised earlier. Opt-in so
                 the documented four-argument `handle` contract keeps working untouched: a
                 plugin's handler must not have to change because core grew a seam.
+    accepts_accessions
+                a drop of this type may also name NCBI accessions, which are downloaded
+                into the staging area and imported alongside whatever files were dropped.
+                The Import data page reads this to decide whether to draw the accessions
+                box, so no template names an import type; `upload_session` reads it to
+                refuse accessions offered to a type that cannot use them.
+
+                **It says "and also from NCBI", not "instead of files".** A type declaring
+                it still receives a staged tree and nothing else -- what arrives from an
+                accession is a GenBank file in that tree by the time any handler runs, so a
+                handler needs no code for this at all -- the two core types that declare it
+                are unchanged apart from the flag. Recording which record each contig came
+                out of happens after the import, in `upload_session._record_downloads`.
+
     only_without_reference
                 the inverse: the type stops being offered once a reference exists,
                 because establishing one is a one-time act. Nothing enforces this
@@ -144,6 +159,7 @@ def register_import_handler(name, label, patterns, handle,
         "requires_reference": requires_reference,
         "only_without_reference": only_without_reference,
         "accepts_options": accepts_options,
+        "accepts_accessions": accepts_accessions,
         "list_units": list_units,
         "menu_order": priority if menu_order is None else menu_order,
     })
@@ -195,6 +211,7 @@ def get_import_types():
         "description": h["description"],
         "requires_reference": h["requires_reference"],
         "only_without_reference": h["only_without_reference"],
+        "accepts_accessions": h["accepts_accessions"],
         "menu_order": h["menu_order"],
     } for h in get_import_handlers()]
 

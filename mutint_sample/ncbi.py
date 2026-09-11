@@ -5,6 +5,13 @@ Nothing in this repo stores an accession -- see `DatabaseSequenceLink`'s docstri
 has to be supplied by a person, and the whole value of this module is that a supplied name is
 *not* taken at its word.
 
+**There is a second way a contig gets an accession, and it does not come through here.** A
+reference imported *from* an accession -- `mutint_import.ncbi_fetch`, the NCBI box on the
+Import data page -- knows which record its bases came out of, so `record_downloaded` below
+writes the link with no verification at all. That is not an exception to the rule below; it is
+the rule met at the other end. Everything else in this file is about a name somebody typed
+beside a sequence that arrived from somewhere else.
+
 **This is a verification, not a search.** It never asks NCBI which record holds a sequence; it
 asks whether the record already named is made of these bases, and answers yes or no. Two
 consequences worth knowing before extending it:
@@ -29,6 +36,7 @@ inside it.
 
 import hashlib
 import logging
+import re
 
 import requests
 from django.conf import settings
@@ -46,7 +54,31 @@ EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 TOOL_NAME = "mutint"
 
 
-class _Unreachable(Exception):
+#: Query parameters that identify this deployment rather than the record being asked for, and
+#: that must never survive into a message. See `redact`.
+_IDENTIFYING = ("api_key", "email")
+
+_IDENTIFYING_IN_URL = re.compile(
+    r"(?i)\b(%s)=[^&\s)]*" % "|".join(_IDENTIFYING))
+
+
+def redact(text):
+    """`text` with this deployment's NCBI credentials taken out of it.
+
+    **`requests` puts the whole URL, query string included, into its exception strings**, and
+    those strings are not kept private: `verify` writes them into `DatabaseSequenceLink.detail`,
+    which is a column, is rendered on `/mutations/reference`, and is printed by
+    `./mutint ncbi_accessions --list`. So a DNS failure or a timed-out connection was enough to
+    write the operator's API key into a user-visible field and into the log beside it.
+
+    Everything that turns a `requests` exception into words goes through here. It is a
+    substitution rather than a check because the key is a value this code was handed and not a
+    shape it can recognise -- `api_key=` is what has to go, whatever follows it.
+    """
+    return _IDENTIFYING_IN_URL.sub(lambda match: "%s=[redacted]" % match.group(1), str(text))
+
+
+class Unreachable(Exception):
     """NCBI could not be asked. Distinct from any answer it might have given."""
 
 
@@ -77,7 +109,7 @@ def sequence_digest_stream(lines):
     return digest.hexdigest(), total
 
 
-def _params(**extra):
+def request_params(**extra):
     params = {"tool": TOOL_NAME}
     email = getattr(settings, "MUTINT_NCBI_EMAIL", "")
     api_key = getattr(settings, "MUTINT_NCBI_API_KEY", "")
@@ -89,35 +121,35 @@ def _params(**extra):
     return params
 
 
-def _timeout():
+def timeout_seconds():
     return getattr(settings, "MUTINT_NCBI_TIMEOUT", 30)
 
 
-def _max_bases():
+def max_bases():
     return getattr(settings, "MUTINT_NCBI_MAX_BASES", 50_000_000)
 
 
-def _summary(accession):
+def summary(accession):
     """`(accessionversion, slen)` for `accession`, or None when NCBI has no such record.
 
-    Raises `_Unreachable` when NCBI could not be asked at all, which is deliberately not the
+    Raises `Unreachable` when NCBI could not be asked at all, which is deliberately not the
     same outcome as being told there is no such record.
     """
     try:
         response = requests.get(
             ESUMMARY_URL,
-            params=_params(db="nuccore", id=accession, retmode="json"),
-            timeout=_timeout())
+            params=request_params(db="nuccore", id=accession, retmode="json"),
+            timeout=timeout_seconds())
     except requests.RequestException as error:
-        raise _Unreachable(str(error))
+        raise Unreachable(redact(error))
 
     if response.status_code != 200:
-        raise _Unreachable("NCBI answered HTTP %s" % response.status_code)
+        raise Unreachable("NCBI answered HTTP %s" % response.status_code)
 
     try:
         payload = response.json()
     except ValueError as error:
-        raise _Unreachable("NCBI's answer was not JSON (%s)" % error)
+        raise Unreachable("NCBI's answer was not JSON (%s)" % redact(error))
 
     result = (payload or {}).get("result") or {}
     uids = result.get("uids") or []
@@ -133,32 +165,32 @@ def _summary(accession):
     try:
         length = int(record.get("slen"))
     except (TypeError, ValueError):
-        raise _Unreachable("NCBI reported no length for %s" % versioned)
+        raise Unreachable("NCBI reported no length for %s" % versioned)
     return versioned, length
 
 
 def _fetch_digest(accession, expected_length):
     """`(sha256, base_count)` for NCBI's FASTA of `accession`, streamed rather than buffered."""
-    if expected_length > _max_bases():
-        raise _Unreachable(
+    if expected_length > max_bases():
+        raise Unreachable(
             "%s is %s bases, past the %s-base ceiling this check will download"
-            % (accession, format(expected_length, ",d"), format(_max_bases(), ",d")))
+            % (accession, format(expected_length, ",d"), format(max_bases(), ",d")))
     try:
         response = requests.get(
             EFETCH_URL,
-            params=_params(db="nuccore", id=accession, rettype="fasta", retmode="text"),
-            timeout=_timeout(),
+            params=request_params(db="nuccore", id=accession, rettype="fasta", retmode="text"),
+            timeout=timeout_seconds(),
             stream=True)
     except requests.RequestException as error:
-        raise _Unreachable(str(error))
+        raise Unreachable(redact(error))
 
     if response.status_code != 200:
-        raise _Unreachable("NCBI answered HTTP %s for the sequence" % response.status_code)
+        raise Unreachable("NCBI answered HTTP %s for the sequence" % response.status_code)
 
     try:
         return sequence_digest_stream(response.iter_lines())
     except requests.RequestException as error:
-        raise _Unreachable("the download stopped partway (%s)" % error)
+        raise Unreachable("the download stopped partway (%s)" % redact(error))
     finally:
         response.close()
 
@@ -183,15 +215,15 @@ def verify(sha256, length, accession):
         return DatabaseSequenceLink.UNCHECKED, "", ""
 
     try:
-        summary = _summary(accession)
-    except _Unreachable as error:
+        record = summary(accession)
+    except Unreachable as error:
         return DatabaseSequenceLink.ERROR, accession, "Could not reach NCBI: %s" % error
 
-    if summary is None:
+    if record is None:
         return (DatabaseSequenceLink.NOT_FOUND, accession,
                 "NCBI has no nucleotide record under %s." % accession)
 
-    versioned, ncbi_length = summary
+    versioned, ncbi_length = record
     if ncbi_length != length:
         return (DatabaseSequenceLink.MISMATCH, versioned,
                 "%s is %s bases; this contig is %s. They are different sequences."
@@ -199,7 +231,7 @@ def verify(sha256, length, accession):
 
     try:
         digest, counted = _fetch_digest(versioned, ncbi_length)
-    except _Unreachable as error:
+    except Unreachable as error:
         return DatabaseSequenceLink.ERROR, versioned, "Could not reach NCBI: %s" % error
 
     if counted != length:
@@ -270,6 +302,43 @@ def check_and_store(sha256, length, accession, user=None,
         })
     if status != DatabaseSequenceLink.VERIFIED:
         logger.info("NCBI check for %s (%s): %s -- %s", accession, sha256[:12], status, detail)
+    return record
+
+
+def record_downloaded(sha256, length, accession, detail, user=None,
+                      database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
+    """Link a contig whose bases we *downloaded* to the record they came out of.
+
+    Written VERIFIED, with no call to `verify` and no second download.
+
+    **This does not break the rule that a name is never the evidence; it is the one case that
+    satisfies it without having to ask.** Everywhere else an accession is a *claim*: somebody
+    typed a name beside a sequence that arrived from somewhere else, and `verify` exists to go
+    and find out whether the two are the same thing. Here the sequence *is* what that record
+    sent, so the comparison `verify` performs has already happened by construction, and
+    re-fetching the genome could only ever agree with itself -- at the cost of downloading
+    every imported genome twice.
+
+    What keeps it honest is upstream: `mutint_import.ncbi_fetch` reads the accession off the
+    VERSION line of the file it actually wrote rather than from what was asked for, and its
+    caller records only digests that reached `ReferenceSequences.seq_ids`. So the row is
+    written when, and only when, these exact bases were both sent by that record and stored.
+
+    A row already here is overwritten, MISMATCH and ERROR included. The key is the digest, so
+    whatever is being replaced was a verdict about *this* sequence -- and a verdict reached
+    from a typed name is exactly what direct provenance supersedes.
+    """
+    record, _created = DatabaseSequenceLink.objects.update_or_create(
+        database=database,
+        sha256=sha256,
+        defaults={
+            "length": length,
+            "accession": accession,
+            "status": DatabaseSequenceLink.VERIFIED,
+            "detail": detail,
+            "checked_at": timezone.now(),
+            "proposed_by": user if (user is not None and user.is_authenticated) else None,
+        })
     return record
 
 

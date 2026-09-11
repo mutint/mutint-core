@@ -521,6 +521,9 @@ def register_core_import_handlers():
         detect=detect_reference,
         handle=handle_reference,
         accepts_options=True,
+        # A reference is the one thing an experiment needs that is usually already published,
+        # so it is the one import type where naming a record beats finding a file.
+        accepts_accessions=True,
         menu_order=MENU_REFERENCE,
         # Establishing a reference is a one-time act. Once the experiment has one,
         # offering this again invites the two things it will not do: replacing the
@@ -545,6 +548,9 @@ def register_core_import_handlers():
         detect=detect_annotation,
         handle=handle_replace_annotation,
         accepts_options=True,
+        # The same question at the other moment: a newer annotation of the genome already
+        # established is exactly the thing NCBI has and this checkout does not.
+        accepts_accessions=True,
         requires_reference=True,
         # Last, deliberately. It rewrites the genome every sample in the experiment is
         # checked against, and is the rarest and least reversible thing on the menu.

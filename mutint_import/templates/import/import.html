@@ -43,6 +43,25 @@
             so nothing is imported as something it is not.
         </small>
 
+        {% if import_type.accepts_accessions %}
+        {% comment %} Above the drop zone, and optional. The two are one import: whatever is
+           typed here is downloaded into the same staging area the files go to, and merged
+           into one reference. See mutint_import/ncbi_fetch.py. {% endcomment %}
+        <div class="form-group" id="accession-box" style="margin-top: 1em;">
+            <label for="import-accessions">Or fetch from NCBI by accession</label>
+            <textarea id="import-accessions" class="form-control" rows="2"
+                      placeholder="NC_000913.3, GCF_000005845.2"></textarea>
+            <small class="help-block">
+                Nucleotide accessions (<code>NC_000913.3</code>, <code>U00096.3</code>) or
+                genome assembly accessions (<code>GCF_</code>&hairsp;/&hairsp;<code>GCA_</code>),
+                separated by commas, spaces or new lines. An assembly brings every sequence it
+                lists. They are combined with any files you drop below, and each contig is
+                recorded as the NCBI record it came from, so nothing has to be confirmed
+                afterwards.
+            </small>
+        </div>
+        {% endif %}
+
         <div id="dropzone" style="border: 2px dashed #999; border-radius: 6px; padding: 2.5em;
              text-align: center; color: #666; background: #fafafa; cursor: pointer;">
             <p style="margin: 0; font-size: 1.1em;">Drag &amp; drop files or folders here,
@@ -125,6 +144,8 @@
     var typeSelect = document.getElementById("import-type");
     var fileListEl = document.getElementById("file-list");
     var dropListEl = document.getElementById("drop-list");
+    // Absent unless this import type declared `accepts_accessions`, so every use is guarded.
+    var accessionsEl = document.getElementById("import-accessions");
     var resetBtn = document.getElementById("import-reset");
     var submitBtn = document.getElementById("import-submit");
     var resultEl = document.getElementById("import-result");
@@ -141,6 +162,10 @@
     // The last snapshot the poll returned, kept so a failure can be shown *above* what had
     // already landed rather than replacing it.
     var lastUnits = null;
+
+    function accessionsText() {
+        return accessionsEl ? accessionsEl.value.trim() : "";
+    }
 
     function matches(path, patterns) {
         var lower = (path || "").toLowerCase();
@@ -315,12 +340,15 @@
             totalLi.textContent = "Total to upload: " + humanBytes(total);
             fileListEl.appendChild(totalLi);
         }
-        // Nothing to do if the selection holds nothing the chosen type reads.
-        submitBtn.disabled = selected.length === 0 || !typeSelect.value ||
-            Object.keys(buckets).length === 0;
+        // Nothing to do if the selection holds nothing the chosen type reads -- unless an
+        // accession was typed, which is a whole import on its own.
+        submitBtn.disabled = !typeSelect.value ||
+            (Object.keys(buckets).length === 0 && !accessionsText());
     }
 
     typeSelect.addEventListener("change", renderList);
+    // So typing an accession enables Import with no file selected at all.
+    if (accessionsEl) { accessionsEl.addEventListener("input", renderList); }
 
     // Back to the page as it loaded: no drops, no result from last time. The type is the
     // tab and stays.
@@ -413,6 +441,13 @@
                         lastUnits = snapshot.units;
                         setUnitProgress(snapshot.completed, snapshot.total, snapshot.stage);
                         renderUnits(snapshot.units, null);
+                    } else if (snapshot && snapshot.stage) {
+                        // Before any unit is announced there is no table to draw, and
+                        // downloading a genome from NCBI happens entirely inside that window.
+                        // Without this the bar would say "Scanning the uploaded files" for the
+                        // length of a download that has not started scanning anything.
+                        setScanningProgress();
+                        progressText.textContent = snapshot.stage;
                     }
                     // The session has reached a state it will not leave, so the import is
                     // over -- and this page must not go on asking. The finalize response is
@@ -473,12 +508,15 @@
         selected = [];
         dirInput.value = "";
         fileInput.value = "";
+        // The accessions go with the files, and for the same reason: pressing Import again
+        // would download and import the very same records a second time.
+        if (accessionsEl) { accessionsEl.value = ""; }
         renderList();
     }
 
     document.getElementById("import-form").addEventListener("submit", function (e) {
         e.preventDefault();
-        if (!selected.length) { return; }
+        if (!selected.length && !accessionsText()) { return; }
 
         submitBtn.disabled = true;
         uploading = true;
@@ -492,12 +530,16 @@
         // and uploading it meant a long wait followed by a page of "not recognized"
         // warnings for files nobody asked to import.
         var toUpload = selected.filter(function (entry) { return classify(entry.path); });
-        if (!toUpload.length) { submitBtn.disabled = false; uploading = false; renderDrops(); return; }
+        var accessions = accessionsText();
+        if (!toUpload.length && !accessions) {
+            submitBtn.disabled = false; uploading = false; renderDrops(); return;
+        }
 
         var uploadId = null;
         mutintUpload(toUpload, {
             experimentId: EXPERIMENT_ID,
             importType: typeSelect.value,
+            accessions: accessions,
             onProgress: setProgress
         }).then(function (id) {
             uploadId = id;
@@ -674,12 +716,41 @@
         return references ? "Reference." : "0 mutations.";
     }
 
-    function successAlert(summary) {
+    // The headline above the table, which has to agree with the rows beneath it.
+    //
+    // **It was `alert-success` unconditionally**, so a drop in which every file failed
+    // announced itself in green as "Imported … : 0 mutations." with every row underneath
+    // carrying an error. A reference import is the worst case of that, being all-or-nothing:
+    // one refusal is reported on *every* row, and the sentence above them still said it had
+    // worked. The rows were right and the headline was not.
+    //
+    // Read off the same rows the table renders -- `whatLanded` already takes that care, and
+    // this is the other half of it.
+    function summaryAlert(summary) {
+        var files = summary.files || [];
+        var failed = files.filter(function (f) { return f.error; }).length;
+        var where = summary.experiment + " (#" + summary.experiment_id + ")";
         var alert = document.createElement("div");
-        alert.className = "alert alert-success";
+
+        if (files.length && failed === files.length) {
+            // Nothing landed, so there is deliberately no "View experiment" link: there is
+            // nothing new to go and look at, and what to do next is on this page.
+            // textContent throughout -- an experiment's name is its owner's words.
+            alert.className = "alert alert-danger";
+            alert.textContent = "Nothing was imported into " + where + ". "
+                + (files.length === 1 ? "What stopped it is below."
+                                      : "What stopped each file is below.");
+            return alert;
+        }
+
+        // Amber for a partial drop: some of it landed, which is worth saying plainly rather
+        // than leaving somebody to count red rows to discover it.
+        alert.className = failed ? "alert alert-warning" : "alert alert-success";
         alert.appendChild(document.createTextNode(
-            "Imported into " + summary.experiment + " (#" + summary.experiment_id + "): "
-            + whatLanded(summary) + " "));
+            "Imported into " + where + ": " + whatLanded(summary)
+            + (failed ? " " + failed + " of " + files.length
+                        + (files.length === 1 ? " file failed." : " files failed.") : "")
+            + " "));
         var link = document.createElement("a");
         link.href = "/stats?experiment_id=" + encodeURIComponent(summary.experiment_id);
         link.textContent = "View experiment";
@@ -781,7 +852,7 @@
     }
 
     function renderSummary(summary) {
-        renderUnits(summary.files || [], successAlert(summary));
+        renderUnits(summary.files || [], summaryAlert(summary));
     }
 
     restoreSummary();

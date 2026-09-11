@@ -93,6 +93,35 @@ restorable from the mutation editor's history. The two were once the same mechan
 was the bug — the old ignored-mutation lists were a delete that kept the row, per experiment,
 attributed to nobody, with no way back.
 
+## NCBI
+
+Two features reach NCBI: confirming that a reference contig is the record somebody said it is
+(the **Reference** page's *Check* button), and importing a reference genome by accession in the
+first place (see *Reference genomes*). Both are optional, and a deployment with no outbound
+network simply does neither — nothing else changes, and no page waits on NCBI to render.
+
+| setting | default | for |
+|---|---|---|
+| `MUTINT_NCBI_API_KEY` | unset | raises NCBI's rate limit from 3 requests a second to 10 |
+| `MUTINT_NCBI_EMAIL` | unset | identifies the deployment to NCBI, as NCBI asks callers to |
+| `MUTINT_NCBI_TIMEOUT` | `30` | seconds per request |
+| `MUTINT_NCBI_MAX_BASES` | `50000000` | the most one check or one import will download |
+
+All four are read from the environment.
+
+**The key and the address are the operator's, and they are used for every user's request.**
+There is no per-user key and no UI for one: a deployment that sets `MUTINT_NCBI_API_KEY` is
+spending its own quota on behalf of everyone who imports, and NCBI sees those requests as that
+deployment's. That is what the key is for — it is a rate-limit identifier, not an access
+credential, and it grants no access to anything that is not already public — but it is worth
+deciding knowingly rather than discovering later. Leaving both unset is a supported
+configuration: requests are spaced so that one import stays within the slower keyless limit.
+
+Neither value reaches a browser, and neither appears in an error message: `mutint_sample.ncbi`
+redacts them out of anything derived from a failed request, because the HTTP client puts the
+whole URL — query string included — into its exception strings, and those are rendered on the
+Reference page.
+
 ## Access
 
 Four ordered roles, granted on a **project** and nowhere else:

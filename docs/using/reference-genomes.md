@@ -31,6 +31,58 @@ Three rules apply across the files of one drop:
 **Replace annotation** takes several files the same way -- and, as with one file, the files
 together must carry the whole genome.
 
+## From an NCBI accession
+
+The **Reference Sequence** tab takes accessions as well as files. Type them into the box above
+the drop zone, separated by commas, spaces, semicolons or new lines:
+
+- **Nucleotide accessions** — `NC_000913.3`, `U00096.3`, `CP009273.1`. An unversioned
+  accession is resolved to whatever version NCBI currently holds, and that is the record you
+  get.
+- **Genome assembly accessions** — `GCF_000005845.2`, `GCA_000005845.2`. The assembly is
+  resolved to the nucleotide records it is made of and **every sequence it lists** is
+  downloaded: chromosome, plasmids and unplaced scaffolds alike. A `GCF_` accession takes each
+  sequence's RefSeq spelling and a `GCA_` its GenBank one.
+
+**Accessions and dropped files are one import.** A chromosome typed as an accession and a
+plasmid dropped as a FASTA make a single reference, on the same terms as two dropped files —
+see *A reference may be several files* above. The download lands in the same staging area the
+files do, and everything after that is identical.
+
+**A typo is refused before anything is uploaded.** Each accession is looked up when you press
+Import, and an accession NCBI has no record of stops the import there, naming it and saying
+which database was searched. Nothing is staged and nothing has to be dropped again.
+
+**Update Annotation takes accessions too**, which is the usual way to move an established
+genome onto a newer annotation of the same sequence.
+
+### The NCBI link is recorded for you
+
+A contig that arrived this way is linked to the record it came from, and the **Reference** page
+shows it as confirmed with nobody having pressed *Check*. That is not a shortcut around the
+check that page offers: the bases came out of that record, which is stronger evidence than the
+accession somebody types beside a sequence that arrived some other way. Mutations on such a
+contig can be drawn in NCBI's own annotation immediately.
+
+The contig is still **named for its LOCUS line** (`NC_000913`), while the link is filed under
+the **VERSION** (`NC_000913.3`) — see the note under *Normalization*. The two are tied together
+by the sequence itself rather than by either name.
+
+### What it needs, and what it costs
+
+Outbound access to `eutils.ncbi.nlm.nih.gov` and `api.ncbi.nlm.nih.gov`. A deployment with no
+outbound network cannot use this way in, and nothing else about it changes.
+
+`MUTINT_NCBI_API_KEY` and `MUTINT_NCBI_EMAIL` are optional (see *Configuration*). Neither is
+required, and both are **the operator's, used for every user's request** — an API key raises
+NCBI's rate limit for this deployment from 3 requests a second to 10, and identifies the
+deployment to NCBI. Requests within one import are spaced so that a single import stays under
+the slower limit either way; two people importing at the same moment can still be rate-limited,
+which is reported as such and costs nothing but the retry.
+
+Imports are capped by `MUTINT_NCBI_MAX_BASES` (50 Mb by default) across the whole drop, and at
+500 sequences per accession.
+
 ## Sequence is the sole invariant
 
 Two samples belong to the same experiment when their reference **sequence** is identical.
