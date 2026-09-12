@@ -64,7 +64,7 @@ plugins register.
 ```
 
 Most of the time nothing here is needed: a page rebuilds its own data when it notices it is
-stale. Reach for it after an upgrade, after restoring a database, or when `--list` shows an
+stale. Reach for it after an update, after restoring a database, or when `--list` shows an
 error — a failed rebuild is recorded rather than raised, so it is quiet by design.
 
 An entry marked `(manual -- --only runs it)` never rebuilds on its own. That is derived data
@@ -84,13 +84,13 @@ when it has gone stale.
 list. With more than one component installed `--component` is required -- bumping the wrong
 repository's version is quiet, and the mistake only surfaces at release.
 
-## Upgrading
+## Updating
 
 ```bash
-./mutint upgrade --check      # what is available; change nothing
-./mutint upgrade              # move this installation onto it
-./mutint upgrade --to v1.4.0  # a particular version
+./mutint update --check      # what is available; change nothing
+./mutint update              # move this installation onto it
+./mutint update --to v1.4.0  # a particular version
 ```
 
-`upgrade` moves the working tree and stops there, so run `./mutint start` afterwards: that is
-what installs new dependencies and applies new migrations. See [Upgrading](upgrading.md).
+`update` moves the working tree and stops there, so run `./mutint start` afterwards: that is
+what installs new dependencies and applies new migrations. See [Updating](updating.md).

@@ -9,7 +9,7 @@
 
     <h3 style="margin-top: 0;">Installed Components</h3>
 
-    <table class="table table-condensed" id="upgrade-components">
+    <table class="table table-condensed" id="update-components">
         <thead>
             <tr>
                 <th>Component</th>
@@ -72,7 +72,7 @@
                 migrations applied on that same launch.
                 {% if can_restart %}
                     <p style="margin-top: 1em; margin-bottom: 0;">
-                        <button type="button" class="btn btn-primary" id="upgrade-restart">
+                        <button type="button" class="btn btn-primary" id="update-restart">
                             Restart MutInt</button>
                     </p>
                 {% endif %}
@@ -97,12 +97,12 @@
         </p>
 
         <div class="form-group">
-            <label for="upgrade-channel">Follow</label>
+            <label for="update-channel">Follow</label>
             {% comment %} `width: auto` so the control sizes to its longest option rather
                than to a guess about how long the options are. `.form-control` is
                `width: 100%`, and the fixed cap that used to override it was measured against
                wording these labels no longer use -- it clipped them mid-word. {% endcomment %}
-            <select id="upgrade-channel" class="form-control"
+            <select id="update-channel" class="form-control"
                     style="width: auto; max-width: 100%;">
                 <option value="stable" {% if channel == "stable" %}selected{% endif %}>
                     Official Releases &mdash; numbered version updates only
@@ -114,27 +114,27 @@
         </div>
 
         <div class="btn-row">
-            <button type="button" class="btn btn-default" id="upgrade-check">
+            <button type="button" class="btn btn-default" id="update-check">
                 Check for updates</button>
             {% comment %} "Install update", not "Install <ref>": the sentence in the status
                box below already names the version, and a button that changes its label
                is one the eye has to re-read. The page is Update everywhere a person sees
-               it; `upgrade` survives in the URL, the ids and the module, which predate
+               it; `update` survives in the URL, the ids and the module, which predate
                the wording. {% endcomment %}
-            <button type="button" class="btn btn-primary" id="upgrade-install"
+            <button type="button" class="btn btn-primary" id="update-install"
                     {% if not available %}style="display: none;"{% endif %}>
                 Install update</button>
         </div>
 
-        <div id="upgrade-status" style="margin-top: 1em;">
+        <div id="update-status" style="margin-top: 1em;">
             {% if blockers %}
                 <div class="alert alert-warning">
                     {% for problem in blockers %}<p>{{ problem }}</p>{% endfor %}
                 </div>
-            {% elif upgrade_error %}
-                <div class="alert alert-warning">{{ upgrade_error }}</div>
+            {% elif update_error %}
+                <div class="alert alert-warning">{{ update_error }}</div>
             {% elif available %}
-                {% comment %} The sentence is composed server-side (`upgrade.summarize`) so
+                {% comment %} The sentence is composed server-side (`update.summarize`) so
                    this and the poll below cannot word it differently, and so that what it
                    says about components is decided where the components are known.
                    {% endcomment %}
@@ -165,12 +165,12 @@
 (function () {
     "use strict";
 
-    var checkButton = document.getElementById("upgrade-check");
+    var checkButton = document.getElementById("update-check");
     if (!checkButton) { return; }          // updating is disabled on this deployment
 
-    var installButton = document.getElementById("upgrade-install");
-    var channel = document.getElementById("upgrade-channel");
-    var status = document.getElementById("upgrade-status");
+    var installButton = document.getElementById("update-install");
+    var channel = document.getElementById("update-channel");
+    var status = document.getElementById("update-status");
     var available = null;
 
     // `text`, not html: every caller passes a sentence the server composed, and a version
@@ -218,7 +218,7 @@
         busy(true, checkButton, "Checking…");
         // mutintPostJson reads real status codes, so a 409 arrives as a rejection carrying
         // the sentence the server wrote rather than as a generic failure.
-        mutintPostJson("{% url 'upgrade_check' %}", {channel: channel.value})
+        mutintPostJson("{% url 'update_check' %}", {channel: channel.value})
             .then(function (data) {
                 available = data.available;
                 if (data.error) {
@@ -247,12 +247,12 @@
     // up for a moment after it answers -- it waits deliberately, so this response arrives --
     // and a poll that only asked "is it back" would be answered yes by the server that is
     // about to stop, and reload the page onto it.
-    var restartButton = document.getElementById("upgrade-restart");
+    var restartButton = document.getElementById("update-restart");
     if (restartButton) {
         restartButton.dataset.label = restartButton.textContent;
         restartButton.addEventListener("click", function () {
             busy(true, restartButton, "Restarting\u2026");
-            mutintPostJson("/upgrade/restart", {})
+            mutintPostJson("/update/restart", {})
                 .then(function () {
                     say("info", "MutInt is restarting. This page reloads when it is back.");
                     waitForRestart();
@@ -290,7 +290,7 @@
     installButton.addEventListener("click", function () {
         var ref = available ? available.ref : "{{ available.ref|escapejs }}";
         busy(true, installButton, "Staging…");
-        mutintPostJson("{% url 'upgrade_install' %}", {ref: ref})
+        mutintPostJson("{% url 'update_install' %}", {ref: ref})
             .then(function () {
                 // Reloaded rather than patched: the staged banner, the buttons and the
                 // installed version are all rendered from state the server now holds, and

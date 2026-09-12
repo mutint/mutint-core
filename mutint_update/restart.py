@@ -1,6 +1,6 @@
 """Stopping this installation, and starting it again, from inside it.
 
-`/upgrade/` stages a version and the next launch applies it, so the last step of an upgrade
+`/update/` stages a version and the next launch applies it, so the last step of an update
 has always been an instruction somebody has to follow: quit MutInt, start it again. This is
 that step as a button.
 
@@ -76,7 +76,7 @@ def _script(pid, command):
 
     `kill -0` is the poll: it tests that the pid can be signalled without signalling it. The
     loop is bounded so a process that will not die cannot leave the helper running for ever,
-    and past the bound it stops being polite -- an upgrade that half-happened because
+    and past the bound it stops being polite -- an update that half-happened because
     something ignored SIGTERM is worse than an ungraceful stop.
     """
     return "\n".join([
@@ -95,15 +95,15 @@ def _script(pid, command):
 
 
 def _note_restart():
-    """Tell the next launch not to open a browser -- see `upgrade.note_restart`. Best effort:
+    """Tell the next launch not to open a browser -- see `update.note_restart`. Best effort:
     a restart that works and opens an extra window beats one that refuses over a state file."""
     try:
-        from mutint_common import upgrade
-        root = upgrade.project_root()
+        from mutint_common import update
+        root = update.project_root()
         # No root means nothing told us which installation this is, and `.` would write a
         # state file wherever the process happens to be standing.
         if root:
-            upgrade.note_restart(root)
+            update.note_restart(root)
     except Exception:
         pass
 

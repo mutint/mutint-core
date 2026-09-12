@@ -92,12 +92,15 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         # None when nothing exported it, and mutint_common.tools then falls back to PATH.
         'MUTINT_TOOLS_DIR': os.environ.get('MUTINT_TOOLS_DIR'),
 
-        # Whether /upgrade/ offers to move this installation onto a newer version. True is
+        # `MUTINT_UPDATE_ENABLED` -- whether /update/ offers to move this installation onto a
+        # newer version -- is deliberately *not* defaulted here. Absent means True, which is
         # right for anything installed from a public repository; ALEdb sets it False in its
-        # own settings, being private and upgraded by hand. It cannot be a `.gitmodules`
+        # own settings, being private and updated by hand. It cannot be a `.gitmodules`
         # omission the way mutint-breseq is: the link lives in core's own account block, and
-        # a plugin has no seam into that.
-        'MUTINT_UPGRADE_ENABLED': True,
+        # a plugin has no seam into that. Not defaulted because `mutint_update.views` falls
+        # back to the setting's old name, `MUTINT_UPGRADE_ENABLED`, only when the new one is
+        # absent -- a default here would make that fallback unreachable, and a deployment
+        # that turned the feature off under the old name would find it back on.
         # Chunked uploads staged but never finalized are reaped after this many hours.
         'MUTINT_UPLOAD_SESSION_TTL_HOURS': int(
             os.environ.get('MUTINT_UPLOAD_SESSION_TTL_HOURS', '24')),
@@ -182,10 +185,10 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_bibliome',
             'mutint_home',
             'mutint_about',           # nav: About, in END_SECTION (the foot)
-            # nav: none. /upgrade/ is reached from the sidebar's account block, which is
+            # nav: none. /update/ is reached from the sidebar's account block, which is
             # written into base.html rather than registered -- nav_registry cannot express
-            # "superusers only". See mutint_upgrade/apps.py.
-            'mutint_upgrade',
+            # "superusers only". See mutint_update/apps.py.
+            'mutint_update',
         ],
 
         # PostgreSQL, and only PostgreSQL. The SQLite backend, its BEGIN IMMEDIATE

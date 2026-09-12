@@ -1,11 +1,11 @@
-"""Stopping MutInt and starting it again from the page that stages an upgrade.
+"""Stopping MutInt and starting it again from the page that stages an update.
 
 **Nothing here starts a helper.** `restart._spawn` is patched in every test that reaches it,
 because the helper's whole job is to signal a process this suite is running inside -- the pid
 it would be handed under the test runner is the test runner. What is asserted instead is the
 script it would have been given, which is where every decision actually lives.
 
-`MUTINT_UPGRADE_ENABLED` is pinned on for the same reason the rest of this app's tests pin
+`MUTINT_UPDATE_ENABLED` is pinned on for the same reason the rest of this app's tests pin
 it: ALEdb sets it False, and an assertion about the enabled behaviour would otherwise pass
 here and fail there.
 """
@@ -19,8 +19,8 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from mutint_common import upgrade
-from mutint_upgrade import restart
+from mutint_common import update
+from mutint_update import restart
 
 RELAUNCH = "/usr/bin/open '/Applications/MutInt.app'"
 
@@ -92,7 +92,7 @@ class RequestRestartTestCase(TestCase):
         # state file, where another test reads and clears it.
         self.base = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
-        root = mock.patch.object(upgrade, "project_root", return_value=self.base)
+        root = mock.patch.object(update, "project_root", return_value=self.base)
         root.start()
         self.addCleanup(root.stop)
 
@@ -110,7 +110,7 @@ class RequestRestartTestCase(TestCase):
                 mock.patch.object(restart, "_spawn"):
             restart.request_restart()
 
-        self.assertTrue(upgrade.take_restart_note(self.base))
+        self.assertTrue(update.take_restart_note(self.base))
 
     def test_it_spawns_the_helper_with_the_pid_it_will_signal(self):
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}), \
@@ -121,16 +121,16 @@ class RequestRestartTestCase(TestCase):
         self.assertIn("kill -TERM %d" % pid, spawn.call_args[0][0])
 
 
-@override_settings(MUTINT_UPGRADE_ENABLED=True)
+@override_settings(MUTINT_UPDATE_ENABLED=True)
 class RestartEndpointTestCase(TestCase):
     def setUp(self):
         # **The state file is patched for the whole class, not per test.** `request_restart`
-        # leaves a note in it, and unpatched that is *this checkout's* `data/upgrade.json` --
+        # leaves a note in it, and unpatched that is *this checkout's* `data/update.json` --
         # which another test then reads and clears, so the damage shows up somewhere else, once,
         # depending on the order tests ran in.
         self.base = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
-        root = mock.patch.object(upgrade, "project_root", return_value=self.base)
+        root = mock.patch.object(update, "project_root", return_value=self.base)
         root.start()
         self.addCleanup(root.stop)
 
@@ -142,7 +142,7 @@ class RestartEndpointTestCase(TestCase):
         one stops the server every reader of the deployment is being served by."""
         self.client.force_login(self.ordinary)
 
-        response = self.client.post(reverse("upgrade_restart"),
+        response = self.client.post(reverse("update_restart"),
                                     data="{}", content_type="application/json")
 
         self.assertEqual(403, response.status_code)
@@ -154,7 +154,7 @@ class RestartEndpointTestCase(TestCase):
         self.client.force_login(self.superuser)
 
         with mock.patch.dict(os.environ, env, clear=True):
-            response = self.client.post(reverse("upgrade_restart"),
+            response = self.client.post(reverse("update_restart"),
                                         data="{}", content_type="application/json")
 
         self.assertEqual(409, response.status_code)
@@ -165,53 +165,53 @@ class RestartEndpointTestCase(TestCase):
 
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}), \
                 mock.patch.object(restart, "_spawn") as spawn:
-            response = self.client.post(reverse("upgrade_restart"),
+            response = self.client.post(reverse("update_restart"),
                                         data="{}", content_type="application/json")
 
         self.assertEqual(200, response.status_code)
         self.assertTrue(response.json()["restarting"])
         self.assertEqual(1, spawn.call_count)
 
-    @override_settings(MUTINT_UPGRADE_ENABLED=False)
-    def test_a_deployment_that_declined_upgrades_declines_this(self):
+    @override_settings(MUTINT_UPDATE_ENABLED=False)
+    def test_a_deployment_that_declined_updates_declines_this(self):
         self.client.force_login(self.superuser)
 
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
-            response = self.client.post(reverse("upgrade_restart"),
+            response = self.client.post(reverse("update_restart"),
                                         data="{}", content_type="application/json")
 
         self.assertEqual(409, response.status_code)
 
     def test_get_is_not_allowed(self):
         self.client.force_login(self.superuser)
-        self.assertEqual(405, self.client.get(reverse("upgrade_restart")).status_code)
+        self.assertEqual(405, self.client.get(reverse("update_restart")).status_code)
 
 
-@override_settings(MUTINT_UPGRADE_ENABLED=True)
+@override_settings(MUTINT_UPDATE_ENABLED=True)
 class RestartButtonTestCase(TestCase):
-    """**Offered in one state only: an upgrade is staged.**
+    """**Offered in one state only: an update is staged.**
 
-    Restarting is what finishes that upgrade, and staged is the one moment where it is the
+    Restarting is what finishes that update, and staged is the one moment where it is the
     obvious next thing to do. A button sitting in the row above permanently would read as a
     general "restart the server" -- which is not what this page is for, and is a strange thing
     to put a click away on a page that is otherwise an inventory.
 
     The endpoint stays willing either way. It is a legitimate thing to ask for -- `./mutint
-    upgrade` from a shell moves the checkout and leaves the running server on the old code,
+    update` from a shell moves the checkout and leaves the running server on the old code,
     and restarting is exactly the fix -- so what narrows here is the offer, not the operation.
     """
 
     def setUp(self):
         self.base = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
-        root = mock.patch("mutint_upgrade.views.upgrade_root", return_value=self.base)
+        root = mock.patch("mutint_update.views.update_root", return_value=self.base)
         root.start()
         self.addCleanup(root.stop)
         self.superuser = User.objects.create_superuser("root", "root@example.com", "pw")
         self.client.force_login(self.superuser)
 
     def _html(self):
-        return self.client.get(reverse("upgrade")).content.decode("utf-8")
+        return self.client.get(reverse("update")).content.decode("utf-8")
 
     def test_no_button_with_nothing_staged(self):
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
@@ -219,28 +219,28 @@ class RestartButtonTestCase(TestCase):
 
         # `id="..."`, not the bare name: the script looks the button up by id whether or not
         # it was rendered, so the bare string is in the page either way.
-        self.assertNotIn('id="upgrade-restart"', html)
+        self.assertNotIn('id="update-restart"', html)
 
     def test_the_button_appears_with_the_staged_message(self):
-        upgrade.request(self.base, "v1.2.3", by="root")
+        update.request(self.base, "v1.2.3", by="root")
 
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
             html = self._html()
 
-        self.assertIn('id="upgrade-restart"', html)
+        self.assertIn('id="update-restart"', html)
         self.assertIn("Restart MutInt", html)
         # Beside the message it finishes, not somewhere else on the page.
         self.assertIn("v1.2.3 is staged", html)
-        self.assertLess(html.index("is staged"), html.index('id="upgrade-restart"'))
+        self.assertLess(html.index("is staged"), html.index('id="update-restart"'))
 
     def test_no_button_when_nothing_can_start_it_again(self):
         """Staged, but launched from a terminal: the page says to quit and start it again,
         which is the same two steps by hand."""
-        upgrade.request(self.base, "v1.2.3", by="root")
+        update.request(self.base, "v1.2.3", by="root")
         env = {k: v for k, v in os.environ.items() if k != restart.RELAUNCH_ENV}
 
         with mock.patch.dict(os.environ, env, clear=True):
             html = self._html()
 
-        self.assertNotIn('id="upgrade-restart"', html)
+        self.assertNotIn('id="update-restart"', html)
         self.assertIn("Quit MutInt and start it again", html)

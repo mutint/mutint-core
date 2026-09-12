@@ -64,7 +64,7 @@ class TestUtil(unittest.TestCase):
 
     def test_the_asset_version_changes_with_the_code(self):
         """The version plus a digest of every component's revision, so a Development-channel
-        upgrade changes every asset URL; the bare version where no revision is known."""
+        update changes every asset URL; the bare version where no revision is known."""
         import re
         from unittest import mock
         from mutint_common.util import compute_asset_version, get_asset_version

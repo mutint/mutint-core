@@ -17,8 +17,8 @@ has nothing to run and no way to reason about what state they are in.
 
 !!! warning "It used to say *ships in a tag*, and that is no longer true"
 
-    MutInt upgrades itself, and its **Development** channel follows `main` (see
-    [Upgrading](../using/upgrading.md)). So `main` is a distribution channel: a migration pushed
+    MutInt updates itself, and its **Development** channel follows `main` (see
+    [Updating](../using/updating.md)). So `main` is a distribution channel: a migration pushed
     there is applied by every installation on that channel, usually within a day.
 
     That kills the tidy-the-history-before-tagging step this page used to prescribe. Someone
@@ -81,10 +81,10 @@ bumped by hand when it means something. ALEdb's is deliberately **not** mutint-c
 it is a deployment with a history predating the platform's name, at 2.0.0 while every component
 sits at 0.0.1.
 
-**Tag an assembly all the same.** `mutint`'s tag is the whole of the **stable** upgrade channel
-— `mutint_common/upgrade.py` asks the project-root repo for tags and never a submodule — so
+**Tag an assembly all the same.** `mutint`'s tag is the whole of the **stable** update channel
+— `mutint_common/update.py` asks the project-root repo for tags and never a submodule — so
 pointers bumped and never tagged leave every installation on that channel told there is nothing
-to upgrade to. ALEdb's tag is a marker only, it having set `MUTINT_UPGRADE_ENABLED = False`.
+to update to. ALEdb's tag is a marker only, it having set `MUTINT_UPDATE_ENABLED = False`.
 
 A bump that carries migrations is verified by migrating, not by looking at pages. See the
 suite `CLAUDE.md` under **How much to verify after a bump**.

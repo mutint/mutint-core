@@ -3,7 +3,7 @@
 The state being guarded against -- `django_migrations` naming files that no longer exist --
 is what a rewritten migration history leaves behind, and it is the reason
 `docs/contributing/releasing.md` says a migration is immutable once it ships in a tag. Before
-the first tag that rule cost nothing and the history was collapsed twice; MutInt upgrades in
+the first tag that rule cost nothing and the history was collapsed twice; MutInt updates in
 place now, so somebody's database really does hold those rows.
 
 The guard is not tested by rewriting migrations, which nothing can do to a running suite.
@@ -44,7 +44,7 @@ class MissingMigrationsTestCase(TestCase):
             self.assertEqual([], migration_guard.missing_migrations(connection))
 
     def test_third_party_apps_are_not_our_business(self):
-        """A package renumbers its own history between releases and its upgrade path is
+        """A package renumbers its own history between releases and its update path is
         pip's. Naming one here would alarm an operator about something they did not do and
         cannot act on."""
         loader = _loader({("django_tasks_db", "0021_gone"): None}, {})
@@ -62,7 +62,7 @@ class DescribeTestCase(TestCase):
 
         self.assertIn("mutint_sample.0002_gone", message)
         self.assertIn("nothing has been changed", message)
-        self.assertIn("upgrade --to", message)
+        self.assertIn("update --to", message)
         self.assertIn("data/backups/", message)
 
     def test_a_long_list_is_summarised(self):

@@ -1,7 +1,7 @@
 """Moving this checkout onto a newer version of itself, in place.
 
-MutInt is installed as a git checkout and upgrades by fetching one. There is no release
-artifact and there deliberately is not: the data an upgrade must not lose -- the cluster in
+MutInt is installed as a git checkout and updates by fetching one. There is no release
+artifact and there deliberately is not: the data an update must not lose -- the cluster in
 ``data/db`` and the file store in ``data/store`` -- lives *inside* the directory an unpacked
 archive would replace. Git already knows to leave ignored files alone, which is the whole
 reason this works at all.
@@ -17,15 +17,15 @@ tests, and this is code that moves somebody's installation.
 
 **Parseable on Python 3.9, standard library only, no Django import.** The entry script loads
 this by path *before* the venv exists, under whatever ``python3`` the host has.
-``mutint_common/tests/test_upgrade.py`` asserts all three, because nothing else would catch
-them on a machine that has already upgraded.
+``mutint_common/tests/test_update.py`` asserts all three, because nothing else would catch
+them on a machine that has already updated.
 
 ### Staged here, applied at the next launch
 
 A running process cannot safely replace its own source and rebuild its own virtualenv: the
 autoreloader would fire part-way through the checkout, a new ``requirements.txt`` cannot be
 installed into the environment currently executing, and migrations would run against
-half-swapped code. So ``/upgrade/`` **stages** a request into ``data/upgrade.json`` and the
+half-swapped code. So ``/update/`` **stages** a request into ``data/update.json`` and the
 next ``./mutint start`` applies it before Django is importable.
 
 Everything after the checkout is machinery that already exists. The entry script's sentinels
@@ -36,7 +36,7 @@ then migrates. This module only has to move the working tree.
 ### What it refuses
 
 The refusals matter more than the happy path, because this same entry script runs in the
-development checkouts of this suite, where an upgrade would be vandalism. It stops, naming
+development checkouts of this suite, where an update would be vandalism. It stops, naming
 what it found, on a dirty working tree, on a HEAD carrying commits the remote has not seen,
 and on a checkout with no ``origin``. Nothing is fetched until those pass.
 """
@@ -48,16 +48,20 @@ import subprocess
 
 #: Where the channel, the last check and any pending request live. Under ``data/`` because it
 #: is state this deployment owns and would miss, and because ``rm -rf env`` -- the documented
-#: way to reset the tools -- must not take a staged upgrade with it.
-STATE_NAME = os.path.join('data', 'upgrade.json')
+#: way to reset the tools -- must not take a staged update with it.
+STATE_NAME = os.path.join('data', 'update.json')
+#: What the file was called while the feature was called upgrading. An installation that
+#: chose the Development channel wrote that choice here; `state_path` moves it across once
+#: rather than quietly putting such an installation back on the stable channel.
+LEGACY_STATE_NAME = os.path.join('data', 'upgrade.json')
 
-#: Where a pre-upgrade dump goes. Beside the database rather than inside it.
+#: Where a pre-update dump goes. Beside the database rather than inside it.
 BACKUP_DIR = os.path.join('data', 'backups')
 
-#: How many pre-upgrade dumps to keep. Nothing else in the suite prunes anything under
+#: How many pre-update dumps to keep. Nothing else in the suite prunes anything under
 #: `data/`, and this is the one part of it that grows without anybody asking for it: each
-#: dump is the whole database, and the Development channel follows `main`, so an upgrade
-#: can happen daily. Five reaches back past a bad upgrade nobody noticed for a few days,
+#: dump is the whole database, and the Development channel follows `main`, so an update
+#: can happen daily. Five reaches back past a bad update nobody noticed for a few days,
 #: and keeps the backups from quietly outgrowing the database they came from.
 BACKUP_KEEP = 5
 
@@ -74,23 +78,23 @@ MAIN_BRANCH = 'main'
 
 #: A release tag: `v` and a dotted number, nothing else. Deliberately strict -- `git describe`
 #: output, release candidates and `testdata-*` asset tags are all things a tag namespace
-#: accumulates, and an upgrade should move between reviewed points or not at all.
+#: accumulates, and an update should move between reviewed points or not at all.
 TAG_RE = re.compile(r'^v(\d+)(?:\.(\d+))*$')
 
-#: How long any single git call may take. An upgrade check runs from a web request; one that
+#: How long any single git call may take. An update check runs from a web request; one that
 #: hangs is worse than one that says it could not reach the remote.
 TIMEOUT = 60
 
 
-class UpgradeError(Exception):
-    """This checkout cannot be upgraded, and the message says why.
+class UpdateError(Exception):
+    """This checkout cannot be updated, and the message says why.
 
     Distinct from `Unreachable` on purpose: "you have uncommitted work" is an answer about
     this installation, and no amount of retrying changes it.
     """
 
 
-class Unreachable(UpgradeError):
+class Unreachable(UpdateError):
     """The remote could not be asked. Distinct from any answer it might have given.
 
     Mirrors `mutint_sample/ncbi.py`'s `_Unreachable`, and for the same reason: a page that
@@ -106,7 +110,7 @@ def project_root():
     re-execs, and it is the only thing that knows: settings cannot, because an assembled
     project reaches `get_base_settings()` through mutint-core's `config/defaults.py`, which
     passes the *mutint-core* directory -- the same trap `templates/` and `staticfiles/` work
-    around. So an upgrade run from inside `mutint/` must move `mutint/`, not the submodule the
+    around. So an update run from inside `mutint/` must move `mutint/`, not the submodule the
     code happens to live in.
 
     `mutint_common.docs_manual.project_root` is the same three lines, and they are deliberately
@@ -149,7 +153,7 @@ def _git(base_dir, *args, **kwargs):
     check = kwargs.pop('check', True)
     exe = git_path(base_dir)
     if exe is None:
-        raise UpgradeError(
+        raise UpdateError(
             "No git found. It is normally installed into env/tools by `./mutint install`; "
             "a copy on PATH works too.")
     try:
@@ -159,10 +163,10 @@ def _git(base_dir, *args, **kwargs):
     except subprocess.TimeoutExpired:
         raise Unreachable("git %s timed out after %d seconds." % (args[0], TIMEOUT))
     except OSError as exc:
-        raise UpgradeError("Could not run git: %s" % exc)
+        raise UpdateError("Could not run git: %s" % exc)
     if check and completed.returncode != 0:
         message = completed.stderr.decode('utf-8', 'replace').strip()
-        raise UpgradeError("git %s failed: %s" % (args[0], message or 'no output'))
+        raise UpdateError("git %s failed: %s" % (args[0], message or 'no output'))
     return completed.stdout.decode('utf-8', 'replace')
 
 
@@ -170,7 +174,14 @@ def _git(base_dir, *args, **kwargs):
 
 
 def state_path(base_dir):
-    return os.path.join(base_dir, STATE_NAME)
+    path = os.path.join(base_dir, STATE_NAME)
+    legacy = os.path.join(base_dir, LEGACY_STATE_NAME)
+    if not os.path.exists(path) and os.path.isfile(legacy):
+        try:
+            os.replace(legacy, path)
+        except OSError:
+            return legacy
+    return path
 
 
 def read_state(base_dir):
@@ -225,9 +236,9 @@ def changed_tracked_files(base_dir):
     """Porcelain lines for tracked files that differ from HEAD. Untracked files are excluded.
 
     **Excluding `??` is the difference between this working and not**, and it governs both
-    refusing an upgrade and verifying an adoption. Every installation accumulates untracked
+    refusing an update and verifying an adoption. Every installation accumulates untracked
     files: `data/` and `env/` are gitignored so they never appear here, but an export somebody
-    downloaded into the directory does -- and an installation that stopped being upgradeable
+    downloaded into the directory does -- and an installation that stopped being updateable
     the first time a file was saved beside it would be no installation at all.
 
     It is not leniency about losing work, either. `git checkout` does not discard an untracked
@@ -245,7 +256,7 @@ def changed_tracked_files(base_dir):
 
 
 def blockers(base_dir):
-    """Everything that stands between this checkout and an upgrade, as sentences.
+    """Everything that stands between this checkout and an update, as sentences.
 
     Returned as a list rather than raised one at a time, so the page can show a reader every
     reason at once instead of making them fix one and come back.
@@ -254,7 +265,7 @@ def blockers(base_dir):
     if not is_git_checkout(base_dir):
         problems.append(
             "This is not a git checkout, so there is nothing to fetch into. "
-            "`./mutint upgrade --adopt` turns an unpacked archive into one without touching "
+            "`./mutint update --adopt` turns an unpacked archive into one without touching "
             "your data.")
         return problems
 
@@ -330,7 +341,7 @@ def _tree_components(base_dir, ref):
     """`{name: sha}` for the components an assembled project pins at `ref`.
 
     Empty for standalone mutint-core, which has no submodules -- and for anything else this
-    cannot read, since it is asked only to describe an upgrade and never to permit one.
+    cannot read, since it is asked only to describe an update and never to permit one.
     """
     output = _git(base_dir, 'ls-tree', ref, check=False)
     found = {}
@@ -345,7 +356,7 @@ def _tree_components(base_dir, ref):
 def component_changes(base_dir, target):
     """Which components installing `target` would move, as a list of dicts.
 
-    **This is the half of an upgrade nobody could see.** A version is a commit of the
+    **This is the half of an update nobody could see.** A version is a commit of the
     assembled project, and what that commit *contains* is a pinned SHA per component -- so
     `apply`'s `submodule update --init --recursive` moves the plugins along with it, and
     "main is available" said nothing about which. Each entry is `{name, from, to, change}`,
@@ -390,7 +401,7 @@ def describe(base_dir, ref, kind):
         # `^{commit}` throughout, because a release tag is **annotated**: `rev-parse v0.0.1`
         # answers the tag object's own SHA and `show -s --format=%cI` prints its header, so
         # the page said "commit <tag object>, dated tag v0.0.1". Peeling asks about the commit
-        # the tag points at, which is what an upgrade actually moves to.
+        # the tag points at, which is what an update actually moves to.
         target = target + '^{commit}'
         described['sha'] = _git(base_dir, 'rev-parse', '--short=8', target).strip() or None
         described['date'] = _git(
@@ -400,7 +411,7 @@ def describe(base_dir, ref, kind):
         described['commits'] = int(ahead) if ahead.isdigit() else None
         described['components'] = component_changes(base_dir, target)
         described['component_total'] = len(_tree_components(base_dir, target))
-    except (UpgradeError, ValueError, OSError):
+    except (UpdateError, ValueError, OSError):
         # Recorded as nothing rather than as a failure: the version is still available and
         # still installable, and this only ever added detail to saying so.
         pass
@@ -424,7 +435,7 @@ def readable_time(iso):
     with the offset showing it asks the reader to do the arithmetic. Converting answers the
     question the column is actually asked -- how old is this -- against the clock on the wall
     behind the screen. `astimezone()` with no argument reads the host's zone, which is the
-    server's, and for the single-machine installation this page upgrades that is the reader's.
+    server's, and for the single-machine installation this page updates that is the reader's.
 
     Anything not of that shape is returned as it came -- `%cI` is strict ISO 8601, and a
     version of git that answered otherwise should show its answer rather than a mangling.
@@ -537,7 +548,7 @@ def check(base_dir, channel=None):
                 or _version_key(latest) > _version_key(here))
             state['available'] = _available(
                 base_dir, latest, 'tag', None) if newer else None
-    except UpgradeError as exc:
+    except UpdateError as exc:
         state['error'] = str(exc)
         state['available'] = None
 
@@ -569,12 +580,12 @@ def void_verdict(base_dir):
     `available` is not a fact about the remote, it is a **comparison**: this ref is newer than
     the one we are on. Move the checkout and the right-hand side of it has changed, so the
     verdict is void whichever ref was installed -- and left in place it is worse than stale,
-    because `/upgrade/` renders the Install button from it and would go on offering a version
-    this installation now *is*, past the upgrade and past every reload after it.
+    because `/update/` renders the Install button from it and would go on offering a version
+    this installation now *is*, past the update and past every reload after it.
 
     `checked_at` goes with it rather than being kept, which is the part that looks like
     over-deletion and is not. The page falls back to *Up to date as of <time>* when there is a
-    timestamp and no `available`, and that sentence after an upgrade is a claim nobody made:
+    timestamp and no `available`, and that sentence after an update is a claim nobody made:
     the check it names ran against the previous version. **Not checked yet** is simply true
     here, and this module refuses the reassuring-but-unverified answer everywhere else --
     `Unreachable` exists for the same reason.
@@ -628,7 +639,7 @@ def _prune_backups(directory, keep=BACKUP_KEEP):
     would keep `keep` of each -- which is the bug this would most plausibly have.
 
     Best-effort, like the dump it follows: a file that will not delete is not a reason to
-    fail an upgrade that has otherwise worked. Only files matching `_BACKUP_NAME` are
+    fail an update that has otherwise worked. Only files matching `_BACKUP_NAME` are
     candidates, so a dump an operator took by hand and named themselves survives.
     """
     try:
@@ -658,17 +669,17 @@ def backup(base_dir, pg, label):
     """`pg_dump` this checkout's database, returning the path, or None if there is nothing
     to dump.
 
-    Best-effort by design: an upgrade that refused to proceed because a backup failed would
-    strand somebody on an old version for a reason that is not about the upgrade. The path is
+    Best-effort by design: an update that refused to proceed because a backup failed would
+    strand somebody on an old version for a reason that is not about the update. The path is
     recorded in the state either way, so a reader can see whether there is one.
 
     **The database only.** `data/store` -- the reads, the BAMs, the coverage BigWigs, breseq's
     reports -- is not in here and is not what this protects: it is two orders of magnitude
-    larger, and an upgrade does not touch it, so the rows this restores still point at files
+    larger, and an update does not touch it, so the rows this restores still point at files
     that are still there.
 
     Older dumps are pruned once this one lands, so the directory keeps `BACKUP_KEEP` and not
-    a copy of the database per upgrade. Pruning after the new dump rather than before it is
+    a copy of the database per update. Pruning after the new dump rather than before it is
     deliberate: a prune that ran first would drop the oldest to make room for a dump that
     then failed.
     """
@@ -699,16 +710,16 @@ def backup(base_dir, pg, label):
 
 
 def apply(base_dir, ref, pg=None, take_backup=True):
-    """Move this checkout onto `ref`. Raises UpgradeError with a sentence if it will not.
+    """Move this checkout onto `ref`. Raises UpdateError with a sentence if it will not.
 
     Deliberately does *not* install dependencies or migrate. The entry script's sentinels
     already rebuild the venv and the tools when a component's requirements change, and
-    `start.py` already migrates -- so the whole of an upgrade downstream of here is machinery
+    `start.py` already migrates -- so the whole of an update downstream of here is machinery
     that predates it.
     """
     problems = blockers(base_dir)
     if problems:
-        raise UpgradeError(' '.join(problems))
+        raise UpdateError(' '.join(problems))
 
     saved = None
     if take_backup and pg is not None:
@@ -734,7 +745,7 @@ def adopt(base_dir, url, ref):
     worth checking rather than asserting, which is what the status probe at the end does.
     """
     if is_git_checkout(base_dir):
-        raise UpgradeError("This is already a git checkout; there is nothing to adopt.")
+        raise UpdateError("This is already a git checkout; there is nothing to adopt.")
     _git(base_dir, 'init', '-q')
     _git(base_dir, 'remote', 'add', 'origin', url)
     _git(base_dir, 'fetch', '--tags', 'origin')
@@ -754,10 +765,10 @@ def adopt(base_dir, url, ref):
     if dirty:
         names = ", ".join(line[3:] for line in dirty[:5])
         more = len(dirty) - min(len(dirty), 5)
-        raise UpgradeError(
+        raise UpdateError(
             "This tree does not match %s -- %d file(s) differ (%s%s). Nothing has been "
             "changed and no files were touched; the git history added here can be removed by "
-            "deleting the .git directory. Adopt the release this actually is, or upgrade from "
+            "deleting the .git directory. Adopt the release this actually is, or update from "
             "a fresh install."
             % (ref, len(dirty), names, " and %d more" % more if more else ""))
 
@@ -774,7 +785,7 @@ def apply_staged(base_dir, pg=None):
 
     Called by the entry script on `start`, before anything reads a requirements.txt. Every
     failure is recorded in the state and swallowed: a launch that refuses to start because an
-    upgrade did not work leaves somebody with no MutInt at all, which is strictly worse than
+    update did not work leaves somebody with no MutInt at all, which is strictly worse than
     an old one plus a message.
     """
     state = read_state(base_dir)
@@ -782,22 +793,22 @@ def apply_staged(base_dir, pg=None):
     if not pending or not pending.get('ref'):
         return None
     ref = pending['ref']
-    print("Applying staged upgrade to %s..." % ref)
+    print("Applying staged update to %s..." % ref)
     try:
         result = apply(base_dir, ref, pg=pg)
-    except UpgradeError as exc:
+    except UpdateError as exc:
         result = {'ref': ref, 'at': _now(), 'ok': False, 'detail': str(exc)}
-        print("Upgrade to %s did not run: %s" % (ref, exc))
+        print("Update to %s did not run: %s" % (ref, exc))
     else:
         print("Now on %s." % (result.get('now') or ref))
         # We are on something else now, so what the last check found is void -- see
-        # `void_verdict`. Only on success: a failed upgrade leaves this checkout where it was,
+        # `void_verdict`. Only on success: a failed update leaves this checkout where it was,
         # and the version it was offered is still genuinely on offer.
         void_verdict(base_dir)
 
     # Re-read: `apply` may have replaced the working tree, and the state file lives in
     # `data/`, which git leaves alone -- but the request must be cleared whatever happened,
-    # or every launch would retry a failing upgrade for ever.
+    # or every launch would retry a failing update for ever.
     state = read_state(base_dir)
     state.pop('requested', None)
     state['last_result'] = result

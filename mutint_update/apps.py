@@ -1,8 +1,8 @@
 from django.apps import AppConfig
 
 
-class UpgradeConfig(AppConfig):
-    """The `/upgrade/` page: what is installed, and moving onto a newer version.
+class UpdateConfig(AppConfig):
+    """The `/update/` page: what is installed, and moving onto a newer version.
 
     No `register_nav_item`, and deliberately. `nav_registry` has no per-user visibility
     concept, so a registered entry renders for anonymous visitors and leads straight to a
@@ -14,4 +14,4 @@ class UpgradeConfig(AppConfig):
     producer, which is the reasoning mutint_jobs/apps.py already records for the same choice.
     """
 
-    name = 'mutint_upgrade'
+    name = 'mutint_update'

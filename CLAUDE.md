@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2581 run, 0 failures** standalone; **3099** assembled, measured with `PYTHONPATH`
+**Baseline: 2586 run, 0 failures** standalone; **3099** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -485,7 +485,7 @@ That is the whole of the release discipline, and `docs/contributing/releasing.md
 procedure. Prove a release by migrating a database built at the *previous* tag — a fresh
 database cannot fail the way an operator's will.
 
-**It used to say *ships in a tag*, and the upgrade path is what changed it.** That rule allowed
+**It used to say *ships in a tag*, and the update path is what changed it.** That rule allowed
 tidying the history before tagging, on the premise that no database had applied a draft
 migration. The **Development** channel follows `main`, so that premise is gone: a migration
 pushed there is applied within a day, and regenerating it at release time would strand exactly
@@ -493,8 +493,8 @@ the people who help test. So the development history *is* the published history 
 adds no migration step, and folding anything already pushed means `squashmigrations` with
 `replaces` — deleting the replaced files being a much later release. Nothing has needed it.
 
-Two things enforce it rather than trusting the reader. `mutint_common/upgrade.py` takes a
-`pg_dump` before applying an upgrade, and `start.py` refuses to migrate a database whose
+Two things enforce it rather than trusting the reader. `mutint_common/update.py` takes a
+`pg_dump` before applying an update, and `start.py` refuses to migrate a database whose
 `django_migrations` names a migration the checkout no longer ships -- `applied_migrations -
 disk_migrations`, restricted to first-party apps, which is exactly the state a collapse
 creates. That check earns its place because `migrate --run-syncdb` runs **unattended on every
@@ -502,19 +502,18 @@ creates. That check earns its place because `migrate --run-syncdb` runs **unatte
 `migrations/` directory vanished, leaving a database that looks fine until it does not.
 
 
-### The page that upgrades this installation
+### The page that updates this installation
 
-`mutint_upgrade` is `/upgrade/`, and it is two things at once: an inventory of what is running,
-and the one control that changes it. **It is called Update everywhere a person sees it** -- the
-sidebar entry, the page, the sentences, and a button that reads *Install update* rather than
-naming the version, which the sentence beside it already does. `upgrade` survives in the URL,
-the ids, the module and `./mutint upgrade`, which predate the wording; renaming those would
-move a route real installations link to for a word. The table is `about_registry.get_about_sections()` -- the
-same entries `/about` renders as prose, keyed by *component checkout*, each with its version
-and a link to its revision on GitHub -- so there is one answer to "what is installed" and this
-page is it, made actionable.
+`mutint_update` is `/update/`, and it is two things at once: an inventory of what is running,
+and the one control that changes it. **It was called upgrading, everywhere, until September 2026**: `mutint_upgrade`, `/upgrade/`,
+`mutint_common/upgrade.py`, `./mutint upgrade`, `MUTINT_UPGRADE_ENABLED` and
+`data/upgrade.json`. All of it is *update* now, links to the old page included. Two things
+survive the old name on purpose, each because breaking it would be silent rather than loud:
+`MUTINT_UPGRADE_ENABLED` is still read when the new setting is absent, since a deployment
+that turned the feature off must not find it back on; and `data/upgrade.json` is moved to
+`data/update.json` on first read, since that file is where an installation's channel lives.
 
-**Each row says when its revision was committed**, through the same `upgrade.readable_time`
+**Each row says when its revision was committed**, through the same `update.readable_time`
 that describes the available version, so the two timestamps on the page cannot be written
 differently. A hash says *which* commit and nothing about how old it is, and how old is the
 question this page exists to answer -- on the Development channel `main` moves several times a
@@ -524,8 +523,8 @@ costs nothing beyond the first render. `/about` has the field available and does
 that page is prose about each component rather than a comparison across them.
 
 **It never blocks on the network**, the posture `mutint_sample/ncbi.py` established: the page
-renders from the stored verdict in `data/upgrade.json`, and only the Check button reaches the
-remote. `upgrade.Unreachable` keeps "could not ask" distinct from "nothing newer", because a
+renders from the stored verdict in `data/update.json`, and only the Check button reaches the
+remote. `update.Unreachable` keeps "could not ask" distinct from "nothing newer", because a
 reader told they are up to date when nobody managed to look is worse off than one shown an
 error.
 
@@ -533,7 +532,7 @@ error.
 nothing else -- not which commit, not when it was made, and not what installing it would do to
 the components, which is most of what a version *is* here: a release is a commit of the
 assembled project, and what that commit contains is a pinned SHA per component, which
-`apply`'s `submodule update --init --recursive` then moves. So `upgrade.describe` fetches the
+`apply`'s `submodule update --init --recursive` then moves. So `update.describe` fetches the
 target and reads its tree, `component_changes` diffs the gitlinks against HEAD, and
 `summarize` composes one sentence naming the commit, its timestamp, how far ahead it is and
 which components move.
@@ -545,7 +544,7 @@ Three things about that are deliberate:
   turn "there is a new version" into an error. Every field can be absent and the sentence
   shortens accordingly.
 - **`^{commit}`, because a release tag is annotated.** `rev-parse v0.0.1` answers the tag
-  object's SHA, which appears in no log and is not what an upgrade moves to, and `show -s
+  object's SHA, which appears in no log and is not what an update moves to, and `show -s
   --format=%cI` on one prints its header -- the page said *dated tag v0.0.1* until this was
   peeled.
 - **The sentence is composed on the server** and rendered as text by both the initial page and
@@ -554,23 +553,23 @@ Three things about that are deliberate:
 
 **What a check found is a comparison, and moving the checkout voids it.** `available` means
 *this ref is newer than the one you are on*, so the right-hand side of it changes the moment an
-upgrade is applied -- whichever ref was installed. `upgrade.void_verdict` drops it, and every
-path that moves the checkout calls it: `apply_staged` on success only (a failed upgrade leaves
-you where you were, and what you were offered is still on offer), `./mutint upgrade`, and
+update is applied -- whichever ref was installed. `update.void_verdict` drops it, and every
+path that moves the checkout calls it: `apply_staged` on success only (a failed update leaves
+you where you were, and what you were offered is still on offer), `./mutint update`, and
 `--adopt`. Without it the page went on describing a version this installation now *was* and
-kept a live Install button for it, past the upgrade and past every reload -- the green *Upgraded
+kept a live Install button for it, past the update and past every reload -- the green *Updated
 to* banner sitting directly above the offer it had just satisfied.
 
 `checked_at` goes with it, which looks like over-deletion and is the same rule: the page falls
 back to *Up to date as of <time>* whenever there is a timestamp and no `available`, and after an
-upgrade that names a check which ran against the previous version. **Not checked yet** is what
+update that names a check which ran against the previous version. **Not checked yet** is what
 is true, and it is the same refusal `Unreachable` exists for -- a reader told they are up to
 date when nobody has looked is worse off than one told nobody has looked. A stored `error` is
 about that same check and goes too; blockers are recomputed on every render and come back on
 their own.
 
-**Install stages; it does not upgrade.** The mechanism, the channels and the refusals all live
-in `mutint_common/upgrade.py` and are described under **Upgrading in place** in the suite
+**Install stages; it does not update.** The mechanism, the channels and the refusals all live
+in `mutint_common/update.py` and are described under **Updating in place** in the suite
 `CLAUDE.md`. What is worth knowing here is the endpoint's own guard: it refuses a `ref` that is
 not the one the last check offered. Without it the endpoint takes an arbitrary string from a
 form field and hands it to `git checkout` on the next launch, which is a much larger promise
@@ -578,22 +577,22 @@ than the page makes.
 
 Both POSTs re-check `is_superuser` rather than trusting the page that offered them -- the gate
 on a write endpoint is not the gate on the page it came from, the same rule `job_cancel` and
-`ncbi_check` follow. The view is `upgrade_page`, not `upgrade`, because this module imports
-`mutint_common.upgrade` and a view of that name would rebind it; the URL is still `upgrade`.
+`ncbi_check` follow. The view is `update_page`, not `update`, because this module imports
+`mutint_common.update` and a view of that name would rebind it; the URL is still `update`.
 
-**A deployment can decline the whole thing** with `MUTINT_UPGRADE_ENABLED = False`. The page
+**A deployment can decline the whole thing** with `MUTINT_UPDATE_ENABLED = False`. The page
 still renders -- the inventory is worth having either way -- and offers no buttons.
 
-**Restart is the last step of an upgrade, as a button.** Staging writes a request and the next
-launch applies it, so finishing an upgrade was always an instruction somebody had to follow.
-`mutint_upgrade/restart.py` does the same quit and the same start on their behalf, and three
+**Restart is the last step of an update, as a button.** Staging writes a request and the next
+launch applies it, so finishing an update was always an instruction somebody had to follow.
+`mutint_update/restart.py` does the same quit and the same start on their behalf, and three
 things about it are load-bearing:
 
-- **It is offered in one state only: an upgrade is staged.** Restarting is what finishes that
-  upgrade, and staged is the moment where it is the obvious next thing rather than a button
+- **It is offered in one state only: an update is staged.** Restarting is what finishes that
+  update, and staged is the moment where it is the obvious next thing rather than a button
   somebody has to wonder about -- one sitting permanently beside *Check for updates* reads as a
   general "restart the server", which is not what this page is for. The **endpoint** stays
-  willing either way, and that asymmetry is deliberate: `./mutint upgrade` from a shell moves
+  willing either way, and that asymmetry is deliberate: `./mutint update` from a shell moves
   the checkout and leaves the running server on the old code, so restarting is a legitimate
   thing to ask for. What narrows is the offer, not the operation.
 - **Nothing in core knows what launched MutInt.** The launcher exports
@@ -612,7 +611,7 @@ things about it are load-bearing:
   the response reaches the browser that asked; polls `kill -0` until the process is gone rather
   than waiting on the port, since `runserver` sets SO_REUSEADDR and what actually needs the
   window is the supervisor stopping the worker and the cluster; and insists with SIGKILL past a
-  bound, because an upgrade half-applied by something ignoring SIGTERM is worse than an
+  bound, because an update half-applied by something ignoring SIGTERM is worse than an
   ungraceful stop.
 
 The page polls **twice**: for the server to go down, then to come back. A poll that only asked
@@ -623,15 +622,15 @@ is back"* true rather than nearly true. `start.py` opens one at the site root on
 right for somebody who double-clicked an icon, wrong here, because the person is already looking
 at MutInt in a window that is polling for it. What they saw was that window navigate to the
 dashboard, which is not a reload and not the page they pressed the button on.
-`upgrade.note_restart` leaves a note in the state file and `start.py` takes it once; an
+`update.note_restart` leaves a note in the state file and `start.py` takes it once; an
 environment variable could not carry this, because the launch it is about is started by a
 detached helper. A note left by a restart that never happened costs one browser window that
 does not open, on a launch where clicking the Dock icon opens one.
 
 Two traps in testing it, both found by it happening. `start.py` must **still migrate** on such a
-launch -- applying a staged upgrade is the whole point of the restart. And a test that reaches
-`request_restart` without patching `upgrade.project_root` writes that note into *this
-checkout's* `data/upgrade.json`, where another test reads and clears it: an order-dependent
+launch -- applying a staged update is the whole point of the restart. And a test that reaches
+`request_restart` without patching `update.project_root` writes that note into *this
+checkout's* `data/update.json`, where another test reads and clears it: an order-dependent
 failure in a different test, with nothing pointing at the cause.
 
 ### What a sample was made from
@@ -1281,7 +1280,7 @@ Add and Change differ only in what they post. A field added to
 ### breseq's own field guards, and where we are stricter
 
 The `genomediff` pin is a **git SHA, and has to be**: every commit in that repo reports itself
-as `0.4.2`, so a version pin cannot tell one from another and pip will not upgrade an installed
+as `0.4.2`, so a version pin cannot tell one from another and pip will not update an installed
 `0.4.2` on the strength of the requirement alone. Bumping an existing environment needs the
 `--force-reinstall` line spelled out in `requirements.txt`.
 
@@ -3205,9 +3204,9 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_jobs/`** — `/jobs/`: background work, who asked for it, and stopping it. One
   model, `Job`, which stores no status of its own. See **Seeing and stopping background
   work** above.
-- **`mutint_upgrade/`** — `/upgrade/`: what this installation is made of, and moving it onto
+- **`mutint_update/`** — `/update/`: what this installation is made of, and moving it onto
   a newer version. Superusers only, reached from the account block. It **stages** and the
-  entry script applies -- see **Upgrading in place** in the suite `CLAUDE.md`. No models.
+  entry script applies -- see **Updating in place** in the suite `CLAUDE.md`. No models.
 - **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eleven
   registries (context, import, import_tab, plugin, nav, about, example, panel, annotator,
   storage and rebuild), and global static files. Three models: `DerivedDataState`,

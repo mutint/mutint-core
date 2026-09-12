@@ -10,7 +10,7 @@ Derived data goes stale for reasons no upload knows about -- a filter edit, a pl
 installed after the data was imported, a rebuild that failed and was recorded rather than
 raised. This is how it catches up in bulk. A page reading one experiment's data rebuilds it
 on its own (`ensure_fresh`), so this is for the cases where waiting for a reader is the wrong
-answer: after an upgrade, after restoring a database, or when `--list` shows an error.
+answer: after an update, after restoring a database, or when `--list` shows an error.
 """
 
 from django.core.management import BaseCommand, CommandError

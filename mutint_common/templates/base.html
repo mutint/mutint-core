@@ -186,12 +186,12 @@
                                nav entry could express -- which is the same reason the whole
                                block is written here rather than registered. Updating moves
                                the code every reader of this deployment is served by. It is
-                               called Update in front of a person and `upgrade` in the code
+                               called Update in front of a person and `update` in the code
                                and the URL, which predate the wording.
                                {% endcomment %}
                             {% if user.is_superuser %}
                                 <li>
-                                    <a href="{% url 'upgrade' %}">Update</a>
+                                    <a href="{% url 'update' %}">Update</a>
                                 </li>
                                 <li>
                                     <a href="{% url 'admin:index' %}">Django admin</a>
@@ -318,7 +318,7 @@
            **Guarded, because unguarded it is never absent.** Django renders an undefined
            variable as the empty string, and almost no view here sets `error` -- so every
            page in the suite drew an empty `<h2>`, and any view that passed the name with a
-           None in it drew the word None as a heading. `mutint_upgrade` did exactly that,
+           None in it drew the word None as a heading. `mutint_update` did exactly that,
            on every visit but the rare failed one, which is what found this.
 
            It costs no layout either way: measured before and after on /about and /project,

@@ -79,7 +79,7 @@ nav:
       - Reference genomes: using/reference-genomes.md
       - Configuration: using/configuration.md
       - Management commands: using/commands.md
-      - Upgrading: using/upgrading.md
+      - Updating: using/updating.md
       - Disk space: using/storage.md
   - Extending MutInt:
       - Writing a plugin:

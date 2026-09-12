@@ -1,8 +1,8 @@
 """Refusing to migrate a database this version cannot migrate.
 
-**A migration becomes immutable the moment it is pushed to `main`**, because the upgrade
+**A migration becomes immutable the moment it is pushed to `main`**, because the update
 path's Development channel follows that branch -- so a migration pushed there is applied by
-real installations within a day. Before there was an upgrade path the rule was about tags and
+real installations within a day. Before there was an update path the rule was about tags and
 the history here was thrown away and regenerated twice.
 `docs/contributing/releasing.md` is the rule and the procedure; this module is what stops the
 rule being merely written down.
@@ -22,7 +22,7 @@ Two things make that worth catching here rather than trusting `migrate` to expla
   behind them, and the database looks fine until the next real migration lands.
 
 **Restricted to first-party apps.** A third-party package legitimately renumbers its own
-history between releases and its upgrade path is pip's, not ours; naming `django_tasks_db`
+history between releases and its update path is pip's, not ours; naming `django_tasks_db`
 here would produce an alarming message about something the operator cannot act on and did not
 do.
 """
@@ -66,8 +66,8 @@ def describe(missing):
         "migration has been published -- on any channel. Migrating now would try to create "
         "tables that already exist, so it has been stopped before anything ran; nothing has "
         "been changed.\n\n"
-        "If you upgraded, the version you came from is the one that can still read this "
-        "database: `./mutint upgrade --to <that tag>` goes back, and any pre-upgrade dump is "
+        "If you updated, the version you came from is the one that can still read this "
+        "database: `./mutint update --to <that tag>` goes back, and any pre-update dump is "
         "in data/backups/. If this is a development checkout, `./mutint db reset --yes` "
         "starts again from empty -- move data/store aside first, since its paths are keyed by "
         "primary keys that restart at 1."

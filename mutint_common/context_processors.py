@@ -16,7 +16,7 @@ def branding(request):
     `asset_version` is what every first-party asset is linked with, as `?v=`: the
     version plus a digest of every installed component's git revision, so the URLs
     change with every commit and not only with every release -- a Development-channel
-    upgrade keeps the version, and a browser must still refetch the scripts. See
+    update keeps the version, and a browser must still refetch the scripts. See
     `mutint_common.util.compute_asset_version`.
     """
     from mutint_common.util import get_asset_version

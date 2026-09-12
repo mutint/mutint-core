@@ -1,6 +1,6 @@
-# Upgrading
+# Updating
 
-MutInt upgrades **in place**. Your data stays where it is — the database in `data/db` and the
+MutInt updates **in place**. Your data stays where it is — the database in `data/db` and the
 file store in `data/store` — and only the code moves.
 
 That is why MutInt is installed as a git checkout and why there is no downloadable archive:
@@ -27,7 +27,7 @@ is at, and it has two buttons:
 
 - **Install update** stages the version it found.
 
-Then **quit MutInt and start it again**. The upgrade is applied before the server comes up,
+Then **quit MutInt and start it again**. The update is applied before the server comes up,
 because a running MutInt cannot safely replace the code it is executing. On a Mac that is a
 double-click on `MutInt.app`; in a terminal it is Ctrl-C and `./mutint start`.
 
@@ -38,13 +38,13 @@ to run `install` or `migrate` yourself.
 ## From a terminal
 
 ```bash
-./mutint upgrade --check          # what is available; change nothing
-./mutint upgrade                  # check, then move onto it
-./mutint upgrade --to v1.4.0      # a particular version
-./mutint upgrade --channel main   # remember which channel to follow
+./mutint update --check          # what is available; change nothing
+./mutint update                  # check, then move onto it
+./mutint update --to v1.4.0      # a particular version
+./mutint update --channel main   # remember which channel to follow
 ```
 
-`./mutint upgrade` moves the working tree and stops there, so **run `./mutint start`
+`./mutint update` moves the working tree and stops there, so **run `./mutint start`
 afterwards** — until you do, the code has moved and the database has not.
 
 ## Two channels
@@ -65,38 +65,38 @@ moves, named for the version you are leaving. `--no-backup` skips it. A deployme
 its own PostgreSQL server (`MUTINT_DB_HOST`) is skipped too — backups there are the operator's.
 
 **The database, and only the database.** `data/store` — the reads, the BAMs, the coverage
-BigWigs, breseq's reports — is not in the dump. It does not need to be: an upgrade never
+BigWigs, breseq's reports — is not in the dump. It does not need to be: an update never
 touches it, so the rows a restore brings back still point at files that are still there. It is
 also typically hundreds of times the size of the dump, which is what makes keeping several of
 these affordable.
 
 **The last five are kept.** Each dump is the whole database, and the Development channel can
-upgrade daily, so the newest five are kept and older ones are deleted as each new dump lands.
+update daily, so the newest five are kept and older ones are deleted as each new dump lands.
 Only files this wrote are eligible — a dump you took yourself and named yourself stays. If you
 want one kept indefinitely, rename it.
 
 **It refuses to touch a checkout somebody is working in.** If there are uncommitted changes, or
-commits the remote has not seen, the upgrade stops and names what it found rather than
+commits the remote has not seen, the update stops and names what it found rather than
 discarding it. That is a development checkout, and `git pull` is the right tool for one.
 
 ## After it
 
-An upgraded installation sits on a **detached HEAD**, which is correct: it is pinned to a
+An updated installation sits on a **detached HEAD**, which is correct: it is pinned to a
 release rather than following a branch. `git status` says so, and it is not a problem to fix.
 
-`./mutint rebuild --all --force` recomputes derived data. An upgrade does this for you; it is
+`./mutint rebuild --all --force` recomputes derived data. An update does this for you; it is
 worth knowing about if you ever restore a database by hand.
 
 ## If something goes wrong
 
-The **Update** page reports what the last attempt did, including a failure — an upgrade that
+The **Update** page reports what the last attempt did, including a failure — an update that
 cannot run is recorded rather than stopping MutInt from starting, so the page is where you find
 out.
 
-To go back, upgrade to the version you came from:
+To go back, update to the version you came from:
 
 ```bash
-./mutint upgrade --to v1.3.0
+./mutint update --to v1.3.0
 ```
 
 Going *back* across a migration is not something any tool can do safely in general, which is
@@ -107,15 +107,15 @@ what the dump in `data/backups/` is for.
     A migration is fixed the moment it is published, and later versions add to it rather than
     rewriting it — see [Releasing](../contributing/releasing.md). That holds on the Development
     channel too, which is what makes the channel safe to run with data: the migrations you take
-    part-way between releases are the same ones the release ships, so upgrading on to it never
+    part-way between releases are the same ones the release ships, so updating on to it never
     asks you to start again.
 
     If your database ever holds a migration the installed code does not ship, `./mutint start`
     refuses to migrate and says so, instead of failing later with an error about a table that
     already exists. It is a bug worth reporting.
 
-## Installations that do not upgrade themselves
+## Installations that do not update themselves
 
-A deployment can turn the feature off with `MUTINT_UPGRADE_ENABLED = False`, and ALEdb does:
-it is served from a private repository and upgraded deliberately by whoever runs it. The
+A deployment can turn the feature off with `MUTINT_UPDATE_ENABLED = False`, and ALEdb does:
+it is served from a private repository and updated deliberately by whoever runs it. The
 **Update** page still lists what is installed; it simply offers no buttons.

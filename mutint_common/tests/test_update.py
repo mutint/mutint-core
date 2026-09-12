@@ -1,12 +1,12 @@
-"""Upgrading in place, tested without a remote.
+"""Updating in place, tested without a remote.
 
-`mutint_common/upgrade.py` is loaded by the entry script *before* the venv exists, so it
+`mutint_common/update.py` is loaded by the entry script *before* the venv exists, so it
 carries the same three constraints `pg.py` does and they are checked the same way: parseable
 on 3.9, no Django import, standard library only. Those failures land on the machines that have
-*not* upgraded yet, and never on the machine of whoever wrote the code.
+*not* updated yet, and never on the machine of whoever wrote the code.
 
 The rest is the half that matters more than the happy path: what it refuses. This module runs
-in the development checkouts of this suite, where applying an upgrade would be vandalism, so
+in the development checkouts of this suite, where applying an update would be vandalism, so
 every refusal gets a test against a real temporary repository rather than a mock -- `git
 status --porcelain` and `rev-list @{upstream}..HEAD` are the things being trusted, and a mock
 of them would only assert that the mock was written to agree.
@@ -22,13 +22,38 @@ import time
 
 from django.test import TestCase
 
-from mutint_common import upgrade
+from mutint_common import update
 
-SOURCE_PATH = upgrade.__file__.replace(".pyc", ".py")
+SOURCE_PATH = update.__file__.replace(".pyc", ".py")
 
 #: Everything the standard library gives us. A name outside this set means the module grew a
 #: dependency, which is the failure this whole file exists to catch early.
 STDLIB = {"json", "os", "re", "subprocess", "datetime", "importlib"}
+
+
+class LegacyStateFileTestCase(TestCase):
+    """`data/upgrade.json` is where an installation's channel lived under the old name."""
+
+    def setUp(self):
+        self.base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.base, True)
+        os.makedirs(os.path.join(self.base, "data"))
+
+    def test_the_old_file_is_moved_across_on_first_read(self):
+        legacy = os.path.join(self.base, update.LEGACY_STATE_NAME)
+        with open(legacy, "w") as handle:
+            json.dump({"channel": update.MAIN}, handle)
+
+        self.assertEqual(update.MAIN, update.read_state(self.base)["channel"])
+        self.assertFalse(os.path.exists(legacy))
+        self.assertTrue(os.path.isfile(os.path.join(self.base, update.STATE_NAME)))
+
+    def test_a_new_file_wins_over_a_leftover_old_one(self):
+        with open(os.path.join(self.base, update.STATE_NAME), "w") as handle:
+            json.dump({"channel": update.STABLE}, handle)
+        with open(os.path.join(self.base, update.LEGACY_STATE_NAME), "w") as handle:
+            json.dump({"channel": update.MAIN}, handle)
+        self.assertEqual(update.STABLE, update.read_state(self.base)["channel"])
 
 
 class ParseabilityTestCase(TestCase):
@@ -94,7 +119,7 @@ class ReadableTimeTestCase(TestCase):
     def _in_zone(self, zone, iso):
         os.environ["TZ"] = zone
         time.tzset()
-        return upgrade.readable_time(iso)
+        return update.readable_time(iso)
 
     def test_it_converts_to_the_hosts_zone(self):
         """11:53 at -04:00 is 15:53 in UTC, and ten minutes to one the next morning in
@@ -122,13 +147,13 @@ class ReadableTimeTestCase(TestCase):
         """`%cI` is strict ISO 8601. A git that answered otherwise should show its answer
         rather than a mangling of it."""
         for value in ("", "whenever", "2026-09-07"):
-            self.assertEqual(value, upgrade.readable_time(value))
+            self.assertEqual(value, update.readable_time(value))
 
 
 class PruneBackupsTestCase(TestCase):
     """`data/backups/` is the one thing under `data/` that grows on its own.
 
-    Each dump is the whole database and the Development channel can upgrade daily, so
+    Each dump is the whole database and the Development channel can update daily, so
     without a cap the backups outgrow what they are backing up. Nothing else in the suite
     prunes anything here -- `reap_uploads` and `reap_jobs` are about rows, not this.
     """
@@ -153,7 +178,7 @@ class PruneBackupsTestCase(TestCase):
         for index in range(8):
             self._dump("pre-main-2026090%d-120000.sql" % index, age_seconds=(8 - index) * 60)
 
-        upgrade._prune_backups(self.directory)
+        update._prune_backups(self.directory)
 
         self.assertEqual(["pre-main-2026090%d-120000.sql" % index for index in range(3, 8)],
                          self._remaining())
@@ -162,7 +187,7 @@ class PruneBackupsTestCase(TestCase):
         for index in range(5):
             self._dump("pre-main-2026090%d-120000.sql" % index, age_seconds=index * 60)
 
-        self.assertEqual([], upgrade._prune_backups(self.directory))
+        self.assertEqual([], update._prune_backups(self.directory))
         self.assertEqual(5, len(self._remaining()))
 
     def test_it_goes_by_age_rather_than_by_name(self):
@@ -172,7 +197,7 @@ class PruneBackupsTestCase(TestCase):
         for index in range(6):
             self._dump("pre-v9.9.9-2026123%d-000000.sql" % index, age_seconds=1000 + index)
 
-        upgrade._prune_backups(self.directory)
+        update._prune_backups(self.directory)
 
         # Alphabetically last and by its stamp the oldest, but it is the newest file here.
         self.assertIn(os.path.basename(newest), self._remaining())
@@ -185,7 +210,7 @@ class PruneBackupsTestCase(TestCase):
         self._dump("before-the-big-import.sql", age_seconds=99999)
         self._dump("notes.txt", age_seconds=99999)
 
-        upgrade._prune_backups(self.directory)
+        update._prune_backups(self.directory)
 
         remaining = self._remaining()
         self.assertIn("before-the-big-import.sql", remaining)
@@ -193,8 +218,8 @@ class PruneBackupsTestCase(TestCase):
 
     def test_a_directory_that_is_not_there_is_not_an_error(self):
         """It runs after a dump lands, but nothing should turn a missing directory into a
-        failed upgrade -- the dump itself is best-effort for the same reason."""
-        self.assertEqual([], upgrade._prune_backups(os.path.join(self.directory, "nope")))
+        failed update -- the dump itself is best-effort for the same reason."""
+        self.assertEqual([], update._prune_backups(os.path.join(self.directory, "nope")))
 
 
 class GitPathTestCase(TestCase):
@@ -216,12 +241,12 @@ class GitPathTestCase(TestCase):
     def test_the_managed_copy_wins(self):
         managed = self._managed()
 
-        self.assertEqual(managed, upgrade.git_path(self.base))
+        self.assertEqual(managed, update.git_path(self.base))
 
     def test_it_falls_back_to_path(self):
-        """Which is what makes an upgrade work on a checkout whose tools were never
+        """Which is what makes an update work on a checkout whose tools were never
         installed, and on a machine that has its own git."""
-        found = upgrade.git_path(self.base)
+        found = update.git_path(self.base)
 
         self.assertIsNotNone(found)
         self.assertNotIn(self.base, found)
@@ -231,7 +256,7 @@ class GitPathTestCase(TestCase):
         os.makedirs(directory)
         open(os.path.join(directory, "git"), "w").close()
 
-        self.assertNotIn(self.base, upgrade.git_path(self.base) or "")
+        self.assertNotIn(self.base, update.git_path(self.base) or "")
 
 
 class StateTestCase(TestCase):
@@ -242,35 +267,35 @@ class StateTestCase(TestCase):
 
     def test_a_missing_file_reads_as_the_stable_channel(self):
         """A new installation has no state, and must not need one seeded."""
-        self.assertEqual(upgrade.STABLE, upgrade.read_state(self.base)["channel"])
+        self.assertEqual(update.STABLE, update.read_state(self.base)["channel"])
 
     def test_a_corrupt_file_does_not_take_a_launch_down(self):
         """The entry script reads this before Django exists. A half-written file is worth a
         default, not a traceback in front of somebody starting MutInt."""
         os.makedirs(os.path.join(self.base, "data"))
-        with open(upgrade.state_path(self.base), "w") as handle:
+        with open(update.state_path(self.base), "w") as handle:
             handle.write("{not json")
 
-        self.assertEqual(upgrade.STABLE, upgrade.read_state(self.base)["channel"])
+        self.assertEqual(update.STABLE, update.read_state(self.base)["channel"])
 
     def test_it_round_trips(self):
-        upgrade.write_state(self.base, {"channel": upgrade.MAIN, "checked_at": "now"})
+        update.write_state(self.base, {"channel": update.MAIN, "checked_at": "now"})
 
-        state = upgrade.read_state(self.base)
-        self.assertEqual(upgrade.MAIN, state["channel"])
+        state = update.read_state(self.base)
+        self.assertEqual(update.MAIN, state["channel"])
         self.assertEqual("now", state["checked_at"])
 
     def test_it_creates_the_data_directory(self):
-        upgrade.write_state(self.base, {"channel": upgrade.STABLE})
+        update.write_state(self.base, {"channel": update.STABLE})
 
-        self.assertTrue(os.path.isfile(upgrade.state_path(self.base)))
+        self.assertTrue(os.path.isfile(update.state_path(self.base)))
 
     def test_a_request_is_recorded_and_cleared(self):
-        upgrade.request(self.base, "v1.2.3", by="admin")
-        self.assertEqual("v1.2.3", upgrade.read_state(self.base)["requested"]["ref"])
+        update.request(self.base, "v1.2.3", by="admin")
+        self.assertEqual("v1.2.3", update.read_state(self.base)["requested"]["ref"])
 
-        upgrade.clear_request(self.base)
-        self.assertNotIn("requested", upgrade.read_state(self.base))
+        update.clear_request(self.base)
+        self.assertNotIn("requested", update.read_state(self.base))
 
 
 class VersionOrderTestCase(TestCase):
@@ -279,16 +304,16 @@ class VersionOrderTestCase(TestCase):
         """v0.10.0 is newer than v0.9.0, and a string sort says otherwise."""
         tags = ["v0.9.0", "v0.10.0", "v0.2.0"]
 
-        self.assertEqual("v0.10.0", sorted(tags, key=upgrade._version_key)[-1])
+        self.assertEqual("v0.10.0", sorted(tags, key=update._version_key)[-1])
 
     def test_a_shorter_tag_sorts_below_a_longer_one_sharing_its_prefix(self):
-        self.assertLess(upgrade._version_key("v1.2"), upgrade._version_key("v1.2.1"))
+        self.assertLess(update._version_key("v1.2"), update._version_key("v1.2.1"))
 
     def test_only_plain_release_tags_match(self):
         for tag in ("v1", "v1.2", "v1.2.3"):
-            self.assertIsNotNone(upgrade.TAG_RE.match(tag), tag)
+            self.assertIsNotNone(update.TAG_RE.match(tag), tag)
         for tag in ("v1.2.0-rc1", "testdata-x-v1", "1.2.3", "v1.2.3+g9f8e7d"):
-            self.assertIsNone(upgrade.TAG_RE.match(tag), tag)
+            self.assertIsNone(update.TAG_RE.match(tag), tag)
 
 
 def _run(base, *args):
@@ -297,7 +322,7 @@ def _run(base, *args):
 
 
 class BlockersTestCase(TestCase):
-    """What stops an upgrade, against real repositories.
+    """What stops an update, against real repositories.
 
     These are the tests that protect a developer's working tree, so they exercise git itself
     rather than a mock of it -- the whole question is whether `git status --porcelain` says
@@ -320,7 +345,7 @@ class BlockersTestCase(TestCase):
         _run(self.base, "commit", "-qm", "one")
 
     def test_a_tree_with_no_git_says_how_to_adopt_it(self):
-        problems = upgrade.blockers(self.base)
+        problems = update.blockers(self.base)
 
         self.assertEqual(1, len(problems))
         self.assertIn("--adopt", problems[0])
@@ -328,7 +353,7 @@ class BlockersTestCase(TestCase):
     def test_a_repository_with_no_origin_is_refused(self):
         self._repo()
 
-        self.assertTrue(any("origin" in problem for problem in upgrade.blockers(self.base)))
+        self.assertTrue(any("origin" in problem for problem in update.blockers(self.base)))
 
     def test_uncommitted_work_is_refused_and_named(self):
         """The refusal that matters most: this same entry script runs in the development
@@ -337,7 +362,7 @@ class BlockersTestCase(TestCase):
         with open(os.path.join(self.base, "a.txt"), "w") as handle:
             handle.write("edited\n")
 
-        problems = upgrade.blockers(self.base)
+        problems = update.blockers(self.base)
 
         self.assertTrue(any("uncommitted" in problem for problem in problems))
         self.assertTrue(any("a.txt" in problem for problem in problems))
@@ -345,7 +370,7 @@ class BlockersTestCase(TestCase):
     def test_an_untracked_file_does_not_block(self):
         """The difference between this working and not. `data/` and `env/` are gitignored so
         they never appear here, but an export somebody downloaded into the directory does --
-        and an installation that stops being upgradeable the first time a file is saved beside
+        and an installation that stops being updateable the first time a file is saved beside
         it is no installation at all. `git checkout` does not discard an untracked file
         either; it refuses and names it, which `apply` passes on."""
         self._repo()
@@ -353,7 +378,7 @@ class BlockersTestCase(TestCase):
         with open(os.path.join(self.base, "new.txt"), "w") as handle:
             handle.write("x\n")
 
-        self.assertEqual([], upgrade.blockers(self.base))
+        self.assertEqual([], update.blockers(self.base))
 
     def test_a_staged_file_blocks(self):
         """Tracked and modified, which is somebody working here."""
@@ -362,7 +387,7 @@ class BlockersTestCase(TestCase):
             handle.write("x\n")
         _run(self.base, "add", "b.txt")
 
-        self.assertTrue(any("uncommitted" in p for p in upgrade.blockers(self.base)))
+        self.assertTrue(any("uncommitted" in p for p in update.blockers(self.base)))
 
     def test_the_first_changed_file_keeps_its_whole_name(self):
         """Porcelain's status occupies two columns and a space, so stripping the output --
@@ -372,7 +397,7 @@ class BlockersTestCase(TestCase):
         with open(os.path.join(self.base, "a.txt"), "w") as handle:
             handle.write("edited\n")
 
-        problems = [p for p in upgrade.blockers(self.base) if "uncommitted" in p]
+        problems = [p for p in update.blockers(self.base) if "uncommitted" in p]
 
         self.assertIn("(a.txt)", problems[0])
 
@@ -380,7 +405,7 @@ class BlockersTestCase(TestCase):
         self._repo()
         _run(self.base, "remote", "add", "origin", "https://example.invalid/x.git")
 
-        self.assertEqual([], upgrade.blockers(self.base))
+        self.assertEqual([], update.blockers(self.base))
 
 
 class AdoptTestCase(TestCase):
@@ -416,11 +441,11 @@ class AdoptTestCase(TestCase):
     def test_a_matching_tree_becomes_a_checkout(self):
         self._unpack()
 
-        result = upgrade.adopt(self.base, self.origin, "v1.0.0")
+        result = update.adopt(self.base, self.origin, "v1.0.0")
 
         self.assertTrue(result["ok"])
-        self.assertEqual("v1.0.0", upgrade.current_ref(self.base))
-        self.assertEqual([], upgrade.blockers(self.base))
+        self.assertEqual("v1.0.0", update.current_ref(self.base))
+        self.assertEqual([], update.blockers(self.base))
 
     def test_data_beside_it_is_untouched(self):
         """The whole point: adoption must not cost somebody their database."""
@@ -430,7 +455,7 @@ class AdoptTestCase(TestCase):
         with open(precious, "w") as handle:
             handle.write("irreplaceable\n")
 
-        upgrade.adopt(self.base, self.origin, "v1.0.0")
+        update.adopt(self.base, self.origin, "v1.0.0")
 
         self.assertEqual("irreplaceable\n", open(precious).read())
 
@@ -440,7 +465,7 @@ class AdoptTestCase(TestCase):
         with open(os.path.join(self.base, "notes.txt"), "w") as handle:
             handle.write("mine\n")
 
-        self.assertTrue(upgrade.adopt(self.base, self.origin, "v1.0.0")["ok"])
+        self.assertTrue(update.adopt(self.base, self.origin, "v1.0.0")["ok"])
 
     def test_a_tree_that_is_not_that_release_is_refused_intact(self):
         """A **mixed** reset is what makes this check real: nothing is written, so the difference
@@ -448,8 +473,8 @@ class AdoptTestCase(TestCase):
         reported success."""
         self._unpack(contents="something else\n")
 
-        with self.assertRaises(upgrade.UpgradeError) as caught:
-            upgrade.adopt(self.base, self.origin, "v1.0.0")
+        with self.assertRaises(update.UpdateError) as caught:
+            update.adopt(self.base, self.origin, "v1.0.0")
 
         self.assertIn("does not match", str(caught.exception))
         self.assertIn("code.txt", str(caught.exception))
@@ -458,10 +483,10 @@ class AdoptTestCase(TestCase):
 
     def test_an_existing_checkout_is_not_adopted(self):
         self._unpack()
-        upgrade.adopt(self.base, self.origin, "v1.0.0")
+        update.adopt(self.base, self.origin, "v1.0.0")
 
-        with self.assertRaises(upgrade.UpgradeError):
-            upgrade.adopt(self.base, self.origin, "v1.0.0")
+        with self.assertRaises(update.UpdateError):
+            update.adopt(self.base, self.origin, "v1.0.0")
 
 
 class ApplyStagedTestCase(TestCase):
@@ -472,24 +497,24 @@ class ApplyStagedTestCase(TestCase):
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
 
     def test_no_request_is_a_no_op(self):
-        self.assertIsNone(upgrade.apply_staged(self.base))
+        self.assertIsNone(update.apply_staged(self.base))
 
-    def test_a_failing_upgrade_is_recorded_rather_than_raised(self):
-        """A launch that refuses to start because an upgrade failed leaves somebody with no
+    def test_a_failing_update_is_recorded_rather_than_raised(self):
+        """A launch that refuses to start because an update failed leaves somebody with no
         MutInt at all, which is strictly worse than an old one plus a message."""
-        upgrade.request(self.base, "v9.9.9")
+        update.request(self.base, "v9.9.9")
 
-        result = upgrade.apply_staged(self.base)
+        result = update.apply_staged(self.base)
 
         self.assertFalse(result["ok"])
         self.assertIn("adopt", result["detail"])
 
     def test_the_request_is_cleared_even_when_it_failed(self):
-        """Left in place, every launch from here on would retry the same failing upgrade."""
-        upgrade.request(self.base, "v9.9.9")
-        upgrade.apply_staged(self.base)
+        """Left in place, every launch from here on would retry the same failing update."""
+        update.request(self.base, "v9.9.9")
+        update.apply_staged(self.base)
 
-        state = upgrade.read_state(self.base)
+        state = update.read_state(self.base)
         self.assertNotIn("requested", state)
         self.assertFalse(state["last_result"]["ok"])
 
@@ -498,7 +523,7 @@ class RestartNoteTestCase(TestCase):
     """One launch telling the next not to open a browser.
 
     `start.py` opens one on every launch, which is right for a double-clicked icon and wrong
-    for a restart asked for from `/upgrade/`: that person is already looking at MutInt in a
+    for a restart asked for from `/update/`: that person is already looking at MutInt in a
     window which is polling for the server to come back, and `open` would navigate it to the
     site root -- so the page that said it would reload took them somewhere else instead.
     """
@@ -508,25 +533,25 @@ class RestartNoteTestCase(TestCase):
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
 
     def test_no_note_by_default(self):
-        self.assertFalse(upgrade.take_restart_note(self.base))
+        self.assertFalse(update.take_restart_note(self.base))
 
     def test_a_note_is_read_once(self):
         """It describes one launch, so the second launch must not inherit it."""
-        upgrade.note_restart(self.base)
+        update.note_restart(self.base)
 
-        self.assertTrue(upgrade.take_restart_note(self.base))
-        self.assertFalse(upgrade.take_restart_note(self.base))
+        self.assertTrue(update.take_restart_note(self.base))
+        self.assertFalse(update.take_restart_note(self.base))
 
     def test_it_leaves_the_rest_of_the_state_alone(self):
         """It shares the file with `requested` and the channel, and a restart happens while an
-        upgrade is staged -- taking the note must not be how that gets lost."""
-        upgrade.write_state(self.base, {"channel": upgrade.MAIN,
+        update is staged -- taking the note must not be how that gets lost."""
+        update.write_state(self.base, {"channel": update.MAIN,
                                         "requested": {"ref": "v1.2.3"}})
-        upgrade.note_restart(self.base)
-        upgrade.take_restart_note(self.base)
+        update.note_restart(self.base)
+        update.take_restart_note(self.base)
 
-        state = upgrade.read_state(self.base)
-        self.assertEqual(upgrade.MAIN, state["channel"])
+        state = update.read_state(self.base)
+        self.assertEqual(update.MAIN, state["channel"])
         self.assertEqual("v1.2.3", state["requested"]["ref"])
 
 
@@ -534,8 +559,8 @@ class VoidVerdictTestCase(TestCase):
     """What a check found is a comparison -- *this ref is newer than the one you are on* -- so
     moving the checkout voids it.
 
-    Left in place it was worse than stale: `/upgrade/` renders its Install button from
-    `available`, so after an upgrade the page went on describing a version this installation
+    Left in place it was worse than stale: `/update/` renders its Install button from
+    `available`, so after an update the page went on describing a version this installation
     now *was*, and offering to install it again, past every reload.
     """
 
@@ -569,20 +594,20 @@ class VoidVerdictTestCase(TestCase):
 
     def _offer(self, ref="v1.1.0"):
         """The state a check leaves behind."""
-        state = upgrade.read_state(self.base)
+        state = update.read_state(self.base)
         state["checked_at"] = "2026-09-09T12:00:00Z"
         state["available"] = {"ref": ref, "kind": "tag", "summary": "%s is available." % ref}
-        upgrade.write_state(self.base, state)
+        update.write_state(self.base, state)
 
-    def test_a_successful_upgrade_forgets_what_was_on_offer(self):
+    def test_a_successful_update_forgets_what_was_on_offer(self):
         self._offer()
-        upgrade.request(self.base, "v1.1.0")
+        update.request(self.base, "v1.1.0")
 
-        result = upgrade.apply_staged(self.base)
+        result = update.apply_staged(self.base)
 
         self.assertTrue(result["ok"], result)
-        self.assertEqual("v1.1.0", upgrade.current_ref(self.base))
-        state = upgrade.read_state(self.base)
+        self.assertEqual("v1.1.0", update.current_ref(self.base))
+        state = update.read_state(self.base)
         self.assertNotIn("available", state)
         self.assertTrue(state["last_result"]["ok"])
 
@@ -590,35 +615,35 @@ class VoidVerdictTestCase(TestCase):
         """The page falls back to *Up to date as of <time>* on a timestamp with no `available`,
         and that check ran against the previous version. **Not checked yet** is what is true."""
         self._offer()
-        upgrade.request(self.base, "v1.1.0")
+        update.request(self.base, "v1.1.0")
 
-        upgrade.apply_staged(self.base)
+        update.apply_staged(self.base)
 
-        self.assertNotIn("checked_at", upgrade.read_state(self.base))
+        self.assertNotIn("checked_at", update.read_state(self.base))
 
-    def test_a_failed_upgrade_keeps_the_offer(self):
+    def test_a_failed_update_keeps_the_offer(self):
         """The checkout did not move, so the version it was offered is still on offer. This is
         what makes the rule a consequence of moving rather than of pressing Install."""
         self._offer(ref="v9.9.9")
-        upgrade.request(self.base, "v9.9.9")
+        update.request(self.base, "v9.9.9")
 
-        result = upgrade.apply_staged(self.base)
+        result = update.apply_staged(self.base)
 
         self.assertFalse(result["ok"])
-        state = upgrade.read_state(self.base)
+        state = update.read_state(self.base)
         self.assertEqual("v9.9.9", state["available"]["ref"])
         self.assertEqual("2026-09-09T12:00:00Z", state["checked_at"])
 
     def test_the_chosen_channel_survives_it(self):
         """It forgets a verdict, not the operator's settings -- `channel` is how a deployment
         says it follows `main`, and throwing it away would silently move it back to `stable`."""
-        upgrade.write_state(self.base, {"channel": upgrade.MAIN,
+        update.write_state(self.base, {"channel": update.MAIN,
                                         "available": {"ref": "main"},
                                         "checked_at": "2026-09-09T12:00:00Z"})
 
-        state = upgrade.void_verdict(self.base)
+        state = update.void_verdict(self.base)
 
-        self.assertEqual(upgrade.MAIN, state["channel"])
+        self.assertEqual(update.MAIN, state["channel"])
         self.assertNotIn("available", state)
 
 
@@ -631,33 +656,33 @@ class CheckTestCase(TestCase):
     def test_it_records_why_it_could_not_check(self):
         """"Could not ask" and "nothing newer" must not look alike to the page -- a reader
         told they are up to date when nobody managed to look is worse than an error."""
-        state = upgrade.check(self.base)
+        state = update.check(self.base)
 
         self.assertIsNone(state["available"])
         self.assertIn("error", state)
 
     def test_it_stores_the_channel_it_was_given(self):
-        state = upgrade.check(self.base, channel=upgrade.MAIN)
+        state = update.check(self.base, channel=update.MAIN)
 
-        self.assertEqual(upgrade.MAIN, state["channel"])
-        self.assertEqual(upgrade.MAIN, upgrade.read_state(self.base)["channel"])
+        self.assertEqual(update.MAIN, state["channel"])
+        self.assertEqual(update.MAIN, update.read_state(self.base)["channel"])
 
 
 class SummarizeTestCase(TestCase):
-    """The sentence the upgrade page shows.
+    """The sentence the update page shows.
 
     It said `main is available.` and nothing else -- not which commit, not when, and not what
-    installing it would do to the components, which is most of what an upgrade *is*. A pure
+    installing it would do to the components, which is most of what an update *is*. A pure
     function over what `describe` managed to find out, so every field is optional.
     """
 
     def test_the_bare_case_is_what_it_always_said(self):
         """`describe` answers nothing when the fetch failed, and the version is still
         available and still installable."""
-        self.assertEqual("main is available.", upgrade.summarize("main", "abc12345", {}))
+        self.assertEqual("main is available.", update.summarize("main", "abc12345", {}))
 
     def test_it_names_the_commit_and_when_it_was_made(self):
-        sentence = upgrade.summarize("main", "abc12345", {
+        sentence = update.summarize("main", "abc12345", {
             "sha": "def67890", "date": "2026-09-07T11:53:23-04:00", "commits": 12})
 
         self.assertIn("commit def67890", sentence)
@@ -665,23 +690,23 @@ class SummarizeTestCase(TestCase):
         # worked on, and a date alone cannot say whether this is the commit you just pushed.
         # Through the helper rather than as a literal, because it renders in the host's zone
         # -- see ReadableTimeTestCase, which is where the formatting itself is pinned down.
-        self.assertIn("committed %s" % upgrade.readable_time("2026-09-07T11:53:23-04:00"),
+        self.assertIn("committed %s" % update.readable_time("2026-09-07T11:53:23-04:00"),
                       sentence)
         self.assertIn("12 commits newer than abc12345", sentence)
 
     def test_one_commit_is_not_pluralised(self):
         self.assertIn("1 commit newer",
-                      upgrade.summarize("main", "abc12345", {"commits": 1}))
+                      update.summarize("main", "abc12345", {"commits": 1}))
 
     def test_it_says_when_no_component_moves(self):
-        sentence = upgrade.summarize("main", "abc12345", {
+        sentence = update.summarize("main", "abc12345", {
             "sha": "def67890", "components": [], "component_total": 6})
 
         self.assertIn("No component changes", sentence)
         self.assertIn("6", sentence)
 
     def test_it_names_every_component_that_moves(self):
-        sentence = upgrade.summarize("main", "abc12345", {
+        sentence = update.summarize("main", "abc12345", {
             "sha": "def67890", "component_total": 6, "components": [
                 {"name": "mutint-core", "from": "1111aaaa", "to": "2222bbbb",
                  "change": "moved"},
@@ -694,11 +719,11 @@ class SummarizeTestCase(TestCase):
 
     def test_a_timestamp_of_another_shape_is_shown_as_it_came(self):
         """Rather than sliced into nonsense by a rule written for `%cI`."""
-        self.assertIn("whenever", upgrade.summarize("main", None, {"date": "whenever"}))
+        self.assertIn("whenever", update.summarize("main", None, {"date": "whenever"}))
 
 
 class ComponentChangesTestCase(TestCase):
-    """Which components an upgrade would move, read out of the target commit's own tree.
+    """Which components an update would move, read out of the target commit's own tree.
 
     Against a real repository with a real submodule: the question is entirely about what
     `git ls-tree` prints for a gitlink, which no mock of it would establish.
@@ -731,14 +756,14 @@ class ComponentChangesTestCase(TestCase):
         _run(path, "commit", "-qm", text)
 
     def test_a_component_that_moved_is_reported_with_both_shas(self):
-        before = upgrade._tree_components(self.base, "HEAD")["child"]
+        before = update._tree_components(self.base, "HEAD")["child"]
         self._commit(self.child, "a.txt", "two")
         _run(os.path.join(self.base, "child"), "fetch", "-q", "origin")
         _run(os.path.join(self.base, "child"), "checkout", "-q", "origin/main")
         _run(self.base, "commit", "-qam", "bump child")
-        after = upgrade._tree_components(self.base, "HEAD")["child"]
+        after = update._tree_components(self.base, "HEAD")["child"]
 
-        changes = upgrade.component_changes(self.base, "HEAD~1")
+        changes = update.component_changes(self.base, "HEAD~1")
 
         self.assertEqual(1, len(changes))
         self.assertEqual("child", changes[0]["name"])
@@ -747,27 +772,27 @@ class ComponentChangesTestCase(TestCase):
         self.assertEqual(before[:8], changes[0]["to"])
 
     def test_a_component_the_target_does_not_have_is_removed(self):
-        changes = upgrade.component_changes(self.base, "HEAD~1")
+        changes = update.component_changes(self.base, "HEAD~1")
 
-        self.assertEqual([{"name": "child", "from": upgrade._tree_components(
+        self.assertEqual([{"name": "child", "from": update._tree_components(
             self.base, "HEAD")["child"][:8], "to": None, "change": "removed"}], changes)
 
     def test_nothing_changed_is_an_empty_list_rather_than_a_claim(self):
-        self.assertEqual([], upgrade.component_changes(self.base, "HEAD"))
+        self.assertEqual([], update.component_changes(self.base, "HEAD"))
 
     def test_a_checkout_with_no_submodules_has_no_components(self):
         """Standalone mutint-core. The sentence then says nothing about components at all."""
-        self.assertEqual({}, upgrade._tree_components(self.child, "HEAD"))
+        self.assertEqual({}, update._tree_components(self.child, "HEAD"))
 
     def test_an_annotated_tag_is_described_by_the_commit_it_points_at(self):
         """`rev-parse v0.0.1` answers the *tag object*, which appears in no log and is not
-        what an upgrade moves to; `show -s` on one prints its header rather than a date."""
+        what an update moves to; `show -s` on one prints its header rather than a date."""
         _run(self.base, "tag", "-a", "v1.0.0", "-m", "release")
         _run(self.base, "remote", "add", "origin", self.child)
 
-        described = upgrade.describe(self.base, "v1.0.0", "tag")
+        described = update.describe(self.base, "v1.0.0", "tag")
 
-        commit = upgrade._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
+        commit = update._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
         self.assertEqual(commit, described["sha"])
         self.assertNotIn("tag", (described.get("date") or ""))
         self.assertRegex(described["date"], r"^\d{4}-\d{2}-\d{2}T")

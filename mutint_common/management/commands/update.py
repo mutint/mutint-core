@@ -1,7 +1,7 @@
-"""`./mutint upgrade` -- move this installation onto a newer version of itself.
+"""`./mutint update` -- move this installation onto a newer version of itself.
 
-The terminal half of what `/upgrade/` does from the sidebar. Both go through
-`mutint_common/upgrade.py`, so there is one definition of what an upgrade is, what it refuses
+The terminal half of what `/update/` does from the sidebar. Both go through
+`mutint_common/update.py`, so there is one definition of what an update is, what it refuses
 and how a channel is resolved; this command adds the arguments and the sentences.
 
 **It does not install dependencies and does not migrate.** Moving the working tree is the
@@ -15,7 +15,7 @@ import os
 
 from django.core.management.base import BaseCommand, CommandError
 
-from mutint_common import pg, upgrade
+from mutint_common import pg, update
 
 
 class Command(BaseCommand):
@@ -29,8 +29,8 @@ class Command(BaseCommand):
             "--to", metavar="REF",
             help="Move to this tag or branch, whatever the channel offers.")
         parser.add_argument(
-            "--channel", choices=upgrade.CHANNELS,
-            help="Remember which channel to follow: %s." % ", ".join(upgrade.CHANNELS))
+            "--channel", choices=update.CHANNELS,
+            help="Remember which channel to follow: %s." % ", ".join(update.CHANNELS))
         parser.add_argument(
             "--adopt", metavar="URL", nargs="?", const=True,
             help="Turn a tree that has no git history into a checkout, in place. Takes the "
@@ -40,13 +40,13 @@ class Command(BaseCommand):
             help="Skip the pg_dump taken before the working tree moves.")
 
     def handle(self, *args, **options):
-        base_dir = upgrade.project_root()
+        base_dir = update.project_root()
         if base_dir is None:
             # Every documented route sets it. Anything else is somebody running manage.py by
             # hand, where the working directory is not reliably the project.
             raise CommandError(
                 "MUTINT_TOOLS_DIR is not set, so this cannot tell which installation to "
-                "upgrade. Run it as `./mutint upgrade`.")
+                "update. Run it as `./mutint update`.")
 
         if options["adopt"]:
             return self._adopt(base_dir, options)
@@ -54,9 +54,9 @@ class Command(BaseCommand):
         if options["to"]:
             return self._apply(base_dir, options["to"], options)
 
-        state = upgrade.check(base_dir, channel=options.get("channel"))
+        state = update.check(base_dir, channel=options.get("channel"))
         self.stdout.write("Channel:   %s" % state.get("channel"))
-        self.stdout.write("Installed: %s" % (upgrade.current_ref(base_dir) or "unknown"))
+        self.stdout.write("Installed: %s" % (update.current_ref(base_dir) or "unknown"))
 
         if state.get("error"):
             # Not a CommandError: "I could not check" is an answer, and one that should not
@@ -71,24 +71,24 @@ class Command(BaseCommand):
 
         self.stdout.write("Available: %s" % _describe(available))
         if options["check"]:
-            self.stdout.write("Run `./mutint upgrade` to install it.")
+            self.stdout.write("Run `./mutint update` to install it.")
             return
 
         self._apply(base_dir, available["ref"], options)
 
     def _apply(self, base_dir, ref, options):
-        self.stdout.write("Upgrading to %s..." % ref)
+        self.stdout.write("Updating to %s..." % ref)
         try:
-            result = upgrade.apply(
+            result = update.apply(
                 base_dir, ref,
                 pg=pg if not options["no_backup"] else None,
                 take_backup=not options["no_backup"])
-        except upgrade.UpgradeError as exc:
+        except update.UpdateError as exc:
             raise CommandError(str(exc))
 
-        # The checkout has moved, so the stored verdict is void: without this, `/upgrade/`
-        # goes on offering the version this shell just installed. See `upgrade.void_verdict`.
-        upgrade.void_verdict(base_dir)
+        # The checkout has moved, so the stored verdict is void: without this, `/update/`
+        # goes on offering the version this shell just installed. See `update.void_verdict`.
+        update.void_verdict(base_dir)
 
         if result.get("backup"):
             self.stdout.write("Backed up the database to %s"
@@ -102,7 +102,7 @@ class Command(BaseCommand):
     def _adopt(self, base_dir, options):
         url = options["adopt"]
         if url is True:
-            url = upgrade.origin_url(base_dir)
+            url = update.origin_url(base_dir)
             if not url:
                 raise CommandError(
                     "This tree has no git history and no recorded remote, so --adopt needs "
@@ -111,14 +111,14 @@ class Command(BaseCommand):
         if not ref:
             raise CommandError("--adopt needs --to <tag> saying which release this tree is.")
         try:
-            result = upgrade.adopt(base_dir, url, ref)
-        except upgrade.UpgradeError as exc:
+            result = update.adopt(base_dir, url, ref)
+        except update.UpdateError as exc:
             raise CommandError(str(exc))
         # Whatever was stored was recorded about a tree that was not a checkout -- an error
         # from a check that could not run, most likely. It says nothing about this one.
-        upgrade.void_verdict(base_dir)
+        update.void_verdict(base_dir)
         self.stdout.write(self.style.SUCCESS(
-            "Adopted as a checkout of %s. Upgrades will work from here." % result["ref"]))
+            "Adopted as a checkout of %s. Updates will work from here." % result["ref"]))
 
 
 def _describe(available):

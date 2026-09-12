@@ -100,7 +100,7 @@ def compute_asset_version():
     installed component's git revision when any is known.
 
     A release changes the version and so every URL; that used to be the whole rule, and it
-    stopped being enough the moment the Development channel existed -- an upgrade to the
+    stopped being enough the moment the Development channel existed -- an update to the
     next `main` commit keeps the version, so a browser kept the previous commit's script
     under the same URL and rendered new rows with old code. Every component's HEAD is in the
     digest, in INSTALLED_APPS order, so a plugin's commit changes the URLs too. Uncached,

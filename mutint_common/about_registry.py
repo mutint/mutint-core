@@ -78,7 +78,7 @@ def get_about_sections():
     from django.apps import apps
     from django.utils.text import slugify
 
-    from mutint_common.upgrade import readable_time
+    from mutint_common.update import readable_time
     from mutint_common.util import get_revision
 
     sections = []
@@ -101,7 +101,7 @@ def get_about_sections():
             'revision': revision['short'] if revision else None,
             # When that revision was committed, as a person reads a time. A hash says which
             # commit and nothing about how old it is, which is the question somebody looking
-            # at an upgrade page is actually asking.
+            # at an update page is actually asking.
             'committed': (readable_time(revision['committed'])
                           if revision and revision.get('committed') else None),
             'revision_url': revision['url'] if revision else None,

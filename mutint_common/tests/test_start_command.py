@@ -57,10 +57,10 @@ class StartCommandTestCase(TestCase):
         self.assertEqual(1, timers)
 
     def test_a_restart_from_the_page_opens_no_browser_and_still_migrates(self):
-        """Pressing Restart on /upgrade/ is how a staged upgrade gets applied, so the migrate
+        """Pressing Restart on /update/ is how a staged update gets applied, so the migrate
         has to survive the gate -- that launch is the whole point. What must not happen is a
         second browser window, navigating the page that is polling for the server away to the
-        site root. See `upgrade.note_restart`."""
+        site root. See `update.note_restart`."""
         command = start.Command()
         command.stdout = StringIO()
         with mock.patch.dict(os.environ, {}, clear=True), \
