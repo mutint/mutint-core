@@ -27,6 +27,33 @@
             <input type="text" class="form-control" id="ne-name" required autofocus>
         </div>
 
+        {% if reference_sources %}
+            {% comment %} Optional, and a shortcut rather than a new way of establishing a
+               reference: the genome is copied from an experiment that already holds it, which
+               saves re-uploading one the installation has. Two plain chained selects -- there
+               is no select2 anywhere in this suite and the house style is hand-written
+               Bootstrap markup. The summary line is not decoration: picking the wrong genome
+               is a silent mistake, so the chosen one has to say which genome it is. {% endcomment %}
+            <div class="form-group">
+                <label for="ne-reference-project">
+                    Reference genome <small class="text-muted">(optional)</small>
+                </label>
+                <select class="form-control" id="ne-reference-project">
+                    <option value="">None &mdash; add one on the Import data page</option>
+                    {% for source in reference_sources %}
+                        <option value="{{ source.id }}"
+                                {% if source.id == reference_from_project %}selected{% endif %}>{{ source.name }}</option>
+                    {% endfor %}
+                </select>
+                <select class="form-control" id="ne-reference-experiment"
+                        style="margin-top: 0.5em;" disabled>
+                </select>
+                <span class="help-block" id="ne-reference-summary"></span>
+            </div>
+            {{ reference_sources|json_script:"ne-reference-sources" }}
+            <span id="ne-reference-from" hidden data-experiment="{{ reference_from|default_if_none:"" }}"></span>
+        {% endif %}
+
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="ne-save">Create experiment</button>
             <a class="btn btn-default"
@@ -40,16 +67,84 @@
     "use strict";
     var save = document.getElementById("ne-save");
     if (!save) { return; }
+
+    var projectSelect = document.getElementById("ne-reference-project");
+    var experimentSelect = document.getElementById("ne-reference-experiment");
+    var summary = document.getElementById("ne-reference-summary");
+    var sourcesNode = document.getElementById("ne-reference-sources");
+    var sources = sourcesNode ? JSON.parse(sourcesNode.textContent) : [];
+
+    function projectById(id) {
+        for (var i = 0; i < sources.length; i += 1) {
+            if (String(sources[i].id) === String(id)) { return sources[i]; }
+        }
+        return null;
+    }
+
+    function chosenExperiment() {
+        var project = projectSelect ? projectById(projectSelect.value) : null;
+        if (!project || !experimentSelect.value) { return null; }
+        for (var i = 0; i < project.experiments.length; i += 1) {
+            if (String(project.experiments[i].id) === String(experimentSelect.value)) {
+                return project.experiments[i];
+            }
+        }
+        return null;
+    }
+
+    function describe() {
+        var experiment = chosenExperiment();
+        if (!experiment) {
+            summary.textContent = "";
+            return;
+        }
+        summary.textContent = experiment.contigs
+            + " sequence" + (experiment.contigs === 1 ? "" : "s") + ", "
+            + experiment.bases.toLocaleString() + " bases.";
+    }
+
+    function fillExperiments(preselect) {
+        var project = projectById(projectSelect.value);
+        experimentSelect.innerHTML = "";
+        if (!project) {
+            experimentSelect.disabled = true;
+            describe();
+            return;
+        }
+        project.experiments.forEach(function (experiment) {
+            var option = document.createElement("option");
+            option.value = experiment.id;
+            option.textContent = experiment.name;
+            if (preselect && String(preselect) === String(experiment.id)) {
+                option.selected = true;
+            }
+            experimentSelect.appendChild(option);
+        });
+        experimentSelect.disabled = false;
+        describe();
+    }
+
+    if (projectSelect) {
+        var preselect = document.getElementById("ne-reference-from").dataset.experiment;
+        projectSelect.addEventListener("change", function () { fillExperiments(null); });
+        experimentSelect.addEventListener("change", describe);
+        fillExperiments(preselect);
+    }
+
     save.addEventListener("click", function () {
         var name = document.getElementById("ne-name").value.trim();
         if (!name) {
             document.getElementById("ne-error").textContent = "An experiment name is required.";
             return;
         }
-        window.mutintPost("/experiment/create/", {
+        var payload = {
             project: document.getElementById("ne-project").value,
             name: name
-        }).then(function (body) {
+        };
+        if (projectSelect && projectSelect.value && experimentSelect.value) {
+            payload.reference_from = experimentSelect.value;
+        }
+        window.mutintPost("/experiment/create/", payload).then(function (body) {
             window.location.href = "/import/?experiment_id=" + body.experiment_id;
         }).catch(function (err) {
             document.getElementById("ne-error").textContent = err.message;

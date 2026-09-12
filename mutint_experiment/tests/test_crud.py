@@ -901,3 +901,141 @@ class ExperimentEditTestCase(TestCase):
         html = self.client.get(url, follow=True).content.decode()
         self.assertNotIn('id="delete-experiment"', html)
         self.assertNotIn("/edit/", html)
+
+
+class ExperimentFromExistingReferenceTestCase(TestCase):
+    """Creating an experiment that starts from another experiment's reference genome.
+
+    What is pinned here is the *endpoint's* refusals rather than the copy itself (that is
+    `mutint_import.tests.test_reference_copy`): a source the caller may not read, or one with
+    no reference, must be refused **before** anything is created, or a bad request leaves a
+    nameless experiment behind for somebody to find later.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+
+        self.user = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.user.set_password("pw")
+        self.user.save()
+        self.client.force_login(self.user)
+
+        self.project = Project.objects.create(name="P", user=self.user)
+        set_primary_owner(self.project, self.user)
+        self.source = Experiment.objects.create(name="Source", project=self.project)
+
+    def _establish(self, experiment):
+        from mutint_import import reference as reference_io
+        from mutint_import import reference_store
+        from mutint_import.tests.test_reference_upload import write_genbank
+
+        path = write_genbank(os.path.join(self.tmp, "ref-%s.gbk" % experiment.id))
+        gff3_text, sequences = reference_io.normalize_reference(path)
+        reference_store.establish_or_check(experiment, gff3_text, sequences)
+
+    def test_the_new_page_offers_the_picker_and_preselects_a_named_source(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            self._establish(self.source)
+
+            html = self.client.get(
+                "/experiment/new/", {"reference": self.source.id}).content.decode()
+
+            self.assertIn('id="ne-reference-project"', html)
+            self.assertIn('id="ne-reference-experiment"', html)
+            self.assertIn('data-experiment="%d"' % self.source.id, html)
+            self.assertIn("Source", html)
+
+    def test_the_picker_is_absent_when_nothing_has_a_reference(self):
+        """A control with nothing in it is worse than no control."""
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            html = self.client.get("/experiment/new/").content.decode()
+            self.assertNotIn('id="ne-reference-project"', html)
+
+    def test_the_new_page_refuses_a_source_the_reader_cannot_see(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            other = Project.objects.create(
+                name="Theirs",
+                user=User.objects.create(username="them", email="t@e.com", is_active=True))
+            hidden = Experiment.objects.create(name="Hidden", project=other)
+            self._establish(hidden)
+
+            response = self.client.get("/experiment/new/", {"reference": hidden.id})
+            self.assertEqual(response.status_code, 403)
+
+    def test_the_new_page_404s_on_a_source_with_no_reference(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            self.assertEqual(
+                self.client.get("/experiment/new/",
+                                {"reference": self.source.id}).status_code, 404)
+
+    def test_creating_one_copies_the_reference(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            self._establish(self.source)
+
+            response = self.client.post("/experiment/create/", {
+                "project": self.project.id, "name": "Copy",
+                "reference_from": self.source.id})
+
+            self.assertEqual(response.status_code, 200, response.content)
+            body = response.json()
+            self.assertEqual(body["reference_from"], self.source.id)
+
+            created = Experiment.objects.get(pk=body["experiment_id"])
+            self.assertEqual(created.reference.gff3_sha256,
+                             self.source.reference.gff3_sha256)
+
+    def test_a_locked_source_is_still_fine(self):
+        """Nothing is written to the source, so neither its role nor its lock is the question."""
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            self._establish(self.source)
+            self.source.locked_at = timezone.now()
+            self.source.save(update_fields=["locked_at"])
+
+            response = self.client.post("/experiment/create/", {
+                "project": self.project.id, "name": "Copy",
+                "reference_from": self.source.id})
+            self.assertEqual(response.status_code, 200, response.content)
+
+    def test_an_unreadable_source_is_refused_and_nothing_is_created(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            other = Project.objects.create(
+                name="Theirs",
+                user=User.objects.create(username="them", email="t@e.com", is_active=True))
+            hidden = Experiment.objects.create(name="Hidden", project=other)
+            self._establish(hidden)
+
+            before = Experiment.objects.count()
+            response = self.client.post("/experiment/create/", {
+                "project": self.project.id, "name": "Copy", "reference_from": hidden.id})
+
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(Experiment.objects.count(), before)
+
+    def test_a_source_with_no_reference_is_refused_and_nothing_is_created(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            before = Experiment.objects.count()
+            response = self.client.post("/experiment/create/", {
+                "project": self.project.id, "name": "Copy",
+                "reference_from": self.source.id})
+
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(Experiment.objects.count(), before)
+
+    def test_an_unknown_source_is_a_404_and_nothing_is_created(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            before = Experiment.objects.count()
+            self.assertEqual(
+                self.client.post("/experiment/create/",
+                                 {"project": self.project.id, "name": "Copy",
+                                  "reference_from": 999999}).status_code, 404)
+            self.assertEqual(Experiment.objects.count(), before)
+
+    def test_no_reference_named_still_creates_a_plain_experiment(self):
+        with override_settings(MUTINT_STORE_DIR=self.store):
+            response = self.client.post("/experiment/create/",
+                                        {"project": self.project.id, "name": "Plain"})
+            self.assertEqual(response.status_code, 200, response.content)
+            self.assertIsNone(response.json()["reference_from"])

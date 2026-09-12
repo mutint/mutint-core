@@ -470,3 +470,38 @@ class BootstrapJourneyTestCase(_Fixture):
         # 4. And the viewer now draws.
         html = self._get().content.decode("utf-8")
         self.assertIn(SVIEWER_SCRIPT, html)
+
+
+class StartAnExperimentFromThisReferenceTestCase(_Fixture):
+    """The shortcut button: the other thing you can do with a reference besides download it."""
+
+    def _get_ref(self, **extra):
+        params = {"experiment_id": self.experiment.id}
+        params.update(extra)
+        return self.client.get("/mutations/reference", params)
+
+    def test_the_button_links_to_the_create_page_with_this_reference_chosen(self):
+        html = self._get_ref().content.decode("utf-8")
+        self.assertIn('href="/experiment/new/?reference=%d"' % self.experiment.id, html)
+        self.assertIn("Create new", html)
+
+    def test_an_anonymous_reader_is_offered_nothing(self):
+        """A public project is readable signed out, and `/experiment/new/` 403s -- so the
+        button would be a dead end dressed up as an action."""
+        self.experiment.project.is_public = True
+        self.experiment.project.save(update_fields=["is_public"])
+        self.client.logout()
+
+        html = self._get_ref().content.decode("utf-8")
+        self.assertEqual(self.client.get("/experiment/new/").status_code, 403)
+        self.assertNotIn("/experiment/new/?reference=", html)
+
+    def test_a_reader_with_nowhere_to_create_is_offered_nothing(self):
+        """Signed in is not enough: the question is whether any project can be written to."""
+        reader = User.objects.create(username="reader", email="r@e.com", is_active=True)
+        self.experiment.project.is_public = True
+        self.experiment.project.save(update_fields=["is_public"])
+        self.client.force_login(reader)
+
+        html = self._get_ref().content.decode("utf-8")
+        self.assertNotIn("/experiment/new/?reference=", html)

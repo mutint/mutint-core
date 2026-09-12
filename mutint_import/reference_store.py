@@ -233,3 +233,67 @@ def annotation_reference_path(experiment_id):
 
 def has_reference(experiment):
     return ReferenceSequences.objects.filter(experiment=experiment).exists()
+
+
+def stored_reference(experiment_id):
+    """The canonical ``(gff3_text, sequences)`` this experiment's reference is stored as.
+
+    The pair `establish_or_check` was handed when the reference was established, read back
+    off disk rather than re-derived: the stored GFF3 *is* what `normalize_reference`
+    produced, so returning its text verbatim reproduces `gff3_sha256` by construction
+    instead of depending on the renderer being byte-stable across versions. `sequences`
+    comes from the stored FASTA in its stored order, for the same reason -- a reference
+    established from an unsorted multi-record bare FASTA keeps that file's order, which
+    re-parsing the GFF3 would silently sort.
+
+    Returns ``None`` when either file is missing or unreadable, which is the one state a
+    caller has to handle: the row says there is a reference and the store cannot produce it.
+    """
+    gff3_text = _stored_gff3_text(experiment_id)
+    if gff3_text is None:
+        return None
+    fasta_path = store.experiment_reference_path(experiment_id, store.REFERENCE_FASTA)
+    try:
+        with open(fasta_path, "r", encoding="utf-8") as handle:
+            sequences = [(seq_id, sequence)
+                         for seq_id, sequence in reference_io.parse_fasta(handle)]
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not sequences:
+        return None
+    return gff3_text, sequences
+
+
+def reference_sources(experiments):
+    """Experiments whose reference another experiment could be started from, by project.
+
+    ``[{"id", "name", "experiments": [{"id", "name", "contigs", "bases"}]}]``, in project
+    then experiment name order -- the shape a Project/Experiment picker renders straight.
+
+    The caller supplies the experiments, already narrowed to what the reader may see, so
+    no access policy lives here. `contigs` and `bases` come off the row rather than from
+    the files, because choosing the wrong genome is a silent mistake and the picker has to
+    be able to say which genome each entry is.
+    """
+    rows = (ReferenceSequences.objects
+            .filter(experiment__in=experiments)
+            .exclude(experiment__project__isnull=True)
+            .select_related("experiment", "experiment__project")
+            .order_by("experiment__project__name", "experiment__name", "experiment__id"))
+
+    projects = []
+    by_project = {}
+    for row in rows:
+        experiment = row.experiment
+        project = experiment.project
+        if project.id not in by_project:
+            by_project[project.id] = {"id": project.id, "name": project.name,
+                                      "experiments": []}
+            projects.append(by_project[project.id])
+        by_project[project.id]["experiments"].append({
+            "id": experiment.id,
+            "name": experiment.name,
+            "contigs": len(row.seq_ids or []),
+            "bases": row.total_length,
+        })
+    return projects

@@ -308,3 +308,58 @@ def install_annotation(experiment, gff3_text, sequences, actor="", allow_rename=
     gd_import.run_post_processing(experiment)
     return reference, created
 
+
+
+def copy_reference(source, target, actor=""):
+    """Establish `target`'s reference as the genome `source` already holds.
+
+    The shortcut behind **Create new experiment with this reference**: a deployment running
+    ten ALEs against one genome should not have to upload or re-download it ten times, and
+    the canonical artifacts are already on disk beside the experiment next door.
+
+    It goes through `install_annotation` rather than copying files, so there is still one
+    code path that writes a reference -- and it hands over the *stored* text and the *stored*
+    FASTA's sequences verbatim (`reference_store.stored_reference`), which is what makes the
+    copy byte-identical rather than merely equivalent. Re-normalising would have been the
+    obvious implementation and is worse twice over: it parses a whole genome into the
+    annotation model for no new information, and `sequences_of` sorts the contigs, so a
+    reference established from an unsorted multi-record bare FASTA would come out with a
+    different `fasta_sha256` than the one it was copied from.
+
+    `target` must have no reference of its own. This establishes one where there was none --
+    it is emphatically not the shell-only `establish_or_check(replace=True)`, which overwrites
+    a *different* genome and still has no UI. `seq_ids[].aliases` are deliberately not
+    carried across, which falls out of `_sequence_fields` writing none on a create: an alias
+    is the name this experiment's stored BAMs and BigWigs were built with, and a new
+    experiment has none.
+
+    Returns `(ReferenceSequences, created)` as `install_annotation` does. Raises
+    `ReferenceUnavailable` when `source` has no reference, when its stored files cannot be
+    read, or when they do not hash to what its row records -- that last being a corrupt
+    store, which is better refused than propagated. **Callers hold the import lock**, as
+    every `install_annotation` caller does.
+    """
+    from mutint_sample.models import ReferenceSequences
+
+    source_row = ReferenceSequences.objects.filter(experiment=source).first()
+    if source_row is None:
+        raise ReferenceUnavailable(
+            "%s has no reference genome to start from." % (source.name,))
+
+    stored = reference_store.stored_reference(source.id)
+    if stored is None:
+        raise ReferenceUnavailable(
+            "%s's reference files could not be read, so they cannot be copied."
+            % (source.name,))
+    gff3_text, sequences = stored
+
+    # The row and the files disagreeing means the store was edited or half-written. Copying
+    # it anyway would establish a reference that is not the one the source page describes.
+    if (reference_store.digest(gff3_text) != source_row.gff3_sha256
+            or reference_store.digest(
+                reference_store.normalized_fasta_text(sequences)) != source_row.fasta_sha256):
+        raise ReferenceUnavailable(
+            "%s's stored reference files do not match its recorded digests, so they cannot "
+            "be copied." % (source.name,))
+
+    return install_annotation(target, gff3_text, sequences, actor=actor)

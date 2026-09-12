@@ -24,7 +24,10 @@ from django.views.decorators.http import require_POST
 
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
-from mutint_experiment.permissions import can_edit_experiment, can_view_project
+from mutint_experiment.permissions import (
+    accessible_projects, can_edit_experiment, can_view_project,
+)
+from mutint_experiment.roles import ROLE_WRITE
 from mutint_import import reference_export
 from mutint_sample import ncbi
 from mutint_sample.breseq_report import build_rows, is_mixed
@@ -245,7 +248,20 @@ def reference_view(request):
         # so the page cannot offer a format the endpoint would refuse.
         "download_formats": list(reference_export.FORMATS.values()),
         "default_format": reference_export.DEFAULT_FORMAT,
+        "can_create_experiment": _may_create_experiment(request.user),
     })
 
     template = loader.get_template("ncbi/reference.html")
     return HttpResponse(template.render(context, request), content_type="text/html")
+
+
+def _may_create_experiment(user):
+    """Whether this reader has anywhere to create an experiment, for the shortcut button.
+
+    Deliberately **not** `may_check`, which asks about write access to *this* experiment and
+    its lock. What the button needs is a project to create under -- an anonymous reader of a
+    public project can read this page and would meet a 403 on `/experiment/new/`, and a
+    control whose every use the server refuses is a dead end dressed up as an action.
+    """
+    return bool(user.is_authenticated
+                and accessible_projects(user, ROLE_WRITE).exists())

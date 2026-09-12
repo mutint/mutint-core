@@ -32,6 +32,19 @@
                 {% endif %}
             </p>
 
+            {% if can_create_experiment %}
+                {% comment %} The other thing you can do with a reference, beside download it:
+                   start an experiment from it. A plain link -- the picker on
+                   `/experiment/new/` arrives with this experiment chosen, and the copy itself
+                   happens in `experiment_create`. Gated on having somewhere to create rather
+                   than on `may_check`, which asks about writing to *this* experiment. {% endcomment %}
+                <div class="btn-row">
+                    <a class="btn btn-default"
+                       href="/experiment/new/?reference={{ experiment_id }}">Create new
+                        experiment with this reference</a>
+                </div>
+            {% endif %}
+
             {% comment %} A sibling of the table, not a wrapper: every row below carries a
                form of its own for the NCBI check, and HTML drops a form nested in a form.
                The checkboxes claim this one through `form=`, so it works with no script. {% endcomment %}

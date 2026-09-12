@@ -1575,6 +1575,44 @@ is no picker to get wrong. Each page checks permission itself -- 403 signed out,
 project you cannot edit -- rather than relying on the button being hidden. The POSTs still
 go to `project_create` / `experiment_create`, which is where the real checks live.
 
+#### A new experiment can start from an experiment that already has a reference
+
+`/experiment/new/` carries an optional Project -> Experiment picker naming the experiment whose
+reference genome the new one begins with, and `/mutations/reference` carries **Create new
+experiment with this reference**, which is a link to that page with `?reference=<pk>` chosen.
+A deployment running ten ALEs against one genome should not have to upload or re-download it
+ten times when the canonical artifacts are already on disk next door.
+
+**It establishes, and is emphatically not `replace=True`.** `mutint_import.annotation`
+`copy_reference(source, target)` goes through `install_annotation` like every other annotation
+write, onto an experiment that has none -- so the rule that swapping a *different* genome into
+an established reference is shell-only is untouched. `experiment_create` holds
+`import_lock.hold()` (409, not a wait: a request would rather refuse than sit open for
+somebody else's drop) **outside** a `transaction.atomic()` that does the create and the copy
+together, so a refusal leaves no nameless experiment behind.
+
+**The copy is byte-identical rather than merely equivalent**, and that took not
+re-normalising. `reference_store.stored_reference` hands back the stored GFF3's text verbatim
+and the stored FASTA's sequences in their stored order, so all three digests come out equal by
+construction; re-deriving from the annotation model would parse a whole genome for no new
+information **and** sort the contigs, which would change `fasta_sha256` for a reference
+established from an unsorted multi-record bare FASTA. A store that does not hash to what its
+row records is refused rather than propagated. `seq_ids[].aliases` are deliberately *not*
+carried across -- that falls out of `_sequence_fields` writing none on a create, and is
+correct, because an alias is the name this experiment's stored BAMs and BigWigs were built
+with.
+
+**The NCBI verdict follows for free**, because `DatabaseSequenceLink` is keyed on
+`(database, sha256)` and not on the experiment: a contig confirmed on the source is confirmed
+on the copy with no second request. That was already the stated reason for keying on the
+bases, and this is the first feature to collect on it.
+
+Read access is the bar for the *source* -- that page already offers any reader the whole genome
+as a download, so reusing one grants nothing new -- and a locked source is fine, nothing being
+written to it. The button is gated on the reader having somewhere to create
+(`accessible_projects(user, ROLE_WRITE).exists()`), **not** on `may_check`, which asks about
+writing to the experiment being looked at.
+
 ### Editing is three pages, and one of them is not what it looks like
 
 `/project/<pk>/edit/`, `/experiment/<pk>/edit/` and `/sample/<pk>/edit/`, plus

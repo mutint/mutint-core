@@ -93,7 +93,8 @@ def experiment_detail(request, pk):
 # Deletion is soft: the row is flagged with a timestamp and the acting user, and
 # `purge_deleted` removes it for real once the retention window passes.
 
-from django.http import JsonResponse
+from django.db import transaction
+from django.http import Http404, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -115,7 +116,15 @@ def project_new(request):
 
 
 def experiment_new(request):
-    """The create-an-experiment form. `?project=<pk>` fixes the project."""
+    """The create-an-experiment form. `?project=<pk>` fixes the project.
+
+    `?reference=<pk>` preselects the experiment whose reference genome the new one should
+    start from -- what **Create new experiment with this reference** on the Reference page
+    links to. It is resolved here rather than left to the client so a hand-typed id cannot
+    reach past what the picker offers, and it is checked with `can_view_project`, not
+    `can_edit_project`: reading a reference is all this does, and that page already lets any
+    reader download the whole genome.
+    """
     if not request.user.is_authenticated:
         return render(request, "403.html", get_user_context(request.user), status=403)
 
@@ -134,8 +143,42 @@ def experiment_new(request):
         # offers the button once you get there.
         return redirect("/project/new/")
 
-    context.update({"project": project, "editable_projects": editable})
+    source = None
+    requested_source = request.GET.get("reference")
+    if requested_source:
+        source = get_object_or_404(Experiment, pk=requested_source)
+        if not can_view_project(request.user, source.project):
+            return render(request, "403.html", context, status=403)
+        if not _has_stored_reference(source):
+            raise Http404("that experiment has no reference genome to start from")
+
+    context.update({
+        "project": project,
+        "editable_projects": editable,
+        "reference_sources": _reference_sources(request.user),
+        "reference_from": source.id if source else None,
+        "reference_from_project": source.project_id if source else None,
+    })
     return render(request, "experiment/new.html", context)
+
+
+def _reference_sources(user):
+    """Experiments the new-experiment picker may copy a reference from, by project.
+
+    Every experiment the reader can *see* that has a reference -- read access is the right
+    bar, since `/mutations/reference` already offers any reader the whole genome as a
+    download, so reusing one grants nothing new. Write access is still required on the
+    project being created *under*, which `experiment_create` checks.
+    """
+    from mutint_import import reference_store
+
+    return reference_store.reference_sources(get_all_user_exps(user))
+
+
+def _has_stored_reference(experiment):
+    from mutint_import import reference_store
+
+    return reference_store.has_reference(experiment)
 
 
 @require_POST
@@ -168,7 +211,14 @@ def project_create(request):
 
 @require_POST
 def experiment_create(request):
-    """Create an experiment under an existing project."""
+    """Create an experiment under an existing project.
+
+    `reference_from` is optional and names an experiment whose reference genome the new one
+    starts from, which saves re-uploading a genome the installation already holds. The source
+    is resolved and refused **before** anything is created, so a bad request leaves no
+    nameless experiment behind; the copy itself then runs inside one transaction with the
+    create, so a failure leaves nothing either.
+    """
     if not request.user.is_authenticated:
         return JsonResponse({"error": "You must be signed in."}, status=403)
 
@@ -180,10 +230,59 @@ def experiment_create(request):
     if not can_edit_project(request.user, project):
         return JsonResponse({"error": "You cannot add to this project."}, status=403)
 
-    experiment = _create_experiment(project, name, request.user)
+    source = None
+    requested_source = (request.POST.get("reference_from") or "").strip()
+    if requested_source:
+        source = get_object_or_404(Experiment, pk=requested_source)
+        # Read access, and deliberately not `can_edit_experiment`: nothing is written to the
+        # source, so neither its role nor its lock is the question. What is written is the
+        # new experiment, under a project `can_edit_project` has already allowed.
+        if not can_view_project(request.user, source.project):
+            return JsonResponse(
+                {"error": "You cannot read that experiment's reference genome."}, status=403)
+        if not _has_stored_reference(source):
+            return JsonResponse(
+                {"error": "%s has no reference genome to start from." % source.name},
+                status=400)
+
+    if source is None:
+        experiment = _create_experiment(project, name, request.user)
+        return JsonResponse({"experiment_id": experiment.id,
+                             "experiment": experiment.name,
+                             "project_id": project.id,
+                             "reference_from": None})
+
+    return _create_experiment_with_reference(request, project, name, source)
+
+
+def _create_experiment_with_reference(request, project, name, source):
+    """Create an experiment and establish `source`'s reference on it, or neither.
+
+    The lock is taken outside the transaction on purpose: `import_lock.acquire` opens a
+    transaction of its own to create its row, and nesting that inside ours would make it a
+    savepoint whose fate is tied to a rollback we may want to perform while still holding
+    the lock. `hold` rather than `hold_waiting` -- a request would rather answer 409 than sit
+    open for the length of somebody else's drop.
+    """
+    from mutint_import import annotation, import_lock
+
+    try:
+        with import_lock.hold():
+            with transaction.atomic():
+                experiment = _create_experiment(project, name, request.user)
+                annotation.copy_reference(source, experiment,
+                                          actor=request.user.get_username())
+    except import_lock.ImportInProgress as error:
+        return JsonResponse({"error": str(error)}, status=409)
+    except annotation.ReferenceUnavailable as error:
+        return JsonResponse({"error": str(error)}, status=400)
+
+    logger.info("copied reference from experiment %s to %s", source.id, experiment.id,
+                extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
                          "experiment": experiment.name,
-                         "project_id": project.id})
+                         "project_id": project.id,
+                         "reference_from": source.id})
 
 
 def _create_experiment(project, name, user):
