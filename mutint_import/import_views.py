@@ -16,13 +16,21 @@ import logging
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
 
+from mutint_common.annotator_registry import (
+    AnnotatorOptionsInvalid,
+    NoReference,
+    clean_selections,
+    render_annotator_panels,
+    run_annotators,
+)
 from mutint_common.import_registry import get_import_types, get_import_types_for
 from mutint_common.import_tab_registry import get_import_tabs
 from mutint_import.templatetags.import_tabs import remembered_tab
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
-from mutint_experiment.permissions import can_edit_experiment
+from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
 
 logger = logging.getLogger("mutint_import.add_views")
 
@@ -99,6 +107,14 @@ def import_view(request):
                   "(GenBank, GFF3 or FASTA) on the Reference Sequence tab, or import a "
                   "Results Folder that includes a reference genome.")
 
+    # The registered reference annotators' panels, on a tab whose handler says it establishes
+    # or updates the reference -- a fact about the handler, so a plugin's reference-establishing
+    # type gets them without this view naming it. On demand only once there is a reference to
+    # run against, which is exactly the Update Annotation moment: `reference` is offered only
+    # without one.
+    annotator_panels = (render_annotator_panels(experiment, request)
+                        if offered and import_type.get("annotators") else [])
+
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
@@ -108,6 +124,8 @@ def import_view(request):
         "import_type": import_type,
         "offered": offered,
         "reason": reason,
+        "annotator_panels": annotator_panels,
+        "annotators_on_demand": bool(annotator_panels) and has_reference,
         # The chosen type alone, scoped here rather than in the template so the page and
         # the JSON it classifies a drop with cannot disagree. `/import/types/` stays
         # unscoped -- it has no experiment to scope by, and the handlers enforce their
@@ -132,3 +150,57 @@ def _has_reference(experiment):
     from mutint_import.reference_store import has_reference
 
     return has_reference(experiment)
+
+
+@require_POST
+def annotate_view(request):
+    """Run the ticked reference annotators against the experiment's stored reference.
+
+    The **Run annotators** button on the Update Annotation tab: nothing is uploaded, so there
+    is no session -- the body is `{experiment_id, annotators}` with the same `annotators`
+    shape the finalize path takes. Gated like a finalize: `can_edit_experiment`, since what an
+    annotator installs is a shared annotation, with the lock's own sentence when that is the
+    reason. Holds the import lock while they run, the way `finalize_upload` does -- an
+    annotator that runs inline re-annotates every mutation and rebuilds derived data, which is
+    an import-class write -- and answers 409 rather than waiting, for the same reason.
+    """
+    import json
+
+    from mutint_import import import_lock
+    from mutint_import.import_lock import ImportInProgress
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}") or {}
+    except ValueError:
+        payload = {}
+
+    try:
+        experiment = Experiment.objects.get(pk=payload.get("experiment_id"))
+    except (Experiment.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Unknown experiment."}, status=404)
+    if not can_edit_experiment(request.user, experiment):
+        return JsonResponse(
+            {"error": experiment_lock_refusal(experiment)
+                      or "You cannot add data to this experiment."}, status=403)
+
+    try:
+        selections = clean_selections(payload.get("annotators") or {})
+    except AnnotatorOptionsInvalid as refusal:
+        return JsonResponse({"error": str(refusal)}, status=400)
+    if not selections:
+        return JsonResponse({"error": "Tick at least one annotator to run."}, status=400)
+
+    try:
+        import_lock.acquire()
+    except ImportInProgress as busy:
+        return JsonResponse({"error": str(busy)}, status=409)
+    try:
+        rows = run_annotators(experiment, selections, request.user)
+    except NoReference as refusal:
+        return JsonResponse({"error": str(refusal)}, status=409)
+    finally:
+        import_lock.release()
+
+    return JsonResponse({"experiment_id": experiment.id, "experiment": experiment.name,
+                         "annotators": rows})
+

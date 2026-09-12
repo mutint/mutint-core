@@ -259,6 +259,7 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
     The rows stay one per file, since `run_import` announced them by name.
     """
     from mutint_common.import_registry import ConfirmationRequired
+    from mutint_import import annotation
     from mutint_import import reference as reference_io
     from mutint_import import reference_store
 
@@ -286,8 +287,12 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
             for relative in paths:
                 if os.path.basename(relative) == duplicate.skipped_file:
                     warnings[relative].append(str(duplicate))
-        reference_store.establish_or_check(
-            experiment, gff3_text, sequences, update_annotation=True,
+        # Through `install_annotation`, not `establish_or_check` directly: a replaced
+        # annotation re-annotates every mutation and rebuilds what derives from them, which a
+        # plain replace used to leave stale until `./mutint reannotate`. On a first reference
+        # it is `establish_or_check` and nothing more.
+        annotation.install_annotation(
+            experiment, gff3_text, sequences,
             allow_rename=bool((options or {}).get("confirm_rename")))
     except reference_store.RenameRequired as ask:
         # Not an error and not a per-file result: the same genome arrived under different
@@ -515,6 +520,7 @@ def handle_vcf(experiment, staged_root, paths, user):
 def register_core_import_handlers():
     register_import_handler(
         name="reference",
+        annotators=True,
         label="Reference genome (GenBank / GFF3 / FASTA)",
         patterns=REFERENCE_PATTERNS,
         priority=PRIORITY_REFERENCE,
@@ -538,6 +544,7 @@ def register_core_import_handlers():
                     "nucleotide sequences but you can upload updated feature annotations.")
     register_import_handler(
         name="replace_annotation",
+        annotators=True,
         label="Replace annotation or rename contigs (GenBank / GFF3 / FASTA)",
         patterns=ANNOTATION_PATTERNS,
         # Deliberately one step behind `reference`, which claims the same files: in

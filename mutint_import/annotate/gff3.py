@@ -18,6 +18,7 @@ from mutint_import.annotate.model import (
     DEFAULT_REPEAT_PRODUCT,
     GENE_TYPES,
     MULTIPLE_SEPARATOR,
+    NEVER_PSEUDO_TYPES,
     REPEAT_TYPES,
     AnnotatedSequence,
     Feature,
@@ -191,6 +192,12 @@ def _build_feature(row, promote_gene_rows=False):
         # GFF3, but a third-party file may not have.
         feature.name = trim_repeat_name(name) if name else DEFAULT_REPEAT_NAME
         feature.product = product or DEFAULT_REPEAT_PRODUCT
+        # A partial IS element is a pseudo mobile_element -- breseq's ReadISEScan flags it,
+        # and repeat_family_sequence skips it when picking a family's consensus. Never for a
+        # repeat_region, which flag_pseudo() leaves alone. reference_sequence.h:528-537
+        if feature_type not in NEVER_PSEUDO_TYPES:
+            feature.pseudogene = _is_true(_first(attributes, 'Pseudo')) \
+                or _is_true(_first(attributes, 'pseudo'))
     else:
         feature.name = name or 'unknown'
         feature.locus_tag = accession
@@ -338,14 +345,15 @@ def _feature_rows(seq_id, feature, index):
         attributes['Note'] = feature.product
 
     feature_type = feature.type
-    if not feature.is_repeat():
-        if feature.pseudogene:
-            # breseq writes a pseudo CDS as fCDS and reads it back as CDS+Pseudo.
-            if feature_type == 'CDS':
-                feature_type = PSEUDO_CDS_TYPE
-            attributes['Pseudo'] = 'true'
-        if feature_type in ('CDS', PSEUDO_CDS_TYPE):
-            attributes['transl_table'] = str(feature.translation_table)
+    # Pseudo for a gene and for a partial mobile_element alike: breseq writes and reads it for
+    # any feature type its flag_pseudo() applies to, and a repeat_region is never one.
+    if feature.pseudogene and feature_type not in NEVER_PSEUDO_TYPES:
+        # breseq writes a pseudo CDS as fCDS and reads it back as CDS+Pseudo.
+        if feature_type == 'CDS':
+            feature_type = PSEUDO_CDS_TYPE
+        attributes['Pseudo'] = 'true'
+    if not feature.is_repeat() and feature_type in ('CDS', PSEUDO_CDS_TYPE):
+        attributes['transl_table'] = str(feature.translation_table)
 
     rows = []
     for position, location in enumerate(feature.locations):

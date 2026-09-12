@@ -22,6 +22,7 @@ holds core's five import types. A plugin is just another caller.
 | [`example_registry`](../reference/example_registry.md) | a directory of data | loads it with `./mutint load_example` |
 | [`context_registry`](../reference/context_registry.md) | a callable | adds to the experiment views' context |
 | [`panel_registry`](../reference/panel_registry.md) | a template and a context callable | draws your panel on the experiment Overview |
+| [`annotator_registry`](../reference/annotator_registry.md) | a panel of options and a callable | draws the panel on the reference tabs of the Import data page, and runs the callable on the reference after it lands |
 
 `context_registry` and `panel_registry` are close enough together to be worth telling apart.
 The first hands the experiment views extra *context*, which some template must already be

@@ -52,7 +52,8 @@ def register_import_handler(name, label, patterns, handle,
                             requires_reference=False,
                             only_without_reference=False, accepts_options=False,
                             accepts_accessions=False,
-                            list_units=None, menu_order=None, directories=()):
+                            list_units=None, menu_order=None, directories=(),
+                            annotators=False):
     """Register an import type.
 
     name        stable slug; the value the Import data page submits
@@ -127,6 +128,12 @@ def register_import_handler(name, label, patterns, handle,
                 priority order, because the Import data page walks *that* list to name what an
                 unrecognized file looks like and wants the handler that would really
                 claim it named first.
+    annotators  this import establishes or updates the reference genome, so the Import
+                data page draws the registered reference annotators' panels beside it and
+                runs the ticked ones after the reference lands -- see
+                `mutint_common.annotator_registry`. A fact about the handler rather than a
+                list of type names in core: a plugin shipping its own reference-establishing
+                handler gets the panels by saying so.
     directories directory names whose whole contents this handler claims, wherever they
                 appear in the drop.
 
@@ -162,6 +169,7 @@ def register_import_handler(name, label, patterns, handle,
         "accepts_accessions": accepts_accessions,
         "list_units": list_units,
         "menu_order": priority if menu_order is None else menu_order,
+        "annotators": bool(annotators),
     })
 
 
@@ -213,6 +221,7 @@ def get_import_types():
         "only_without_reference": h["only_without_reference"],
         "accepts_accessions": h["accepts_accessions"],
         "menu_order": h["menu_order"],
+        "annotators": h["annotators"],
     } for h in get_import_handlers()]
 
 

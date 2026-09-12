@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2412 run, 0 failures** standalone; **2827** assembled, measured with `PYTHONPATH`
+**Baseline: 2502 run, 0 failures** standalone; **2827** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -736,7 +736,7 @@ recomputes them in place against the stored reference -- re-importing is not nee
 on a broken link). Output goes to `site/`, which is git-ignored. Nothing is hosted.
 
 **The toolchain is MkDocs + Material + mkdocstrings, and the reason is the docstrings.** The
-nine registries carry hundreds of lines of docstring with single-backtick code spans, written
+ten registries carry hundreds of lines of docstring with single-backtick code spans, written
 as markdown. Sphinx's `autodoc` parses docstrings as reStructuredText, where a single backtick
 is a *title reference* -- every one would render as italics and warn. MyST changes how `.md`
 pages parse, not how docstrings do. `mkdocstrings` parses them as markdown, so the reference
@@ -3245,9 +3245,9 @@ user-facing lists exclude deleted rows explicitly via `mutint_experiment.models.
 
 ### Import types are pluggable
 
-`mutint_common/import_registry.py` is one of nine registries in `mutint_common/` -- alongside
+`mutint_common/import_registry.py` is one of ten registries in `mutint_common/` -- alongside
 `import_tab_registry`, `plugin_registry`, `nav_registry`, `about_registry`, `context_registry`,
-`example_registry`, `panel_registry` and `rebuild_registry`. An app registers what it can
+`example_registry`, `panel_registry`, `annotator_registry` and `rebuild_registry`. An app registers what it can
 ingest from `AppConfig.ready()` and it appears among the Import data page's tabs and in
 auto-detect, with no edit to core:
 
@@ -3407,6 +3407,61 @@ worse than an honest INS: it asserts a mechanism the data may not support, and b
 in the same `get_or_create` key it forks the row against every other import of the same call.
 
 **Both exports check `can_view_project`**, and each has a test that fails without the check.
+
+### Reference annotators run on the reference after it lands
+
+`mutint_common/annotator_registry.py` is the tenth registry, and the first whose contribution
+is a *step*: a component registers something that runs on the reference genome once it is
+stored, rather than a page, a link, a handler or a panel of content. The Import data page's two
+reference tabs draw a fieldset per annotator -- an enable box and a description core owns, the
+component's body-only template beneath -- and run the ticked ones after the reference lands;
+the Update Annotation tab also offers **Run annotators** against the stored reference with
+nothing uploaded (`import_views.annotate_view`, `POST /import/annotate`). The case that asked
+for it is ISEScan (`mutint-isescan`): breseq's own manual says to predict IS elements on the
+reference and merge them in with `CONVERT-REFERENCE -s`, so an insertion is one MOB rather than
+two junctions -- an annotation *derived* from the sequence by a tool that takes minutes.
+
+**Panels are keyed off the handler, not off a list of type names.** `register_import_handler`
+gained `annotators=`, which core sets on `reference` and `replace_annotation`: "this import
+establishes or updates the reference" is a fact about the handler, and a plugin shipping its
+own reference-establishing handler gets the panels by saying so. A Results Folder import never
+runs one, whatever was posted.
+
+**Options travel by input name and are decided by the component.** The page collects every
+`name=` input in a fieldset into `{name: value}` -- checkboxes as booleans -- and posts them
+with the finalize (and with the confirm-rename re-post, which is the same import). `enabled`
+is the one key core owns. `clean_selections` refuses an unknown name or a non-mapping outright
+and hands the rest to the component's `clean`, whose `ValueError` becomes a 400 naming the
+annotator's label -- before the download and the lock, so a bad form costs nothing and the
+session stays open. `run` is expected to return promptly and to return a message; a tool that
+takes minutes enqueues a job and says so. One annotator raising is an error on its own summary
+row and the rest still run: the reference is already installed by then, and one component's
+fault must not read as a failed import.
+
+**`install_annotation` is the one write, and the plain Update Annotation drop goes through
+it too.** `mutint_import.annotation.install_annotation(experiment, gff3_text, sequences)` is
+`establish_or_check(update_annotation=True)` followed by what that call deliberately does not
+do -- `clear_cache`, `reannotate_experiment`, `run_post_processing` -- so a replaced annotation
+reaches every mutation's gene names and every derived table. It used to leave them stale until
+somebody ran `./mutint reannotate`, which nobody did; `_ingest_reference` calls it now.
+Reannotation is skipped when the reference was just created (nothing has mutations before a
+reference) and when the stored digest did not change (the same annotation arrived again).
+It takes no lock: a request holds the import lock through `finalize_upload` and the endpoint,
+and a task takes it through **`import_lock.hold_waiting`** -- mutint-breseq's
+`_wait_for_import_lock` promoted, a context manager that polls rather than refuses, with a
+`check` callable so a cancelled job stops waiting. **It does not wait on a lock this process
+holds**: under the immediate task backend the task runs inside the request that holds it --
+every test, and the finalize and Run annotators paths both hold it around `run_annotators`
+-- and the first version of this waited on itself for the whole timeout. The holder string
+carries host and pid, so "held by this process" is answerable; a worker is another process.
+
+**A partial IS element is a pseudo `mobile_element`, and the stored form carries it now.**
+breseq's `flag_pseudo` marks one and `repeat_family_sequence` skips pseudo copies when picking
+a family's consensus; `render_breseq_gff3` wrote `Pseudo` for genes alone, so a partial element
+came back whole on reload and joined the vote. The GFF3 loader and renderer and the GenBank
+loader carry it for `mobile_element` now, never for `repeat_region` (`NEVER_PSEUDO_TYPES`).
+A stored GFF3 whose GenBank had `/pseudo` on a `mobile_element` renders differently and its
+`gff3_sha256` changes; that column only decides "same annotation, skip".
 
 ### Staging a drop that is not an import
 

@@ -235,3 +235,56 @@ class NormalizedFormRoundTripTest(SimpleTestCase):
         self.assertEqual('spliced gene, plus strand', spliced[0].product)
         with open(self.normalized) as handle:
             self.assertNotIn('%25', handle.read())
+
+
+class PseudoMobileElementTest(SimpleTestCase):
+    """`Pseudo` on a mobile_element survives the stored form, and only there.
+
+    breseq flags a partial IS element pseudo (ReadISEScan) and skips pseudo copies when it
+    picks a family's consensus sequence. The renderer used to write `Pseudo` for genes alone,
+    so a partial element came back whole on reload and joined the consensus vote. A
+    repeat_region is never pseudo -- flag_pseudo() is a no-op for it -- and stays that way.
+    """
+
+    HEADER = ("##gff-version 3\n##sequence-region\tSYN001\t1\t600\n")
+    ROWS = ("SYN001\t.\tmobile_element\t101\t300\t.\t+\t0\t"
+            "Name=IS3;Note=Complete IS3 family IS element\n"
+            "SYN001\t.\tmobile_element\t401\t500\t.\t-\t0\t"
+            "Name=IS3;Note=Partial IS3 family IS element;Pseudo=true\n"
+            "SYN001\t.\trepeat_region\t551\t580\t.\t+\t0\t"
+            "Name=REP;Note=repeat region;Pseudo=true\n")
+    FASTA = "##FASTA\n>SYN001\n" + ("ACGTTGCAAC" * 60) + "\n"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.path = os.path.join(self.tmp, 'is.gff3')
+        with open(self.path, 'w') as handle:
+            handle.write(self.HEADER + self.ROWS + self.FASTA)
+
+    def _repeats(self, references):
+        return [(loc.feature.type, loc.start_1, loc.feature.pseudogene)
+                for loc in references['SYN001'].repeat_locations]
+
+    def test_pseudo_is_read_for_a_mobile_element_and_never_for_a_repeat_region(self):
+        references = load_gff3(self.path)
+        self.assertEqual([('mobile_element', 101, False), ('mobile_element', 401, True),
+                          ('repeat_region', 551, False)], self._repeats(references))
+
+    def test_pseudo_round_trips_through_the_renderer(self):
+        from mutint_import.annotate.gff3 import render_breseq_gff3
+
+        rendered = os.path.join(self.tmp, 'again.gff3')
+        with open(rendered, 'w') as handle:
+            handle.write(render_breseq_gff3(load_gff3(self.path)))
+        with open(rendered) as handle:
+            text = handle.read()
+        self.assertEqual(1, text.count('Pseudo=true'))
+        self.assertEqual(self._repeats(load_gff3(self.path)),
+                         self._repeats(load_gff3(rendered)))
+
+    def test_a_pseudo_copy_does_not_vote_for_the_family_consensus(self):
+        references = load_gff3(self.path)
+        # Only the complete copy, 200 bases, is a candidate; the partial one is 100.
+        self.assertEqual(200, len(references.repeat_family_sequence('IS3', 1)))
+

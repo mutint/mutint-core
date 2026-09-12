@@ -65,6 +65,58 @@ def hold(name=IMPORT_LOCK, holder=None):
         release(name)
 
 
+@contextmanager
+def hold_waiting(name=IMPORT_LOCK, holder=None, timeout=1800, poll=5, check=None):
+    """Hold the import lock for the block, waiting for it rather than refusing.
+
+    `hold` refuses immediately by design: the web path would rather answer 409 than hold a
+    request open for somebody else's drop. A **background task** is the opposite case --
+    nobody is waiting on a response, and what is at stake is hours of finished work that
+    would be thrown away over a few seconds of overlap with a web upload. So this polls
+    `acquire` every `poll` seconds for up to `timeout`, then raises the `ImportInProgress`
+    it last saw.
+
+    `check` is an optional callable asked before every attempt and expected to raise when
+    the wait should be given up -- `mutint_jobs.jobs.check_cancelled` fits, and it is why
+    this takes a callable rather than a task id: a wait of half an hour is long enough for
+    somebody to change their mind, and a wait nobody can give up on is the same dead end as
+    a job nobody can stop. This is mutint-breseq's `_wait_for_import_lock`, promoted.
+
+    **A lock this process already holds is not waited on.** Under an immediate task backend
+    -- the whole test suite, and any deployment that chooses one -- a task runs *inside* the
+    request that enqueued it, and that request may hold the lock through `finalize_upload`
+    or the Run annotators endpoint. Waiting on it would be waiting on ourselves, for the
+    length of the timeout. The holder string carries this host and pid (`describe_holder`),
+    so "held by this process" is answerable; such a hold yields at once and releases nothing,
+    since the outer holder will. A worker is another process and is never mistaken for one.
+    """
+    import time
+
+    own = describe_holder()
+    existing = current(name)
+    if existing is not None and existing.holder and existing.holder.endswith(own) \
+            and not existing.is_stale():
+        yield
+        return
+
+    holder = holder or own
+    deadline = time.monotonic() + timeout
+    while True:
+        if check is not None:
+            check()
+        try:
+            acquire(name, holder)
+            break
+        except ImportInProgress:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(poll)
+    try:
+        yield
+    finally:
+        release(name)
+
+
 def acquire(name=IMPORT_LOCK, holder=None):
     """Take the lock, breaking a stale one. Raises ``ImportInProgress`` if it is held."""
     holder = holder or describe_holder()

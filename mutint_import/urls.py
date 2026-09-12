@@ -11,6 +11,9 @@ urlpatterns = [
     # here without touching this file.
     re_path(r'^$', import_views.import_view, name='import_data'),
     re_path(r'^types/$', import_views.import_types_view, name='import_types'),
+    # Run the registered reference annotators against the stored reference, with nothing
+    # uploaded: the Update Annotation tab's other button.
+    re_path(r'^annotate$', import_views.annotate_view, name='import_annotate'),
 
     # Chunked upload of breseq result folders. Split into three short requests so a
     # multi-GB drop never depends on a single long-lived POST.

@@ -77,6 +77,33 @@
         <ul id="drop-list" class="list-unstyled" style="margin-top: 1em;"></ul>
         <ul id="file-list"></ul>
 
+        {% comment %} The registered reference annotators, one fieldset each, drawn only on a
+           tab whose handler establishes or updates the reference. Core owns the fieldset,
+           the enable box and the description; the body is the component's template. The
+           inputs inside the body travel by `name=` -- see `annotatorSelections` below and
+           `mutint_common.annotator_registry.clean_selections`. {% endcomment %}
+        {% if annotator_panels %}
+        <div id="annotator-panels" style="margin-top: 1em;">
+            {% for panel in annotator_panels %}
+            <fieldset class="annotator" data-annotator="{{ panel.name }}"
+                      style="border: 1px solid #ddd; border-radius: 4px; padding: 0.6em 1em; margin-bottom: 0.8em;">
+                <div class="checkbox" style="margin-top: 0;">
+                    <label><input type="checkbox" class="annotator-enable">
+                        Run <b>{{ panel.label }}</b>
+                        {% if has_reference %}after the annotation is updated{% else %}after the reference is set{% endif %}</label>
+                </div>
+                {% if panel.description %}<small class="help-block">{{ panel.description }}</small>{% endif %}
+                <div class="annotator-body">{{ panel.html }}</div>
+            </fieldset>
+            {% endfor %}
+            {% if annotators_on_demand %}
+            <button type="button" class="btn btn-default" id="annotate-run" disabled>Run annotators</button>
+            <small class="help-block">Runs the ticked annotators against this experiment's
+                current reference; nothing needs to be uploaded.</small>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div id="import-progress" style="display: none; margin-top: 1em;">
             <div class="progress" style="margin-bottom: 0.4em;">
                 <div id="import-progress-bar" class="progress-bar" role="progressbar"
@@ -165,6 +192,84 @@
 
     function accessionsText() {
         return accessionsEl ? accessionsEl.value.trim() : "";
+    }
+
+    // The reference annotators' panels, when this tab draws them. What was ticked travels
+    // with the finalize (and with the confirm-rename re-post, which is the same import), so
+    // the selection is captured at the press and kept for as long as that import lasts.
+    var annotatorPanelsEl = document.getElementById("annotator-panels");
+    var annotateRunBtn = document.getElementById("annotate-run");
+    var lastAnnotators = {};
+
+    function annotatorSelections() {
+        var selections = {};
+        if (!annotatorPanelsEl) { return selections; }
+        annotatorPanelsEl.querySelectorAll("fieldset[data-annotator]").forEach(function (fs) {
+            var enable = fs.querySelector(".annotator-enable");
+            var options = { enabled: !!(enable && enable.checked) };
+            fs.querySelectorAll(".annotator-body input[name], .annotator-body select[name], " +
+                                ".annotator-body textarea[name]").forEach(function (input) {
+                if (input.name === "enabled") { return; }   // reserved for the box above
+                if (input.type === "checkbox") {
+                    options[input.name] = input.checked;
+                } else if (input.type === "radio") {
+                    if (input.checked) { options[input.name] = input.value; }
+                } else {
+                    options[input.name] = input.value;
+                }
+            });
+            selections[fs.getAttribute("data-annotator")] = options;
+        });
+        return selections;
+    }
+
+    function anyAnnotatorTicked() {
+        var selections = annotatorSelections();
+        return Object.keys(selections).some(function (name) {
+            return selections[name].enabled;
+        });
+    }
+
+    // textContent throughout: messages and errors come from components.
+    function annotatorList(rows) {
+        var list = document.createElement("ul");
+        list.className = "list-unstyled";
+        list.style.marginTop = "0.5em";
+        (rows || []).forEach(function (row) {
+            var item = document.createElement("li");
+            var label = document.createElement("strong");
+            label.textContent = row.label || row.name;
+            item.appendChild(label);
+            item.appendChild(document.createTextNode(": " + (row.error || row.message || "done")));
+            if (row.error) { item.className = "text-danger"; }
+            list.appendChild(item);
+        });
+        return list;
+    }
+
+    if (annotatorPanelsEl && annotateRunBtn) {
+        annotatorPanelsEl.addEventListener("change", function () {
+            annotateRunBtn.disabled = uploading || !anyAnnotatorTicked();
+        });
+        annotateRunBtn.addEventListener("click", function () {
+            annotateRunBtn.disabled = true;
+            resultEl.innerHTML = "";
+            mutintPostJson("/import/annotate", {
+                experiment_id: EXPERIMENT_ID,
+                annotators: annotatorSelections()
+            }).then(function (body) {
+                var box = document.createElement("div");
+                box.className = "alert alert-info";
+                box.textContent = "Annotators run against the current reference:";
+                box.appendChild(annotatorList(body.annotators || []));
+                resultEl.innerHTML = "";
+                resultEl.appendChild(box);
+            }).catch(function (err) {
+                renderError(err.message || String(err));
+            }).then(function () {
+                annotateRunBtn.disabled = uploading || !anyAnnotatorTicked();
+            });
+        });
     }
 
     function matches(path, patterns) {
@@ -536,6 +641,7 @@
         }
 
         var uploadId = null;
+        lastAnnotators = annotatorSelections();
         mutintUpload(toUpload, {
             experimentId: EXPERIMENT_ID,
             importType: typeSelect.value,
@@ -549,7 +655,8 @@
             // until then the bar says what it is doing rather than inventing a denominator.
             setScanningProgress();
             startPolling(uploadId);
-            return mutintPostJson("/import/uploads/" + uploadId + "/finalize", {});
+            return mutintPostJson("/import/uploads/" + uploadId + "/finalize",
+                                  {annotators: lastAnnotators});
         }).then(function (summary) {
             stopPolling();
             progressEl.style.display = "none";
@@ -665,7 +772,7 @@
             progressText.textContent = "Renaming and re-annotating\u2026";
             startPolling(uploadId);
             mutintPostJson("/import/uploads/" + uploadId + "/finalize",
-                     {confirm_rename: true}).then(function (summary) {
+                     {confirm_rename: true, annotators: lastAnnotators}).then(function (summary) {
                 stopPolling();
                 progressEl.style.display = "none";
                 finish(summary);
@@ -853,6 +960,15 @@
 
     function renderSummary(summary) {
         renderUnits(summary.files || [], summaryAlert(summary));
+        // What the ticked reference annotators said, under the table. Absent from a data
+        // import's summary, and an empty list when none was ticked.
+        if ((summary.annotators || []).length) {
+            var heading = document.createElement("p");
+            heading.textContent = "Reference annotators:";
+            heading.style.marginTop = "1em";
+            resultEl.appendChild(heading);
+            resultEl.appendChild(annotatorList(summary.annotators));
+        }
     }
 
     restoreSummary();

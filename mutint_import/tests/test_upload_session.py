@@ -274,3 +274,93 @@ class UploadSessionEndpointTestCase(TestCase):
 
         response = self._chunk(upload_id, "s1/data/output.gd", 0, b"data")
         self.assertEqual(response.status_code, 409)
+
+
+class AnnotatorsOnFinalizeTestCase(UploadSessionEndpointTestCase):
+    """The ticked reference annotators run after the reference lands, and only then."""
+
+    def setUp(self):
+        super().setUp()
+        from django.apps import apps
+        from mutint_common.annotator_registry import (
+            register_reference_annotator, unregister_reference_annotator)
+
+        self.seen = []
+        register_reference_annotator(
+            apps.get_app_config("mutint_import"), name="t_fin", label="Finalize Thing",
+            run=lambda e, o, u: self.seen.append((e.pk, o)) or {"message": "ran"},
+            template="tests/annotator_panel.html")
+        self.addCleanup(unregister_reference_annotator, "t_fin")
+
+    def _reference_session(self, import_type="reference"):
+        from mutint_import.tests.test_reference_upload import write_genbank
+
+        source = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, source, True)
+        write_genbank(os.path.join(source, "chr.gbk"))
+        with open(os.path.join(source, "chr.gbk"), "rb") as handle:
+            payload = handle.read()
+        created = self._create([{"path": "chr.gbk", "size": len(payload)}],
+                               import_type=import_type)
+        self.assertEqual(created.status_code, 200, created.content)
+        upload_id = created.json()["upload_id"]
+        self.assertEqual(self._chunk(upload_id, "chr.gbk", 0, payload).status_code, 200)
+        return upload_id
+
+    def _finalize(self, upload_id, body):
+        return self.client.post("/import/uploads/%s/finalize" % upload_id,
+                                data=json.dumps(body), content_type="application/json")
+
+    def test_a_ticked_annotator_runs_after_the_reference_lands(self):
+        upload_id = self._reference_session()
+        response = self._finalize(upload_id, {"annotators": {"t_fin": {"enabled": True,
+                                                                      "x": "1"}}})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([(self.experiment.pk, {"x": "1"})], self.seen)
+        rows = response.json()["annotators"]
+        self.assertEqual(rows[0]["label"], "Finalize Thing")
+        self.assertEqual(rows[0]["message"], "ran")
+
+    def test_an_unticked_annotator_does_not_run(self):
+        upload_id = self._reference_session()
+        response = self._finalize(upload_id, {"annotators": {"t_fin": {"enabled": False}}})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([], self.seen)
+        self.assertEqual([], response.json()["annotators"])
+
+    def test_a_bad_selection_is_refused_with_the_session_still_open(self):
+        upload_id = self._reference_session()
+        response = self._finalize(upload_id, {"annotators": {"t_nobody": {"enabled": True}}})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(UploadSession.objects.get(pk=upload_id).state, "open")
+        self.assertEqual([], self.seen)
+
+    def test_a_refused_annotation_replace_does_not_run_it(self):
+        # Establish one genome, then try to replace its annotation with a different genome.
+        first = self._reference_session()
+        self.assertEqual(self._finalize(first, {}).status_code, 200)
+        from mutint_import.tests.test_reference_upload import write_genbank
+
+        source = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, source, True)
+        write_genbank(os.path.join(source, "other.gbk"),
+                      [("other", breseq_fixture.SEQUENCE_B)])
+        with open(os.path.join(source, "other.gbk"), "rb") as handle:
+            payload = handle.read()
+        created = self._create([{"path": "other.gbk", "size": len(payload)}],
+                               import_type="replace_annotation")
+        upload_id = created.json()["upload_id"]
+        self._chunk(upload_id, "other.gbk", 0, payload)
+
+        response = self._finalize(upload_id, {"annotators": {"t_fin": {"enabled": True}}})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIsNotNone(response.json()["files"][0]["error"])
+        self.assertEqual([], self.seen)
+        self.assertEqual([], response.json()["annotators"])
+
+    def test_a_data_import_carries_no_annotators(self):
+        upload_id = self._upload_sample_folder()
+        response = self.client.post("/import/uploads/%s/finalize" % upload_id, {})
+        self.assertEqual(response.json()["annotators"], [])
+        self.assertEqual([], self.seen)
+

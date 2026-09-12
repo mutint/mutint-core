@@ -119,6 +119,22 @@ A mutation imported before a reference existed has no annotation and renders thr
 fallback. Nothing is lost — the verbatim record is kept — and `./mutint reannotate <id>`
 recomputes annotations in place once a reference arrives. Re-importing is not needed.
 
+### Updating the annotation re-annotates everything
+
+Dropping a better annotation of the same sequence on the **Update Annotation** tab replaces
+the stored annotation and re-derives every mutation's gene, codon and amino-acid fields
+against it, then recomputes what depends on them. Nothing needs re-importing and
+`./mutint reannotate` is not needed afterwards.
+
+### Reference annotators
+
+Installed components can offer tools that run *on* the reference after it lands — ISEScan,
+which predicts insertion sequences, is the first. Each appears as a panel on the Reference
+Sequence and Update Annotation tabs with a box to tick; ticked, it runs after the reference is
+set or updated. On the Update Annotation tab, **Run annotators** runs the ticked ones against
+the current reference with nothing uploaded. What each one does is described on its panel and
+in its component's own pages.
+
 ## Downloading the reference
 
 The experiment's **Reference** page lists every sequence in the stored reference, and each

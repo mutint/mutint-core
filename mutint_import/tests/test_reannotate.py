@@ -11,6 +11,7 @@ import shutil
 import tempfile
 from datetime import datetime
 from io import StringIO
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -249,3 +250,62 @@ class ReannotateOtherExperimentsTestCase(TestCase):
         for pk, before in untouched.items():
             mutation = Mutation.objects.get(pk=pk)
             self.assertEqual(before, (mutation.gene_name, mutation.snp_type))
+
+
+class InstallAnnotationTestCase(ReannotateTestCase):
+    """`install_annotation`: the one write everything that changes an annotation goes through.
+
+    Inherits the reannotate fixture -- a bare FASTA reference and 36 unannotated mutations --
+    because that is exactly the state a plain annotation replace used to leave behind.
+    """
+
+    def _install(self, path, **kwargs):
+        gff3_text, sequences = reference.normalize_reference(path)
+        return annotation.install_annotation(self.experiment, gff3_text, sequences, **kwargs)
+
+    def test_installing_an_annotation_reannotates_every_mutation(self):
+        reference_row, created = self._install(SYNTHETIC_GFF3)
+
+        self.assertFalse(created)
+        self.assertEqual("thrA", self.mutation_at(130).gene_name)
+        self.assertEqual("snp_nonsense", self.mutation_at(130).mutation_category)
+        expected, _sequences = reference.normalize_reference(SYNTHETIC_GFF3)
+        self.assertEqual(reference_store.digest(expected), reference_row.gff3_sha256)
+
+    def test_it_asks_for_the_rebuilds_an_annotation_change_needs(self):
+        with mock.patch("mutint_import.gd_import.run_post_processing") as rebuild:
+            self._install(SYNTHETIC_GFF3)
+        rebuild.assert_called_once_with(self.experiment)
+
+    def test_the_same_annotation_again_reannotates_nothing(self):
+        self._install(SYNTHETIC_GFF3)
+        with mock.patch("mutint_import.annotation.reannotate_experiment") as reannotate, \
+                mock.patch("mutint_import.gd_import.run_post_processing") as rebuild:
+            self._install(SYNTHETIC_GFF3)
+        reannotate.assert_not_called()
+        rebuild.assert_not_called()
+
+    def test_a_first_reference_is_established_and_nothing_is_reannotated(self):
+        ReferenceSequences.objects.filter(experiment=self.experiment).delete()
+        with mock.patch("mutint_import.annotation.reannotate_experiment") as reannotate, \
+                mock.patch("mutint_import.gd_import.run_post_processing") as rebuild:
+            _reference_row, created = self._install(SYNTHETIC_GFF3)
+        self.assertTrue(created)
+        reannotate.assert_not_called()
+        rebuild.assert_not_called()
+
+    def test_the_update_annotation_drop_reannotates(self):
+        """The bug this closes: dropping a better annotation on the Update Annotation tab
+        left every mutation's gene names as they were until `./mutint reannotate`."""
+        from mutint_import.handlers import _ingest_reference
+
+        staged = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, staged, True)
+        shutil.copy(SYNTHETIC_GFF3, os.path.join(staged, "better.gff3"))
+
+        summary = _ingest_reference(self.experiment, staged, ["better.gff3"],
+                                    annotation_only=True)
+
+        self.assertIsNone(summary["files"][0]["error"])
+        self.assertEqual("thrA", self.mutation_at(130).gene_name)
+

@@ -170,6 +170,60 @@ that registers a panel and an About section and nothing else whatever: no URL, n
 model, no migration. Before this registry existed it had to live in mutint-core, for no better
 reason than that `/stats` is where it is drawn.
 
+## An annotator that runs on the reference
+
+```python
+from mutint_common.annotator_registry import register_reference_annotator
+
+register_reference_annotator(self, name='isescan', label='ISEScan IS elements',
+                             run=annotator.run, clean=annotator.clean,
+                             template='isescan/panel.html',
+                             context=annotator.panel_context,
+                             description='Predicts insertion sequences and annotates them.')
+```
+
+The Import data page's two reference tabs — **Reference Sequence** and **Update Annotation** —
+draw a fieldset per registered annotator: an enable box and your description, which core
+owns, and your template underneath. When the box is ticked and the reference lands, `run` is
+called; the Update Annotation tab also has a **Run annotators** button that calls it against
+the stored reference with nothing uploaded. A Results Folder import never runs one: the panels
+are only drawn on tabs whose import type says it establishes or updates the reference.
+
+**Your template is the body only, and its inputs travel by name.** Give every control a
+`name=`; the page collects them as `{name: value}` — a checkbox as a boolean, a radio as the
+checked value, everything else as its string — and posts them with the import. `enabled` is
+reserved for the box core draws. `clean(options)` is where you say what those strings mean:
+it receives the dict with `enabled` stripped and returns what `run` will be handed, and a
+`ValueError` from it is shown to the person as a refusal of the form, before anything is
+uploaded. The `annotator` name is in your template's context.
+
+**`run(experiment, options, user)` returns a JSON-safe dict and is expected to return
+promptly.** Its `message` is what the import summary shows. Anything that takes minutes
+belongs on the worker: enqueue a job through `mutint_jobs` (see [Background jobs](background-jobs.md))
+and return `"queued as job N"`. An exception from `run` becomes an error on your row of the
+summary, and the other annotators still run — the reference is already installed by then.
+
+**Write the annotation through `install_annotation`, holding the import lock.** Core's
+`mutint_import.annotation.install_annotation(experiment, gff3_text, sequences)` stores a new
+annotation for the same sequence, re-annotates every mutation and rebuilds what derives from
+them; the plain Update Annotation drop goes through it too. A request already holds the lock
+when it calls `run`. A task does not, and takes it with `import_lock.hold_waiting`, which waits
+for a running import rather than refusing — nobody is waiting on a worker's response, and what
+is at stake is the work the task just did:
+
+```python
+with import_lock.hold_waiting(holder=..., check=lambda: jobs.check_cancelled(queue_id)):
+    install_annotation(experiment, gff3_text, sequences)
+```
+
+A lock the current process already holds is not waited on: under an immediate task backend
+the task runs inside the request that enqueued it, which holds the lock, and the hold yields
+at once. A worker is another process and always takes it for itself.
+
+[`mutint-isescan`](https://github.com/mutint/mutint-isescan) is the worked example: a panel of
+two checkboxes, a `run` that queues a job, and a task that runs ISEScan, merges its predictions
+into the reference's features and installs the result.
+
 ## Context for the experiment views
 
 ```python

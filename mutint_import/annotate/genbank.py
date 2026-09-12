@@ -17,6 +17,7 @@ from mutint_import.annotate.model import (
     DEFAULT_REPEAT_PRODUCT,
     GENE_TYPES,
     MULTIPLE_SEPARATOR,
+    NEVER_PSEUDO_TYPES,
     REPEAT_TYPES,
     AnnotatedSequence,
     Feature,
@@ -84,6 +85,10 @@ def _build_feature(bio_feature, promoted_type=None):
                     break
         feature.name = name
         feature.product = product or DEFAULT_REPEAT_PRODUCT
+        # /pseudo on a mobile_element marks a partial IS, as breseq's flag_pseudo() does; a
+        # repeat_region is never pseudo. reference_sequence.h:528-537
+        if feature_type not in NEVER_PSEUDO_TYPES:
+            feature.pseudogene = 'pseudo' in bio_feature.qualifiers
     else:
         feature.name = (_first_qualifier(bio_feature, 'gene')
                         or _first_qualifier(bio_feature, 'locus_tag')

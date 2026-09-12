@@ -31,9 +31,15 @@ from mutint_common.import_registry import (
     ConfirmationRequired,
     get_import_handler,
     run_import,
+    KIND_REFERENCE,
 )
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
+from mutint_common.annotator_registry import (
+    AnnotatorOptionsInvalid,
+    clean_selections,
+    run_annotators,
+)
 from mutint_import import accessions, import_lock, ncbi_fetch, reference_store
 from mutint_import.import_lock import ImportInProgress
 from mutint_import.models import (
@@ -338,8 +344,18 @@ def finalize_upload(request, upload_id):
                       or "You cannot add data to this experiment."}, status=403)
 
     root = store.staging_dir(session.id)
-    options = {"confirm_rename": _payload(request).get("confirm_rename")}
+    payload = _payload(request)
+    options = {"confirm_rename": payload.get("confirm_rename")}
     progress = _SessionProgress(session.id)
+
+    # The reference annotators the page ticked, checked now -- before the download and the
+    # lock -- so a bad selection costs nothing and the session stays open, as a
+    # `needs_confirmation` leaves it. They run after the import, below, and only if the
+    # reference actually landed.
+    try:
+        selections = clean_selections(payload.get("annotators") or {})
+    except AnnotatorOptionsInvalid as refusal:
+        return JsonResponse({"error": str(refusal)}, status=400)
 
     # **Before the lock, deliberately.** The download writes only into this session's own
     # staging directory, so it needs no lock at all -- and `import_lock` is one-at-a-time for
@@ -370,7 +386,8 @@ def finalize_upload(request, upload_id):
         return JsonResponse({"error": str(busy)}, status=409)
 
     try:
-        return _finalize_holding_lock(session, request, root, options, progress, downloaded)
+        return _finalize_holding_lock(session, request, root, options, progress, downloaded,
+                                      selections=selections)
     finally:
         # One release covering every way out of the function below, including the ones that
         # return a refusal. A lock stranded here would block every later import until it
@@ -433,7 +450,20 @@ def _record_downloads(experiment, downloaded, user):
                          getattr(experiment, "id", None))
 
 
-def _finalize_holding_lock(session, request, root, options, progress, downloaded=None):
+def _reference_landed(summary):
+    """Whether this drop established or updated the reference, judged from its rows.
+
+    The reference-kind rows exist and none carries an error. **Not the `has_reference` flip**:
+    `replace_annotation` never flips it, and `_ingest_reference` is all-or-nothing, so an
+    error on any reference row means nothing landed.
+    """
+    rows = [entry for entry in summary.get("files") or []
+            if entry.get("kind") == KIND_REFERENCE]
+    return bool(rows) and not any(entry.get("error") for entry in rows)
+
+
+def _finalize_holding_lock(session, request, root, options, progress, downloaded=None,
+                           selections=None):
     """The body of `finalize_upload`, run with the import lock held."""
     try:
         # The registry decides what each file is and which handler takes it, so a plugin's
@@ -463,6 +493,18 @@ def _finalize_holding_lock(session, request, root, options, progress, downloaded
 
     if downloaded:
         _record_downloads(session.experiment, downloaded, request.user)
+
+    # The ticked reference annotators, after the reference is in and before the session is
+    # closed -- still under the lock, since an annotator that runs inline reannotates and
+    # rebuilds. Only when a reference actually landed: a refused annotation replace must not
+    # then run a tool over the reference it refused to touch. Never after a data import,
+    # whatever was posted, because the panels are only drawn on the reference tabs.
+    summary["annotators"] = []
+    if selections and _reference_landed(summary):
+        with import_progress.reporting(progress):
+            import_progress.stage("Running reference annotators\u2026")
+            summary["annotators"] = run_annotators(
+                session.experiment, selections, request.user)
 
     progress.finish()
     shutil.rmtree(root, ignore_errors=True)

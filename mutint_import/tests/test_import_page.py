@@ -458,3 +458,60 @@ class SummaryHeadlineTestCase(TestCase):
     def test_success_is_no_longer_unconditional(self):
         # The exact line this replaced. Its return would put the old bug back.
         self.assertNotIn('alert.className = "alert alert-success";', self._html())
+
+
+class AnnotatorPanelsTestCase(ImportPageTestCase):
+    """The reference annotators' panels are drawn on the reference tabs and nowhere else."""
+
+    def setUp(self):
+        super().setUp()
+        from django.apps import apps
+        from mutint_common.annotator_registry import (
+            register_reference_annotator, unregister_reference_annotator)
+
+        register_reference_annotator(
+            apps.get_app_config("mutint_import"), name="t_page", label="Page Thing",
+            run=lambda e, o, u: {}, template="tests/annotator_panel.html",
+            context=lambda e, r: {"note": "from the context"},
+            description="Does a page thing.")
+        self.addCleanup(unregister_reference_annotator, "t_page")
+
+    def _establish(self):
+        from mutint_import import reference, reference_store
+        from mutint_import.tests.test_reannotate import SYNTHETIC_GFF3
+
+        gff3_text, sequences = reference.normalize_reference(SYNTHETIC_GFF3)
+        reference_store.establish_or_check(self.experiment, gff3_text, sequences,
+                                           update_annotation=True)
+
+    def _page(self, tab):
+        return self.client.get("/import/?experiment_id=%s&tab=%s" % (self.experiment.id, tab))
+
+    def test_the_reference_tab_draws_the_panel_without_the_run_button(self):
+        html = self._page("reference").content.decode()
+        self.assertIn('data-annotator="t_page"', html)
+        self.assertIn("Page Thing", html)
+        self.assertIn("Does a page thing.", html)
+        self.assertIn("t_page: from the context", html)
+        self.assertIn("after the reference is set", html)
+        self.assertNotIn('id="annotate-run"', html)
+
+    def test_the_update_annotation_tab_draws_the_panel_and_the_run_button(self):
+        self._establish()
+        html = self._page("update_annotation").content.decode()
+        self.assertIn('data-annotator="t_page"', html)
+        self.assertIn("after the annotation is updated", html)
+        self.assertIn('id="annotate-run"', html)
+
+    def test_a_data_tab_draws_no_panel(self):
+        self._establish()
+        html = self._page("genomediff").content.decode()
+        self.assertNotIn('data-annotator="t_page"', html)
+        self.assertNotIn('id="annotate-run"', html)
+
+    def test_the_types_endpoint_says_which_types_take_annotators(self):
+        types = {t["name"]: t for t in self.client.get("/import/types/").json()["types"]}
+        self.assertTrue(types["reference"]["annotators"])
+        self.assertTrue(types["replace_annotation"]["annotators"])
+        self.assertFalse(types["genomediff"]["annotators"])
+

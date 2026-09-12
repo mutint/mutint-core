@@ -25,6 +25,7 @@ more exhibit a committed row another connection can see than it can exhibit a co
 
 import os
 import threading
+from unittest import mock
 
 from django.db import OperationalError, connection, connections, transaction
 from django.test import TestCase, TransactionTestCase
@@ -444,3 +445,68 @@ class ImportLockVisibilityTestCase(TransactionTestCase):
         thread.join()
 
         self.assertEqual(refused, [True])
+
+
+class HoldWaitingTestCase(TestCase):
+    """`hold_waiting`: the lock for a task, which waits where a request refuses."""
+
+    def test_it_holds_and_releases(self):
+        with import_lock.hold_waiting(holder="me", timeout=1, poll=0.01):
+            self.assertEqual("me", import_lock.current().holder)
+        self.assertIsNone(import_lock.current())
+
+    def test_it_waits_for_a_holder_to_finish(self):
+        import_lock.acquire(holder="somebody else")
+        released = []
+
+        def let_go():
+            released.append(1)
+            import_lock.release()
+
+        # Release on the first poll, from the sleep the wait takes between attempts.
+        with mock.patch("time.sleep", side_effect=lambda _s: let_go()):
+            with import_lock.hold_waiting(holder="me", timeout=5, poll=0.01):
+                self.assertEqual("me", import_lock.current().holder)
+        self.assertEqual([1], released)
+
+    def test_it_gives_up_at_the_deadline_with_the_holder_named(self):
+        import_lock.acquire(holder="somebody else")
+        self.addCleanup(import_lock.release)
+        with mock.patch("time.sleep", lambda _s: None):
+            with self.assertRaises(import_lock.ImportInProgress) as caught:
+                with import_lock.hold_waiting(holder="me", timeout=0, poll=0.01):
+                    pass
+        self.assertIn("somebody else", str(caught.exception))
+
+    def test_check_is_asked_before_every_attempt_and_can_give_up(self):
+        import_lock.acquire(holder="somebody else")
+        self.addCleanup(import_lock.release)
+        asked = []
+
+        def check():
+            asked.append(1)
+            if len(asked) == 3:
+                raise RuntimeError("cancelled")
+
+        with mock.patch("time.sleep", lambda _s: None):
+            with self.assertRaises(RuntimeError):
+                with import_lock.hold_waiting(holder="me", timeout=60, poll=0.01,
+                                              check=check):
+                    pass
+        self.assertEqual(3, len(asked))
+        # Still somebody else's: giving up must not release a lock this never held.
+        self.assertEqual("somebody else", import_lock.current().holder)
+
+    def test_a_lock_this_process_holds_is_not_waited_on(self):
+        """An immediate task backend runs the task inside the request that holds the lock;
+        waiting there would be waiting on ourselves."""
+        import_lock.acquire()          # the request's own hold, this host and pid
+        self.addCleanup(import_lock.release)
+        with mock.patch("time.sleep", side_effect=AssertionError("waited")):
+            with import_lock.hold_waiting(holder="isescan run 1 (%s)"
+                                                 % import_lock.describe_holder(),
+                                          timeout=0, poll=0.01):
+                pass
+        # Still held: the inner hold released nothing.
+        self.assertIsNotNone(import_lock.current())
+

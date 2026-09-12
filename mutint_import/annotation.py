@@ -262,3 +262,49 @@ def reannotate_experiment(experiment, mutations=None, references=None, dry_run=F
                     apply_to(mutation, record)
 
     return annotated, changed, skipped, failed
+
+
+def install_annotation(experiment, gff3_text, sequences, actor="", allow_rename=False):
+    """Store a new annotation for the same sequence and bring every mutation up to date.
+
+    **The one function everything that changes an experiment's annotation writes through** --
+    the Update Annotation drop and every registered reference annotator alike. It is
+    `reference_store.establish_or_check(update_annotation=True)` followed by what that call
+    deliberately does not do: `clear_cache()`, `reannotate_experiment()` and
+    `gd_import.run_post_processing()`, so a mutation's gene names, codons and categories
+    follow the annotation rather than sitting stale until somebody runs `./mutint reannotate`
+    -- which is what a plain annotation replace used to leave behind.
+
+    Reannotation is skipped in two cases and both are correct. When the reference was just
+    **created**, nothing has mutations yet: every mutation-bearing import type requires a
+    reference, and a breseq folder brings its own. When the stored GFF3's digest **did not
+    change**, the same annotation arrived again and there is nothing to re-derive. A rename
+    changes the digest and has already reannotated inside `apply_rename`; the second pass here
+    finds nothing to change and is not worth a special case.
+
+    Returns `(reference, created)`, as `establish_or_check` does. **Callers hold the import
+    lock; this takes none** -- a request already holds it through `finalize_upload`, and a
+    task takes it through `import_lock.hold_waiting`.
+    """
+    from mutint_import import gd_import
+    from mutint_sample.models import ReferenceSequences
+
+    before = (ReferenceSequences.objects.filter(experiment=experiment)
+              .values_list("gff3_sha256", flat=True).first())
+    reference, created = reference_store.establish_or_check(
+        experiment, gff3_text, sequences, update_annotation=True,
+        allow_rename=allow_rename, actor=actor)
+    if created or reference.gff3_sha256 == before:
+        return reference, created
+
+    clear_cache()
+    try:
+        reannotate_experiment(experiment)
+    except ReferenceUnavailable:
+        # Written a moment ago and unreadable now is a bug worth a log line, not a failed
+        # import: the annotation is installed, and `./mutint reannotate` is the recovery.
+        logger.exception("could not reannotate experiment %s after installing its annotation",
+                         experiment.id)
+    gd_import.run_post_processing(experiment)
+    return reference, created
+
