@@ -149,3 +149,5 @@ class Command(BaseCommand):
             unattributed = 0
         self.stdout.write("%-40s %12s" % ("unattributed (staging, orphans)",
                                           filesizeformat(unattributed)))
+        from mutint_common.storage_registry import database_bytes
+        self.stdout.write("%-40s %12s" % ("database", filesizeformat(database_bytes())))

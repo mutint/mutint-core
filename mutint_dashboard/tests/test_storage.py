@@ -60,6 +60,14 @@ class DashboardStorageTestCase(TestCase):
         self.assertEqual(0, row["orphan_experiments"])
         self.assertEqual(150, row["total"])
 
+    def test_the_database_size_is_on_the_page(self):
+        from mutint_common.storage_registry import database_bytes
+        size = database_bytes()
+        self.assertGreater(size, 0)
+        html = self.client.get("/dashboard").content.decode()
+        self.assertIn("<td>Database</td>", html)
+        self.assertIn('title="%d bytes"' % size, html)
+
     def test_a_missing_store_is_zero(self):
         with override_settings(MUTINT_STORE_DIR=os.path.join(self.store, "nowhere")):
             rebuild_storage_unattributed()

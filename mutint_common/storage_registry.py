@@ -230,6 +230,29 @@ def stale_experiment_ids(experiment_ids):
     return wanted - fresh
 
 
+# --- the database -------------------------------------------------------------------------
+
+def database_bytes():
+    """What the PostgreSQL database takes on disk, from `pg_database_size`.
+
+    One catalogue call that stats the database's files rather than reading any row, so it is
+    milliseconds on any size of database and is computed per render rather than stored.
+    Indexes and dead tuples included: this is what the disk holds, not what the rows add up
+    to, which is the honest number for an inventory. Works against an external
+    `MUTINT_DB_HOST` too, since it needs only a connection. 0 if the server will not say.
+    """
+    from django.db import connection
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_database_size(current_database())")
+            row = cursor.fetchone()
+    except Exception:  # noqa: BLE001 -- a dashboard line must not 500 the page
+        logger.exception("could not read the database's size")
+        return 0
+    return int(row[0]) if row and row[0] is not None else 0
+
+
 # --- reading ------------------------------------------------------------------------------
 
 def usage_for(experiment):

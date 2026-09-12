@@ -43,7 +43,11 @@ its locked experiments and names them, and clears the rest.
 A plugin may register a kind that is counted and not offered for clearing, for data that
 has a better way to be freed.
 
-## Deleted, purged, unattributed
+## Deleted, purged, unattributed, and the database
+
+The dashboard also shows the size of the PostgreSQL database itself, as the disk holds it
+(indexes and reclaimable space included). It is asked of the server on every view, which
+costs nothing noticeable, and with `MUTINT_DB_HOST` set it is that server's number.
 
 Deleting an experiment in the browser flags it; `./mutint purge_deleted` removes it for real
 after the retention window, files included. Until then its files are counted on the

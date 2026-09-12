@@ -43,6 +43,7 @@ class StorageCommandTestCase(TestCase):
         self.assertIn("total in live experiments", out)
         self.assertIn("awaiting purge", out)
         self.assertIn("unattributed", out)
+        self.assertIn("database", out)
         self.assertIn("KB", out)
 
     def test_one_experiment(self):

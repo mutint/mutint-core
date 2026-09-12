@@ -7,7 +7,8 @@ from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment, Project, live
 from mutint_common.rebuild_registry import ensure_fresh
 from mutint_common.storage_registry import (
-    UNATTRIBUTED_REBUILD, bytes_by_kind, ensure_measured, stale_experiment_ids,
+    UNATTRIBUTED_REBUILD, bytes_by_kind, database_bytes, ensure_measured,
+    stale_experiment_ids,
 )
 from mutint_dashboard.models import InstallationCounts
 from mutint_dashboard.util import counts
@@ -118,7 +119,8 @@ def storage_context():
     Three numbers beside the total, each answering a different "where did the rest go":
     per kind, so a deployment knows whether it is the BAMs or the reports; awaiting purge,
     the sizes of soft-deleted experiments that `purge_deleted` will free; and unattributed,
-    the bytes nothing in the database points at (see `rebuild_storage_unattributed`).
+    the bytes nothing in the database points at (see `rebuild_storage_unattributed`). And
+    the database itself, which is the other thing a deployment's disk is holding.
     """
     from django.db.models import Q, Sum
 
@@ -144,4 +146,5 @@ def storage_context():
         "storage_awaiting_purge": awaiting_purge,
         "storage_unattributed": unattributed.get("total", 0),
         "storage_unmeasured": unmeasured,
+        "storage_database": database_bytes(),
     }
