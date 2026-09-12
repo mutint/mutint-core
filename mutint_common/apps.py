@@ -14,3 +14,13 @@ class CommonConfig(AppConfig):
 
         register_about_section(self, name='mutint-core', version=__version__,
                                template='about/sections/mutint_core.html')
+
+        # The sizes of what every component keeps in the store, one row per experiment per
+        # registered kind. Registered here because the registry and the table are this
+        # app's; the kinds themselves come from mutint_sample and from plugins. Default
+        # scope and priority: nothing derives from it and it reads nothing derived, so its
+        # place in the order is immaterial. See mutint_common/storage_registry.py.
+        from mutint_common.rebuild_registry import register_rebuilder
+        from mutint_common.storage_registry import STORAGE_REBUILD, rebuild_storage
+
+        register_rebuilder(STORAGE_REBUILD, rebuild_storage, label='Stored data sizes')

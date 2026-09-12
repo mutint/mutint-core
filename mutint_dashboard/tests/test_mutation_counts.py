@@ -329,10 +329,12 @@ class MutationCountsTestCase(TestCase):
                 self.assertEqual([labels[token] for token in vocabulary],
                                  [label for label, _total, _unique in response.context[key]])
 
+        # Four tables: the counts, the Stored Data panel, then the two vocabulary tables
+        # this test is about.
         bodies = re.findall(r"<tbody>(.*?)</tbody>", html, re.S)
-        self.assertEqual(3, len(bodies), "the dashboard's three tables")
-        self.assertEqual(len(MUTATION_TYPE_LIST), bodies[1].count("<tr>"))
-        self.assertEqual(len(FUNCTIONAL_CHANGE_TYPE_LIST), bodies[2].count("<tr>"))
+        self.assertEqual(4, len(bodies), "the dashboard's four tables")
+        self.assertEqual(len(MUTATION_TYPE_LIST), bodies[2].count("<tr>"))
+        self.assertEqual(len(FUNCTIONAL_CHANGE_TYPE_LIST), bodies[3].count("<tr>"))
 
     def test_the_type_counts_add_up_to_the_total(self):
         """Newly true, and the point of storing the buckets by vocabulary token.

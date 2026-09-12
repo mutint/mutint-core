@@ -82,6 +82,11 @@ class Command(BaseCommand):
         shutil.rmtree(store.experiment_reference_dir(experiment_id), ignore_errors=True)
         for path in sample_dirs:
             shutil.rmtree(path, ignore_errors=True)
+        # `delete_experiments` just marked the unattributed count stale because it left
+        # these directories behind; they are gone now, so mark it once more.
+        from mutint_common.rebuild_registry import request_rebuild
+        from mutint_common.storage_registry import UNATTRIBUTED_REBUILD
+        request_rebuild(only=[UNATTRIBUTED_REBUILD], reason='experiment purged')
 
     @staticmethod
     def _samples(experiment):

@@ -412,11 +412,11 @@
     var button = document.getElementById("delete-experiment");
     if (!button) { return; }
 
-    // mutintConfirmTypedDelete and mutintPost rather than a hand-rolled swal, getCookie and
+    // mutintConfirmDelete and mutintPost rather than a hand-rolled swal, getCookie and
     // fetch: this was the last block in the file still carrying its own copies of all
     // three, and the lock handler below already says there is no reason for a second one.
     button.addEventListener("click", function () {
-        window.mutintConfirmTypedDelete("this experiment").then(function (confirmed) {
+        window.mutintConfirmDelete("this experiment").then(function (confirmed) {
             if (!confirmed) { return; }
             window.mutintPost("/experiment/" + button.dataset.experimentId + "/delete/", {})
                 .then(function () {

@@ -67,10 +67,14 @@ class PageTestCase(EditorTestCase):
         self.assertContains(self.get(EDIT), "csrfmiddlewaretoken")
 
     def test_it_does_not_promise_the_deletion_is_permanent(self):
-        """mutintConfirmDelete says "This is permanent", which is the opposite of true here."""
+        """A plain accept with this page's own sentence: the change is recorded and anybody
+        can put it back, which neither stock wording says. Not the typed dialog -- that is
+        for what cannot be undone, and this is the most undoable delete there is."""
         html = self.get(DELETE).content.decode()
-        # base.html names the helper in a comment on every page, so look for the call.
+        # base.html names the helpers in a comment on every page, so look for the calls.
         self.assertNotIn("mutintConfirmDelete(", html)
+        self.assertNotIn("mutintConfirmTyped(", html)
+        self.assertIn("mutintConfirm(", html)
         self.assertIn("restore them from the history", html)
 
     # --- the two tabs over one listing ----------------------------------------------------

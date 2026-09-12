@@ -1,6 +1,6 @@
 # The registries
 
-There are eight, all in `mutint_common`. Each is a module holding a list, a `register_*`
+There are eleven, all in `mutint_common`. Each is a module holding a list, a `register_*`
 function an app calls from `AppConfig.ready()`, and a `get_*` function core calls when it
 renders. That is the whole mechanism — there is no plugin base class, no manifest and no
 entry-point scanning.
@@ -23,6 +23,7 @@ holds core's five import types. A plugin is just another caller.
 | [`context_registry`](../reference/context_registry.md) | a callable | adds to the experiment views' context |
 | [`panel_registry`](../reference/panel_registry.md) | a template and a context callable | draws your panel on the experiment Overview |
 | [`annotator_registry`](../reference/annotator_registry.md) | a panel of options and a callable | draws the panel on the reference tabs of the Import data page, and runs the callable on the reference after it lands |
+| [`storage_registry`](../reference/storage_registry.md) | a label and a measure, optionally a clear | counts your files on the dashboard and the Overview, and offers a Clear button |
 
 `context_registry` and `panel_registry` are close enough together to be worth telling apart.
 The first hands the experiment views extra *context*, which some template must already be
@@ -33,7 +34,7 @@ registers a panel and nothing else at all: no URL, no nav entry, no model.
 
 ## Direction
 
-Eight of the nine run one way: an app contributes something and core consumes it. Registration
+All but one run one way: an app contributes something and core consumes it. Registration
 is additive and core never calls back.
 
 `rebuild_registry` is the exception and the only one that runs **both** ways.

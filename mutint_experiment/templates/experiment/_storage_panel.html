@@ -1,0 +1,80 @@
+{% comment %} The body of the Storage panel on the Overview -- the page draws the heading.
+   Registered through panel_registry from mutint_experiment.apps; the context comes from
+   storage_views.storage_panel_context. Sizes are stored rows, measured on this render if
+   they were stale; see mutint_common/storage_registry.py. {% endcomment %}
+<table class="table" id="storage-table" style="width: auto; min-width: 40%;">
+    <thead>
+    <tr>
+        <th>Stored data</th>
+        <th style="text-align: right;">Size</th>
+        {% if storage_can_edit %}<th></th>{% endif %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in storage_rows %}
+    <tr data-kind="{{ row.key }}">
+        <td title="{{ row.description }}">{{ row.label }}</td>
+        <td style="text-align: right;" title="{{ row.bytes }} bytes">{{ row.bytes|filesizeformat }}</td>
+        {% if storage_can_edit %}
+        <td>
+            {% if row.clearable %}
+            <button type="button" class="btn btn-danger btn-xs storage-clear"
+                    data-kind="{{ row.key }}" data-label="{{ row.label }}"
+                    data-experiment-id="{{ experiment.id }}"
+                    {% if not row.bytes %}disabled{% endif %}>Clear</button>
+            {% else %}
+            <small style="color: #666;">measured only</small>
+            {% endif %}
+        </td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+    <tr>
+        <td><b>Total</b></td>
+        <td style="text-align: right;" title="{{ storage_total }} bytes"><b>{{ storage_total|filesizeformat }}</b></td>
+        {% if storage_can_edit %}<td></td>{% endif %}
+    </tr>
+    </tbody>
+</table>
+{% if storage_stale %}
+<div class="alert alert-warning" style="max-width: 40em;">
+    These sizes could not be measured; what is shown is the last measurement that succeeded.
+    <code>./mutint rebuild --list</code> says why.
+</div>
+{% endif %}
+<small style="color: #666;">
+    The reference genome and each sample's mutation file are never cleared: the mutations
+    are the data. Clearing removes files only; the samples and their mutations stay.
+</small>
+<div id="storage-error" style="color: #a00; margin-top: 0.5em;"></div>
+{% if storage_can_edit %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+    var buttons = document.querySelectorAll("#storage-table .storage-clear");
+    Array.prototype.forEach.call(buttons, function (button) {
+        button.addEventListener("click", function () {
+            var kind = button.getAttribute("data-kind");
+            var label = button.getAttribute("data-label");
+            var experimentId = button.getAttribute("data-experiment-id");
+            window.mutintConfirmTypedClear(label.toLowerCase() + " of this experiment")
+                .then(function (confirmed) {
+                    if (!confirmed) { return; }
+                    button.disabled = true;
+                    window.mutintPost("/experiment/" + experimentId + "/storage/clear/",
+                                      {kind: kind})
+                        .then(function () {
+                            // The browser links and the sample menu change with the flags,
+                            // so the whole page is re-rendered rather than one cell.
+                            window.location.reload();
+                        })
+                        .catch(function (err) {
+                            button.disabled = false;
+                            document.getElementById("storage-error").textContent = err.message;
+                        });
+                });
+        });
+    });
+})();
+</script>
+{% endif %}

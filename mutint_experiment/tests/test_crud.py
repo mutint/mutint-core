@@ -163,12 +163,14 @@ class SoftDeleteTestCase(TestCase):
 
 
 class DeleteControlsTestCase(TestCase):
-    """Where the delete controls appear, and which confirm dialog they use.
+    """Where the delete controls appear, and which confirm dialog each one gets.
 
-    Deleting an experiment or a project destroys data; revoking somebody's access or
-    removing them from a group does not. The two are behind different dialogs -- the
-    first makes you type DELETE -- and this is what keeps them from converging back
-    onto one, which is how a guard stops being noticed.
+    One question decides it: can the person undo it afterwards? Deleting a project or an
+    experiment is soft, revoking a grant can be granted again and a group member can be
+    re-added, so all of those are a plain accept. Leaving a project is the one thing on
+    these pages nobody can undo for themselves, and it makes you type LEAVE. What this
+    pins is that the two do not drift: a plain accept growing a typed word teaches people
+    to type by reflex, and the typed one losing its word is a guard nobody notices going.
     """
 
     def setUp(self):
@@ -221,15 +223,15 @@ class DeleteControlsTestCase(TestCase):
 
     # --- which dialog each control uses --------------------------------------------
 
-    def test_the_data_deletes_make_you_type_it(self):
+    def test_the_data_deletes_are_a_plain_accept(self):
         """All four, and each assertion first proves it found its subject.
 
         A check that looks for a call in a page is one renamed id away from passing
         because it matched nothing at all, which this repo has been bitten by before.
 
-        The three bulk controls reach the typed dialog through mutintDeleteSelected
-        rather than naming it, so the last assertion below is what makes that route
-        mean what the other three say.
+        The three bulk controls reach the dialog through mutintDeleteSelected rather than
+        naming it, so the last assertion below is what makes that route mean what the
+        other three say.
         """
         for url, control, call in (
                 ("/project/", 'id="delete-selected"', "mutintDeleteSelected"),
@@ -237,24 +239,46 @@ class DeleteControlsTestCase(TestCase):
                 ("/project/%d/" % self.project.id,
                  'id="delete-selected"', "mutintDeleteSelected"),
                 ("/stats/?experiment_id=%d" % self.experiment.id,
-                 'id="delete-experiment"', "mutintConfirmTypedDelete")):
+                 'id="delete-experiment"', "mutintConfirmDelete(")):
             with self.subTest(url=url):
                 html = self._html(url)
                 self.assertIn(control, html)
                 self.assertIn(call, html)
+                # A direct typed call, not mutintConfirmTypedClear, which the project page
+                # legitimately carries for its Storage block.
+                self.assertNotIn("mutintConfirmTyped(", html)
 
         from django.contrib.staticfiles import finders
 
         with open(finders.find("js/mutint_crud.js"), encoding="utf-8") as handle:
             source = handle.read()
         gather = source[source.index("window.mutintDeleteSelected"):]
-        self.assertIn("mutintConfirmTypedDelete", gather)
+        self.assertIn("mutintConfirmDelete(", gather)
+        self.assertNotIn("mutintConfirmTyped", gather)
 
-    def test_revoking_access_stays_a_plain_confirm(self):
-        """Removing a grant destroys nothing, and should not feel like it does."""
+    def test_revoking_and_group_removals_are_plain_and_leaving_is_typed(self):
         html = self._html("/project/%d/access/" % self.project.id)
-        self.assertIn("mutintConfirmDelete(", html)
-        self.assertNotIn("mutintConfirmTypedDelete", html)
+        self.assertIn('mutintConfirm(', html)
+        self.assertIn('mutintConfirmTyped("Leave this project?"', html)
+        self.assertIn("Type LEAVE to confirm", html)
+        self.assertNotIn("Type DELETE", html)
+
+        from mutint_experiment.models import UserGroup
+        group = UserGroup.objects.create(name="G", owner=self.owner)
+        html = self._html("/group/%d/" % group.id)
+        self.assertIn("mutintConfirm(", html)
+        self.assertNotIn("mutintConfirmTyped(", html)
+
+    def test_the_typed_dialog_takes_its_word_from_the_caller(self):
+        """DELETE everywhere would be answered by reflex; the word names the action."""
+        from django.contrib.staticfiles import finders
+
+        with open(finders.find("js/mutint_crud.js"), encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("window.mutintConfirmTyped = function (title, text, verb, word)", source)
+        self.assertIn("window.mutintConfirm = function (title, text, verb)", source)
+        self.assertIn('"CLEAR")', source)
+        self.assertNotIn("mutintConfirmTypedDelete", source)
 
     # --- where a single delete lands -----------------------------------------------
 

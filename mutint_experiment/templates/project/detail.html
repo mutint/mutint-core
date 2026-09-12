@@ -57,6 +57,54 @@
         </div>
     </div>
 
+    {% comment %} Stored data across the project's live experiments, per kind, with a Clear
+       for each kind that can be -- the Overview's Storage panel summed. Stored numbers
+       only: this page does not measure, so an experiment nobody has measured yet counts 0
+       and the line under the table says how many those are. A locked experiment is skipped
+       by the endpoint and named in #storage-result. {% endcomment %}
+    <div class="row">
+        <br>
+        <h4>Stored data</h4>
+        <table class="table" id="storage-table" style="width: auto; min-width: 40%;">
+            <thead>
+            <tr>
+                <th>Kind</th>
+                <th style="text-align: right;">Size</th>
+                {% if can_edit %}<th></th>{% endif %}
+            </tr>
+            </thead>
+            <tbody>
+            {% for key, label, size, clearable in storage_kinds %}
+            <tr data-kind="{{ key }}">
+                <td>{{ label }}</td>
+                <td style="text-align: right;" title="{{ size }} bytes">{{ size|filesizeformat }}</td>
+                {% if can_edit %}
+                <td>
+                    {% if clearable %}
+                    <button type="button" class="btn btn-danger btn-xs storage-clear"
+                            data-kind="{{ key }}" data-label="{{ label }}"
+                            {% if not size %}disabled{% endif %}>Clear in every experiment</button>
+                    {% else %}
+                    <small style="color: #666;">measured only</small>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            <tr>
+                <td><b>Total</b></td>
+                <td style="text-align: right;" title="{{ storage_total }} bytes"><b>{{ storage_total|filesizeformat }}</b></td>
+                {% if can_edit %}<td></td>{% endif %}
+            </tr>
+            </tbody>
+        </table>
+        {% if storage_unmeasured %}
+        <small style="color: #666;">{{ storage_unmeasured }} experiment{{ storage_unmeasured|pluralize }}
+            not yet measured; opening an experiment's Overview measures it.</small>
+        {% endif %}
+        <div id="storage-result" style="color: #a00; margin-top: 0.5em;"></div>
+    </div>
+
     <div class="row">
         <br>
         <h4>Experiments in the Project:</h4>
@@ -95,6 +143,7 @@
                 <th>Project</th>
                 <th>Publication</th>
                 <th>Date</th>
+                <th>Stored data</th>
             </tr>
             </thead>
             <tbody>
@@ -114,6 +163,7 @@
                         {% endfor %}
                     </td>
                     <td>{{ experiment.date }}</td>
+                    <td data-order="{{ experiment.storage_bytes }}" title="{{ experiment.storage_bytes }} bytes">{{ experiment.storage_bytes|filesizeformat }}</td>
                 </tr>
             {% endfor %}
             </tbody>
@@ -127,6 +177,34 @@
     document.getElementById("delete-selected").addEventListener("click", function () {
         window.mutintDeleteSelected({tableId: "exp_table", path: "/experiment/",
                                     noun: "experiment"});
+    });
+
+    var buttons = document.querySelectorAll("#storage-table .storage-clear");
+    Array.prototype.forEach.call(buttons, function (button) {
+        button.addEventListener("click", function () {
+            var kind = button.getAttribute("data-kind");
+            var label = button.getAttribute("data-label");
+            window.mutintConfirmTypedClear(label.toLowerCase() + " in every experiment of this project")
+                .then(function (confirmed) {
+                    if (!confirmed) { return; }
+                    button.disabled = true;
+                    window.mutintPost("/project/" + project_id + "/storage/clear/", {kind: kind})
+                        .then(function (body) {
+                            if (body.skipped.length) {
+                                // Partial by design: say which were left alone before the
+                                // reload draws numbers that do not add up to zero.
+                                return swal("", "Cleared in " + body.cleared.length
+                                    + " experiment(s). Skipped (locked): "
+                                    + body.skipped.join(", "), "info");
+                            }
+                        })
+                        .then(function () { window.location.reload(); })
+                        .catch(function (err) {
+                            button.disabled = false;
+                            document.getElementById("storage-result").textContent = err.message;
+                        });
+                });
+        });
     });
 })();
 </script>

@@ -170,6 +170,31 @@ that registers a panel and an About section and nothing else whatever: no URL, n
 model, no migration. Before this registry existed it had to live in mutint-core, for no better
 reason than that `/stats` is where it is drawn.
 
+## Data you keep in the store
+
+```python
+from mutint_common.storage_registry import register_storage_kind
+
+register_storage_kind(self, key='breseq_runs', label='breseq run directories',
+                      measure=measure_runs,          # callable(experiment) -> bytes
+                      clear=None,                    # counted, not offered for clearing
+                      description='reads and output kept for failed runs')
+```
+
+If your component writes files under `store.component_dir`, register a kind so they are
+counted: the dashboard's total is meant to be the whole store, and an experiment's Overview
+lists every kind beside its size. `measure` walks the files **your rows point at** -- never
+the store itself, which would count directories nothing owns. Pass a `clear` callable to get
+a Clear button beside the kind on the Overview and the project page; it must remove the files
+*and* correct whatever rows say they exist. Leave it `None` for data that has a better way to
+be freed, as mutint-breseq does for run directories, which go when the run is deleted.
+
+**Call `request_remeasure(experiment.id)` wherever you write or delete under the store.**
+Sizes are stored rows, rebuilt when something says the files moved; the import path says so
+for what it stores, and nothing can say so for you. mutint-breseq calls it after a launch
+moves reads in, after a run's scratch is cleaned up, and when a run is deleted. A kind that
+forgets is not wrong on the page -- it is quietly out of date, which is worse.
+
 ## An annotator that runs on the reference
 
 ```python

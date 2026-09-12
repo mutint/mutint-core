@@ -268,3 +268,31 @@ class WeightedBedGraphTestCase(TestCase):
         self.assertEqual(2.0, depth[5])     # both
         self.assertEqual(1.0, depth[14])    # second alone
         self.assertNotIn(15, depth)
+
+
+class BuildMarksStorageStaleTestCase(BuildPreconditionsTestCase):
+    """`build_for` runs after the import's rebuild measured the experiment, so it has to say
+    the sizes moved -- or every BigWig is missing from the stored total."""
+
+    def test_a_built_bigwig_marks_the_storage_row_stale(self):
+        from unittest import mock
+
+        from mutint_common.rebuild_registry import is_stale, run_rebuilds
+        from mutint_common.storage_registry import STORAGE_REBUILD
+
+        run_rebuilds(self.sample.experiment.id, only=[STORAGE_REBUILD])
+        self.assertFalse(is_stale(STORAGE_REBUILD, self.sample.experiment.id))
+
+        def fake_run(argv):
+            with open(argv[-1], "wb") as handle:
+                handle.write(b"bigwig")
+
+        tally = mock.Mock()
+        tally.describe.return_value = "tally"
+        with mock.patch.object(coverage, "require", return_value="bedGraphToBigWig"), \
+                mock.patch.object(coverage, "write_weighted_bedgraph", return_value=tally), \
+                mock.patch.object(coverage, "_sort_in_place"), \
+                mock.patch.object(coverage, "_run", side_effect=fake_run):
+            coverage.build_for(self.sample)
+
+        self.assertTrue(is_stale(STORAGE_REBUILD, self.sample.experiment.id))

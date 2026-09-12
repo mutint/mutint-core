@@ -32,6 +32,8 @@ its plugins ship.
 ./mutint ncbi_accessions      # record or check NCBI accessions for stored references
 ./mutint relabel_samples <id> # one-shot cleanup of labels from the retired coordinate format; --dry-run first
 ./mutint project_access       # grant or revoke a role on a project from the shell
+./mutint storage --list       # disk taken by each experiment's stored data, per kind
+./mutint storage --clear alignments 4   # remove one kind for one experiment (see Disk space)
 ```
 
 `load_example` loads a directory of real files through the real import path, so the derived
@@ -58,6 +60,7 @@ plugins register.
 ./mutint rebuild 4                      # everything stale for experiment 4
 ./mutint rebuild --all --force          # every live experiment, stale or not
 ./mutint rebuild 4 --only overview
+./mutint rebuild --all --only storage   # measure every experiment's stored data once
 ```
 
 Most of the time nothing here is needed: a page rebuilds its own data when it notices it is

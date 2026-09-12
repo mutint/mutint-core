@@ -266,14 +266,12 @@ $(document).ready(function () {
             swal("", "Select at least one mutation, then try again.", "warning");
             return;
         }
-        swal({
-            title: "Delete " + ids.length + " call(s)?",
-            text: "They are removed from the samples they are selected in and the change is "
-                + "recorded, so you can restore them from the history page.",
-            icon: "warning",
-            buttons: true,
-            dangerMode: true
-        }).then(function (confirmed) {
+        window.mutintConfirm(
+            "Delete " + ids.length + " call(s)?",
+            "They are removed from the samples they are selected in and the change is "
+            + "recorded, so you can restore them from the history page.",
+            "Delete"
+        ).then(function (confirmed) {
             if (!confirmed) { return; }
             document.getElementById("me-error").textContent = "";
             // One POST for the whole batch across every sample it touches -- which is what

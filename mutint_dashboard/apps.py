@@ -8,7 +8,10 @@ class DashboardConfig(AppConfig):
         from mutint_common.rebuild_registry import (
             PRIORITY_AGGREGATE, SITE_SCOPE, register_rebuilder,
         )
-        from mutint_dashboard.util import rebuild_mutation_counts, rebuild_sample_counts
+        from mutint_common.storage_registry import UNATTRIBUTED_REBUILD
+        from mutint_dashboard.util import (
+            rebuild_mutation_counts, rebuild_sample_counts, rebuild_storage_unattributed,
+        )
 
         # **A nav entry only when the brand does not lead here.** The dashboard is normally
         # what the sidebar's own brand links to -- an inventory of the whole installation is
@@ -43,3 +46,9 @@ class DashboardConfig(AppConfig):
         # the reason `_live_call_rows` gives.
         register_rebuilder('mutation_counts', rebuild_mutation_counts, scope=SITE_SCOPE,
                            label='Dashboard mutation counts', priority=PRIORITY_AGGREGATE)
+        # Bytes in the store nothing owns. Named by the storage registry's constant rather
+        # than spelled here, because `request_remeasure` marks it from core and from every
+        # plugin that moves files, and two spellings would mean one of them marks nothing.
+        register_rebuilder(UNATTRIBUTED_REBUILD, rebuild_storage_unattributed,
+                           scope=SITE_SCOPE, label='Unattributed stored data',
+                           priority=PRIORITY_AGGREGATE)

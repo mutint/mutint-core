@@ -70,6 +70,14 @@ def delete_experiments(experiment_ids):
     # the change -- there is no earlier `request_rebuild` for it to answer, and running eagerly
     # is right for a command the operator is already waiting on.
     run_rebuilds(scope=SITE_SCOPE, force=True)
+    # The rows are gone and the files are not: nothing here touches the store, so every
+    # sample directory these experiments had is now owned by nobody. That is the dashboard's
+    # unattributed line, marked rather than walked -- this is a shell command, and the
+    # dashboard recounts on its next view. (`purge_deleted` removes the files afterwards and
+    # marks it again.)
+    from mutint_common.rebuild_registry import request_rebuild
+    from mutint_common.storage_registry import UNATTRIBUTED_REBUILD
+    request_rebuild(only=[UNATTRIBUTED_REBUILD], reason='experiments hard-deleted')
 
 
 def _delete_all_orphaned_mutations():

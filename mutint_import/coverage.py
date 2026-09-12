@@ -274,6 +274,12 @@ def build_for(sample):
 
     sample.coverage_stored = True
     sample.save(update_fields=["coverage_stored"])
+    # Freshness belongs where the data is written. The import's own rebuild measured the
+    # experiment before this file existed -- coverage is a task, run after the POST returned
+    # -- so without this the stored size is too low by every BigWig until something else
+    # happens to remeasure. Marked, not run: the next reader of the number pays.
+    from mutint_common.storage_registry import request_remeasure
+    request_remeasure(experiment.id, reason="coverage built for sample %s" % sample.id)
     logger.info("coverage for sample %s: %s", sample.id, tally.describe())
     return tally
 

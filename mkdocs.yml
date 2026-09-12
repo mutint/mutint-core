@@ -80,6 +80,7 @@ nav:
       - Configuration: using/configuration.md
       - Management commands: using/commands.md
       - Upgrading: using/upgrading.md
+      - Disk space: using/storage.md
   - Extending MutInt:
       - Writing a plugin:
           - Overview: extending/index.md
@@ -107,6 +108,7 @@ nav:
           - context_registry: reference/context_registry.md
           - panel_registry: reference/panel_registry.md
           - annotator_registry: reference/annotator_registry.md
+          - storage_registry: reference/storage_registry.md
       - Assembling a project: assembling/index.md
       - Cutting a release: contributing/releasing.md
       - Contributing to these docs: contributing/docs.md

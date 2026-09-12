@@ -1,10 +1,11 @@
 """The seam that lets a component put its own content on the experiment Overview.
 
-Core registers no panel of its own -- the needle plot was the last thing on `/stats` that
-could have, and it is the mutint-needle component now. So every test here registers its own and
-unregisters it afterwards, which is also the only way core *can* test this: asserting on what
-is absent from a shared registry is a statement about the install set rather than about core,
-and would fail the moment a component that registers a panel is installed beside it.
+Core registers one panel of its own -- Storage, from `mutint_experiment` -- and the needle
+plot, which was the last thing written into `/stats` directly, is the mutint-needle component
+now. Every test here still registers its own and unregisters it afterwards, which is the only
+way core *can* test the mechanism: asserting on what is absent from a shared registry is a
+statement about the install set rather than about core, and would fail the moment a component
+that registers a panel is installed beside it.
 
 **Every assertion here is about this test's own panels, never about the whole list.** These
 were written comparing the rendered list outright, which passed standalone and failed four

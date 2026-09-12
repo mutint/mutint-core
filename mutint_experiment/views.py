@@ -10,6 +10,8 @@ from .permissions import (
 from .roles import ROLE_WRITE
 from mutint_common.logger import user_extra
 from mutint_common.util import get_user_context
+from mutint_common.storage_registry import bytes_by_experiment
+from mutint_experiment.storage_views import project_storage_context
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,9 @@ def projects(request):
     template_name = "project/list.html"
     from mutint_bibliome.models import Publication
     project_dic = {}
+    # One query for every listed project's stored-data sizes, summed per project below.
+    sizes = bytes_by_experiment(
+        live(Experiment.objects.filter(project__in=project_list)).values_list("id", flat=True))
     for project in project_list:
         project_experiments = live(project.experiment_set.all())
         # One entry per paper, however many of the project's experiments cite it.
@@ -29,6 +34,9 @@ def projects(request):
                 seen.add(pub.url)
                 publications.append(pub)
         project_dic[project] = publications
+        project.storage_bytes = sum(
+            sizes.get(experiment_id, 0)
+            for experiment_id in project_experiments.values_list("id", flat=True))
 
     return render(request, template_name, {'project_dic': project_dic.items()})
 
@@ -43,8 +51,22 @@ def _editable_projects(user):
     return accessible_projects(user, ROLE_WRITE)
 
 
+def _attach_storage_bytes(experiments):
+    """`experiment.storage_bytes` on each instance, from one query over the stored sizes.
+
+    The templates iterate model instances, so the number rides on the instance rather than
+    in a parallel dict. Stored rows only: a list page does not measure, and an experiment
+    nobody has measured yet reads as 0 here, which the Overview corrects on its first view.
+    """
+    experiments = list(experiments)
+    sizes = bytes_by_experiment(experiment.id for experiment in experiments)
+    for experiment in experiments:
+        experiment.storage_bytes = sizes.get(experiment.id, 0)
+    return experiments
+
+
 def experiments(request):
-    experiment_list = get_all_user_exps(request.user)
+    experiment_list = _attach_storage_bytes(get_all_user_exps(request.user))
     template_name = "experiment/list.html"
     return render(request, template_name, {
         'experiments': experiment_list,
@@ -58,10 +80,12 @@ def project_detail(request, pk):
         experiments = live(project.experiment_set.all())
         context = {
             "project": project,
-            "experiments": experiments,
+            "experiments": _attach_storage_bytes(experiments),
             "can_edit": can_edit_project(request.user, project),
             "can_admin": can_admin_project(request.user, project),
         }
+        # The Storage block: sizes across the project, and the Clear buttons an editor gets.
+        context.update(project_storage_context(experiments))
         # After the permission check, so the 403 below never names the project. This is what
         # puts the project's bolded row in the sidebar with no experiment selected.
         context.update(project.project_context())

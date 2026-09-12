@@ -51,6 +51,7 @@
             <th>Project</th>
             <th>Publication</th>
             <th>Date</th>
+            <th>Stored data</th>
         </tr>
         </thead>
         <tbody>
@@ -70,6 +71,7 @@
                     {% endfor %}
                 </td>
                 <td>{{ experiment.date_str }}</td>
+                <td data-order="{{ experiment.storage_bytes }}" title="{{ experiment.storage_bytes }} bytes">{{ experiment.storage_bytes|filesizeformat }}</td>
             </tr>
         {% endfor %}
         </tbody>

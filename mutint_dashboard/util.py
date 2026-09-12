@@ -200,3 +200,49 @@ def _mutation_type_bucket(mutation_type):
     if mutation_type in MUTATION_TYPE_LIST:
         return mutation_type
     return UNANNOTATED
+
+
+def rebuild_storage_unattributed():
+    """The `storage_unattributed` row: bytes in the store that no row owns.
+
+    The per-experiment sizes (`mutint_common.storage_registry`) count the filesystem indexed
+    by the database, so a directory nothing points at is invisible to them by construction --
+    and there are three ways one arises: a drop abandoned in `staging/` before the reaper
+    runs, and the sample and experiment directories `./mutint delete` leaves behind, since it
+    hard-deletes rows and touches no file. This is the line that makes them visible, and the
+    dashboard's total the whole store rather than the part that is accounted for.
+
+    Soft-deleted experiments are *not* orphans -- their rows exist and their sizes are
+    attributed, under "awaiting purge" -- so both listings are set-differenced against every
+    primary key, not the live ones. Tolerates a store that does not exist yet.
+    """
+    import os
+
+    from mutint_common import store
+    from mutint_common.storage_registry import directory_bytes
+    from mutint_sample.models import Sample
+
+    def orphan_bytes(subdir, known_ids):
+        root = os.path.join(store.store_root(), subdir)
+        total = 0
+        try:
+            names = os.listdir(root)
+        except OSError:
+            return 0
+        for name in names:
+            if name.isdigit() and int(name) in known_ids:
+                continue
+            total += directory_bytes(os.path.join(root, name))
+        return total
+
+    staging = directory_bytes(os.path.join(store.store_root(), "staging"))
+    orphan_samples = orphan_bytes(
+        "samples", set(Sample.objects.values_list("id", flat=True)))
+    orphan_experiments = orphan_bytes(
+        "experiments", set(Experiment.objects.values_list("id", flat=True)))
+    InstallationCounts.objects.update_or_create(
+        name=InstallationCounts.STORAGE_UNATTRIBUTED,
+        defaults={"data": {"staging": staging,
+                           "orphan_samples": orphan_samples,
+                           "orphan_experiments": orphan_experiments,
+                           "total": staging + orphan_samples + orphan_experiments}})

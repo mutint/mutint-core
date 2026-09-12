@@ -70,6 +70,48 @@
                 </table>
             </div>
 
+            {% comment %} What the store holds. The per-kind rows are the sum of every live
+               experiment's Storage panel; the two lines under them are what that sum leaves
+               out -- experiments deleted and not yet purged, and files nothing points at.
+               Sizes are stored rows, measured when the files change, so this page is not a
+               walk of the store; see mutint_common/storage_registry.py. {% endcomment %}
+            <div class="panel panel-default" id="storage-panel">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Stored Data</h3>
+                </div>
+                <table class="table">
+                    <tbody>
+                    {% for key, label, size in storage_kinds %}
+                    <tr data-kind="{{ key }}">
+                        <td>{{ label }}</td>
+                        <td title="{{ size }} bytes">{{ size|filesizeformat }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <td><b>Total in live experiments</b></td>
+                        <td title="{{ storage_total }} bytes"><b>{{ storage_total|filesizeformat }}</b></td>
+                    </tr>
+                    <tr>
+                        <td>Awaiting purge (deleted experiments)</td>
+                        <td title="{{ storage_awaiting_purge }} bytes">{{ storage_awaiting_purge|filesizeformat }}</td>
+                    </tr>
+                    <tr>
+                        <td>Unattributed (staging and orphaned directories)</td>
+                        <td title="{{ storage_unattributed }} bytes">{{ storage_unattributed|filesizeformat }}</td>
+                    </tr>
+                    </tbody>
+                </table>
+                <div style="padding: 0 15px 10px 15px">
+                    <small><i>
+                        {% if storage_unmeasured %}{{ storage_unmeasured }} experiment{{ storage_unmeasured|pluralize }}
+                        could not be measured; <code>./mutint rebuild --list</code> says why.{% endif %}
+                        Each experiment's Overview has the same table for that experiment,
+                        with a Clear button per kind; <code>./mutint storage --list</code>
+                        prints it for every experiment.
+                    </i></small>
+                </div>
+            </div>
+
             <div class="panel panel-default">
                 <div class="panel-heading">
                     <h3 class="panel-title">Mutation Type Counts</h3>

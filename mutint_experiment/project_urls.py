@@ -12,6 +12,7 @@ from django.urls import re_path
 from mutint_experiment.access_views import (
     project_access, project_access_bulk, project_access_grant, project_access_revoke,
 )
+from mutint_experiment.storage_views import project_storage_clear
 from mutint_experiment.views import (
     project_create, project_delete, project_detail, project_edit, project_new,
     project_update, projects,
@@ -36,4 +37,9 @@ urlpatterns = [
             project_access_revoke, name="project_access_revoke"),
     re_path(r'^(?P<pk>[0-9]+)/access/bulk/$',
             project_access_bulk, name="project_access_bulk"),
+
+    # The same clear as an experiment's, across every experiment in the project; a locked
+    # one is skipped and named, as `access/bulk/` reports what it refused.
+    re_path(r'^(?P<pk>[0-9]+)/storage/clear/$',
+            project_storage_clear, name="project_storage_clear"),
 ]

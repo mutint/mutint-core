@@ -211,17 +211,15 @@
                 return;
             }
 
-            // Deliberately not mutintConfirmDelete, whose text says the deletion is permanent.
-            // Here it is the opposite: the point of this page is that it is recorded and can
-            // be put back, and a dialog that said otherwise would stop people using it.
-            swal({
-                title: "Delete " + ids.length + " mutation(s)?",
-                text: "They are removed from this sample and the change is recorded, so you "
-                    + "can restore them from the history page.",
-                icon: "warning",
-                buttons: true,
-                dangerMode: true
-            }).then(function (confirmed) {
+            // The plain accept with this page's own sentence, not mutintConfirmDelete's:
+            // that one talks about a listing and an administrator, and here the point is
+            // that the change is recorded and anybody can put it back from the history page.
+            window.mutintConfirm(
+                "Delete " + ids.length + " mutation(s)?",
+                "They are removed from this sample and the change is recorded, so you "
+                + "can restore them from the history page.",
+                "Delete"
+            ).then(function (confirmed) {
                 if (!confirmed) { return; }
                 document.getElementById("me-error").textContent = "";
                 // One POST for the whole batch, not one per row: it is what makes this a

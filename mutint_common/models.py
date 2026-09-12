@@ -1,6 +1,6 @@
 """State for the rebuild registry -- what derived data is stale, and why.
 
-This is `mutint_common`'s only model, and the app had none before it. It lives here rather than
+This was `mutint_common`'s only model, and the app had none before it. It lives here rather than
 in `mutint_stats` beside the data it most often describes because it is not about statistics: it
 tracks staleness for every registered rebuild, plugins included, and a plugin's state has no
 business living inside the stats app. The shared layer is where a table shared by every
@@ -83,3 +83,40 @@ class UserPreference(models.Model):
 
     def __str__(self):
         return "%s: %s" % (self.user_id, self.key)
+
+
+class StorageUsage(models.Model):
+    """Bytes one experiment's rows own on disk, for one registered kind of stored data.
+
+    The third model here, and derived data in the `rebuild_registry` sense: a function of the
+    files in the store, rebuilt by the `storage` rebuilder when something says they changed.
+    Stored rather than walked per render because a breseq report tree is thousands of files
+    per sample and the dashboard sums across the installation. The kinds are whatever
+    `mutint_common.storage_registry` has registered -- a plugin's as much as core's, which is
+    why the table lives here beside `DerivedDataState` rather than in `mutint_sample`.
+
+    **A missing row reads as 0.** Whether that 0 is trustworthy is `DerivedDataState`'s
+    question, under the `storage` name; a page that wants the truth asks `ensure_measured`.
+
+    CASCADE on the experiment, and the experiment's soft delete leaves the rows alone: that
+    is what lets the dashboard say how much a purge would free. `purge_deleted` takes the
+    rows with the experiment.
+    """
+
+    experiment = models.ForeignKey("mutint_experiment.Experiment", on_delete=models.CASCADE,
+                                   related_name="storage_usage")
+    kind = models.CharField(max_length=64, db_index=True,
+                            help_text="the key the kind is registered under")
+    bytes = models.BigIntegerField(default=0)
+    measured_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["experiment", "kind"],
+                             name="one_storage_row_per_experiment_per_kind"),
+        ]
+        verbose_name = "storage usage"
+        verbose_name_plural = "storage usage"
+
+    def __str__(self):
+        return "experiment %s %s: %d bytes" % (self.experiment_id, self.kind, self.bytes)

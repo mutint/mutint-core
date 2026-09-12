@@ -28,3 +28,14 @@ class ExperimentConfig(AppConfig):
         from mutint_experiment.ancestor import note_sample_deleted
         pre_delete.connect(note_sample_deleted, sender="mutint_sample.Sample",
                            dispatch_uid="mutint_experiment.ancestor")
+
+        # The Storage panel on the Overview: how much disk this experiment's stored data
+        # takes, per kind, with a Clear button beside each kind that can be. Through the
+        # panel registry rather than written into stats.html, which makes core the first
+        # user of its own seam -- and keeps the mutint_stats template knowing nothing about
+        # storage, as it knows nothing about the needle plot.
+        from mutint_common.panel_registry import register_overview_panel
+        from mutint_experiment.storage_views import storage_panel_context
+        register_overview_panel(self, name='storage', title='Storage',
+                                template='experiment/_storage_panel.html',
+                                context=storage_panel_context)

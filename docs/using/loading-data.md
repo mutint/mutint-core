@@ -84,11 +84,15 @@ Files are stored under `MUTINT_STORE_DIR`, keyed by database id:
 
 ```
 <store>/experiments/<experiment_id>/reference/{reference.gff3,reference.fasta,reference.fasta.fai}
-<store>/samples/<sample_id>/{sample.gd,aligned.bam,aligned.bam.bai}
+<store>/samples/<sample_id>/{sample.gd,aligned.bam,aligned.bam.bai,coverage.bw}
+<store>/samples/<sample_id>/report/...        breseq's own HTML report
 ```
 
 Alignments are served with HTTP range support, which is what lets the genome browser read them
 without downloading. Every request is permission-checked like any other page.
+
+How much of this each experiment takes, and how to drop the alignments or the report once you
+are done with them, is [Disk space](storage.md).
 
 ## Looking at alignments
 

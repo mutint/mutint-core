@@ -212,9 +212,9 @@ class ImportPageTestCase(TestCase):
         self.assertNotIn("Add data", html)
         self.assertIn("delete-experiment", html)
         # The dialog copy used to be inlined here, and this asserted the literal
-        # "This is permanent." Deleting an experiment is one of the four controls behind
-        # the typed gate now, and the wording lives in mutint_crud.js with it.
-        self.assertIn("mutintConfirmTypedDelete", html)
+        # "This is permanent." -- which was never true of a soft delete. The wording lives in
+        # mutint_crud.js now, behind a plain accept: an administrator can bring it back.
+        self.assertIn("mutintConfirmDelete(", html)
 
     def test_list_pages_offer_create_and_delete(self):
         projects = self.client.get("/project/").content.decode("utf-8")
@@ -224,14 +224,14 @@ class ImportPageTestCase(TestCase):
         self.assertIn('href="/project/new/"', projects)
         new_project = self.client.get("/project/new/").content.decode("utf-8")
         self.assertIn("First experiment", new_project)   # optional, in the same step
-        # mutintConfirmDelete calls swal(), which base.html does not load.
+        # mutintConfirmTyped calls swal(), which base.html does not load.
         self.assertIn("sweetalert", projects)
 
         experiments = self.client.get("/experiment/").content.decode("utf-8")
         self.assertIn("delete-selected", experiments)
 
     def test_both_list_pages_load_the_shared_crud_helpers(self):
-        """mutintPost / mutintConfirmDelete moved out of the templates into one static
+        """mutintPost / mutintConfirmTyped moved out of the templates into one static
         file; a page that lost the script would fail silently on click.
 
         mutintTogglePanel was the third, and is gone: the create forms are modals now,
@@ -242,13 +242,14 @@ class ImportPageTestCase(TestCase):
         self.assertIsNotNone(path)
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
-        for helper in ("mutintPost", "mutintConfirmDelete", "mutintConfirmTypedDelete",
-                       "mutintDeleteSelected"):
+        for helper in ("mutintPost", "mutintConfirm", "mutintConfirmDelete",
+                       "mutintConfirmTyped", "mutintDeleteSelected"):
             self.assertIn(helper, source)
         self.assertNotIn("mutintTogglePanel", source)
-        # mutintConfirmDelete keeps its wording; it is the plain confirm the group and
-        # sharing pages use. If this line fails, the wrong helper was edited.
-        self.assertIn("This is permanent.", source)
+        # mutintConfirmDelete is plain, because deletion is soft; the old wording claimed
+        # otherwise. If this line fails, the wrong helper was edited.
+        self.assertNotIn("This is permanent.", source)
+        self.assertIn("An administrator can bring it back", source)
 
         for url in ("/project/", "/experiment/"):
             html = self.client.get(url).content.decode("utf-8")

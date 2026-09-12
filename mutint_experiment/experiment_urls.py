@@ -14,6 +14,7 @@ else. A route added below is a route, not a trap.
 from django.urls import re_path
 
 from mutint_experiment.sample_views import experiment_samples, experiment_samples_update
+from mutint_experiment.storage_views import experiment_storage_clear
 from mutint_experiment.views import (
     experiment_ancestor, experiment_ancestor_apply, experiment_create, experiment_delete,
     experiment_detail, experiment_edit, experiment_lock, experiment_new, experiment_update,
@@ -39,6 +40,11 @@ urlpatterns = [
     # Locking. Its own endpoint rather than a field on the edit form: a locked experiment
     # refuses `experiment_update` outright, so a checkbox there could lock and never unlock.
     re_path(r'^(?P<pk>[0-9]+)/lock/$', experiment_lock, name="experiment_lock"),
+
+    # Clearing one kind of stored data -- the alignments, the report -- for every sample.
+    # Gated on `can_edit_experiment`, so a locked experiment refuses. See storage_views.
+    re_path(r'^(?P<pk>[0-9]+)/storage/clear/$',
+            experiment_storage_clear, name="experiment_storage_clear"),
 
     # The designated ancestor: the sample this experiment started from, whose mutations are
     # subtracted from every other sample. A page and an apply endpoint, the pairing

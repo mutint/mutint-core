@@ -3,7 +3,7 @@
 {% block title %}Sharing {{ project.name }}{% endblock %}
 {% block header %}Sharing: {{ project.name }}{% endblock %}
 {% block scripts_and_style %}
-    {% comment %} base.html does not load sweetalert; mutintConfirmDelete calls swal(),
+    {% comment %} base.html does not load sweetalert; mutintConfirmTyped calls swal(),
        so every page using it pulls it in for itself. {% endcomment %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
@@ -355,17 +355,18 @@
             // Leaving asks its own question, and reloads to somewhere else afterwards: this
             // page is admin-only, so the reload every other action ends with would land the
             // person who just left on a 403 and read as the removal having gone wrong.
+            // Leaving is the one removal on this page nobody can undo for themselves --
+            // somebody who administers the project would have to grant the access back --
+            // so it is the typed dialog, and the word is LEAVE. Revoking somebody else's is
+            // a plain accept: it can be granted again from this same page.
             var ask = isSelf
-                ? swal({
-                    title: "Leave this project?",
-                    text: "You will lose your access to {{ project.name }}. Somebody who "
-                        + "administers it would have to grant it back.",
-                    icon: "warning",
-                    buttons: true,
-                    dangerMode: true
-                })
-                : window.mutintConfirmDelete("access for "
-                                            + button.getAttribute("data-subject"));
+                ? window.mutintConfirmTyped("Leave this project?",
+                    "You will lose your access to {{ project.name|escapejs }}. Somebody who "
+                    + "administers it would have to grant it back. Type LEAVE to confirm.",
+                    "Leave", "LEAVE")
+                : window.mutintConfirm(
+                    "Revoke access for " + button.getAttribute("data-subject") + "?",
+                    "They can be granted it again; nothing else changes.", "Revoke");
             ask.then(function (confirmed) {
                 if (!confirmed) { return; }
                 window.mutintPost(revokeUrl, {

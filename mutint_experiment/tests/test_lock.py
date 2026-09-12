@@ -213,6 +213,8 @@ class EveryWritePathTestCase(LockTestCase):
                 "/experiment/%d/update/" % experiment_id, {"name": "renamed"})),
             ("experiment delete", lambda: self.client.post(
                 "/experiment/%d/delete/" % experiment_id, {})),
+            ("storage clear", lambda: self.client.post(
+                "/experiment/%d/storage/clear/" % experiment_id, {"kind": "alignments"})),
         )
 
     def test_every_write_endpoint_refuses(self):

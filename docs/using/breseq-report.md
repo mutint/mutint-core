@@ -22,7 +22,8 @@ Samples imported as bare `.gd` files or from VCF **have no report** — those fo
 mutations and nothing else — and the links are simply absent rather than broken.
 
 Samples imported before this feature existed also have none: the report was discarded at the
-time and there is nothing to recover. Re-importing the folder brings it.
+time and there is nothing to recover. Re-importing the folder brings it -- as it does for a
+sample whose report was cleared to free disk space (see [Disk space](storage.md)).
 
 ## Opening it on its own
 

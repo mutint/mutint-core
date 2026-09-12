@@ -99,6 +99,10 @@ def _remove_files(sender, instance, **kwargs):
 Hang the row off `Experiment` with `on_delete=CASCADE` and deleting the experiment then
 reaches the files with nothing further to write.
 
+Files that stay under `component_dir` for any length of time should also be **counted**:
+register a storage kind so they appear on the dashboard and the Overview, and say when they
+move. See [Data you keep in the store](integrating.md#data-you-keep-in-the-store).
+
 ## Two things that will bite
 
 **Your session is not finalizable.** `POST /import/uploads/<id>/finalize` refuses a session

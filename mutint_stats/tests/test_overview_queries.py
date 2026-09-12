@@ -55,6 +55,13 @@ class OverviewQueryCountTestCase(TestCase):
             MutationCall.objects.create(
                 sample=sample, mutation=mutation,
                 present=True, frequency="1.0000")
+        # The one thing on this page that *is* stored and rebuilt: the Storage panel's sizes
+        # (`mutint_common.storage_registry`), measured by the first reader after a change,
+        # deliberately -- walking a report tree per view is the cost storing exists to
+        # avoid. Measured here so the counts below are about the Overview's own numbers,
+        # which store nothing, and not about that panel paying once.
+        from mutint_common.storage_registry import ensure_measured
+        ensure_measured(experiment.id)
         return experiment
 
     def _queries(self, experiment):

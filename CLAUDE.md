@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2502 run, 0 failures** standalone; **2955** assembled, measured with `PYTHONPATH`
+**Baseline: 2581 run, 0 failures** standalone; **3099** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3204,10 +3204,10 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_upgrade/`** — `/upgrade/`: what this installation is made of, and moving it onto
   a newer version. Superusers only, reached from the account block. It **stages** and the
   entry script applies -- see **Upgrading in place** in the suite `CLAUDE.md`. No models.
-- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the nine
-  registries (context, import, import_tab, plugin, nav, about, example, **panel** and
-  **rebuild**), and
-  global static files. `DerivedDataState` is its only model.
+- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eleven
+  registries (context, import, import_tab, plugin, nav, about, example, panel, annotator,
+  storage and rebuild), and global static files. Three models: `DerivedDataState`,
+  `UserPreference` and `StorageUsage`.
 - **`config/`** — Django project config: settings, root URLs, the WSGI entry point.
 
 ### Adding and deleting through the UI
@@ -3233,13 +3233,20 @@ Creation and deletion are nested under the objects they act on:
   the whole gather-confirm-post-reload routine. A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
-- **Deleting data makes you type `DELETE`.** `mutintConfirmTypedDelete` is the dialog behind
-  the four controls that destroy something — the two bulk deletes above, the project list's,
-  and **Delete experiment** on `/stats` — and it resolves true only for that exact word.
-  `mutintConfirmDelete`, the plain yes/no, stays for `group/detail.html` and
-  `project/access.html`: removing a membership or revoking a grant destroys nothing, and
-  a dialog that feels the same for both is what teaches people to click through the one that
-  matters. The wording lives with each helper, so a page carries no delete copy of its own.
+- **Which confirm dialog a control gets is decided by whether it can be undone.**
+  `mutintConfirm(title, text, verb)` is a plain accept and is what every recoverable removal
+  gets: deleting a project or an experiment (soft, restorable by an administrator until
+  purged -- `mutintConfirmDelete` is that stock wording, behind the two bulk deletes, the
+  project list's and **Delete experiment** on `/stats`), revoking a grant, removing a
+  group member, deleting a group, and the mutation editor's delete, whose own sentence says
+  the change is recorded and restorable. `mutintConfirmTyped(title, text, verb, word)`
+  makes the person type a word and is for what cannot be undone: **leaving a project**
+  types `LEAVE`, because only somebody who administers it can let you back in, and the
+  Storage panel's **Clear** types `CLEAR`, because the files are gone short of a re-import.
+  The word names the action rather than being `DELETE` everywhere, so the dialog cannot be
+  answered by reflex. (Every removal typed `DELETE` for one commit; the typed dialog was
+  then a reflex on the page where it mattered least.) `test_crud.DeleteControlsTestCase`
+  pins which control has which.
   - **It is client-side only, deliberately.** The endpoints already check the role and the
     lock, which is what actually protects the data; a server-side "must post DELETE" field
     would be a contract `./mutint delete` does not honour and one `curl` away from bypass,
@@ -3283,9 +3290,10 @@ user-facing lists exclude deleted rows explicitly via `mutint_experiment.models.
 
 ### Import types are pluggable
 
-`mutint_common/import_registry.py` is one of ten registries in `mutint_common/` -- alongside
+`mutint_common/import_registry.py` is one of eleven registries in `mutint_common/` -- alongside
 `import_tab_registry`, `plugin_registry`, `nav_registry`, `about_registry`, `context_registry`,
-`example_registry`, `panel_registry`, `annotator_registry` and `rebuild_registry`. An app registers what it can
+`example_registry`, `panel_registry`, `annotator_registry`, `storage_registry` and
+`rebuild_registry`. An app registers what it can
 ingest from `AppConfig.ready()` and it appears among the Import data page's tabs and in
 auto-detect, with no edit to core:
 
@@ -3304,6 +3312,47 @@ exclude files that live inside one.
 `patterns` does more than route. `identify()` uses it to name the type a rejected file belongs
 to, and the Import data page serializes it to name the type a file in the drop belongs to before
 anything uploads — so a plugin gets both of those by registering, with no edit to core.
+
+### Stored data has a size, and some of it can be cleared
+
+`mutint_common/storage_registry.py` is the eleventh registry: a component registers each
+**kind** of data it keeps in the store with a `measure(experiment) -> bytes` and, if it can
+be thrown away, a `clear(experiment)`. Core registers two from `mutint_sample/storage.py` --
+**alignments** (`aligned.bam`, its index and `coverage.bw`, one unit because the BigWig is
+derived from the BAM and cannot be rebuilt without it) and the breseq **report** tree -- both
+clearable. mutint-breseq registers its run directories, measured only. `sample.gd` and the
+reference are not kinds: the mutations are the data.
+
+**Sizes are stored rows, and that is the whole reason it is a registry and not a walk.**
+`StorageUsage` (in `mutint_common`, beside `DerivedDataState`, because the kinds are any
+component's) is one row per experiment per kind, written by the `storage` rebuilder like any
+other derived data: the import path runs it, the Overview's panel and the dashboard
+`ensure_measured` it, and `request_remeasure` marks it. A breseq report is thousands of files
+per sample and the dashboard sums the installation, so this is exactly the "genuinely
+expensive" case the rebuild registry's docstring reserves storing for.
+
+**The rows are only as honest as the remeasures, and two are easy to forget.** Coverage is
+built by a task after the import's rebuild already measured the experiment, so `build_for`
+marks it again -- without that every BigWig is missing from the total. mutint-breseq's
+cleanup runs after the import it triggered, so the task marks it again -- without that
+every successful run counts its reads and output that are no longer there. Anything else
+that writes or removes under the store must say so the same way, and `request_remeasure`
+narrows with `only=`, so it does not recount the dashboard's mutations.
+
+**A kind measures the filesystem indexed by the rows, never the flags and never a listing.**
+`bam_stored` says a BAM was stored, not that it still is; a `listdir` counts what nobody owns.
+What nobody owns is the dashboard's `storage_unattributed` line, a site-scoped rebuild in
+`mutint_dashboard` over abandoned staging and the directories `./mutint delete` leaves --
+it hard-deletes rows and touches no file -- and it is reported so the dashboard's total is
+the whole store, with no button, because nothing in the database can say what it is.
+
+**Clearing asks `can_edit_experiment`**, at `/experiment/<pk>/storage/clear/`; the project
+endpoint asks it per experiment and is partial by design, skipping and naming the locked
+ones, as `access/bulk/` reports what it refused. `clear_alignments` flips `bam_stored` and
+`coverage_stored` *together*, or `./mutint coverage` tries to derive from a BAM that is gone
+on every run. The Overview's Storage panel is registered through `panel_registry` from
+`mutint_experiment.apps` -- core's first use of its own seam -- and `./mutint storage` is the
+shell counterpart, which clears a locked experiment the way `./mutint import` writes to one.
 
 ### Serving breseq's report, which is the only HTML we did not write
 

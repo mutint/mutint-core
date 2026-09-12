@@ -40,6 +40,11 @@ class InstallationCounts(models.Model):
     MUTATION_CALLS = "mutation_calls"
     #: Distinct mutations behind those calls, same shape.
     UNIQUE_MUTATIONS = "unique_mutations"
+    #: Bytes in the store no experiment's rows own:
+    #: `{"staging": n, "orphan_samples": n, "orphan_experiments": n, "total": n}`.
+    #: A fourth row for a fourth rebuilder, `storage_unattributed`, invalidated by anything
+    #: that moves files -- see `mutint_common.storage_registry`.
+    STORAGE_UNATTRIBUTED = "storage_unattributed"
 
     #: Which count this row holds -- one of the three above.
     #:

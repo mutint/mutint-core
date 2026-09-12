@@ -3,7 +3,7 @@
 {% block title %}Group {{ group.name }}{% endblock %}
 {% block header %}Group: {{ group.name }}{% endblock %}
 {% block scripts_and_style %}
-    {% comment %} base.html does not load sweetalert; mutintConfirmDelete calls swal(). {% endcomment %}
+    {% comment %} base.html does not load sweetalert; mutintConfirm calls swal(). {% endcomment %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
 {% block content %}
@@ -202,8 +202,10 @@
     Array.prototype.forEach.call(document.querySelectorAll(".gd-remove"), function (button) {
         button.addEventListener("click", function () {
             clearError();
-            window.mutintConfirmDelete(
-                button.getAttribute("data-username") + " from this group"
+            window.mutintConfirm(
+                "Remove " + button.getAttribute("data-username") + " from this group?",
+                "They lose whatever access this group holds on every project it is shared "
+                + "with, until they are added again.", "Remove"
             ).then(function (confirmed) {
                 if (!confirmed) { return; }
                 window.mutintPost(base + "members/remove/", {
@@ -233,7 +235,9 @@
             if (sharedCount > 0) {
                 what += ", removing its access to " + sharedCount + " project(s)";
             }
-            window.mutintConfirmDelete(what).then(function (confirmed) {
+            window.mutintConfirm("Delete " + what + "?",
+                "Its members keep their own accounts and lose the access the group gave "
+                + "them.", "Delete").then(function (confirmed) {
                 if (!confirmed) { return; }
                 window.mutintPost(base + "delete/", {}).then(function () {
                     window.location.href = "/group/";
