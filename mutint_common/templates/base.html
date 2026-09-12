@@ -184,12 +184,14 @@
                                admin. {% endcomment %}
                             {% comment %} Superusers only, and a narrower gate than any
                                nav entry could express -- which is the same reason the whole
-                               block is written here rather than registered. Upgrading moves
-                               the code every reader of this deployment is served by.
+                               block is written here rather than registered. Updating moves
+                               the code every reader of this deployment is served by. It is
+                               called Update in front of a person and `upgrade` in the code
+                               and the URL, which predate the wording.
                                {% endcomment %}
                             {% if user.is_superuser %}
                                 <li>
-                                    <a href="{% url 'upgrade' %}">Upgrade</a>
+                                    <a href="{% url 'upgrade' %}">Update</a>
                                 </li>
                                 <li>
                                     <a href="{% url 'admin:index' %}">Django admin</a>

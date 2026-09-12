@@ -10,7 +10,7 @@ files alone, which is the whole reason this works.
 
 ## From the sidebar
 
-Click your username, then **Upgrade**. The page is superusers-only.
+Click your username, then **Update**. The page is superusers-only.
 
 It lists every component this installation is made of, with its version and the git revision it
 is at, and it has two buttons:
@@ -25,7 +25,7 @@ is at, and it has two buttons:
     day, the timestamp is usually the thing that tells you whether this is the change you are
     waiting for.
 
-- **Install** stages the version it found.
+- **Install update** stages the version it found.
 
 Then **quit MutInt and start it again**. The upgrade is applied before the server comes up,
 because a running MutInt cannot safely replace the code it is executing. On a Mac that is a
@@ -89,7 +89,7 @@ worth knowing about if you ever restore a database by hand.
 
 ## If something goes wrong
 
-The **Upgrade** page reports what the last attempt did, including a failure — an upgrade that
+The **Update** page reports what the last attempt did, including a failure — an upgrade that
 cannot run is recorded rather than stopping MutInt from starting, so the page is where you find
 out.
 
@@ -118,4 +118,4 @@ what the dump in `data/backups/` is for.
 
 A deployment can turn the feature off with `MUTINT_UPGRADE_ENABLED = False`, and ALEdb does:
 it is served from a private repository and upgraded deliberately by whoever runs it. The
-**Upgrade** page still lists what is installed; it simply offers no buttons.
+**Update** page still lists what is installed; it simply offers no buttons.

@@ -505,7 +505,11 @@ creates. That check earns its place because `migrate --run-syncdb` runs **unatte
 ### The page that upgrades this installation
 
 `mutint_upgrade` is `/upgrade/`, and it is two things at once: an inventory of what is running,
-and the one control that changes it. The table is `about_registry.get_about_sections()` -- the
+and the one control that changes it. **It is called Update everywhere a person sees it** -- the
+sidebar entry, the page, the sentences, and a button that reads *Install update* rather than
+naming the version, which the sentence beside it already does. `upgrade` survives in the URL,
+the ids, the module and `./mutint upgrade`, which predate the wording; renaming those would
+move a route real installations link to for a word. The table is `about_registry.get_about_sections()` -- the
 same entries `/about` renders as prose, keyed by *component checkout*, each with its version
 and a link to its revision on GitHub -- so there is one answer to "what is installed" and this
 page is it, made actionable.

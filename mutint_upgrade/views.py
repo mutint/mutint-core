@@ -123,7 +123,7 @@ def upgrade_check(request):
         # page that offered it.
         return JsonResponse({"error": "Not permitted."}, status=403)
     if not _enabled():
-        return JsonResponse({"error": "Upgrades are not enabled on this deployment."},
+        return JsonResponse({"error": "Updates are not enabled on this deployment."},
                             status=409)
     base_dir = upgrade_root()
     if base_dir is None:
@@ -151,7 +151,7 @@ def upgrade_install(request):
     if not request.user.is_superuser:
         return JsonResponse({"error": "Not permitted."}, status=403)
     if not _enabled():
-        return JsonResponse({"error": "Upgrades are not enabled on this deployment."},
+        return JsonResponse({"error": "Updates are not enabled on this deployment."},
                             status=409)
     base_dir = upgrade_root()
     if base_dir is None:
@@ -196,7 +196,7 @@ def upgrade_restart(request):
         # page that offered it.
         return JsonResponse({"error": "Not permitted."}, status=403)
     if not _enabled():
-        return JsonResponse({"error": "Upgrades are not enabled on this deployment."},
+        return JsonResponse({"error": "Updates are not enabled on this deployment."},
                             status=409)
     if restart.relaunch_command() is None:
         return JsonResponse(

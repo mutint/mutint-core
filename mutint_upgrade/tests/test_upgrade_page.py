@@ -146,13 +146,15 @@ class UpgradePageTestCase(TestCase):
 
         response = self.client.get(reverse("upgrade"))
 
-        self.assertContains(response, "Upgraded to")
+        self.assertContains(response, "Updated to")
         html = response.content.decode("utf-8")
-        # The button is rendered either way and hidden by style, so its *label* is what says
-        # whether the page is offering anything: "Install v1.1.0" would be. What fills the
-        # status box instead is not asserted here -- this fixture's base is not a git
-        # checkout, so it is the blocker warning rather than "Not checked yet".
-        self.assertNotIn("Install v1.1.0", html)
+        # The button is rendered either way and hidden by style, and its label is the same
+        # either way, so the hiding style and the status sentence are what say whether the
+        # page is offering anything. What fills the status box instead is not asserted here
+        # -- this fixture's base is not a git checkout, so it is the blocker warning rather
+        # than "Not checked yet".
+        button = html[html.index('id="upgrade-install"'):]
+        self.assertLess(button.index('display: none'), button.index("Install update"))
         self.assertNotIn("v1.1.0 is available", html)
 
     def test_a_failed_apply_is_reported_on_the_page(self):

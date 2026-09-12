@@ -266,7 +266,7 @@ def blockers(base_dir):
         names = [line[3:] for line in dirty[:5]]
         more = len(dirty) - len(names)
         problems.append(
-            "There are uncommitted changes here (%s%s). An upgrade would discard them, so it "
+            "There are uncommitted changes here (%s%s). An update would discard them, so it "
             "will not run. This looks like a development checkout rather than an installation."
             % (', '.join(names), ' and %d more' % more if more > 0 else ''))
 
@@ -276,7 +276,7 @@ def blockers(base_dir):
     ahead = _git(base_dir, 'rev-list', '--count', '@{upstream}..HEAD', check=False).strip()
     if ahead.isdigit() and int(ahead) > 0:
         problems.append(
-            "This checkout has %s commit(s) that the remote does not, which an upgrade would "
+            "This checkout has %s commit(s) that the remote does not, which an update would "
             "leave unreachable." % ahead)
     return problems
 
@@ -526,7 +526,7 @@ def check(base_dir, channel=None):
             if not tags:
                 state['available'] = None
                 state['error'] = (
-                    "The remote has no release tags yet, so there is nothing to upgrade to. "
+                    "The remote has no release tags yet, so there is nothing to update to. "
                     "The development channel follows `%s` instead." % MAIN_BRANCH)
                 write_state(base_dir, state)
                 return state

@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}Upgrade{% endblock %}
+{% block title %}Update{% endblock %}
 
-{% block header %}Upgrade{% endblock %}
+{% block header %}Update{% endblock %}
 
 {% block content %}
 <div class="col-lg-10">
@@ -50,7 +50,7 @@
 
     {% if not enabled %}
 
-        <p style="color: #666;">Upgrading is not enabled on this deployment. Its operator
+        <p style="color: #666;">Updating is not enabled on this deployment. Its operator
            updates it by hand.</p>
 
     {% else %}
@@ -60,14 +60,14 @@
         {% if requested %}
             {% comment %} Restart is offered *here* and nowhere else, because staged is the
                one state where restarting is the obvious next thing rather than a button
-               somebody might wonder about. It finishes this upgrade; a control that sat in
+               somebody might wonder about. It finishes this update; a control that sat in
                the row above permanently would read as a general "restart the server", which
                is not a thing this page is for. {% endcomment %}
             <div class="alert alert-info">
                 <strong>{{ requested.ref }} is staged.</strong>
                 {% if can_restart %}Restart MutInt to apply it
                 {% else %}Quit MutInt and start it again to apply it{% endif %} &mdash; the
-                upgrade happens before the server comes up, because a running MutInt cannot
+                update happens before the server comes up, because a running MutInt cannot
                 safely replace its own code. Any new dependencies are installed and any new
                 migrations applied on that same launch.
                 {% if can_restart %}
@@ -80,12 +80,12 @@
         {% elif last_result %}
             {% if last_result.ok %}
                 <div class="alert alert-success">
-                    Upgraded to <strong>{{ last_result.now|default:last_result.ref }}</strong>.
+                    Updated to <strong>{{ last_result.now|default:last_result.ref }}</strong>.
                     {% if last_result.backup %}The database was backed up first.{% endif %}
                 </div>
             {% else %}
                 <div class="alert alert-warning">
-                    <strong>The upgrade to {{ last_result.ref }} did not run.</strong>
+                    <strong>The update to {{ last_result.ref }} did not run.</strong>
                     {{ last_result.detail }}
                 </div>
             {% endif %}
@@ -116,9 +116,14 @@
         <div class="btn-row">
             <button type="button" class="btn btn-default" id="upgrade-check">
                 Check for updates</button>
+            {% comment %} "Install update", not "Install <ref>": the sentence in the status
+               box below already names the version, and a button that changes its label
+               is one the eye has to re-read. The page is Update everywhere a person sees
+               it; `upgrade` survives in the URL, the ids and the module, which predate
+               the wording. {% endcomment %}
             <button type="button" class="btn btn-primary" id="upgrade-install"
                     {% if not available %}style="display: none;"{% endif %}>
-                Install {{ available.ref }}</button>
+                Install update</button>
         </div>
 
         <div id="upgrade-status" style="margin-top: 1em;">
@@ -161,7 +166,7 @@
     "use strict";
 
     var checkButton = document.getElementById("upgrade-check");
-    if (!checkButton) { return; }          // upgrading is disabled on this deployment
+    if (!checkButton) { return; }          // updating is disabled on this deployment
 
     var installButton = document.getElementById("upgrade-install");
     var channel = document.getElementById("upgrade-channel");
@@ -227,8 +232,6 @@
                     say("success", "Up to date.");
                 }
                 if (available) {
-                    installButton.textContent = "Install " + available.ref;
-                    installButton.dataset.label = installButton.textContent;
                     installButton.style.display = "";
                 } else {
                     installButton.style.display = "none";
@@ -266,7 +269,7 @@
         var tries = 0;
         var timer = setInterval(function () {
             tries += 1;
-            if (tries > 240) {          // four minutes; a first launch after an upgrade
+            if (tries > 240) {          // four minutes; a first launch after an update
                 clearInterval(timer);   // installs dependencies and migrates
                 say("warning", "MutInt has not come back yet. It may still be installing " +
                                "this version's dependencies; the window showing its log will " +
@@ -295,7 +298,7 @@
                 window.location.reload();
             })
             .catch(function (error) {
-                say("danger", (error && error.message) || "Could not stage the upgrade.");
+                say("danger", (error && error.message) || "Could not stage the update.");
                 busy(false, installButton, null);
             });
     });
