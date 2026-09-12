@@ -3320,8 +3320,9 @@ anything uploads — so a plugin gets both of those by registering, with no edit
 be thrown away, a `clear(experiment)`. Core registers two from `mutint_sample/storage.py` --
 **alignments** (`aligned.bam`, its index and `coverage.bw`, one unit because the BigWig is
 derived from the BAM and cannot be rebuilt without it) and the breseq **report** tree -- both
-clearable. mutint-breseq registers its run directories, measured only. `sample.gd` and the
-reference are not kinds: the mutations are the data.
+clearable. `sample.gd` and the reference are not kinds: the mutations are the data. No plugin
+registers one yet -- mutint-breseq was going to, for failed runs' reads, and instead made a
+failed run clean up the way a successful one does, so there was nothing left to count.
 
 **Sizes are stored rows, and that is the whole reason it is a registry and not a walk.**
 `StorageUsage` (in `mutint_common`, beside `DerivedDataState`, because the kinds are any
@@ -3333,10 +3334,9 @@ expensive" case the rebuild registry's docstring reserves storing for.
 
 **The rows are only as honest as the remeasures, and two are easy to forget.** Coverage is
 built by a task after the import's rebuild already measured the experiment, so `build_for`
-marks it again -- without that every BigWig is missing from the total. mutint-breseq's
-cleanup runs after the import it triggered, so the task marks it again -- without that
-every successful run counts its reads and output that are no longer there. Anything else
-that writes or removes under the store must say so the same way, and `request_remeasure`
+marks it again -- without that every BigWig is missing from the total. A plugin whose
+files change after the import it triggered has the same problem and the same answer.
+Anything that writes or removes under the store must say so, and `request_remeasure`
 narrows with `only=`, so it does not recount the dashboard's mutations.
 
 **A kind measures the filesystem indexed by the rows, never the flags and never a listing.**

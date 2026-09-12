@@ -175,10 +175,10 @@ reason than that `/stats` is where it is drawn.
 ```python
 from mutint_common.storage_registry import register_storage_kind
 
-register_storage_kind(self, key='breseq_runs', label='breseq run directories',
-                      measure=measure_runs,          # callable(experiment) -> bytes
-                      clear=None,                    # counted, not offered for clearing
-                      description='reads and output kept for failed runs')
+register_storage_kind(self, key='my_plugin_caches', label='My plugin caches',
+                      measure=measure_caches,        # callable(experiment) -> bytes
+                      clear=clear_caches,            # or None: counted, not offered
+                      description='what stops working once they are cleared')
 ```
 
 If your component writes files under `store.component_dir`, register a kind so they are
@@ -187,13 +187,14 @@ lists every kind beside its size. `measure` walks the files **your rows point at
 the store itself, which would count directories nothing owns. Pass a `clear` callable to get
 a Clear button beside the kind on the Overview and the project page; it must remove the files
 *and* correct whatever rows say they exist. Leave it `None` for data that has a better way to
-be freed, as mutint-breseq does for run directories, which go when the run is deleted.
+be freed. And consider not keeping the files at all: mutint-breseq was going to register its
+run directories and instead made every run delete its reads and output when it ends, however
+it ends, which left nothing to count.
 
 **Call `request_remeasure(experiment.id)` wherever you write or delete under the store.**
 Sizes are stored rows, rebuilt when something says the files moved; the import path says so
-for what it stores, and nothing can say so for you. mutint-breseq calls it after a launch
-moves reads in, after a run's scratch is cleaned up, and when a run is deleted. A kind that
-forgets is not wrong on the page -- it is quietly out of date, which is worse.
+for what it stores, and nothing can say so for you. A kind that forgets is not wrong on the
+page -- it is quietly out of date, which is worse.
 
 ## An annotator that runs on the reference
 

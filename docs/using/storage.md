@@ -40,9 +40,8 @@ re-importing the breseq folder brings the files back.
 A **locked** experiment refuses, like every other write. Clearing from a project's page skips
 its locked experiments and names them, and clears the rest.
 
-A plugin may register a kind that is counted and not offered for clearing. mutint-breseq's
-run directories are one: a failed run keeps its reads on purpose, and deleting the run on the
-*Run breseq* page is how to free them.
+A plugin may register a kind that is counted and not offered for clearing, for data that
+has a better way to be freed.
 
 ## Deleted, purged, unattributed
 

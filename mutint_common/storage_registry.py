@@ -3,8 +3,9 @@
 The eleventh registry. Apps call `register_storage_kind()` from `AppConfig.ready()` with a
 callable that measures one experiment's bytes of that kind and, optionally, one that clears
 them. Core registers two -- the alignments (BAM, index and coverage) and breseq's HTML
-report, both clearable -- and a plugin that keeps files under `store.component_dir` registers
-its own so the dashboard's total is the whole store rather than the part core knows about.
+report, both clearable -- and a plugin that keeps files under `store.component_dir` for any
+length of time registers its own, so the dashboard's total is the whole store rather than
+the part core knows about.
 
 **Why this exists.** Nothing said how much disk an experiment took, and nothing short of
 `./mutint purge_deleted` removed a stored file. The BAM and breseq's `output/` tree are most
@@ -30,10 +31,11 @@ directories left by `./mutint delete` -- is the dashboard's site-scoped rebuild,
 `UNATTRIBUTED_REBUILD`, and is deliberately not attributed to anybody.
 
 **Clearing is a kind's own decision.** `clear=None` registers a kind that is counted and not
-offered for clearing -- mutint-breseq's run directories are that, because a failed run keeps
-its reads on purpose and deleting the run is the way to free them. Reference files and
+offered for clearing, for data that has a better way to be freed. Reference files and
 `sample.gd` are not kinds at all: the mutations are the data, and there is nothing to be
-"cleared" about the file every mutation was read from.
+"cleared" about the file every mutation was read from. (mutint-breseq registers no kind:
+every run, however it ends, deletes its reads and output, so a run directory never holds
+anything worth counting for longer than the run takes.)
 
 **Failures are isolated.** A kind whose `measure` raises is logged with its app and key and
 counted as zero, and the rest of the experiment is still measured -- the posture every
