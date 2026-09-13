@@ -120,10 +120,19 @@ class WorkerSpawnTestCase(TestCase):
 
     # --- the gate ------------------------------------------------------------
 
-    def test_a_launch_starts_exactly_one(self):
+    @override_settings(MUTINT_WORKERS=1)
+    def test_a_launch_starts_exactly_one_supervisor(self):
         popen, _call, _at_exit, out = self._run({})
         self.assertEqual(1, popen.call_count)
         self.assertIn("Background worker running", out)
+
+    @override_settings(MUTINT_WORKERS=4)
+    def test_one_supervisor_whatever_the_count(self):
+        """The architectural decision, made checkable. The pool is N children of one
+        supervisor because the shutdown order -- workers, then group, then cluster -- is a
+        global invariant that N supervisors would turn into a per-process one."""
+        popen, _call, _at_exit, _out = self._run({})
+        self.assertEqual(1, popen.call_count)
 
     def test_a_reload_starts_none(self):
         """Ungated, every saved file would start another and nothing would stop them."""
@@ -139,6 +148,63 @@ class WorkerSpawnTestCase(TestCase):
         popen, _call, _at_exit, out = self._run({}, no_worker=True)
         self.assertEqual(0, popen.call_count)
         self.assertIn("db_worker", out)
+
+    @override_settings(MUTINT_WORKERS=3)
+    def test_the_setting_decides_how_many(self):
+        argv = self._run({})[0].call_args.args[0]
+        self.assertEqual("3", argv[argv.index("--workers") + 1])
+
+    @override_settings(MUTINT_WORKERS=4)
+    def test_the_flag_beats_the_setting(self):
+        argv = self._run({}, workers=2)[0].call_args.args[0]
+        self.assertEqual("2", argv[argv.index("--workers") + 1])
+
+    @override_settings(MUTINT_WORKERS=4)
+    def test_no_worker_beats_both(self):
+        """Not an argparse conflict: the realistic way to hit it is an alias carrying one flag
+        and an environment carrying the other, and a dev server that refuses to start over a
+        redundant flag is the wrong trade."""
+        popen, _call, _at_exit, out = self._run({}, no_worker=True, workers=4)
+        self.assertEqual(0, popen.call_count)
+        self.assertIn("db_worker", out)
+
+    @override_settings(MUTINT_WORKERS=0)
+    def test_zero_is_the_same_as_no_worker(self):
+        """An operator must be able to turn the pool off from the environment."""
+        popen, _call, _at_exit, out = self._run({})
+        self.assertEqual(0, popen.call_count)
+        self.assertIn("No background worker", out)
+
+    @override_settings(MUTINT_WORKERS="four")
+    def test_a_nonsense_setting_does_not_stop_the_server(self):
+        popen, call, _at_exit, out = self._run({})
+        argv = popen.call_args.args[0]
+        self.assertEqual("1", argv[argv.index("--workers") + 1])
+        self.assertIn("not a number", out)
+        self.assertIn("runserver", [c.args[0] for c in call.call_args_list])
+
+    @override_settings(MUTINT_WORKERS=500)
+    def test_a_huge_count_is_clamped_and_said_so(self):
+        """A typo must not be able to exhaust the cluster's connection limit."""
+        popen, _call, _at_exit, out = self._run({})
+        argv = popen.call_args.args[0]
+        self.assertEqual(str(start.MAX_WORKERS), argv[argv.index("--workers") + 1])
+        self.assertIn("rather than 500", out)
+
+    @override_settings(MUTINT_WORKERS=3)
+    def test_the_banner_says_how_many(self):
+        out = self._run({})[3]
+        self.assertIn("3 background workers running", out)
+        self.assertIn("supervisor pid", out)
+
+    @override_settings(MUTINT_WORKERS=1)
+    def test_the_banner_stays_singular_for_one(self):
+        """Never "1 background workers". Pinned rather than left to the default, which is a
+        function of this machine's core count: unpinned it would pass on a laptop and fail on a
+        two-core CI box, or the other way about."""
+        out = self._run({})[3]
+        self.assertIn("Background worker running", out)
+        self.assertNotIn("1 background workers", out)
 
     @override_settings(TASKS={"default": {"BACKEND": "django.tasks.backends.immediate."
                                                      "ImmediateBackend"}})
@@ -230,9 +296,20 @@ class DeadmanPipeTestCase(TestCase):
     def test_the_write_end_is_not_inheritable(self):
         with mock.patch.dict(os.environ, {}, clear=True), \
                 mock.patch.object(start.subprocess, "Popen"):
-            _process, write_fd = start._spawn_worker()
+            _process, write_fd = start._spawn_worker(1)
         self.addCleanup(os.close, write_fd)
         self.assertFalse(os.get_inheritable(write_fd))
+
+    @override_settings(TASKS={"default": {"BACKEND": "django_tasks_db.DatabaseBackend"}})
+    def test_there_is_still_exactly_one_write_end(self):
+        """A pool is N children of one supervisor. A later refactor giving each worker its own
+        pipe would multiply the one detail that disables this silently."""
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(start.subprocess, "Popen") as popen:
+            _process, write_fd = start._spawn_worker(4)
+        self.addCleanup(os.close, write_fd)
+        self.assertEqual(1, popen.call_count)
+        self.assertEqual(1, len(popen.call_args.kwargs["pass_fds"]))
 
 
 class StopWorkerTestCase(unittest.TestCase):
@@ -288,7 +365,7 @@ class WatchWorkerTestCase(unittest.TestCase):
         process = mock.Mock()
         process.wait.return_value = 1
         start._watch_worker(process, threading.Event(), said.append)
-        self.assertIn("background worker exited", "".join(said).lower())
+        self.assertIn("background workers have stopped", "".join(said).lower())
 
     def test_our_own_shutdown_is_silent(self):
         """Or every Ctrl-C would print it."""
@@ -330,3 +407,51 @@ class WorkerFlagsTestCase(TestCase):
             with self.assertRaises(CommandError) as caught:
                 Worker().create_parser("", "db_worker").parse_args(["--no-reload"])
         self.assertIn("not a database backend", str(caught.exception))
+
+
+class DefaultWorkersTestCase(unittest.TestCase):
+    """How many workers an installation that has said nothing gets.
+
+    Scaled to the machine because the failure it answers is a queue that does not drain: with
+    one worker a breseq run blocks every coverage build behind it for hours, on a laptop with
+    cores to spare. Half of them, so PostgreSQL, runserver and whatever a task shells out to
+    still have somewhere to run -- and capped, because what runs out first is memory rather
+    than cores.
+    """
+
+    def _default(self, cpus, env=None):
+        from mutint_common import base_settings
+        with mock.patch.dict(os.environ, env or {}, clear=True), \
+                mock.patch.object(base_settings.os, "cpu_count", return_value=cpus):
+            return base_settings.default_workers()
+
+    def test_it_is_half_the_cores_capped(self):
+        self.assertEqual([1, 1, 1, 2, 4, 4],
+                         [self._default(cpus) for cpus in (None, 1, 2, 4, 16, 64)])
+
+    def test_never_none_and_never_zero(self):
+        """`os.cpu_count()` can answer None, and a machine that cannot say how many cores it
+        has must still run a worker."""
+        self.assertEqual(1, self._default(None))
+
+    def test_an_explicit_value_is_obeyed_above_the_cap(self):
+        """The cap is on the guess, not on an answer somebody gave. `start` is what stops a
+        typo, with a number and a sentence."""
+        self.assertEqual(32, self._default(8, {"MUTINT_WORKERS": "32"}))
+
+    def test_zero_is_kept(self):
+        """Turning the pool off from the environment has to reach `start`, which treats it the
+        same as --no-worker."""
+        self.assertEqual(0, self._default(8, {"MUTINT_WORKERS": "0"}))
+
+    def test_a_negative_clamps(self):
+        self.assertEqual(0, self._default(8, {"MUTINT_WORKERS": "-4"}))
+
+    def test_nonsense_falls_back_rather_than_raising(self):
+        """Every other integer setting here would raise, which is right for them. This one is
+        plausibly typed at a shell, and settings that refuse to load take the server down
+        before anything can say why."""
+        self.assertEqual(4, self._default(8, {"MUTINT_WORKERS": "four"}))
+
+    def test_an_empty_value_falls_back_too(self):
+        self.assertEqual(4, self._default(8, {"MUTINT_WORKERS": ""}))

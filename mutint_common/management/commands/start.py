@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
 
@@ -20,7 +21,18 @@ RELOADER_CHILD_ENV = 'RUN_MAIN'
 
 #: How long the worker's process group gets between SIGTERM and SIGKILL at shutdown.
 #: Short deliberately -- see mutint_jobs/supervisor.py's GRACE_SECONDS, which owns the reason.
-WORKER_STOP_GRACE_SECONDS = 5
+#:
+#: **It must stay larger than the supervisor's**, because the two nest: our SIGTERM reaches the
+#: supervisor, which stops each of its workers under a grace period of its own before exiting.
+#: Equal or smaller and we would SIGKILL the group while the supervisor was still being polite,
+#: which is the orphaned-breseq case that grace period exists to avoid. Twice it, plus a
+#: second: the supervisor spends at most two grace periods (SIGTERM, then SIGKILL).
+WORKER_STOP_GRACE_SECONDS = 11
+
+#: The most workers `--workers` or `MUTINT_WORKERS` may ask for. Nothing here needs a hundred,
+#: and the number that matters is the cluster's `max_connections` -- initdb's default 100, which
+#: `pg.py` does not tune. A guard against a typo rather than a considered maximum.
+MAX_WORKERS = 16
 
 
 def is_first_launch():
@@ -37,8 +49,14 @@ def _supervisor_script():
     return os.path.abspath(supervisor.__file__)
 
 
-def _spawn_worker():
-    """Start a background worker under a deadman supervisor. Returns (process, write_fd).
+def _spawn_worker(count):
+    """Start `count` background workers under one deadman supervisor.
+
+    Returns (process, write_fd) -- **one** process and **one** fd however many workers were
+    asked for. The pool is N children of that single supervisor, for the reason its own module
+    docstring gives: the shutdown order (workers, then group, then cluster) is a global
+    invariant that N supervisors would turn into a per-process one. Everything below this line
+    is therefore singular on purpose, and a change that made it plural would be the bug.
 
     Answers None when a worker should not be started, and says why -- see the gates below.
 
@@ -79,6 +97,10 @@ def _spawn_worker():
     if os.getpgrp() == os.getpid():
         argv += ["--group", str(os.getpgrp())]
 
+    # Passed always, not only when it differs from the supervisor's own default: an explicit
+    # number beats two defaults that have to be kept in agreement.
+    argv += ["--workers", str(count)]
+
     # The cluster half of the deadman, armed only when we own the cluster. We can answer that
     # directly: `os.execv` preserved the pid, so this process *is* the owner the entry script
     # recorded. An unowned cluster -- `./mutint db start`, which exists so a server outlives one
@@ -115,9 +137,13 @@ def _spawn_worker():
 def _stop_worker(process, stopping):
     """Signal the supervisor's whole process group. Silent, and never raises.
 
-    `killpg`, not `process.kill()`: the supervisor has the worker as a child in its group, and
-    signalling only the leader leaves a worker running with no parent -- the orphan the old
-    refusal was worried about. Same reasoning as mutint-breseq's runner.py.
+    `killpg`, not `process.kill()`: the supervisor has every worker as a child in its group, and
+    signalling only the leader leaves them running with no parent -- the orphan the old refusal
+    was worried about. Same reasoning as mutint-breseq's runner.py.
+
+    **This takes no count and must not grow one.** `start_new_session` made the supervisor a
+    group leader and each worker inherits that pgid, so one `killpg` reaches the whole pool in
+    one syscall however large it is.
     """
     stopping.set()
     try:
@@ -133,18 +159,22 @@ def _stop_worker(process, stopping):
 
 
 def _watch_worker(process, stopping, write):
-    """Say so, loudly, if the worker exits on its own.
+    """Say so, loudly, when no worker is left.
 
     Without this a worker that dies three seconds in leaves a terminal that looks entirely
     normal for the next six hours -- which is the state this feature exists to fix,
     reintroduced one level down. The `stopping` flag is what keeps it quiet when *we* are the
     ones ending it, or every Ctrl-C would print it.
+
+    What we watch is the supervisor, which outlives any one worker: with a pool it reports each
+    death itself and exits only when the last one has gone. So this fires exactly when the
+    sentence below is true, rather than when the pool has merely shrunk.
     """
     code = process.wait()
     if stopping.is_set():
         return
-    write("\nThe background worker exited (status %s). Queued work will not run until you\n"
-          "restart, or run `%s db_worker` in another terminal.\n"
+    write("\nThe background workers have stopped (status %s). Queued work will not run until\n"
+          "you restart, or run `%s db_worker` in another terminal.\n"
           % (code, os.path.basename(_entry_script())))
 
 
@@ -175,6 +205,10 @@ class Command(BaseCommand):
         parser.add_argument(
             '--no-worker', action='store_true',
             help='Do not start a background worker alongside the server.')
+        parser.add_argument(
+            '--workers', type=int, default=None,
+            help='How many background workers to start (default: the MUTINT_WORKERS setting). '
+                 'Zero is the same as --no-worker.')
 
     def handle(self, *args, **options):
         url = 'http://127.0.0.1:8000'
@@ -208,7 +242,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write('Superuser already exists')
 
-            worker = self._start_worker(options.get('no_worker'))
+            worker = self._start_worker(options.get('no_worker'), options.get('workers'))
 
             # **Not on a restart asked for from the page.** Opening a browser is right for
             # somebody who double-clicked an icon, and wrong here: they are already looking at
@@ -223,10 +257,22 @@ class Command(BaseCommand):
             self.stdout.write(f'\nStarting MutInt at {url}')
             self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)')
             if worker is not None:
-                self.stdout.write(
-                    '  Background worker running (pid %d): coverage and other queued work is\n'
-                    '  derived as it arrives. It runs the code as of now -- restart to pick up\n'
-                    '  changes to a task. Start without one with --no-worker.\n' % worker.pid)
+                process, count = worker
+                if count == 1:
+                    self.stdout.write(
+                        '  Background worker running (supervisor pid %d): coverage and other\n'
+                        '  queued work is derived as it arrives. It runs the code as of now --\n'
+                        '  restart to pick up changes to a task. Run more with --workers N or\n'
+                        '  the MUTINT_WORKERS setting; none with --no-worker.\n' % process.pid)
+                else:
+                    # The pid is the supervisor's, and is labelled so: it is not any one
+                    # worker's, and it is the number that lets somebody signal the whole pool.
+                    self.stdout.write(
+                        '  %d background workers running (supervisor pid %d): coverage and other\n'
+                        '  queued work is derived as it arrives. They run the code as of now --\n'
+                        '  restart to pick up changes to a task. Change how many with\n'
+                        '  --workers N or the MUTINT_WORKERS setting; none with --no-worker.\n'
+                        % (count, process.pid))
             else:
                 # Kept for the case where we did not start one. The symptom of not knowing is a
                 # sample that imports perfectly and quietly has no coverage track.
@@ -236,13 +282,45 @@ class Command(BaseCommand):
 
         call_command('runserver')
 
-    def _start_worker(self, no_worker):
-        """Spawn the worker if we should, and arrange for it to die with us. Returns it, or None.
+    def _worker_count(self, no_worker, asked):
+        """How many workers to run: `--no-worker` > `--workers N` > MUTINT_WORKERS > 1.
+
+        **`--no-worker --workers 4` is not an error.** The realistic way to hit it is a shell
+        alias carrying one and an environment carrying the other, and a dev server that refuses
+        to start over a redundant flag is the wrong trade -- the same posture as the three gates
+        below. Nor is a value that is not a number: settings are clamped where they are read,
+        because an assembled project can assign MUTINT_WORKERS straight into its own settings
+        dict without passing through `base_settings.default_workers`.
+        """
+        if no_worker:
+            return 0
+        if asked is None:
+            asked = getattr(settings, 'MUTINT_WORKERS', 1)
+        try:
+            count = int(asked)
+        except (TypeError, ValueError):
+            self.stdout.write(
+                '  MUTINT_WORKERS is not a number (%r); starting one background worker.'
+                % (asked,))
+            return 1
+        if count > MAX_WORKERS:
+            self.stdout.write(
+                '  Starting %d background workers rather than %d: more than that is a typo\n'
+                '  more often than an intention, and the cluster runs at PostgreSQL\'s default\n'
+                '  connection limit.' % (MAX_WORKERS, count))
+            return MAX_WORKERS
+        return max(0, count)
+
+    def _start_worker(self, no_worker, asked=None):
+        """Spawn the workers if we should, and arrange for them to die with us.
+
+        Returns `(supervisor process, count)`, or None.
 
         Three gates, and each refuses quietly with a sentence rather than failing the command:
         a dev server that will not start because a worker could not is the wrong trade.
         """
-        if no_worker:
+        count = self._worker_count(no_worker, asked)
+        if not count:
             return None
         # Asked through mutint_jobs, which is already the one place in mutint-core that knows
         # which backend is configured. Under ImmediateBackend there is no queue to drain, and
@@ -255,7 +333,7 @@ class Command(BaseCommand):
             return None
 
         try:
-            process, _write_fd = _spawn_worker()
+            process, _write_fd = _spawn_worker(count)
         except OSError as error:
             self.stdout.write('  Could not start a background worker: %s' % error)
             return None
@@ -275,4 +353,4 @@ class Command(BaseCommand):
         atexit.register(_stop_worker, process, stopping)
         threading.Thread(target=_watch_worker, args=(process, stopping, self.stdout.write),
                          daemon=True).start()
-        return process
+        return process, count

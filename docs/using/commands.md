@@ -44,7 +44,8 @@ README stating the expected answer.
 
 ```bash
 ./mutint db_worker            # run queued work (coverage derivation, breseq runs); --batch drains and exits
-                              #   `./mutint start` runs one for you; this is for everywhere else
+                              #   `./mutint start` runs MUTINT_WORKERS of them for you;
+                              #   this is for everywhere else
 ./mutint reap_uploads         # discard staged uploads nobody finalized (cron's job)
 ./mutint reap_jobs            # discard queue rows no worker ever claimed; --dry-run first
 ```

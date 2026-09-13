@@ -95,18 +95,18 @@
         return html;
     }
 
-    // Says what was observed and hedges what it means, deliberately. A worker halfway through
-    // a twelve-hour breseq run leaves the head of the queue waiting exactly like no worker at
+    // Says what was observed and hedges what it means, deliberately. Workers halfway through
+    // twelve-hour breseq runs leave the head of the queue waiting exactly like no worker at
     // all, and there is no way to tell the two apart -- the queue keeps no worker registry and
     // no heartbeat. A banner that stated the conclusion would be wrong often enough to teach
-    // people to ignore it.
+    // people to ignore it, and with a pool of workers it would be wrong more often, not less.
     function renderStalled(since) {
         if (!since) { stalledEl.innerHTML = ""; return; }
         var when = new Date(since);
         stalledEl.innerHTML =
             '<div class="alert alert-warning">Work has been waiting since ' +
-            esc(when.toLocaleString()) + '. No worker appears to be running: start one with ' +
-            '<code>db_worker</code>, or restart the server.</div>';
+            esc(when.toLocaleString()) + '. Every background worker is busy, or none is ' +
+            'running: start one with <code>db_worker</code>, or restart the server.</div>';
     }
 
     // Log first, then Cancel: reading what a job is doing is the commoner thing to want, and

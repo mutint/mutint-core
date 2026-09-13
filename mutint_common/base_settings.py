@@ -23,6 +23,27 @@ import sys
 from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured
 
+#: Ceiling on the *computed* default only, not on a number somebody asked for. Memory rather
+#: than cores: a worker can be holding a whole breseq run, and that is what runs out first.
+DEFAULT_WORKER_CAP = 4
+
+
+def default_workers():
+    """How many background workers to run when nobody has said. See `MUTINT_WORKERS` below.
+
+    A value that is not a number falls back rather than raising. Every other integer here is
+    read the same way and would raise, which is right for them: this one is plausibly typed at
+    a shell, and settings that refuse to load take the whole server down before anything can
+    say why.
+    """
+    asked = os.environ.get('MUTINT_WORKERS')
+    if asked:
+        try:
+            return max(0, int(asked))
+        except ValueError:
+            pass
+    return max(1, min(DEFAULT_WORKER_CAP, (os.cpu_count() or 1) // 2))
+
 
 def get_base_settings(base_dir, mutint_core_dir=None):
     """
@@ -91,6 +112,22 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         # project, the same reason templates/ and staticfiles/ have to be re-pointed.
         # None when nothing exported it, and mutint_common.tools then falls back to PATH.
         'MUTINT_TOOLS_DIR': os.environ.get('MUTINT_TOOLS_DIR'),
+
+        # How many `db_worker` processes `./mutint start` runs. Scaled to the machine because
+        # the failure it answers is a queue that does not drain: one worker means a breseq run
+        # blocks every coverage build behind it for hours, on a laptop with cores to spare.
+        #
+        # Half the cores, so PostgreSQL, runserver and whatever a task shells out to still have
+        # somewhere to run. The cap is memory rather than cores -- a worker can be holding a
+        # whole breseq run -- and it also bounds how many workers can be parked at once on the
+        # single import lock, which is the real ceiling on what a pool buys here.
+        #
+        # **This is a pool, not supervision**: nothing restarts a worker that dies. A deployment
+        # does not use `start` at all and runs its own under systemd or a container policy.
+        #
+        # `start.py` clamps this again and re-reads the environment: an assembled project can
+        # assign the setting straight into its own settings dict and never pass through here.
+        'MUTINT_WORKERS': default_workers(),
 
         # `MUTINT_UPDATE_ENABLED` -- whether /update/ offers to move this installation onto a
         # newer version -- is deliberately *not* defaulted here. Absent means True, which is

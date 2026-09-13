@@ -143,8 +143,12 @@ enqueued, and it must be started through the entry script — a bare `manage.py 
 neither the database connection nor `MUTINT_TOOLS_DIR`, so it finds none of the external tools.
 A deployment runs one under whatever supervises its web server.
 
-The worker `start` runs is deliberately **not** reloaded on code changes, so it executes the
+The workers `start` runs are deliberately **not** reloaded on code changes, so they execute the
 code as of launch. Restart the server after editing a task, or your edit is not what runs.
+
+Nothing restarts a worker that dies: the supervisor says so in the terminal and the pool
+carries on one smaller. A pool is not process supervision, and a deployment runs `db_worker`
+under whatever supervises its web server rather than under `start` at all.
 
 `./mutint reap_jobs` clears queue rows that were never claimed — the library's own
 `prune_db_task_results` only removes *finished* ones, so an unclaimed row is otherwise

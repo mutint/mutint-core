@@ -3944,12 +3944,27 @@ own settings every job's status reads as unknown and the page shows "no longer o
 That is correct — an immediate backend keeps no results — and it is why every test about
 queueing overrides `TASKS` to the database backend. `mutint_jobs/tests/test_jobs.py` pins both.
 
-### Running a worker with the dev server
+### Running workers with the dev server
 
-`./mutint start` spawns a `db_worker` alongside `runserver`, so in development the queue drains
-on its own. Two real hazards had to be answered first: *runserver re-executes this whole
-command line on every code change, so a spawned one becomes an orphan-management problem*, and
-*a background worker that dies silently is worse than one you can see*.
+`./mutint start` spawns `db_worker` processes alongside `runserver`, so in development the
+queue drains on its own. Two real hazards had to be answered first: *runserver re-executes this
+whole command line on every code change, so a spawned one becomes an orphan-management
+problem*, and *a background worker that dies silently is worse than one you can see*.
+
+**How many is `MUTINT_WORKERS`**, defaulting to half the machine's cores capped at four, with
+`--workers N` on the command line beating it and `--no-worker` beating both; zero anywhere is
+the same as `--no-worker`. `base_settings.default_workers()` computes it and `start.py` clamps
+it again, because an assembled project can assign the setting straight into its own settings
+dict without passing through that read. The cap is on the *guess*, not on a number somebody
+gave; `MAX_WORKERS` is what stops a typo, and the number that makes it matter is the cluster's
+`max_connections`, which `pg.py` leaves at initdb's default 100.
+
+**The ceiling on what a pool buys is `import_lock`**, which is one lock for the whole database:
+several workers finishing runs together queue up to install their results, and a worker waiting
+on `hold_waiting` is taking nothing else off the queue meanwhile. The fix when it bites needs
+no library change -- `db_worker` has `--queue-name` and `--exclude-queues`, so one worker on an
+import queue and the rest excluding it would settle it -- but that means giving `@task` call
+sites a queue name, which is a design of its own.
 
 The first is answered by `is_first_launch()`, the `RUN_MAIN` gate this module already carries
 for `migrate`: we are the reloader's *parent*, and it re-executes only the child. The second is
@@ -3979,9 +3994,9 @@ which the startup banner says out loud.
 `atexit` covers more than it looks like -- `run_with_reloader` installs `SIGTERM ->
 sys.exit(0)` and ends `except KeyboardInterrupt: pass`, so Ctrl-C, SIGTERM and a closed
 terminal all exit normally and run the hook. What no hook can cover is `kill -9`. So
-`mutint_jobs/supervisor.py` sits between `start` and the worker, holding the read end of a pipe
-whose write end only `start` has: when `start` dies **for any reason**, the kernel closes it,
-the read returns EOF, and the supervisor stops the worker and the cluster.
+`mutint_jobs/supervisor.py` sits between `start` and the workers, holding the read end of a
+pipe whose write end only `start` has: when `start` dies **for any reason**, the kernel closes
+it, the read returns EOF, and the supervisor stops every worker and the cluster.
 
 - **The write end must stay non-inheritable**, and this is the detail that would disable the
   whole thing *silently*. `restart_with_reloader` spawns runserver with `close_fds=False`, so
@@ -4004,10 +4019,27 @@ the read returns EOF, and the supervisor stops the worker and the cluster.
   those deliberately so a server outlives one command). **Adoption stays**, demoted to the
   backstop for a supervisor that is itself killed.
 - **`atexit` is LIFO and that ordering is load-bearing.** The entry script registers the
-  cluster's hook first, so `start`'s worker hook -- registered later -- runs first: worker
+  cluster's hook first, so `start`'s worker hook -- registered later -- runs first: workers
   down, then cluster. Reversed, `pg_ctl stop` drops the connection under a live worker, whose
   next query raises into `run_task`'s handler, whose `set_failed` then writes to the database
   that has just gone away. Every Ctrl-C would end in a traceback with no apparent cause.
+- **The same ordering is why the pool is N children of one supervisor**, rather than `start`
+  spawning N supervisors. Inside the supervisor the order is workers, then the parent's group,
+  then the cluster, for exactly the reason above -- and N supervisors would make that a
+  per-process rule: the first to finish its worker would stop the cluster while another was
+  still waiting out its own grace period. Arming only one of them with `--pg-dir` does not
+  help, because that one cannot see the other N-1 workers.
+- **The supervisor catches SIGTERM, and must.** `_stop_worker` signals the whole group;
+  without a handler the supervisor would die on the default action, so `start`'s
+  `wait(timeout=...)` would return at once and its SIGKILL fallback would never fire -- while
+  the workers, which answer SIGTERM by *finishing the task in hand*, went on holding database
+  connections into the cluster shutdown. `WORKER_STOP_GRACE_SECONDS` is therefore larger than
+  the supervisor's `GRACE_SECONDS`: the two nest, and equal would mean SIGKILLing the group
+  while the supervisor was still being polite.
+- **One grace period for the pool, not one each.** `_stop_all` signals every worker before
+  waiting on any of them. Serially, four workers that ignore SIGTERM would be forty seconds
+  before the cluster is stopped -- forty seconds of the orphaned runserver child holding port
+  8000, which is the symptom `_stop_group` exists to prevent.
 
 #### "Dies silently", answered three ways
 
@@ -4016,15 +4048,23 @@ the read returns EOF, and the supervisor stops the worker and the cluster.
   runserver's. Redirecting them anywhere is precisely what the objection means, and it is
   exactly the sort of thing a later tidy-up "improves" -- so a test asserts `stdout` and
   `stderr` are absent from the `Popen` kwargs.
-- **A watcher thread says so** when the worker exits on its own, gated on a `threading.Event`
-  the shutdown hook sets first, or every Ctrl-C would print it.
+- **The supervisor announces each death**, naming the worker and how many are left, and
+  **replaces none of them**. With a pool this is the case that would otherwise be invisible: a
+  partial death leaves a terminal that looks entirely normal and a queue that drains slower.
+  The worker ids are ours (`mutint-<supervisor pid>-<n>`) rather than `db_worker`'s 32 random
+  characters, which only matters because the output is inherited -- N workers logging into one
+  terminal is unreadable otherwise. They reach `DBTaskResult.worker_ids` and so `/jobs/` too.
+- **A watcher thread says so** when the *last* worker has gone -- that is when the supervisor
+  itself exits -- gated on a `threading.Event` the shutdown hook sets first, or every Ctrl-C
+  would print it.
 - **`/jobs/` says so too**, and this is the only honest form the question can take: the queue
   keeps no worker registry and no heartbeat, only `worker_ids` written onto rows already
   claimed. So `queue.oldest_ready()` reports when the row a worker *would claim next* started
   waiting, and past `STALLED_SECONDS` (60, not 5 -- a page loaded a second after an import
   would otherwise accuse a worker about to claim the row) the page states the observation and
-  **hedges the conclusion**, because a worker halfway through a twelve-hour breseq run looks
-  identical from here.
+  **hedges the conclusion**, because workers halfway through twelve-hour breseq runs look
+  identical from here. A pool makes the hedge more necessary, not less: "every worker is busy"
+  and "no worker is running" are still indistinguishable, and now the first is likelier.
 
 Two designs were rejected and are worth not re-proposing. **A worker pid file** knows only
 about workers `start` itself launched, while the likeliest real failure is a `db_worker`
@@ -4033,9 +4073,13 @@ the direction that makes people start a second one and stop trusting the indicat
 line in `./mutint db status`** would destroy that command's stated virtue of answering on a
 tree where nothing is provisioned, since `db` is entry-script-dispatched and pre-venv.
 
-**This must not grow into process supervision.** No restart-on-crash, no worker pool, no
-`--workers N`. A deployment runs `db_worker` under systemd, supervisor or a container restart
-policy, which already exist and are better at it.
+**A pool is not process supervision, and this must not grow into it.** `MUTINT_WORKERS`
+chooses how many workers run; nothing restarts one that dies, nothing tracks their health, and
+there is no supervision tree. The reason the count is here at all is that `./mutint start` is
+what an *install* runs -- `install.sh` ends in `exec ./mutint start`, and so does `MutInt.app`
+-- so on a machine installed by cloning there is nothing else that could own a pool. A
+**deployment** still does not use `start`: it runs `db_worker` under systemd, supervisor or a
+container restart policy, which already exist and are better at it.
 
 ### Pluggable App Slots
 
@@ -4090,10 +4134,11 @@ declares the slot, and what it declares is what `/accounts/` actually reverses t
   under `env/`, or one you run yourself by exporting `MUTINT_DB_HOST`. See **The database** in
   the suite `CLAUDE.md`.
 - File storage: `MUTINT_STORE_DIR`, keyed by database id (`mutint_common/store.py`)
-- Background work: **`./mutint start` runs one; everywhere else it has to be run.** `TASKS`
-  names `django_tasks_db.DatabaseBackend`, and `./mutint db_worker` is what executes what has
-  been enqueued. The dev server spawns one alongside itself (see **Running a worker with
-  the dev server** above), so a developer's queue drains on its own; a deployment does not use
+- Background work: **`./mutint start` runs them; everywhere else they have to be run.**
+  `TASKS` names `django_tasks_db.DatabaseBackend`, and `./mutint db_worker` is what executes
+  what has been enqueued. The dev server spawns `MUTINT_WORKERS` of them alongside itself (see
+  **Running workers with the dev server** above), so a developer's queue drains on its own and
+  drains in parallel; a deployment does not use
   `start` and runs its own under whatever supervises its web server. The only thing *this repo* enqueues is coverage
   derivation, whose degraded state is benign: an installation with no worker running imports
   correctly and simply has no coverage tracks until `./mutint coverage` is run. **A plugin's

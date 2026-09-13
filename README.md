@@ -170,7 +170,8 @@ All configuration is via environment variables. The defaults are suitable for lo
 ./mutint db stop               # stop it
 ./mutint db reset --yes        # throw the database away and start again, empty
 ./mutint db_worker             # run queued background work (coverage derivation)
-                              #   `./mutint start` runs one for you; this is for everywhere else
+                              #   `./mutint start` runs MUTINT_WORKERS of them for you;
+                              #   this is for everywhere else
 ./mutint reap_jobs             # discard queue rows no worker ever claimed
 ./mutint test                  # run test suite
 ./mutint makemigrations        # generate new migrations after model changes

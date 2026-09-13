@@ -29,11 +29,27 @@ a process that never loads settings has never done that. `mutint_common/pg.py` i
 path here for the same reason it is loaded by path from the entry script, and is usable at all
 because it carries the identical constraint.
 
-**One process group holds both of us.** `start` spawns this with `start_new_session=True`, so
-Ctrl-C at the terminal never reaches either of us -- `start`'s hook is then the single
-stopper, rather than the worker's own SIGINT handler racing it and holding the database open
-while the cluster is being shut down underneath. The worker is an ordinary child in this
-group, so `start`'s `killpg` reaches us both, and on EOF we signal it by pid.
+**One process group holds all of us.** `start` spawns this with `start_new_session=True`, so
+Ctrl-C at the terminal never reaches any of us -- `start`'s hook is then the single stopper,
+rather than the workers' own SIGINT handlers racing it and holding the database open while the
+cluster is being shut down underneath. Each worker is an ordinary child in this group, so
+`start`'s `killpg` reaches us all, and on EOF we signal them by pid.
+
+### Why the pool lives here and not in `start`
+
+`--workers N` spawns N of them from this one process, rather than `start` spawning N of these.
+The deciding reason is that **the shutdown order below is a global invariant**: workers first,
+then the group, then the cluster, because the first two hold database connections. N
+supervisors would make it a per-process one -- the first to finish its worker would stop the
+cluster while another was still waiting out its own grace period, which is `pg_ctl stop`
+underneath a live worker, the exact failure `start`'s two `atexit` hooks are ordered to avoid.
+Arming only one of them with `--pg-dir` does not help, because that one cannot see the other
+N-1 workers. It also keeps `start`'s side singular: one pipe, one hook, one watcher thread.
+
+**Nothing here ever restarts a worker.** A pool is not supervision: a worker that dies is
+announced and not replaced, and the announcement is the whole answer to "a background worker
+that dies silently is worse than one you can see" -- which at N workers means a *partial*
+death, invisible in every other respect.
 """
 
 import os
@@ -57,30 +73,76 @@ GRACE_SECONDS = 5
 POLL_SECONDS = 1.0
 
 
-def _stop(process):
-    """SIGTERM, a grace period, then SIGKILL. Never raises."""
-    if process.poll() is not None:
-        return
+def _stop_all(processes, grace=GRACE_SECONDS):
+    """SIGTERM every live worker, one shared grace period, then SIGKILL the rest.
+
+    **Signal them all before waiting on any of them**, so teardown costs one grace period
+    rather than N of them. Serially, four workers that ignore SIGTERM would be forty seconds
+    before `_stop_group` and `_stop_cluster` run -- forty seconds of the orphaned runserver
+    child holding port 8000, which is the symptom `_stop_group` exists to prevent.
+
+    Never raises: everything below this point runs where nobody is left to read a traceback.
+    """
+    live = [process for process in processes if process.poll() is None]
     for sig in (signal.SIGTERM, signal.SIGKILL):
-        try:
-            process.send_signal(sig)
-        except (OSError, ProcessLookupError):
+        if not live:
             return
-        try:
-            process.wait(timeout=GRACE_SECONDS)
-            return
-        except subprocess.TimeoutExpired:
-            continue
+        for process in live:
+            try:
+                process.send_signal(sig)
+            except (OSError, ProcessLookupError):
+                pass
+        deadline = time.monotonic() + grace
+        for process in list(live):
+            try:
+                process.wait(timeout=max(0, deadline - time.monotonic()))
+                live.remove(process)
+            except subprocess.TimeoutExpired:
+                pass
+            except (OSError, ProcessLookupError):
+                live.remove(process)
 
 
-def _wait_for_parent(read_fd, process):
-    """Block until the parent dies or the worker exits. True if the parent died.
+def _stop(process):
+    """One worker, the same way. Kept because a single child is still the common case."""
+    _stop_all([process])
+
+
+def _announce(name, code, remaining):
+    """Say that a worker has gone, and how much of the pool is left.
+
+    stderr, which `start` inherits, so this lands in the same terminal as everything else --
+    see the note on inherited output in `main`. This is the whole of what replaces restarting
+    it: the pool degrades monotonically and says so each time it does.
+    """
+    sys.stderr.write(
+        "\n%s exited (status %s). %s\n"
+        % (name,
+           code,
+           "%d background worker%s still running."
+           % (remaining, "" if remaining == 1 else "s") if remaining
+           else "No background workers are left; queued work will not run until you restart."))
+    sys.stderr.flush()
+
+
+def _wait_for_parent(read_fd, processes, announce=None):
+    """Block until the parent dies or every worker has exited. True if the parent died.
 
     Two things to wait on and only one of them is a file descriptor, so `select` with a
-    timeout and a look at the child in between. A worker that exits on its own must not leave
-    this process blocked on the pipe for ever: `start` watches exactly one child -- us -- so
-    our exit is what tells it the worker is gone.
+    timeout and a look at the children in between.
+
+    **One worker exiting is not the end of the wait**, or a single crash would tear down the
+    healthy rest of the pool. It is announced instead, once, and the wait carries on until the
+    last one has gone -- which is the moment `start`'s watcher thread should print its "queued
+    work will not run" sentence, and is exactly what returning False tells it.
+
+    The `poll()` here is also what reaps each child. A `select`-only loop would leave zombies
+    behind over a long session.
     """
+    # Resolved here rather than as a default argument, which would bind the function at import
+    # and make the module attribute unpatchable.
+    announce = announce or _announce
+    remaining = list(processes)
     while True:
         try:
             ready, _, _ = select.select([read_fd], [], [], POLL_SECONDS)
@@ -90,7 +152,15 @@ def _wait_for_parent(read_fd, process):
             # Readable means either data (nobody writes any) or EOF. Both mean the parent is
             # not coming back, so the distinction is not worth drawing.
             return True
-        if process.poll() is not None:
+        for name, process in list(remaining):
+            code = process.poll()
+            if code is None:
+                continue
+            # Removed before announcing, so a worker is reported once rather than once per
+            # second for the rest of the session.
+            remaining.remove((name, process))
+            announce(name, code, len(remaining))
+        if not remaining:
             return False
 
 
@@ -115,10 +185,13 @@ def main(argv=None):
     parent_pid = int(parent_pid) if parent_pid else None
     group_pgid = int(_option(argv, "--group", 0))
     pg_base_dir = _option(argv, "--pg-dir")
+    # Clamped here as well as in `start`, deliberately: two processes, two defaults, and this
+    # one runs where nobody is left to be told that a nonsense value was ignored.
+    workers = max(1, int(_option(argv, "--workers", 1)))
 
     if len(argv) < 2:
         sys.stderr.write("usage: supervisor.py <read-fd> <entry-script> "
-                         "[--parent PID] [--group PGID] [--pg-dir DIR]\n")
+                         "[--parent PID] [--group PGID] [--pg-dir DIR] [--workers N]\n")
         return 2
 
     read_fd = int(argv[0])
@@ -129,15 +202,43 @@ def main(argv=None):
     # land in the same terminal as runserver's. Capturing them anywhere is precisely what
     # "a background worker that dies silently" means, which is the objection this whole
     # feature had to answer.
-    process = subprocess.Popen([sys.executable, entry_script, "db_worker", "--no-reload"])
+    #
+    # **Each worker is named**, which matters only because of that inherited output: every line
+    # `db_worker` logs carries `worker_id=`, and its default is 32 random characters. With a
+    # pool writing into one terminal that is the difference between `mutint-9134-2` and noise.
+    # The id also lands in the queue row's `worker_ids`, and so on /jobs/. Qualified with our
+    # own pid so two checkouts cannot produce the same names.
+    #
+    # `--no-startup-delay` is deliberately *not* passed: `db_worker` sleeps a random fraction
+    # of a second before its first poll, which its own comment says is there to avoid exactly
+    # the thundering herd that starting N of them at once would otherwise be.
+    processes = []
+    for index in range(workers):
+        name = "mutint-%d-%d" % (os.getpid(), index + 1)
+        processes.append((name, subprocess.Popen(
+            [sys.executable, entry_script, "db_worker", "--no-reload", "--worker-id", name])))
 
-    if _wait_for_parent(read_fd, process) and not _alive_or_unknown(parent_pid):
-        # **The order is the whole of the shutdown.** The worker first, then whatever is left
+    # **`start` signals this whole group with SIGTERM and then waits for us.** Without a handler
+    # we would die instantly on the default action -- so that wait would return at once, its
+    # SIGKILL fallback would never fire, and the workers, which answer SIGTERM by *finishing
+    # the task in hand* (hours, for a breseq run), would still be holding database connections
+    # when the entry script's hook stops the cluster underneath them. So catch it, stop them
+    # properly, and only then go.
+    def _terminate(_signum, _frame):
+        _stop_all([process for _name, process in processes])
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _terminate)
+    signal.signal(signal.SIGINT, _terminate)
+
+    if _wait_for_parent(read_fd, processes) and not _alive_or_unknown(parent_pid):
+        # **The order is the whole of the shutdown.** Every worker first, then whatever is left
         # of the parent's group, then the cluster -- because the first two hold database
         # connections, and stopping PostgreSQL underneath a live one is exactly the mistake
         # `start`'s two atexit hooks are ordered to avoid: the connection drops mid-query and
         # `run_task`'s handler tries to record the failure in the database that has just gone.
-        _stop(process)
+        # It is also why the pool is N children of one supervisor rather than N supervisors.
+        _stop_all([process for _name, process in processes])
         _stop_group(group_pgid)
         _stop_cluster(pg_base_dir, parent_pid)
     return 0

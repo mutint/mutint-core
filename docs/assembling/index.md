@@ -169,7 +169,7 @@ installation happens before Django exists. Code finds them through `mutint_commo
 ## First-time setup and running
 
 ```bash
-./mutint start   # first run: provisions env/, migrates, creates an admin, spawns a worker,
+./mutint start   # first run: provisions env/, migrates, creates an admin, spawns workers,
                  # opens a browser, starts the server
 ./mutint install # (re)install dependencies only
 ```

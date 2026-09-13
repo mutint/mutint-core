@@ -138,8 +138,44 @@ no identification, so there is nothing to set for it to work; the three settings
 All three are read from the environment. The two caps are checked when the accession is
 resolved, before anything is downloaded, and the refusal names the setting; the timeout bounds
 silence rather than duration, so a multi-gigabyte file may take as long as it takes while a
-stalled mirror fails with a sentence. The download itself runs on the background worker, is
+stalled mirror fails with a sentence. The download itself runs on a background worker, is
 written to the job's log as each file arrives, and can be cancelled from the Jobs page.
+
+## Background workers
+
+`./mutint start` runs background workers alongside the server, and they are what actually
+executes queued work — coverage derivation, breseq runs, ISEScan runs, SRA downloads. How many
+is yours to choose.
+
+| setting | default | for |
+|---|---|---|
+| `MUTINT_WORKERS` | half the machine's cores, at most 4 | how many workers `./mutint start` runs; `0` runs none |
+
+Read from the environment, so `MUTINT_WORKERS=8 ./mutint start` is enough for one launch, and
+`./mutint start --workers 8` does the same from the command line. A value that is not a number
+is ignored with a sentence rather than stopping the server, and anything above 16 is clamped —
+past that it is a typo more often than an intention. `--no-worker`, `--workers 0` and
+`MUTINT_WORKERS=0` are the same thing: no worker runs, and queued work waits for a
+`./mutint db_worker` started somewhere else.
+
+The default leaves half the machine because the workers are not the only thing on it: the web
+server and the PostgreSQL cluster are running too, and **a task may itself be parallel**.
+breseq's `-j` and ISEScan's thread count each default to every core but two, and neither knows
+how many workers exist — so four workers each running breseq will ask for more threads than
+the machine has. That oversubscribes rather than fails, but on a machine doing several runs at
+once, naming `-j` yourself is worth it.
+
+The cap of 4 is about memory rather than cores — a worker can be holding a whole breseq run —
+and about one other thing worth knowing before raising it. **Imports are serialized.** One
+lock covers the whole database, so several workers finishing runs at the same moment queue up
+to install their results, and a worker waiting for that lock is not taking anything else off
+the queue meanwhile. The parallelism is in the computation, not in the landing.
+
+**Nothing restarts a worker that dies.** This is a pool, not process supervision: a worker that
+exits is announced in the terminal and not replaced, and `/jobs/` says when work has been
+waiting with nothing taking it. A deployment does not use `./mutint start` at all — it runs
+`db_worker` under systemd, supervisor or a container restart policy, which already do this
+properly.
 
 ## Access
 
