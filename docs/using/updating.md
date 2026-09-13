@@ -18,12 +18,14 @@ is at, and it has two buttons:
 - **Check for updates** asks the remote what is available. It is the only thing on the page
   that touches the network; the page itself always renders instantly from the last answer.
 
-    It tells you what you would be getting, not just its name: which commit, when it was
-    committed, how many commits ahead of you it is, and **which components it moves** — a
-    version is a commit of the whole assembly, and installing it moves each plugin to the
-    revision that commit pins. On the Development channel, where `main` moves several times a
-    day, the timestamp is usually the thing that tells you whether this is the change you are
-    waiting for.
+    It tells you what you would be getting, not just that there is something. One sentence
+    naming the release — a version number on the Official channel, a commit on the Development
+    one — and when it was made; then a list of **everything it would move**. That list starts
+    with the installation itself and continues with each component, because a version is a
+    commit of the whole assembly and installing it moves each plugin to the revision that
+    commit pins. On the Development channel, where `main` moves several times a day, the
+    timestamp is usually the thing that tells you whether this is the change you are waiting
+    for.
 
 - **Install update** stages the version it found.
 

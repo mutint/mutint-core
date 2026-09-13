@@ -671,55 +671,60 @@ class CheckTestCase(TestCase):
 class SummarizeTestCase(TestCase):
     """The sentence the update page shows.
 
-    It said `main is available.` and nothing else -- not which commit, not when, and not what
-    installing it would do to the components, which is most of what an update *is*. A pure
-    function over what `describe` managed to find out, so every field is optional.
+    One sentence, naming what is offered and when it was made. A pure function over what
+    `describe` managed to find out, so every field is optional -- a fetch that failed must
+    leave the answer poorer rather than turn "there is a new version" into an error.
+
+    What is in the parentheses depends on the channel, and the deployment's name is passed in
+    because this module imports nothing from Django. Everything about *components* belongs to
+    the list the page draws underneath, not here.
     """
 
-    def test_the_bare_case_is_what_it_always_said(self):
+    def test_it_names_the_commit_on_the_development_channel(self):
+        sentence = update.summarize("main", {
+            "sha": "def67890", "date": "2026-09-07T11:53:23-04:00"}, update.BRANCH, "MutInt")
+
+        self.assertEqual(
+            "A new version of MutInt is available (commit def67890) committed on %s."
+            % update.readable_time("2026-09-07T11:53:23-04:00"), sentence)
+
+    def test_it_names_the_version_on_the_stable_channel(self):
+        """A release has a name somebody chose, and calling it a commit would bury the version
+        number that is the whole point of the channel."""
+        sentence = update.summarize("v0.0.2", {
+            "sha": "def67890", "date": "2026-09-07T11:53:23-04:00"}, update.TAG, "MutInt")
+
+        self.assertIn("(version v0.0.2)", sentence)
+        # "committed on" is still there and should be; what must not be is the word standing
+        # in for the version somebody released.
+        self.assertNotIn("(commit", sentence)
+
+    def test_an_unbranded_checkout_invents_no_name(self):
+        """Standalone mutint-core is unbranded, and a name it has not been given is not one to
+        make up."""
+        self.assertEqual("A new version is available (commit def67890).",
+                         update.summarize("main", {"sha": "def67890"}))
+
+    def test_the_bare_case_falls_back_to_the_ref(self):
         """`describe` answers nothing when the fetch failed, and the version is still
         available and still installable."""
-        self.assertEqual("main is available.", update.summarize("main", "abc12345", {}))
+        self.assertEqual("A new version is available (commit main).",
+                         update.summarize("main", {}))
 
-    def test_it_names_the_commit_and_when_it_was_made(self):
-        sentence = update.summarize("main", "abc12345", {
-            "sha": "def67890", "date": "2026-09-07T11:53:23-04:00", "commits": 12})
-
-        self.assertIn("commit def67890", sentence)
-        # The time, not just the day: `main` moves several times a day on a project being
-        # worked on, and a date alone cannot say whether this is the commit you just pushed.
-        # Through the helper rather than as a literal, because it renders in the host's zone
-        # -- see ReadableTimeTestCase, which is where the formatting itself is pinned down.
-        self.assertIn("committed %s" % update.readable_time("2026-09-07T11:53:23-04:00"),
-                      sentence)
-        self.assertIn("12 commits newer than abc12345", sentence)
-
-    def test_one_commit_is_not_pluralised(self):
-        self.assertIn("1 commit newer",
-                      update.summarize("main", "abc12345", {"commits": 1}))
-
-    def test_it_says_when_no_component_moves(self):
-        sentence = update.summarize("main", "abc12345", {
-            "sha": "def67890", "components": [], "component_total": 6})
-
-        self.assertIn("No component changes", sentence)
-        self.assertIn("6", sentence)
-
-    def test_it_names_every_component_that_moves(self):
-        sentence = update.summarize("main", "abc12345", {
+    def test_it_says_nothing_about_components(self):
+        """They are the list under it. The sentence used to name every one of them while the
+        page printed them again as bullets directly beneath."""
+        sentence = update.summarize("main", {
             "sha": "def67890", "component_total": 6, "components": [
                 {"name": "mutint-core", "from": "1111aaaa", "to": "2222bbbb",
-                 "change": "moved"},
-                {"name": "mutint-needle", "from": None, "to": "3333cccc",
-                 "change": "added"}]})
+                 "change": "moved"}]}, update.BRANCH, "MutInt")
 
-        self.assertIn("moves 2 of 6 components", sentence)
-        self.assertIn("mutint-core (1111aaaa to 2222bbbb)", sentence)
-        self.assertIn("mutint-needle (added)", sentence)
+        self.assertNotIn("mutint-core", sentence)
+        self.assertNotIn("component", sentence)
 
     def test_a_timestamp_of_another_shape_is_shown_as_it_came(self):
         """Rather than sliced into nonsense by a rule written for `%cI`."""
-        self.assertIn("whenever", update.summarize("main", None, {"date": "whenever"}))
+        self.assertIn("whenever", update.summarize("main", {"date": "whenever"}))
 
 
 class ComponentChangesTestCase(TestCase):
@@ -754,6 +759,37 @@ class ComponentChangesTestCase(TestCase):
             handle.write(text + "\n")
         _run(path, "add", name)
         _run(path, "commit", "-qm", text)
+
+    def test_the_project_itself_is_reported_with_both_shas(self):
+        """The repository the update is *of*. Every bullet named a submodule, so the one whose
+        commit pins all the others was the only revision the page did not show."""
+        here = update._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
+        self._commit(self.base, "b.txt", "later")
+        there = update._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
+        # Back to where the installation would be: `from` is read off HEAD, so HEAD has to be
+        # the older commit for there to be a move at all.
+        _run(self.base, "checkout", "-q", here)
+
+        entry = update._project_change(self.base, there)
+
+        self.assertEqual("super", entry["name"])
+        self.assertEqual(here, entry["from"])
+        self.assertEqual(there, entry["to"])
+        self.assertEqual("moved", entry["change"])
+
+    def test_the_project_is_absent_when_it_would_not_move(self):
+        """Nothing to say, rather than a bullet pointing a commit at itself."""
+        here = update._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
+        self.assertIsNone(update._project_change(self.base, here))
+
+    def test_the_project_carries_the_count_it_was_given(self):
+        """`describe` already ran `rev-list HEAD..target`; counting it twice would be two git
+        calls answering one question."""
+        self._commit(self.base, "b.txt", "one more")
+        there = update._git(self.base, "rev-parse", "--short=8", "HEAD").strip()
+        _run(self.base, "checkout", "-q", "HEAD~1")
+
+        self.assertEqual(2, update._project_change(self.base, there, 2)["commits"])
 
     def test_a_component_that_moved_is_reported_with_both_shas(self):
         before = update._tree_components(self.base, "HEAD")["child"]

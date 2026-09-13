@@ -27,6 +27,24 @@ def branding(request):
     }
 
 
+def deployment_name():
+    """What this deployment calls itself, or None where nothing is branded.
+
+    Not a context processor -- it takes no request. It lives here because this is the module
+    that reads `MUTINT_BRANDING`, and it has two callers that must agree: `/update/` and
+    `./mutint update --check` both hand it to `mutint_common.update.summarize`, which composes
+    one sentence precisely so the page and the command cannot word it differently. A name read
+    two ways would put the difference back one level down.
+
+    Read here rather than in `update.py`, which imports nothing from Django -- the entry script
+    loads that module before the venv exists.
+
+    None rather than a fallback: standalone mutint-core is unbranded, and the sentence then
+    says "A new version is available" rather than inventing a name for it.
+    """
+    return (getattr(settings, 'MUTINT_BRANDING', None) or {}).get('name') or None
+
+
 def global_settings(request):
     return {
         'GOOGLE_ANALYTICS_TAG': settings.GOOGLE_ANALYTICS_TAG,

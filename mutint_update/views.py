@@ -26,6 +26,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
 from mutint_common import update
+from mutint_common.context_processors import deployment_name
 from mutint_update import restart
 from mutint_common.about_registry import get_about_sections
 from mutint_common.logger import user_extra
@@ -141,7 +142,7 @@ def update_check(request):
     if channel is not None and channel not in update.CHANNELS:
         return JsonResponse({"error": "Unknown channel."}, status=400)
 
-    state = update.check(base_dir, channel=channel)
+    state = update.check(base_dir, channel=channel, name=deployment_name())
     return JsonResponse({
         "channel": state.get("channel"),
         "checked_at": state.get("checked_at"),

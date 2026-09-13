@@ -41,6 +41,72 @@ class UpdatePageTestCase(TestCase):
         self.superuser = User.objects.create_superuser("root", "r@example.com", "pw")
         self.ordinary = User.objects.create_user("reader", "r2@example.com", "pw")
 
+    def _write_available(self, **extra):
+        """A checked state with something available, as `update.check` would have left it.
+
+        `blockers` is silenced because this temporary directory is not a git checkout, and the
+        page reports that ahead of anything a check found -- correctly, since a tree it cannot
+        fetch into is the more useful thing to say.
+        """
+        patch = mock.patch.object(update, "blockers", return_value=[])
+        patch.start()
+        self.addCleanup(patch.stop)
+        state = update.read_state(self.base)
+        available = {
+            "ref": "main", "kind": update.BRANCH, "sha": "def67890",
+            "summary": "A new version of MutInt is available (commit def67890) "
+                       "committed on 2026-09-07 11:53.",
+            "project": {"name": "mutint", "from": "abc12345", "to": "def67890",
+                        "change": "moved", "commits": 2},
+            "components": [{"name": "mutint-core", "from": "1111aaaa", "to": "2222bbbb",
+                            "change": "moved"}],
+        }
+        available.update(extra)
+        state["available"] = available
+        state["checked_at"] = "2026-09-07 11:53"
+        update.write_state(self.base, state)
+
+    def test_the_project_heads_the_list_of_what_would_move(self):
+        """It is the repository the update is *of*; every other bullet is one of its
+        submodules. Order is the assertion -- a reader looking for the new revision of MutInt
+        itself should not have to find it among the components."""
+        self.client.force_login(self.superuser)
+        self._write_available()
+
+        body = self.client.get(reverse("update")).content.decode()
+
+        self.assertLess(body.index("mutint</code>"), body.index("mutint-core</code>"))
+        self.assertIn("abc12345", body)
+        self.assertIn("2 commits", body)
+
+    def test_the_sentence_is_the_one_the_check_composed(self):
+        """Composed server-side so this and the poll cannot word it differently."""
+        self.client.force_login(self.superuser)
+        self._write_available()
+
+        self.assertContains(
+            self.client.get(reverse("update")),
+            "A new version of MutInt is available (commit def67890)")
+
+    def test_a_version_with_no_project_move_still_lists_its_components(self):
+        """`_project_change` answers None when the revisions match, and the list must survive
+        it rather than disappearing."""
+        self.client.force_login(self.superuser)
+        self._write_available(project=None)
+
+        self.assertContains(self.client.get(reverse("update")), "mutint-core")
+
+    def test_the_page_and_the_command_name_the_deployment_the_same_way(self):
+        """`summarize` composes one sentence so the page and the command cannot word it
+        differently; a name each of them read for itself would put the difference back one
+        level down."""
+        from mutint_common.context_processors import deployment_name
+
+        with override_settings(MUTINT_BRANDING={"name": "MutInt"}):
+            self.assertEqual("MutInt", deployment_name())
+        with override_settings(MUTINT_BRANDING={}):
+            self.assertIsNone(deployment_name())
+
     def test_an_anonymous_visitor_gets_403(self):
         self.assertEqual(403, self.client.get(reverse("update")).status_code)
 

@@ -76,6 +76,12 @@ CHANNELS = (STABLE, MAIN)
 #: The branch the development channel follows. Every repo in the suite is on `main`.
 MAIN_BRANCH = 'main'
 
+#: What an available version *is*, which the two channels answer differently: `stable` offers
+#: a release somebody named and `main` offers whatever was last pushed. `describe` resolves
+#: the ref through it, and `summarize` says "version" or "commit" by it.
+BRANCH = 'branch'
+TAG = 'tag'
+
 #: A release tag: `v` and a dotted number, nothing else. Deliberately strict -- `git describe`
 #: output, release candidates and `testdata-*` asset tags are all things a tag namespace
 #: accumulates, and an update should move between reviewed points or not at all.
@@ -379,6 +385,53 @@ def component_changes(base_dir, target):
     return changes
 
 
+def _repository_name(base_dir):
+    """This checkout's repository name, from `origin` where there is one.
+
+    `https://github.com/mutint/mutint.git` and `git@github.com:mutint/mutint.git` both answer
+    `mutint`. A checkout with no remote -- or one whose URL ends in a slash -- falls back to
+    the directory, which is the only other thing there is to go on.
+    """
+    url = (origin_url(base_dir) or '').rstrip('/')
+    if url:
+        tail = url.rsplit('/', 1)[-1].rsplit(':', 1)[-1]
+        if tail.endswith('.git'):
+            tail = tail[:-len('.git')]
+        if tail:
+            return tail
+    return os.path.basename(os.path.abspath(base_dir))
+
+
+def _project_change(base_dir, target_sha, commits=None):
+    """The assembled project's own move, in the same shape as a component's.
+
+    **It heads the list the page draws**, and it was missing: every bullet named a submodule,
+    so the one repository the update is actually *of* -- the one carrying the version, the
+    settings and the entry script -- was the only one whose new revision the page did not
+    show. A reader could see mutint-core going to a commit and not the commit of MutInt that
+    pinned it there.
+
+    `commits` is `describe`'s own count, passed in rather than recounted: it is the same
+    `rev-list HEAD..target`, and it rides here rather than in the sentence because it is a fact
+    about this move and belongs beside the two revisions it is counted between.
+
+    **Named off `origin`, falling back to the directory.** A repository name is what every
+    other line on the list is -- `.gitmodules` paths -- so the deployment's branding would be
+    the odd one out, and the directory alone is whatever the person who cloned it typed. An
+    installation cloned into `mutint-test` is still the `mutint` repository.
+    """
+    here = _git(base_dir, 'rev-parse', '--short=8', 'HEAD', check=False).strip() or None
+    if not here or not target_sha or here == target_sha:
+        return None
+    return {
+        'name': _repository_name(base_dir),
+        'from': here,
+        'to': target_sha,
+        'change': 'moved',
+        'commits': commits,
+    }
+
+
 def describe(base_dir, ref, kind):
     """What installing `ref` would actually do, as far as the remote will say.
 
@@ -397,7 +450,7 @@ def describe(base_dir, ref, kind):
         # A branch is read through its remote-tracking ref for the reason `apply` checks one
         # out that way: a local `main` may not exist, and creating one here would be a lie
         # about what this checkout is on.
-        target = 'origin/%s' % ref if kind == 'branch' else ref
+        target = 'origin/%s' % ref if kind == BRANCH else ref
         # `^{commit}` throughout, because a release tag is **annotated**: `rev-parse v0.0.1`
         # answers the tag object's own SHA and `show -s --format=%cI` prints its header, so
         # the page said "commit <tag object>, dated tag v0.0.1". Peeling asks about the commit
@@ -411,6 +464,8 @@ def describe(base_dir, ref, kind):
         described['commits'] = int(ahead) if ahead.isdigit() else None
         described['components'] = component_changes(base_dir, target)
         described['component_total'] = len(_tree_components(base_dir, target))
+        described['project'] = _project_change(
+            base_dir, described['sha'], described['commits'])
     except (UpdateError, ValueError, OSError):
         # Recorded as nothing rather than as a failure: the version is still available and
         # still installable, and this only ever added detail to saying so.
@@ -453,40 +508,39 @@ def readable_time(iso):
         return iso
 
 
-def summarize(ref, current, described):
+def summarize(ref, described, kind=BRANCH, name=None):
     """The sentence the page shows. Composed here so the page and its poll cannot word it
-    differently, and plain text so neither has to escape it."""
-    where = "%s is available" % ref
-    detail = []
-    if described.get('sha'):
-        detail.append("commit %s" % described['sha'])
+    differently, and plain text so neither has to escape it.
+
+    **One sentence, and the detail is in the list under it.** It used to carry the commit, the
+    date, how far ahead it was *and* every component that would move -- while the page printed
+    the components again as bullets directly beneath, so the longest part of the sentence was
+    a duplicate of the next element. It opened `main is available`, which reads as a statement
+    about a branch rather than about this installation.
+
+    **What is in the parentheses depends on the channel**, because the two are different kinds
+    of answer: `stable` offers a release, which has a name somebody chose, and `main` offers
+    whatever was pushed, which has only a commit. Saying "commit" for a tag would bury the
+    version number that is the whole point of the stable channel.
+
+    It took the installed ref too, to say how far ahead the offer was. That count is on the
+    project's own line in the list now, between the two revisions it is counted across, which
+    is where a reader is already looking to see what would move.
+
+    `name` is the deployment's own, from `MUTINT_BRANDING`, and is passed in because this
+    module imports nothing from Django -- see the module docstring. Without one the sentence
+    simply says "A new version", which is what standalone mutint-core wants: it is unbranded,
+    and a name it has not been given is not one to invent.
+    """
+    what = ("version %s" % ref if kind == TAG
+            else "commit %s" % (described.get('sha') or ref))
+    sentence = "A new version%s is available (%s)" % (" of %s" % name if name else "", what)
     if described.get('date'):
-        detail.append("committed %s" % readable_time(described['date']))
-    commits = described.get('commits')
-    if commits:
-        detail.append("%d commit%s newer than %s"
-                      % (commits, "" if commits == 1 else "s", current or "what you have"))
-    first = "%s: %s." % (where, ", ".join(detail)) if detail else "%s." % where
-
-    if 'components' not in described:
-        return first
-
-    changes = described['components']
-    if not changes:
-        total = described.get('component_total') or 0
-        return first + (" No component changes: every one of the %d stays where it is."
-                        % total if total else " No component changes.")
-
-    moved = ", ".join(
-        "%s (%s)" % (entry['name'],
-                     "%s to %s" % (entry['from'], entry['to']) if entry['change'] == 'moved'
-                     else entry['change'])
-        for entry in changes)
-    total = described.get('component_total') or len(changes)
-    return "%s It also moves %d of %d components: %s." % (first, len(changes), total, moved)
+        sentence += " committed on %s" % readable_time(described['date'])
+    return sentence + "."
 
 
-def _available(base_dir, ref, kind, sha):
+def _available(base_dir, ref, kind, sha, name=None):
     """The `available` record: what it is, and what installing it would do.
 
     The ref and the SHA come from `ls-remote` and are always known; everything `describe`
@@ -497,17 +551,21 @@ def _available(base_dir, ref, kind, sha):
     record = {'ref': ref, 'kind': kind, 'sha': described.get('sha') or sha}
     record.update(described)
     record['sha'] = record.get('sha') or sha
-    record['summary'] = summarize(ref, current_ref(base_dir), described)
+    record['summary'] = summarize(ref, described, kind, name)
     return record
 
 
-def check(base_dir, channel=None):
+def check(base_dir, channel=None, name=None):
     """Ask the remote what is available. Returns the new state; never raises.
 
     Failure is recorded as a sentence in the state rather than thrown, because this is called
     from a web request and from a management command and neither wants a traceback for a
     network that was busy. The distinction between "could not ask" and "nothing newer" is kept
     all the way through -- see `Unreachable`.
+
+    `name` is the deployment's own, for the sentence `summarize` composes. It is passed in
+    rather than read here because this module imports nothing from Django; both callers have
+    settings and can read `MUTINT_BRANDING` for themselves.
     """
     state = read_state(base_dir)
     if channel is not None:
@@ -531,7 +589,7 @@ def check(base_dir, channel=None):
             local = _git(base_dir, 'rev-parse', 'HEAD').strip()
             newer = sha != local
             state['available'] = _available(
-                base_dir, MAIN_BRANCH, 'branch', sha[:8]) if newer else None
+                base_dir, MAIN_BRANCH, BRANCH, sha[:8], name) if newer else None
         else:
             tags = remote_tags(base_dir)
             if not tags:
@@ -547,7 +605,7 @@ def check(base_dir, channel=None):
                 not (here or '').startswith('v')
                 or _version_key(latest) > _version_key(here))
             state['available'] = _available(
-                base_dir, latest, 'tag', None) if newer else None
+                base_dir, latest, TAG, None, name) if newer else None
     except UpdateError as exc:
         state['error'] = str(exc)
         state['available'] = None

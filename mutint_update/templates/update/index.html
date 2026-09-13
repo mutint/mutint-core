@@ -135,12 +135,24 @@
                 <div class="alert alert-warning">{{ update_error }}</div>
             {% elif available %}
                 {% comment %} The sentence is composed server-side (`update.summarize`) so
-                   this and the poll below cannot word it differently, and so that what it
-                   says about components is decided where the components are known.
+                   this and the poll below cannot word it differently. It says what is on
+                   offer and when it was made, and nothing about what would move -- that is
+                   the list underneath, which this block and the poll's `componentList` draw
+                   from the same record.
                    {% endcomment %}
                 <div class="alert alert-info">{{ available.summary }}</div>
-                {% if available.components %}
+                {% comment %} The project itself heads the list: it is the repository the
+                   update is *of*, and every other line is one of its submodules.
+                   {% endcomment %}
+                {% if available.project or available.components %}
                     <ul style="color: #666; margin-top: 0.5em;">
+                        {% if available.project %}
+                            <li><code>{{ available.project.name }}</code>
+                                {{ available.project.from }} &rarr; {{ available.project.to }}
+                                {% if available.project.commits %}
+                                    ({{ available.project.commits }} commit{{ available.project.commits|pluralize }})
+                                {% endif %}</li>
+                        {% endif %}
                         {% for entry in available.components %}
                             <li><code>{{ entry.name }}</code>
                                 {% if entry.change == "moved" %}
@@ -185,24 +197,35 @@
     }
 
     // The per-component from/to, under the sentence. Built rather than concatenated so a
-    // component name cannot be markup either.
+    // component name cannot be markup either. The project itself heads the list, exactly as
+    // the server-rendered block above does -- the two are the same list drawn twice, and a
+    // difference between them is a bug rather than a variation.
     function componentList(available) {
+        var project = available && available.project;
         var changes = (available && available.components) || [];
-        if (!changes.length) { return null; }
+        if (!project && !changes.length) { return null; }
         var list = document.createElement("ul");
         list.style.color = "#666";
         list.style.marginTop = "0.5em";
-        changes.forEach(function (entry) {
+
+        function row(entry, extra) {
             var item = document.createElement("li");
             var name = document.createElement("code");
             name.textContent = entry.name;
             item.appendChild(name);
             item.appendChild(document.createTextNode(
                 entry.change === "moved"
-                    ? " " + entry.from + " \u2192 " + entry.to
+                    ? " " + entry.from + " \u2192 " + entry.to + (extra || "")
                     : " " + entry.change));
             list.appendChild(item);
-        });
+        }
+
+        if (project) {
+            row(project, project.commits
+                ? " (" + project.commits + " commit" + (project.commits === 1 ? "" : "s") + ")"
+                : "");
+        }
+        changes.forEach(function (entry) { row(entry); });
         return list;
     }
 
@@ -226,7 +249,9 @@
                 } else if (available) {
                     // The server's sentence, as text: it is prose about commits and
                     // component names, and nothing in it wants to be markup.
-                    say("info", available.summary || (available.ref + " is available."),
+                    say("info",
+                        available.summary
+                            || ("A new version is available (" + available.ref + ")."),
                         componentList(available));
                 } else {
                     say("success", "Up to date.");

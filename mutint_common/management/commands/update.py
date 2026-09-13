@@ -16,6 +16,7 @@ import os
 from django.core.management.base import BaseCommand, CommandError
 
 from mutint_common import pg, update
+from mutint_common.context_processors import deployment_name
 
 
 class Command(BaseCommand):
@@ -54,7 +55,8 @@ class Command(BaseCommand):
         if options["to"]:
             return self._apply(base_dir, options["to"], options)
 
-        state = update.check(base_dir, channel=options.get("channel"))
+        state = update.check(base_dir, channel=options.get("channel"),
+                             name=deployment_name())
         self.stdout.write("Channel:   %s" % state.get("channel"))
         self.stdout.write("Installed: %s" % (update.current_ref(base_dir) or "unknown"))
 
