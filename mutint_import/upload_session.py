@@ -33,6 +33,7 @@ from mutint_common.import_registry import (
     run_import,
     KIND_REFERENCE,
 )
+from mutint_import.metadata import MetadataError
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
 from mutint_common.annotator_registry import (
@@ -485,6 +486,9 @@ def _finalize_holding_lock(session, request, root, options, progress, downloaded
         # 200 rather than 409: the client's postJson throws on any non-2xx and renders
         # `error`, so a status code would turn a question into a failure message.
         return JsonResponse({"needs_confirmation": ask.payload})
+    except MetadataError as exc:
+        # The person's own file, refused before anything landed: a 400 with the line.
+        return _fail(session, root, progress, str(exc), status=400)
     except Exception as exc:
         logger.exception("breseq folder finalize failed for session %s", session.id)
         # Before the state change, so the last poll shows which unit it died on rather than

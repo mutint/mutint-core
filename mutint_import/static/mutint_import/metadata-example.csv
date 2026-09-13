@@ -1,0 +1,21 @@
+# metadata.csv -- an example. Lines starting with # are ignored; delete them or keep them.
+#
+# Each row places one sample: its name within the population, the population, the time
+# point (a whole number), whether it is a population (mixed) or a clone (individual,
+# isolate) -- blank keeps what the data says -- and which inputs it covers. A breseq results folder is named by
+# its folder; a .gd or VCF by its filename, extension optional; read files on the Run
+# breseq page by name or by a stem their mates share.
+sample,population,time_point,sample_type,data
+# A breseq results folder called ZDB16 in the drop, and a .gd beside it:
+ZDB16,Ara-3,30000,clone,ZDB16
+763A,Ara-2,500,clone,Ara-2_500gen_763A.gd
+# A VCF, named without its extension:
+clone7,wt,120,,clone7
+# Two read files on the Run breseq page, s1_R1.fastq.gz and s1_R2.fastq.gz, by their stem;
+# and a second pair on the same row separated by ;
+A1,glucose,10,population,s1;s1_lane2
+# A sample that is not placed yet: population and time_point both blank.
+mystery,,,,mystery_sample.gd
+# The same three fields work inside a file instead of here:
+#   in a .gd:  #=SAMPLE 763A   #=POPULATION Ara-2   #=TIME 500   #=SAMPLE_TYPE clone
+#   in a VCF:  ##sample=763A   ##population=Ara-2   ##generation=500   ##sample_type=clone

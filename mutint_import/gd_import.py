@@ -30,6 +30,7 @@ from mutint_experiment.models import (
     Project,
 )
 from mutint_import import annotation
+from mutint_import import metadata as sample_metadata
 from mutint_import import sniff
 from mutint_import.gene_annotation import get_annotated_gene_list
 from mutint_import import sample_names
@@ -205,7 +206,7 @@ def record_document_inputs(sample, document, filename, kind=inputs.KIND_GENOMEDI
     inputs.record_inputs(sample, entries)
 
 
-def import_document_as_sample(document, sample_name, context):
+def import_document_as_sample(document, sample_name, context, aliases=()):
     """Build the experiment chain for ``sample_name`` and write the document's mutations.
 
     Shared by the bare-.gd upload, where the sample name comes from the filename, and the
@@ -226,9 +227,30 @@ def import_document_as_sample(document, sample_name, context):
     """
     _check_seq_ids(document, context["experiment"], sample_name)
 
+    # Three sources, asked in order, and the first that answers wins: a metadata.csv row
+    # for this input, the file's own header, then the filename. See mutint_import/metadata.py
+    # for why the override lands here rather than as a relabel afterwards.
     identity = parse_sample_identity(sample_name)
+    # `aliases` are other names a metadata.csv row may have used for this input -- a VCF's
+    # filename, where the sample is named by its column. Asked after the name itself.
+    row = sample_metadata.row_for(sample_name)
+    for alias in aliases:
+        if row is not None:
+            break
+        row = sample_metadata.row_for(alias)
+    placed_by = sample_metadata.BY_CSV
+    if row is None:
+        row = sample_metadata.coordinate_from_headers(
+            getattr(document, "metadata", None) or {}, where="%s's header" % sample_name,
+            filename_identity=identity, filename_stem=sample_name)
+        placed_by = sample_metadata.BY_HEADER
+    if row is None:
+        placed_by = sample_metadata.BY_FILENAME
+    context.setdefault("placements", {})[sample_name] = placed_by
 
-    if identity is None:
+    if row is not None:
+        seq_experiment = _place_by_metadata(context, document, row, sample_name)
+    elif identity is None:
         # The name says nothing about where the sample belongs. Give it its own isolate
         # rather than letting every such name collapse onto 1-1-1-1.
         seq_experiment = _get_or_create_autonumbered_chain(
@@ -250,6 +272,79 @@ def import_document_as_sample(document, sample_name, context):
 
     return seq_experiment, _database_gd_mutations(
         seq_experiment, document, context.get("experiment")), replaced
+
+
+def _place_by_metadata(context, document, row, sample_name):
+    """The chain for a sample whose coordinate a metadata row or a header decided.
+
+    `source_name` stays the input's own name, so a re-import still finds the sample and so
+    mutint-breseq's lookup still works; the description is cleared, so the sample's label is
+    its coordinate rather than the file it came from.
+
+    Three cases, because a sample imported *before* the metadata existed must not become a
+    second sample beside itself:
+
+    - the input was imported before and the coordinate is free (or is its own): the sample
+      is **moved** there, and the population it vacated is pruned if empty;
+    - the input was imported before and another sample already holds the coordinate: the
+      sample is left where it is and the summary says so, rather than two samples silently
+      swapping calls;
+    - otherwise `get_or_create` on the coordinate, which is what makes a same-metadata
+      re-import a no-op and lets a row supersede an existing sample the way a filename
+      collision does.
+    """
+    from mutint_experiment import samples as sample_edits
+
+    experiment = context["experiment"]
+    population_name = row.population or UNSPECIFIED_POPULATION
+    coordinate = (population_name, row.time_point, row.sample)
+
+    existing = Sample.objects.filter(
+        source_name=sample_name, **{paths.to_experiment(): experiment}).first()
+    occupant = Sample.objects.filter(
+        population__experiment=experiment, population__name=population_name,
+        time_point=row.time_point, name=row.sample).first()
+
+    if existing is not None and occupant is not None and occupant.pk != existing.pk:
+        current = sample_metadata.current()
+        message = ("%s stays at %s: the coordinate %s is already held by %s."
+                   % (sample_name,
+                      sample_edits.coordinate_str(sample_edits.sample_coordinate(existing)),
+                      sample_edits.coordinate_str(coordinate), occupant.source_name))
+        if current is not None:
+            current.note(message)
+        logger.warning(message)
+        return existing
+
+    if existing is not None:
+        fields = []
+        old = None
+        if sample_edits.sample_coordinate(existing) != coordinate or existing.description:
+            old = existing.population
+            existing.population = sample_edits.resolve_population(
+                experiment, coordinate, species=old.species, strain=old.strain)
+            existing.time_point = row.time_point
+            existing.name = row.sample
+            existing.description = ""
+            fields += ["population", "time_point", "name", "description"]
+        if row.is_clonal is not None and existing.is_clonal != row.is_clonal:
+            existing.is_clonal = row.is_clonal
+            fields.append("is_clonal")
+        if fields:
+            existing.save(update_fields=fields)
+        if old is not None and old.pk != existing.population_id:
+            sample_edits.prune_orphans([old])
+        return existing
+
+    created = _get_or_create_chain(context, document, population_name, row.time_point,
+                                   row.sample, None, sample_name, description="",
+                                   is_clonal=row.is_clonal)
+    if row.is_clonal is not None and created.is_clonal != row.is_clonal:
+        # A row that reused a sample already at the coordinate: `get_or_create`'s defaults
+        # did not apply, and the metadata's word still stands.
+        created.is_clonal = row.is_clonal
+        created.save(update_fields=["is_clonal"])
+    return created
 
 
 def _parse_document(uploaded):
@@ -310,7 +405,7 @@ def read_files_named_by(document):
 
 def _get_or_create_chain(context, document, population_name, time_point,
                          sample_label, replicate, sample_name,
-                         description=""):
+                         description="", is_clonal=None):
     """Synthesize the experiment chain down to a Sample, reading
     reference/date/type hints from the GenomeDiff header (no breseq HTML).
 
@@ -334,7 +429,9 @@ def _get_or_create_chain(context, document, population_name, time_point,
     sequencing_date = metadata.get("CREATED", "") or ""
     # breseq marks a polymorphism run with -p. That is the *mixed* case, so the stored
     # flag is its negation -- the one place in the suite that turns the .gd into polarity.
-    is_clonal = " -p" not in (metadata.get("COMMAND", "") or "")
+    # A metadata row or header that said `sample_type` outranks it.
+    if is_clonal is None:
+        is_clonal = " -p" not in (metadata.get("COMMAND", "") or "")
 
     population, _ = Population.objects.get_or_create(experiment=experiment, name=population_name)
     label = sample_names.sample_label(sample_label, replicate)

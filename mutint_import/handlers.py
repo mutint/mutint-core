@@ -387,7 +387,8 @@ def handle_genomediff(experiment, staged_root, paths, user):
             # above rolls back whole and re-import is idempotent. See mutint_import.retry.
             _, count, replaced = with_retry(import_one, describe=filename)
             entry = {"file": filename, "mutations": count, "error": None,
-                     "replaced": replaced}
+                     "replaced": replaced,
+                     "named_by": context.get("placements", {}).get(sample_name)}
             total += count
         except Exception as exc:
             logger.exception("genomediff import failed for %s", relative)
@@ -496,12 +497,13 @@ def handle_vcf(experiment, staged_root, paths, user):
             def import_one(sample_name=sample_name):
                 with transaction.atomic():
                     return vcf_import.import_sample(
-                        document, sample_name, context, experiment)
+                        document, sample_name, context, experiment, filename=filename)
 
             try:
                 count, replaced, problems = with_retry(import_one, describe=sample_name)
                 entry = {"file": sample_name, "mutations": count, "error": None,
-                         "warnings": problems, "replaced": replaced}
+                         "warnings": problems, "replaced": replaced,
+                         "named_by": context.get("placements", {}).get(sample_name)}
                 total += count
             except Exception as exc:
                 logger.exception("vcf import failed for %s in %s", sample_name, relative)

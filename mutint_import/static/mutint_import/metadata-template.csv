@@ -1,0 +1,18 @@
+# metadata.csv -- drop this beside your data on the Import data page, or among read files on
+# the Run breseq page, to say where each sample sits. Lines starting with # are ignored.
+#
+# sample      the sample's name within its population (763A, 1-1, clone7)
+# population  the population or lineage (Ara-2, 3, wt). Leave blank, with time_point blank
+#             too, for a sample that is not placed yet.
+# time_point  a whole number: generations, transfers, days -- whatever your series counts in.
+# sample_type optional: population or mixed for a sample of many genotypes, clone or
+#             individual or isolate for one. Blank keeps what the data says (breseq's -p).
+# data        which inputs this row places: a breseq results folder's name, a .gd or VCF
+#             filename (the extension may be left off), or a read file's name or a stem
+#             shared by its mates. Several in one cell, separated by ; -- or repeat the row
+#             with the same sample, population and time_point.
+#
+# The same fields may be written into a .gd (#=SAMPLE, #=POPULATION, #=TIME, #=SAMPLE_TYPE)
+# or a VCF (##sample=, ##population=, ##generation=, ##sample_type=) instead. A row here outranks a file's header,
+# and a header outranks the filename.
+sample,population,time_point,sample_type,data

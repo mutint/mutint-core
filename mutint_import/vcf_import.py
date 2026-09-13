@@ -12,6 +12,7 @@ That is what makes "GenomeDiff is the anchor format" true rather than aspiration
 called by breseq and the same site called by GATK land on one row because one function decides.
 """
 
+import csv
 import logging
 
 from django.conf import settings
@@ -253,7 +254,7 @@ def _revcomp(sequence):
     return sequence.translate(str.maketrans("ACGTacgt", "TGCAtgca"))[::-1]
 
 
-def import_sample(document, sample_name, context, experiment):
+def import_sample(document, sample_name, context, experiment, filename=None):
     """Write one VCF sample. Returns `(mutations, replaced, problems)`.
 
     The records go through `gd_import`'s own machinery: `import_document_as_sample` resolves
@@ -269,7 +270,11 @@ def import_sample(document, sample_name, context, experiment):
 
     converted = convert(document, sample_name, experiment, filename=sample_name)
     sample, count, replaced = import_document_as_sample(
-        _AsGenomeDiff(converted.records, metadata_for(document)), sample_name, context)
+        _AsGenomeDiff(converted.records, metadata_for(document, sample_name)),
+        sample_name, context,
+        # A metadata.csv row may name the file rather than the column; for a file of one
+        # sample the two mean the same thing, and for a file of several they cannot.
+        aliases=(filename,) if filename and len(document.sample_names) <= 1 else ())
 
     sample.set_record(sample.COMPONENT, VCF_RECORD, header_record(document))
     # What it was made from, beside the header it was made from. A VCF names no read files --
@@ -286,7 +291,7 @@ def import_sample(document, sample_name, context, experiment):
 METADATA_FROM_HEADER = {"reference": "REFSEQ", "filedate": "CREATED", "source": "COMMAND"}
 
 
-def metadata_for(document):
+def metadata_for(document, sample_name=None):
     """A VCF header as the `#=` metadata `import_document_as_sample` reads.
 
     `##reference=` is the genome the calls were made against, which is exactly what `#=REFSEQ`
@@ -299,14 +304,43 @@ def metadata_for(document):
     assumption this importer is built on, and is a guess worth naming rather than burying.
     """
     metadata = {}
+    structured = {}
     for line in document.header:
         if not line.startswith("##") or "=" not in line:
             continue
         key, _, value = line[2:].partition("=")
-        mapped = METADATA_FROM_HEADER.get(key.strip().lower())
+        key = key.strip()
+        value = value.strip()
+        mapped = METADATA_FROM_HEADER.get(key.lower())
         if mapped and mapped not in metadata:
-            metadata[mapped] = value.strip()
+            metadata[mapped] = value
+            continue
+        # Where a file places its samples. A plain `##population=Ara-2` is file-wide; the
+        # spec's structured `##SAMPLE=<ID=col,population=Ara-2,generation=500>` is one
+        # column's, and wins over the plain key for that column. Keys are handed on under
+        # their own names; `mutint_import.metadata.coordinate_from_headers` knows the
+        # synonyms, so the two readers cannot disagree about what `generation` means.
+        if key.upper() == "SAMPLE" and value.startswith("<") and value.endswith(">"):
+            fields = _structured_fields(value[1:-1])
+            if fields.get("ID"):
+                structured[fields.pop("ID")] = fields
+            continue
+        if key.lower() not in METADATA_FROM_HEADER and key not in metadata:
+            metadata[key] = value
+    if sample_name is not None:
+        for field, value in structured.get(sample_name, {}).items():
+            metadata[field] = value
     return metadata
+
+
+def _structured_fields(text):
+    """`ID=x,population=y,...` as a dict; a quoted value may hold a comma."""
+    fields = {}
+    for part in next(csv.reader([text])):
+        name, _, value = part.partition("=")
+        if name.strip():
+            fields[name.strip()] = value.strip().strip('"')
+    return fields
 
 
 class _AsGenomeDiff:

@@ -189,7 +189,7 @@ def _truthy(raw):
     return bool(raw)
 
 
-def _optional_time_point(raw, label, row_label):
+def optional_time_point(raw, label, row_label):
     """A whole number, also when it arrives as `500.0` -- or **None** for a blank.
 
     `Sample.time_point` is a float, so a coordinate read back from a row and posted again
@@ -218,6 +218,11 @@ def _optional_time_point(raw, label, row_label):
         # 0 is legal: a time point of 0 is where an ancestor sits.
         raise SampleEditError("%s: %s cannot be negative." % (row_label, label))
     return value
+
+
+#: The name this had while only the editor called it. `mutint_import.metadata` calls it
+#: too now, so the rule for what a time point is has one spelling in two readers.
+_optional_time_point = optional_time_point
 
 
 #: An ALE or a sample label is a label, not a number (`mutint_experiment.0008`), so the only

@@ -34,10 +34,23 @@ def _uploaded(path):
         return SimpleUploadedFile(os.path.basename(path), handle.read())
 
 
+#: The LTEE headers the fixture carries that place a sample on their own -- see
+#: `mutint_import.metadata.coordinate_from_headers`. Tests that copy the fixture under other
+#: filenames are about what a *filename* says, so they drop these first; the tests that
+#: import the fixture as itself keep them, which is how `Ara-3` outranks the `3` in its name.
+_PLACEMENT_HEADERS = ("#=TIME", "#=POPULATION", "#=TREATMENT", "#=CLONE", "#=TITLE")
+
+
+def _without_placement_headers(raw):
+    return b"\n".join(
+        line for line in raw.splitlines()
+        if not any(line.startswith(key.encode()) for key in _PLACEMENT_HEADERS)) + b"\n"
+
+
 def _uploaded_as(path, name):
     """Same fixture content under a different filename, to exercise name parsing."""
     with open(path, "rb") as handle:
-        return SimpleUploadedFile(name, handle.read())
+        return SimpleUploadedFile(name, _without_placement_headers(handle.read()))
 
 
 def ensure_reference(experiment="gd exp", project="gd project"):
@@ -93,7 +106,10 @@ class GdImportTestCase(TestCase):
         # Experiment chain synthesized from the filename 3-30000-1-1.
         self.assertEqual(Experiment.objects.count(), 1)
         population = Population.objects.get()
-        self.assertEqual(population.name, "3")
+        # The file's own `#=POPULATION Ara-3` outranks the `3` in its filename; the time
+        # point agrees either way, and the sample label `1-1` is the filename's, since the
+        # header names none. See mutint_import/metadata.py.
+        self.assertEqual(population.name, "Ara-3")
         self.assertEqual({30000}, set(Sample.objects.values_list('time_point', flat=True)))
         # `1-1`, not `1`: the replicate field is part of the label, kept even when it is
         # 1 so that `3-30000-1-1` and `3-30000-1-2` are siblings rather than a bare `1`
@@ -355,6 +371,8 @@ class GdImportTestCase(TestCase):
         """The strict parser must not regress names that genuinely are A-F-I-R."""
         self._import_named(["3-30000-1-1.gd"])
 
+        # Headers stripped by `_import_named`, so the name alone decides -- unlike the test
+        # above, which imports the file as itself and lets its `#=POPULATION` win.
         self.assertEqual(Population.objects.get().name, "3")
         self.assertEqual({30000}, set(Sample.objects.values_list('time_point', flat=True)))
         self.assertEqual(Sample.objects.get().name, "1-1")
@@ -419,7 +437,7 @@ class PolymorphismModeTestCase(TestCase):
 
     def _import_with_command(self, command, name="1-500-1-1.gd"):
         with open(CLEAN_GD, "rb") as handle:
-            raw = handle.read().decode()
+            raw = _without_placement_headers(handle.read()).decode()
         lines = raw.splitlines()
         # After #=GENOME_DIFF, which must stay first.
         lines.insert(1, "#=COMMAND\t%s" % command)

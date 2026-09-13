@@ -18,6 +18,10 @@ Either way the name decides where the sample sits: `Ara-2_500gen_763A` places it
 `Ara-2` at time point 500, `3-30000-1-1` names the coordinate directly, and anything else is
 auto-numbered onto ALE 1. That is the same rule a `.gd` filename goes through.
 
+A VCF can also say where its samples sit: `##sample=`, `##population=` and `##generation=`
+header lines apply to every sample column, and `##SAMPLE=<ID=col,population=...,generation=...>`
+places one column. A `metadata.csv` dropped alongside outranks both; see *Loading data*.
+
 ## Mutations share rows with breseq's
 
 A VCF is converted to GenomeDiff on the way in, which is MutInt's own format. That is not a

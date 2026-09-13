@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2586 run, 0 failures** standalone; **3099** assembled, measured with `PYTHONPATH`
+**Baseline: 2631 run, 0 failures** standalone; **3093** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -2233,6 +2233,49 @@ auto-numbering is what keeps a misread name addressable.
 reorders every mutation table's columns. `mutint_experiment/ordering.py` `sample_order()`
 is what every sample listing orders by, in core and in mutint-phylogeny: it pads each text
 field with zeros for the comparison, so digits sort by value and labels still sort as text.
+
+### A sample's place comes from three sources, asked in order at one seam
+
+`mutint_import/metadata.py` is the second and third of them; the filename rule above is the
+last. `gd_import.import_document_as_sample` asks, in order: a **`metadata.csv`** row for this
+input, the **file's own header** (`#=SAMPLE`/`#=POPULATION`/`#=TIME` in a `.gd`, `##key=`
+lines and `##SAMPLE=<ID=...>` in a VCF, under the synonyms `SYNONYMS` lists), then the
+**filename**. The first that answers wins, and `context["placements"]` records which, so
+every handler's summary row carries `named_by`.
+
+**The override happens at the seam and not as a relabel afterwards**, and the reason is a
+hole rather than a preference: a filename that itself parses would land on the filename's
+coordinate first and then be moved, and the next import of that file would find nothing at
+its coordinate and mint a second sample. Deciding before the row exists makes a
+same-metadata re-import a no-op, because the chain is `get_or_create` on the coordinate.
+An optional `sample_type` column (population/mixed, clone/individual/isolate) sets `is_clonal`
+through the same placement and outranks the `-p` rule; blank leaves that rule in force.
+`_place_by_metadata` still has to handle the one transition -- a sample imported before the
+metadata existed -- and does so by **moving** it (through `samples.resolve_population` and
+`prune_orphans`, not `apply_rows`, which also writes `is_clonal`), unless another sample
+already holds the coordinate, in which case it stays and the summary says so.
+`source_name` is never touched: it is what re-import and mutint-breseq match on.
+
+**The CSV is read by `run_import`, never by a handler.** It is split out of the paths before
+the claim pass, so it is never announced as a unit and never a leftover, parsed, and
+installed in a module-level slot through `metadata.applying()` for the seam to ask -- exactly
+as `import_progress.reporting()` installs its reporter, and for the same reason: the handler
+signature is a published contract. A malformed CSV raises and refuses the whole drop, since
+everything under it would otherwise land unplaced; `finalize_upload` maps that to a 400. A
+row naming nothing and an input no row names are warnings in `summary["metadata"]`; an input
+two rows name is an error for that input alone, raised inside the handler's per-unit
+try/except.
+
+**Header fields override the filename field by field**, and a header naming no sample keeps
+the filename's -- so the LTEE's `3-30000-1-1.gd`, carrying `#=POPULATION Ara-3` and
+`#=TIME 30000`, lands at Ara-3 / 30000 / 1-1. That is what `#=TIME` means in those files,
+which is why `time` stays a synonym though breseq's own `output.gd` never writes it. An
+exact key beats a synonym, so `#=POPULATION` wins over `#=TREATMENT` when a file carries
+both. `test_gd_import`'s renaming helpers strip these headers from the fixture, because
+those tests are about filenames; the tests that import the fixture as itself let its header
+win. A VCF row that names the *file* reaches its sample through an `aliases=` argument at
+the seam, for a single-column file only -- for several columns the two cannot mean the same
+thing.
 
 ### Which import types the Import data page offers
 

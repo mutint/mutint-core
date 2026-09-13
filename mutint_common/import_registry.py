@@ -341,11 +341,23 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
     from mutint_experiment.permissions import ExperimentLocked
 
     from mutint_common import import_progress
+    from mutint_import import metadata as sample_metadata
 
     if experiment is not None and getattr(experiment, "is_locked", False):
         raise ExperimentLocked(experiment.lock_message())
 
     paths = walk_files(staged_root)
+
+    # A `metadata.csv` is about the other files, not an input: it is taken out before any
+    # handler claims, never announced as a unit, and installed for the one seam that decides
+    # a sample's coordinate to ask. A malformed one raises here and refuses the whole drop --
+    # see mutint_import/metadata.py for why that is the right refusal.
+    metadata_paths, paths = sample_metadata.split_paths(paths)
+    if len(metadata_paths) > 1:
+        raise sample_metadata.MetadataError(
+            "one metadata.csv per drop; found %s" % ", ".join(sorted(metadata_paths)))
+    parsed_metadata = (sample_metadata.read_file(staged_root, metadata_paths[0])
+                       if metadata_paths else None)
 
     if import_type:
         handler = get_import_handler(import_type)
@@ -379,14 +391,15 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
     total_mutations = 0
 
     cursor = 0
-    for handler, claimed, unit_count in plan:
-        # Each handler writes into its own slice of the announcement, so one that reports
-        # nothing costs its rows and nobody else's.
-        import_progress.advance_to(cursor)
-        summary = _call(handler, experiment, staged_root, claimed, user, options)
-        cursor += unit_count
-        file_results.extend(summary.get("files") or [])
-        total_mutations += summary.get("total_mutations") or 0
+    with sample_metadata.applying(parsed_metadata):
+        for handler, claimed, unit_count in plan:
+            # Each handler writes into its own slice of the announcement, so one that
+            # reports nothing costs its rows and nobody else's.
+            import_progress.advance_to(cursor)
+            summary = _call(handler, experiment, staged_root, claimed, user, options)
+            cursor += unit_count
+            file_results.extend(summary.get("files") or [])
+            total_mutations += summary.get("total_mutations") or 0
 
     import_progress.advance_to(cursor)
     for path in leftovers:
@@ -399,9 +412,19 @@ def run_import(experiment, staged_root, user, import_type=None, options=None):
         file_results.append(entry)
         import_progress.report(entry)
 
-    return {
+    result = {
         "experiment_id": experiment.id,
         "experiment": experiment.name,
         "total_mutations": total_mutations,
         "files": file_results,
     }
+    if parsed_metadata is not None:
+        report = parsed_metadata.report()
+        # Inputs that landed while the CSV said nothing about them: placed by their own
+        # header or by their filename, which is fine and worth a line.
+        report["unnamed_inputs"] = sorted(
+            entry["file"] for entry in file_results
+            if not entry.get("error")
+            and entry.get("named_by") not in (None, sample_metadata.BY_CSV))
+        result["metadata"] = report
+    return result

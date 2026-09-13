@@ -116,6 +116,20 @@ def delete_sample(experiment_pk, population_name, time_point, sample_name):
     request_rebuild(experiment_pk, reason='sample removed')
 
 
+def _print_metadata_report(report):
+    """What a drop's `metadata.csv` did, after the per-file lines."""
+    if not report:
+        return
+    print("  %s: %d row(s); placed %d input(s)"
+          % (report["file"], report["rows"], len(report["applied"])))
+    for line in report.get("unmatched_rows") or []:
+        print("    row naming nothing in the drop: %s" % line)
+    for name in report.get("unnamed_inputs") or []:
+        print("    not named by the file (placed by its own name): %s" % name)
+    for warning in report.get("warnings") or []:
+        print("    warning: %s" % warning)
+
+
 def import_paths(paths, experiment, user):
     """Import each path into `experiment`, exactly the way a web drop is imported.
 
@@ -156,6 +170,7 @@ def import_paths(paths, experiment, user):
                 print("    warning: %s" % warning)
         print("  %d mutations from %d file(s)"
               % (summary["total_mutations"], len(summary["files"])))
+        _print_metadata_report(summary.get("metadata"))
         summaries.append(summary)
     return summaries
 

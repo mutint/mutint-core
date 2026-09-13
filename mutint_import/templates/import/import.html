@@ -76,6 +76,15 @@
 
         <ul id="drop-list" class="list-unstyled" style="margin-top: 1em;"></ul>
         <ul id="file-list"></ul>
+        {% comment %} Where a sample sits can come from a metadata.csv dropped with the data
+           rather than from each filename; the two files are the blank and a worked
+           example, served as app static files. {% endcomment %}
+        <p style="color: #666;"><small>
+            To name and place the samples, drop a <code>metadata.csv</code> alongside:
+            <a href="{% static 'mutint_import/metadata-template.csv' %}" download>blank template</a>
+            or <a href="{% static 'mutint_import/metadata-example.csv' %}" download>worked example</a>.
+            A <code>.gd</code> or VCF can also carry the same fields in its header.
+        </small></p>
 
         {% comment %} The registered reference annotators, one fieldset each, drawn only on a
            tab whose handler establishes or updates the reference. Core owns the fieldset,
@@ -293,9 +302,20 @@
 
     // Preview only. A file inside a breseq folder matches several types' patterns; the server
     // resolves that by priority and by each handler's own detect.
+    // A metadata.csv is about the other files rather than an input of any type, so it is
+    // accepted on every tab and never a stray -- the server takes it out before any handler
+    // claims and reads it for the sample coordinates. See mutint_import/metadata.py.
+    var METADATA_TYPE = {name: "metadata", label: "Sample metadata (metadata.csv)",
+                         patterns: [], directories: []};
+    function isMetadata(path) {
+        var base = path.split("/").pop();
+        return base.toLowerCase() === "metadata.csv";
+    }
+
     function classify(path) {
         var chosen = typeSelect.value;
         if (!chosen) { return null; }
+        if (isMetadata(path)) { return METADATA_TYPE; }
         var candidates = IMPORT_TYPES.filter(function (t) { return t.name === chosen; });
         for (var i = 0; i < candidates.length; i++) {
             if (matches(path, candidates[i].patterns) ||
@@ -958,8 +978,40 @@
         resultEl.appendChild(table);
     }
 
+    // What a dropped metadata.csv did: how many rows placed a sample, and the lines worth
+    // a second look -- rows naming nothing in the drop, inputs the file did not name (placed
+    // by their own header or name), and notes such as a coordinate already taken.
+    function metadataReport(report) {
+        var box = document.createElement("div");
+        box.style.marginTop = "1em";
+        var heading = document.createElement("p");
+        heading.textContent = report.file + ": " + report.rows + " row(s), placed " +
+            (report.applied || []).length + " sample(s).";
+        box.appendChild(heading);
+        var lines = [];
+        (report.unmatched_rows || []).forEach(function (row) {
+            lines.push("Row naming nothing in the drop: " + row);
+        });
+        (report.unnamed_inputs || []).forEach(function (name) {
+            lines.push("Not named by the file, placed by its own name or header: " + name);
+        });
+        (report.warnings || []).forEach(function (text) { lines.push(text); });
+        if (lines.length) {
+            var list = document.createElement("ul");
+            list.style.color = "#8a6d3b";
+            lines.forEach(function (text) {
+                var item = document.createElement("li");
+                item.textContent = text;
+                list.appendChild(item);
+            });
+            box.appendChild(list);
+        }
+        return box;
+    }
+
     function renderSummary(summary) {
         renderUnits(summary.files || [], summaryAlert(summary));
+        if (summary.metadata) { resultEl.appendChild(metadataReport(summary.metadata)); }
         // What the ticked reference annotators said, under the table. Absent from a data
         // import's summary, and an empty list when none was ticked.
         if ((summary.annotators || []).length) {

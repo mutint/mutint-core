@@ -3,7 +3,9 @@
 *.swp
 *.pyc
 *~
-static/
+# STATIC_ROOT, at the checkout root only: an app's own static/ directory (mutint_import/
+# static/, where the metadata.csv templates live) is source and is tracked.
+/static/
 .ropeproject/
 .idea/
 .DS_Store

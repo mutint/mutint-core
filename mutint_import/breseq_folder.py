@@ -225,7 +225,8 @@ def _import_samples(context, root, report_loose_gd, user=None):
                          experiment=experiment,
                          cancellable=True)
             entry = {"file": sample_name, "mutations": count, "error": None,
-                     "warnings": warnings, "replaced": replaced}
+                     "warnings": warnings, "replaced": replaced,
+                     "named_by": context.get("placements", {}).get(sample_name)}
             total_mutations += count
         except Exception as exc:  # one bad sample must not poison the batch
             logger.exception("breseq folder import failed for %s", sample_name)
