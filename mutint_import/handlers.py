@@ -18,6 +18,7 @@ from mutint_common import import_progress
 from mutint_import.retry import with_retry
 from mutint_common.import_registry import (
     KIND_REFERENCE,
+    PRIORITY_ARCHIVE,
     PRIORITY_DATA,
     PRIORITY_REFERENCE,
     matches_patterns,
@@ -80,8 +81,16 @@ GD_RELATIVE_SUFFIX = "data/output.gd"
 MENU_GENOMEDIFF = 10
 MENU_VCF = 15
 MENU_BRESEQ = 20
+MENU_ARCHIVE = 25
 MENU_REFERENCE = 30
 MENU_REPLACE_ANNOTATION = 90
+
+#: What the Import data page uploads for the MutInt Archive tab: the manifest, a zip that
+#: may hold one, and everything under the two directories an archive keeps. Deliberately
+#: not `.gd` or `.vcf` -- `identify()` names types in priority order, and this handler runs
+#: first, so a stray `.gd` on any tab would otherwise be described as looking like an archive.
+ARCHIVE_PATTERNS = ["mutint.json", ".zip"]
+ARCHIVE_DIRECTORIES = ["samples", "reference"]
 
 
 # --- breseq result folders ----------------------------------------------------------------
@@ -169,6 +178,290 @@ def handle_breseq_folders(experiment, staged_root, paths, user):
     from mutint_import.breseq_folder import import_samples_into
 
     return import_samples_into(experiment, staged_root, user=user)
+
+
+# --- MutInt archives -----------------------------------------------------------------------
+
+def detect_archives(staged_root, paths):
+    """Claim every file under a folder holding `mutint.json`, and any zip holding one.
+
+    An archive is a directory-shaped unit that brings its own reference, like a breseq
+    folder, and everything in it belongs to it: the reference pair would otherwise go to the
+    reference handler and the sample files to genomediff or vcf, each placing samples from a
+    filename the manifest already speaks for. Claiming them all here is enough -- `run_import`
+    hands a path to the first claimant in priority order, and this handler runs first.
+    """
+    from mutint_import import archive
+
+    roots = archive.find_archive_roots(paths)
+    claimed = [p for p in paths if any(archive.under(root, p) for root in roots)]
+    for relative in paths:
+        if relative in claimed or not relative.lower().endswith(".zip"):
+            continue
+        if archive.is_archive_zip(os.path.join(staged_root, relative)):
+            claimed.append(relative)
+    return claimed
+
+
+def list_archive_units(staged_root, claimed):
+    """One unit per sample file plus one for the reference, per archive.
+
+    Named the way `handle_archives` reports them -- `reference`, then each sample file's
+    basename -- which `test_import_progress.AnnouncedNamesTestCase` pins for every handler.
+    A zip is announced from its listing, so the names match once it is unpacked.
+    """
+    names = []
+    for root, files in _archive_contents(staged_root, claimed):
+        names.append("reference")
+        names.extend(os.path.basename(f) for f in files if _is_sample_file(root, f))
+    return names
+
+
+def _archive_contents(staged_root, claimed):
+    """`[(root, [paths under it])]` for each archive in the claim, zips listed unopened."""
+    from mutint_import import archive
+
+    found = []
+    roots = archive.find_archive_roots(claimed)
+    for root in roots:
+        found.append((root, [p for p in claimed if archive.under(root, p)]))
+    for relative in claimed:
+        if relative.lower().endswith(".zip") and not any(
+                archive.under(root, relative) for root in roots):
+            try:
+                members = archive.zip_members(os.path.join(staged_root, relative))
+            except Exception:
+                members = []
+            for inner in archive.find_archive_roots(members):
+                found.append((relative, [os.path.join(relative, m) for m in members
+                                         if archive.under(inner, m)]))
+    return found
+
+
+def _is_sample_file(root, relative):
+    from mutint_import.archive import SAMPLES_DIR
+
+    inside = relative[len(root) + 1:] if root else relative
+    inside = inside.replace(os.sep, "/")
+    parts = inside.split("/")
+    return (SAMPLES_DIR in parts[:-1]
+            and inside.lower().endswith((".gd", ".vcf", ".vcf.gz")))
+
+
+def handle_archives(experiment, staged_root, paths, user, options=None):
+    """Rehydrate an exported experiment: reference, samples, then the manifest.
+
+    Per archive: read the manifest; install the reference from the archive's stored pair,
+    all or nothing -- the samples are defined against it, so a refused reference refuses
+    them too; import each sample file through the same `.gd` and VCF importers a plain drop
+    uses, under a `metadata.applying` built from the manifest so placement is the one rule;
+    then `archive.apply_manifest` writes what the files cannot say. Derived data is rebuilt
+    once at the end, after the ancestor is set, since it subtracts that sample.
+    """
+    import shutil
+    import tempfile
+
+    from mutint_common.import_registry import ConfirmationRequired
+    from mutint_import import archive, vcf, vcf_import
+    from mutint_import import metadata as sample_metadata
+    from mutint_import import reference as reference_io
+    from mutint_import import reference_store
+    from mutint_import.annotation import install_annotation
+    from mutint_import.gd_import import (
+        _parse_document,
+        import_document_as_sample,
+        parse_warnings,
+        prepare_experiment_by_id,
+        record_document_header,
+        record_document_inputs,
+        run_post_processing,
+    )
+
+    results = []
+    total = 0
+    imported_any = False
+    scratch = []
+    try:
+        for root, files in _archive_contents(staged_root, paths):
+            base = staged_root
+            if root.lower().endswith(".zip"):
+                # Unpacked beside nothing the drop owns: a CLI import may be walking a
+                # directory the operator keeps, and the staging area is removed anyway.
+                target = tempfile.mkdtemp(prefix="mutint-archive-")
+                scratch.append(target)
+                try:
+                    archive.extract_zip(os.path.join(staged_root, root), target)
+                except Exception as exc:
+                    logger.exception("could not unpack %s", root)
+                    for name in list_archive_units(staged_root, [root]):
+                        entry = {"file": name, "mutations": 0, "error": str(exc)}
+                        results.append(entry)
+                        import_progress.begin(name)
+                        import_progress.report(entry)
+                    continue
+                base = target
+                members = [os.path.relpath(os.path.join(dirpath, f), target)
+                           for dirpath, _d, fs in os.walk(target) for f in fs]
+                inner = archive.find_archive_roots(members)[0]
+                files = [m for m in members if archive.under(inner, m)]
+                root = inner
+
+            sample_files = [f for f in files if _is_sample_file(root, f)]
+            unit_names = ["reference"] + [os.path.basename(f) for f in sample_files]
+
+            def refuse_all(message):
+                for name in unit_names:
+                    entry = {"file": name, "mutations": None if name == "reference" else 0,
+                             "error": message}
+                    if name == "reference":
+                        entry["kind"] = KIND_REFERENCE
+                    results.append(entry)
+                    import_progress.begin(name)
+                    import_progress.report(entry)
+
+            try:
+                manifest = archive.read_manifest(
+                    os.path.join(base, root, archive.MANIFEST) if root
+                    else os.path.join(base, archive.MANIFEST))
+            except archive.ArchiveError as error:
+                refuse_all(str(error))
+                continue
+
+            # The reference, all or nothing, from the stored pair as `copy_reference` does.
+            import_progress.begin("reference")
+            try:
+                folder = os.path.join(base, root) if root else base
+                with open(os.path.join(folder, manifest["reference"]["gff3"]),
+                          "r", encoding="utf-8") as handle:
+                    gff3_text = handle.read()
+                with open(os.path.join(folder, manifest["reference"]["fasta"]),
+                          "r", encoding="utf-8") as handle:
+                    sequences = list(reference_io.parse_fasta(handle))
+                if not sequences:
+                    raise archive.ArchiveError("the archive's reference FASTA holds no sequence")
+                install_annotation(
+                    experiment, gff3_text, sequences,
+                    allow_rename=bool((options or {}).get("confirm_rename")))
+            except reference_store.RenameRequired as ask:
+                raise ConfirmationRequired(_rename_payload(experiment, ask.plan, "reference"))
+            except reference_store.ReferenceMismatch:
+                logger.info("archive reference refused for experiment %s: sequence differs",
+                            experiment.id)
+                entry = {"file": "reference", "mutations": None, "kind": KIND_REFERENCE,
+                         "error": ("the archive's reference genome is not this experiment's, "
+                                   "which cannot be changed from here; import it into an "
+                                   "experiment with no reference, or one with the same")}
+                results.append(entry)
+                import_progress.report(entry)
+                for name in unit_names[1:]:
+                    entry = {"file": name, "mutations": 0,
+                             "error": "not imported: the archive's reference was refused"}
+                    results.append(entry)
+                    import_progress.begin(name)
+                    import_progress.report(entry)
+                continue
+            except Exception as exc:
+                logger.exception("archive reference failed for experiment %s", experiment.id)
+                entry = {"file": "reference", "mutations": None, "kind": KIND_REFERENCE,
+                         "error": str(exc)}
+                results.append(entry)
+                import_progress.report(entry)
+                for name in unit_names[1:]:
+                    entry = {"file": name, "mutations": 0,
+                             "error": "not imported: the archive's reference was refused"}
+                    results.append(entry)
+                    import_progress.begin(name)
+                    import_progress.report(entry)
+                continue
+            entry = {"file": "reference", "mutations": None, "kind": KIND_REFERENCE,
+                     "error": None}
+            results.append(entry)
+            import_progress.report(entry)
+
+            context = prepare_experiment_by_id(experiment.id)
+            imported = {}
+            by_basename = {os.path.basename(e["file"]): e for e in manifest["samples"]}
+            try:
+                placement = archive.placement_for(manifest)
+            except sample_metadata.MetadataError as error:
+                for name in unit_names[1:]:
+                    entry = {"file": name, "mutations": 0, "error": str(error)}
+                    results.append(entry)
+                    import_progress.begin(name)
+                    import_progress.report(entry)
+                continue
+
+            with sample_metadata.applying(placement):
+                for relative in sample_files:
+                    filename = os.path.basename(relative)
+                    path = os.path.join(base, relative)
+                    import_progress.begin(filename)
+                    entry_of = by_basename.get(filename)
+
+                    def import_one(path=path, filename=filename):
+                        stem = filename
+                        for suffix in (".vcf.gz", ".vcf", ".gd"):
+                            if stem.lower().endswith(suffix):
+                                stem = stem[:-len(suffix)]
+                                break
+                        with transaction.atomic():
+                            if filename.lower().endswith((".vcf", ".vcf.gz")):
+                                with open(path, "rb") as handle:
+                                    document = vcf.read(handle, filename)
+                                count = replaced = 0
+                                warnings = []
+                                for name in vcf_import.sample_names_for(document, filename):
+                                    c, r, problems = vcf_import.import_sample(
+                                        document, name, context, experiment,
+                                        filename=filename)
+                                    count += c
+                                    replaced += r
+                                    warnings.extend(problems)
+                                return count, replaced, warnings
+                            with open(path, "rb") as handle:
+                                document = _parse_document(handle)
+                            sample, count, replaced = import_document_as_sample(
+                                document, stem, context)
+                            record_document_inputs(sample, document, filename)
+                            record_document_header(sample, document)
+                            return count, replaced, parse_warnings(document)
+
+                    try:
+                        count, replaced, warnings = with_retry(import_one, describe=filename)
+                        entry = {"file": filename, "mutations": count, "error": None,
+                                 "warnings": warnings, "replaced": replaced,
+                                 "named_by": archive.MANIFEST}
+                        total += count
+                        imported_any = True
+                        if entry_of is not None:
+                            sample = archive.find_imported(experiment, entry_of)
+                            if sample is not None:
+                                imported[entry_of["file"]] = sample
+                    except Exception as exc:
+                        logger.exception("archive sample import failed for %s", relative)
+                        entry = {"file": filename, "mutations": 0, "error": str(exc),
+                                 "warnings": []}
+                    results.append(entry)
+                    import_progress.report(entry)
+
+            try:
+                archive.apply_manifest(experiment, manifest, imported, user)
+            except Exception as exc:
+                logger.exception("archive manifest could not be applied to experiment %s",
+                                 experiment.id)
+                entry = {"file": archive.MANIFEST, "mutations": None, "kind": KIND_REFERENCE,
+                         "error": "the experiment's details could not be applied: %s" % exc}
+                results.append(entry)
+                import_progress.report(entry)
+    finally:
+        for target in scratch:
+            shutil.rmtree(target, ignore_errors=True)
+
+    if imported_any:
+        import_progress.stage("Recomputing derived data\u2026")
+        run_post_processing(experiment)
+
+    return {"files": results, "total_mutations": total}
 
 
 # --- reference genomes --------------------------------------------------------------------
@@ -350,6 +643,8 @@ def handle_genomediff(experiment, staged_root, paths, user):
         _database_gd_mutations,
         _parse_document,
         import_document_as_sample,
+        record_document_header,
+        record_document_inputs,
     )
     from mutint_import.gd_import import prepare_experiment_by_id
     from mutint_import.reference_store import has_reference
@@ -379,8 +674,13 @@ def handle_genomediff(experiment, staged_root, paths, user):
             with transaction.atomic():
                 with open(os.path.join(staged_root, relative), "rb") as handle:
                     document = _parse_document(handle)
-                return import_document_as_sample(
+                sample, count, replaced = import_document_as_sample(
                     document, sample_name, context)
+                # What it was made from and what its header said, refreshed on every
+                # import -- neither runs through `get_or_create(defaults=...)`.
+                record_document_inputs(sample, document, filename)
+                record_document_header(sample, document)
+                return sample, count, replaced
 
         try:
             # Retried only for lock contention, and safe to retry because the transaction
@@ -520,6 +820,24 @@ def handle_vcf(experiment, staged_root, paths, user):
 
 
 def register_core_import_handlers():
+    register_import_handler(
+        name="mutint_archive",
+        label="MutInt Archive (a folder or zip from Export experiment)",
+        patterns=ARCHIVE_PATTERNS,
+        directories=ARCHIVE_DIRECTORIES,
+        # Before the reference handler, so in pass one it claims the archive's reference
+        # pair and sample files before either could be routed on its suffix.
+        priority=PRIORITY_ARCHIVE,
+        detect=detect_archives,
+        handle=handle_archives,
+        list_units=list_archive_units,
+        accepts_options=True,
+        # It establishes or updates the reference, so the annotator panels apply.
+        annotators=True,
+        menu_order=MENU_ARCHIVE,
+        description="An experiment exported from MutInt: the reference genome, every "
+                    "sample's mutations, and the experiment's own details, which replace "
+                    "this experiment's. Drop the unzipped folder or the zip itself.")
     register_import_handler(
         name="reference",
         annotators=True,

@@ -41,6 +41,11 @@
         <small class="help-block" id="import-type-help">
             Anything this type does not recognize is reported rather than routed elsewhere,
             so nothing is imported as something it is not.
+            {% if has_reference %}
+            To move this experiment to another MutInt,
+            <a id="archive-export-link" href="{% url 'archive_export' experiment.id %}">export
+            it as an archive</a> and drop the result on that installation's MutInt Archive tab.
+            {% endif %}
         </small>
 
         {% if import_type.accepts_accessions %}

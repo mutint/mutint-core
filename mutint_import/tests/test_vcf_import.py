@@ -200,25 +200,128 @@ class VcfImportTestCase(TestCase):
 
     # --- round trip -----------------------------------------------------------------------
 
-    def test_a_single_sample_vcf_exports_byte_for_byte(self):
+    def test_a_single_sample_vcf_exports_byte_for_byte_plus_where_it_sits(self):
+        """Verbatim, with one line added: the `##SAMPLE` line saying the sample's coordinate,
+        so a re-import anywhere lands where the sample is now."""
         # Bases read off the fixture rather than typed: a REF that disagrees with the
         # reference is refused, correctly, and a hand-typed one is how that gets discovered.
-        text = vcf_text([
+        rows = [
             "test_ref\t100\t.\t%s\tA\t50.5\tPASS\tDP=30;AF=0.5\tGT:AD\t1:2,8"
             % SEQUENCE[99],
             "test_ref\t120\t.\t%s\t%sAAA\t99\tq10\tDP=12\tGT:AD\t1:1,11"
-            % (SEQUENCE[119], SEQUENCE[119])])
-        self._import(text)
+            % (SEQUENCE[119], SEQUENCE[119])]
+        self._import(vcf_text(rows))
 
         sample = Sample.objects.get(population__experiment=self.experiment)
-        self.assertEqual(text, vcf_export.export_vcf_text(sample))
+        self.assertIsNone(sample.time_point)  # `s1` places nothing
+        expected = vcf_text(rows, header=[
+            "##fileformat=VCFv4.2",
+            "##contig=<ID=test_ref,length=%d>" % len(SEQUENCE),
+            "##SAMPLE=<ID=s1,sample=1,sample_type=clone>"])  # auto-numbered: `1`
+        self.assertEqual(expected, vcf_export.export_vcf_text(sample))
 
-    def test_a_sample_that_never_came_from_a_vcf_has_none(self):
+        # And an unplaced sample's export still lands on itself.
+        self._import(expected, filename="again.vcf")
+        self.assertEqual(sample.pk,
+                         Sample.objects.get(population__experiment=self.experiment).pk)
+
+    def test_the_placement_line_carries_the_coordinate_and_is_upserted(self):
+        rows = ["test_ref\t100\t.\t%s\tA\t50\tPASS\t.\tGT\t1" % SEQUENCE[99]]
+        self._import(vcf_text(rows, header=[
+            "##fileformat=VCFv4.2",
+            "##SAMPLE=<ID=s1,Description=\"a clone, frozen\",generation=500,population=Ara-3>"]))
+        sample = Sample.objects.get(population__experiment=self.experiment)
+        self.assertEqual(("Ara-3", 500), (sample.population.name, sample.time_point))
+
+        # Moved since, and mixed after all: the line says so, and keeps the description.
+        sample.time_point = 1000
+        sample.is_clonal = False
+        sample.save()
+        text = vcf_export.export_vcf_text(sample)
+        lines = text.splitlines()
+        self.assertEqual(
+            '##SAMPLE=<ID=s1,sample=s1,population=Ara-3,time_point=1000,'
+            'sample_type=population,Description="a clone, frozen">', lines[1])
+        self.assertEqual(1, len([line for line in lines if line.startswith("##SAMPLE=")]))
+
+    def test_exporting_an_imported_export_is_byte_identical(self):
+        rows = ["test_ref\t100\t.\t%s\tA\t50\tPASS\t.\tGT\t1" % SEQUENCE[99]]
+        self._import(vcf_text(rows, samples=("Ara-1_500gen_c1",)))
+        sample = Sample.objects.get(population__experiment=self.experiment)
+        first = vcf_export.export_vcf_text(sample)
+
+        self._import(first, filename="again.vcf")
+        self.assertEqual(1, Sample.objects.filter(population__experiment=self.experiment).count())
+        self.assertEqual(first, vcf_export.export_vcf_text(
+            Sample.objects.get(population__experiment=self.experiment)))
+
+    def test_an_export_places_the_sample_where_it_is_now(self):
+        rows = ["test_ref\t100\t.\t%s\tA\t50\tPASS\t.\tGT\t1" % SEQUENCE[99]]
+        self._import(vcf_text(rows))
+        sample = Sample.objects.get(population__experiment=self.experiment)
+        from mutint_experiment.models import Population
+        population = Population.objects.create(experiment=self.experiment, name="Ara+2")
+        sample.population = population
+        sample.time_point = 250
+        sample.name = "c7"
+        sample.save()
+
+        text = vcf_export.export_vcf_text(sample)
+        from mutint_experiment.views import _create_experiment
+        other = _create_experiment(self.project, "other", self.user)
+        self.experiment, kept = other, self.experiment
+        self._establish_reference()
+        self.experiment = kept
+        context = prepare_experiment_by_id(other.id)
+        import io
+        document = vcf.read(io.StringIO(text), "s1.vcf")
+        for name in vcf_import.sample_names_for(document, "s1.vcf"):
+            vcf_import.import_sample(document, name, context, other)
+
+        landed = Sample.objects.get(population__experiment=other)
+        self.assertEqual(("Ara+2", 250, "c7"),
+                         (landed.population.name, landed.time_point, landed.name))
+
+    def test_a_sample_that_never_came_from_a_vcf_gets_a_generated_one(self):
+        """A lossy view for tools that speak VCF, and the file says what it lost."""
+        import io
+        gd_text = ("#=GENOME_DIFF\t1.0\n#=REFSEQ\tREL606.gbk\n"
+                   "SNP\t1\t.\ttest_ref\t100\tA\tfrequency=0.25\n"
+                   "DEL\t2\t.\ttest_ref\t120\t3\n"
+                   "MOB\t3\t.\ttest_ref\t140\tIS150\t1\t3\n"
+                   "AMP\t4\t.\ttest_ref\t150\t4\t2\n")
+        sample, _count, _replaced = import_document_as_sample(
+            _parse_document(io.BytesIO(gd_text.encode())), "Ara-1_500gen_c3", self.context)
+
+        text = vcf_export.export_vcf_text(sample)
+        lines = text.splitlines()
+        self.assertEqual("##fileformat=VCFv4.2", lines[0])
+        self.assertTrue(lines[1].startswith("##source=MutInt "))
+        self.assertIn("##reference=REL606.gbk", lines)
+        self.assertIn("##contig=<ID=test_ref,length=%d>" % len(SEQUENCE), lines)
+        self.assertIn("##SAMPLE=<ID=Ara-1_500gen_c3,sample=c3,population=Ara-1,"
+                      "time_point=500,sample_type=clone>", lines)
+        self.assertIn("##mutint_omitted=2  # mutations with no VCF spelling, left out of "
+                      "this file: 1 AMP, 1 MOB; the sample's .gd carries them", lines)
+        self.assertEqual("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t"
+                         "Ara-1_500gen_c3", lines[-3])
+        self.assertEqual("test_ref\t100\t.\t%s\tA\t.\t.\tAF=0.2500\tGT\t1" % SEQUENCE[99],
+                         lines[-2])
+        self.assertTrue(lines[-1].startswith("test_ref\t119\t.\t%s" % SEQUENCE[118]))
+
+        # And it is a VCF this importer reads back onto the same sample -- which, because a
+        # re-import supersedes a sample's calls, then holds only what the file could spell.
+        # The file said so; that is the cost of a lossy view and the reason the .gd exists.
+        self._import(text, filename="generated.vcf")
+        self.assertEqual(1, Sample.objects.filter(population__experiment=self.experiment).count())
+        self.assertEqual(2, MutationCall.objects.filter(sample=sample).count())
+
+    def test_a_generated_vcf_with_nothing_left_out_says_nothing_about_it(self):
         import io
         gd_text = "#=GENOME_DIFF\t1.0\nSNP\t1\t.\ttest_ref\t100\tA\n"
         sample, _count, _replaced = import_document_as_sample(
             _parse_document(io.BytesIO(gd_text.encode())), "from_gd", self.context)
-        self.assertIsNone(vcf_export.export_vcf_text(sample))
+        self.assertNotIn("##mutint_omitted", vcf_export.export_vcf_text(sample))
 
     def test_an_added_mutation_is_regenerated_and_the_file_says_so(self):
         """The export must not quietly hand back a file that is not what was uploaded."""

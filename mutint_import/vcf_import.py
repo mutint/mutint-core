@@ -13,6 +13,7 @@ called by breseq and the same site called by GATK land on one row because one fu
 """
 
 import csv
+import re
 import logging
 
 from django.conf import settings
@@ -333,13 +334,18 @@ def metadata_for(document, sample_name=None):
     return metadata
 
 
+#: `key=value` or `key="a value, with commas"`, as the spec writes structured lines.
+_STRUCTURED_FIELD = re.compile(r'\s*([^=,]+)=("([^"]*)"|[^,]*)\s*(?:,|$)')
+
+
 def _structured_fields(text):
     """`ID=x,population=y,...` as a dict; a quoted value may hold a comma."""
     fields = {}
-    for part in next(csv.reader([text])):
-        name, _, value = part.partition("=")
-        if name.strip():
-            fields[name.strip()] = value.strip().strip('"')
+    for match in _STRUCTURED_FIELD.finditer(text):
+        name = match.group(1).strip()
+        value = match.group(3) if match.group(3) is not None else match.group(2)
+        if name:
+            fields[name] = value.strip()
     return fields
 
 

@@ -64,8 +64,9 @@ class ImportPageTestCase(TestCase):
         self.assertEqual([tab["label"] for tab in get_import_tabs(self.experiment.id)],
                          [t[1] for t in tabs])
         # Only the ways in that work: this experiment has no reference, so it can establish
-        # one or drop a results folder, which brings its own.
-        self.assertEqual(["Reference Sequence", "Results Folder"], [t[1] for t in tabs])
+        # one or drop something that brings its own -- a results folder or an archive.
+        self.assertEqual(["Reference Sequence", "Results Folder", "MutInt Archive"],
+                         [t[1] for t in tabs])
         self.assertEqual("/import/?experiment_id=%d&amp;tab=breseq_folder" % self.experiment.id,
                          tabs[1][0])
         self.assertIn('id="import-type" value="reference"', html)
@@ -121,10 +122,11 @@ class ImportPageTestCase(TestCase):
         body = self.client.get("/import/types/").json()
         names = [t["name"] for t in body["types"]]
         self.assertEqual(
-            names[:4], ["reference", "replace_annotation", "breseq_folder", "genomediff"])
-        self.assertIn(".gbk", body["types"][0]["patterns"])
+            names[:5], ["mutint_archive", "reference", "replace_annotation", "breseq_folder",
+                        "genomediff"])
+        self.assertIn(".gbk", body["types"][1]["patterns"])
         # Unfiltered here: this endpoint has no experiment to scope by.
-        self.assertTrue(body["types"][1]["requires_reference"])
+        self.assertTrue(body["types"][2]["requires_reference"])
 
     def test_the_offered_list_leads_with_mutations_and_ends_with_replace_annotation(self):
         """Menu order is not run order, and this is the case that separates them.

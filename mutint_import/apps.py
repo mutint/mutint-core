@@ -34,6 +34,9 @@ class ImportConfig(AppConfig):
         # "Results Folder" rather than "breseq output": the tab is for what a pipeline left
         # behind, and breseq's is the one kind it reads today.
         register_import_tab("breseq_folder", "Results Folder", import_type="breseq_folder")
+        # An exported experiment brings its own reference, so the tab is on the strip
+        # whether or not this experiment has one yet -- like Results Folder.
+        register_import_tab("mutint_archive", "MutInt Archive", import_type="mutint_archive")
         # Last, after the plugins' tabs: correcting the annotation of an experiment that is
         # already set up is not a way of getting data into one, and it is the tab somebody
         # wants least often. `reference` above is the same question at the other moment and

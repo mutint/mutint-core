@@ -11,11 +11,13 @@ class ImportTabRegistryTestCase(TestCase):
         self.addCleanup(registry._tabs.__setitem__, slice(None), self.before)
 
     def test_only_the_ways_in_that_work_are_offered(self):
-        """An experiment with no reference can establish one, or drop a results folder --
-        which brings its own. The tabs that would refuse are not shown at all."""
+        """An experiment with no reference can establish one, or drop something that brings
+        its own -- a results folder or an archive. The tabs that would refuse are not shown
+        at all."""
         tabs = registry.get_import_tabs(7)
 
-        self.assertEqual(["reference", "breseq_folder"], [t["key"] for t in tabs])
+        self.assertEqual(["reference", "breseq_folder", "mutint_archive"],
+                         [t["key"] for t in tabs])
 
     def test_a_type_tab_lands_on_the_import_page_by_its_key(self):
         # `breseq_folder`, because a tab is only shown where its type can run and this is the

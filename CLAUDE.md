@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2631 run, 0 failures** standalone; **3093** assembled, measured with `PYTHONPATH`
+**Baseline: 2697 run, 0 failures** standalone; **3163** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3229,7 +3229,8 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_curate/`** — Editing, adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.
-- **`mutint_export/`** — Data export in various formats.
+- **`mutint_export/`** — CSV export of the mutation table. The whole-experiment archive is
+  `mutint_import/archive.py`, beside the importer that reads it back.
 - **`mutint_stats/`** — The `/stats` page: the Overview's mutation counts, the sample table,
   and whatever the installed components register as panels. **It has no models**: its counts
   are computed by the request that renders them, reading the three or four columns the answer
@@ -3540,6 +3541,97 @@ worse than an honest INS: it asserts a mechanism the data may not support, and b
 in the same `get_or_create` key it forks the row against every other import of the same call.
 
 **Both exports check `can_view_project`**, and each has a test that fails without the check.
+
+**Every sample has a VCF export, and a sample that came from none gets a generated one.**
+`export_vcf_text` used to answer None for a breseq sample, on the reasoning that there was
+no header to replay and no honest way to invent QUAL, FILTER and INFO. What that refused was
+a view for tools that speak VCF, which is a reasonable thing to want as long as the file says
+what it is. So `_generated_header` writes one -- `##source=MutInt`, `##reference` from the
+sequencing group, a `##contig` per reference contig, the `AF` INFO definition -- every row
+comes from `_regenerate`, and **the mutations VCF cannot spell are counted in
+`##mutint_omitted`, by type**: a MOB, AMP, INV or CON is left out rather than misspelt, and a
+file that silently dropped them would be the failure worth engineering against. The `.gd` is
+the complete record, which is why the archive still carries breseq samples as `.gd`. The
+stored path counts its unspellable additions the same way, where it used to drop them
+without a word.
+
+**Both exports say where the sample sits, in the header the importer reads.** A `.gd` used to
+come back out with two header lines and the shared record's `frequency`; dropped again under
+a name that said nothing, it landed unplaced. Three things changed, and the VCF export got the
+matching one:
+
+- **The `.gd`'s own header is kept at import** -- `gd_import.record_document_header`, under
+  `supplemental_data["mutint_core"]["genome_diff"]` as `[name, value]` pairs because a key
+  may repeat -- at all three sites that import one (the CLI, the web handler and the breseq
+  folder; the web handler had also never recorded inputs). `export_gd_header` replays it
+  minus `GENOME_DIFF` and minus every key `metadata.SYNONYMS` knows, then writes `SAMPLE`,
+  `POPULATION` and `TIME_POINT` (together or not at all, as `_clean_coordinate` requires) and
+  `SAMPLE_TYPE clone|population`, in the spelling `coordinate_from_headers` reads back. The
+  placement keys are dropped from the replay rather than kept beside MutInt's because the
+  sample may have been moved since; an LTEE file's `#=TIME 30000` must not contradict it.
+  `READSEQ` is written from the recorded inputs only when the replay carried none.
+- **`Mutation.to_gd_line(frequency=)`** puts the call's own frequency on the line. The record
+  is shared and holds whichever file wrote it first, so a mixed sample's line carried another
+  sample's number. An equal value keeps the record's spelling, so a fresh import still
+  exports the line it was read from.
+- **The VCF export upserts one `##SAMPLE=<ID=<column>,sample=,population=,time_point=,
+  sample_type=>` line** for the sample's column -- the spec's own per-column metadata and the
+  line `vcf_import.metadata_for` reads first. Rewritten in place when the file already has
+  one, keeping its other fields, so exporting an imported export is byte-identical; the
+  `#CHROM` line names the column after the sample too, so a projection of a multi-sample
+  file is re-importable as the sample it is. `_structured_fields` parses `key="a, b"` now,
+  which the `csv` reader it used did not: a quote after `=` is not a quoted field to it.
+
+### An experiment travels as an archive
+
+`mutint_import/archive.py` writes an experiment as one zip and reads it back: `mutint.json`
+(the manifest), `metadata.csv`, the stored reference pair byte for byte, and one `.gd` or
+VCF per sample -- VCF where the sample arrived as one, since that export is verbatim.
+**Export experiment** on the Reference page and a link on the Import data page serve it
+(`/import/archive/<id>/export`, `can_view_project`, 404 without a reference); mutint-api
+serves the same bytes for a public experiment. It carries mutations and the reference and
+nothing derived from reads: alignments, coverage and the report are gigabytes, and every
+analysis reads the mutations. Writer and reader sit in one module, as `vcf_import` and
+`vcf_export` do, so the two halves cannot disagree about a key.
+
+**The manifest is authoritative on import.** `handle_archives` installs the reference
+through `install_annotation` (all or nothing: a different sequence refuses every row, a newer
+annotation of the same one replaces the target's), imports each sample file through the same
+`.gd` and VCF importers a plain drop uses, and then `apply_manifest` overwrites the
+experiment's name and notes, the populations' description/species/strain, each sample's
+flags, description and four `mutint_core` groups, the publications and the ancestor. A lock
+is not carried and nothing about the project is. Derived data is rebuilt once at the end,
+after the ancestor is set, since it subtracts that sample.
+
+Five decisions are load-bearing:
+
+- **Placement goes through the seam, from the archive's own CSV.** `placement_for` parses
+  `metadata_csv(manifest)` with `metadata.parse` and installs it with a nested
+  `metadata.applying` (which restores the outer slot), so the archive's `metadata.csv` and
+  the coordinate the importer applies are one text -- and re-importing an archive lands on
+  the same samples, because the chain is `get_or_create` on the coordinate. The sample each
+  entry became is then found by that coordinate (`find_imported`), not by `source_name`,
+  which the manifest may have just rewritten.
+- **`metadata.split_paths` leaves a CSV with a `mutint.json` sibling alone.** It matches by
+  basename at any depth, so it would otherwise take the archive's CSV for the whole drop and
+  report every row as naming nothing.
+- **The handler runs first and claims everything under its folder** (`PRIORITY_ARCHIVE = 5`).
+  `run_import` hands a path to the first claimant, so the reference pair and the sample
+  files never reach the handlers that would route them by suffix, with no change to those
+  handlers' detects. It is offered with or without a reference, like Results Folder.
+- **Its patterns are `mutint.json` and `.zip`, never `.gd`.** `identify()` names types in
+  priority order and this handler is first, so a stray `.gd` on any tab would otherwise be
+  described as looking like an archive. `directories=["samples", "reference"]` is what makes
+  the page upload the folder's contents for the tab.
+- **A zip is unpacked into a temporary directory, not beside the drop**, with every member
+  checked to land inside it. A CLI import may be walking a directory the operator keeps, and
+  the staging area is removed anyway. `zipfile` into a `BytesIO` on the way out, not
+  zipstream-ng: genomes are megabytes, the result is trivially testable, and a failure is a
+  clean 500 rather than a truncated stream.
+
+`mutint_import/tests/test_archive.py` holds the round trip -- every field, population,
+publication, the ancestor and the call set equal on a fresh experiment, from the folder,
+from the zip and from the CLI -- and `docs/using/exporting-an-experiment.md` is the guide.
 
 ### Reference annotators run on the reference after it lands
 

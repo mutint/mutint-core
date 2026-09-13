@@ -43,6 +43,7 @@ from mutint_import import reference_store
 from mutint_sample import inputs
 from mutint_import.gd_import import (
     _parse_document,
+    record_document_header,
     record_document_inputs,
     _prepare_experiment,
     parse_warnings,
@@ -313,6 +314,7 @@ def _import_one_sample(sample_dir, sample_name, context):
     # falling back to the folder's name for a `data/` tree assembled by hand.
     record_document_inputs(seq_experiment, document, sample_name,
                            kind=inputs.KIND_FOLDER)
+    record_document_header(seq_experiment, document)
 
     sample_store = store.ensure_dir(store.sample_dir(seq_experiment.id))
     shutil.copyfile(gd_path, os.path.join(sample_store, store.SAMPLE_GD))

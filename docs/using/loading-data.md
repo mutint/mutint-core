@@ -41,6 +41,10 @@ chosen type — to how it loaded.
 **Sample statistics come from `data/summary.json`** — total reads, average read length, percent
 mapped, mean coverage. A sample without that file still imports with those left at zero.
 
+**An experiment exported from another MutInt** goes on the **MutInt Archive** tab, as the zip
+or the folder it unpacks to. It brings its own reference and its own details, which replace
+the target experiment's -- see *Exporting an experiment*.
+
 ## Where a sample sits in the evolution
 
 A sample's place -- its population, its time point, and its name within the population --

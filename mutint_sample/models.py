@@ -317,6 +317,23 @@ class UncalledRegion(models.Model):
         verbose_name_plural = "uncalled regions"
 
 
+def _override_frequency(attributes, frequency):
+    """Put a call's own frequency on a record's attributes; see `Mutation.to_gd_line`."""
+    if frequency is None:
+        return
+    stored = attributes.get("frequency")
+    if stored is None:
+        if float(frequency) != 1.0:
+            attributes["frequency"] = "%.10g" % float(frequency)
+        return
+    try:
+        unchanged = float(stored) == float(frequency)
+    except (TypeError, ValueError):
+        unchanged = False
+    if not unchanged:
+        attributes["frequency"] = "%.10g" % float(frequency)
+
+
 class Mutation(SupplementalDataMixin):
     mutation_type = models.CharField(max_length=3,
                                      null=True,
@@ -427,12 +444,19 @@ class Mutation(SupplementalDataMixin):
         return u"%d %s" % (self.start_position,
                            self.sequence_change)
 
-    def to_gd_line(self) -> str:
+    def to_gd_line(self, frequency=None) -> str:
         """Reconstruct this mutation's GenomeDiff line (for gdtools APPLY).
 
         Prefers the verbatim record; falls back to a best-effort line built from the scalar
         columns for legacy rows that have none (that fallback is not guaranteed
         APPLY-complete — the discrete alleles were not captured for those rows).
+
+        **`frequency` is the one per-sample value on the line.** The record is shared by
+        every sample carrying this mutation and holds whichever file wrote it first, so a
+        mixed sample's own `MutationCall.frequency` is what its `.gd` has to say. Given one,
+        it replaces the record's when the two differ as numbers and is added when the record
+        has none and it is not the clonal default; an equal value keeps the record's own
+        spelling, so a fresh import still exports the line it was read from.
 
         **It splats every key it is given, and that is why it reads one key rather than the
         column.** `supplemental_data` is shared — a plugin may keep its own import records
@@ -448,6 +472,7 @@ class Mutation(SupplementalDataMixin):
             record_type = data.pop('type', self.mutation_type)
             record_id = data.pop('id', self.id)
             parent_ids = data.pop('parent_ids', None)
+            _override_frequency(data, frequency)
             return str(Record(record_type, record_id, parent_ids=parent_ids, **data))
 
         if self.mutation_type not in TYPE_SPECIFIC_FIELDS:
@@ -456,6 +481,7 @@ class Mutation(SupplementalDataMixin):
         attributes = {'seq_id': self.seq_id, 'position': self.start_position}
         if self.feature_length is not None:
             attributes['size'] = self.feature_length
+        _override_frequency(attributes, frequency)
         return str(Record(self.mutation_type, self.id, parent_ids=None, **attributes))
 
     #: The K-12 MG1655 accession EcoCyc's gene pages are keyed on. Matched on the accession

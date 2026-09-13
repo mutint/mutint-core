@@ -697,3 +697,186 @@ class NewParserBehaviorTestCase(GdImportTestCase):
         rows = Mutation.objects.filter(start_position=100, mutation_type="DEL")
         self.assertEqual(1, rows.count(), "one mutation, however the size was written")
         self.assertEqual("del 42 bp", rows.get().sequence_change)
+
+
+class ExportHeaderTestCase(GdImportTestCase):
+    """The `.gd` a sample exports carries its header back, and says where the sample sits.
+
+    Two halves. The file's own `#=` lines are kept at import (`record_document_header`) and
+    replayed, minus the ones that place a sample; then MutInt writes the current coordinate
+    in the spelling its own importer reads. Re-importing an export therefore lands where the
+    sample is now, wherever the file was named from.
+    """
+
+    def _export_lines(self, sample):
+        return [line for line in gd_import.export_gd_text(sample).splitlines()
+                if line.startswith("#=")]
+
+    def test_the_header_is_kept_at_import(self):
+        self._import(CLEAN_GD)
+        header = Sample.objects.get().record(gd_import.GD_RECORD)["header"]
+        self.assertIn(["TITLE", "Ara-3_30000gen_ZDB16"], header)
+        self.assertIn(["AUTHOR", "Deatherage DE"], header)
+        self.assertIn(["READSEQ",
+                       "ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR098/SRR098031/SRR098031.fastq.gz"],
+                      header)
+
+    def test_the_export_replays_the_header_and_drops_what_places_the_sample(self):
+        self._import(CLEAN_GD)
+        lines = self._export_lines(Sample.objects.get())
+
+        self.assertEqual("#=GENOME_DIFF\t1.0", lines[0])
+        self.assertIn("#=TITLE\tAra-3_30000gen_ZDB16", lines)
+        self.assertIn("#=AUTHOR\tDeatherage DE", lines)
+        self.assertIn("#=CLONE\tA", lines)
+        self.assertIn("#=MUTATOR_STATUS\tnon-mutator", lines)
+        self.assertIn("#=REFSEQ\tBarrickLab-Public:release/reference/REL606.6.gbk", lines)
+        # One READSEQ: the replayed one, not a second copy from the recorded inputs.
+        self.assertEqual(1, len([line for line in lines if line.startswith("#=READSEQ\t")]))
+        # `TIME`, `POPULATION` and `TREATMENT` (a synonym for population) place the sample,
+        # and MutInt writes the coordinate itself -- so the population appears once, as
+        # MutInt's line, and the file's `TIME` spelling not at all.
+        for key in ("#=TIME\t", "#=TREATMENT\t"):
+            self.assertFalse([line for line in lines if line.startswith(key)], key)
+        self.assertEqual(1, lines.count("#=POPULATION\tAra-3"))
+
+    def test_the_export_writes_the_coordinate(self):
+        self._import(CLEAN_GD)
+        lines = self._export_lines(Sample.objects.get())
+
+        self.assertIn("#=SAMPLE\t1-1", lines)
+        self.assertIn("#=POPULATION\tAra-3", lines)
+        self.assertIn("#=TIME_POINT\t30000", lines)
+        self.assertIn("#=SAMPLE_TYPE\tclone", lines)
+        # The coordinate comes after the replayed header, and in this order.
+        keys = [line.split("\t")[0] for line in lines]
+        self.assertEqual(["#=SAMPLE", "#=POPULATION", "#=TIME_POINT", "#=SAMPLE_TYPE"],
+                         keys[-4:])
+
+    def test_an_unplaced_sample_writes_no_population_or_time_point(self):
+        self._ensure_reference()
+        gd_import.import_gd_files(
+            [_uploaded_as(CLEAN_GD, "whatever.gd")], project_name="gd project",
+            experiment_name="gd exp", owner_name="tester")
+        sample = Sample.objects.get()
+        self.assertIsNone(sample.time_point)
+        lines = self._export_lines(sample)
+
+        self.assertIn("#=SAMPLE\t%s" % sample.name, lines)
+        self.assertFalse([line for line in lines if line.startswith("#=POPULATION")])
+        self.assertFalse([line for line in lines if line.startswith("#=TIME_POINT")])
+
+    def test_a_population_sample_says_so(self):
+        self._import(CLEAN_GD)
+        Sample.objects.update(is_clonal=False)
+        self.assertIn("#=SAMPLE_TYPE\tpopulation", self._export_lines(Sample.objects.get()))
+
+    def test_a_fractional_time_point_keeps_its_fraction(self):
+        self._import(CLEAN_GD)
+        Sample.objects.update(time_point=2.5)
+        self.assertIn("#=TIME_POINT\t2.5", self._export_lines(Sample.objects.get()))
+
+    def test_reimporting_an_export_lands_on_the_same_sample(self):
+        self._import(CLEAN_GD)
+        sample = Sample.objects.get()
+        text = gd_import.export_gd_text(sample)
+
+        # Under a name that says nothing: the header is what places it.
+        gd_import.import_gd_files(
+            [SimpleUploadedFile("exported.gd", text.encode("utf-8"))],
+            project_name="gd project", experiment_name="gd exp", owner_name="tester")
+
+        self.assertEqual(1, Sample.objects.count())
+        self.assertEqual(sample.pk, Sample.objects.get().pk)
+
+    def test_an_export_places_the_sample_in_another_experiment(self):
+        self._import(CLEAN_GD)
+        text = gd_import.export_gd_text(Sample.objects.get())
+
+        self._ensure_reference("other exp")
+        gd_import.import_gd_files(
+            [SimpleUploadedFile("exported.gd", text.encode("utf-8"))],
+            project_name="gd project", experiment_name="other exp", owner_name="tester")
+
+        moved = Sample.objects.get(population__experiment__name="other exp")
+        self.assertEqual(("Ara-3", 30000, "1-1"),
+                         (moved.population.name, moved.time_point, moved.name))
+        self.assertTrue(moved.is_clonal)
+
+    def test_a_moved_sample_exports_its_new_coordinate(self):
+        self._import(CLEAN_GD)
+        sample = Sample.objects.get()
+        elsewhere = Population.objects.create(experiment=sample.experiment, name="Ara+1")
+        sample.population = elsewhere
+        sample.time_point = 500
+        sample.name = "7"
+        sample.save()
+
+        lines = self._export_lines(Sample.objects.get())
+        self.assertIn("#=POPULATION\tAra+1", lines)
+        self.assertIn("#=TIME_POINT\t500", lines)
+        self.assertIn("#=SAMPLE\t7", lines)
+        self.assertNotIn("#=POPULATION\tAra-3", lines)
+
+    def test_a_sample_with_no_stored_header_falls_back_to_the_sequencing_group(self):
+        self._import(CLEAN_GD)
+        sample = Sample.objects.get()
+        sample.set_record(Sample.COMPONENT, gd_import.GD_RECORD, {})
+        sample.set_record(Sample.COMPONENT, Sample.SEQUENCING,
+                          {"date": "2020-01-01", "reference_genome": "REL606.gbk"})
+
+        lines = self._export_lines(Sample.objects.get())
+        self.assertIn("#=REFSEQ\tREL606.gbk", lines)
+        self.assertIn("#=CREATED\t2020-01-01", lines)
+        self.assertIn("#=SAMPLE\t1-1", lines)
+
+    def test_recorded_read_files_are_written_when_the_header_named_none(self):
+        from mutint_sample import inputs
+
+        self._import(CLEAN_GD)
+        sample = Sample.objects.get()
+        sample.set_record(Sample.COMPONENT, gd_import.GD_RECORD, {})
+        inputs.record_inputs(sample, inputs.read_entries(["a_R1.fastq.gz", "a_R2.fastq.gz"]))
+
+        lines = self._export_lines(Sample.objects.get())
+        self.assertEqual(["#=READSEQ\ta_R1.fastq.gz", "#=READSEQ\ta_R2.fastq.gz"],
+                         [line for line in lines if line.startswith("#=READSEQ")])
+
+    def test_each_sample_exports_its_own_frequency(self):
+        """The record is shared and holds the first file's frequency; the call has its own."""
+        header = "#=GENOME_DIFF\t1.0\n#=REFSEQ\tREL606\n"
+        self._ensure_reference()
+        for name, frequency in (("1-100-1-1.gd", "1"), ("1-200-1-1.gd", "0.42")):
+            body = "SNP\t1\t.\tREL606\t100\tA\tfrequency=%s\n" % frequency
+            gd_import.import_gd_files(
+                [SimpleUploadedFile(name, (header + body).encode("utf-8"))],
+                project_name="gd project", experiment_name="gd exp", owner_name="tester")
+
+        self.assertEqual(1, Mutation.objects.count())
+        first = gd_import.export_gd_text(Sample.objects.get(time_point=100))
+        second = gd_import.export_gd_text(Sample.objects.get(time_point=200))
+        self.assertIn("frequency=1", first.splitlines()[-1])
+        self.assertNotIn("0.42", first)
+        self.assertIn("frequency=0.42", second.splitlines()[-1])
+
+    def test_a_call_with_no_frequency_in_the_record_gets_one_when_it_is_not_clonal(self):
+        self._import(CLEAN_GD)
+        call = MutationCall.objects.select_related("mutation").first()
+        self.assertNotIn("frequency", call.mutation.genome_diff)
+        self.assertNotIn("frequency=", call.mutation.to_gd_line(frequency=1.0))
+        self.assertIn("frequency=0.25", call.mutation.to_gd_line(frequency=0.25))
+
+    def test_the_web_drop_records_inputs_and_header_too(self):
+        from mutint_import import handlers
+
+        experiment = self._ensure_reference()
+        staged = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, staged, True)
+        shutil.copyfile(CLEAN_GD, os.path.join(staged, "3-30000-1-1.gd"))
+
+        handlers.handle_genomediff(experiment, staged, ["3-30000-1-1.gd"], self.user)
+
+        sample = Sample.objects.get()
+        self.assertTrue(sample.record(gd_import.GD_RECORD).get("header"))
+        self.assertEqual(["ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR098/SRR098031/SRR098031.fastq.gz"],
+                         [item["value"] for item in sample.inputs])

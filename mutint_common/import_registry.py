@@ -24,6 +24,9 @@ import os
 
 _import_handlers = []
 
+#: An archive brings its own reference and claims everything under its folder, so it runs
+#: -- and in pass one, claims -- before the reference handler could take its files.
+PRIORITY_ARCHIVE = 5
 PRIORITY_REFERENCE = 10
 PRIORITY_DATA = 50
 

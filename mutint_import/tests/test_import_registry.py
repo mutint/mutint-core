@@ -46,12 +46,15 @@ class ImportRegistryRoutingTestCase(TestCase):
     def test_core_types_are_registered_in_priority_order(self):
         names = [t["name"] for t in import_registry.get_import_types()]
         self.assertEqual(
-            names[:4], ["reference", "replace_annotation", "breseq_folder", "genomediff"])
+            names[:5], ["mutint_archive", "reference", "replace_annotation", "breseq_folder",
+                        "genomediff"])
         # Reference must run before anything that is checked against it.
         handlers = import_registry.get_import_handlers()
         by_name = {h["name"]: h["priority"] for h in handlers}
         self.assertLess(by_name["reference"], by_name["breseq_folder"])
         self.assertLess(by_name["reference"], by_name["genomediff"])
+        # An archive brings its own reference and must claim its files before that handler.
+        self.assertLess(by_name["mutint_archive"], by_name["reference"])
 
     # --- auto-detect ------------------------------------------------------------------
 

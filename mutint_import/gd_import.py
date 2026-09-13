@@ -185,7 +185,35 @@ def _import_one_file(uploaded, filename, context):
     # The sample used to be discarded here. What a bare `.gd` drop was made from is the `.gd`
     # -- and if breseq wrote it, the file itself names the reads it was called from.
     record_document_inputs(sample, document, filename)
+    record_document_header(sample, document)
     return count, parse_warnings(document)
+
+
+#: The `Sample.supplemental_data` group holding a `.gd`'s own header, under `mutint_core`.
+GD_RECORD = "genome_diff"
+
+
+def record_document_header(sample, document):
+    """Keep the `.gd`'s `#=` header on the sample, so its export can write it back.
+
+    Everything the file said about itself -- `TITLE`, `AUTHOR`, `CREATED`, `COMMAND`, every
+    `REFSEQ` and `READSEQ` -- in file order, as `[name, value]` pairs because a key may
+    repeat and `MetadataDict.lists` answers every value. The importer reads three of these
+    keys into columns and would otherwise discard the rest, which is what left a re-imported
+    file with a header of two lines. The VCF path keeps its header the same way
+    (`vcf_import.header_record`).
+
+    Only a real `GenomeDiff` has `lists`; the VCF importer's `_AsGenomeDiff` carries a plain
+    dict and records its header under its own key, so this is a no-op there. Called after
+    the sample exists, like `record_document_inputs`, so a re-import refreshes it.
+    """
+    metadata = getattr(document, "metadata", None)
+    if not hasattr(metadata, "lists"):
+        return
+    header = [[name, "" if value is None else str(value)]
+              for name, values in metadata.lists()
+              for value in values]
+    sample.set_record(Sample.COMPONENT, GD_RECORD, {"header": header})
 
 
 def record_document_inputs(sample, document, filename, kind=inputs.KIND_GENOMEDIFF):
@@ -673,21 +701,82 @@ def export_gd_text(seq_experiment):
 
     The result is a valid ``.gd`` accepted by ``gdtools APPLY`` (resolution of MOB
     ``repeat_name`` / CON/INT ``region`` still requires the reference genbank named
-    in ``#=REFSEQ``)."""
-    lines = ["#=GENOME_DIFF\t1.0"]
-    reference_genome = seq_experiment.sequencing.get("reference_genome") or ""
-    if reference_genome:
-        lines.append("#=REFSEQ\t%s" % reference_genome)
-
+    in ``#=REFSEQ``), and one the importer places where the sample sits now: the header
+    is the file's own, replayed, followed by the lines MutInt writes itself. See
+    `export_gd_header`.
+    """
+    lines = export_gd_header(seq_experiment)
     calls = (MutationCall.objects
                 .filter(sample=seq_experiment)
                 .select_related("mutation")
                 .order_by("mutation__start_position"))
     for mutation_call in calls:
-        gd_line = mutation_call.mutation.to_gd_line()
+        gd_line = mutation_call.mutation.to_gd_line(frequency=mutation_call.frequency)
         if gd_line:
             lines.append(gd_line)
     return "\n".join(lines) + "\n"
+
+
+#: Header lines the export writes, in this order after the replayed ones.
+_SAMPLE_KEY = "SAMPLE"
+_POPULATION_KEY = "POPULATION"
+_TIME_POINT_KEY = "TIME_POINT"
+_SAMPLE_TYPE_KEY = "SAMPLE_TYPE"
+
+
+def export_gd_header(sample):
+    """The `#=` lines of a sample's `.gd`, as a list without newlines.
+
+    Two parts. **The file's own header replayed**, from what `record_document_header` kept,
+    minus `GENOME_DIFF` (written first, once) and minus every key that places a sample --
+    anything `metadata.SYNONYMS` knows, so an LTEE file's `#=TIME 30000` cannot contradict a
+    sample somebody has since moved. A sample with no stored header (imported before it was
+    kept, or from a VCF) gets `REFSEQ` and `CREATED` back from the `sequencing` group, which
+    is where the importer put them.
+
+    **Then where the sample sits**, in the spelling `coordinate_from_headers` reads back:
+    `SAMPLE`, then `POPULATION` and `TIME_POINT` together or not at all -- the importer
+    refuses one without the other, and a sample not placed yet has neither -- then
+    `SAMPLE_TYPE clone|population`. Last, one `READSEQ` per read file the sample records,
+    only when the replayed header named none, since a header breseq wrote already has them.
+    """
+    stored = sample.record(GD_RECORD).get("header") or []
+    lines = ["#=GENOME_DIFF\t1.0"]
+    replayed_keys = set()
+    for name, value in stored:
+        if name == "GENOME_DIFF":
+            continue
+        if sample_metadata.is_placement_key(name):
+            continue
+        replayed_keys.add(name)
+        lines.append("#=%s\t%s" % (name, value))
+    if not stored:
+        sequencing = sample.sequencing
+        if sequencing.get("reference_genome"):
+            lines.append("#=REFSEQ\t%s" % sequencing["reference_genome"])
+        if sequencing.get("date"):
+            lines.append("#=CREATED\t%s" % sequencing["date"])
+
+    lines.append("#=%s\t%s" % (_SAMPLE_KEY, sample.name))
+    population = sample.population_name
+    if sample.time_point is not None and population != UNSPECIFIED_POPULATION:
+        lines.append("#=%s\t%s" % (_POPULATION_KEY, population))
+        lines.append("#=%s\t%s" % (_TIME_POINT_KEY, format_time_point(sample.time_point)))
+    lines.append("#=%s\t%s" % (_SAMPLE_TYPE_KEY,
+                                "clone" if sample.is_clonal else "population"))
+    if "READSEQ" not in replayed_keys:
+        for item in sample.inputs:
+            if item.get("kind") == inputs.KIND_READS and item.get("value"):
+                lines.append("#=READSEQ\t%s" % item["value"])
+    return lines
+
+
+def format_time_point(time_point):
+    """`500` for `500.0`, `2.5` for `2.5` -- the way a person writes the column."""
+    value = float(time_point)
+    if value == int(value):
+        return "%d" % int(value)
+    return "%g" % value
 
 
 def synthesize_sequence_change(record):

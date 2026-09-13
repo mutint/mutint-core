@@ -59,6 +59,15 @@ SYNONYMS = {
     "sampletype": "sample_type",
 }
 
+def is_placement_key(key):
+    """Whether a header key is one that places a sample -- anything `SYNONYMS` knows.
+
+    The `.gd` export asks, so that a replayed header cannot carry a coordinate the sample
+    has since been moved away from; the export writes the current one itself.
+    """
+    return _normalize_key(key) in SYNONYMS
+
+
 #: What placed a sample; recorded per import so the summary can say which rule applied.
 BY_CSV = "metadata.csv"
 BY_HEADER = "header"
@@ -351,9 +360,20 @@ def is_metadata_file(path):
 
 
 def split_paths(paths):
-    """`(metadata paths, the rest)` -- the CSV is never one of the drop's inputs."""
-    mine = [path for path in paths if is_metadata_file(path)]
-    rest = [path for path in paths if not is_metadata_file(path)]
+    """`(metadata paths, the rest)` -- the CSV is never one of the drop's inputs.
+
+    **Except inside a MutInt archive.** An exported experiment carries a `metadata.csv`
+    beside its `mutint.json`, and that one belongs to the archive: its importer reads it
+    itself, so taking it here would install it for the whole drop and then report every
+    row as naming nothing. A CSV with a manifest as its sibling is left in place.
+    """
+    from mutint_import.archive import MANIFEST
+
+    archives = {os.path.dirname(path) for path in paths
+                if os.path.basename(path) == MANIFEST}
+    mine = [path for path in paths
+            if is_metadata_file(path) and os.path.dirname(path) not in archives]
+    rest = [path for path in paths if path not in mine]
     return mine, rest
 
 

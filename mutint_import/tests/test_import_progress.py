@@ -167,6 +167,50 @@ class AnnouncedNamesTestCase(ImportProgressTestCase):
 
         self.assertEqual(len(recorder.announced), 1, recorder.announced)
 
+    def test_an_archive_announces_the_reference_and_each_sample_file(self):
+        import io
+        import zipfile
+
+        from mutint_import import archive
+        from mutint_import.breseq_folder import import_samples_into
+
+        source_drop = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, source_drop, True)
+        breseq_fixture.write_sample(source_drop, "1-30000-1-1")
+        breseq_fixture.write_sample(source_drop, "1-40000-1-1")
+        import_samples_into(self.experiment, source_drop, user=self.user)
+        payload = archive.archive_bytes(self.experiment)
+        with zipfile.ZipFile(io.BytesIO(payload)) as zipped:
+            zipped.extractall(self.drop)
+
+        from mutint_experiment.views import _create_experiment
+        self.experiment = _create_experiment(self.project, "target", self.user)
+        recorder, _summary = self.run_drop(import_type="mutint_archive")
+
+        self.assertEqual(recorder.announced,
+                         ["reference", "1-30000-1-1.gd", "1-40000-1-1.gd"])
+        self.assert_announcement_matches_reports(recorder)
+
+    def test_a_zipped_archive_announces_the_same_units(self):
+        import zipfile
+
+        from mutint_import import archive
+        from mutint_import.breseq_folder import import_samples_into
+
+        source_drop = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, source_drop, True)
+        breseq_fixture.write_sample(source_drop, "1-30000-1-1")
+        import_samples_into(self.experiment, source_drop, user=self.user)
+        with open(os.path.join(self.drop, "exp.zip"), "wb") as handle:
+            handle.write(archive.archive_bytes(self.experiment))
+
+        from mutint_experiment.views import _create_experiment
+        self.experiment = _create_experiment(self.project, "target", self.user)
+        recorder, _summary = self.run_drop(import_type="mutint_archive")
+
+        self.assertEqual(recorder.announced, ["reference", "1-30000-1-1.gd"])
+        self.assert_announcement_matches_reports(recorder)
+
     def test_genomediff_announces_basenames_not_paths(self):
         self.write_reference()
         nested = os.path.join(self.drop, "batch")

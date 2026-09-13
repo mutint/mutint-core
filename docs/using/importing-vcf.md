@@ -63,8 +63,20 @@ genome.
 ## Getting the VCF back out
 
 `/import/vcf/<sample id>/export` returns the sample as the VCF it came from — the same header
-and the same data lines, byte for byte for a single-sample file. A sample that never came from
-a VCF has no export.
+and the same data lines, byte for byte for a single-sample file, plus one header line MutInt
+adds: a `##SAMPLE=<ID=...>` line naming the sample's population, time point, name and whether
+it is a clone or a population sample, as they are now. That line is what the importer reads
+first when the file is dropped again, so a re-import lands where the sample sits rather than
+where its filename would put it.
+
+A sample that came from breseq rather than a VCF gets one **generated** from its mutations,
+under a header MutInt writes: the reference's contigs, the placement line, and a `##source`
+line naming MutInt. Its `QUAL` and `FILTER` are `.` and `INFO` carries the frequency as
+`AF=`. It is a view for tools that speak VCF, and a lossy one: a mobile element insertion,
+an amplification, an inversion or a conversion has no VCF spelling and is left out, and the
+`##mutint_omitted=` header counts them by type. The sample's `.gd` is the complete record,
+and is what to drop back on MutInt: re-importing a generated VCF over the sample replaces
+its calls with only the ones the file could spell.
 
 Mutations **added or edited in MutInt** since the import have no original line, so they are
 rebuilt from the mutation, and the file says so in an `##mutint_regenerated=` header. Their

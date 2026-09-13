@@ -5,6 +5,9 @@ from mutint_import import import_views, staging, upload_session, views
 urlpatterns = [
     re_path(r'^gd/(?P<sample_id>\d+)/export$', views.gd_export_view, name='gd_export'),
     re_path(r'^vcf/(?P<sample_id>\d+)/export$', views.vcf_export_view, name='vcf_export'),
+    # The whole experiment as one zip, re-importable on the MutInt Archive tab.
+    re_path(r'^archive/(?P<experiment_id>\d+)/export$', views.archive_export_view,
+            name='archive_export'),
 
     # One place to import anything into an experiment: a strip of tabs from the import tab
     # registry, one per type, and the page itself for `?type=`. A plugin's tab is reachable

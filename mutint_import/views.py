@@ -9,9 +9,11 @@ is now the `replace_annotation` import type in `handlers.py`.
 """
 
 from django.http import HttpResponse
+from django.utils.http import content_disposition_header
 
+from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_view_project
-from mutint_import import gd_import, vcf_export
+from mutint_import import archive, gd_import, vcf_export
 from mutint_sample.models import Sample
 
 
@@ -53,20 +55,35 @@ def gd_export_view(request, sample_id):
 
 
 def vcf_export_view(request, sample_id):
-    """Download this sample as the VCF it was imported from.
-
-    404 for a sample that never came from one: there is no header to write and no honest way
-    to invent the fields a VCF has that GenomeDiff does not.
-    """
+    """Download this sample as VCF: the file it was imported from, or one generated from
+    its mutations -- see `vcf_export` for what a generated one says it left out."""
     sample, refusal = _viewable_sample(request, sample_id)
     if refusal is not None:
         return refusal
 
     text = vcf_export.export_vcf_text(sample)
-    if text is None:
-        return HttpResponse("This sample was not imported from a VCF.", status=404)
-
     filename = "%s.vcf" % (sample.source_name or ("sample_%s" % sample_id))
     response = HttpResponse(text, content_type="text/plain")
     response["Content-Disposition"] = 'attachment; filename="%s"' % filename
+    return response
+
+
+def archive_export_view(request, experiment_id):
+    """Download the whole experiment as a MutInt archive -- see `mutint_import.archive`.
+
+    Same 404 posture as the sample exports: an experiment you cannot see is not
+    distinguishable from one that does not exist. An experiment with no reference has no
+    archive, since every mutation in it is defined against one.
+    """
+    experiment = (Experiment.objects.filter(pk=experiment_id)
+                  .select_related("project").first())
+    if experiment is None or not can_view_project(request.user, experiment.project):
+        return HttpResponse("Experiment not found.", status=404)
+    try:
+        payload = archive.archive_bytes(experiment)
+    except archive.ArchiveError as error:
+        return HttpResponse(str(error), status=404)
+    response = HttpResponse(payload, content_type="application/zip")
+    response["Content-Disposition"] = content_disposition_header(
+        True, archive.archive_filename(experiment))
     return response
