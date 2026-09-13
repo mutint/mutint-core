@@ -88,6 +88,18 @@ class ParseTestCase(SimpleTestCase):
             rows = metadata.parse(handle.read()).rows
         self.assertGreaterEqual(len(rows), 4)
         self.assertIn("s1", [token for row in rows for token in row.data])
+        # The reads example the breseq launcher links: stems that match a pair, a two-lane
+        # row, a population sample and an unplaced one.
+        reads = finders.find("mutint_import/metadata-example-reads.csv")
+        self.assertIsNotNone(reads)
+        with open(reads, encoding="utf-8") as handle:
+            parsed = metadata.parse(handle.read())
+        self.assertGreaterEqual(len(parsed.rows), 4)
+        mixed = parsed.lookup_stem(["Ara-2_2000gen_L001_R1.fastq.gz"])
+        self.assertEqual("mix", mixed.sample)
+        self.assertFalse(mixed.is_clonal)
+        self.assertEqual("763A", parsed.lookup_stem(
+            ["Ara-2_500gen_763A_R1.fastq.gz", "Ara-2_500gen_763A_R2.fastq.gz"]).sample)
 
 
 class LookupTestCase(SimpleTestCase):

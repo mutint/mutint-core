@@ -1,0 +1,19 @@
+# metadata.csv for the Run breseq page, under Multiple samples. Drop it among the read files.
+# Lines starting with # are ignored.
+#
+# Each row is one sample. The data cell names its read files exactly, or by a stem the files
+# share: "s1" covers s1_R1.fastq.gz and s1_R2.fastq.gz; several stems separated by ;
+# The longest matching stem wins, so "S12" beats "S1" for S12_R1.fastq.gz.
+#
+# sample_type sets that sample's Population sample option: population or mixed runs breseq
+# with -p, clone or individual or isolate without. Blank uses the checkbox on the page.
+sample,population,time_point,sample_type,data
+# Two clones from the same population at different generations:
+763A,Ara-2,500,clone,Ara-2_500gen_763A
+763B,Ara-2,500,clone,Ara-2_500gen_763B
+# A population sample sequenced on two lanes, so two stems name one sample:
+mix,Ara-2,2000,population,Ara-2_2000gen_L001;Ara-2_2000gen_L002
+# Reads with names that say nothing, placed here instead:
+c7,glucose,120,clone,SRR37077254
+# A sample that is not placed yet: population and time_point both blank.
+mystery,,,,run17
