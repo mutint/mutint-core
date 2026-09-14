@@ -17,6 +17,10 @@ urlpatterns = [
     # Run the registered reference annotators against the stored reference, with nothing
     # uploaded: the Update Annotation tab's other button.
     re_path(r'^annotate$', import_views.annotate_view, name='import_annotate'),
+    # What the annotation panel under the tab strip polls while a job is in flight. GET, and
+    # on every import tab page including plugins' -- see `mutint_import.annotation_status`.
+    re_path(r'^annotators/status$', import_views.annotator_status_view,
+            name='import_annotator_status'),
 
     # Chunked upload of breseq result folders. Split into three short requests so a
     # multi-GB drop never depends on a single long-lived POST.

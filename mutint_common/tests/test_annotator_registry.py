@@ -215,3 +215,50 @@ class RunTestCase(ExperimentTestCase):
         with self.assertRaises(NoReference):
             run_annotators(self.experiment, {"t_x": {}}, self.user)
         self.assertEqual([], seen)
+
+
+class JobLinkTestCase(ExperimentTestCase):
+    """A `run` that queued something says so with `job_id`, and core makes the link.
+
+    **Core reverses it, not the component**, and both halves are load-bearing. The page writes
+    every part of an annotator row with `textContent`, precisely because the words come from
+    components -- so an `href` is the one thing a component must not be able to hand it, and a
+    `job_url` in the contract would be a `javascript:` away from a component-injected link on
+    core's own page. An integer cannot be. And `/jobs/` is core's route.
+    """
+
+    def _job(self):
+        from mutint_import import tasks as import_tasks
+        from mutint_jobs import jobs as jobs_api
+
+        return jobs_api.enqueue(import_tasks.build_coverage, 1, user=self.user,
+                                experiment=self.experiment, annotates_reference=True)
+
+    def test_a_job_id_becomes_a_link_to_that_job_s_log(self):
+        job = self._job()
+        self._register("t_queued",
+                       run=lambda e, o, u: {"message": "queued", "job_id": job.pk})
+        row = run_annotators(self.experiment, {"t_queued": {}}, self.user)[0]
+        self.assertEqual("/jobs/%d/log" % job.pk, row["job_url"])
+
+    def test_it_points_at_the_log_rather_than_the_list(self):
+        """Right even a second after queueing: the log page renders its box and its poller
+        for a job that has printed nothing yet, which is exactly when somebody opens it."""
+        job = self._job()
+        self._register("t_queued", run=lambda e, o, u: {"job_id": job.pk})
+        self.assertTrue(run_annotators(self.experiment, {"t_queued": {}},
+                                       self.user)[0]["job_url"].endswith("/log"))
+
+    def test_an_annotator_that_ran_inline_gets_no_link(self):
+        self._register("t_inline", run=lambda e, o, u: {"message": "done"})
+        self.assertNotIn("job_url",
+                         run_annotators(self.experiment, {"t_inline": {}}, self.user)[0])
+
+    def test_an_unusable_job_id_does_not_cost_the_row(self):
+        """One component's bad key must not take down a page that is mostly other
+        components' content -- the posture the whole registry takes."""
+        self._register("t_odd", run=lambda e, o, u: {"message": "eh", "job_id": "not a pk"})
+        with self.assertLogs("mutint_common.annotator_registry", level="WARNING"):
+            row = run_annotators(self.experiment, {"t_odd": {}}, self.user)[0]
+        self.assertEqual("eh", row["message"])
+        self.assertNotIn("job_url", row)

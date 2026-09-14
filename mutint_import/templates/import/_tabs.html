@@ -1,3 +1,4 @@
+{% load static %}
 {% comment %} The ways into an experiment, one tab each, from mutint_common.import_tab_registry:
    core's import types and any page a plugin registered. The same shape as the curate strip,
    for the same reason -- these are one task at different moments, not five sidebar entries.
@@ -9,4 +10,16 @@
             <a href="{{ tab.url }}">{{ tab.label }}</a></li>
     {% endfor %}
 </ul>
+
+{% comment %} Under the strip rather than on a tab, which is the whole point of it being here:
+   the Reference Sequence tab leaves the strip the moment a reference lands, so a panel drawn
+   *on* that tab is the one thing the person cannot get back to. Every page that wears the
+   strip wears this -- core's tabs and a plugin's page alike -- and the script below touches no
+   button on any of them; it announces, and each page decides. See
+   `mutint_import.annotation_status`. {% endcomment %}
+<div id="mutint-annotation-panel" class="alert alert-warning"
+     style="margin-bottom: 16px;{% if not annotation_status.busy %} display: none;{% endif %}"
+     data-status-url="{{ status_url }}" data-experiment="{{ experiment_id }}"></div>
+{{ annotation_status|json_script:"mutint-annotation-status" }}
+<script src="{% static "js/mutint_annotation_status.js" %}?v={{ asset_version }}"></script>
 {% endif %}

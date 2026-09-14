@@ -55,7 +55,15 @@
         <div class="form-group" id="accession-box" style="margin-top: 1em;">
             <label for="import-accessions">Or fetch from NCBI by accession</label>
             <textarea id="import-accessions" class="form-control" rows="2"
-                      placeholder="NC_000913.3, GCF_000005845.2"></textarea>
+                      placeholder="NC_000913.3, GCF_000005845.2">{{ accession_prefill }}</textarea>
+            {% if accession_prefill %}
+            {% comment %} A fixed sentence, and it names nobody. The value arrived in the URL,
+               so core cannot render prose about where it came from without rendering prose a
+               caller supplied -- and it has no way to know which page linked here. Saying
+               where it came from is that page's job, before it navigates. {% endcomment %}
+            <small class="help-block" id="accession-prefill-note">Filled in from a link. Check
+                it before importing.</small>
+            {% endif %}
             <small class="help-block">
                 Nucleotide accessions (<code>NC_000913.3</code>, <code>U00096.3</code>) or
                 genome assembly accessions (<code>GCF_</code>&hairsp;/&hairsp;<code>GCA_</code>),
@@ -126,6 +134,11 @@
             <small id="import-progress-text" style="color: #666;"></small>
         </div>
 
+        {% comment %} Beside the button, not only in the panel at the top of the page: a
+           disabled control whose explanation is several screens up is a dead end. {% endcomment %}
+        <div id="import-submit-hold" class="help-block" style="display: none; color: #8a6d3b;">
+            Held while a reference annotator is running &mdash; see the notice above, which
+            offers its log and a way to stop it.</div>
         <button type="submit" class="btn btn-primary" id="import-submit" disabled>Import</button>
         <button type="button" class="btn btn-default" id="import-reset" disabled>Reset</button>
         <a class="btn btn-default" href="/stats?experiment_id={{ experiment.id }}">Back to experiment</a>
@@ -189,6 +202,7 @@
     var accessionsEl = document.getElementById("import-accessions");
     var resetBtn = document.getElementById("import-reset");
     var submitBtn = document.getElementById("import-submit");
+    var submitHold = document.getElementById("import-submit-hold");
     var resultEl = document.getElementById("import-result");
     var progressEl = document.getElementById("import-progress");
     var progressBar = document.getElementById("import-progress-bar");
@@ -200,6 +214,11 @@
     // looks like it never finished. clearInterval stops the next tick, not the one already
     // in the air, so the answer has to be to ignore its result rather than to prevent it.
     var pollGeneration = 0;
+    // Whether an annotator is still rewriting this experiment's annotation. Seeded from the
+    // server so the very first paint is right -- a first-reference import reloads the page,
+    // and the answer has to be there before anything is drawn -- and kept up by the shared
+    // panel's event. See mutint_common/staticfiles/js/mutint_annotation_status.js.
+    var annotationBusy = {{ annotation_status.busy|yesno:"true,false" }};
     // The last snapshot the poll returned, kept so a failure can be shown *above* what had
     // already landed rather than replacing it.
     var lastUnits = null;
@@ -244,6 +263,23 @@
         });
     }
 
+    // The shared panel under the tab strip owns "is an annotator running"; this page only
+    // listens. Two directions: it tells us when the answer changed, and we tell it when this
+    // page has just started something -- which is what covers the Update Annotation tab and
+    // the confirm-rename re-post, neither of which reloads.
+    document.addEventListener("mutint:annotation-status", function (event) {
+        annotationBusy = !!(event.detail && event.detail.busy);
+        renderList();
+        if (annotateRunBtn) {
+            annotateRunBtn.disabled = annotationBusy || uploading || !anyAnnotatorTicked();
+        }
+    });
+
+    function announceAnnotators(rows) {
+        if (!(rows || []).some(function (row) { return row.job_id; })) { return; }
+        document.dispatchEvent(new CustomEvent("mutint:annotators-started"));
+    }
+
     // textContent throughout: messages and errors come from components.
     function annotatorList(rows) {
         var list = document.createElement("ul");
@@ -253,7 +289,17 @@
             var item = document.createElement("li");
             var label = document.createElement("strong");
             label.textContent = row.label || row.name;
-            item.appendChild(label);
+            // `job_url` is core's own reverse of a `job_id` the component returned -- never a
+            // URL a component supplied, which is why this is the one href on the row. See
+            // mutint_common.annotator_registry._link_job.
+            if (row.job_url) {
+                var link = document.createElement("a");
+                link.href = row.job_url;
+                link.appendChild(label);
+                item.appendChild(link);
+            } else {
+                item.appendChild(label);
+            }
             item.appendChild(document.createTextNode(": " + (row.error || row.message || "done")));
             if (row.error) { item.className = "text-danger"; }
             list.appendChild(item);
@@ -263,7 +309,7 @@
 
     if (annotatorPanelsEl && annotateRunBtn) {
         annotatorPanelsEl.addEventListener("change", function () {
-            annotateRunBtn.disabled = uploading || !anyAnnotatorTicked();
+            annotateRunBtn.disabled = annotationBusy || uploading || !anyAnnotatorTicked();
         });
         annotateRunBtn.addEventListener("click", function () {
             annotateRunBtn.disabled = true;
@@ -278,10 +324,11 @@
                 box.appendChild(annotatorList(body.annotators || []));
                 resultEl.innerHTML = "";
                 resultEl.appendChild(box);
+                announceAnnotators(body.annotators);
             }).catch(function (err) {
                 renderError(err.message || String(err));
             }).then(function () {
-                annotateRunBtn.disabled = uploading || !anyAnnotatorTicked();
+                annotateRunBtn.disabled = annotationBusy || uploading || !anyAnnotatorTicked();
             });
         });
     }
@@ -471,9 +518,14 @@
             fileListEl.appendChild(totalLi);
         }
         // Nothing to do if the selection holds nothing the chosen type reads -- unless an
-        // accession was typed, which is a whole import on its own.
-        submitBtn.disabled = !typeSelect.value ||
+        // accession was typed, which is a whole import on its own. And nothing to do at all
+        // while an annotator is still rewriting the annotation: what landed now would carry
+        // calls made against the reference as it is, which re-annotating afterwards cannot
+        // undo. `renderList` owns this flag -- the listener below sets `annotationBusy` and
+        // calls back here rather than reaching for the button itself.
+        submitBtn.disabled = annotationBusy || !typeSelect.value ||
             (Object.keys(buckets).length === 0 && !accessionsText());
+        if (submitHold) { submitHold.style.display = annotationBusy ? "" : "none"; }
     }
 
     typeSelect.addEventListener("change", renderList);
@@ -715,6 +767,11 @@
         // Always, failures included: re-pressing Import would re-upload and re-import the
         // samples that already landed, so re-picking the folder is the deliberate way back.
         clearSelection();
+        // Before the branch, so it covers both: a first-reference drop reloads and the fresh
+        // page is server-rendered with the job already on it, while a replace_annotation drop
+        // does not reload at all and would otherwise sit with an empty panel until somebody
+        // navigated.
+        announceAnnotators(summary.annotators);
         if (summary.has_reference && !HAD_REFERENCE) {
             try {
                 sessionStorage.setItem(SUMMARY_KEY, JSON.stringify(summary));
@@ -1029,6 +1086,11 @@
     }
 
     restoreSummary();
+    // The page as it loads. With nothing selected this computes exactly what the HTML already
+    // hardcodes -- Import and Reset both disabled -- so it changes nothing except in the two
+    // cases that need it: an accession prefilled from the URL, which must enable Import, and
+    // an annotator already running, which must disable it and show the reason beside it.
+    renderList();
 })();
 </script>
 {% endif %}

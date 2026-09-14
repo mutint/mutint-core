@@ -515,3 +515,154 @@ class CancellationFlagIsSafeToAskTestCase(TestCase):
         jobs_api.request_cancel(job)
 
         self.assertTrue(jobs_api.is_cancelled("abc"))
+
+
+class FinishedTestCase(TestCase):
+    """`jobs.finished` is the rule everything rendering a job agrees on.
+
+    It was `views._finished`, private to the jobs page, and it moved here when a second
+    surface needed it -- `annotation_jobs`, and through it the Import data page's decision to
+    hold a drop. The two must not be able to disagree about when work is over.
+    """
+
+    def test_the_two_real_statuses_are_over(self):
+        self.assertTrue(jobs_api.finished("SUCCESSFUL"))
+        self.assertTrue(jobs_api.finished("FAILED"))
+
+    def test_unknown_counts_as_over(self):
+        """The queue prunes finished results after a fortnight, so a result it no longer
+        holds is old rather than running. It is also every way `status_of` can fail -- and
+        that direction is what keeps a dead worker from wedging a page for ever."""
+        self.assertTrue(jobs_api.finished(queue.STATUS_UNKNOWN))
+
+    def test_waiting_and_working_are_not(self):
+        self.assertFalse(jobs_api.finished("READY"))
+        self.assertFalse(jobs_api.finished("RUNNING"))
+
+
+@override_settings(TASKS=DATABASE_BACKEND)
+class RowPermissionTestCase(TestCase):
+    """A row is rendered *for somebody*, and that is not decoration.
+
+    On `/jobs/` it looks like belt and braces, because `for_user` already restricted the list
+    to rows the caller owns. It is load-bearing on the Import data page's annotation panel,
+    which deliberately shows a viewer somebody else's job -- the alternative being a disabled
+    Import button with no reason beside it -- and these two terms are the whole of what keeps
+    that viewer to the bare fact that the job exists.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.other = User.objects.create(username="other", email="x@e.com", is_active=True)
+        self.admin = User.objects.create(username="root", email="r@e.com",
+                                         is_active=True, is_superuser=True)
+        self.job = jobs_api.enqueue(import_tasks.build_coverage, 123456789,
+                                    user=self.owner, label="coverage", cancellable=True)
+        # A log on disk, so the link is a question about permission rather than about
+        # whether there is anything to read.
+        from mutint_jobs import logs
+        with logs.open_log(self.job.task_result_id) as log:
+            logs.write(log, "hello")
+        self.addCleanup(logs.discard, self.job.task_result_id)
+
+    def test_the_owner_gets_the_log_and_the_button(self):
+        row = jobs_api.row(self.job, user=self.owner)
+        self.assertTrue(row["log"])
+        self.assertTrue(row["cancellable"])
+
+    def test_a_stranger_gets_neither(self):
+        row = jobs_api.row(self.job, user=self.other)
+        self.assertEqual("", row["log"])
+        self.assertFalse(row["cancellable"])
+        # But still learns that it exists, and whose it is -- which is the point of showing
+        # them anything at all.
+        self.assertEqual("coverage", row["label"])
+        self.assertEqual("owner", row["user"])
+
+    def test_a_superuser_gets_both(self):
+        row = jobs_api.row(self.job, user=self.admin)
+        self.assertTrue(row["log"])
+        self.assertTrue(row["cancellable"])
+
+    def test_the_jobs_page_keeps_every_key_it_rendered(self):
+        """`jobs/list.html` builds its rows from these names; the promotion out of the view
+        must not have quietly dropped one."""
+        self.client.force_login(self.owner)
+        row = self.client.get("/jobs/list").json()["jobs"][0]
+        self.assertEqual({
+            "id", "label", "component", "user", "experiment", "experiment_id",
+            "created_at", "status", "finished", "cancel_requested",
+            "cancel_requested_by", "cancellable", "log",
+        }, set(row))
+
+
+@override_settings(TASKS=DATABASE_BACKEND)
+class AnnotationJobsTestCase(TestCase):
+    """What the Import data page holds a drop for.
+
+    The database backend throughout, and not as ceremony: under the immediate one
+    `status_of` answers `STATUS_UNKNOWN` for everything, `finished` is therefore True, and
+    `annotation_jobs` is structurally always empty. That is the *right* answer there -- an
+    immediate backend really did finish the work inside the request -- which is exactly why a
+    test written without this decorator would pass while asserting nothing at all.
+    """
+
+    def setUp(self):
+        from django_tasks_db.models import DBTaskResult
+        self.DBTaskResult = DBTaskResult
+        self.user = User.objects.create(username="asker", email="a@e.com", is_active=True)
+        self.project = Project.objects.create(name="P", user=self.user)
+        from mutint_experiment.models import Experiment
+        self.experiment = Experiment.objects.create(name="E", project=self.project)
+        self.other = Experiment.objects.create(name="F", project=self.project)
+
+    def _job(self, experiment=None, annotates=True):
+        return jobs_api.enqueue(import_tasks.build_coverage, 1, user=self.user,
+                                experiment=experiment or self.experiment,
+                                cancellable=True, annotates_reference=annotates)
+
+    def test_a_queued_annotation_job_is_in_flight(self):
+        job = self._job()
+        self.assertEqual([job.pk],
+                         [one.pk for one in jobs_api.annotation_jobs(self.experiment)])
+
+    def test_a_finished_one_is_not(self):
+        """**The queue decides, never the row.** Nothing on the `Job` changes when the work
+        ends -- it holds no status by design -- so this is the only thing that can say so."""
+        job = self._job()
+        self.DBTaskResult.objects.filter(id=job.task_result_id).update(status="SUCCESSFUL")
+        self.assertEqual([], jobs_api.annotation_jobs(self.experiment))
+
+    def test_a_job_whose_result_the_queue_has_lost_is_not(self):
+        """The dead-worker case, and the reason this cannot wedge. A worker killed outright
+        never writes a status, so if anything here trusted a stored one the experiment would
+        be held for ever. Every way the queue can fail to answer is `STATUS_UNKNOWN`."""
+        job = self._job()
+        self.DBTaskResult.objects.filter(id=job.task_result_id).delete()
+        self.assertEqual([], jobs_api.annotation_jobs(self.experiment))
+
+    def test_a_cancelled_one_is_not(self):
+        """The person's own way out when no worker is running. `request_cancel` deliberately
+        never touches the queue row, so such a job stays READY indefinitely -- and if that
+        still counted, pressing Cancel would change nothing anybody could see."""
+        job = self._job()
+        jobs_api.request_cancel(job, by=self.user)
+        self.assertEqual([], jobs_api.annotation_jobs(self.experiment))
+
+    def test_ordinary_work_for_the_same_experiment_is_not(self):
+        """A coverage build is not an annotation write. This is the whole reason the flag is
+        a column rather than something derived from `component`."""
+        self._job(annotates=False)
+        self.assertEqual([], jobs_api.annotation_jobs(self.experiment))
+
+    def test_another_experiment_is_not(self):
+        self._job(experiment=self.other)
+        self.assertEqual([], jobs_api.annotation_jobs(self.experiment))
+
+    def test_it_looks_no_further_back_than_the_cap(self):
+        """Every candidate costs a `status_of` query, and an experiment accumulates a row per
+        run for ever, so the newest few are all that is asked about."""
+        jobs = [self._job() for _ in range(jobs_api.ANNOTATION_JOB_LIMIT + 3)]
+        found = jobs_api.annotation_jobs(self.experiment)
+        self.assertEqual(jobs_api.ANNOTATION_JOB_LIMIT, len(found))
+        self.assertEqual(jobs[-1].pk, found[0].pk)

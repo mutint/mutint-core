@@ -12,6 +12,7 @@ in auto-detect, without this module knowing it exists. It replaced the two-page 
 """
 
 import logging
+import re
 
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
@@ -26,6 +27,7 @@ from mutint_common.annotator_registry import (
     run_annotators,
 )
 from mutint_common.import_registry import get_import_types, get_import_types_for
+from mutint_import.annotation_status import status_for
 from mutint_common.import_tab_registry import get_import_tabs
 from mutint_import.templatetags.import_tabs import remembered_tab
 from mutint_common.util import get_user_context
@@ -33,6 +35,35 @@ from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
 
 logger = logging.getLogger("mutint_import.add_views")
+
+
+#: What a prefilled accession may be made of. Letters, digits, and the punctuation the box
+#: itself documents -- `NC_000913.3`, `GCF_000005845.2`, several of them separated by commas,
+#: spaces or newlines.
+_ACCESSION_PREFILL = re.compile(r"^[A-Za-z0-9._,\s-]+$")
+
+#: Longer than any plausible list of accessions somebody linked to, and short enough that
+#: nothing worth reading is lost by refusing it.
+_ACCESSION_PREFILL_MAX = 200
+
+
+def accession_prefill(raw):
+    """A `?accession=` value fit to put in the box, or "".
+
+    **Refuse, never repair**, which is the whole rule. Stripping the characters it does not
+    like out of `NC_0009<13.3` would leave `NC_000913.3` -- a string that still looks like an
+    accession and downloads a genome nobody asked for. An empty box is a visible nothing, and
+    the person retypes it.
+
+    The character class is **not** the security control and must not be widened on the grounds
+    that something else is. The value is rendered into a `<textarea>` through the template, so
+    Django's autoescaping is what makes it safe; this rule is about honesty -- a prefilled box
+    should hold something that could be an accession, or nothing at all.
+    """
+    value = (raw or "").strip()
+    if not value or len(value) > _ACCESSION_PREFILL_MAX:
+        return ""
+    return value if _ACCESSION_PREFILL.match(value) else ""
 
 
 @ensure_csrf_cookie
@@ -126,6 +157,13 @@ def import_view(request):
         "reason": reason,
         "annotator_panels": annotator_panels,
         "annotators_on_demand": bool(annotator_panels) and has_reference,
+        # Arrives in the URL, from a page that worked an accession out and handed it over --
+        # mutint-refsniff's Identify Reference from Reads is the first. It fills the box and
+        # nothing else: the person still presses Import, on the tab where the annotators are.
+        "accession_prefill": accession_prefill(request.GET.get("accession")),
+        # Also handed to `{% import_tabs %}`, which draws the panel; this copy is for the
+        # page's own script, which reads the same answer to decide whether Import is on.
+        "annotation_status": status_for(experiment, request.user),
         # The chosen type alone, scoped here rather than in the template so the page and
         # the JSON it classifies a drop with cannot disagree. `/import/types/` stays
         # unscoped -- it has no experiment to scope by, and the handlers enforce their
@@ -204,3 +242,28 @@ def annotate_view(request):
     return JsonResponse({"experiment_id": experiment.id, "experiment": experiment.name,
                          "annotators": rows})
 
+
+
+def annotator_status_view(request):
+    """`GET /import/annotators/status?experiment_id=<pk>` -- what the panel polls.
+
+    Gated exactly as `annotate_view` is, on `can_edit_experiment` with the lock's own
+    sentence, and for the same reason: this explains a control that only somebody who can
+    import is shown, and a reader who cannot import never sees the page it sits on.
+
+    `no-store`, for the reason `job_log_tail` gives -- a polled URL a proxy may cache is a
+    panel that freezes for one reader and for nobody else, which is the shape of bug that gets
+    blamed on the queue.
+    """
+    try:
+        experiment = Experiment.objects.get(pk=request.GET.get("experiment_id"))
+    except (Experiment.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"error": "Unknown experiment."}, status=404)
+    if not can_edit_experiment(request.user, experiment):
+        return JsonResponse(
+            {"error": experiment_lock_refusal(experiment)
+                      or "You cannot add data to this experiment."}, status=403)
+
+    response = JsonResponse(status_for(experiment, request.user))
+    response["Cache-Control"] = "no-store"
+    return response

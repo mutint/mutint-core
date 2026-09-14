@@ -5,7 +5,6 @@ import logging
 from django.http import Http404, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
@@ -16,51 +15,9 @@ from mutint_jobs.models import Job
 
 logger = logging.getLogger("mutint_jobs.views")
 
-# Queue statuses that mean the work is over. `TaskResult.is_finished` says the same thing; it
-# is spelled out here because the page also has to reason about STATUS_UNKNOWN, which the
-# queue's own vocabulary has no word for.
-FINISHED = ("SUCCESSFUL", "FAILED")
-
-
-def _finished(status):
-    """Whether a job has stopped moving, as this page reasons about it.
-
-    `STATUS_UNKNOWN` counts: the queue prunes finished results after a fortnight, so a job it
-    no longer holds is old rather than running. Shared by the rows and by the log page's poll,
-    which must agree about when to stop asking.
-    """
-    return status in FINISHED or status == queue.STATUS_UNKNOWN
-
-
-def _row(job):
-    status = queue.status_of(job.task_result_id, job.task_path)
-    finished = _finished(status)
-    return {
-        "id": job.pk,
-        "label": job.label or job.task_path,
-        "component": job.component,
-        "user": job.user.username if job.user else "",
-        "experiment": job.experiment.name if job.experiment else "",
-        "experiment_id": job.experiment_id,
-        "created_at": job.created_at.isoformat(),
-        "status": status,
-        "finished": finished,
-        "cancel_requested": job.cancel_requested,
-        "cancel_requested_by": (job.cancel_requested_by.username
-                                if job.cancel_requested_by else ""),
-        # A button only where pressing it would do something: the job must still be running,
-        # and its task must have promised to poll. Anything else is a control that lies.
-        "cancellable": bool(job.cancellable) and not finished and not job.cancel_requested,
-        # A link only where there is something to read. One `os.path.exists` per row, over a
-        # list already capped at 200 -- and cheaper than the `status_of` above it, which is a
-        # query. A job whose task ran no tool never gets one.
-        "log": (reverse("job_log", args=(job.pk,))
-                if logs.exists(job.task_result_id) else ""),
-    }
-
 
 def _rows(user):
-    return [_row(job) for job in jobs_api.for_user(user)[:200]]
+    return [jobs_api.row(job, user=user) for job in jobs_api.for_user(user)[:200]]
 
 
 def _unattributed(user):
@@ -75,27 +32,6 @@ def _unattributed(user):
     } for row in queue.unattributed(known)]
 
 
-def _stalled_since(user):
-    """When the head of the queue started waiting, if nothing appears to be taking it.
-
-    **This is the closest thing to "is a worker running" that can honestly be asked.**
-    `django_tasks_db` keeps no worker registry and no heartbeat -- only `worker_ids`, written
-    onto rows a worker has already claimed -- so the page reports the observation and leaves
-    the reader to draw the conclusion, because a worker busy on a twelve-hour breseq run looks
-    from here exactly like no worker at all.
-
-    Shown to everybody, not just superusers, unlike the unattributed list: that panel exposes
-    other people's work, while this is a fact about the installation that explains why *your*
-    job says queued.
-    """
-    oldest = queue.oldest_ready()
-    if oldest is None:
-        return None
-    if (timezone.now() - oldest).total_seconds() < queue.STALLED_SECONDS:
-        return None
-    return oldest.isoformat()
-
-
 @ensure_csrf_cookie
 def jobs(request):
     """`/jobs/` -- your jobs, or everyone's if you are a superuser."""
@@ -106,7 +42,7 @@ def jobs(request):
     context.update({
         "jobs": _rows(request.user),
         "unattributed": _unattributed(request.user),
-        "stalled_since": _stalled_since(request.user),
+        "stalled_since": jobs_api.stalled_since(),
         "is_superuser": request.user.is_superuser,
     })
     return render(request, "jobs/list.html", context)
@@ -123,7 +59,7 @@ def jobs_json(request):
     return JsonResponse({
         "jobs": _rows(request.user),
         "unattributed": _unattributed(request.user),
-        "stalled_since": _stalled_since(request.user),
+        "stalled_since": jobs_api.stalled_since(),
     })
 
 
@@ -187,7 +123,7 @@ def job_log(request, pk):
     # last lines, with nothing to say so.
     status = queue.status_of(job.task_result_id, job.task_path)
     text, truncated = logs.read_tail(job.task_result_id)
-    finished = _finished(status)
+    finished = jobs_api.finished(status)
     has_log = bool(text) or logs.exists(job.task_result_id)
 
     context = get_user_context(request.user)
@@ -227,7 +163,7 @@ def job_log_tail(request, pk):
     """The same tail as the page, as JSON, for the page's poll.
 
     Everything the page needs to decide what to do next, in one request: the text, whether it
-    is cut, how to name the status, and **whether to ask again**. `finished` is `_row`'s rule
+    is cut, how to name the status, and **whether to ask again**. `finished` is `jobs.row`'s rule
     rather than a second one, so the log page and `/jobs/` cannot disagree about when a job
     stopped.
 
@@ -244,7 +180,7 @@ def job_log_tail(request, pk):
         "text": text,
         "truncated": truncated,
         "status": queue.label_for(status),
-        "finished": _finished(status),
+        "finished": jobs_api.finished(status),
     })
     # A polled URL that a proxy is free to cache is a log that freezes for one reader and
     # nobody else. Nothing else in this codebase sets a cache header, which is why this one

@@ -60,6 +60,27 @@ class Job(models.Model):
     #: silently does nothing is worse than no button. A task opts in by promising to check.
     cancellable = models.BooleanField(default=False)
 
+    #: Whether this job will rewrite the experiment's annotation, through
+    #: `mutint_import.annotation.install_annotation`. Set by the enqueuer; a reference
+    #: annotator's job is the only producer today.
+    #:
+    #: **The two flags on this model are different kinds of statement, and confusing them
+    #: would put the wrong thing here.** `cancellable` is a *promise about behaviour* -- this
+    #: task polls -- and the task is what keeps it. This is a *claim about effect* -- this job
+    #: rewrites the annotation -- and the task does nothing with it at all; core reads it, to
+    #: decide what the Import data page may offer while the job is in flight.
+    #:
+    #: Named for the effect rather than for what core does about it. `blocks_import` was the
+    #: other candidate and puts core's policy into a flag the producer sets: the producer
+    #: knows what it writes, not what somebody else will decide to do about that.
+    #:
+    #: It is a column rather than something core derives from `component`, because a component
+    #: that registers an annotator may enqueue other work too -- and a convention that happens
+    #: to hold today would switch the Import button off for a job with nothing to do with the
+    #: annotation. Declared at the enqueue site, which is the only place that can be wrong and
+    #: right at the same moment.
+    annotates_reference = models.BooleanField(default=False)
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [

@@ -69,6 +69,32 @@ enqueue — that is the handle.
 button only for jobs that claim they can be stopped, and a button that silently does nothing
 is worse than no button.
 
+## Saying that a job rewrites the annotation
+
+```python
+jobs.enqueue(tasks.run_thing, thing.pk, ..., annotates_reference=True)
+```
+
+The two flags on a `Job` are different kinds of statement, and it is worth keeping them apart.
+`cancellable` is a **promise about behaviour** — this task polls — and your task is what keeps
+it. `annotates_reference` is a **claim about effect** — this job will rewrite the experiment's
+annotation through `install_annotation` — and your task does nothing with it at all. Core reads
+it, to draw the panel under the Import data page's tab strip and to hold every Import button on
+that experiment until the job is over. Set it only if that is true; see
+[Integrating](integrating.md#an-annotator-that-runs-on-the-reference).
+
+## Rendering a job somewhere else
+
+`jobs.row(job, user=...)` is the dict `/jobs/` renders, and `jobs.finished(status)` is its rule
+for when work has stopped moving — `SUCCESSFUL`, `FAILED`, and a result the queue no longer
+holds. Use them rather than reading a status yourself, so every surface agrees about when a job
+is over.
+
+`user` is required and is not decoration: it gates the `log` link through `jobs.may_view` and
+the `cancellable` flag through `jobs.may_cancel`, so a page showing somebody another person's
+job shows that it exists and nothing more. `jobs.log_urls(ids)` is the cheaper form when you
+hold queue ids rather than `Job` rows and only want the links.
+
 ### If your task runs a subprocess
 
 **Do not write the loop.** `mutint_jobs.processes.run_tool` runs a command, polls the

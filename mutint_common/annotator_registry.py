@@ -28,6 +28,22 @@ import summary. A tool that takes minutes enqueues a job through `mutint_jobs` a
 request that finalized an upload. A task that then calls `install_annotation` holds the
 import lock through `import_lock.hold_waiting`; see `docs/plugin/integrating.md`.
 
+**A `run` that enqueued may say so with `job_id`**, and should: core turns it into a
+`job_url` on the summary row, so the label becomes a link to that job's live log instead of a
+sentence telling somebody to go and find it. It is optional -- an annotator that finished
+inline has no job to point at -- and it is the `Job` primary key, not the queue's own id.
+
+**There is deliberately no `pending(experiment)` callable**, and the absence is worth knowing
+before anybody adds one. What the Import data page needs is whether an annotation job is in
+flight for this experiment, and that question is answered by the *queue*, never by a
+component's own status column -- a worker killed outright leaves a stored status saying
+`running` for ever. Once the queue is the authority, every id such a callable could return is
+already a `Job` row carrying `experiment`, so the only thing a component contributes is one
+bit: that this job rewrites the annotation. That bit is `jobs.enqueue(annotates_reference=
+True)`, declared where the enqueue happens, which is the only place it can be wrong and right
+at the same moment. A registration parameter, an entry key, per-annotator isolation and a
+contract to carry one bit is ceremony. See `mutint_jobs.jobs.annotation_jobs`.
+
 **Panels are body-only templates and options travel by input name.** Core draws the fieldset
 and the enable checkbox; the template supplies the controls, each with a `name=`, and the page
 collects them as `{name: value}` -- a checkbox as a boolean, everything else as its string.
@@ -79,9 +95,12 @@ def register_reference_annotator(app_config, name, label, run, template, context
                 the fieldset. Registering the same name twice replaces the first.
     label       what the enable box and the summary row call it, e.g. 'ISEScan IS elements'.
     run         callable(experiment, options, user) -> dict, JSON-safe. Its `message` is what
-                the summary shows; any other keys are the component's own. Expected to return
-                promptly -- enqueue a job for anything that takes minutes -- and to write the
-                annotation through `mutint_import.annotation.install_annotation`.
+                the summary shows; `job_id` is optional and is the `Job` primary key of work
+                it enqueued, which core renders as a link; any other keys are the component's
+                own. Expected to return promptly -- enqueue a job for anything that takes
+                minutes, through `mutint_jobs.jobs.enqueue(..., annotates_reference=True)` --
+                and to write the annotation through
+                `mutint_import.annotation.install_annotation`.
     template    template name for the panel body, e.g. 'isescan/panel.html'. Body only: core
                 draws the fieldset, the enable box and the description.
     context     optional callable(experiment, request) -> dict for the template.
@@ -188,6 +207,33 @@ def clean_selections(raw):
     return selections
 
 
+def _link_job(row):
+    """Turn a row's `job_id` into a `job_url`, if it has one.
+
+    **Core reverses this, not the component, and both halves of that matter.** The page writes
+    every part of an annotator row with `textContent`, precisely because the words come from
+    components -- so an `href` is the one thing a component must not be able to hand it. A
+    `job_url` string in the contract would be a `javascript:` away from a component-injected
+    link on core's page; an integer cannot be. And `/jobs/` is core's route, so a component
+    reversing its name would be a second opinion about a URL it does not own.
+
+    It points at the log rather than at the list, which is right even a second after the job
+    was queued: `job_log` renders its box and its poller for a job that has printed nothing.
+
+    A `job_id` naming nothing reverses fine (the view answers 404 on its own) and a
+    non-integer simply drops, because one component's bad key must not cost the page.
+    """
+    from django.urls import NoReverseMatch, reverse
+
+    job_id = row.get('job_id')
+    if not job_id:
+        return
+    try:
+        row['job_url'] = reverse('job_log', args=(int(job_id),))
+    except (NoReverseMatch, TypeError, ValueError):
+        logger.warning("annotator %s returned an unusable job_id %r", row.get('name'), job_id)
+
+
 def run_annotators(experiment, selections, user):
     """Run each selected annotator against `experiment`'s stored reference.
 
@@ -197,6 +243,8 @@ def run_annotators(experiment, selections, user):
     and for one that raised, `{'name', 'label', 'message': '', 'error': str(exc)}`, logged,
     with the rest still run. Rows must be JSON-safe; they go into the
     import summary and are echoed back to the page.
+
+    A row carrying `job_id` also gets `job_url`, the live log of that job.
 
     Raises `NoReference` before running anything when the experiment has no reference:
     both callers -- the finalize path and the Run annotators button -- pass through here, so
@@ -220,6 +268,7 @@ def run_annotators(experiment, selections, user):
             row.update(result)
             row.setdefault('message', '')
             row.setdefault('error', None)
+            _link_job(row)
         except Exception as exc:  # noqa: BLE001 -- one annotator must not fail the rest
             logger.exception("reference annotator %s.%s failed for experiment %s",
                              entry['app'], entry['name'], experiment.id)

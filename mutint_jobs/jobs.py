@@ -41,7 +41,7 @@ class JobCancelled(Exception):
 
 
 def enqueue(task, *args, user=None, label="", component="", experiment=None,
-            cancellable=False, **kwargs):
+            cancellable=False, annotates_reference=False, **kwargs):
     """Enqueue `task` and record who asked. Returns the `Job`.
 
     The queue first, the row second, and **deliberately not in one transaction**. The two
@@ -52,6 +52,10 @@ def enqueue(task, *args, user=None, label="", component="", experiment=None,
 
     `user` may be None -- some work is asked for by an import rather than by a person -- and
     such a job is then visible only to superusers, for want of anyone to show it to.
+
+    `annotates_reference` says this job will rewrite the experiment's annotation; see the
+    field's own comment for why it is a claim about effect rather than a promise about
+    behaviour, and `annotation_jobs` below for what core does with it.
     """
     result = task.enqueue(*args, **kwargs)
 
@@ -62,7 +66,8 @@ def enqueue(task, *args, user=None, label="", component="", experiment=None,
         label=label or (getattr(task, "name", "") or ""),
         component=component,
         experiment=experiment,
-        cancellable=cancellable)
+        cancellable=cancellable,
+        annotates_reference=annotates_reference)
 
 
 def is_cancelled(task_result_id):
@@ -199,6 +204,113 @@ def may_view(user, job):
     if user.is_superuser:
         return True
     return job.user_id == user.id
+
+
+def stalled_since():
+    """When the head of the queue started waiting, if nothing appears to be taking it.
+
+    **This is the closest thing to "is a worker running" that can honestly be asked.**
+    `django_tasks_db` keeps no worker registry and no heartbeat -- only `worker_ids`, written
+    onto rows a worker has already claimed -- so a page reports the observation and leaves the
+    reader to draw the conclusion, because a worker busy on a twelve-hour breseq run looks
+    from here exactly like no worker at all.
+
+    It lives here rather than on the jobs page because it has a second reader now: the Import
+    data page's annotation panel, which switches a button off and therefore owes an
+    explanation when nothing is going to finish. Two surfaces inventing two rules for one
+    observation is how they come to disagree.
+    """
+    from django.utils import timezone
+
+    oldest = queue.oldest_ready()
+    if oldest is None:
+        return None
+    if (timezone.now() - oldest).total_seconds() < queue.STALLED_SECONDS:
+        return None
+    return oldest.isoformat()
+
+
+def finished(status):
+    """Whether a job has stopped moving, as the pages reason about it.
+
+    `STATUS_UNKNOWN` counts: the queue prunes finished results after a fortnight, so a job it
+    no longer holds is old rather than running. `TaskResult.is_finished` says the same thing
+    about the two real statuses; this exists because everything rendering a job also has to
+    reason about the third, which the queue's own vocabulary has no word for.
+    """
+    return status in queue.FINISHED_STATUSES or status == queue.STATUS_UNKNOWN
+
+
+def row(job, *, user):
+    """One job as the pages render it. `user` is who is looking, and is required.
+
+    **The two permission terms below are load-bearing only away from `/jobs/`.** That page
+    lists `for_user(user)`, which already restricts it to jobs the caller owns or is a
+    superuser over, so `may_cancel` and `may_view` are no-ops there and look like belt and
+    braces. They are not: the Import data page's annotation panel deliberately shows a viewer
+    somebody *else's* job -- because the alternative is a disabled Import button with no
+    reason given -- and these are what keep that viewer's row to the bare fact that the job
+    exists, with no log link and no Cancel button. Removing them would hand a stranger both.
+    """
+    from django.urls import reverse
+
+    status = queue.status_of(job.task_result_id, job.task_path)
+    over = finished(status)
+    return {
+        "id": job.pk,
+        "label": job.label or job.task_path,
+        "component": job.component,
+        "user": job.user.username if job.user else "",
+        "experiment": job.experiment.name if job.experiment else "",
+        "experiment_id": job.experiment_id,
+        "created_at": job.created_at.isoformat(),
+        "status": status,
+        "finished": over,
+        "cancel_requested": job.cancel_requested,
+        "cancel_requested_by": (job.cancel_requested_by.username
+                                if job.cancel_requested_by else ""),
+        # A button only where pressing it would do something: the job must still be running,
+        # its task must have promised to poll, and this reader must be allowed to stop it.
+        # Anything else is a control that lies.
+        "cancellable": (bool(job.cancellable) and not over and not job.cancel_requested
+                        and may_cancel(user, job)),
+        # A link only where there is something to read and somebody who may read it. One
+        # `os.path.exists` per row, over a list already capped -- and cheaper than the
+        # `status_of` above it, which is a query. A job whose task ran no tool never gets one.
+        "log": (reverse("job_log", args=(job.pk,))
+                if logs.exists(job.task_result_id) and may_view(user, job) else ""),
+    }
+
+
+#: How many of an experiment's annotation jobs `annotation_jobs` will look at. `Job` stores no
+#: status, so "unfinished" is not expressible in SQL and every candidate row costs a
+#: `status_of` query -- `UNATTRIBUTED_LIMIT`'s reasoning at a much smaller scale. An experiment
+#: accumulates one row per annotator run for ever, and only the newest can be in flight.
+ANNOTATION_JOB_LIMIT = 10
+
+
+def annotation_jobs(experiment, *, limit=ANNOTATION_JOB_LIMIT):
+    """The jobs still in flight that will rewrite `experiment`'s annotation, newest first.
+
+    **The queue decides, never the row and never a component's own status column.** A worker
+    killed outright -- which `./mutint start`'s own shutdown does -- leaves whatever it was
+    working on looking eternally busy to anything that trusts a stored status. Everything
+    built on this answer would then be stuck for ever, so the stored rows are only the
+    candidates and `status_of` is the answer.
+
+    **A job somebody has asked to stop is excluded, and that is the escape hatch.**
+    `request_cancel` deliberately never touches the queue row, so with no worker running a
+    cancelled job stays READY indefinitely -- and if that still counted as in flight, pressing
+    Cancel would change nothing a person could see. What this answers is what is *about* to be
+    written, and a cancellation is the person saying it should not be.
+    """
+    candidates = (Job.objects
+                  .filter(experiment=experiment, annotates_reference=True,
+                          cancel_requested_at__isnull=True)
+                  .select_related("user", "experiment", "cancel_requested_by")
+                  .order_by("-created_at")[:limit])
+    return [job for job in candidates
+            if not finished(queue.status_of(job.task_result_id, job.task_path))]
 
 
 def log_urls(task_result_ids):

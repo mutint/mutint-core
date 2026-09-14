@@ -231,6 +231,34 @@ belongs on the worker: enqueue a job through `mutint_jobs` (see [Background jobs
 and return `"queued as job N"`. An exception from `run` becomes an error on your row of the
 summary, and the other annotators still run — the reference is already installed by then.
 
+**Return `job_id` too, and enqueue with `annotates_reference=True`.** They are what connect
+the job to the page, and they do different things:
+
+```python
+job = jobs.enqueue(tasks.run_thing, thing.pk, user=user, label='Thing — %s' % experiment.name,
+                   component='mutint_thing', experiment=experiment,
+                   cancellable=True, annotates_reference=True)
+return {'message': 'Thing queued as job %d.' % job.pk, 'job_id': job.pk}
+```
+
+`job_id` is the `Job` primary key, and core reverses it into the link the summary row's label
+becomes. **Hand back the id, never a URL**: every part of that row is written with
+`textContent` precisely because the words come from components, so an `href` is the one thing
+a component must not be able to supply — an integer cannot carry a `javascript:`.
+
+`annotates_reference` puts your job in the panel under the import tab strip, live, with its log
+and a Cancel button, on **every** tab — and holds the Import button on all of them until it
+finishes. That is worth doing even though nothing would be corrupted if somebody imported
+meanwhile: `install_annotation` re-annotates every mutation when you finish, but a sample
+imported in the meantime was *called* against the reference as it stands, and re-annotating
+cannot undo that. For ISEScan it is the whole point — an IS insertion called before the merge
+is two junctions, and afterwards it is one MOB.
+
+**Ask the queue what is still running, never your own status column.** If your `run` refuses a
+second start while one is under way, decide that on `queue.status_of` rather than on a row you
+wrote: a worker killed outright never gets to write `failed`, so a column saying `running`
+says it for ever. `mutint_isescan.annotator.in_flight` is the shape.
+
 **Write the annotation through `install_annotation`, holding the import lock.** Core's
 `mutint_import.annotation.install_annotation(experiment, gff3_text, sequences)` stores a new
 annotation for the same sequence, re-annotates every mutation and rebuilds what derives from
@@ -247,6 +275,23 @@ with import_lock.hold_waiting(holder=..., check=lambda: jobs.check_cancelled(que
 A lock the current process already holds is not waited on: under an immediate task backend
 the task runs inside the request that enqueued it, which holds the lock, and the hold yields
 at once. A worker is another process and always takes it for itself.
+
+**Your page hears `mutint:annotation-status`, if it has a control worth holding.** Every page
+that renders `{% import_tabs %}` gets the panel and the script behind it, and that script
+touches no button on any page — it runs on pages core does not own, so reaching for an id it
+did not choose is a coupling that breaks quietly. It draws the panel and dispatches on
+`document`:
+
+```javascript
+document.addEventListener("mutint:annotation-status", function (event) {
+    annotationBusy = !!(event.detail && event.detail.busy);
+    renderList();          // whatever already owns your button's disabled flag
+});
+```
+
+It fires on load as well as on every change, so there is no initial state to fetch. If your
+page *starts* an annotator, dispatch `mutint:annotators-started` on `document` afterwards and
+the panel polls at once rather than waiting for the next page load.
 
 [`mutint-isescan`](https://github.com/mutint/mutint-isescan) is the worked example: a panel of
 two checkboxes, a `run` that queues a job, and a task that runs ISEScan, merges its predictions

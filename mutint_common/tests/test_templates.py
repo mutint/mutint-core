@@ -375,3 +375,50 @@ class ControlTabsScriptTestCase(unittest.TestCase):
                 text = handle.read()
             self.assertNotRegex(text, r"bootstrap-[\d.]+/js/bootstrap\.min\.js",
                                 os.path.relpath(path, CORE))
+
+
+class AnnotationStatusAssetTestCase(unittest.TestCase):
+    """The annotation panel's markup and its script are one thing.
+
+    The panel is an empty `<div>` that the script fills, so a partial carrying the element
+    without loading the script renders an invisible box that never says anything -- and the
+    page above it would then hold its Import button on a `busy` flag nothing ever updates.
+    The same rule `breseq_table.css`/`.js` has, for the same reason.
+    """
+
+    PANEL = 'id="mutint-annotation-panel"'
+    JS = "js/mutint_annotation_status.js"
+
+    def test_every_template_with_the_panel_loads_the_script(self):
+        missing = []
+        users = 0
+        for path in _templates():
+            with open(path, errors="ignore") as handle:
+                text = handle.read()
+            if self.PANEL not in text:
+                continue
+            users += 1
+            if self.JS not in text:
+                missing.append(os.path.relpath(path, CORE))
+
+        self.assertEqual(1, users, "the panel belongs in import/_tabs.html and nowhere else")
+        self.assertEqual([], missing, ", ".join(missing))
+
+    def test_the_script_exists_and_announces_rather_than_reaching_for_buttons(self):
+        """It loads on pages this repo does not own -- mutint-breseq's launcher and
+        mutint-refsniff's tab both wear the strip -- so reaching for `#import-submit` would be
+        a core snippet depending on an id a plugin is free to reuse. It draws its own panel
+        and dispatches an event; each page decides what to hold."""
+        path = os.path.join(CORE, "mutint_common", "staticfiles", "js",
+                            "mutint_annotation_status.js")
+        self.assertTrue(os.path.exists(path), "%s is missing" % self.JS)
+        with open(path) as handle:
+            script = handle.read()
+        self.assertIn("mutint:annotation-status", script)
+        self.assertIn("mutint:annotators-started", script)
+        # It looks up its own two elements and nothing else. Asserted against the lookups
+        # rather than against the word, which its own comment uses to explain the rule.
+        self.assertEqual(
+            {'"mutint-annotation-panel"', '"mutint-annotation-status"'},
+            set(re.findall(r"getElementById\((\"[^\"]+\")\)", script)))
+        self.assertNotIn('querySelector("#', script)

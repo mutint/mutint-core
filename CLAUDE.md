@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2697 run, 0 failures** standalone; **3163** assembled, measured with `PYTHONPATH`
+**Baseline: 2828 run, 0 failures** standalone; **3422** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -2336,6 +2336,23 @@ page classifies a drop with cannot disagree:
 a reference dropped alongside data still runs first on `priority`, which is how a first drop
 establishes one. `/import/types/` stays unscoped; it has no experiment to scope by.
 
+**`?accession=` fills the NCBI box, for a page that worked one out and is handing it over.**
+mutint-refsniff's Identify Reference from Reads is the first: it used to import the assembly
+itself, which meant the one path that knows for certain the experiment has no reference yet was
+also the one path that posted `{annotators: {}}` and silently skipped every annotator. It links
+here instead, and the person presses Import on the tab where the boxes are.
+
+`accession_prefill` **refuses rather than repairs** -- over 200 characters, or anything outside
+`[A-Za-z0-9._,\s-]`, and the whole value is dropped. Stripping the characters out of
+`NC_0009<13.3` would leave a string that still looks like an accession and downloads a genome
+nobody asked for; an empty box is a visible nothing. The character rule is **not** the security
+control and must not be widened on the grounds that something else is: the value goes into a
+`<textarea>` through the template, so Django's escaping is what makes it safe. The note under
+the box is a fixed sentence of core's own, because core cannot render prose a caller supplied
+and has no way to know which page linked here; saying where it came from is that page's job,
+before it navigates. And it took a `renderList()` call at load, which nothing had: `renderList`
+owns whether Import is enabled, so a server-rendered value sat in the box behind a dead button.
+
 **The order they are listed in is not the order they run in**, and `menu_order` is what
 separates the two. `priority` decides which handler runs first and is correctness -- a
 reference genome must be established before mutations that are hash-checked against it -- so
@@ -3692,6 +3709,47 @@ establishes or updates the reference" is a fact about the handler, and a plugin 
 own reference-establishing handler gets the panels by saying so. A Results Folder import never
 runs one, whatever was posted.
 
+**A queued annotator is watched from the page, not from `/jobs/`.** `run` may return a
+`job_id` beside its message, and two things follow from it. Core reverses it into the link the
+summary row's label becomes -- *core*, because every part of that row is written with
+`textContent` precisely because the words come from components, so an `href` is the one thing
+a component must not be able to hand the page; an integer cannot carry a `javascript:`. And
+the job itself, enqueued with `jobs.enqueue(annotates_reference=True)`, is drawn live in a
+panel under the **tab strip** -- `import/_tabs.html`, so every page wearing the strip has it,
+core's tabs and a plugin's page alike -- with its status, its log and a Cancel button, polled
+from `/import/annotators/status` while anything is in flight.
+
+Under the strip rather than on a tab, and that is the whole of why it works: the Reference
+Sequence tab is `only_without_reference=True`, and a first-reference drop **reloads the page**,
+so the tab the person was looking at has left the strip by the time it comes back and
+`import_view` falls back to another one. A panel drawn on that tab is the one thing they
+cannot get back to. `mutint_import/annotation_status.py` is the single answer all three
+surfaces read -- the view, the tag, the endpoint -- so they cannot disagree.
+
+**Import is held on every tab while it runs**, which is not about data integrity: the lock
+orders the writes and `install_annotation` re-annotates every mutation afterwards. It is about
+the calls. A breseq folder, a `.gd` or a VCF that lands now was *called* against the reference
+as it stands, with each IS insertion as two junctions -- which is exactly what running ISEScan
+first is for, and which re-annotating the genome cannot turn back into a MOB. mutint-breseq's
+launcher holds its own button the same way, by listening to `mutint:annotation-status`; the
+shared script deliberately touches no button itself, since it loads on pages core does not own.
+
+**Busy is the queue's answer and never a component's claim**, and the escape hatches follow
+from it. `jobs.annotation_jobs` treats its rows as candidates and asks `status_of` about each,
+so a worker killed outright -- which `./mutint start`'s own shutdown does -- cannot hold an
+experiment for ever; a cancel-requested job drops out immediately, which is what makes Cancel
+mean something when no worker is running at all; and the panel carries `/jobs/`'s own stalled
+hedge, which earns its place here more than there because here it explains a button being off.
+
+**There is deliberately no `pending(experiment)` callable on the registry**, and the refusal is
+the interesting part. It was the obvious design. But once the queue is the authority, every id
+such a callable could return is already a `Job` row carrying `experiment` -- so the only thing
+a component contributes is one bit, and a registration parameter, an entry key, per-annotator
+isolation and a contract to carry one bit is ceremony. The bit is a column, beside `cancellable`
+which is a flag of exactly the same shape, and it is declared at the **enqueue site**, the only
+place that can be wrong and right at the same moment. Deriving it from `Job.component` instead
+needs no migration and is correct only while mutint-isescan happens to enqueue nothing else.
+
 **Options travel by input name and are decided by the component.** The page collects every
 `name=` input in a fieldset into `{name: value}` -- checkboxes as booleans -- and posts them
 with the finalize (and with the confirm-rename re-post, which is the same import). `enabled`
@@ -3870,6 +3928,33 @@ So the flag is the whole mechanism, and it behaves the same whether the job had 
 not. The honest cost: a job cancelled before a worker reaches it is still picked up later and
 returns having done nothing, and with no worker running it stays on the queue indefinitely. The
 `Job` says cancelled either way, which is the question that was actually asked.
+
+**`annotates_reference` is the second flag, and it is a different kind of statement.**
+`cancellable` is a **promise about behaviour** -- this task polls -- and the task is what keeps
+it. This is a **claim about effect** -- this job rewrites the experiment's annotation through
+`install_annotation` -- and the task does nothing with it at all; core reads it, to draw the
+Import data page's annotation panel and hold every Import button on that experiment. Named for
+the effect rather than for core's policy: `blocks_import` would put one page's decision into a
+flag the producer sets, and the producer knows what it writes, not what somebody else will do
+about it. `jobs.annotation_jobs(experiment)` is the query, capped, and it asks the queue about
+every candidate rather than trusting a stored status -- see **Reference annotators run on the
+reference after it lands**.
+
+**`jobs.finished(status)` and `jobs.row(job, user=...)` are public**, having been `views._row`
+and `views._finished` until a second surface needed them. `row` takes `user` as a **required**
+keyword and gates two of its keys on it, and the reason is worth keeping because it looks like
+belt and braces on this page: `/jobs/` lists `for_user(user)`, so `may_cancel` and `may_view`
+are no-ops there. They are load-bearing on the annotation panel, which shows a viewer somebody
+*else's* job.
+
+**That panel is a deliberate widening of `may_view`'s rule, and it belongs stated here.** The
+rule is that standing to read a job comes from having asked for it, and that is right for a
+log, which is a tool's account of work. It is wrong for the *existence* of a job that is
+switching a button off in front of somebody: a disabled control with no reason beside it is a
+dead end. So a colleague who can edit the experiment sees the job's label, its status and whose
+it is, and gets neither the log nor the Cancel button. `for_user` is deliberately not used
+there -- it would show the owner a busy panel and everybody else a disabled button beside an
+empty one, which is the worst of both.
 
 **`cancellable` is a promise the task makes**, defaulting to False. A task that does not poll
 cannot be stopped, and the page renders a button only where pressing it would do something.

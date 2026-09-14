@@ -521,3 +521,107 @@ class AnnotatorPanelsTestCase(ImportPageTestCase):
         self.assertTrue(types["replace_annotation"]["annotators"])
         self.assertFalse(types["genomediff"]["annotators"])
 
+
+
+class AccessionPrefillTestCase(AccessionBoxTestCase):
+    """`?accession=` fills the box, and refuses rather than repairs.
+
+    A page that worked an accession out hands it over here instead of importing it itself --
+    mutint-refsniff's Identify Reference from Reads is the first -- so that the person lands on
+    the tab where the annotators are offered and presses Import there.
+    """
+
+    def _box(self, html):
+        return html.split('id="import-accessions"')[1].split("</textarea>")[0]
+
+    def test_an_accession_reaches_the_box_and_says_where_it_came_from(self):
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id,
+                                            "tab": "reference",
+                                            "accession": "GCF_000005845.2"}).content.decode()
+        self.assertIn("GCF_000005845.2", self._box(html))
+        self.assertIn('id="accession-prefill-note"', html)
+
+    def test_a_list_of_them_is_allowed(self):
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id,
+                                            "tab": "reference",
+                                            "accession": "NC_000913.3, U00096.3"}).content.decode()
+        self.assertIn("NC_000913.3, U00096.3", self._box(html))
+
+    def test_a_value_it_does_not_like_leaves_the_box_empty(self):
+        """**Refuse, never repair.** Stripping the characters out of `NC_0009<13.3` would
+        leave a string that still looks like an accession and downloads a genome nobody asked
+        for; an empty box is a visible nothing and the person retypes it."""
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id,
+                                            "tab": "reference",
+                                            "accession": "NC_0009<13.3"}).content.decode()
+        self.assertEqual("", self._box(html).split(">", 1)[1].strip())
+        self.assertNotIn('id="accession-prefill-note"', html)
+
+    def test_an_overlong_value_is_refused_whole(self):
+        html = self.client.get("/import/", {"experiment_id": self.experiment.id,
+                                            "tab": "reference",
+                                            "accession": "NC_000913.3," * 30}).content.decode()
+        self.assertNotIn('id="accession-prefill-note"', html)
+
+    def test_no_parameter_draws_no_note(self):
+        html = self._html("reference")
+        self.assertNotIn('id="accession-prefill-note"', html)
+
+    def test_the_page_computes_its_buttons_at_load(self):
+        """`renderList` owns whether Import is enabled, and nothing called it at load -- so a
+        server-rendered accession would have sat in an enabled-looking box behind a disabled
+        button. It also has to run for the reverse case, an annotator already running."""
+        html = self._html("reference")
+        self.assertRegex(html, r"restoreSummary\(\);\s*(//[^\n]*\n\s*)*renderList\(\);")
+
+
+class AnnotationHoldTestCase(AnnotatorPanelsTestCase):
+    """While an annotator is rewriting the annotation, no tab offers an import.
+
+    Not because anything would be corrupted -- `install_annotation` re-annotates every
+    mutation and the import lock orders the writes -- but because what lands now was *called*
+    against the reference as it stands, and re-annotating afterwards cannot turn the two
+    junctions a breseq run made of an IS insertion into the one MOB that running ISEScan was
+    for. The run is not wrong so much as wasted.
+    """
+
+    def _tabs(self):
+        from mutint_common.import_tab_registry import get_import_tabs
+        return [tab for tab in get_import_tabs(self.experiment.id) if tab["import_types"]]
+
+    def test_every_tab_wears_the_panel(self):
+        """It is under the strip rather than on a tab, and that is the point: the Reference
+        Sequence tab leaves the strip the moment a reference lands, so a panel drawn on it is
+        the one thing somebody cannot get back to."""
+        self._establish()
+        for tab in self._tabs():
+            html = self._page(tab["key"]).content.decode()
+            self.assertIn('id="mutint-annotation-panel"', html, tab["key"])
+            self.assertIn('id="mutint-annotation-status"', html, tab["key"])
+
+    def test_the_page_seeds_its_own_flag_from_the_server(self):
+        """A first-reference import reloads the page, so the answer has to be right on the
+        very first paint rather than one poll later."""
+        html = self._page("genomediff").content.decode()
+        self.assertIn("var annotationBusy = false;", html)
+
+    def test_import_is_held_and_says_why_beside_the_button(self):
+        from mutint_import import tasks as import_tasks
+        from mutint_jobs import jobs as jobs_api
+
+        with override_settings(TASKS={"default":
+                                      {"BACKEND": "django_tasks_db.DatabaseBackend"}}):
+            jobs_api.enqueue(import_tasks.build_coverage, 1, user=self.user,
+                             label="ISEScan — E", experiment=self.experiment,
+                             cancellable=True, annotates_reference=True)
+            html = self._page("genomediff").content.decode()
+
+        self.assertIn("var annotationBusy = true;", html)
+        # And the reason sits beside the button, not only in the panel several screens up.
+        self.assertIn('id="import-submit-hold"', html)
+
+    def test_render_list_is_what_holds_the_button(self):
+        """One owner per flag: the event listener sets `annotationBusy` and calls back into
+        `renderList`, which is the only place `submitBtn.disabled` is computed."""
+        html = self._page("genomediff").content.decode()
+        self.assertIn("submitBtn.disabled = annotationBusy ||", html)

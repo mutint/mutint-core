@@ -46,10 +46,48 @@ def remember_tab(user, key):
 
 @register.inclusion_tag("import/_tabs.html", takes_context=True)
 def import_tabs(context, active=None):
+    """The strip, and under it the annotation panel every import tab wears.
+
+    **Nothing reaches `_tabs.html` that is not returned here.** `InclusionNode.render` builds
+    its context with `context.new(...)`, which keeps the builtins and throws everything else
+    away -- so the page's `request`, its `user`, and every context processor's variable are
+    absent unless they are put in this dict. `asset_version` is the one that matters and the
+    one that fails *silently*: a `?v={{ asset_version }}` in the template would simply render
+    as `?v=`, serving last release's script from a browser cache, which is the exact failure
+    `get_asset_version` exists to prevent. `AssetVersionTestCase` scans template text and
+    would not notice, so `test_import_tabs_tag.py` guards this instead.
+
+    The panel costs one indexed `Job` query plus a `status_of` per in-flight row, on every
+    import tab page, plugins' included -- which is bounded by `annotation_jobs`' own cap. The
+    tag already writes a preference on every render, so this was never a free call.
+    """
+    from django.urls import reverse
+
+    from mutint_common.util import get_asset_version
+    from mutint_experiment.models import Experiment
+    from mutint_import.annotation_status import status_for
+
     experiment_id = context.get("experiment_id")
     if not experiment_id:
         return {"tabs": [], "active": active}
     request = context.get("request")
     if request is not None:
         remember_tab(request.user, active)
-    return {"tabs": get_import_tabs(experiment_id), "active": active}
+
+    # A page may have worked this out already -- core's import view does, because its own
+    # script needs the same answer -- so take that rather than asking twice per render.
+    status = context.get("annotation_status")
+    if status is None:
+        experiment = Experiment.objects.filter(pk=experiment_id).first()
+        user = getattr(request, "user", None)
+        status = (status_for(experiment, user) if experiment is not None
+                  else {"busy": False, "stalled": None, "jobs": []})
+
+    return {
+        "tabs": get_import_tabs(experiment_id),
+        "active": active,
+        "experiment_id": experiment_id,
+        "annotation_status": status,
+        "status_url": reverse("import_annotator_status"),
+        "asset_version": get_asset_version(),
+    }
