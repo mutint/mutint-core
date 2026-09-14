@@ -618,9 +618,34 @@ things about it are load-bearing:
   outside the process group the deadman supervisor tears down. It waits before signalling, so
   the response reaches the browser that asked; polls `kill -0` until the process is gone rather
   than waiting on the port, since `runserver` sets SO_REUSEADDR and what actually needs the
-  window is the supervisor stopping the worker and the cluster; and insists with SIGKILL past a
+  window is the supervisor stopping the worker and the cluster; insists with SIGKILL past a
   bound, because an update half-applied by something ignoring SIGTERM is worse than an
-  ungraceful stop.
+  ungraceful stop; and **unsets `RUN_MAIN` before the relaunch**, which is the subtlest line
+  in the file.
+
+**That last one was a bug for as long as the button existed, and the shape of it is worth
+more than the fix.** Everything downstream of the helper inherits this process's environment
+-- and `man open` says so in as many words: *"opened applications inherit environment
+variables just as if you had launched the application directly through its full path."* View
+code is always the reloader's *child*, so `RUN_MAIN=true` rode `open` into the applet, through
+`Start MutInt.command`, and into the new `./mutint start`, where `is_first_launch()` read it
+and concluded it was not a first launch. The entire block behind that gate was skipped: the
+migration guard, `migrate --run-syncdb`, the superuser check, **the worker pool**, and the
+banner -- plus, in the entry script, the cluster's `atexit` shutdown hook, which reads the same
+variable. So Restart brought MutInt up on the new code against the old schema with no workers,
+and the one line that would have said so is inside the block that did not run. What it looks
+like in `data/server.log`: `Starting WSGI development server` and `You have 1 unapplied
+migration(s)`, with no `Operations to perform`, no `Starting worker`, no `Starting MutInt at`.
+
+Two things about where the fix goes. **Not in the entry script**, which is the obvious place
+and is wrong: `restart_with_reloader` re-runs `[sys.executable] + sys.argv` -- the entry script
+itself -- with `RUN_MAIN` set, so stripping it there makes every autoreload a first launch and
+migrates on every file save. And **in the helper's shell, not as `env=` on the `Popen`**: the
+helper is `/bin/sh -c` whatever the relaunch command is, so one `unset` line covers `open` and
+`systemctl` alike; it sits beside the command it protects; it subtracts one name where a
+rebuilt environment is a standing invitation to drop something the relaunch needed
+(`MUTINT_RELAUNCH_COMMAND` above all -- scrub that and Restart works exactly once); and it is
+readable in `_script`, which is where `test_restart.py` says the helper's decisions live.
 
 The page polls **twice**: for the server to go down, then to come back. A poll that only asked
 "is it back" would be answered yes by the server that has not stopped yet.
@@ -630,13 +655,17 @@ is back"* true rather than nearly true. `start.py` opens one at the site root on
 right for somebody who double-clicked an icon, wrong here, because the person is already looking
 at MutInt in a window that is polling for it. What they saw was that window navigate to the
 dashboard, which is not a reload and not the page they pressed the button on.
-`update.note_restart` leaves a note in the state file and `start.py` takes it once; an
-environment variable could not carry this, because the launch it is about is started by a
-detached helper. A note left by a restart that never happened costs one browser window that
-does not open, on a launch where clicking the Dock icon opens one.
+`update.note_restart` leaves a note in the state file and `start.py` takes it once. A state
+file rather than an environment variable because the note has to outlive the environment --
+a relaunch that fails or is retried still finds it -- and **not**, as this said for a while,
+because an environment variable could not reach that launch. It reaches it perfectly well,
+which is the whole of the `RUN_MAIN` bug above. A note left by a restart that never happened
+costs one browser window that does not open, on a launch where clicking the Dock icon opens
+one.
 
 Two traps in testing it, both found by it happening. `start.py` must **still migrate** on such a
-launch -- applying a staged update is the whole point of the restart. And a test that reaches
+launch -- applying a staged update is the whole point of the restart, and for a long time that
+was written here and nothing enforced it; `ScriptTestCase` does now. And a test that reaches
 `request_restart` without patching `update.project_root` writes that note into *this
 checkout's* `data/update.json`, where another test reads and clears it: an order-dependent
 failure in a different test, with nothing pointing at the cause.

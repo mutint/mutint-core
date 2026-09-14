@@ -82,8 +82,54 @@ class ScriptTestCase(TestCase):
         self.assertLess(self.script.index("kill -0 4242"), self.script.index(RELAUNCH))
         self.assertIn("sleep %d" % restart.SETTLE_SECONDS, self.script)
 
+    def test_it_strips_the_reloader_flag_before_relaunching(self):
+        """**The regression this file exists to hold.** `open` hands the app it launches our
+        whole environment, view code is always the reloader's child, and a `RUN_MAIN` that
+        reaches `./mutint start` makes `is_first_launch()` false -- so the restart that was
+        supposed to apply a staged update brought up a server that never migrated, with no
+        worker pool, and no banner to say either. Ordering is half the assertion: unset after
+        the relaunch would be unset after the only thing that reads it.
+
+        This asserts the text and not the effect, which is the rule for this file -- nothing
+        here starts a helper. The effect was checked once by hand instead, against a real
+        `_spawn` with a `sleep` of our own as the victim: without the line the relaunch saw
+        `RUN_MAIN=true`, with it the variable was absent. What could regress is this line
+        going missing or sliding below `command`, and both are here; that `unset` works is
+        POSIX's business, not ours."""
+        unset = "unset %s" % restart.RELOADER_CHILD_ENV
+        self.assertIn(unset, self.script)
+        self.assertLess(self.script.index(unset), self.script.index(RELAUNCH))
+
     def test_the_relaunch_is_the_last_thing(self):
         self.assertTrue(self.script.rstrip().endswith(RELAUNCH))
+
+
+class ReloaderFlagTestCase(TestCase):
+    """The name is spelled in three modules, and unsetting one nothing reads would be a fix
+    that tests green and changes nothing."""
+
+    def test_it_is_the_name_django_sets(self):
+        from django.utils import autoreload
+
+        self.assertEqual(autoreload.DJANGO_AUTORELOAD_ENV, restart.RELOADER_CHILD_ENV)
+
+    def test_it_is_the_name_the_launch_gate_reads(self):
+        """`start.py` spells it again rather than have a view import a management command;
+        this is what keeps the two copies one fact."""
+        from mutint_common.management.commands import start
+
+        self.assertEqual(start.RELOADER_CHILD_ENV, restart.RELOADER_CHILD_ENV)
+
+    def test_the_gate_is_what_a_scrubbed_environment_buys(self):
+        """Stated as a behaviour rather than a constant, because the constants above could
+        agree while `is_first_launch` read them the other way round."""
+        from mutint_common.management.commands import start
+
+        with mock.patch.dict(os.environ, {restart.RELOADER_CHILD_ENV: "true"}):
+            self.assertFalse(start.is_first_launch())
+        env = {k: v for k, v in os.environ.items() if k != restart.RELOADER_CHILD_ENV}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertTrue(start.is_first_launch())
 
 
 class RequestRestartTestCase(TestCase):

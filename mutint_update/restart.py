@@ -25,6 +25,18 @@ whatever relaunches MutInt has to outlive everything this one is about to kill. 
 gets its own session (`start_new_session`), which is what puts it outside the process group
 the deadman supervisor tears down -- the same group membership that makes `kill -9` on the
 app clean up the runserver child.
+
+**What the relaunch must not inherit is our `RUN_MAIN`, and that is subtler than it sounds.**
+Everything downstream inherits this process's environment -- the helper from us, and the app
+the helper starts from the helper, which `man open` states in as many words -- so the flag
+that marks us as the reloader's *child* reached the new `./mutint start` and told it it was
+not a first launch. It came up on the new code without migrating and without workers, which
+is the state an update exists to avoid. `_script` unsets it, and says why there.
+
+**Not in the entry script**, which is the tempting place: Django's `restart_with_reloader`
+re-runs `[sys.executable] + sys.argv` -- the entry script itself -- with `RUN_MAIN` set, so
+stripping it there would make every autoreload a first launch and `migrate` on every file
+save. Here is the one place that knows it is about to start a genuinely new MutInt.
 """
 
 import os
@@ -78,6 +90,12 @@ def _script(pid, command):
     loop is bounded so a process that will not die cannot leave the helper running for ever,
     and past the bound it stops being polite -- an update that half-happened because
     something ignored SIGTERM is worse than an ungraceful stop.
+
+    The last decision is the `unset` below, and it is here rather than an `env=` on the
+    `Popen` for the reason this docstring exists: the helper is shell and this is where its
+    decisions can be read. It also sits beside the command it protects rather than thirty
+    lines away in another language, and it *subtracts* one name where a rebuilt environment
+    is a standing invitation to drop something `open` or `systemctl` needs.
     """
     return "\n".join([
         "sleep %d" % RESPONSE_GRACE_SECONDS,
@@ -90,6 +108,16 @@ def _script(pid, command):
         "done",
         "kill -0 %d 2>/dev/null && kill -KILL %d 2>/dev/null" % (pid, pid),
         "sleep %d" % SETTLE_SECONDS,
+        # **The relaunched MutInt must not be told it is a reloader child.** We are one --
+        # view code always is -- and everything below inherits our environment: the helper
+        # from us, and whatever `command` starts from the helper. `man open` is explicit that
+        # *"opened applications inherit environment variables just as if you had launched the
+        # application directly through its full path"*, so the flag rode `open` -> applet ->
+        # `Start MutInt.command` -> `./mutint start`, where `is_first_launch()` read it and
+        # skipped the entire launch block: no migration guard, no `migrate --run-syncdb`, no
+        # worker pool, no banner -- on the one launch whose whole purpose is to apply a
+        # staged update. Unset where it is known to be a lie about the process to come.
+        "unset %s" % RELOADER_CHILD_ENV,
         command,
     ])
 
@@ -124,8 +152,12 @@ def request_restart():
     if not command:
         raise RuntimeError("Nothing told MutInt how to start itself again.")
     pid = server_pid()
-    # Before spawning, so it is on disk whatever happens next: the launch this note is for is
-    # started by a detached helper, and an environment variable could not reach it.
+    # Before spawning, so it is on disk whatever happens next. A state file rather than an
+    # environment variable because the note outlives the environment that would have carried
+    # it -- the launch is started by a detached helper, and on a relaunch that fails or is
+    # retried the note is still there to be taken once. (It used to say an environment
+    # variable *could not* reach that launch, which is simply untrue: `open` hands the whole
+    # environment on, which is the bug the `unset` in `_script` exists to undo.)
     _note_restart()
     _spawn(_script(pid, command))
     return pid

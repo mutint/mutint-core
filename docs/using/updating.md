@@ -29,13 +29,19 @@ is at, and it has two buttons:
 
 - **Install update** stages the version it found.
 
-Then **quit MutInt and start it again**. The update is applied before the server comes up,
-because a running MutInt cannot safely replace the code it is executing. On a Mac that is a
-double-click on `MutInt.app`; in a terminal it is Ctrl-C and `./mutint start`.
+Then MutInt has to be started again, because the update is applied *before* the server comes
+up: a running MutInt cannot safely replace the code it is executing.
 
-That one launch does everything: it moves the working tree, installs any dependencies the new
-version added, installs any new external tools, and applies any new migrations. You do not have
-to run `install` or `migrate` yourself.
+- **Restart MutInt** appears beside the staged message when MutInt was started by something
+  that can start it again -- `MutInt.app` on a Mac. It stops the server, starts it, and the
+  page you are on reloads itself when it is back.
+- Otherwise -- from a terminal, where the process that would have to run the command is the
+  one being stopped -- the page says to **quit MutInt and start it again** by hand. That is a
+  double-click on `MutInt.app`, or Ctrl-C and `./mutint start`.
+
+Either way that one launch does everything: it moves the working tree, installs any
+dependencies the new version added, installs any new external tools, and applies any new
+migrations. You do not have to run `install` or `migrate` yourself.
 
 ## From a terminal
 
