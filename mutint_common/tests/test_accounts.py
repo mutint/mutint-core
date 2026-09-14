@@ -258,11 +258,12 @@ class AuthSlotTestCase(TestCase):
         self.assertEqual(1, len(slots), "the slot takes the first match, so two is ambiguous")
         self.assertEqual("mutint_accounts", slots[0].name)
 
-    def test_it_serves_the_four_routes_under_one_namespace(self):
+    def test_it_serves_the_five_routes_under_one_namespace(self):
         from mutint_accounts import urls as installed
 
         self.assertEqual("accounts", installed.app_name)
-        self.assertEqual({"login", "logout", "password_change", "password_change_done"},
+        self.assertEqual({"login", "logout", "password_change", "password_change_done",
+                          "email_change"},
                          {p.name for p in installed.urlpatterns})
 
     def test_those_routes_are_what_is_actually_mounted(self):
@@ -273,6 +274,52 @@ class AuthSlotTestCase(TestCase):
         self.assertEqual("/accounts/login/", reverse("accounts:login"))
         self.assertEqual("/accounts/logout/", reverse("accounts:logout"))
         self.assertEqual("/accounts/password/", reverse("accounts:password_change"))
+        self.assertEqual("/accounts/email/", reverse("accounts:email_change"))
+
+
+class EmailChangePageTestCase(TestCase):
+    """The one account page Django does not ship. It exists because a component now sends
+    the address on somebody's behalf, and a `User` created by `start.py` or by Django admin
+    may carry a placeholder or nothing."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="reader", email="r@e.com", password=PASSWORD)
+        self.client.force_login(self.user)
+
+    def test_signing_in_is_required(self):
+        self.client.logout()
+        response = self.client.get("/accounts/email/")
+        self.assertEqual(302, response.status_code)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_it_shows_the_current_address(self):
+        response = self.client.get("/accounts/email/")
+        self.assertEqual(200, response.status_code)
+        self.assertTemplateUsed(response, "accounts/email_change.html")
+        self.assertContains(response, 'value="r@e.com"')
+
+    def test_saving_changes_the_row_and_says_so(self):
+        response = self.client.post("/accounts/email/", {"email": " new@e.com "})
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, "Saved.")
+        self.user.refresh_from_db()
+        self.assertEqual("new@e.com", self.user.email)
+
+    def test_a_bad_address_is_refused_and_the_row_kept(self):
+        for bad in ("", "not an address", "a@"):
+            response = self.client.post("/accounts/email/", {"email": bad})
+            self.assertEqual(200, response.status_code, bad)
+            self.assertNotContains(response, "Saved.")
+            self.assertContains(response, 'style="color: #a00;')
+        self.user.refresh_from_db()
+        self.assertEqual("r@e.com", self.user.email)
+
+    def test_the_sidebar_offers_it_beside_change_password(self):
+        html = self.client.get("/accounts/password/").content.decode()
+        self.assertIn("Change Email", html)
+        self.assertIn("/accounts/email/", html)
+        self.assertLess(html.index("Change Password"), html.index("Change Email"))
 
 
 class LogoutTestCase(TestCase):

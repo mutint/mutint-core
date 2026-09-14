@@ -1,4 +1,5 @@
-"""The account pages every auth app serves: login, logout and changing a password.
+"""The account pages every auth app serves: login, logout, changing a password, and
+changing an email address.
 
 **Shared because the auth slot is pluggable.** An app carrying `auth_app = True` is what
 `mutint_common.urls` mounts under `^accounts/` with namespace `accounts`, and this module is
@@ -38,6 +39,8 @@ both. Changing that is a behavior change and not this module's business.
 """
 
 from django.contrib.auth import views as auth_views
+
+from mutint_common import account_views
 from django.urls import re_path, reverse_lazy
 
 account_urlpatterns = [
@@ -58,4 +61,6 @@ account_urlpatterns = [
             auth_views.PasswordChangeDoneView.as_view(
                 template_name='accounts/password_change_done.html'),
             name='password_change_done'),
+    # Ours, not Django's: nothing in django.contrib.auth lets a person set their own address.
+    re_path(r'^email/$', account_views.email_change, name='email_change'),
 ]

@@ -328,8 +328,16 @@ silently fails validation forever. `test_accounts.HandWrittenFieldsTestCase` com
 names the Bootstrap 4 classes it must not carry, because "it looks like every other page" is a
 claim that rots quietly.
 
+**Change Email is the one account page Django does not ship**, at `/accounts/email/`
+(`mutint_common/account_views.py`), and it exists because a component now sends the address
+on somebody's behalf: mutint-refsniff names it to NCBI with each BLAST search, and a `User`
+made by `start.py` carries `admin@example.com` while one made in Django admin may carry
+nothing. Signed-in only, redirecting to login as the password page does; saving re-renders
+the page with a line rather than landing on a done page, because nothing about it needs
+explaining afterwards.
+
 **The sidebar's account block is the shell's own, not a nav entry.** Username, and under it
-Logout, Change Password, Jobs, Groups and -- for a superuser -- Django admin. It is written into
+Logout, Change Password, Change Email, Jobs, Groups and -- for a superuser -- Django admin. It is written into
 `base.html` rather than registered, because `nav_registry`'s one per-user gate --
 `requires_edit`, write access to the selected experiment's project -- is not the question any
 of these asks, and `base.html` already has `user`. A `visible_to=` predicate for one entry

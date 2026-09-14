@@ -164,6 +164,14 @@
                                 <a href="{% url 'accounts:password_change' %}">Change Password</a>
                             </li>
                             <li>
+                                {% comment %} The address on your own User row, which Django
+                                   admin can set and nothing else could. A component sends it
+                                   on your behalf -- mutint-refsniff names it to NCBI with
+                                   each search -- so it belongs where the password you change
+                                   is. {% endcomment %}
+                                <a href="{% url 'accounts:email_change' %}">Change Email</a>
+                            </li>
+                            <li>
                                 {% comment %} These are the jobs *you* asked for, the way this
                                    is the password *you* change. A superuser sees everyone's on
                                    the same page. {% endcomment %}

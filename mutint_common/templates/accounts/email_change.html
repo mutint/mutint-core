@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Change email{% endblock %}
+{% block header %}Change email{% endblock %}
+{% comment %} The one account page Django does not ship. Hand-written, as every form here is;
+   saving re-renders this page with a line saying so rather than landing on a done page,
+   because nothing about an email change needs explaining afterwards the way a password
+   change's sessions do. {% endcomment %}
+{% block content %}
+    <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
+        <form method="post" action="">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="ec-email">Email address</label>
+                <input type="email" class="form-control" id="ec-email" name="email"
+                       value="{{ email }}" autocomplete="email" required autofocus>
+                <small class="help-block">
+                    Where you can be reached about your work here. It is sent on your behalf
+                    where a service asks who is asking &mdash; NCBI, for a BLAST search launched
+                    from the Identify Reference from Reads tab &mdash; and nowhere else.
+                </small>
+                {% if error %}
+                    <div style="color: #a00; margin-top: 0.4em;">{{ error }}</div>
+                {% endif %}
+                {% if saved %}
+                    <div style="color: #3c763d; margin-top: 0.4em;">Saved.</div>
+                {% endif %}
+            </div>
+            <div style="margin-top: 1.5em;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a class="btn btn-default" href="/">Cancel</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}
