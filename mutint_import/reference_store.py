@@ -161,13 +161,25 @@ def _sequence_fields(sequences, fasta_sha, sequence_sha):
 
 
 def _apply_sequence_fields(reference, sequences, fasta_sha, sequence_sha, extra=()):
-    """Write `_sequence_fields` onto `reference`, preserving any recorded aliases."""
+    """Write `_sequence_fields` onto `reference`, preserving aliases and roles.
+
+    `sequence_entries` mints entries from the sequences alone, so anything a person
+    recorded *about* a contig has to be carried across by hand here. Two things are:
+    the names it used to have, and its breseq role (`reference_roles`). Both are keyed
+    by name, which is right for this path -- it runs when the sequences are the same and
+    only the annotation moved, so the names have not changed. A **rename** rebuilds the
+    entries elsewhere, and carries both across there; see `reference_rename._record_aliases`.
+    """
     aliases = {entry["id"]: entry["aliases"]
                for entry in (reference.seq_ids or []) if entry.get("aliases")}
+    roles = {entry["id"]: entry["role"]
+             for entry in (reference.seq_ids or []) if entry.get("role")}
     fields = _sequence_fields(sequences, fasta_sha, sequence_sha)
     for entry in fields["seq_ids"]:
         if entry["id"] in aliases:
             entry["aliases"] = aliases[entry["id"]]
+        if entry["id"] in roles:
+            entry["role"] = roles[entry["id"]]
     for name, value in fields.items():
         setattr(reference, name, value)
     reference.save(update_fields=list(fields) + list(extra))

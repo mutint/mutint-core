@@ -413,13 +413,21 @@ def _rename_evidence(Evidence, experiment, mapping):
 
 
 def _record_aliases(reference, plan):
-    """Carry each sequence's former names forward onto its new entry.
+    """Carry each sequence's former names, and its breseq role, forward onto its new entry.
 
-    Accumulated rather than replaced: a sequence renamed twice must keep the first name too,
-    or a BAM stored before either rename stops resolving.
+    Aliases are accumulated rather than replaced: a sequence renamed twice must keep the
+    first name too, or a BAM stored before either rename stops resolving.
+
+    The **role** (`reference_roles`) is carried under the *old* name, because a rename
+    changes what a contig is called and not what it is: contigs of a draft assembly are
+    still contigs of it afterwards. It is carried only where it was set explicitly -- an
+    entry that was taking the name-based guess goes on taking it, now against the new name,
+    which is the answer a person would get if they set the names this way to begin with.
     """
     previous = {entry["id"]: list(entry.get("aliases") or [])
                 for entry in (reference.seq_ids or [])}
+    roles = {entry["id"]: entry["role"]
+             for entry in (reference.seq_ids or []) if entry.get("role")}
     mapping = plan.mapping
 
     entries = reference_io.sequence_entries(plan.sequences)
@@ -430,6 +438,8 @@ def _record_aliases(reference, plan):
             aliases.append(old_name)
         if aliases:
             entry["aliases"] = aliases
+        if old_name in roles:
+            entry["role"] = roles[old_name]
 
     reference.seq_ids = entries
     reference.total_length = sum(len(seq) for _seq_id, seq in plan.sequences)

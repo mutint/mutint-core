@@ -135,6 +135,59 @@ set or updated. On the Update Annotation tab, **Run annotators** runs the ticked
 the current reference with nothing uploaded. What each one does is described on its panel and
 in its component's own pages.
 
+## Draft assemblies, plasmids and transposons: the Role column
+
+breseq analyses a reference sequence differently depending on which of its three reference
+options the sequence arrives under, and the **Reference** page's Role column is where that is
+decided. Each contig is one of:
+
+| Role | breseq option | What it means |
+|---|---|---|
+| **Reference (-r)** | `-r` | A coverage distribution is fitted to this sequence on its own. The default for anything that is not obviously an assembly contig. |
+| **Contig (-c)** | `-c` | **One** coverage distribution is fitted across *every* sequence marked this way. This is what the contigs of a single draft assembly want -- they are one chromosome at one copy number -- and it is what stops a short contig being fitted on its own, which is unreliable below about a thousand bases. |
+| **Junction-only (-s)** | `-s` | Used only for calling junctions against the other sequences. No coverage is fitted and no mutations are called on it. A transposon or a marker cassette that is not part of the reference genome is the usual case. |
+
+To change them: tick the sequences on the **Reference** page, choose a role from **Set role
+for selected**, and press Apply. **Reset to suggested** puts them back on the suggestion.
+Changing a role alters no sequence and no annotation, and re-runs nothing that has already
+been analysed -- it decides how the *next* breseq run launched from MutInt is invoked. You
+need write access to the experiment, and the experiment must not be locked.
+
+### Roles marked *suggested* were read from the name
+
+A contig whose name looks like an assembler's -- `NODE_1_length_…`, `contig_00007`,
+`scaffold12`, `k141_12345` -- is suggested as **Contig (-c)**; everything else is suggested
+as **Reference (-r)**. A suggestion is not an answer: it is shown as *suggested* precisely so
+that a wrong one is visible and costs one click to fix. Check it on a draft assembly whose
+contigs are named something else, and on a finished genome that happens to be named like an
+assembly.
+
+**Junction-only is never suggested.** No sequence name reliably means "this is not part of
+the genome", and the mistake is not one you would see: a sequence wrongly marked junction-only
+has every mutation on it quietly uncalled. Set that one yourself.
+
+### A junction-only sequence goes into the reference first
+
+Import it like any other sequence -- on the **Reference Sequence** tab if the experiment has
+no reference yet, or with **Replace annotation** alongside the rest of the genome -- and then
+mark it Junction-only on the Reference page. It is part of the reference; the role only says
+how breseq should treat it.
+
+Doing it this way is also what lets the resulting sample import. breseq writes every sequence
+it was given into its own output, whichever option it arrived under, so the analysed sample
+still matches the experiment's reference exactly.
+
+### What this cannot express
+
+Two *separate* draft assemblies, each fitted its own shared coverage distribution, cannot be
+described: everything marked Contig (-c) is fitted together, as one group. A single assembly
+plus any number of individually-fitted replicons and junction-only sequences is the shape this
+covers.
+
+Sequences imported from a breseq run somebody else did are not affected by any of this -- the
+roles govern runs launched from MutInt, and the analysis in an uploaded results folder has
+already happened.
+
 ## Downloading the reference
 
 The experiment's **Reference** page lists every sequence in the stored reference, and each

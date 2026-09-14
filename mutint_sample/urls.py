@@ -45,6 +45,13 @@ urlpatterns = [
     # file routes below, which all carry an id segment.
     re_path(r'^reference$', mutint_sample.views.ncbi_view.reference_view, name='reference_view'),
 
+    # Which breseq reference option each contig is passed under. A sibling of `ncbi/check`
+    # rather than part of it: both are per-contig state edited on that page, and neither is
+    # about the other. `^reference/roles$` carries no id segment, so it does not collide
+    # with the `^reference/<id>/...` file routes either.
+    re_path(r'^reference/roles$', mutint_sample.views.ncbi_view.reference_roles_set,
+            name='reference_roles_set'),
+
     # Managed-store files, addressed by primary key and streamed with Range support.
     re_path(r'^alignments/(?P<sample_id>\d+)/bam$',
             mutint_sample.views.alignments.sample_bam, name='sample_bam'),

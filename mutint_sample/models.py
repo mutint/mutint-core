@@ -622,12 +622,19 @@ class ReferenceSequences(models.Model):
     # mutint_import.reference.sequence_set_digest. Blank on a row whose stored FASTA was
     # missing when the backfill ran -- blank means *unknown*, never "matches".
     sequence_sha256 = models.CharField(max_length=64, blank=True, default="")
-    # [{"id": ..., "length": ..., "sha256": ..., "aliases": [...]}, ...] in the order they
-    # appear in the FASTA. `sha256` is the per-sequence digest a rename maps old names onto
-    # new ones by; `aliases` is the names this sequence used to have, and is what
+    # [{"id": ..., "length": ..., "sha256": ..., "aliases": [...], "role": ...}, ...] in the
+    # order they appear in the FASTA. `sha256` is the per-sequence digest a rename maps old
+    # names onto new ones by; `aliases` is the names this sequence used to have, and is what
     # /mutations/reference/<id>/chromalias serves so stored BAMs and BigWigs -- which keep
     # the names they were built with -- still resolve. Absent on both counts until a
     # reference is re-established or renamed.
+    #
+    # `role` is which breseq reference option this contig is passed under -- see
+    # `mutint_import.reference_roles`. It is present only where somebody set it explicitly;
+    # **absent means the name-based guess**, which is why adding it needed no migration and
+    # no backfill. Both `aliases` and `role` are carried across a rewrite by
+    # `reference_store._apply_sequence_fields` and across a rename by
+    # `reference_rename._record_aliases`.
     seq_ids = models.JSONField(default=list)
     total_length = models.BigIntegerField(default=0)
 

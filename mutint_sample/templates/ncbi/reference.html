@@ -74,6 +74,7 @@
                         </th>
                         <th>Sequence</th>
                         <th class="reference-length">Length</th>
+                        <th>Role</th>
                         <th>Previously named</th>
                         <th>NCBI record</th>
                     </tr>
@@ -88,6 +89,11 @@
                         </td>
                         <td><code>{{ contig.id }}</code></td>
                         <td class="reference-length">{{ contig.length_display }}</td>
+                        <td class="reference-role">
+                            {{ contig.role_label }}
+                            {% if contig.role_guessed %}<span class="reference-role-guessed"
+                                title="Suggested from the sequence name. Nobody has set this; change it below and it stops being a suggestion.">suggested</span>{% endif %}
+                        </td>
                         <td>
                             {% if contig.aliases %}
                                 {% for alias in contig.aliases %}<code>{{ alias }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
@@ -133,11 +139,49 @@
                 </tbody>
             </table>
 
+            {% if may_check %}
+                {% comment %} Not a <form>: the row checkboxes already belong to
+                   `reference-download` through `form=`, and an input may belong to only
+                   one form. The script gathers the checked ones. {% endcomment %}
+                <div class="reference-roles form-inline" id="reference-roles">
+                    {% comment %} mutintPostJson sends the CSRF token from the cookie, and
+                       rendering the tag is what sets it. It cannot be borrowed from the
+                       per-row check forms: those are gone once every contig is verified,
+                       which is exactly when this control still has to work. {% endcomment %}
+                    {% csrf_token %}
+                    <label for="reference-role-select">Set role for selected:</label>
+                    <select class="form-control input-sm" id="reference-role-select">
+                        {% for role in roles %}
+                        <option value="{{ role.key }}" title="{{ role.description }}">{{ role.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-default btn-sm"
+                            id="reference-role-apply">Apply</button>
+                    <button type="button" class="btn btn-default btn-sm"
+                            id="reference-role-reset"
+                            title="Put the selected sequences back on the role suggested by their names">Reset to suggested</button>
+                    <span class="reference-role-status"></span>
+                </div>
+            {% endif %}
+
             <p class="ncbi-footnote">
                 Downloads are generated from the stored reference, which keeps the sequence
                 and the genes breseq annotates against; the file it was imported from is not
                 kept. A GenBank download therefore carries CDS, RNA and repeat features with
                 their names, locus tags and products, and no translations or source record.
+            </p>
+
+            <p class="ncbi-footnote">
+                A sequence's <b>role</b> is which breseq reference option it is passed under
+                when a run is launched from this MutInt. <b>Reference (-r)</b> fits coverage
+                to it on its own. <b>Contig (-c)</b> fits one coverage distribution across
+                every sequence marked that way, which is what the contigs of a single draft
+                assembly want &mdash; and what stops a short contig being fitted alone.
+                <b>Junction-only (-s)</b> uses it only for calling junctions against the
+                others, with no coverage fitted and no mutations called on it; a transposon
+                that is not in the reference genome is the usual case. A role marked
+                <i>suggested</i> was read from the sequence's name and nobody has confirmed
+                it. Changing one alters no sequence and no annotation.
             </p>
 
             {% if may_check %}
@@ -184,6 +228,54 @@
 {% endif %}
 
 {% if may_check and has_reference %}
+<script type="text/javascript">
+(function () {
+    "use strict";
+    // The row checkboxes belong to the download form, so this reads them rather than
+    // submitting them, and posts JSON through the shared helper in mutint_crud.js.
+    var apply = document.getElementById("reference-role-apply");
+    var reset = document.getElementById("reference-role-reset");
+    var select = document.getElementById("reference-role-select");
+    var status = document.querySelector(".reference-role-status");
+    if (!apply) { return; }
+
+    function selected() {
+        return Array.prototype.slice.call(
+            document.querySelectorAll('input[name="seq_id"][form="reference-download"]'))
+            .filter(function (box) { return box.checked; })
+            .map(function (box) { return box.value; });
+    }
+
+    function send(role) {
+        var seqIds = selected();
+        if (!seqIds.length) {
+            status.textContent = "Select at least one sequence.";
+            return;
+        }
+        apply.disabled = true;
+        reset.disabled = true;
+        status.textContent = "Saving…";
+        mutintPostJson("{% url 'reference_roles_set' %}", {
+            experiment_id: {{ experiment_id }},
+            seq_ids: seqIds,
+            role: role
+        }).then(function (data) {
+            // Reload rather than rewriting the rows here: a role changes this column, the
+            // suggested markers and the grouping the breseq page reports, and the server
+            // already decides all of it. Same rule as the accession check below.
+            window.location.reload();
+        }).catch(function (error) {
+            apply.disabled = false;
+            reset.disabled = false;
+            status.textContent = (error && error.message) || "The change could not be saved.";
+        });
+    }
+
+    apply.addEventListener("click", function () { send(select.value); });
+    reset.addEventListener("click", function () { send(null); });
+}());
+</script>
+
 <script type="text/javascript">
 (function () {
     "use strict";

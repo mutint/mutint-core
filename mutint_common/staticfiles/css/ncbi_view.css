@@ -61,3 +61,40 @@
 .reference-select {
     width: 1%;
 }
+
+/* The Role control under the contig table. Same shape as the download row above it: a
+   menu and buttons on one line, `form-control` sized to its contents because Bootstrap
+   makes it 100% wide and it would otherwise take the whole row. */
+.reference-roles {
+    margin-top: 10px;
+    align-items: center;
+}
+
+.reference-roles select.form-control {
+    width: auto;
+    display: inline-block;
+    margin: 0 8px;
+}
+
+.reference-roles label {
+    margin-bottom: 0;
+}
+
+.reference-role-status {
+    margin-left: 10px;
+}
+
+/* Keeps a long contig name from being pushed onto two lines by the role beside it. */
+.reference-role {
+    white-space: nowrap;
+}
+
+/* The suggestion marker sits beside the role it qualifies, not under it. It carries its
+   own color rather than borrowing `.reference-muted`, which the template uses in two other
+   places and which no stylesheet defines. */
+.reference-role-guessed {
+    color: #717171;
+    font-size: 11px;
+    font-style: italic;
+    margin-left: 6px;
+}

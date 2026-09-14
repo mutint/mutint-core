@@ -377,7 +377,11 @@ class ReferencePageTestCase(_Fixture):
     def test_the_format_menu_is_the_endpoint_s_table(self):
         html = self._get_ref().content.decode("utf-8")
         self.assertIn('<select id="reference-format" name="format"', html)
-        offered = re.findall(r'<option value="([a-z0-9]+)"', html)
+        # Scoped to this menu's own <select>. The page carries a second one -- the Role
+        # control's -- so scraping every <option> on the page asks a different question
+        # than this test means, and would fail on any menu added later.
+        menu = html.split('<select id="reference-format"', 1)[1].split("</select>", 1)[0]
+        offered = re.findall(r'<option value="([a-z0-9_]+)"', menu)
         self.assertEqual(offered, list(reference_export.FORMATS))
         self.assertIn('value="%s" selected' % reference_export.DEFAULT_FORMAT, html)
 

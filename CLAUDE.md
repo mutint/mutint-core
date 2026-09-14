@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2828 run, 0 failures** standalone; **3422** assembled, measured with `PYTHONPATH`
+**Baseline: 2868 run, 0 failures** standalone; **3459** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3191,6 +3191,65 @@ whose current NCBI version is not the genome held here reports MISMATCH -- corre
 and `detail` carries enough for a person to retry with the version they meant. Walking back
 through earlier versions is a non-goal for now.
 
+
+### A contig has a role, and it is which breseq option it arrives under
+
+breseq takes reference sequences under three flags, and which one a sequence arrives under
+changes the analysis: `-r` fits a coverage distribution per sequence, `-c` fits **one across
+every sequence in that file** -- what a draft assembly's contigs want, being one chromosome
+at one copy number -- and `-s` uses the file only for calling junctions, fitting no coverage
+and calling no mutations on it. **breseq has no way to express this except by which input
+file a sequence is in**, and this repo has no input files: `reference.normalize_references`
+merges every uploaded file into one canonical GFF3 and FASTA, and the originating filename
+is used for duplicate warnings and then dropped.
+
+So `mutint_import/reference_roles.py` records the grouping per contig and rebuilds the files
+from it, through `reference_export.subset` + `render` -- the same pair the Reference page's
+download already uses. mutint-breseq is the consumer; nothing in core runs breseq.
+
+**A role changes nothing about the data.** Not the bases, not the annotation, not a
+mutation's gene names, and nothing derived -- so unlike `install_annotation`, which it
+otherwise resembles, it asks for **no rebuild and no reannotation**. What it changes is the
+command line of every future breseq run. It is still a *shared* write, which is why the
+endpoint asks `can_edit_experiment` rather than being a per-reader preference.
+
+**An absent key means the guess, and that is what made this migration-free.** The role is a
+`role` key on the contig's `ReferenceSequences.seq_ids` entry, written only where somebody
+set one; `entry_role` falls back to `guess_role` otherwise. Nothing is backfilled, a new
+experiment needs no seeding, and no column and no model were added -- the posture a missing
+`DerivedDataState` row takes. It also means the page can say *suggested*, and that marker is
+the whole reason guessing from a name is defensible: being wrong is visible and costs one
+click.
+
+**The guess is narrow, anchored, and refuses to guess the dangerous one.** `^(node|contig|
+ctg|scaffold|scf)[._-]?\d` plus megahit's `^k\d+[._-]\d`, so `Contigo`, `NODEL`, a bare
+`contig` and a WGS accession like `JAABCD010000001` are all left alone. **`junction_only` is
+never guessed**: there is no name that reliably means "this sequence is not in the genome",
+and the two mistakes do not cost the same -- a contig wrongly left `-r` is fitted its own
+coverage, while a sequence wrongly made junction-only has every mutation on it silently
+uncalled.
+
+**Two places carry the key across by hand**, both beside `aliases` and for the same reason --
+`sequence_entries` mints entries from the sequences alone, so anything recorded *about* a
+contig is lost unless carried. `reference_store._apply_sequence_fields` carries it by name,
+which is right for a rewrite where only the annotation moved;
+`reference_rename._record_aliases` carries it under the **old** name through `plan.pairs`,
+because a rename changes what a contig is called and not what it is. A *guessed* role
+re-guesses against the new name, which is the answer somebody would get had the contigs been
+called that to begin with.
+
+**A junction-only sequence is a contig of the reference, imported normally and then
+flagged** -- not an extra file attached to one run. That is what keeps `breseq_folder`'s
+`sequence_set_digest` check passing, and it was verified against the real breseq rather than
+assumed: a run given `-r main -c contigs -s IS150` writes **every** sequence into its own
+`data/reference.gff3`, so the digest matches and the sample imports. The same run's
+`summary.json` reports `junction_only: true` for it, and the two `-c` contigs come back with
+an identical `coverage_average` while the `-r` chromosome has its own -- which is the shared
+fit, visible in the output.
+
+**There is deliberately no named-group model.** Three flat roles render to at most three
+files, so two draft assemblies fitted *separately* cannot be expressed. That is a real
+limitation and the docs say so; a group name would be a mechanism with no producer.
 
 ### Django Apps
 

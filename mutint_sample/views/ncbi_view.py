@@ -16,6 +16,7 @@ whole risk this page carries is that a near-miss accession renders a completely 
 picture of the wrong gene, so an unverified contig gets an explanation and no viewer.
 """
 
+import json
 import logging
 
 from django.http import Http404, HttpResponse, JsonResponse
@@ -28,7 +29,7 @@ from mutint_experiment.permissions import (
     accessible_projects, can_edit_experiment, can_view_project,
 )
 from mutint_experiment.roles import ROLE_WRITE
-from mutint_import import reference_export
+from mutint_import import reference_export, reference_roles
 from mutint_sample import ncbi
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.locus import buffered_extent, mutation_extent
@@ -138,6 +139,66 @@ def ncbi_check(request):
     })
 
 
+@require_POST
+def reference_roles_set(request):
+    """Set, or clear, the breseq role of one or more contigs of an experiment's reference.
+
+    Takes JSON -- `{"experiment_id": n, "seq_ids": [...], "role": "contig"|null}` -- because
+    the control is a bulk one over the checkboxes the page already has, and those carry
+    `form="reference-download"`: an input may belong to only one form, so a second `<form>`
+    over them is not expressible and the page gathers them in script instead.
+
+    A null `role` clears the override, putting those contigs back on the name-based
+    suggestion. That is a real operation rather than a tidy-up: it is how somebody undoes a
+    mistake without having to know what the suggestion would have been.
+
+    Gated on `can_edit_experiment`, like `ncbi_check` and for the same reason -- it writes,
+    and a predicate handed the project cannot see the lock that lives on the experiment.
+    The write is genuinely **shared**: it changes the command line of every future breseq
+    run in this experiment, which is as shared as a write gets.
+
+    It asks for no rebuild and no reannotation: see `mutint_import.reference_roles`.
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({"error": "Expected a JSON body."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "Expected a JSON object."}, status=400)
+
+    try:
+        experiment = Experiment.objects.get(pk=payload.get("experiment_id"))
+    except (Experiment.DoesNotExist, ValueError, TypeError):
+        raise Http404("No such experiment.")
+
+    if not _may_view(request.user, experiment):
+        return JsonResponse({"error": "You do not have access to this experiment."}, status=403)
+    if not _may_check(request.user, experiment):
+        return JsonResponse(
+            {"error": "You need write access to this experiment, and it must not be locked."},
+            status=403)
+
+    seq_ids = payload.get("seq_ids")
+    if not isinstance(seq_ids, list) or not seq_ids:
+        return JsonResponse({"error": "Select at least one sequence."}, status=400)
+    seq_ids = [str(seq_id) for seq_id in seq_ids]
+
+    raw_role = payload.get("role")
+    if raw_role is None:
+        role = None
+    else:
+        role = reference_roles.normalize_role(raw_role)
+        if role is None:
+            return JsonResponse(
+                {"error": "%s is not a reference role." % raw_role}, status=400)
+
+    changed = reference_roles.set_roles(experiment, {seq_id: role for seq_id in seq_ids})
+    return JsonResponse({
+        "changed": changed,
+        "grouping": reference_roles.describe(experiment),
+    })
+
+
 def _may_view(user, experiment):
     """Same rule as browse and the alignment routes -- deliberately not a second one."""
     project = getattr(experiment, "project", None)
@@ -244,6 +305,13 @@ def reference_view(request):
         "total_length": format(sum(contig["length"] for contig in contigs), ",d"),
         "verified_count": sum(1 for contig in contigs if contig["is_verified"]),
         "may_check": _may_check(request.user, experiment),
+        # One vocabulary for the Role column's menu and for what the endpoint accepts, so
+        # the page cannot offer a role the server would refuse -- the rule the download
+        # menu already follows.
+        "roles": [{"key": role,
+                   "label": reference_roles.ROLE_LABELS[role],
+                   "description": reference_roles.ROLE_DESCRIPTIONS[role]}
+                  for role in reference_roles.ROLES],
         # The download row's menu is rendered from the table the endpoint dispatches on,
         # so the page cannot offer a format the endpoint would refuse.
         "download_formats": list(reference_export.FORMATS.values()),

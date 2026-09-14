@@ -42,6 +42,7 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 
+from mutint_import import reference_roles
 from mutint_sample.models import DatabaseSequenceLink, ReferenceSequences
 
 logger = logging.getLogger(__name__)
@@ -427,6 +428,13 @@ def contig_states(experiment, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
             # Position column this way. A genome length is unreadable without it.
             "length_display": format(entry.get("length") or 0, ",d"),
             "aliases": list(entry.get("aliases") or []),
+            # Which breseq reference option this contig is passed under, and whether that
+            # is an answer somebody gave or the name-based suggestion. Assembled here
+            # rather than in the view so the page and the endpoint that writes it cannot
+            # form two opinions about what a contig's role currently is.
+            "role": reference_roles.entry_role(entry),
+            "role_label": reference_roles.ROLE_LABELS[reference_roles.entry_role(entry)],
+            "role_guessed": reference_roles.entry_is_guessed(entry),
             "checkable": bool(entry.get("sha256") and entry.get("length")),
             "record": record,
             "status": record.status if record else DatabaseSequenceLink.UNCHECKED,
