@@ -1,6 +1,8 @@
 """The import tab registry: what a tab may be, and how it renders."""
 
-from django.test import TestCase
+import tempfile
+
+from django.test import TestCase, override_settings
 
 from mutint_common import import_tab_registry as registry
 
@@ -46,6 +48,39 @@ class ImportTabRegistryTestCase(TestCase):
         registry.register_import_tab("p", "P", url="/somewhere/", requires_reference=True)
 
         self.assertNotIn("p", [t["key"] for t in registry.get_import_tabs(7)])
+
+    def test_a_page_tab_only_without_a_reference_goes_when_one_arrives(self):
+        """The inverse flag, for a page that exists to find a reference: offered while there
+        is none, gone once there is one. Checked against a real experiment, because the
+        registry reads the answer off what `import_registry` offers it."""
+        from django.contrib.auth.models import User
+        from mutint_experiment.models import Project
+        from mutint_experiment.views import _create_experiment
+        from mutint_import import reference_store
+        from mutint_import.tests import breseq_fixture
+
+        registry.register_import_tab("find", "Find", url="/find/", only_without_reference=True)
+        owner = User.objects.create(username="o")
+        experiment = _create_experiment(Project.objects.create(name="p", user=owner), "e", owner)
+
+        self.assertIn("find", [t["key"] for t in registry.get_import_tabs(experiment.id)])
+
+        sequences = [("ref", breseq_fixture.SEQUENCE_A)]
+        with override_settings(MUTINT_STORE_DIR=tempfile.mkdtemp()):
+            reference_store.establish_or_check(
+                experiment, breseq_fixture.gff3_text(sequences), sequences)
+
+        self.assertNotIn("find", [t["key"] for t in registry.get_import_tabs(experiment.id)])
+
+    def test_the_two_reference_flags_are_exclusive_and_for_page_tabs(self):
+        with self.assertRaises(ValueError):
+            registry.register_import_tab("x", "X", url="/x/", requires_reference=True,
+                                         only_without_reference=True)
+        with self.assertRaises(ValueError):
+            registry.register_import_tab("x", "X", import_type="vcf",
+                                         only_without_reference=True)
+        with self.assertRaises(ValueError):
+            registry.register_import_tab("x", "X", import_type="vcf", requires_reference=True)
 
     def test_a_page_tab_carries_the_experiment_and_a_dead_one_is_skipped(self):
         registry.register_import_tab("p", "P", url_name="reference_view")

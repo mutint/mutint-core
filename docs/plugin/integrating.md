@@ -71,7 +71,9 @@ so it wears the same strip. Tabs render in `INSTALLED_APPS` order, after core's 
 **The strip only offers tabs that can run now.** A tab naming import types is hidden while
 none of them can, which the registry works out for you. A tab that is a page of your own is
 opaque to it, so say `requires_reference=True` if your page needs the experiment to have a
-reference genome -- mutint-breseq's does, because breseq calls mutations against one.
+reference genome -- mutint-breseq's does, because breseq calls mutations against one -- or
+`only_without_reference=True` if it is pointless once there is one, which is
+mutint-refsniff's Identify Reference from Reads.
 
 `priority` is real ordering, not a preference: a reference genome must be established before
 anything hash-checked against it, so core registers `reference` at 10, `breseq_folder` at 50

@@ -29,7 +29,8 @@ _tabs = []
 
 
 def register_import_tab(key, label, *, import_type=None, import_types=None, url_name=None,
-                        url=None, requires_reference=False, last=False):
+                        url=None, requires_reference=False, only_without_reference=False,
+                        last=False):
     """Register a tab on the Import data page (from `AppConfig.ready()`).
 
     key           identifies the tab; the page marks the matching one active, and the tab's
@@ -50,6 +51,13 @@ def register_import_tab(key, label, *, import_type=None, import_types=None, url_
                   of its own is opaque, so the plugin says. mutint-breseq's Run breseq is one:
                   breseq calls mutations *against* a reference and its launcher refuses
                   without one.
+    only_without_reference
+                  the inverse, for a `url_name`/`url` tab only: hide it once the experiment
+                  has a reference. The name is `import_registry`'s, which says the same of
+                  a handler that establishes one. mutint-refsniff's Identify Reference from
+                  Reads is the case: a page that exists to *find* a reference has nothing to
+                  offer once there is one, and a tab that stayed would be one more that
+                  refuses when opened.
     last          sort after every other tab, plugins' included. There is still no `order=`:
                   the strip's order is INSTALLED_APPS order, and this says only "the tail",
                   which INSTALLED_APPS cannot express at all because plugins are appended
@@ -67,11 +75,20 @@ def register_import_tab(key, label, *, import_type=None, import_types=None, url_
         raise ValueError("register_import_tab() needs exactly one of import_types, url_name, url")
     if import_types is not None and not import_types:
         raise ValueError("register_import_tab() needs at least one import type")
+    if requires_reference and only_without_reference:
+        raise ValueError("register_import_tab() takes requires_reference or "
+                         "only_without_reference, not both")
+    if import_types is not None and (requires_reference or only_without_reference):
+        # A type tab asks `import_registry` whether it can run; a second answer here would be
+        # a second opinion about the same handler.
+        raise ValueError("register_import_tab() decides a type tab's visibility from its "
+                         "import types; the reference flags are for a page tab")
     _tabs[:] = [t for t in _tabs if t["key"] != key]
     _tabs.append({"key": key, "label": label,
                   "import_types": tuple(import_types) if import_types else None,
                   "url_name": url_name, "url": url,
-                  "requires_reference": requires_reference, "last": last})
+                  "requires_reference": requires_reference,
+                  "only_without_reference": only_without_reference, "last": last})
 
 
 def unregister_import_tab(key):
@@ -133,6 +150,8 @@ def get_import_tabs(experiment_id):
             if not any(name in offered for name in tab["import_types"]):
                 continue
         elif tab.get("requires_reference") and not offered_with_reference(offered):
+            continue
+        elif tab.get("only_without_reference") and offered_with_reference(offered):
             continue
         try:
             if tab["import_types"] is not None:
