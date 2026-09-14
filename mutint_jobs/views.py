@@ -22,9 +22,19 @@ logger = logging.getLogger("mutint_jobs.views")
 FINISHED = ("SUCCESSFUL", "FAILED")
 
 
+def _finished(status):
+    """Whether a job has stopped moving, as this page reasons about it.
+
+    `STATUS_UNKNOWN` counts: the queue prunes finished results after a fortnight, so a job it
+    no longer holds is old rather than running. Shared by the rows and by the log page's poll,
+    which must agree about when to stop asking.
+    """
+    return status in FINISHED or status == queue.STATUS_UNKNOWN
+
+
 def _row(job):
     status = queue.status_of(job.task_result_id, job.task_path)
-    finished = status in FINISHED or status == queue.STATUS_UNKNOWN
+    finished = _finished(status)
     return {
         "id": job.pk,
         "label": job.label or job.task_path,
@@ -157,15 +167,28 @@ def _job_for_reading(request, pk):
 
 @require_GET
 def job_log(request, pk):
-    """`/jobs/<pk>/log` -- what this job's commands printed.
+    """`/jobs/<pk>/log` -- what this job's commands printed, followed while it runs.
 
-    Deliberately not polled. `/jobs/` and mutint-breseq's run list already poll the *status*,
-    which is the thing that changes meaningfully on its own; a log is read when somebody wants
-    to read it, and a Refresh they press is both cheaper and easier to reason about than a
-    page that moves under them while they are reading it.
+    **The page that moves under you while you are reading it is the thing to avoid**, and it
+    is avoided by two rules rather than by not polling at all -- which is what this did, and
+    which meant watching a three-hour breseq run was a Refresh every minute that reloaded the
+    whole page and lost your place. The rules: new output is *appended*, never repainted, so
+    a selection and a scroll position survive it; and the box is re-pinned to the bottom only
+    when the reader was already there. A checkbox turns it off, and it is offered only while
+    the job is still running, because a finished log does not change.
+
+    `job_log_tail` is what the page asks; this renders the first copy, so the page is complete
+    before any JavaScript runs.
     """
     job = _job_for_reading(request, pk)
+    # The status first, then the log, and that order is load-bearing in both readers here: a
+    # job can finish between the two reads, and this way round any final write is already in
+    # the text being returned. The other way round stops the page polling on a log missing its
+    # last lines, with nothing to say so.
+    status = queue.status_of(job.task_result_id, job.task_path)
     text, truncated = logs.read_tail(job.task_result_id)
+    finished = _finished(status)
+    has_log = bool(text) or logs.exists(job.task_result_id)
 
     context = get_user_context(request.user)
     context.update({
@@ -175,14 +198,59 @@ def job_log(request, pk):
         # job that finished an hour ago -- the reason `Job` stores no status at all. Rendered
         # through the same labels `/jobs/` uses, or this page would be the one surface calling
         # it `unknown` rather than "No longer on the queue".
-        "status": queue.label_for(queue.status_of(job.task_result_id, job.task_path)),
+        "status": queue.label_for(status),
         "log_text": text,
         "log_truncated": truncated,
-        "has_log": bool(text) or logs.exists(job.task_result_id),
+        "has_log": has_log,
+        # **The box and the script are rendered for a job that has printed nothing yet**, not
+        # only for one that has. `has_log` alone was the obvious gate and is exactly wrong: a
+        # page opened the second a breseq run is launched has no log, so it would get no box,
+        # no script and no poll -- the one case live tailing exists for.
+        "show_box": has_log or not finished,
+        "finished": finished,
+        # The script's whole input, as a json_script rather than values interpolated into it:
+        # the house idiom (`jobs/list.html`), and what makes the server half of this
+        # assertable from a test that cannot run JavaScript.
+        "log_state": {
+            "finished": finished,
+            "truncated": truncated,
+            "tail_url": reverse("job_log_tail", args=(job.pk,)),
+        },
         "tail_kb": logs.TAIL_BYTES // 1024,
         "download_url": reverse("job_log_download", args=(job.pk,)),
     })
     return render(request, "jobs/log.html", context)
+
+
+@require_GET
+def job_log_tail(request, pk):
+    """The same tail as the page, as JSON, for the page's poll.
+
+    Everything the page needs to decide what to do next, in one request: the text, whether it
+    is cut, how to name the status, and **whether to ask again**. `finished` is `_row`'s rule
+    rather than a second one, so the log page and `/jobs/` cannot disagree about when a job
+    stopped.
+
+    The response that first reports `finished` already carries the final text -- the log is
+    complete by the time the queue says so -- which is why the page needs no extra fetch to
+    close out. `_job_for_reading` keeps the 404-never-403 posture the page and the download
+    have.
+    """
+    job = _job_for_reading(request, pk)
+    # Status first, then the log; see `job_log` for why that order is the safe one.
+    status = queue.status_of(job.task_result_id, job.task_path)
+    text, truncated = logs.read_tail(job.task_result_id)
+    response = JsonResponse({
+        "text": text,
+        "truncated": truncated,
+        "status": queue.label_for(status),
+        "finished": _finished(status),
+    })
+    # A polled URL that a proxy is free to cache is a log that freezes for one reader and
+    # nobody else. Nothing else in this codebase sets a cache header, which is why this one
+    # says why it does.
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @require_GET

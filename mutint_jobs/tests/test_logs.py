@@ -258,9 +258,14 @@ class LogPageTestCase(LogTestCaseBase):
         self.assertIn("Download the log", body)
 
     def test_a_short_log_says_nothing_about_cutting(self):
+        """`hidden`, not absent, and that is the change: the notice now lives in the page from
+        the start so the poll can reveal it when a log crosses the cut while somebody is
+        watching. What matters to a reader -- that they are not told about a cut that has not
+        happened -- is the same either way."""
         self.write("brief")
 
-        self.assertNotIn("Showing the last", self.get(self.user).content.decode())
+        body = self.get(self.user).content.decode()
+        self.assertIn('id="job-log-cut" hidden', body)
 
     def test_the_download_is_the_whole_log(self):
         with logs.open_log("result-1") as log:
@@ -411,3 +416,140 @@ class WritingAgainTestCase(LogTestCaseBase):
 
         text, _ = logs.read_tail("result-1")
         self.assertEqual("only attempt\n", text)
+
+
+DATABASE_BACKEND = {"default": {"BACKEND": "django_tasks_db.DatabaseBackend"}}
+
+
+class LogTailTestCase(LogTestCaseBase):
+    """`/jobs/<pk>/log/tail` -- the same tail as the page, as JSON, for its poll."""
+
+    def setUp(self):
+        super().setUp()
+        self.other = User.objects.create_user(
+            username="somebody", email="s@e.com", password="a-long-enough-password")
+        self.root = User.objects.create_superuser(
+            username="root", email="r@e.com", password="a-long-enough-password")
+        self.url = "/jobs/%d/log" % self.job.pk
+        self.tail_url = self.url + "/tail"
+
+    def get(self, user, url=None):
+        self.client.force_login(user)
+        return self.client.get(url or self.url)
+
+    def test_it_answers_what_the_page_rendered(self):
+        self.write("what the tool said")
+
+        body = self.get(self.user, self.tail_url).json()
+
+        self.assertEqual("what the tool said\n", body["text"])
+        self.assertFalse(body["truncated"])
+
+    def test_a_job_that_printed_nothing_answers_empty_rather_than_failing(self):
+        """The module's rule for every reader: a missing log is a state, not an error. The
+        page polls from the moment it loads, which is before a queued job has written."""
+        body = self.get(self.user, self.tail_url).json()
+
+        self.assertEqual(200, self.get(self.user, self.tail_url).status_code)
+        self.assertEqual("", body["text"])
+
+    def test_a_cut_log_says_so_here_too(self):
+        """The page hides that notice until it is true, so the poll is what reveals it when a
+        log crosses the cut while somebody is watching."""
+        self.write("x" * (logs.TAIL_BYTES + 100))
+
+        self.assertTrue(self.get(self.user, self.tail_url).json()["truncated"])
+
+    def test_somebody_else_gets_a_404_rather_than_a_403(self):
+        """Same posture as the page and the download: a 403 tells the caller the id exists,
+        and job ids are sequential."""
+        self.write("private")
+
+        self.assertEqual(404, self.get(self.other, self.tail_url).status_code)
+
+    def test_a_superuser_can_read_anybody_s(self):
+        self.write("what the tool said")
+
+        self.assertEqual("what the tool said\n",
+                         self.get(self.root, self.tail_url).json()["text"])
+
+    def test_a_job_the_queue_no_longer_holds_is_finished(self):
+        """`prune_db_task_results` clears finished results after a fortnight, so a job the
+        queue cannot answer for is old rather than running -- and a page polling one must
+        stop rather than ask for ever."""
+        body = self.get(self.user, self.tail_url).json()
+
+        self.assertTrue(body["finished"])
+        self.assertEqual("No longer on the queue", body["status"])
+
+    def test_the_page_offers_no_checkbox_for_a_finished_job(self):
+        self.write("done")
+
+        self.assertNotIn('id="job-log-follow"', self.get(self.user).content.decode())
+
+
+@override_settings(TASKS=DATABASE_BACKEND)
+class RunningLogTailTestCase(TestCase):
+    """A job the queue really is holding.
+
+    **Against the database backend, and that is the whole point of this class.** Under the
+    suite's own settings `ImmediateBackend.supports_get_result` is False, so every status
+    reads `unknown` and *every* job reads as finished -- a test of "keeps polling while it
+    runs" written without this override passes while asserting nothing at all.
+    """
+
+    def setUp(self):
+        self.store = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.store, True)
+        patcher = override_settings(MUTINT_STORE_DIR=self.store)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.user = User.objects.create(username="asker", email="a@e.com", is_active=True)
+        self.client.force_login(self.user)
+
+    def _queued(self):
+        from mutint_import import tasks as import_tasks
+        from mutint_jobs import jobs as jobs_api
+
+        return jobs_api.enqueue(import_tasks.build_coverage, 123456789, user=self.user)
+
+    def test_a_running_job_that_has_printed_nothing_still_gets_a_box_and_a_script(self):
+        """**The case live tailing exists for**, and the one the obvious gate would have
+        missed. Clicking through to the log of a breseq run within a second of launching it
+        finds no log at all -- so a page that renders the box and the script only when there
+        is one would leave that reader on a static page that never polls, with a manual
+        reload as the only way out."""
+        job = self._queued()
+
+        body = self.client.get("/jobs/%d/log" % job.pk).content.decode()
+
+        self.assertIn('id="job-log"', body)
+        self.assertIn('id="job-log-state"', body)
+        self.assertIn("has not printed anything yet", body)
+
+    def test_a_finished_job_that_printed_nothing_gets_neither(self):
+        """Nothing will ever arrive, so there is nothing to poll for."""
+        from mutint_jobs.models import Job
+
+        job = Job.objects.create(task_result_id="gone", task_path="app.tasks.thing",
+                                 user=self.user, label="Over")
+
+        body = self.client.get("/jobs/%d/log" % job.pk).content.decode()
+
+        self.assertNotIn('id="job-log"', body)
+        self.assertNotIn('id="job-log-state"', body)
+        self.assertIn("never will", body)
+
+    def test_a_queued_job_is_not_finished_and_the_page_offers_the_checkbox(self):
+        job = self._queued()
+        with logs.open_log(job.task_result_id) as log:
+            logs.write(log, "started")
+
+        body = self.client.get("/jobs/%d/log/tail" % job.pk).json()
+
+        self.assertFalse(body["finished"])
+        self.assertEqual("Queued", body["status"])
+        self.assertIn("started", body["text"])
+        self.assertIn('id="job-log-follow"',
+                      self.client.get("/jobs/%d/log" % job.pk).content.decode())

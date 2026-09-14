@@ -11,44 +11,102 @@
         {% if job.component %}<code>{{ job.component }}</code> &middot; {% endif %}
         {% if job.experiment %}{{ job.experiment.name }} &middot; {% endif %}
         started {{ job.created_at }}
-        {% if status %} &middot; {{ status }}{% endif %}
+        {% comment %} In a span of its own so the poll can flip it in place: a job that
+           finishes while somebody is watching should not need a reload to say so. {% endcomment %}
+        {% if status %} &middot; <span id="job-log-status">{{ status }}</span>{% endif %}
     </p>
 
     {% comment %} The controls sit above the box rather than below it, because the box is as
-       tall as the viewport and a control under it would be off the screen. {% endcomment %}
+       tall as the viewport and a control under it would be off the screen. The checkbox and
+       the finished note ride this same line, and that is not tidiness: .mutint-job-log-box is
+       calc(100vh - 220px), and common.css says that figure was measured against these rows
+       plus *one* conditional notice -- which the truncation notice already owns. {% endcomment %}
     <p class="mutint-job-log-controls">
-        <a href="" class="btn-primary2" role="button">Refresh</a>
+        <a href="" class="btn-primary2" role="button" id="job-log-refresh">Refresh</a>
         <button type="button" class="btn-primary2" id="job-log-top">&uarr; Top</button>
         <button type="button" class="btn-primary2" id="job-log-bottom">&darr; Bottom</button>
         {% if has_log %}
             <a href="{{ download_url }}" class="btn-primary2" role="button">Download</a>
         {% endif %}
+        {% if not finished %}
+            {% comment %} Offered only while the job is running: a finished log does not
+               change, and a control that cannot do anything is one that lies. {% endcomment %}
+            <label class="mutint-job-log-follow" id="job-log-follow-label">
+                <input type="checkbox" id="job-log-follow" checked> Auto-refresh
+            </label>
+        {% endif %}
+        <span class="mutint-job-log-note" id="job-log-done" hidden>The job finished; this is
+            the complete log.</span>
     </p>
 
-    {% if log_truncated %}
-        {% comment %} Said out loud, because the Top button would otherwise jump to a
-           beginning that is not the log's. {% endcomment %}
-        <p class="mutint-job-log-cut">Showing the last {{ tail_kb }} KB. Download the log
-            for all of it.</p>
+    {% comment %} Always in the DOM, hidden until it is true, because a log can cross the cut
+       while somebody is watching it -- and because the Top button would otherwise jump to a
+       beginning that is not the log's without saying so. {% endcomment %}
+    <p class="mutint-job-log-cut" id="job-log-cut" {% if not log_truncated %}hidden{% endif %}>Showing the last {{ tail_kb }} KB. Download the log for all of it.</p>
+
+    {% if not has_log %}
+        {% if finished %}
+            <p class="mutint-job-log-empty" id="job-log-empty">This job has not printed anything. A
+                job that runs no external command never will; one that is still waiting for a
+                worker has not started yet.</p>
+        {% else %}
+            {% comment %} A different sentence while it is running: the one above is only true
+               once nothing more can arrive. {% endcomment %}
+            <p class="mutint-job-log-empty" id="job-log-empty">Output appears here as it
+                arrives. This job has not printed anything yet.</p>
+        {% endif %}
     {% endif %}
 
-    {% if has_log %}
-        <pre class="mutint-job-log-box" id="job-log">{{ log_text }}</pre>
-    {% else %}
-        <p class="mutint-job-log-empty">This job has not printed anything. A job that runs no
-            external command never will; one that is still waiting for a worker has not
-            started yet.</p>
+    {% if show_box %}
+        {% comment %} Rendered empty for a job that has not printed yet, so the poll has
+           somewhere to put the first line it sees. See `show_box` in the view. {% endcomment %}
+        <pre class="mutint-job-log-box" id="job-log" {% if not has_log %}hidden{% endif %}>{{ log_text }}</pre>
     {% endif %}
 
 </div>
 
-{% if has_log %}
+{% if show_box %}
+{{ log_state|json_script:"job-log-state" }}
 <script type="text/javascript">
 (function () {
     "use strict";
 
+    // Slow on purpose, and not only to be polite: `logs.py` notes that a child block-buffers
+    // into this file, so its output arrives in lumps whatever we do. Polling faster would ask
+    // more often for the same bytes. The same five seconds `/jobs/` uses.
+    var POLL_MS = 5000;
+
+    // How near the bottom still counts as being at it. About one line: fractional pixels on a
+    // HiDPI display, browser zoom, and a partial last line all mean the arithmetic rarely
+    // lands on zero, and a 2px test would decide a reader had scrolled away when they had not.
+    var BOTTOM_SLOP = 24;
+
+    var STATE = JSON.parse(document.getElementById("job-log-state").textContent);
+
     var box = document.getElementById("job-log");
-    if (!box) { return; }
+    var statusEl = document.getElementById("job-log-status");
+    var cutEl = document.getElementById("job-log-cut");
+    var doneEl = document.getElementById("job-log-done");
+    var emptyEl = document.getElementById("job-log-empty");
+    var followEl = document.getElementById("job-log-follow");
+    var refreshEl = document.getElementById("job-log-refresh");
+
+    var pollTimer = null;
+    // The guard `/jobs/`, the Add page and the breseq run list all use: a request already in
+    // flight when something else redraws must not paint stale text over the top of it.
+    var pollGeneration = 0;
+
+    // **What we believe the box holds**, seeded from the box and corrected by the server.
+    //
+    // It is seeded rather than left null because a selection made before the first poll
+    // should survive it -- and it is corrected because the seed is not necessarily what the
+    // server sent: everything rendered went through the HTML parser, which folds CR into LF
+    // and turns NUL into U+FFFD. When one of those is in the log the first poll fails the
+    // prefix test, replaces, and sets this from the response; every poll after that compares
+    // text this script received against text it received, where no such rule applies. So the
+    // rare case costs exactly one repaint and then behaves, and the ordinary case -- no CR
+    // and no NUL, which is all fifteen real logs measured -- never repaints at all.
+    var lastText = box.textContent;
 
     // Opened at the end, which is where a log's news is. Done here rather than with the
     // `flex-direction: column-reverse` trick, which reverses what the arrow keys and the
@@ -63,6 +121,125 @@
     document.getElementById("job-log-bottom").addEventListener("click", function () {
         box.scrollTop = box.scrollHeight;
     });
+
+    function atBottom() {
+        return box.scrollHeight - box.scrollTop - box.clientHeight < BOTTOM_SLOP;
+    }
+
+    // **Append, never repaint, wherever the text only grew.** This is the whole of why the
+    // page does not flicker and why a selection inside the log survives a refresh: in the
+    // ordinary case the new text is the old text plus something, and only the something
+    // reaches the DOM. `current + text.slice(current.length) === text` identically, so the
+    // two branches cannot disagree about what the box ends up holding.
+    //
+    // The replace branch is for a log that has grown past the tail the server sends: the
+    // front has scrolled off, so there is no common prefix any more. It is **skipped while
+    // the reader is scrolled up**, because that is the one case where repainting would move
+    // the page under somebody reading it. `lastText` still advances, so the next poll taken
+    // at the bottom is current.
+    function apply(text) {
+        var pinned = atBottom();
+        var current = lastText;
+        if (text.length >= current.length && text.lastIndexOf(current, 0) === 0) {
+            if (text.length > current.length) {
+                box.appendChild(document.createTextNode(text.slice(current.length)));
+            }
+        } else if (pinned) {
+            box.textContent = text;
+        } else {
+            // Scrolled up, and the text did not merely grow. Repainting here is the one thing
+            // that would move the page under somebody reading it, so it waits; `lastText`
+            // still advances, and the next poll taken at the bottom is current.
+            lastText = text;
+            return;
+        }
+        lastText = text;
+        if (pinned) { box.scrollTop = box.scrollHeight; }
+    }
+
+    function stopPolling() {
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+        pollGeneration += 1;
+    }
+
+    function finish() {
+        stopPolling();
+        if (followEl) {
+            followEl.checked = false;
+            followEl.disabled = true;
+        }
+        if (doneEl) { doneEl.hidden = false; }
+    }
+
+    function draw(body) {
+        var text = body.text || "";
+        if (text) {
+            if (emptyEl) { emptyEl.hidden = true; }
+            box.hidden = false;
+        }
+        apply(text);
+        if (statusEl && body.status) { statusEl.textContent = body.status; }
+        if (cutEl) { cutEl.hidden = !body.truncated; }
+    }
+
+    function schedule() {
+        pollTimer = setTimeout(function () { load(true); }, POLL_MS);
+    }
+
+    // One fetch. `again` says whether to schedule another -- the Refresh button asks for one
+    // and nothing more, whether or not auto-refresh is on.
+    function load(again) {
+        // A tab nobody is looking at does not need the news. Six log pages left open
+        // overnight would otherwise be thousands of round trips for a log nobody reads; the
+        // next poll after it is looked at again catches up in one request, because the whole
+        // tail comes back every time.
+        if (again && document.hidden) { schedule(); return; }
+
+        var mine = pollGeneration;
+        return fetch(STATE.tail_url, {cache: "no-store"})
+            .then(function (resp) { return resp.ok ? resp.json() : null; })
+            .then(function (body) {
+                if (mine !== pollGeneration) { return; }
+                if (body) {
+                    draw(body);
+                    // The response that first says finished already carries the final text --
+                    // the status is read before the log, so nothing written at the end is
+                    // missed -- and there is nothing left to ask for.
+                    if (body.finished) { finish(); return; }
+                }
+                if (again) { schedule(); }
+            })
+            .catch(function () {
+                // Ignored and rescheduled, as every poller here does: a log page is not where
+                // a transient network failure should be reported.
+                if (mine !== pollGeneration) { return; }
+                if (again) { schedule(); }
+            });
+    }
+
+    refreshEl.addEventListener("click", function (e) {
+        // The link still works with no JavaScript, where it reloads the page as it always
+        // did. With it, one fetch and no repaint -- and it stays useful when auto-refresh is
+        // off or the job has finished, which is when somebody is most likely to press it.
+        e.preventDefault();
+        load(false);
+    });
+
+    function startPolling() {
+        stopPolling();
+        schedule();
+    }
+
+    if (followEl) {
+        followEl.addEventListener("change", function () {
+            if (followEl.checked) { startPolling(); } else { stopPolling(); }
+        });
+    }
+
+    // `followEl.checked` rather than STATE.finished: Firefox restores form state across a
+    // reload and the back button, so a reader who turned this off and came back would
+    // otherwise get an unchecked box and a page polling anyway.
+    if (!STATE.finished && followEl && followEl.checked) { startPolling(); }
 }());
 </script>
 {% endif %}

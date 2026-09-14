@@ -756,6 +756,26 @@ table.dataTable thead .sorting_desc:after {
     margin-bottom: 0.5em;
 }
 
+/* Rides the controls line rather than taking one of its own: the box below is
+   `calc(100vh - 220px)` and that constant was measured against exactly these rows, so a
+   second line would push the foot of the log off the screen by its own height.
+   `vertical-align: middle` on both halves because a bare checkbox sits on the text baseline
+   and the buttons beside it do not. */
+.mutint-job-log-follow,
+.mutint-job-log-note {
+    margin-left: 0.75em;
+    margin-bottom: 0;
+    font-weight: normal;
+    color: #777;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.mutint-job-log-follow input {
+    margin: 0 0.3em 0 0;
+    vertical-align: middle;
+}
+
 /* Said in the page's own voice rather than the tool's, so it must not read as a log line. */
 .mutint-job-log-cut,
 .mutint-job-log-empty {

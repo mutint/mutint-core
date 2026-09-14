@@ -3932,9 +3932,8 @@ record of work it did, which is what every `SET_NULL` on that model is there to 
 it and `mutint_jobs.processes.run_tool` writes it: a command's stdout and stderr go straight
 into an open file rather than into a `PIPE`, which is what makes a running job's output
 readable at all. The page renders the last `TAIL_BYTES` in a viewport-tall box that opens
-scrolled to the end, with Refresh, Top, Bottom and a download of the whole log. Deliberately
-not polled -- `/jobs/` and mutint-breseq's run list already poll the *status*, which is what
-changes on its own.
+scrolled to the end, with Refresh, Top, Bottom, a download of the whole log, and an
+**Auto-refresh** checkbox that follows a running job.
 
 Four things about it are load-bearing:
 
@@ -3954,6 +3953,45 @@ Four things about it are load-bearing:
 - **The cost of keying by the queue's id** is that work enqueued with a bare `task.enqueue`
   leaves a log no `post_delete` can reach. `logs.orphans` finds those and `./mutint reap_jobs`
   sweeps them, which is the command that already exists for exactly that class of litter.
+
+**It follows a running job, and the two rules that make that bearable are the design.** This
+page was deliberately *not* polled for a long while, on the argument that a page moving under
+a reader is worse than a Refresh they press. The argument was right and the conclusion was
+wrong: watching a three-hour breseq run meant reloading the whole page every minute and losing
+your place each time. What replaces it is not "poll anyway" but two guards --
+
+- **Append, never repaint.** Each poll fetches the same `read_tail` the page rendered, and the
+  script appends only the part that is new (`text` starts with what we already had). A
+  selection inside the log survives, nothing below the fold reflows, and the DOM is bounded at
+  `TAIL_BYTES` for free because the server never sends more. The fallback -- a full
+  `textContent` write -- is correct by construction, since `current + text.slice(current.length)`
+  *is* `text`; it is reached only when the log has grown past the tail and the front has
+  scrolled off.
+- **Follow only from the bottom.** Whether the box was scrolled to the end is measured
+  *before* the DOM is touched and re-pinned after only if it was. Scrolled up, a pure append is
+  still applied (it lands below the fold and moves nothing) but a *repaint* is deferred -- that
+  being the one case that would move the page under somebody reading it.
+
+Three smaller things, each a bug avoided rather than a preference:
+
+- **`lastText` is seeded from the box and corrected by the server.** It cannot simply *be*
+  `box.textContent` for ever: everything rendered went through the HTML parser, which folds CR
+  into LF and NUL into U+FFFD, so one stray NUL would fail the prefix test on every poll and
+  silently repaint for the life of the page. Seeding it means a selection made before the first
+  poll survives; correcting it from the response means the rare case costs one repaint and then
+  behaves. (Measured: fifteen real job logs, zero carriage returns, largest 251 KB.)
+- **The box and the script are rendered whenever the job is unfinished**, not only when a log
+  already exists. `has_log` alone is the obvious gate and is exactly wrong -- a page opened the
+  second a run is launched has no log, so it would get no box, no script and no poll, which is
+  the one case live tailing is for.
+- **The status is read before the log, in both readers.** A job can finish between the two, and
+  this order means any final write is already in the text being returned; the other order stops
+  the page polling on a log missing its last lines, with nothing to say so.
+
+`_finished(status)` is shared by the rows and by both log readers rather than spelled three
+times, which is how the log page and `/jobs/` are kept from disagreeing about when a job
+stopped. The poll answers 200 with empty text for a job that has printed nothing -- unlike the
+download, which 404s -- because a job that has not started must still be pollable.
 
 How promptly output appears is the **child's** choice: a tool whose stdout is not a terminal
 block-buffers, and a refresh shows what it has flushed. A pipe would behave identically -- the
