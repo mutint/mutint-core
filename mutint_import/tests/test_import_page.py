@@ -218,7 +218,7 @@ class ImportPageTestCase(TestCase):
         self.assertIn("delete-experiment", html)
         # The dialog copy used to be inlined here, and this asserted the literal
         # "This is permanent." -- which was never true of a soft delete. The wording lives in
-        # mutint_crud.js now, behind a plain accept: an administrator can bring it back.
+        # mutint_crud.js now, typed DELETE and saying an administrator can bring it back.
         self.assertIn("mutintConfirmDelete(", html)
 
     def test_list_pages_offer_create_and_delete(self):
@@ -251,8 +251,8 @@ class ImportPageTestCase(TestCase):
                        "mutintConfirmTyped", "mutintDeleteSelected"):
             self.assertIn(helper, source)
         self.assertNotIn("mutintTogglePanel", source)
-        # mutintConfirmDelete is plain, because deletion is soft; the old wording claimed
-        # otherwise. If this line fails, the wrong helper was edited.
+        # Deletion is soft and mutintConfirmDelete's wording says so; the old wording
+        # claimed otherwise. If this line fails, the wrong helper was edited.
         self.assertNotIn("This is permanent.", source)
         self.assertIn("An administrator can bring it back", source)
 

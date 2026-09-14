@@ -223,15 +223,15 @@ class DeleteControlsTestCase(TestCase):
 
     # --- which dialog each control uses --------------------------------------------
 
-    def test_the_data_deletes_are_a_plain_accept(self):
+    def test_the_data_deletes_type_DELETE(self):
         """All four, and each assertion first proves it found its subject.
 
         A check that looks for a call in a page is one renamed id away from passing
         because it matched nothing at all, which this repo has been bitten by before.
 
         The three bulk controls reach the dialog through mutintDeleteSelected rather than
-        naming it, so the last assertion below is what makes that route mean what the
-        other three say.
+        naming it, so the last assertions below are what make that route mean what the
+        other three say: mutintConfirmDelete is the typed dialog with DELETE as its word.
         """
         for url, control, call in (
                 ("/project/", 'id="delete-selected"', "mutintDeleteSelected"),
@@ -244,9 +244,6 @@ class DeleteControlsTestCase(TestCase):
                 html = self._html(url)
                 self.assertIn(control, html)
                 self.assertIn(call, html)
-                # A direct typed call, not mutintConfirmTypedClear, which the project page
-                # legitimately carries for its Storage block.
-                self.assertNotIn("mutintConfirmTyped(", html)
 
         from django.contrib.staticfiles import finders
 
@@ -254,9 +251,13 @@ class DeleteControlsTestCase(TestCase):
             source = handle.read()
         gather = source[source.index("window.mutintDeleteSelected"):]
         self.assertIn("mutintConfirmDelete(", gather)
-        self.assertNotIn("mutintConfirmTyped", gather)
+        stock = source[source.index("window.mutintConfirmDelete = "):
+                       source.index("window.mutintDeleteSelected")]
+        self.assertIn("mutintConfirmTyped(", stock)
+        self.assertIn('"DELETE")', stock)
+        self.assertIn("Type DELETE to confirm", stock)
 
-    def test_revoking_and_group_removals_are_plain_and_leaving_is_typed(self):
+    def test_revoking_and_member_removal_are_plain_and_leaving_and_group_delete_typed(self):
         html = self._html("/project/%d/access/" % self.project.id)
         self.assertIn('mutintConfirm(', html)
         self.assertIn('mutintConfirmTyped("Leave this project?"', html)
@@ -266,8 +267,11 @@ class DeleteControlsTestCase(TestCase):
         from mutint_experiment.models import UserGroup
         group = UserGroup.objects.create(name="G", owner=self.owner)
         html = self._html("/group/%d/" % group.id)
+        # Removing a member is plain: they can be added back from this page.
+        self.assertIn('id="gd-delete"', html)
         self.assertIn("mutintConfirm(", html)
-        self.assertNotIn("mutintConfirmTyped(", html)
+        self.assertIn('mutintConfirmTyped("Delete " + what', html)
+        self.assertIn("Type DELETE to confirm", html)
 
     def test_the_typed_dialog_takes_its_word_from_the_caller(self):
         """DELETE everywhere would be answered by reflex; the word names the action."""

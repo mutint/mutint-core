@@ -11,14 +11,16 @@
  * project page wanting it as well is what turned two copies into an argument for none.
  *
  * Two confirm dialogs, and which one a control gets is decided by one question: can the
- * person undo it afterwards? mutintConfirm(title, text, verb) is a plain accept, for every
- * removal that can be put back -- a soft-deleted project or experiment (an administrator
- * restores it until it is purged), a revoked grant, a group membership, a mutation delete
- * the history page restores. mutintConfirmTyped(title, text, verb, word) makes the person
- * type a word, and is for what cannot: leaving a project types LEAVE, because nobody but an
- * administrator can let you back in; clearing stored files types CLEAR, because the files
- * are gone and only re-importing brings them. The word names the action rather than being
- * DELETE everywhere, so the dialog cannot be answered by reflex.
+ * person undo it themselves, from the page? mutintConfirm(title, text, verb) is a plain
+ * accept, for a removal they can put back -- a revoked grant, a group membership, a
+ * mutation delete the history page restores. mutintConfirmTyped(title, text, verb, word)
+ * makes the person type a word, and is for what they cannot: deleting a project, an
+ * experiment or a group types DELETE (a project or experiment is soft-deleted and an
+ * administrator can restore it, but the person who clicked cannot, and a group's grants are
+ * gone); leaving a project types LEAVE, because nobody but an administrator can let you back
+ * in; clearing stored files types CLEAR, because the files are gone and only re-importing
+ * brings them. The word names the action rather than being DELETE everywhere, so the dialog
+ * cannot be answered by reflex.
  *
  * mutintPost sends the CSRF token from the cookie. A page using it must render
  * {% csrf_token %} somewhere, which is what sets that cookie. mutintPostJson is the same
@@ -100,14 +102,16 @@
     };
 
     /* The stock wording for deleting a project or an experiment -- the two bulk deletes,
-     * the project list's and Delete experiment on /stats. Plain, because deletion is soft:
-     * the row leaves every listing and an administrator can bring it back until it is
-     * purged. Worded without a number, because `what` supplies one: this dialog says
-     * "2 experiment(s)" and "this experiment" from the same sentence. */
+     * the project list's and Delete experiment on /stats. Typed, because although deletion
+     * is soft -- the row leaves every listing and an administrator can bring it back until
+     * it is purged -- the person clicking cannot undo it from anywhere they can reach, and
+     * an experiment is months of somebody's work. Worded without a number, because `what`
+     * supplies one: this dialog says "2 experiment(s)" and "this experiment" from the same
+     * sentence. */
     window.mutintConfirmDelete = function (what) {
-        return window.mutintConfirm("Delete " + what + "?",
+        return window.mutintConfirmTyped("Delete " + what + "?",
             "It leaves every listing. An administrator can bring it back until it is "
-            + "purged.", "Delete");
+            + "purged. Type DELETE to confirm.", "Delete", "DELETE");
     };
 
     /* The typed dialog, for what cannot be undone.

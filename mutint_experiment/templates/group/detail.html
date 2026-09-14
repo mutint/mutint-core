@@ -235,9 +235,9 @@
             if (sharedCount > 0) {
                 what += ", removing its access to " + sharedCount + " project(s)";
             }
-            window.mutintConfirm("Delete " + what + "?",
+            window.mutintConfirmTyped("Delete " + what + "?",
                 "Its members keep their own accounts and lose the access the group gave "
-                + "them.", "Delete").then(function (confirmed) {
+                + "them. Type DELETE to confirm.", "Delete", "DELETE").then(function (confirmed) {
                 if (!confirmed) { return; }
                 window.mutintPost(base + "delete/", {}).then(function () {
                     window.location.href = "/group/";

@@ -3288,20 +3288,23 @@ Creation and deletion are nested under the objects they act on:
   the whole gather-confirm-post-reload routine. A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
-- **Which confirm dialog a control gets is decided by whether it can be undone.**
-  `mutintConfirm(title, text, verb)` is a plain accept and is what every recoverable removal
-  gets: deleting a project or an experiment (soft, restorable by an administrator until
-  purged -- `mutintConfirmDelete` is that stock wording, behind the two bulk deletes, the
-  project list's and **Delete experiment** on `/stats`), revoking a grant, removing a
-  group member, deleting a group, and the mutation editor's delete, whose own sentence says
-  the change is recorded and restorable. `mutintConfirmTyped(title, text, verb, word)`
-  makes the person type a word and is for what cannot be undone: **leaving a project**
-  types `LEAVE`, because only somebody who administers it can let you back in, and the
-  Storage panel's **Clear** types `CLEAR`, because the files are gone short of a re-import.
-  The word names the action rather than being `DELETE` everywhere, so the dialog cannot be
-  answered by reflex. (Every removal typed `DELETE` for one commit; the typed dialog was
-  then a reflex on the page where it mattered least.) `test_crud.DeleteControlsTestCase`
-  pins which control has which.
+- **Which confirm dialog a control gets is decided by whether the person can undo it
+  themselves.** `mutintConfirm(title, text, verb)` is a plain accept and is what a removal
+  they can put back from the page gets: revoking a grant, removing a group member, and the
+  mutation editor's delete, whose own sentence says the change is recorded and restorable.
+  `mutintConfirmTyped(title, text, verb, word)` makes the person type a word and is for what
+  they cannot: **deleting a project, an experiment or a group** types `DELETE` --
+  `mutintConfirmDelete` is the stock wording for the first two, behind the two bulk deletes,
+  the project list's and **Delete experiment** on `/stats`, and it still says an
+  administrator can restore the row until it is purged, because that is true; what is not
+  true is that the person who clicked can. **Leaving a project** types `LEAVE`, because only
+  somebody who administers it can let you back in, and the Storage panel's **Clear** types
+  `CLEAR`, because the files are gone short of a re-import. The word names the action rather
+  than being `DELETE` everywhere, so the dialog cannot be answered by reflex. (Deleting a
+  project or an experiment was a plain accept for a while, on the reasoning that a soft
+  delete is recoverable. It is -- by an administrator, through Django admin -- and an
+  experiment deleted by a click that was meant for another button is what brought it back.)
+  `test_crud.DeleteControlsTestCase` pins which control has which.
   - **It is client-side only, deliberately.** The endpoints already check the role and the
     lock, which is what actually protects the data; a server-side "must post DELETE" field
     would be a contract `./mutint delete` does not honour and one `curl` away from bypass,
