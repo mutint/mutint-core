@@ -64,9 +64,12 @@ class ImportPageTestCase(TestCase):
         self.assertEqual([tab["label"] for tab in get_import_tabs(self.experiment.id)],
                          [t[1] for t in tabs])
         # Only the ways in that work: this experiment has no reference, so it can establish
-        # one or drop something that brings its own -- a results folder or an archive.
+        # one or drop something that brings its own -- a results folder or an archive. Core's
+        # three lead; a plugin's tab for a reference-less experiment (mutint-refsniff's) may
+        # follow, which a core test may not assert the absence of.
         self.assertEqual(["Reference Sequence", "Results Folder", "MutInt Archive"],
-                         [t[1] for t in tabs])
+                         [t[1] for t in tabs][:3])
+        self.assertNotIn("Genome Diff", [t[1] for t in tabs])
         self.assertEqual("/import/?experiment_id=%d&amp;tab=breseq_folder" % self.experiment.id,
                          tabs[1][0])
         self.assertIn('id="import-type" value="reference"', html)
