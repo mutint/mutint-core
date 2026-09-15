@@ -39,10 +39,11 @@
             the complete log.</span>
     </p>
 
-    {% comment %} Always in the DOM, hidden until it is true, because a log can cross the cut
-       while somebody is watching it -- and because the Top button would otherwise jump to a
-       beginning that is not the log's without saying so. {% endcomment %}
-    <p class="mutint-job-log-cut" id="job-log-cut" {% if not log_truncated %}hidden{% endif %}>Showing the last {{ tail_kb }} KB. Download the log for all of it.</p>
+    {% comment %} Always in the DOM, hidden until it is true, because a log can cross the
+       ceiling while somebody is watching it -- and because the Top button would otherwise jump
+       to a beginning that is not the log's without saying so. Once shown it stays shown: the
+       dropped front does not come back on a later poll. {% endcomment %}
+    <p class="mutint-job-log-cut" id="job-log-cut" {% if not log_truncated %}hidden{% endif %}>This log is larger than {{ max_mb }} MB, so the box holds the most recent {{ max_mb }} MB of it. Download the log for all of it.</p>
 
     {% if not has_log %}
         {% if finished %}
@@ -96,17 +97,19 @@
     // flight when something else redraws must not paint stale text over the top of it.
     var pollGeneration = 0;
 
-    // **What we believe the box holds**, seeded from the box and corrected by the server.
+    // **How much of the log we already hold**, in bytes, as the server counts them. Every
+    // poll asks for what is new since this and appends it, so the box accumulates the whole
+    // log however long the job runs.
     //
-    // It is seeded rather than left null because a selection made before the first poll
-    // should survive it -- and it is corrected because the seed is not necessarily what the
-    // server sent: everything rendered went through the HTML parser, which folds CR into LF
-    // and turns NUL into U+FFFD. When one of those is in the log the first poll fails the
-    // prefix test, replaces, and sets this from the response; every poll after that compares
-    // text this script received against text it received, where no such rule applies. So the
-    // rare case costs exactly one repaint and then behaves, and the ordinary case -- no CR
-    // and no NUL, which is all fifteen real logs measured -- never repaints at all.
-    var lastText = box.textContent;
+    // It is a byte count and not the text itself, which is what removes a whole class of
+    // problem this page used to carry: comparing a server response against `box.textContent`
+    // meant reckoning with the HTML parser, which folds CR into LF and turns NUL into U+FFFD,
+    // so a log containing either failed the comparison and repainted. Nothing is compared now.
+    var offset = STATE.offset || 0;
+
+    // Sticky, because a dropped front does not come back: once the ceiling has been crossed
+    // the box is missing content for the life of the page, whatever later polls return.
+    var truncated = !!STATE.truncated;
 
     // Opened at the end, which is where a log's news is. Done here rather than with the
     // `flex-direction: column-reverse` trick, which reverses what the arrow keys and the
@@ -126,35 +129,28 @@
         return box.scrollHeight - box.scrollTop - box.clientHeight < BOTTOM_SLOP;
     }
 
-    // **Append, never repaint, wherever the text only grew.** This is the whole of why the
-    // page does not flicker and why a selection inside the log survives a refresh: in the
-    // ordinary case the new text is the old text plus something, and only the something
-    // reaches the DOM. `current + text.slice(current.length) === text` identically, so the
-    // two branches cannot disagree about what the box ends up holding.
+    // **Append what is new; replace only when the server says the log itself restarted.**
+    // The ordinary path adds a text node and touches nothing else, which is why a selection
+    // inside the log, the scroll position and find-in-page all survive a poll -- and why the
+    // box can hold a log far larger than any one response.
     //
-    // The replace branch is for a log that has grown past the tail the server sends: the
-    // front has scrolled off, so there is no common prefix any more. It is **skipped while
-    // the reader is scrolled up**, because that is the one case where repainting would move
-    // the page under somebody reading it. `lastText` still advances, so the next poll taken
-    // at the bottom is current.
-    function apply(text) {
+    // `reset` is the server's word for "what you hold is not a prefix of this any more": the
+    // file was replaced, or the gap was past the ceiling. It is the one case that repaints,
+    // and it **waits while the reader is scrolled up**, because that is the one case where
+    // repainting would move the page under somebody reading it. The offset is not advanced
+    // when it waits, so the next poll taken at the bottom brings the same content and applies
+    // it -- the alternative would skip that text for good.
+    function apply(body) {
         var pinned = atBottom();
-        var current = lastText;
-        if (text.length >= current.length && text.lastIndexOf(current, 0) === 0) {
-            if (text.length > current.length) {
-                box.appendChild(document.createTextNode(text.slice(current.length)));
-            }
-        } else if (pinned) {
+        var text = body.text || "";
+        if (body.reset) {
+            if (!pinned) { return false; }
             box.textContent = text;
-        } else {
-            // Scrolled up, and the text did not merely grow. Repainting here is the one thing
-            // that would move the page under somebody reading it, so it waits; `lastText`
-            // still advances, and the next poll taken at the bottom is current.
-            lastText = text;
-            return;
+        } else if (text) {
+            box.appendChild(document.createTextNode(text));
         }
-        lastText = text;
         if (pinned) { box.scrollTop = box.scrollHeight; }
+        return true;
     }
 
     function stopPolling() {
@@ -177,9 +173,12 @@
             if (emptyEl) { emptyEl.hidden = true; }
             box.hidden = false;
         }
-        apply(text);
+        // The offset advances only when the text was actually applied, so a repaint deferred
+        // because the reader had scrolled up is re-offered rather than skipped.
+        if (apply(body) && typeof body.offset === "number") { offset = body.offset; }
         if (statusEl && body.status) { statusEl.textContent = body.status; }
-        if (cutEl) { cutEl.hidden = !body.truncated; }
+        if (body.truncated) { truncated = true; }
+        if (cutEl) { cutEl.hidden = !truncated; }
     }
 
     function schedule() {
@@ -191,12 +190,15 @@
     function load(again) {
         // A tab nobody is looking at does not need the news. Six log pages left open
         // overnight would otherwise be thousands of round trips for a log nobody reads; the
-        // next poll after it is looked at again catches up in one request, because the whole
-        // tail comes back every time.
+        // next poll after it is looked at again catches up in one request, because the
+        // request names where it got to rather than asking for a fixed window.
         if (again && document.hidden) { schedule(); return; }
 
         var mine = pollGeneration;
-        return fetch(STATE.tail_url, {cache: "no-store"})
+        // The offset is the whole of the request: an idle poll transfers an empty string
+        // rather than re-sending everything the reader already has.
+        var url = STATE.tail_url + "?offset=" + encodeURIComponent(offset);
+        return fetch(url, {cache: "no-store"})
             .then(function (resp) { return resp.ok ? resp.json() : null; })
             .then(function (body) {
                 if (mine !== pollGeneration) { return; }

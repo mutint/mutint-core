@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2868 run, 0 failures** standalone; **3459** assembled, measured with `PYTHONPATH`
+**Baseline: 2873 run, 0 failures** standalone; **3464** assembled, measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -4075,9 +4075,9 @@ record of work it did, which is what every `SET_NULL` on that model is there to 
 **A job's log is a file, and `/jobs/<pk>/log` is where it is read.** `mutint_jobs.logs` owns
 it and `mutint_jobs.processes.run_tool` writes it: a command's stdout and stderr go straight
 into an open file rather than into a `PIPE`, which is what makes a running job's output
-readable at all. The page renders the last `TAIL_BYTES` in a viewport-tall box that opens
-scrolled to the end, with Refresh, Top, Bottom, a download of the whole log, and an
-**Auto-refresh** checkbox that follows a running job.
+readable at all. The page renders the **whole** log in a viewport-tall box that opens scrolled
+to the end, with Refresh, Top, Bottom, a download, and an **Auto-refresh** checkbox that
+follows a running job.
 
 Four things about it are load-bearing:
 
@@ -4104,26 +4104,37 @@ a reader is worse than a Refresh they press. The argument was right and the conc
 wrong: watching a three-hour breseq run meant reloading the whole page every minute and losing
 your place each time. What replaces it is not "poll anyway" but two guards --
 
-- **Append, never repaint.** Each poll fetches the same `read_tail` the page rendered, and the
-  script appends only the part that is new (`text` starts with what we already had). A
-  selection inside the log survives, nothing below the fold reflows, and the DOM is bounded at
-  `TAIL_BYTES` for free because the server never sends more. The fallback -- a full
-  `textContent` write -- is correct by construction, since `current + text.slice(current.length)`
-  *is* `text`; it is reached only when the log has grown past the tail and the front has
-  scrolled off.
+- **Append, never repaint.** The page holds a byte `offset` and each poll asks
+  `logs.read_since` for what is new after it, so only the new text reaches the DOM. A
+  selection inside the log survives, nothing below the fold reflows, and an idle poll
+  transfers an empty string rather than re-sending what the reader already has. `reset` is
+  the server's word for the two cases where appending is not possible -- the log was replaced,
+  or the gap was past `MAX_RENDER_BYTES` -- and is the only thing that repaints.
 - **Follow only from the bottom.** Whether the box was scrolled to the end is measured
   *before* the DOM is touched and re-pinned after only if it was. Scrolled up, a pure append is
   still applied (it lands below the fold and moves nothing) but a *repaint* is deferred -- that
-  being the one case that would move the page under somebody reading it.
+  being the one case that would move the page under somebody reading it. **The offset is not
+  advanced when a repaint is deferred**, so the next poll taken at the bottom brings the same
+  content and applies it; advancing it would skip that text for good.
 
 Three smaller things, each a bug avoided rather than a preference:
 
-- **`lastText` is seeded from the box and corrected by the server.** It cannot simply *be*
-  `box.textContent` for ever: everything rendered went through the HTML parser, which folds CR
-  into LF and NUL into U+FFFD, so one stray NUL would fail the prefix test on every poll and
-  silently repaint for the life of the page. Seeding it means a selection made before the first
-  poll survives; correcting it from the response means the rare case costs one repaint and then
-  behaves. (Measured: fifteen real job logs, zero carriage returns, largest 251 KB.)
+- **The page tracks a byte offset, never the text it holds.** Comparing a response against
+  `box.textContent` is the version of this that was written first, and it has to reckon with
+  the HTML parser -- which folds CR into LF and NUL into U+FFFD -- so a log carrying either
+  failed the comparison and repainted for the life of the page. An offset is the server's own
+  count and nothing in the DOM can perturb it. It also settles what the reader actually
+  asked for: a log is no longer capped at the size of one response, so watching a long run
+  stops throwing away the scrollback. `logs.read_since` holds back a trailing partial UTF-8
+  sequence so the next read starts on a character boundary; splitting one would decode to a
+  replacement character on each side of the seam, which no later read could repair.
+- **`TAIL_BYTES` and `MAX_RENDER_BYTES` are different questions.** The first is what a *row*
+  stores as its own copy (`BreseqRun.log`, `IsescanRun.log`, through `read_tail`, from the end
+  because that is where a failure says why). The second is the ceiling on one response, and so
+  on what the box holds -- 8 MB, against a complete REL606 run measured at 63 KB, because its
+  job is to stop a runaway tool taking the browser down rather than to trim ordinary output.
+  Past it the page repaints from the end and says so, and the notice is sticky: a dropped
+  front does not come back on a later poll.
 - **The box and the script are rendered whenever the job is unfinished**, not only when a log
   already exists. `has_log` alone is the obvious gate and is exactly wrong -- a page opened the
   second a run is launched has no log, so it would get no box, no script and no poll, which is

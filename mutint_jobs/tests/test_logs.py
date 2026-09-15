@@ -4,6 +4,7 @@ import gzip
 import os
 import shutil
 import tempfile
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -247,15 +248,27 @@ class LogPageTestCase(LogTestCaseBase):
         self.assertEqual(200, response.status_code)
         self.assertIn("has not printed anything", response.content.decode())
 
-    def test_a_cut_log_says_it_is_cut(self):
-        """The Top button would otherwise jump to a beginning that is not the log's."""
+    def test_a_log_past_the_row_tail_is_not_cut_on_the_page(self):
+        """`TAIL_BYTES` bounds what a *row* stores, and used to bound this page too -- so a
+        long run's scrollback was thrown away while somebody was reading it. The page reads
+        by offset now and keeps everything; only `MAX_RENDER_BYTES` above can cut it."""
         with logs.open_log("result-1") as log:
             logs.write(log, "x" * (logs.TAIL_BYTES + 5000))
 
         body = self.get(self.user).content.decode()
 
-        self.assertIn("Showing the last", body)
+        self.assertIn('id="job-log-cut" hidden', body)
+
+    def test_a_log_past_the_ceiling_says_it_is_cut(self):
+        """The Top button would otherwise jump to a beginning that is not the log's."""
+        with logs.open_log("result-1") as log:
+            logs.write(log, "x" * 5000)
+
+        with mock.patch.object(logs, "MAX_RENDER_BYTES", 1000):
+            body = self.get(self.user).content.decode()
+
         self.assertIn("Download the log", body)
+        self.assertNotIn('id="job-log-cut" hidden', body)
 
     def test_a_short_log_says_nothing_about_cutting(self):
         """`hidden`, not absent, and that is the change: the notice now lives in the page from
@@ -455,10 +468,54 @@ class LogTailTestCase(LogTestCaseBase):
 
     def test_a_cut_log_says_so_here_too(self):
         """The page hides that notice until it is true, so the poll is what reveals it when a
-        log crosses the cut while somebody is watching."""
+        log crosses the ceiling while somebody is watching."""
+        self.write("x" * 5000)
+
+        with mock.patch.object(logs, "MAX_RENDER_BYTES", 1000):
+            self.assertTrue(self.get(self.user, self.tail_url).json()["truncated"])
+
+    def test_a_log_past_the_row_tail_is_not_cut_for_the_poll(self):
+        """The regression this page existed to have: watching a long run must not throw away
+        what has already been read."""
         self.write("x" * (logs.TAIL_BYTES + 100))
 
-        self.assertTrue(self.get(self.user, self.tail_url).json()["truncated"])
+        self.assertFalse(self.get(self.user, self.tail_url).json()["truncated"])
+
+    def test_the_poll_returns_only_what_is_new(self):
+        """The whole point of the offset: an idle poll transfers nothing, and a busy one
+        transfers what arrived rather than everything the reader already holds."""
+        self.write("first line")
+        first = self.get(self.user, self.tail_url).json()
+        self.assertEqual("first line\n", first["text"])
+        self.assertFalse(first["reset"])
+
+        idle = self.get(self.user, self.tail_url + "?offset=%d" % first["offset"]).json()
+        self.assertEqual("", idle["text"])
+        self.assertEqual(first["offset"], idle["offset"])
+
+        self.write("second line")
+        more = self.get(self.user, self.tail_url + "?offset=%d" % idle["offset"]).json()
+        self.assertEqual("second line\n", more["text"])
+        self.assertGreater(more["offset"], idle["offset"])
+
+    def test_an_offset_past_the_end_starts_again(self):
+        """A task that writes after its log was compressed opens a fresh file, so the page's
+        offset can be past the end of what is now there. It must repaint, not append."""
+        self.write("a much longer first log")
+        body = self.get(self.user, self.tail_url + "?offset=9999").json()
+
+        self.assertTrue(body["reset"])
+        self.assertFalse(body["truncated"], "it starts at the beginning of what is there")
+        self.assertIn("first log", body["text"])
+
+    def test_a_nonsense_offset_is_the_whole_log_rather_than_an_error(self):
+        """It is the page's own bookkeeping; the worst a bad one can do is send it all again."""
+        self.write("what the tool said")
+
+        for value in ("", "-5", "banana", "1e9"):
+            body = self.get(self.user, self.tail_url + "?offset=" + value).json()
+            self.assertEqual(200, self.get(self.user, self.tail_url).status_code)
+            self.assertIn("what the tool said", body["text"], value)
 
     def test_somebody_else_gets_a_404_rather_than_a_403(self):
         """Same posture as the page and the download: a 403 tells the caller the id exists,

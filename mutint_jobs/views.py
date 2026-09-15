@@ -122,7 +122,10 @@ def job_log(request, pk):
     # the text being returned. The other way round stops the page polling on a log missing its
     # last lines, with nothing to say so.
     status = queue.status_of(job.task_result_id, job.task_path)
-    text, truncated = logs.read_tail(job.task_result_id)
+    # From the beginning, and the page keeps every byte it is subsequently sent -- see
+    # `logs.read_since`. `offset` is what the poll asks from, so the first poll after this
+    # render transfers only what was written in between.
+    text, offset, _reset, truncated = logs.read_since(job.task_result_id)
     finished = jobs_api.finished(status)
     has_log = bool(text) or logs.exists(job.task_result_id)
 
@@ -150,9 +153,10 @@ def job_log(request, pk):
         "log_state": {
             "finished": finished,
             "truncated": truncated,
+            "offset": offset,
             "tail_url": reverse("job_log_tail", args=(job.pk,)),
         },
-        "tail_kb": logs.TAIL_BYTES // 1024,
+        "max_mb": logs.MAX_RENDER_BYTES // (1024 * 1024),
         "download_url": reverse("job_log_download", args=(job.pk,)),
     })
     return render(request, "jobs/log.html", context)
@@ -175,9 +179,13 @@ def job_log_tail(request, pk):
     job = _job_for_reading(request, pk)
     # Status first, then the log; see `job_log` for why that order is the safe one.
     status = queue.status_of(job.task_result_id, job.task_path)
-    text, truncated = logs.read_tail(job.task_result_id)
+    text, offset, reset, truncated = logs.read_since(job.task_result_id, _offset(request))
     response = JsonResponse({
         "text": text,
+        "offset": offset,
+        # Append unless this says otherwise. `read_since` owns when that is; the page only has
+        # to honour it, which is what lets it keep a log longer than any one response.
+        "reset": reset,
         "truncated": truncated,
         "status": queue.label_for(status),
         "finished": jobs_api.finished(status),
@@ -187,6 +195,19 @@ def job_log_tail(request, pk):
     # says why it does.
     response["Cache-Control"] = "no-store"
     return response
+
+
+def _offset(request):
+    """The byte offset the page says it already holds, or 0.
+
+    Anything unreadable is 0 rather than a 400: the parameter is this page's own bookkeeping,
+    and the worst a bad one can do is send the log again from the start -- which is exactly
+    what `read_since` does with an offset it cannot honour anyway.
+    """
+    try:
+        return max(0, int(request.GET.get("offset", 0)))
+    except (TypeError, ValueError):
+        return 0
 
 
 @require_GET

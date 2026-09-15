@@ -49,9 +49,18 @@ COMPONENT = "mutint_jobs"
 LOG_NAME = "job.log"
 COMPRESSED_NAME = LOG_NAME + ".gz"
 
-#: What the page renders, from the end. A breseq log runs to megabytes and the news is at the
-#: bottom; the download route has the whole thing, and the page says when it had to cut.
+#: What a *row* stores as its own copy of the log -- `BreseqRun.log`, `IsescanRun.log` -- taken
+#: from the end, because that is where a failure says why. Not what the log page renders: that
+#: reads from an offset and keeps everything (see `read_since`).
 TAIL_BYTES = 256 * 1024
+
+#: The ceiling on one response from `read_since`, and so on what the log page holds in one
+#: `<pre>`. Deliberately far above anything real -- a complete breseq run against REL606
+#: measured 63 KB, and the largest of fifteen stored job logs was 251 KB -- because its job is
+#: to stop a runaway tool taking the browser and this process down with it, not to trim
+#: ordinary output. Past it the page repaints from the end and says so, which is the only
+#: honest answer once content has to be dropped.
+MAX_RENDER_BYTES = 8 * 1024 * 1024
 
 #: How much is read at a time when streaming the whole log to a client.
 CHUNK_BYTES = 64 * 1024
@@ -219,6 +228,103 @@ def read_tail(task_result_id, tail_bytes=TAIL_BYTES):
         if newline != -1:
             text = text[newline + 1:]
     return text, truncated
+
+
+def _whole_characters(data):
+    """`data` with any trailing partial UTF-8 sequence removed.
+
+    A byte offset can land in the middle of a character, and the next read starts exactly
+    where this one stopped -- so stopping mid-sequence would decode to a replacement
+    character *here* and another one *there*, turning one character into two mojibake blobs
+    that no later read can repair. Dropping the partial tail leaves it for the next read,
+    which sees the whole sequence.
+    """
+    for back in range(1, min(4, len(data)) + 1):
+        byte = data[-back]
+        if byte < 0x80:          # ASCII: nothing before it can be incomplete
+            return data
+        if byte >= 0xC0:         # a start byte: is its sequence all here?
+            needed = 4 if byte >= 0xF0 else 3 if byte >= 0xE0 else 2
+            return data if back >= needed else data[:-back]
+        # 0x80..0xBF is a continuation byte; keep walking back to its start byte
+    return data
+
+
+def read_since(task_result_id, offset=0, max_bytes=None):
+    """Log content from `offset` bytes in, as `(text, next_offset, reset, truncated)`.
+
+    This is what the log page reads, and it reads by **offset** so that the page can keep
+    everything it has ever been sent. Re-sending the tail on every poll -- which is what this
+    replaced -- bounds the page at whatever that tail is: once the log outgrows it there is no
+    common prefix to append onto, so the reader's own scrollback is thrown away and repainted
+    with the end. Asking for "what is new since byte N" has no such ceiling, and costs less on
+    the wire besides: an idle poll transfers nothing rather than a quarter of a megabyte.
+
+    `offset` is into the log's *logical* content, which is the same whether the file on disk is
+    the plain one or the gzip written when the job finished -- so an offset held across that
+    switch stays valid, and a page watching a job that ends mid-poll does not skip or repeat.
+
+    `reset` means **replace what you hold with this text** rather than appending it. Two things
+    cause it and both are real: a log that has been replaced since (a task that writes again
+    after its log was compressed opens a fresh file, so the caller's offset is past the end),
+    and a gap too large to hand over in one response. `truncated` then says whether what came
+    back starts at the beginning of the log -- the page must not offer a Top button onto a
+    beginning that is not one.
+    """
+    # Resolved here rather than as a default argument, so a test can lower the ceiling by
+    # patching the constant instead of writing eight megabytes to prove what happens past it.
+    if max_bytes is None:
+        max_bytes = MAX_RENDER_BYTES
+
+    path = stored_path(task_result_id)
+    if path is None:
+        return "", 0, False, False
+
+    try:
+        if path.endswith(".gz"):
+            # No seeking into a gzip without decompressing what precedes the offset anyway, so
+            # this reads the lot. Only a finished job's log is compressed, so it happens once
+            # per page rather than once per poll.
+            with gzip.open(path, "rb") as handle:
+                whole = handle.read()
+            size = len(whole)
+            start, reset = _window(offset, size, max_bytes)
+            data = whole[start:]
+        else:
+            size = os.path.getsize(path)
+            start, reset = _window(offset, size, max_bytes)
+            with open(path, "rb") as handle:
+                handle.seek(start)
+                data = handle.read()
+    except (OSError, EOFError, gzip.BadGzipFile):
+        logger.warning("could not read the log for %s", task_result_id, exc_info=True)
+        return "", 0, False, False
+
+    data = _whole_characters(data)
+    text = data.decode("utf-8", "replace")
+    if reset and start > 0:
+        # A partial first line is worse than a missing one -- `read_tail`'s rule, and for the
+        # same reason: this text is about to become the whole of what the reader can see.
+        newline = text.find("\n")
+        if newline != -1:
+            dropped = len(text[:newline + 1].encode("utf-8"))
+            start += dropped
+            text = text[newline + 1:]
+    return text, start + len(text.encode("utf-8")), reset, reset and start > 0
+
+
+def _window(offset, size, max_bytes):
+    """Where to start reading, and whether that is a reset. See `read_since`."""
+    # A negative or past-the-end offset is not a caller's bug to raise on: the log it refers to
+    # is simply not the log on disk any more.
+    if offset < 0 or offset > size:
+        offset = 0
+        reset = True
+    else:
+        reset = False
+    if size - offset > max_bytes:
+        return size - max_bytes, True
+    return offset, reset
 
 
 def stream(task_result_id):
