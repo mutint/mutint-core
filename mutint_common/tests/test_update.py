@@ -688,6 +688,16 @@ class SummarizeTestCase(TestCase):
             "A new version of MutInt is available (commit def67890) committed on %s."
             % update.readable_time("2026-09-07T11:53:23-04:00"), sentence)
 
+    def test_a_staged_version_is_described_in_the_same_words(self):
+        """The banner that says to restart must not fall back to naming a branch."""
+        sentence = update.summarize("main", {
+            "sha": "def67890", "date": "2026-09-07T11:53:23-04:00"}, update.BRANCH, "MutInt",
+            staged=True)
+
+        self.assertEqual(
+            "A new version of MutInt (commit def67890) committed on %s is staged."
+            % update.readable_time("2026-09-07T11:53:23-04:00"), sentence)
+
     def test_it_names_the_version_on_the_stable_channel(self):
         """A release has a name somebody chose, and calling it a commit would bury the version
         number that is the whole point of the channel."""

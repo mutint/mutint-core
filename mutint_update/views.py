@@ -19,6 +19,7 @@ to look is worse off than one shown an error.
 
 import json
 import logging
+import os
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -28,8 +29,11 @@ from django.views.decorators.http import require_POST
 from mutint_common import update
 from mutint_common.context_processors import deployment_name
 from mutint_update import restart
-from mutint_common.about_registry import get_about_sections
+from mutint_common.about_registry import (
+    component_dir, first_party_app_configs, get_about_sections, get_project_section,
+)
 from mutint_common.logger import user_extra
+from mutint_common.management.commands.version import aggregator
 from mutint_common.util import get_user_context
 
 logger = logging.getLogger(__name__)
@@ -66,13 +70,28 @@ def _body(request):
     return body if isinstance(body, dict) else None
 
 
-def _rows():
+def _rows(base_dir=None):
     """One row per installed component: name, version, revision, link.
 
     `get_about_sections` keys by *component checkout*, so mutint-core's fifteen apps are one
     row and a plugin is one row, which is the unit somebody updating thinks in.
+
+    **The assembled project heads them.** It has no Django app, so the inventory cannot see
+    it, and it is the repository an update is *of* -- the row every other row is pinned by.
+    Named by `update.repository_name`, as the list of what an update would move names it, so
+    the two cannot call one checkout two things. Standalone mutint-core is its own project
+    and already has its row.
     """
-    return get_about_sections()
+    rows = get_about_sections()
+    if base_dir is None:
+        return rows
+    root = os.path.realpath(base_dir)
+    for app_config in first_party_app_configs():
+        if os.path.realpath(component_dir(app_config)) == root:
+            return rows
+    project = aggregator()
+    return [get_project_section(root, update.repository_name(root),
+                                project[2] if project else None)] + rows
 
 
 def update_page(request):
@@ -93,7 +112,7 @@ def update_page(request):
     context = get_user_context(request.user)
     context.update({
         "enabled": _enabled() and base_dir is not None,
-        "components": _rows(),
+        "components": _rows(base_dir),
         "channel": state.get("channel", update.STABLE),
         "channels": update.CHANNELS,
         "checked_at": state.get("checked_at"),
@@ -105,8 +124,9 @@ def update_page(request):
         # anyway: it reports the last *update attempt*, not a problem with the request.
         "update_error": state.get("error"),
         "last_result": state.get("last_result"),
+        "last_result_what": _what(state.get("last_result")),
         "requested": state.get("requested"),
-        "current": update.current_ref(base_dir) if base_dir else None,
+        "staged_summary": _staged_summary(state),
         "blockers": update.blockers(base_dir) if base_dir else [],
         # Only where something said how to start MutInt again -- see `restart`. From a
         # terminal nothing does, and a Restart button there would offer to kill the
@@ -114,6 +134,40 @@ def update_page(request):
         "can_restart": restart.relaunch_command() is not None,
     })
     return render(request, "update/index.html", context)
+
+
+def _what(result):
+    """What the last update moved to, or tried to, as `summarize` would name it -- or None.
+
+    A release has a name somebody chose and anything else has only a commit, so a branch is
+    never named: `main` says which channel was followed and nothing about what is installed.
+    `now` is where the checkout ended up; a failed update has only the ref it was asked for,
+    which is worth saying when it is a version and not when it is a branch.
+    """
+    if not result:
+        return None
+    now = result.get("now")
+    if now:
+        return ("version %s" if update.TAG_RE.match(now) else "commit %s") % now
+    ref = result.get("ref") or ""
+    return "version %s" % ref if update.TAG_RE.match(ref) else None
+
+
+def _staged_summary(state):
+    """The sentence about what is staged, in the words the check used for it.
+
+    Install refuses a ref the last check did not offer, so what is staged is normally what
+    `available` describes; where it is not -- staged from a shell, or the verdict has since
+    been replaced -- the sentence says only what is known.
+    """
+    requested = state.get("requested")
+    if not requested:
+        return None
+    available = state.get("available") or {}
+    if available.get("ref") != requested.get("ref"):
+        return "An update is staged."
+    return update.summarize(available["ref"], available, available.get("kind", update.BRANCH),
+                            deployment_name(), staged=True)
 
 
 def update_root():

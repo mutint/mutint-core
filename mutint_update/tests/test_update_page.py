@@ -192,8 +192,86 @@ class UpdatePageTestCase(TestCase):
 
         response = self.client.get(reverse("update"))
 
-        self.assertContains(response, "v1.2.3 is staged")
+        self.assertContains(response, "An update is staged.")
         self.assertContains(response, "start it again")
+
+    def test_the_staged_sentence_is_the_checks_own_and_names_no_branch(self):
+        """`main is staged` is a statement about a branch. What is staged is described the
+        way the check described it, and under the channel menu rather than above it."""
+        self._write_available(date="2026-09-07T11:53:23-04:00")
+        update.request(self.base, "main", by="root")
+        self.client.force_login(self.superuser)
+
+        body = self.client.get(reverse("update")).content.decode()
+
+        self.assertIn("(commit def67890) committed on %s is staged."
+                      % update.readable_time("2026-09-07T11:53:23-04:00"), body)
+        self.assertNotIn("main is staged", body)
+        self.assertNotIn("A new version of MutInt is available", body)
+        self.assertLess(body.index('id="update-channel"'), body.index("is staged."))
+        # What would move is still listed under it.
+        self.assertIn("mutint-core</code>", body)
+
+    def test_the_project_heads_the_component_table(self):
+        """An assembled project has no Django app, so the inventory cannot see it -- and it
+        is the repository an update is *of*. Named as the list of what would move names it."""
+        self.client.force_login(self.superuser)
+
+        with mock.patch.object(update, "repository_name", return_value="the-project"), \
+                mock.patch("mutint_update.views.aggregator",
+                           return_value=("The Project", None, "9.8.7")):
+            body = self.client.get(reverse("update")).content.decode()
+
+        table = body[body.index('id="update-components"'):body.index("</table>")]
+        self.assertLess(table.index("the-project"), table.index("mutint-core"))
+        self.assertIn("9.8.7", table)
+
+    def test_a_project_that_is_a_component_is_not_listed_twice(self):
+        """Standalone mutint-core is its own project and already has its row."""
+        from mutint_common.about_registry import component_dir
+        from django.apps import apps
+
+        core = component_dir(apps.get_app_config("mutint_common"))
+        self.client.force_login(self.superuser)
+
+        with mock.patch("mutint_update.views.update_root", return_value=core), \
+                mock.patch.object(update, "repository_name", return_value="the-project"):
+            response = self.client.get(reverse("update"))
+
+        self.assertNotContains(response, "the-project")
+
+    def test_the_menu_has_no_heading_and_the_page_no_installed_line(self):
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(reverse("update"))
+
+        self.assertNotContains(response, "Follow</label>")
+        self.assertNotContains(response, "Installed:")
+        self.assertContains(response, 'aria-label="Update channel"')
+
+    def test_where_mutint_can_be_restarted_installing_is_one_button(self):
+        """Beside Check for updates, in a colour of its own, and instead of Install."""
+        self._write_available()
+        self.client.force_login(self.superuser)
+
+        with mock.patch("mutint_update.views.restart.relaunch_command", return_value="x"):
+            body = self.client.get(reverse("update")).content.decode()
+
+        self.assertIn("Restart to install updates", body)
+        self.assertIn('class="btn btn-success" id="update-restart"', body)
+        self.assertNotIn('id="update-install"', body)
+        self.assertLess(body.index('id="update-check"'), body.index('id="update-restart"'))
+
+    def test_from_a_terminal_install_is_offered_and_restart_is_not(self):
+        """Nothing can start MutInt again there, so a Restart button would only stop it."""
+        self._write_available()
+        self.client.force_login(self.superuser)
+
+        with mock.patch("mutint_update.views.restart.relaunch_command", return_value=None):
+            body = self.client.get(reverse("update")).content.decode()
+
+        self.assertIn('id="update-install"', body)
+        self.assertNotIn('id="update-restart"', body)
 
     def test_an_applied_update_is_not_still_offered(self):
         """The green banner says what happened; nothing beside it should still be selling the
@@ -222,6 +300,26 @@ class UpdatePageTestCase(TestCase):
         button = html[html.index('id="update-install"'):]
         self.assertLess(button.index('display: none'), button.index("Install update"))
         self.assertNotIn("v1.1.0 is available", html)
+
+    def test_the_result_banners_never_name_a_branch(self):
+        """`main` says which channel was followed and nothing about what is installed."""
+        self.client.force_login(self.superuser)
+        for result, expected in (
+                ({"ref": "main", "ok": True, "now": "def67890"}, "Updated to <strong>commit def67890"),
+                ({"ref": "v0.0.2", "ok": True, "now": "v0.0.2"}, "Updated to <strong>version v0.0.2"),
+                ({"ref": "main", "ok": True, "now": None}, "Updated."),
+                ({"ref": "main", "ok": False, "detail": "x"}, "The update did not run."),
+                ({"ref": "v0.0.2", "ok": False, "detail": "x"},
+                 "The update to version v0.0.2 did not run.")):
+            state = update.read_state(self.base)
+            state["last_result"] = result
+            update.write_state(self.base, state)
+
+            body = self.client.get(reverse("update")).content.decode()
+
+            self.assertIn(expected, body)
+            self.assertNotIn("to main", body)
+            self.assertNotIn("<strong>main", body)
 
     def test_a_failed_apply_is_reported_on_the_page(self):
         """`apply_staged` swallows the failure so the launch survives, which means this page

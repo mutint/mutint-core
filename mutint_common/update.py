@@ -385,7 +385,7 @@ def component_changes(base_dir, target):
     return changes
 
 
-def _repository_name(base_dir):
+def repository_name(base_dir):
     """This checkout's repository name, from `origin` where there is one.
 
     `https://github.com/mutint/mutint.git` and `git@github.com:mutint/mutint.git` both answer
@@ -424,7 +424,7 @@ def _project_change(base_dir, target_sha, commits=None):
     if not here or not target_sha or here == target_sha:
         return None
     return {
-        'name': _repository_name(base_dir),
+        'name': repository_name(base_dir),
         'from': here,
         'to': target_sha,
         'change': 'moved',
@@ -508,7 +508,7 @@ def readable_time(iso):
         return iso
 
 
-def summarize(ref, described, kind=BRANCH, name=None):
+def summarize(ref, described, kind=BRANCH, name=None, staged=False):
     """The sentence the page shows. Composed here so the page and its poll cannot word it
     differently, and plain text so neither has to escape it.
 
@@ -531,13 +531,17 @@ def summarize(ref, described, kind=BRANCH, name=None):
     module imports nothing from Django -- see the module docstring. Without one the sentence
     simply says "A new version", which is what standalone mutint-core wants: it is unbranded,
     and a name it has not been given is not one to invent.
+
+    `staged=True` is the same sentence about a version that has been staged rather than
+    offered, so the banner that says to restart describes it in the words the check did.
     """
     what = ("version %s" % ref if kind == TAG
             else "commit %s" % (described.get('sha') or ref))
-    sentence = "A new version%s is available (%s)" % (" of %s" % name if name else "", what)
+    sentence = "A new version%s%s (%s)" % (
+        " of %s" % name if name else "", "" if staged else " is available", what)
     if described.get('date'):
         sentence += " committed on %s" % readable_time(described['date'])
-    return sentence + "."
+    return sentence + (" is staged." if staged else ".")
 
 
 def _available(base_dir, ref, kind, sha, name=None):

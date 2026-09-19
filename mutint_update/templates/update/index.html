@@ -57,52 +57,27 @@
 
         <h3 style="margin-top: 2em;">Updates</h3>
 
-        {% if requested %}
-            {% comment %} Restart is offered *here* and nowhere else, because staged is the
-               one state where restarting is the obvious next thing rather than a button
-               somebody might wonder about. It finishes this update; a control that sat in
-               the row above permanently would read as a general "restart the server", which
-               is not a thing this page is for. {% endcomment %}
-            <div class="alert alert-info">
-                <strong>{{ requested.ref }} is staged.</strong>
-                {% if can_restart %}Restart MutInt to apply it
-                {% else %}Quit MutInt and start it again to apply it{% endif %} &mdash; the
-                update happens before the server comes up, because a running MutInt cannot
-                safely replace its own code. Any new dependencies are installed and any new
-                migrations applied on that same launch.
-                {% if can_restart %}
-                    <p style="margin-top: 1em; margin-bottom: 0;">
-                        <button type="button" class="btn btn-primary" id="update-restart">
-                            Restart MutInt</button>
-                    </p>
-                {% endif %}
-            </div>
-        {% elif last_result %}
+        {% if last_result and not requested %}
             {% if last_result.ok %}
                 <div class="alert alert-success">
-                    Updated to <strong>{{ last_result.now|default:last_result.ref }}</strong>.
+                    {% if last_result_what %}Updated to <strong>{{ last_result_what }}</strong>.
+                    {% else %}Updated.{% endif %}
                     {% if last_result.backup %}The database was backed up first.{% endif %}
                 </div>
             {% else %}
                 <div class="alert alert-warning">
-                    <strong>The update to {{ last_result.ref }} did not run.</strong>
+                    <strong>The update{% if last_result_what %} to {{ last_result_what }}{% endif %} did not run.</strong>
                     {{ last_result.detail }}
                 </div>
             {% endif %}
         {% endif %}
 
-        <p>
-            <strong>Installed:</strong>
-            {% if current %}<code>{{ current }}</code>{% else %}unknown{% endif %}
-        </p>
-
         <div class="form-group">
-            <label for="update-channel">Follow</label>
             {% comment %} `width: auto` so the control sizes to its longest option rather
                than to a guess about how long the options are. `.form-control` is
                `width: 100%`, and the fixed cap that used to override it was measured against
                wording these labels no longer use -- it clipped them mid-word. {% endcomment %}
-            <select id="update-channel" class="form-control"
+            <select id="update-channel" class="form-control" aria-label="Update channel"
                     style="width: auto; max-width: 100%;">
                 <option value="stable" {% if channel == "stable" %}selected{% endif %}>
                     Official Releases &mdash; numbered version updates only
@@ -116,23 +91,47 @@
         <div class="btn-row">
             <button type="button" class="btn btn-default" id="update-check">
                 Check for updates</button>
-            {% comment %} "Install update", not "Install <ref>": the sentence in the status
-               box below already names the version, and a button that changes its label
-               is one the eye has to re-read. The page is Update everywhere a person sees
-               it; `update` survives in the URL, the ids and the module, which predate
-               the wording. {% endcomment %}
-            <button type="button" class="btn btn-primary" id="update-install"
-                    {% if not available %}style="display: none;"{% endif %}>
-                Install update</button>
+            {% comment %} One of two buttons, decided by whether anything can start MutInt
+               again -- see `restart`. Where something can, staging and restarting are one
+               click, because staging is only ever a step towards the restart that applies
+               it. From a terminal nothing can, and a Restart button there would offer to
+               kill the server and nothing else: Install stages, and the box below says to
+               quit and start again. The labels are fixed -- the sentence in the status box
+               names the version, and a button that changes its label is one the eye has to
+               re-read. {% endcomment %}
+            {% if can_restart %}
+                <button type="button" class="btn btn-success" id="update-restart"
+                        data-staged="{% if requested %}1{% endif %}"
+                        {% if not available and not requested %}style="display: none;"{% endif %}>
+                    Restart to install updates</button>
+            {% else %}
+                <button type="button" class="btn btn-primary" id="update-install"
+                        {% if not available or requested %}style="display: none;"{% endif %}>
+                    Install update</button>
+            {% endif %}
         </div>
 
         <div id="update-status" style="margin-top: 1em;">
+            {% if requested %}
+                {% comment %} The same sentence the check composed, about a version that is
+                   now staged (`update.summarize(staged=True)`), and then what finishes it.
+                   {% endcomment %}
+                <div class="alert alert-info">
+                    {{ staged_summary }}
+                    {% if can_restart %}Restart MutInt to install it
+                    {% else %}Quit MutInt and start it again to install it{% endif %} &mdash;
+                    the update happens before the server comes up, because a running MutInt
+                    cannot safely replace its own code. Any new dependencies are installed and
+                    any new migrations applied on that same launch.
+                </div>
+            {% endif %}
             {% if blockers %}
                 <div class="alert alert-warning">
                     {% for problem in blockers %}<p>{{ problem }}</p>{% endfor %}
                 </div>
             {% elif update_error %}
                 <div class="alert alert-warning">{{ update_error }}</div>
+            {% elif requested %}
             {% elif available %}
                 {% comment %} The sentence is composed server-side (`update.summarize`) so
                    this and the poll below cannot word it differently. It says what is on
@@ -141,30 +140,34 @@
                    from the same record.
                    {% endcomment %}
                 <div class="alert alert-info">{{ available.summary }}</div>
-                {% comment %} The project itself heads the list: it is the repository the
-                   update is *of*, and every other line is one of its submodules.
-                   {% endcomment %}
-                {% if available.project or available.components %}
-                    <ul style="color: #666; margin-top: 0.5em;">
-                        {% if available.project %}
-                            <li><code>{{ available.project.name }}</code>
-                                {{ available.project.from }} &rarr; {{ available.project.to }}
-                                {% if available.project.commits %}
-                                    ({{ available.project.commits }} commit{{ available.project.commits|pluralize }})
-                                {% endif %}</li>
-                        {% endif %}
-                        {% for entry in available.components %}
-                            <li><code>{{ entry.name }}</code>
-                                {% if entry.change == "moved" %}
-                                    {{ entry.from }} &rarr; {{ entry.to }}
-                                {% else %}{{ entry.change }}{% endif %}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
             {% elif checked_at %}
                 <p style="color: #666;">Up to date as of {{ checked_at }}.</p>
             {% else %}
                 <p style="color: #666;">Not checked yet.</p>
+            {% endif %}
+            {% comment %} Under the staged sentence as under the offered one: what would
+               move is the same list either way. {% endcomment %}
+            {% if not blockers and not update_error %}
+            {% comment %} The project itself heads the list: it is the repository the
+               update is *of*, and every other line is one of its submodules.
+               {% endcomment %}
+            {% if available.project or available.components %}
+                <ul style="color: #666; margin-top: 0.5em;">
+                    {% if available.project %}
+                        <li><code>{{ available.project.name }}</code>
+                            {{ available.project.from }} &rarr; {{ available.project.to }}
+                            {% if available.project.commits %}
+                                ({{ available.project.commits }} commit{{ available.project.commits|pluralize }})
+                            {% endif %}</li>
+                    {% endif %}
+                    {% for entry in available.components %}
+                        <li><code>{{ entry.name }}</code>
+                            {% if entry.change == "moved" %}
+                                {{ entry.from }} &rarr; {{ entry.to }}
+                            {% else %}{{ entry.change }}{% endif %}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
             {% endif %}
         </div>
 
@@ -180,7 +183,11 @@
     var checkButton = document.getElementById("update-check");
     if (!checkButton) { return; }          // updating is disabled on this deployment
 
+    // One of these two is on the page, never both: Restart where something can start
+    // MutInt again, Install where nothing can. `offerButton` is whichever it is.
     var installButton = document.getElementById("update-install");
+    var restartButton = document.getElementById("update-restart");
+    var offerButton = restartButton || installButton;
     var channel = document.getElementById("update-channel");
     var status = document.getElementById("update-status");
     var available = null;
@@ -235,7 +242,7 @@
     }
 
     checkButton.dataset.label = checkButton.textContent;
-    installButton.dataset.label = installButton.textContent;
+    offerButton.dataset.label = offerButton.textContent;
 
     checkButton.addEventListener("click", function () {
         busy(true, checkButton, "Checking…");
@@ -256,10 +263,12 @@
                 } else {
                     say("success", "Up to date.");
                 }
-                if (available) {
-                    installButton.style.display = "";
+                // A staged update keeps its Restart button whatever this check found:
+                // restarting is still what finishes it.
+                if (available || (restartButton && restartButton.dataset.staged)) {
+                    offerButton.style.display = "";
                 } else {
-                    installButton.style.display = "none";
+                    offerButton.style.display = "none";
                 }
             })
             .catch(function (error) {
@@ -268,16 +277,24 @@
             .then(function () { busy(false, checkButton, null); });
     });
 
-    // Restart, where the launcher said how. Two waits rather than one: the server is still
-    // up for a moment after it answers -- it waits deliberately, so this response arrives --
-    // and a poll that only asked "is it back" would be answered yes by the server that is
-    // about to stop, and reload the page onto it.
-    var restartButton = document.getElementById("update-restart");
+    function offeredRef() {
+        return available ? available.ref : "{{ available.ref|escapejs }}";
+    }
+
+    // Stage, then restart, as one click -- or restart alone when an update is already
+    // staged. Two waits rather than one afterwards: the server is still up for a moment
+    // after it answers -- it waits deliberately, so this response arrives -- and a poll that
+    // only asked "is it back" would be answered yes by the server that is about to stop, and
+    // reload the page onto it.
     if (restartButton) {
-        restartButton.dataset.label = restartButton.textContent;
         restartButton.addEventListener("click", function () {
             busy(true, restartButton, "Restarting\u2026");
-            mutintPostJson("/update/restart", {})
+            var staged = restartButton.dataset.staged
+                ? Promise.resolve()
+                : mutintPostJson("{% url 'update_install' %}", {ref: offeredRef()})
+                    .then(function () { restartButton.dataset.staged = "1"; });
+            staged
+                .then(function () { return mutintPostJson("/update/restart", {}); })
                 .then(function () {
                     say("info", "MutInt is restarting. This page reloads when it is back.");
                     waitForRestart();
@@ -312,21 +329,22 @@
         }, 1000);
     }
 
-    installButton.addEventListener("click", function () {
-        var ref = available ? available.ref : "{{ available.ref|escapejs }}";
-        busy(true, installButton, "Staging…");
-        mutintPostJson("{% url 'update_install' %}", {ref: ref})
-            .then(function () {
-                // Reloaded rather than patched: the staged banner, the buttons and the
-                // installed version are all rendered from state the server now holds, and
-                // rebuilding that here would be a second opinion about what it says.
-                window.location.reload();
-            })
-            .catch(function (error) {
-                say("danger", (error && error.message) || "Could not stage the update.");
-                busy(false, installButton, null);
-            });
-    });
+    if (installButton) {
+        installButton.addEventListener("click", function () {
+            busy(true, installButton, "Staging…");
+            mutintPostJson("{% url 'update_install' %}", {ref: offeredRef()})
+                .then(function () {
+                    // Reloaded rather than patched: the staged banner, the buttons and the
+                    // installed version are all rendered from state the server now holds, and
+                    // rebuilding that here would be a second opinion about what it says.
+                    window.location.reload();
+                })
+                .catch(function (error) {
+                    say("danger", (error && error.message) || "Could not stage the update.");
+                    busy(false, installButton, null);
+                });
+        });
+    }
 }());
 </script>
 {% endblock %}

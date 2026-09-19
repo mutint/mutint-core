@@ -76,10 +76,6 @@ def get_about_sections():
     under another owner links to its own home and one published nowhere links to nothing.
     """
     from django.apps import apps
-    from django.utils.text import slugify
-
-    from mutint_common.update import readable_time
-    from mutint_common.util import get_revision
 
     sections = []
     seen = set()
@@ -92,23 +88,45 @@ def get_about_sections():
         seen.add(directory)
 
         entry = _sections.get(directory, {})
-        name = entry.get('name') or os.path.basename(directory)
-        revision = get_revision(directory)
-        sections.append({
-            'name': name,
-            'version': entry.get('version'),
-            'template': _loadable(entry.get('template')),
-            'revision': revision['short'] if revision else None,
-            # When that revision was committed, as a person reads a time. A hash says which
-            # commit and nothing about how old it is, which is the question somebody looking
-            # at an update page is actually asking.
-            'committed': (readable_time(revision['committed'])
-                          if revision and revision.get('committed') else None),
-            'revision_url': revision['url'] if revision else None,
-            'repository_url': revision['repository'] if revision else None,
-            'anchor': slugify(name),
-        })
+        sections.append(_section(directory, entry.get('name'), entry.get('version'),
+                                 entry.get('template')))
     return sections
+
+
+def get_project_section(directory, name=None, version=None):
+    """The assembled project's own entry, in the shape `get_about_sections` returns.
+
+    An assembled project has no Django app of its own, so the walk over app configs above
+    structurally cannot see it -- and on `/update/` it is the repository an update is *of*.
+    The caller says where it is and what it is called; nothing is registered, because there
+    is no `AppConfig` to register from.
+    """
+    return _section(os.path.abspath(directory), name, version, None)
+
+
+def _section(directory, name, version, template):
+    """One entry of the inventory, for the checkout at `directory`."""
+    from django.utils.text import slugify
+
+    from mutint_common.update import readable_time
+    from mutint_common.util import get_revision
+
+    name = name or os.path.basename(directory)
+    revision = get_revision(directory)
+    return {
+        'name': name,
+        'version': version,
+        'template': _loadable(template),
+        'revision': revision['short'] if revision else None,
+        # When that revision was committed, as a person reads a time. A hash says which
+        # commit and nothing about how old it is, which is the question somebody looking
+        # at an update page is actually asking.
+        'committed': (readable_time(revision['committed'])
+                      if revision and revision.get('committed') else None),
+        'revision_url': revision['url'] if revision else None,
+        'repository_url': revision['repository'] if revision else None,
+        'anchor': slugify(name),
+    }
 
 
 def first_party_app_configs():

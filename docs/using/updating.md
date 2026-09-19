@@ -12,8 +12,8 @@ files alone, which is the whole reason this works.
 
 Click your username, then **Update**. The page is superusers-only.
 
-It lists every component this installation is made of, with its version and the git revision it
-is at, and it has two buttons:
+It lists the installation itself and then every component it is made of, each with its version
+and the git revision it is at. Under the table is the channel menu and two buttons:
 
 - **Check for updates** asks the remote what is available. It is the only thing on the page
   that touches the network; the page itself always renders instantly from the last answer.
@@ -27,17 +27,17 @@ is at, and it has two buttons:
     timestamp is usually the thing that tells you whether this is the change you are waiting
     for.
 
-- **Install update** stages the version it found.
+- **Restart to install updates** appears beside it once there is an update to install, when
+  MutInt was started by something that can start it again -- `MutInt.app` on a Mac. One click
+  stages the version the check found, stops the server and starts it, and the page you are on
+  reloads itself when it is back.
 
-Then MutInt has to be started again, because the update is applied *before* the server comes
-up: a running MutInt cannot safely replace the code it is executing.
+MutInt has to be started again because the update is applied *before* the server comes up: a
+running MutInt cannot safely replace the code it is executing.
 
-- **Restart MutInt** appears beside the staged message when MutInt was started by something
-  that can start it again -- `MutInt.app` on a Mac. It stops the server, starts it, and the
-  page you are on reloads itself when it is back.
-- Otherwise -- from a terminal, where the process that would have to run the command is the
-  one being stopped -- the page says to **quit MutInt and start it again** by hand. That is a
-  double-click on `MutInt.app`, or Ctrl-C and `./mutint start`.
+- From a terminal -- where the process that would have to run the command is the one being
+  stopped -- the button is **Install update** instead. It stages the version, and the page then
+  says to **quit MutInt and start it again** by hand: Ctrl-C and `./mutint start`.
 
 Either way that one launch does everything: it moves the working tree, installs any
 dependencies the new version added, installs any new external tools, and applies any new

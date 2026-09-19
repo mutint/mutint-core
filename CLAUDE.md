@@ -521,6 +521,13 @@ survive the old name on purpose, each because breaking it would be silent rather
 that turned the feature off must not find it back on; and `data/upgrade.json` is moved to
 `data/update.json` on first read, since that file is where an installation's channel lives.
 
+**The assembled project is the table's first row.** It has no Django app, so
+`get_about_sections` cannot see it, and it is the repository an update is *of*.
+`views._rows` prepends `about_registry.get_project_section`, named by
+`update.repository_name` -- the same function that names it in the list of what an update
+would move -- and versioned by `version.aggregator()`. Standalone mutint-core is its own
+project and already has its row, so nothing is prepended there.
+
 **Each row says when its revision was committed**, through the same `update.readable_time`
 that describes the available version, so the two timestamps on the page cannot be written
 differently. A hash says *which* commit and nothing about how old it is, and how old is the
@@ -593,16 +600,25 @@ still renders -- the inventory is worth having either way -- and offers no butto
 
 **Restart is the last step of an update, as a button.** Staging writes a request and the next
 launch applies it, so finishing an update was always an instruction somebody had to follow.
-`mutint_update/restart.py` does the same quit and the same start on their behalf, and three
+`mutint_update/restart.py` does the same quit and the same start on their behalf, and these
 things about it are load-bearing:
 
-- **It is offered in one state only: an update is staged.** Restarting is what finishes that
-  update, and staged is the moment where it is the obvious next thing rather than a button
-  somebody has to wonder about -- one sitting permanently beside *Check for updates* reads as a
-  general "restart the server", which is not what this page is for. The **endpoint** stays
-  willing either way, and that asymmetry is deliberate: `./mutint update` from a shell moves
-  the checkout and leaves the running server on the old code, so restarting is a legitimate
-  thing to ask for. What narrows is the offer, not the operation.
+- **It is one click, *Restart to install updates*, and offered only when there is an update
+  to install** -- one the last check found, or one already staged. Staging is only ever a step
+  towards the restart that applies it, so where something can start MutInt again the button
+  does both: it posts `update_install` unless `data-staged` says that is done, then
+  `update_restart`. It sits right of *Check for updates*, green so it does not read as that
+  button's twin, and is rendered hidden otherwise -- a permanently visible one reads as a
+  general "restart the server", which is not what this page is for. Where nothing can relaunch
+  MutInt the button is **Install update** instead, which stages, and the status box says to
+  quit and start again. The **endpoint** stays willing either way, and that asymmetry is
+  deliberate: `./mutint update` from a shell moves the checkout and leaves the running server
+  on the old code, so restarting is a legitimate thing to ask for. What narrows is the offer,
+  not the operation.
+- **The staged sentence is the check's own.** `update.summarize(staged=True)` describes what
+  is staged in the words that offered it, so the banner never names a branch; it renders in
+  the status box under the channel menu and the buttons, with the list of what would move
+  still beneath it.
 - **Nothing in core knows what launched MutInt.** The launcher exports
   `MUTINT_RELAUNCH_COMMAND`; where nothing did, there is no button and the endpoint refuses.
   MutInt.app sets it to an `open` of its own bundle and a systemd unit could set

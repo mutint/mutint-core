@@ -11,6 +11,7 @@ here and fail there.
 """
 
 import os
+import re
 import shutil
 import tempfile
 from unittest import mock
@@ -235,12 +236,12 @@ class RestartEndpointTestCase(TestCase):
 
 @override_settings(MUTINT_UPDATE_ENABLED=True)
 class RestartButtonTestCase(TestCase):
-    """**Offered in one state only: an update is staged.**
+    """**Offered only when there is an update to install: one a check found, or one staged.**
 
-    Restarting is what finishes that update, and staged is the one moment where it is the
-    obvious next thing to do. A button sitting in the row above permanently would read as a
-    general "restart the server" -- which is not what this page is for, and is a strange thing
-    to put a click away on a page that is otherwise an inventory.
+    Restarting is what installs an update, so where something can start MutInt again the
+    button stages and restarts in one click. With nothing to install it is on the page but
+    hidden -- the check's script is what reveals it -- because a visible one would read as a
+    general "restart the server", which is not what this page is for.
 
     The endpoint stays willing either way. It is a legitimate thing to ask for -- `./mutint
     update` from a shell moves the checkout and leaves the running server on the old code,
@@ -259,25 +260,27 @@ class RestartButtonTestCase(TestCase):
     def _html(self):
         return self.client.get(reverse("update")).content.decode("utf-8")
 
-    def test_no_button_with_nothing_staged(self):
+    def _button(self, html):
+        return re.search(r'<button[^>]*id="update-restart"[^>]*>', html).group(0)
+
+    def test_the_button_is_hidden_with_nothing_to_install(self):
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
             html = self._html()
 
-        # `id="..."`, not the bare name: the script looks the button up by id whether or not
-        # it was rendered, so the bare string is in the page either way.
-        self.assertNotIn('id="update-restart"', html)
+        self.assertIn("display: none", self._button(html))
 
-    def test_the_button_appears_with_the_staged_message(self):
+    def test_the_button_shows_for_a_staged_update_and_says_so_to_the_script(self):
         update.request(self.base, "v1.2.3", by="root")
 
         with mock.patch.dict(os.environ, {restart.RELAUNCH_ENV: RELAUNCH}):
             html = self._html()
 
-        self.assertIn('id="update-restart"', html)
-        self.assertIn("Restart MutInt", html)
-        # Beside the message it finishes, not somewhere else on the page.
-        self.assertIn("v1.2.3 is staged", html)
-        self.assertLess(html.index("is staged"), html.index('id="update-restart"'))
+        button = self._button(html)
+        self.assertNotIn("display: none", button)
+        # Already staged, so the click must restart without staging again.
+        self.assertIn('data-staged="1"', button)
+        self.assertIn("Restart to install updates", html)
+        self.assertIn("Restart MutInt to install it", html)
 
     def test_no_button_when_nothing_can_start_it_again(self):
         """Staged, but launched from a terminal: the page says to quit and start it again,
