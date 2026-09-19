@@ -446,6 +446,45 @@ table.dataTable thead .sorting_desc:after {
     margin-left: 0;
 }
 
+/* A list page's table hands its search box to the row (mutintListToolbar), and it sits at
+   the far end of it. DataTables' own rules for the box are all scoped to
+   `div.dataTables_wrapper`, so a box moved out of the wrapper loses every one of them: the
+   input falls back to `.form-control`'s `display: block; width: 100%` and drops under its
+   label, 10px below the buttons' center line. They are restated here for that reason. The
+   label's bottom margin goes as well: it is for a box on a line of its own. */
+.btn-row > .dataTables_filter {
+    margin-left: auto;
+}
+
+.btn-row > .dataTables_filter label,
+.btn-row > .dataTables_length label {
+    margin-bottom: 0;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+.btn-row > .dataTables_filter input {
+    display: inline-block;
+    width: auto;
+    margin-left: 0.5em;
+}
+
+.btn-row > .dataTables_length select {
+    display: inline-block;
+    width: 75px;
+}
+
+/* The checkbox heading a Select column stands over the ones under it, which the Select
+   extension draws at the cell's center. */
+.table > thead > tr > th.select-checkbox {
+    text-align: center;
+}
+
+th.select-checkbox > input.mutint-select-all {
+    margin: 0;
+    vertical-align: middle;
+}
+
 .centered {
     text-align: center;
 }

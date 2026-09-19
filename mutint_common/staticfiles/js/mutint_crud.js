@@ -157,6 +157,51 @@
             + "and their mutations stay. Type CLEAR to confirm.", "Clear", "CLEAR");
     };
 
+    /* The list pages' one row of controls, and the checkbox that heads their first column.
+     *
+     * DataTables draws its search box and its Buttons in a band of its own above the table,
+     * which on a page that already has a row of "+ New" and Delete made two rows of controls
+     * for one table. This moves both into the page's own .btn-row -- Buttons beside the
+     * page's, the search box pushed to the far end -- so the band it leaves is empty. A
+     * paged table's length menu goes with them, or it would be left holding that band open
+     * by itself. With no toolbarId nothing moves and only the checkbox is wired, for a table
+     * that is one column of a wider page and has no row of its own to move into.
+     *
+     * The header checkbox replaces a Select menu holding Select all and Deselect all, and is
+     * the access table's idiom on a DataTable. It is found by class and handled by
+     * delegation from the container, never by id: with scrollY DataTables moves the real
+     * header into a table of its own and leaves a hidden copy behind, so there are two of
+     * them, and a handler bound before the split lands on whichever one the page cannot see.
+     * It selects the rows the search box has left, which is what "all" means to somebody
+     * looking at a narrowed table with a Delete button beside it.
+     */
+    window.mutintListToolbar = function (table, toolbarId) {
+        var container = $(table.table().container());
+        var toolbar = toolbarId ? $("#" + toolbarId) : $();
+        if (toolbar.length) {
+            toolbar.append(container.find(".dt-buttons"));
+            toolbar.append(container.find(".dataTables_length"));
+            toolbar.append(container.find(".dataTables_filter"));
+        }
+
+        function sync() {
+            var shown = table.rows({search: "applied"}).count();
+            var picked = table.rows({search: "applied", selected: true}).count();
+            container.find("input.mutint-select-all").prop({
+                checked: shown > 0 && picked === shown,
+                indeterminate: picked > 0 && picked < shown
+            });
+        }
+
+        container.on("change", "input.mutint-select-all", function () {
+            var rows = table.rows({search: "applied"});
+            if (this.checked) { rows.select(); } else { rows.deselect(); }
+            sync();
+        });
+        table.on("select deselect search.dt", sync);
+        sync();
+    };
+
     /* "Delete selected" over a DataTable of rows that each link to what they are.
      *
      * opts: {tableId, path, noun} -- e.g. {tableId: "exp_table",

@@ -121,14 +121,17 @@
            exactly one. An experiment that is *locked* still refuses from the endpoint and
            is named in #del-error, because the lock lives on the experiment and only the
            experiment can answer for it. {% endcomment %}
-        {% if can_edit %}
-        <div class="btn-row" style="margin-bottom: 1em;">
+        {% comment %} The row renders for a reader too: mutintListToolbar moves the
+           table's Export menu and search box into it, and neither needs write access. {% endcomment %}
+        <div class="btn-row" id="list-toolbar" style="margin-bottom: 1em;">
+            {% if can_edit %}
             <a class="btn btn-primary"
                href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
             <button type="button" class="btn btn-danger" id="delete-selected">
                 &minus; Delete selected</button>
-            <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
+            {% endif %}
         </div>
+        {% if can_edit %}
         <div style="margin-bottom: 1em;">
             <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
         </div>
@@ -137,7 +140,8 @@
         <table id="exp_table" class="table table-striped table-bordered" style="width: 100%;">
             <thead>
             <tr>
-                <th></th>
+                <th width="30"><input type="checkbox" class="mutint-select-all"
+                           title="Select every row showing"></th>
                 <th>Exp ID</th>
                 <th>Exp Name</th>
                 <th>Project</th>

@@ -67,7 +67,8 @@
             <table class="table breseq-table" id="me-table">
                 <thead>
                     <tr>
-                        <th></th>
+                        <th><input type="checkbox" class="mutint-select-all"
+                                   title="Select every row showing"></th>
                         <th class="breseq-evidence">Type</th>
                         <th class="breseq-seq-id">Reference</th>
                         <th class="breseq-position">Position</th>
@@ -124,10 +125,11 @@
             order: [[2, "asc"], [3, "asc"]],
             columnDefs: [{ targets: 0, orderable: false, className: "select-checkbox" }],
             select: { style: "multi", selector: "td:first-child" },
-            dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
-            buttons: [{ extend: "collection", text: "Select",
-                        buttons: ["selectAll", "selectNone"] }]
+            dom: 'l<"pull-right"f>rt<<"pull-left"i><"pull-right"p>>'
         });
+        // No toolbar id: this table is one column of the page, and the button row above it
+        // spans both, so the search box stays over the table it searches.
+        window.mutintListToolbar(table);
 
         document.getElementById("me-apply").addEventListener("click", function () {
             var mutationIds = [];

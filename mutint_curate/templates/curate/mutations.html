@@ -73,11 +73,10 @@
         </div>
 
         {% if is_delete_mode %}
-        <div class="row" style="margin-bottom: 10px;">
+        <div class="btn-row" id="me-toolbar" style="margin-bottom: 10px;">
             <button type="button" class="btn btn-danger" id="me-apply">&minus; Delete selected</button>
-            <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
-            <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
         </div>
+        <div id="me-error" style="color: #a00; margin-bottom: 0.5em;"></div>
         {% endif %}
 
         <div class="row">
@@ -102,7 +101,12 @@
                            control in the last column is one nobody can reach without
                            scrolling sideways. It also means one column scheme, so the two
                            tabs sort and index identically. {% endcomment %}
+                        {% if is_delete_mode %}
+                        <th><input type="checkbox" class="mutint-select-all"
+                                   title="Select every row showing"></th>
+                        {% else %}
                         <th></th>
+                        {% endif %}
                         <th class="breseq-evidence">Type</th>
                         <th class="breseq-seq-id">Reference</th>
                         <th class="breseq-position">Position</th>
@@ -192,10 +196,9 @@
             order: [[2, "asc"], [3, "asc"]],
             columnDefs: [{ targets: 0, orderable: false, className: "select-checkbox" }],
             select: { style: "multi", selector: "td:first-child" },
-            dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
-            buttons: [{ extend: "collection", text: "Select",
-                        buttons: ["selectAll", "selectNone"] }]
+            dom: 'lfrt<<"pull-left"i><"pull-right"p>>'
         });
+        window.mutintListToolbar(table, "me-toolbar");
 
         document.getElementById("me-apply").addEventListener("click", function () {
             var ids = [];

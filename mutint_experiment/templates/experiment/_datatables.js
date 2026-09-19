@@ -5,7 +5,7 @@
             scrollX: true,
             autoWidth: true,
             paging: false,
-            dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
+            dom: 'Bfrt<<"pull-left"i><"pull-right"p>>',
             deferRender: true,
             columnDefs: [
                 {
@@ -24,11 +24,6 @@
             },
             order: [[1, 'asc']],
             buttons: [
-                {
-                    extend: 'collection',
-                    text: 'Select',
-                    buttons: ['selectAll', 'selectNone']
-                },
                 {
                     extend: 'collection',
                     text: 'Export',
@@ -57,6 +52,7 @@
                 },
             ],
         });
+        window.mutintListToolbar(table, 'list-toolbar');
 
     });
 

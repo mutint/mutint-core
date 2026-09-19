@@ -3393,6 +3393,23 @@ Creation and deletion are nested under the objects they act on:
   the whole gather-confirm-post-reload routine. A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
+- **Each list page has one row of controls, and `mutintListToolbar(table, toolbarId)` is what
+  makes it one.** It moves the DataTable's search box and its Buttons (the experiment
+  tables' **Export** menu) into the page's own `.btn-row` beside "+ New" and Delete, and
+  wires the `input.mutint-select-all` checkbox in the first column's header: checked selects
+  every row the search box has left, and it goes indeterminate on a partial selection. Two
+  things about it were found by measuring. The checkbox is found by class and handled by
+  delegation, because under `scrollY` DataTables splits the header into a table of its own
+  and leaves a hidden copy, so there are two of them. And **every DataTables rule for the
+  search box is scoped to `div.dataTables_wrapper`**, so a box moved out of the wrapper
+  falls back to `.form-control`'s block layout and sits 10px below the buttons;
+  `common.css` restates them for `.btn-row > .dataTables_filter`. The row renders for a
+  reader who can create nothing, since searching and exporting need no write access.
+  The mutation editor's **Delete** tab uses it too, and being paged it hands over its length
+  menu as well, whose rules are wrapper-scoped the same way; the checkbox reaches every
+  page, not only the one drawn. The **Copy** tab calls it with no toolbar id and gets the
+  checkbox alone: its table is one column of the page under a button row spanning both, so
+  its search box stays over the table it searches.
 - **Which confirm dialog a control gets is decided by whether the person can undo it
   themselves.** `mutintConfirm(title, text, verb)` is a plain accept and is what a removal
   they can put back from the page gets: revoking a grant, removing a group member, and the

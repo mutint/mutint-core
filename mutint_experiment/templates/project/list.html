@@ -9,20 +9,17 @@
      $(document).ready(function() {
             // Select and Buttons come from base.html's combined bundle (se-1.2.2, b-1.3.1),
             // which loads at the end of <body> -- hence the ready() wrapper.
-            $('#project_table').DataTable({
+            var table = $('#project_table').DataTable({
                 scrollY: '70vh',
                 paging: false,
-                dom: 'l<<"pull-left"B><"pull-right"f>r>t<<"pull-left"i><"pull-right"p>>',
+                dom: 'frt<<"pull-left"i><"pull-right"p>>',
                 columnDefs: [
                     { targets: 0, orderable: false, className: 'select-checkbox' }
                 ],
                 select: { style: 'multi', selector: 'td:first-child' },
-                order: [[1, 'asc']],
-                buttons: [
-                    { extend: 'collection', text: 'Select',
-                      buttons: ['selectAll', 'selectNone'] }
-                ]
+                order: [[1, 'asc']]
             });
+            window.mutintListToolbar(table, 'list-toolbar');
         } );
 </script>
 
@@ -34,13 +31,16 @@
        authenticated user and project_delete requires can_edit_project, which no
        anonymous user satisfies. Offering them was an invitation to a dead end.
        The server checks stand on their own; this only stops advertising them. {% endcomment %}
-    {% if user.is_authenticated %}
-    <div class="btn-row" style="margin-bottom: 1em;">
+    {% comment %} The row itself renders for everyone: mutintListToolbar moves the table's
+       search box into it, and a signed-out reader still searches. {% endcomment %}
+    <div class="btn-row" id="list-toolbar" style="margin-bottom: 1em;">
+        {% if user.is_authenticated %}
         <a class="btn btn-primary" href="/project/new/">+ New project</a>
         <button type="button" class="btn btn-danger" id="delete-selected">
             &minus; Delete selected</button>
-        <small style="color: #666; margin-left: 0.5em;">Select rows with the checkbox column.</small>
+        {% endif %}
     </div>
+    {% if user.is_authenticated %}
     <div id="del-error" style="color: #a00; margin-top: 0.5em; margin-bottom: 1em;"></div>
     {% endif %}
 
@@ -49,7 +49,8 @@
     <table id="project_table" class="table table-bordered" style="width: 100%;">
         <thead>
             <tr>
-                <th width="30"></th>
+                <th width="30"><input type="checkbox" class="mutint-select-all"
+                           title="Select every row showing"></th>
                 <th>Name</th>
                 <th>Publications</th>
                 <th>Date</th>
