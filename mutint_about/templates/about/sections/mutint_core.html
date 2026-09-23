@@ -1,25 +1,14 @@
 {% comment %} mutint-core's own About section: what the platform is, not who is running
    it. A deployment replaces this by writing a file at the same path, and says who it is
    in about/deployment.html rather than by overriding the whole page. {% endcomment %}
-<p>This site runs <b>mutint-core</b> {{ mutint_version }}, a platform for storing and
-    exploring mutations from adaptive laboratory evolution (ALE) experiments. It
-    imports resequencing output, annotates mutations against an experiment's
-    reference, and presents them as searchable, filterable, exportable tables
-    across experiments and samples.</p>
+<p>Core database and webserver functionality provided by a fork of
+    <a href="https://github.com/Aletechdev/aledb">ALEdb</a>.</p>
 
-<h4>Mutation data generation</h4>
-<p>Mutation calls are imported from the <a href="https://github.com/barricklab/breseq">breseq</a>
-    resequencing pipeline, and re-annotated internally against the reference stored
-    for each experiment.</p>
-<p>Deatherage, D.E., Barrick, J.E. (2014) Identification of mutations in
-    laboratory-evolved microbes from next-generation sequencing data using BreSeq.
-    Methods Mol. Biol.</p>
+<p><b>Citation:</b> Phaneuf PV, Gosting D, Palsson BO, Feist AM (2019) ALEdb 1.0: a database of mutations
+    from adaptive laboratory evolution experimentation. <i>Nucleic Acids Res.</i> <b>47</b>:D1164–D1171.
+    <a href="https://doi.org/10.1093/nar/gky983">https://doi.org/10.1093/nar/gky983</a></p>
 
-{% comment %} The needle plot's citation used to sit here, under a "3rd party packages used"
-   heading listing one package. It moved to mutint-needle with the plot itself: core neither
-   draws it nor vendors it any more, and a component's About section is the place its own
-   dependencies are credited -- which is also what keeps the credit from appearing on a
-   deployment that does not install the plot. {% endcomment %}
+<p><b>Website:</b> <a href="https://aledb.org">ALEdb</a></p>
 
 <h4>License</h4>
 <p>mutint-core is released under the MIT License. Permission is hereby granted, free
