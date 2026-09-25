@@ -365,8 +365,10 @@ class InstitutionalFooterTestCase(TestCase):
         for page in self.PAGES:
             with self.subTest(page=page):
                 content = self.client.get(page).content.decode()
+                # Not a surname: the About page cites the ALEdb paper, whose authors
+                # include one, and that credit is the platform's own attribution.
                 for marker in ("sbrg-logo", "ucsd-logo", "cfb-logo",
-                               "hosted and maintained", "Feist"):
+                               "hosted and maintained"):
                     self.assertNotIn(marker, content)
 
     def test_a_deployment_footer_is_picked_up(self):
