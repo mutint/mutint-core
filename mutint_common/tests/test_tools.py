@@ -69,3 +69,33 @@ class ToolPathTestCase(TestCase):
         with override_settings(MUTINT_TOOLS_DIR=self.tools_dir):
             self.assertTrue(tools.have("bedtools"))
             self.assertFalse(tools.have("bedtools", "no-such-tool-anywhere"))
+
+
+class ToolEnvironmentTestCase(TestCase):
+    """For a tool that runs other tools by bare name -- including a JVM wrapper's `java`."""
+
+    def setUp(self):
+        self.tools_dir = tempfile.mkdtemp()
+
+    def test_the_tools_bin_goes_first_on_path(self):
+        with override_settings(MUTINT_TOOLS_DIR=self.tools_dir):
+            env = tools.tool_environment({"PATH": "/usr/bin"})
+        self.assertEqual([os.path.join(self.tools_dir, "bin"), "/usr/bin"],
+                         env["PATH"].split(os.pathsep))
+        self.assertNotIn("JAVA_HOME", env)
+
+    def test_a_conda_jvm_goes_on_path_and_sets_java_home(self):
+        """bioconda's openjdk puts nothing in bin/, and nothing here runs its activation
+        script, so without this a Java tool runs on whatever java the host has."""
+        jvm = os.path.join(self.tools_dir, "lib", "jvm")
+        os.makedirs(os.path.join(jvm, "bin"))
+        with override_settings(MUTINT_TOOLS_DIR=self.tools_dir):
+            env = tools.tool_environment({"PATH": "/usr/bin", "JAVA_HOME": "/host/java"})
+        self.assertEqual([os.path.join(self.tools_dir, "bin"), os.path.join(jvm, "bin"),
+                          "/usr/bin"], env["PATH"].split(os.pathsep))
+        self.assertEqual(jvm, env["JAVA_HOME"])
+
+    def test_no_tools_directory_leaves_the_environment_alone(self):
+        with override_settings(MUTINT_TOOLS_DIR=None):
+            env = tools.tool_environment({"PATH": "/usr/bin"})
+        self.assertEqual({"PATH": "/usr/bin"}, env)

@@ -60,3 +60,39 @@ def require(name):
 def have(*names):
     """Whether every one of `names` can be found -- for deciding to skip optional work."""
     return all(tool_path(name) for name in names)
+
+
+#: Where bioconda's `openjdk` puts the JVM inside a prefix. Nothing of it is in `bin/`.
+JVM_DIR = os.path.join("lib", "jvm")
+
+
+def tool_environment(env=None):
+    """`env` with the managed tools directory -- and its JVM, if it has one -- first on PATH.
+
+    For a tool that runs other tools by bare name: breseq's bowtie2, ISEScan's hmmer, a Java
+    wrapper's `java`. Prepending `<tools>/bin` is the whole of it for most packages.
+
+    **Not for a JVM.** bioconda's `openjdk` puts nothing in the prefix's `bin/`: the JVM is at
+    `lib/jvm/bin/java` and conda exports `JAVA_HOME` from an activation script, which
+    `mutint_jobs.processes.run_tool` does not run. So a Java tool -- bbmap's `sendsketch.sh`,
+    FastQC -- would otherwise run on whatever `java` the *host* has, which on a developer Mac
+    is `/usr/bin/java` and on a clean machine is nothing. The JVM's `bin` goes on PATH ahead of
+    the host's and `JAVA_HOME` is set to what `openjdk_activate.sh` would set, gated on the
+    directory existing so a prefix without a JVM leaves the host's own alone.
+
+    mutint-isescan, mutint-breseq and mutint-refsniff each carry a copy of this from before it
+    was here; they can call this one instead.
+    """
+    env = dict(os.environ if env is None else env)
+    directory = tools_dir()
+    if not directory:
+        return env
+    entries = [os.path.join(directory, "bin")]
+    jvm = os.path.join(directory, JVM_DIR)
+    if os.path.isdir(os.path.join(jvm, "bin")):
+        entries.append(os.path.join(jvm, "bin"))
+        env["JAVA_HOME"] = jvm
+        env["JAVA_LD_LIBRARY_PATH"] = os.path.join(jvm, "lib", "server")
+    existing = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join(entries + ([existing] if existing else []))
+    return env

@@ -42,3 +42,14 @@ def by_group(entries):
     for group in ordered:
         group["paired"] = len(group["entries"]) > 1
     return ordered
+
+
+@register.simple_tag(takes_context=True)
+def sample_links(context, sample):
+    """What installed components link to about this sample -- `sample_link_registry`.
+
+    A tag rather than a view's context key so every page including the box gets them, and
+    taking the request from the context because a provider may want to ask who is reading.
+    """
+    from mutint_common.sample_link_registry import sample_links as registered
+    return registered(sample, context.get("request"))

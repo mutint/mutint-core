@@ -94,6 +94,7 @@ nav:
           - Showing filtered data: plugin/filtering.md
           - Taking a file upload: plugin/staging.md
           - Work that takes minutes, or hours: plugin/background-jobs.md
+          - Steps on a sample's reads: plugin/read-steps.md
           - Templates and static files: plugin/templates.md
           - Models and derived data: plugin/derived-data.md
           - Testing: plugin/testing.md
@@ -110,6 +111,8 @@ nav:
           - panel_registry: reference/panel_registry.md
           - annotator_registry: reference/annotator_registry.md
           - storage_registry: reference/storage_registry.md
+          - read_step_registry: reference/read_step_registry.md
+          - sample_link_registry: reference/sample_link_registry.md
       - Assembling a project: assembling/index.md
       - Cutting a release: contributing/releasing.md
       - Contributing to these docs: contributing/docs.md

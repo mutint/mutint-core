@@ -31,4 +31,12 @@
             {% endfor %}
         </div>
     {% endif %}{% endwith %}
+    {% comment %} What installed components keep about this sample, each a link to it: a
+       FastQC report on its reads, say. Drawn from `sample_link_registry`, so a deployment
+       without such a component shows no line at all. {% endcomment %}
+    {% sample_links sample as links %}{% if links %}
+        <div class="sample-inputs-links">
+            {% for link in links %}<a href="{{ link.url }}" target="_blank" rel="noopener"{% if link.title %} title="{{ link.title }}"{% endif %}>{{ link.label }} &raquo;</a>{% endfor %}
+        </div>
+    {% endif %}
 </div>

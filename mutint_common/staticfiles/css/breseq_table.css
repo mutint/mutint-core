@@ -228,6 +228,14 @@
     margin-right: 0.4em;
 }
 
+.sample-inputs-links {
+    margin-top: 0.3em;
+}
+
+.sample-inputs-links a + a {
+    margin-left: 1em;
+}
+
 .sample-inputs-paired {
     font-size: 85%;
     margin-left: 0.4em;

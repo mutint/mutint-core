@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2873 run, 0 failures** standalone; **3464** assembled, measured with `PYTHONPATH`
+**Baseline: 2903 run, 0 failures** standalone; **3542** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3380,9 +3380,9 @@ All apps use the `mutint_*` namespace. Key apps:
 - **`mutint_update/`** — `/update/`: what this installation is made of, and moving it onto
   a newer version. Superusers only, reached from the account block. It **stages** and the
   entry script applies -- see **Updating in place** in the suite `CLAUDE.md`. No models.
-- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the eleven
+- **`mutint_common/`** — Shared utilities, middleware (`LoginRequiredMiddleware`), the thirteen
   registries (context, import, import_tab, plugin, nav, about, example, panel, annotator,
-  storage and rebuild), and global static files. Three models: `DerivedDataState`,
+  storage, rebuild, read_step and sample_link), and global static files. Three models: `DerivedDataState`,
   `UserPreference` and `StorageUsage`.
 - **`config/`** — Django project config: settings, root URLs, the WSGI entry point.
 
@@ -3486,10 +3486,10 @@ user-facing lists exclude deleted rows explicitly via `mutint_experiment.models.
 
 ### Import types are pluggable
 
-`mutint_common/import_registry.py` is one of eleven registries in `mutint_common/` -- alongside
+`mutint_common/import_registry.py` is one of thirteen registries in `mutint_common/` -- alongside
 `import_tab_registry`, `plugin_registry`, `nav_registry`, `about_registry`, `context_registry`,
-`example_registry`, `panel_registry`, `annotator_registry`, `storage_registry` and
-`rebuild_registry`. An app registers what it can
+`example_registry`, `panel_registry`, `annotator_registry`, `storage_registry`,
+`rebuild_registry`, `read_step_registry` and `sample_link_registry`. An app registers what it can
 ingest from `AppConfig.ready()` and it appears among the Import data page's tabs and in
 auto-detect, with no edit to core:
 
@@ -3877,6 +3877,54 @@ came back whole on reload and joined the vote. The GFF3 loader and renderer and 
 loader carry it for `mobile_element` now, never for `repeat_region` (`NEVER_PSEUDO_TYPES`).
 A stored GFF3 whose GenBank had `/pseudo` on a `mobile_element` renders differently and its
 `gff3_sha256` changes; that column only decides "same annotation, skip".
+
+### Steps on a sample's reads, and links from its page
+
+Two registries exist for a component that works on the reads a sample is made from:
+`mutint_common/read_step_registry.py` (the twelfth) and `sample_link_registry.py` (the
+thirteenth). mutint-breseq is the producer, its own fastp trimming is the first step, and
+mutint-fastqc's FastQC report is the second. `docs/plugin/read-steps.md` is the guide.
+
+**Core owns the seam and runs nothing.** Core has no reads. A **producer** stores the step
+names somebody ticked, checks them at launch with `clean_selection(check_available=True)`, and
+in its task calls `run_read_steps(selected, ReadStepContext(...))`. Then it calls either
+`attach_read_steps` or `discard_read_steps`. The loop, the order and the endings live here
+rather than in the producer, so a second producer, such as another variant caller, gets them by
+calling the same functions instead of copying mutint-breseq's task.
+
+Four things about it are load-bearing:
+
+- **Two stages, and the stage decides order, not the app.** Every `inspect` step, which only
+  looks and whose return value is ignored, runs before every `transform` step, which may hand
+  back a replacement read list. A QC report therefore describes what was uploaded rather than
+  what trimming left, whichever app loads first. This is the third registry that takes an
+  order, after `import_registry` and `rebuild_registry`, for their reason: what a step sees
+  depends on what ran before it.
+- **The sample does not exist while the steps run.** A step keys what it keeps by
+  `ctx.producer`, a string naming the producer's run, and is later told either
+  `attach(producer, sample)` or `discard(producer)`. Both are isolated per step and logged,
+  never raised: by then the producer's run has already succeeded or failed, and a consumer's
+  bookkeeping must not change which.
+- **A step's failure is the producer's only when the step says so.** `ReadStepFailed` fails the
+  run; trimming raises it. An advisory step catches its own trouble and calls `ctx.note`.
+  `Cancelled`, `TimeoutExpired` and `OSError` propagate, so a producer maps them the way it maps
+  its own tool's. `run_read_steps` polls the cancellation flag between steps and after the
+  last one, raising the same `Cancelled` as `run_tool`.
+- **`ctx.run_tool` is `run_tool` bound to the run**, with its log, deadline and flag, so a
+  step's tool is cancellable and its output appears in the job's log while it runs, for free.
+
+**`sample_link_registry` is links, not panels.** A callable `(sample, request) -> [(label,
+url, title)]` is drawn by `{% sample_links sample %}` in `sample/_inputs.html`, which is the
+box at the top of the Mutations page and the sample edit page. A sample's page is its
+mutations, and a component adds a way to something else. A provider that raises is dropped
+with a logged warning, the posture `panel_registry` takes. The breseq report's own link stays
+hardcoded, because core keeps that report.
+
+**`tools.tool_environment()` is in core now** because FastQC needed what mutint-refsniff's
+copy already did. It puts `<tools>/bin` first on PATH and, where bioconda's `openjdk` put a JVM
+at `lib/jvm/bin`, adds that directory and sets `JAVA_HOME`. A Java tool otherwise runs on the
+host's java: the developer's Mac has one, and a clean machine has none. mutint-breseq,
+mutint-isescan and mutint-refsniff still carry their own copies, and can switch to this one.
 
 ### Staging a drop that is not an import
 

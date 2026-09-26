@@ -1,6 +1,6 @@
 # The registries
 
-There are eleven, all in `mutint_common`. Each is a module holding a list, a `register_*`
+There are thirteen, all in `mutint_common`. Each is a module holding a list, a `register_*`
 function an app calls from `AppConfig.ready()`, and a `get_*` function core calls when it
 renders. That is the whole mechanism — there is no plugin base class, no manifest and no
 entry-point scanning.
@@ -24,6 +24,8 @@ holds core's five import types. A plugin is just another caller.
 | [`panel_registry`](../reference/panel_registry.md) | a template and a context callable | draws your panel on the experiment Overview |
 | [`annotator_registry`](../reference/annotator_registry.md) | a panel of options and a callable | draws the panel on the reference tabs of the Import data page, and runs the callable on the reference after it lands |
 | [`storage_registry`](../reference/storage_registry.md) | a label and a measure, optionally a clear | counts your files on the dashboard and the Overview, and offers a Clear button |
+| [`read_step_registry`](../reference/read_step_registry.md) | a step on a sample's reads, and its stage | offers it as a checkbox wherever reads are analysed, and a producer runs it before predicting mutations |
+| [`sample_link_registry`](../reference/sample_link_registry.md) | a callable returning links | draws them in the box at the top of a sample's page |
 
 `context_registry` and `panel_registry` are close enough together to be worth telling apart.
 The first hands the experiment views extra *context*, which some template must already be
@@ -34,8 +36,12 @@ registers a panel and nothing else at all: no URL, no nav entry, no model.
 
 ## Direction
 
-All but one run one way: an app contributes something and core consumes it. Registration
+All but two run one way: an app contributes something and core consumes it. Registration
 is additive and core never calls back.
+
+`read_step_registry` is consumed by *plugins* rather than by core: core has no reads, so it
+owns the seam, and a producer such as mutint-breseq calls `run_read_steps` and later
+`attach_read_steps` or `discard_read_steps`. See [Steps on a sample's reads](read-steps.md).
 
 `rebuild_registry` is the exception and the only one that runs **both** ways.
 (`panel_registry` looks like a second exception, because core calls your context callable while
@@ -52,7 +58,7 @@ knowing what it is. See [Models and derived data](derived-data.md).
 
 ## Ordering
 
-Two of the seven have explicit ordering, and the distinction is worth internalising because it
+Three have explicit ordering, and the distinction is worth internalising because it
 determines whether you get to ask for a position at all.
 
 - **`import_registry` has `priority`**, because a reference genome must be established before
@@ -60,6 +66,9 @@ determines whether you get to ask for a position at all.
 - **`rebuild_registry` has `priority`**, because the per-experiment filter defaults must exist
   before anything that counts mutations through them, and installation-wide totals must be
   counted after the per-experiment tables they aggregate.
+- **`read_step_registry` has a `stage`**: every `inspect` step sees the reads before any
+  `transform` step rewrites them, so a QC report describes what was uploaded rather than what
+  trimming left. Within a stage it is `INSTALLED_APPS` order.
 - **Everything else is `INSTALLED_APPS` order**, and deliberately has no `order` parameter. A
   nav entry's position is cosmetic, and so is a panel's; to move one, move its app. Plugins load after every core
   app, so a plugin's nav entry lands at the end of its section, and plugins order among
