@@ -80,8 +80,8 @@ def tool_environment(env=None):
     the host's and `JAVA_HOME` is set to what `openjdk_activate.sh` would set, gated on the
     directory existing so a prefix without a JVM leaves the host's own alone.
 
-    mutint-isescan, mutint-breseq and mutint-refsniff each carry a copy of this from before it
-    was here; they can call this one instead.
+    Every component runs its tools under this one, so a Java tool added anywhere gets the JVM
+    without its author having to know about the trap.
     """
     env = dict(os.environ if env is None else env)
     directory = tools_dir()

@@ -94,6 +94,15 @@ class ToolEnvironmentTestCase(TestCase):
         self.assertEqual([os.path.join(self.tools_dir, "bin"), os.path.join(jvm, "bin"),
                           "/usr/bin"], env["PATH"].split(os.pathsep))
         self.assertEqual(jvm, env["JAVA_HOME"])
+        self.assertEqual(os.path.join(jvm, "lib", "server"), env["JAVA_LD_LIBRARY_PATH"])
+
+    def test_without_a_conda_jvm_the_hosts_java_home_is_left_alone(self):
+        """Gated on the directory, so a prefix with no JVM does not point JAVA_HOME at
+        nothing."""
+        with override_settings(MUTINT_TOOLS_DIR=self.tools_dir):
+            env = tools.tool_environment({"PATH": "/usr/bin", "JAVA_HOME": "/host/jdk"})
+        self.assertEqual("/host/jdk", env["JAVA_HOME"])
+        self.assertNotIn("JAVA_LD_LIBRARY_PATH", env)
 
     def test_no_tools_directory_leaves_the_environment_alone(self):
         with override_settings(MUTINT_TOOLS_DIR=None):

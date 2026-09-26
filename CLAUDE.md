@@ -87,7 +87,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2903 run, 0 failures** standalone; **3542** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 2904 run, 0 failures** standalone; **3537** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -3920,11 +3920,12 @@ mutations, and a component adds a way to something else. A provider that raises 
 with a logged warning, the posture `panel_registry` takes. The breseq report's own link stays
 hardcoded, because core keeps that report.
 
-**`tools.tool_environment()` is in core now** because FastQC needed what mutint-refsniff's
-copy already did. It puts `<tools>/bin` first on PATH and, where bioconda's `openjdk` put a JVM
-at `lib/jvm/bin`, adds that directory and sets `JAVA_HOME`. A Java tool otherwise runs on the
-host's java: the developer's Mac has one, and a clean machine has none. mutint-breseq,
-mutint-isescan and mutint-refsniff still carry their own copies, and can switch to this one.
+**`tools.tool_environment()` is the one environment every component runs a tool under** --
+breseq, fastp, ISEScan, sendsketch and FastQC alike. It puts `<tools>/bin` first on PATH and,
+where bioconda's `openjdk` put a JVM at `lib/jvm/bin`, adds that directory and sets
+`JAVA_HOME` and `JAVA_LD_LIBRARY_PATH`. A Java tool otherwise runs on the host's java: the
+developer's Mac has one, and a clean machine has none. One function is what makes that true
+of a Java tool added to any component, rather than of the ones whose author remembered.
 
 ### Staging a drop that is not an import
 
