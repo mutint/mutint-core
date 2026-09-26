@@ -42,6 +42,14 @@ See `docs/assembling/` (built by `./mutint docs`) for the full assembly guide.
 and re-execs under `env/main/bin/python` — no manual `python -m venv` / `activate` needed.
 This mirrors mutint's `./mutint` entry script. `env/` is git-ignored.
 
+**The script is byte-identical to `mutint/mutint` and `aledb/aledb`**, and
+`mutint_common/tests/test_entry_script.py` both runs it (against a scratch project, as a
+subprocess) and asserts the other two copies match wherever the suite is checked out beside
+this repo. Edit here and copy; the test says which copy drifted. On `start` it reads
+`.gitmodules` twice -- at the top, and again after applying a staged update -- because an
+update can add a component whose `tools.txt` and `requirements.txt` the first read cannot
+know about.
+
 **Run all tests**:
 ```bash
 ./mutint test
@@ -87,7 +95,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2904 run, 0 failures** standalone; **3537** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 2907 run, 0 failures** standalone; **3540** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later

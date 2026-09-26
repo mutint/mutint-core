@@ -6,7 +6,8 @@ under an older interpreter, an import of something that is not installed yet, a 
 that silently exceeds what the operating system accepts. Those are what this covers.
 
 The lifecycle lives in a module rather than in the entry script precisely so that it can be
-covered at all -- the script is three byte-identical copies with no tests.
+covered here at all -- the script is three byte-identical copies, and `test_entry_script.py`
+can only run it from outside, as a subprocess.
 """
 
 import ast
