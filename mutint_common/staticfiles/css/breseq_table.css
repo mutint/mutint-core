@@ -303,7 +303,8 @@ table.dataTable.breseq-table thead .sorting_desc:after {
    take their row's background so scrolled content does not show through; the header, which
    is both sticky-top and sticky-left at the corner, sits above both. */
 /* DataTables' own controls, in two rows above the box, outside anything that scrolls: the
-   length menu, the search box and the count; the pager and Export CSV. The length menu is
+   options toggle, the length menu, the search box and the count; the pager and Export CSV.
+   The length menu is
    given the search box's size rather than the theme's 75px, and both the page's 14px type
    rather than Bootstrap's 12px for a small input, which read as two sizes side by side. The
    row gap is the one every wrapping control row has (.btn-row), so a narrow window stacks

@@ -2020,7 +2020,11 @@ mutation reads identically whether one sample or forty stand beside it. There is
 every sample cell already is one (`100%`, `42.0%`, `✓` for a present call with no frequency),
 linked into the genome browser when the sample has reads, tinted when present, blank when absent.
 `present=False` read-support cells are gone; no importer ever wrote `evidence`, so none had ever
-rendered.
+rendered. **The Type cell links into the browser too**, as the per-sample table's does, but a
+row is a mutation rather than one sample's call: `type_url` is the leftmost linked sample
+cell's URL plus `samples=mutant`, so the browser opens with every sample carrying it shown.
+Derived from the cells, so a caller's `browse_url` is honoured, and absent when no carrying
+sample has reads.
 
 **Rows are objects and DataTables reads cells by name** (`data: "gene"`, `data: "samples.3"`),
 which is what makes hiding a column, or adding one later, move no index anywhere. The header is
@@ -2055,9 +2059,12 @@ tag alone, as Search does, gets the three client-side tabs from the tag. The scr
 its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
 `.tab-content`. The DataTables toolbars -- length, search, count, pager, Export CSV -- sit
 under the strip on every tab; the Frequency display menu and the View switch are in the
-Display pane, not in those toolbars. **Hide Options**, first in the pager's row before
-Export CSV, folds the strip and its panes away to give the table the height, and
-remembers it as `mutation_matrix.options` -- shown by default. It hides the `.tab-content`
+Display pane, not in those toolbars. **Show/Hide display and filtering options**, first in
+the length-and-search row, folds the strip and its panes away to give the table the height,
+and remembers it as `mutation_matrix.options` -- shown by default. It is a plain button the
+script prepends to that row rather than a DataTables button, because Buttons render only
+where `B` sits in `dom`, which is the pager's row; one label for both states, with
+`aria-expanded` saying which. It hides the `.tab-content`
 it found and the strip immediately before it, and never the container: on a page with no
 pane box the script's `controls` *is* the container, and hiding that hides the table.
 
@@ -2074,6 +2081,19 @@ every menu and the search box, `search: "applied"`) or every row the server prod
 "export what I am looking at" and "export the experiment" are both one click and neither is
 a page. `page.html` has two blocks, `matrix_form_fields` and `matrix_summary`, so such a page
 can extend it rather than copy it.
+
+**Export SVG draws the table for a figure**, from `js/mutation_matrix_svg.js` -- the fourth
+asset every page rendering the tag links, which `test_templates` enforces. It builds the
+drawing from DataTables' data, not the DOM: `deferRender` leaves only the current page in the
+document, and it exports the rows "Filtered mutations" does, every page of them; and an HTML
+table inside `<foreignObject>` is not vector to anything that edits figures. So it is plain
+`<rect>`/`<text>`/`<line>` in sRGB hex, in the visible columns and samples, the current
+Frequency display and view. The population colors are read back as each header's
+`--sample-color`, so the CSS stays the one palette; the heat map is re-mixed in oklab in
+JS because its CSS `color-mix` means nothing to an SVG reader. Headers come from
+`dt.column(i).header()`, never a fresh `querySelectorAll`: a hidden column's `<th>` leaves the
+document and every later index would be off by one -- found by measuring, when a probe that
+did it dropped the first sample column. A collapsed gene list exports as its summary.
 
 **Ancestral rows are marked, not filtered.** `build_matrix(ancestral_mutation_ids=...)` puts
 `ancestral: true|false` on each row, `rowCallback` toggles `ancestral_table_row` from it on
@@ -2810,7 +2830,10 @@ one being viewed included: it is shown and hidden like the rest, so *Hide all sa
 only the reference and gene tracks. **Clicking a row toggles that one sample** -- it runs
 `mutintSelectList` in `{toggle: true}` mode, matching the Tracks menu beside it, because a
 plain click that showed one sample by unloading every other has no gesture that puts them
-back. The four presets set the whole selection, which is what makes them presets. It has the same shape as the column menu on the Metadata
+back. The four presets set the whole selection, which is what makes them presets. The page
+opens on the clicked sample alone, or with `?samples=mutant` on every sample carrying the
+mutation -- the *Show mutant samples* preset applied at load, through `is_shown`, which is
+what the Compare table's Type cell asks for. It has the same shape as the column menu on the Metadata
 page -- DataTables' colvis collection -- a `ul.dropdown-menu` of `<li><a>` where a showing
 sample is `active` on its `<li>`, so Bootstrap's own `.dropdown-menu > .active > a` paints the
 row and there is nothing to restyle. (DataTables does put `#717171` on the active `<li>`, but

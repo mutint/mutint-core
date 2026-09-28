@@ -114,6 +114,17 @@ class RowsTestCase(_Fixture):
         row = self.row(self.matrix(), 100)
         self.assertNotIn("u", row["samples"][0])
 
+    def test_the_type_links_to_the_browser_showing_every_carrying_sample(self):
+        # At the leftmost sample with reads, asking for all the mutant samples.
+        row = self.row(self.matrix(), 100)
+        self.assertEqual(row["samples"][0]["u"] + "&samples=mutant", row["type_url"])
+        first, second = self.sample_dict.values()
+        first.bam_stored = False
+        row = self.row(self.matrix(), 100)
+        self.assertEqual(row["samples"][1]["u"] + "&samples=mutant", row["type_url"])
+        second.bam_stored = False
+        self.assertIsNone(self.row(self.matrix(), 100)["type_url"])
+
     def test_a_present_call_with_no_frequency_shows_the_mark(self):
         # A hand-added mutation need not claim a frequency.
         mutation = Mutation.objects.create(

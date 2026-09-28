@@ -219,7 +219,8 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     in: the table does not sort.
 
     `browse_url(call)` and `refseq_url(mutation)` -> `(url, title)` may be replaced; the
-    defaults are `browse_url_for` and `refseq_url_for`.
+    defaults are `browse_url_for` and `refseq_url_for`. Each row's `type_url` is derived from
+    its sample cells' browse links -- see `_type_url`.
 
     `sets` is a sequence of `RowSet`s. Each row is annotated with the keys of the sets that
     hold its mutation, and the sets are offered in the Show menu, counted by the rows they
@@ -254,6 +255,8 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
         row["samples"][column_of[call.sample_id]] = _sample_cell(call, browse_url)
 
     rows = sorted(by_mutation.values(), key=lambda r: (r["seq_id_text"], r["position_sort"]))
+    for row in rows:
+        row["type_url"] = _type_url(row["samples"])
     if sets:
         for row in rows:
             row["sets"] = [s.key for s in sets if row["id"] in s.mutation_ids]
@@ -268,6 +271,22 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
                           types=tuple(sorted({row["type"] for row in rows if row["type"]})),
                           seq_ids=tuple(sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]})),
                           sets=sets)
+
+
+def _type_url(cells):
+    """Where a row's Type cell links: the genome browser at the first linked sample cell,
+    asked to show every sample carrying the mutation rather than that one alone.
+
+    The row is a mutation rather than one sample's call, so the browser opens on all of them;
+    it still has to open *at* a sample, and the leftmost with reads is as good as any. Taken
+    from the cell's own URL, so a caller's `browse_url` is honoured. None when no carrying
+    sample has reads -- the per-sample table's Type cell is plain text in that case too.
+    """
+    for cell in cells:
+        if cell and cell.get("u"):
+            url = cell["u"]
+            return url + ("&" if "?" in url else "?") + "samples=mutant"
+    return None
 
 
 def _describe(mutation, refseq_url, width):

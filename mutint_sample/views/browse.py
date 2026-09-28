@@ -168,7 +168,11 @@ def browse_mutation(request):
         # Named here rather than written out in the template, so the click handler and the
         # track config cannot come to disagree about which track is the clickable one.
         "mutations_track_id": MUTATION_TRACK_ID,
-        "samples": _sample_tracks(experiment, mutation, current_id=sample.id),
+        # `?samples=mutant` opens with every sample carrying the mutation shown, which is
+        # what a link naming a mutation rather than one sample's call means -- the Type cell
+        # of the cross-sample table. Anything else opens on the clicked sample alone.
+        "samples": _sample_tracks(experiment, mutation, current_id=sample.id,
+                                  show_mutant=request.GET.get("samples") == "mutant"),
     })
 
     template = loader.get_template("browse/browse.html")
@@ -309,11 +313,13 @@ def _sample_track(sample):
     }
 
 
-def _sample_tracks(experiment, mutation, current_id):
+def _sample_tracks(experiment, mutation, current_id, show_mutant=False):
     """Every sample in the experiment with an alignment, for the sample menu.
 
-    The sample being viewed is in the list like any other, marked `is_current` only so the
-    template can check its box: it is shown and hidden by the same control as the rest.
+    The sample being viewed is in the list like any other, marked `is_current`: it is shown
+    and hidden by the same control as the rest. `is_shown` is what the template checks the
+    box by, and so what loads first -- the current sample, plus with `show_mutant` every
+    sample carrying the mutation, the "Show mutant samples" preset applied at load.
 
     Ordered by `get_ordered_sample_queryset` rather than by a query of this view's own, so the
     menu reads in the same A/F/I/R order as the mutation table's columns and the Samples
@@ -322,7 +328,8 @@ def _sample_tracks(experiment, mutation, current_id):
     called = _samples_calling(mutation)
     return [dict(_sample_track(sample),
                  has_mutation=sample.id in called,
-                 is_current=sample.id == current_id)
+                 is_current=sample.id == current_id,
+                 is_shown=sample.id == current_id or (show_mutant and sample.id in called))
             # `include_ancestor=True`: the browser inspects evidence rather than analyzing
             # it, and the ancestor's own evidence link lands here. Hiding its track would
             # leave `is_current` matching nothing on the very sample that was clicked.

@@ -11,6 +11,7 @@
     <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
     <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
     <script src="{% static 'js/mutation_matrix.js' %}?v={{ asset_version }}"></script>
+    <script src="{% static 'js/mutation_matrix_svg.js' %}?v={{ asset_version }}"></script>
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 {% block content %}

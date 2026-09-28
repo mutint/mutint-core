@@ -69,7 +69,7 @@
                                     data-coverage-url="{{ sample.coverageURL|default_if_none:'' }}"
                                     data-mutant="{% if sample.has_mutation %}1{% else %}0{% endif %}"
                                     data-order="{{ forloop.counter0 }}"
-                                    {% if sample.is_current %}class="active"{% endif %}>
+                                    {% if sample.is_shown %}class="active"{% endif %}>
                                     <a href="#"><span class="mut-flag">{% if sample.has_mutation %}*{% endif %}</span><span class="sample-name">{{ sample.name }}</span></a>
                                 </li>
                             {% endfor %}

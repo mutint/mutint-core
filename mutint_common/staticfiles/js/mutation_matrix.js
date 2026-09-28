@@ -26,8 +26,9 @@
  *     through `[data-mutation-matrix-controls]` because the page may own the strip; the
  *     DataTables toolbars -- length, search, count, pager, Export CSV -- stay under the strip
  *     on every tab;
- *   - Hide Options / Show Options, first in the pager's row, folds the strip and its panes
- *     away and remembers that it did (`mutation_matrix.options`); shown unless told otherwise;
+ *   - "Show/Hide display and filtering options", first in the length-and-search row, folds
+ *     the strip and its panes away and remembers that it did (`mutation_matrix.options`);
+ *     shown unless told otherwise;
  *   - the table lives in a scroll box as wide as itself and no wider than the window: the
  *     header sticks to its top and the descriptive columns to its left, each pinned column's
  *     `left` being the sum of the widths before it, recomputed after every draw and whenever
@@ -119,7 +120,7 @@
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
-        // The strip and its panes, folded away by Hide Options. `controls` is the container
+        // The strip and its panes, folded away by the options toggle. `controls` is the container
         // itself when no pane box was found, and hiding that would hide the table.
         var optionPanes = controls !== container ? controls : container.querySelector(".tab-content");
         var optionStrip = optionPanes && optionPanes.previousElementSibling &&
@@ -173,6 +174,18 @@
                 visible: !hiddenColumns[key],
                 render: renderHtml
             };
+            // The Type cell links into the genome browser with every sample carrying the
+            // mutation shown -- the per-sample table's Type link, for a row that is a mutation.
+            if (key === "type") {
+                column.render = function (data, type, row) {
+                    if (type !== "display" || !row.type_url) { return renderHtml(data); }
+                    var a = document.createElement("a");
+                    a.href = row.type_url;
+                    a.title = "Show the read alignments of every sample carrying this mutation";
+                    a.textContent = data;
+                    return a.outerHTML;
+                };
+            }
             if (key === "seq_id") {
                 column.render = function (data, type, row) {
                     if (type !== "display") { return renderHtml(data); }
@@ -241,8 +254,9 @@
             // The server's order, and no sort handles on the headers: a click on a sample's
             // header follows its link instead.
             ordering: false,
-            // Two rows of controls above the table -- length, search and the count; then the
-            // pager and Export CSV -- and the table alone in the box that scrolls. The box
+            // Two rows of controls above the table -- the options toggle (prepended below),
+            // length, search and the count; then the pager, Export CSV and Export SVG -- and the table
+            // alone in the box that scrolls. The box
             // itself is DataTables' doing, so that it wraps only the table.
             dom: '<"mutation-matrix-toolbar"lfi><"mutation-matrix-toolbar"pB>r<"mutation-matrix-scroll"t>',
             // Export is a menu of two: the rows showing -- after the Show menu, the hidden
@@ -250,21 +264,7 @@
             // -- or every row the server produced. Visible columns only, either way. Ancestral
             // rows the reader asked to see are rows the server produced, so both include them;
             // they are in no row set, so choosing one in the Show menu drops them.
-            // Hide Options goes first, before Export CSV: it is about the page rather than
-            // the data. Absent where there is nothing to fold.
-            buttons: (optionPanes ? [{
-                text: optionsShown ? "Hide Options" : "Show Options",
-                className: "mutation-matrix-options-toggle",
-                action: function (e, api, node) {
-                    optionsShown = !optionsShown;
-                    applyOptions();
-                    api.button(node).text(optionsShown ? "Hide Options" : "Show Options");
-                    prefs.set(OPTIONS_KEY, { hidden: !optionsShown });
-                    // The box's top moved; the ResizeObserver on the body catches it too, but
-                    // not where ResizeObserver is missing.
-                    sizeScrollBox();
-                }
-            }] : []).concat([{
+            buttons: [{
                 extend: "collection",
                 text: "Export CSV",
                 autoClose: true,
@@ -279,7 +279,21 @@
                     title: container.getAttribute("data-csv-title") || "mutations",
                     exportOptions: { columns: ":visible", modifier: { search: "none" } }
                 }]
-            }]),
+            }, {
+                // A vector drawing of the filtered rows, as the Display settings show them;
+                // mutation_matrix_svg.js builds it from the data rather than the DOM.
+                text: "Export SVG",
+                action: function (e, api) {
+                    var svg = window.mutationMatrixSvg(api, table);
+                    var link = document.createElement("a");
+                    link.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+                    link.download = (container.getAttribute("data-csv-title") || "mutations") + ".svg";
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(function () { URL.revokeObjectURL(link.href); }, 0);
+                }
+            }],
             language: { emptyTable: container.getAttribute("data-empty-message") || "No mutations to show." },
             // breseq shades by displayed row, so a filtered table stripes like a full one.
             // A row the server marked ancestral gets the per-sample table's red -- toggled
@@ -293,6 +307,30 @@
             // inside it; the explicit call below covers that draw.
             drawCallback: function () { if (dt) { pinColumns(); } }
         });
+
+        /* The options toggle leads the first toolbar row, ahead of the length menu and the
+           search box: it is about the page rather than the data, and it sits nearest the
+           strip it folds. A plain button rather than a DataTables one, because Buttons render
+           only where `B` is in `dom`, which is the pager's row. One label for both states --
+           `aria-expanded` carries which. Absent where there is nothing to fold. */
+        var firstToolbar = container.querySelector(".mutation-matrix-toolbar");
+        if (optionPanes && firstToolbar) {
+            var optionsToggle = document.createElement("button");
+            optionsToggle.type = "button";
+            optionsToggle.className = "btn btn-default mutation-matrix-options-toggle";
+            optionsToggle.textContent = "Show/Hide display and filtering options";
+            optionsToggle.setAttribute("aria-expanded", String(optionsShown));
+            optionsToggle.addEventListener("click", function () {
+                optionsShown = !optionsShown;
+                applyOptions();
+                optionsToggle.setAttribute("aria-expanded", String(optionsShown));
+                prefs.set(OPTIONS_KEY, { hidden: !optionsShown });
+                // The box's top moved; the ResizeObserver on the body catches it too, but
+                // not where ResizeObserver is missing.
+                sizeScrollBox();
+            });
+            firstToolbar.insertBefore(optionsToggle, firstToolbar.firstChild);
+        }
 
         /* The descriptive columns stay put while the samples scroll. `position: sticky`
            needs each pinned column's `left` to be the width of everything pinned before it,

@@ -97,16 +97,17 @@ class BreseqTableAssetsTravelTogetherTestCase(unittest.TestCase):
 
 
 class MutationMatrixAssetsTestCase(unittest.TestCase):
-    """A page that renders `{% mutation_matrix %}` needs three assets, not one.
+    """A page that renders `{% mutation_matrix %}` needs four assets, not one.
 
     The partial itself emits no <link> or <script>: the page owns its head. So a page that
     uses the tag and forgets the script gets a header and two menus that do nothing, and no
     error anywhere. Same rule, same shape as the breseq pair above.
     """
 
-    ASSETS = ("css/breseq_table.css", "js/breseq_table.js", "js/mutation_matrix.js")
+    ASSETS = ("css/breseq_table.css", "js/breseq_table.js", "js/mutation_matrix.js",
+              "js/mutation_matrix_svg.js")
 
-    def test_every_template_using_the_tag_links_all_three(self):
+    def test_every_template_using_the_tag_links_all_four(self):
         users, missing = 0, []
         for path in _templates():
             with open(path, errors="ignore") as handle:

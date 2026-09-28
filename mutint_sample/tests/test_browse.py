@@ -214,6 +214,25 @@ class BrowseMutationTestCase(TestCase):
                                  current_id=self.sample.id)
         self.assertEqual([s["is_current"] for s in samples].count(True), 1)
         self.assertTrue(next(s for s in samples if s["id"] == self.sample.id)["is_current"])
+        self.assertEqual([s["is_shown"] for s in samples], [s["is_current"] for s in samples])
+
+    def test_samples_mutant_opens_with_every_carrying_sample_checked(self):
+        """The cross-sample table's Type cell names a mutation, not one sample's call, so it
+        asks for every sample carrying it -- and only those."""
+        import re
+        other = self._second_sample()
+
+        html = self.client.get("/mutations/browse", {
+            "mutation_call_id": self.call.id, "samples": "mutant"}).content.decode("utf-8")
+        checked = set(re.findall(r'data-value="(\d+)"[^>]*class="active"', html))
+        self.assertEqual({str(self.sample.id), str(other.id)}, checked)
+
+        MutationCall.objects.filter(sample=other, mutation=self.call.mutation).update(
+            present=False)
+        shown = {s["id"]: s["is_shown"]
+                 for s in _sample_tracks(self.experiment, self.call.mutation,
+                                         current_id=self.sample.id, show_mutant=True)}
+        self.assertEqual({self.sample.id: True, other.id: False}, shown)
 
     def test_a_sample_is_marked_mutant_only_when_the_mutation_is_called_in_it(self):
         """The `*` follows the mutation table's own rule -- `present`, not the mere
