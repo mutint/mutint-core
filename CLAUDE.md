@@ -1765,7 +1765,12 @@ column added without it fails silently.
 round the whole page put the horizontal scrollbar under the last row, off screen on any
 experiment of more than a screenful. `.sb-scroll` wraps only the table, its script sizes
 the box to the bottom of the window the way `mutation_matrix.js` sizes the matrix's (less
-whatever a deployment puts under it, measured), and the heading is `position: sticky`. Save
+whatever a deployment puts under it, measured), and the heading is `position: sticky`. What
+follows the box is measured on `#mutint-content`, **never on the document**: `scrollHeight`
+is never less than the window, so once the window grew the space under the box read as a
+gap to leave room for and the box kept its old height -- it could shrink and never grow
+back, and a few resizes ratcheted it down to its 240px minimum with a screenful to spare.
+Save
 and Cancel sit in the one control row *above* the table beside the spreadsheet buttons, with
 the error line under that row, precisely so nothing sits below the box.
 

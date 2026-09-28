@@ -162,20 +162,22 @@
     // --- the scroll box: down to the bottom of the window ---
 
     // The mutation matrix's sizing (mutation_matrix.js sizeScrollBox), with one addition:
-    // whatever follows the box on the page is measured and left room for, so a deployment's
-    // footer under it stays in view rather than being pushed off by the box.
+    // whatever follows the box in the content column is measured and left room for, so a
+    // deployment's footer under it stays in view rather than being pushed off by the box.
+    // Measured on the content column, never on the document: `scrollHeight` is never less
+    // than the window, so after the window grew the space below the box read as a gap to
+    // leave room for, and the box kept its old height. It could shrink and never grow back,
+    // and resizing a few times ratcheted it down to its minimum with a screenful to spare.
     var scrollBox = document.querySelector(".sb-scroll");
+    var column = document.getElementById("mutint-content") || document.body;
     function sizeScrollBox() {
         if (!scrollBox) { return; }
         var root = document.documentElement;
         var rect = scrollBox.getBoundingClientRect();
         var top = rect.top + window.pageYOffset;
-        var below = root.scrollHeight - (rect.bottom + window.pageYOffset);
+        var below = column.getBoundingClientRect().bottom - rect.bottom;
         var height = Math.max(240, Math.floor(root.clientHeight - top - below));
         scrollBox.style.maxHeight = height + "px";
-        // A fraction of a pixel left over gives the page a scrollbar with nothing to scroll.
-        var excess = root.scrollHeight - root.clientHeight;
-        if (excess > 0 && height - excess >= 240) { scrollBox.style.maxHeight = (height - excess) + "px"; }
     }
     sizeScrollBox();
     window.addEventListener("resize", sizeScrollBox);
