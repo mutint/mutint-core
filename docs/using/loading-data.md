@@ -105,11 +105,11 @@ already holds that place, which is reported.
 ### Changing samples with the same spreadsheet
 
 An experiment's **Samples** page -- in the sidebar, for anyone who can edit it -- is a table
-of every sample, and it speaks this format too. **Download spreadsheet** gives you a
+of every sample, and it speaks this format too. **Download CSV** gives you a
 `metadata.csv` filled in with what the table shows now, one row per sample, with `data`
 holding each sample's source name. Edit it in any spreadsheet program, then **Upload
-spreadsheet** to read it back: the table's boxes fill with the file's values and the ones
-that changed are highlighted. Nothing is saved until you press **Save all samples**, which
+CSV** to read it back: the table's boxes fill with the file's values and the ones
+that changed are highlighted. Nothing is saved until you press **Save**, which
 checks the whole table the way it checks anything typed. Rows that name no sample in the
 experiment, and samples no row names, are listed under the buttons; those samples are left
 as they were.

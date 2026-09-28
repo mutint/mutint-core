@@ -1734,11 +1734,11 @@ nothing about a renumber changes a mutation count, and paying for the whole data
 rename is what would make this feel broken in production. A descriptive-only save rebuilds
 nothing.
 
-**The bulk page reads and writes the import's `metadata.csv`.** *Download spreadsheet* is
+**The bulk page reads and writes the import's `metadata.csv`.** *Download CSV* is
 `metadata.write` over the table, with `data` set to each sample's source name; *Upload
-spreadsheet* is `metadata.parse` plus `Metadata.lookup` per sample, which is the import's
+CSV* is `metadata.parse` plus `Metadata.lookup` per sample, which is the import's
 own matching. **The upload saves nothing**: it returns values, the page fills its boxes and
-highlights what moved, and **Save all samples** posts them through `_save` like anything
+highlights what moved, and **Save** posts them through `_save` like anything
 typed. That keeps one validation path, and an upload that turns out wrong costs a reload
 rather than a restore. The answer carries only what a row said -- a blank flag cell, or a
 column the file lacks, leaves that box alone.
@@ -1771,7 +1771,7 @@ is never less than the window, so once the window grew the space under the box r
 gap to leave room for and the box kept its old height -- it could shrink and never grow
 back, and a few resizes ratcheted it down to its 240px minimum with a screenful to spare.
 Save
-and Cancel sit in the one control row *above* the table beside the spreadsheet buttons, with
+and Cancel sit in the one control row *above* the table beside the CSV buttons, with
 the error line under that row, precisely so nothing sits below the box.
 
 **The source name is read-only on the bulk page**: a link to the sample's own page, which

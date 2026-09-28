@@ -12,6 +12,7 @@ of the label now, so `make_sample(1, 1, "1-2")` is what `1-1-1-2` used to be.
 """
 
 import json
+import re
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -172,7 +173,10 @@ class SampleEditPagesTestCase(SampleEditTestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertNotContains(response, 'data-toggle="modal"')
-                self.assertContains(response, "Cancel")
+                # Cancel on the single page, Discard changes on the bulk one; either way a
+                # link that leaves without saving.
+                html = response.content.decode()
+                self.assertTrue("Cancel" in html or "Discard changes" in html, url)
 
     def test_a_sample_with_no_flask_is_a_404(self):
         """It has no project, so it cannot be permission-checked. Repairing those belongs
@@ -731,8 +735,10 @@ class TimePointLabelingTestCase(SampleEditTestCase):
                 for old in (">Sample name<", ">Sample<", ">Description<"):
                     self.assertNotIn(old, html)
         bulk = self.client.get("/experiment/%d/samples/" % self.experiment.id).content.decode()
-        self.assertLess(bulk.index(">Sample ID<"), bulk.index(">Label<"))
-        self.assertLess(bulk.index(">Label<"), bulk.index(">Mixed<"))
+        # The headings only: the sentence above the table names the same words in bold.
+        headings = re.findall(r"<th[^>]*>([^<]*)</th>", bulk)
+        self.assertLess(headings.index("Sample ID"), headings.index("Label"))
+        self.assertLess(headings.index("Label"), headings.index("Mixed"))
         single = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
         self.assertLess(single.index("Identity"), single.index('id="se-description"'))
         self.assertLess(single.index('id="se-description"'), single.index('id="se-mixed"'))

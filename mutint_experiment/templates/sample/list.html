@@ -39,12 +39,9 @@
         {% csrf_token %}
 
         <p style="color: #666;">
-            Everything saves in one step, or not at all. A sample is shown throughout the
-            site by its label when it has one, and by its population, time point and
-            sample ID otherwise &mdash; so renumbering a sample that carries a label
-            changes nothing you see until you clear it. To change a sample's source name,
-            follow it to the sample's own page. Every column here belongs to the sample
-            alone; nothing you change on one row affects another.
+            Samples are named on other pages using their <b>Label</b> (if set) or by concatenating 
+            their <b>Population</b>, <b>Time point</b>, and <b>Sample ID</b> (otherwise). To change a sample's 
+            <b>Source name</b>, which is assigned from and used when importing data, follow the link to the single sample edit page.
         </p>
 
         {% if samples %}
@@ -54,19 +51,22 @@
            write, through the same validation as anything typed. The row is above the table
            rather than under it so that nothing sits below the scroll box, which then reaches
            the window's edge and keeps its scrollbars on screen however many rows there are. {% endcomment %}
+        {% comment %} Three groups in one row -- Save; the CSV pair; Discard -- with a wider
+           gap between groups than the row's 5px between buttons. {% endcomment %}
         <div class="btn-row" style="margin-bottom: 0.5em;">
-            <button type="button" class="btn btn-primary btn-sm" id="sb-save">Save all samples</button>
-            <a class="btn btn-default btn-sm"
-               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
-            <a class="btn btn-default btn-sm"
-               href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download spreadsheet</a>
-            <button type="button" class="btn btn-default btn-sm" id="sb-upload">Upload spreadsheet&hellip;</button>
-            <input type="file" id="sb-upload-file" accept=".csv,text/csv" hidden>
+            <button type="button" class="btn btn-primary" id="sb-save">Save</button>
+            <a class="btn btn-default" style="margin-left: 15px;"
+               href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download CSV</a>
+            <button type="button" class="btn btn-default" id="sb-upload">Upload CSV&hellip;</button>
+            <a class="btn btn-danger" style="margin-left: 15px;"
+               href="/stats?experiment_id={{ experiment.id }}">Discard changes</a>
+            {% comment %} display: none inline rather than the hidden attribute: Bootstrap's
+               `input[type=file] { display: block }` outranks `[hidden]`, and the browser's own
+               Choose File control then sat in the row beside the button that opens it. {% endcomment %}
+            <input type="file" id="sb-upload-file" accept=".csv,text/csv" style="display: none;">
         </div>
         <p style="color: #666;">
-            The spreadsheet is the <code>metadata.csv</code> an import reads. Uploading one
-            fills the table and highlights what changed; nothing is saved until you press
-            <b>Save all samples</b>.
+            To make many changes, you can download the CSV, edit it, and upload the new CSV. Cells with changes will be highlighted. You must click <b>Save</b> to keep the new values.
         </p>
         <div id="sb-upload-status" style="margin-bottom: 1em; white-space: pre-line;"></div>
         <div id="sb-error" style="color: #a00; margin-bottom: 1em; white-space: pre-line;"></div>
@@ -76,6 +76,7 @@
             <thead>
             <tr>
                 <th>Source Name</th>
+                <th title="The condition this sample was grown under: pick one already in use, or type a new one">Treatment</th>
                 <th class="sb-population-col">Population</th>
                 {% comment %} The column is `Sample.time_point` and the label has always said
                    "Time point" -- the two agree. Fixation orders samples by it. {% endcomment %}
@@ -87,7 +88,6 @@
                 <th title="What the sample is called throughout the site; clear it to show the coordinate">Label</th>
                 <th width="50">Mixed</th>
                 {% for flag in flags %}<th width="50" title="{{ flag.label }}">{{ flag.column_heading }}</th>{% endfor %}
-                <th title="The condition this sample was grown under: pick one already in use, or type a new one">Treatment</th>
             </tr>
             </thead>
             {% comment %} The experiment's treatments are the values its samples carry, so
@@ -114,6 +114,9 @@
                         <a href="/sample/{{ sample.id }}/edit/"
                            title="Edit this sample, including its source name">{{ sample.source_name|default:"(unnamed)" }}</a>
                     </td>
+                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-treatment" maxlength="100"
+                               id="sb-treatment-{{ sample.id }}" list="sb-treatments"
+                               value="{{ sample.treatment }}"></td>
                     {% comment %} ALE and sample ID are text: a lineage is called `Ara-1`,
                        a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
                        three -- silently, by sending an empty value. The time point is text
@@ -136,9 +139,6 @@
                         <input autocomplete="off" type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
                                data-flag="{{ flag.field }}" {% if flag.on %}checked{% endif %}></td>
                     {% endfor %}
-                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-treatment" maxlength="100"
-                               id="sb-treatment-{{ sample.id }}" list="sb-treatments"
-                               value="{{ sample.treatment }}"></td>
                 </tr>
             {% endfor %}
             </tbody>
@@ -269,7 +269,7 @@
                 if (fill(id, body.samples[id])) { changed += 1; }
             });
             var lines = [file.name + ": " + (changed === 1 ? "1 sample" : changed + " samples") +
-                         " changed in the table. Press Save all samples to keep the changes."];
+                         " changed in the table. Press Save to keep the changes."];
             if ((body.unmatched_rows || []).length) {
                 lines.push("Rows that named no sample here: " + body.unmatched_rows.join("; "));
             }
