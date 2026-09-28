@@ -6,8 +6,8 @@ above it, asked in this order at the one seam (`gd_import.import_document_as_sam
 
 1. **A `metadata.csv` dropped with the data.** Columns `sample,population,time_point,data`,
    with an optional `sample_type` (population/mixed, or clone/individual/isolate) between
-   the last two, and optional `description`, `hypermutator`, `contaminated` and
-   `low_coverage` after them (a header row, any column order); `#` lines and blank lines
+   the last two, and optional `treatment`, `description`, `hypermutator`, `contaminated`
+   and `low_coverage` after them (a header row, any column order); `#` lines and blank lines
    are ignored; `data` names the
    inputs the row places, several separated by `;`, and rows with the same coordinate may
    repeat to name more. An input is a breseq results folder's name, a `.gd` or VCF filename
@@ -16,8 +16,9 @@ above it, asked in this order at the one seam (`gd_import.import_document_as_sam
    a handler and never a unit of its own, and installed in a slot here for the seam to ask,
    exactly as `import_progress.reporting()` installs its reporter.
 2. **The file's own header.** A `.gd`'s `#=KEY value` lines and a VCF's `##key=value` lines,
-   under the synonyms in `SYNONYMS` (`sample`/`name`, `population`/`treatment`/`condition`,
-   `time_point`/`generation`/`transfer`/`time`...), so a file can carry its own placement.
+   under the synonyms in `SYNONYMS` (`sample`/`name`, `population`,
+   `time_point`/`generation`/`transfer`/`time`, `treatment`/`condition`...), so a file can
+   carry its own placement, and its treatment.
 3. **The filename**, as before.
 
 **Why the override happens at the seam and not as a relabel afterwards.** A filename that
@@ -27,14 +28,22 @@ Deciding before the row exists means a same-metadata re-import is a no-op, becau
 chain is `get_or_create` on the coordinate. `source_name` stays the filename either way; it
 is what re-import and mutint-breseq match on.
 
-**The four descriptive columns ride the same row, and a blank cell means different things.**
+**The five descriptive columns ride the same row, and a blank cell means different things.**
 A blank `description` is a sample with no description, because that is what the placement
 has always done -- it clears the filename so the label is the coordinate. A blank flag cell
 leaves the flag as it is, which is `sample_type`'s rule: a flag is a fact somebody recorded,
-and a spreadsheet that does not mention it has not said it is false. The Edit samples page
-downloads this same file filled in and reads it back, so there is one format for both.
-These columns are **not** in `SYNONYMS`: that map also decides which `.gd` header keys are
-placement, and a `#=DESCRIPTION` line is not one.
+and a spreadsheet that does not mention it has not said it is false. A blank `treatment`
+follows the flags on import -- the file has not said the sample had none -- while the Edit
+samples page, which sends every box, clears it. The Edit samples page downloads this same
+file filled in and reads it back, so there is one format for both.
+The description and the flags are **not** in `SYNONYMS`: that map also decides which `.gd`
+header keys MutInt writes itself on export, and a `#=DESCRIPTION` line is not one. The
+treatment **is** in it, under `treatment` and `condition`, for the opposite reason: a
+`#=TREATMENT` line is one MutInt writes from the row, so the replayed one must go. **Both
+words meant population once**, as a synonym `#=POPULATION` outranked, and a file that
+placed itself by `#=TREATMENT` alone now needs a `#=POPULATION` line or a filename that
+parses. The treatment is descriptive and not placement: a header naming only a treatment
+does not place the sample, and `header_treatment` is how the filename path still reads it.
 
 **A malformed CSV refuses the whole drop.** A missing column or a row that cannot be read
 would otherwise land everything unplaced, which is the outcome the file exists to prevent.
@@ -54,7 +63,8 @@ COLUMNS = ("sample", "population", "time_point", "data")
 #: May be present or not: `sample_type`, between time_point and data, saying whether the
 #: sample is a population (mixed) or a clone (individual, isolate). Blank leaves the
 #: importer's own rule -- breseq's `-p` in the `.gd`'s command line -- in force.
-OPTIONAL_COLUMNS = ("sample_type",)
+OPTIONAL_COLUMNS = ("sample_type", "treatment")
+TREATMENT_COLUMN = "treatment"
 POPULATION_TYPES = ("population", "mixed")
 CLONE_TYPES = ("clone", "individual", "isolate")
 DATA_SEPARATOR = ";"
@@ -73,24 +83,53 @@ def flag_columns():
 
     return {flag.key: flag.field for flag in FLAGS}
 
-#: Header keys a file may place itself with, each mapped to the column it means. Matched
-#: after lowercasing and dropping spaces and underscores, so `Time point`, `time_point` and
-#: `TIMEPOINT` are one key.
+#: Header keys a file may place or describe itself with, each mapped to the column it
+#: means. Matched after lowercasing and dropping spaces and underscores, so `Time point`,
+#: `time_point` and `TIMEPOINT` are one key. `treatment` and `condition` were synonyms for
+#: `population` until the treatment became a column of its own.
 SYNONYMS = {
     "sample": "sample", "name": "sample",
-    "population": "population", "treatment": "population", "condition": "population",
+    "population": "population",
     "timepoint": "time_point", "time": "time_point", "generation": "time_point",
     "generations": "time_point", "transfer": "time_point", "transfers": "time_point",
     "sampletype": "sample_type",
+    "treatment": "treatment", "condition": "treatment",
 }
 
-def is_placement_key(key):
-    """Whether a header key is one that places a sample -- anything `SYNONYMS` knows.
+#: The columns that place a sample; the rest of `SYNONYMS` describes it.
+PLACEMENT_COLUMNS = ("sample", "population", "time_point", "sample_type")
 
-    The `.gd` export asks, so that a replayed header cannot carry a coordinate the sample
-    has since been moved away from; the export writes the current one itself.
+def is_placement_key(key):
+    """Whether a header key is one MutInt writes from the row itself -- anything `SYNONYMS`
+    knows, the treatment included.
+
+    The `.gd` and VCF exports ask, so that a replayed header cannot carry a coordinate the
+    sample has since been moved away from, or a treatment somebody has since changed; the
+    export writes the current ones itself.
     """
     return _normalize_key(key) in SYNONYMS
+
+
+def header_treatment(mapping):
+    """The treatment a file's own header names, or None when it names none.
+
+    The half of `coordinate_from_headers` that is not placement, for the path that placed
+    the sample by its filename: a `.gd` carrying `#=TREATMENT` and nothing else about where
+    it sits still says what it was grown under.
+    """
+    if not hasattr(mapping, "keys"):
+        return None
+    normalized = {_normalize_key(key): key for key in mapping.keys()}
+    for key in ("treatment", "condition"):
+        if key not in normalized:
+            continue
+        value = mapping.get(normalized[key])
+        if isinstance(value, (list, tuple)):
+            value = value[-1] if value else ""
+        value = ("" if value is None else str(value)).strip()
+        if value:
+            return value
+    return None
 
 
 #: What placed a sample; recorded per import so the summary can say which rule applied.
@@ -113,10 +152,30 @@ class MetadataConflict(MetadataError):
 #: One row of the CSV: the coordinate and the inputs it places. `time_point` is an int or
 #: None; `population` is "" for an unplaced sample; `is_clonal` is True for a clone, False
 #: for a population sample, None when the row said nothing; `line` is the CSV line number.
-#: `description` is None when the file has no such column; `flags` holds only the flags the
-#: row set, `{Sample field: bool}`.
-Row = namedtuple("Row", "line sample population time_point data is_clonal description flags",
-                 defaults=(None, None, {}))
+#: `description` and `treatment` are None when the file has no such column; `flags` holds
+#: only the flags the row set, `{Sample field: bool}`.
+Row = namedtuple("Row",
+                 "line sample population time_point data is_clonal description flags treatment",
+                 defaults=(None, None, {}, None))
+
+
+def details_of(row):
+    """What a row says about a sample beyond where it sits: `{"treatment", "description",
+    "flags"}`, each key present only when the row spoke.
+
+    For a caller that places a sample by some other route and applies the row's details
+    later -- the breseq launcher, whose sample exists hours after the CSV was read -- so the
+    details travel as a JSON-safe dict and `gd_import.apply_sample_details` applies them with
+    the same rules the import path uses.
+    """
+    details = {}
+    if row.treatment is not None:
+        details["treatment"] = row.treatment
+    if row.description is not None:
+        details["description"] = row.description
+    if row.flags:
+        details["flags"] = dict(row.flags)
+    return details
 
 
 def _normalize_key(key):
@@ -307,6 +366,7 @@ def parse(text, source=FILENAME):
             cell("sample"), cell("population"), cell("time_point"), where)
         is_clonal = _clean_sample_type(cell("sample_type"), where)
         description = (cell(DESCRIPTION_COLUMN) if DESCRIPTION_COLUMN in index else None)
+        treatment = (cell(TREATMENT_COLUMN) if TREATMENT_COLUMN in index else None)
         row_flags = {}
         for column, field in flags.items():
             value = _clean_flag(cell(column), column, where)
@@ -327,6 +387,9 @@ def parse(text, source=FILENAME):
             if existing.description and description and existing.description != description:
                 raise MetadataError(
                     "%s: the same sample has a different description on another row." % where)
+            if existing.treatment and treatment and existing.treatment != treatment:
+                raise MetadataError(
+                    "%s: the same sample has a different treatment on another row." % where)
             for field, value in row_flags.items():
                 if existing.flags.get(field, value) != value:
                     raise MetadataError(
@@ -336,10 +399,11 @@ def parse(text, source=FILENAME):
                 data=existing.data + data,
                 is_clonal=existing.is_clonal if is_clonal is None else is_clonal,
                 description=existing.description or description,
-                flags=dict(existing.flags, **row_flags))
+                flags=dict(existing.flags, **row_flags),
+                treatment=existing.treatment or treatment)
         else:
             rows[key] = Row(number, sample, population, time_point, data, is_clonal,
-                            description, row_flags)
+                            description, row_flags, treatment)
             order.append(key)
     return Metadata([rows[key] for key in order], source=source)
 
@@ -348,18 +412,23 @@ def write(entries):
     """The CSV text `parse` reads, one row per entry; the one writer of this format.
 
     Each entry is a dict: `sample`, `population`, `time_point` (a number or None),
-    `is_clonal`, `description`, `flags` (`{Sample field: bool}`) and `data` (a string, or a
-    list joined with `;`). Population and time point are written together or not at all, as
-    `parse` requires -- a sample with no time point is an unplaced one, whatever population
-    it was filed under. The archive writes its `metadata.csv` with this, and the Edit samples
-    page its spreadsheet.
+    `is_clonal`, `treatment`, `description`, `flags` (`{Sample field: bool}`) and `data` (a
+    string, or a list joined with `;`). Population and time point are written together or
+    not at all, as `parse` requires -- a sample with no time point is an unplaced one,
+    whatever population it was filed under. The archive writes its `metadata.csv` with this,
+    and the Edit samples page its spreadsheet.
+
+    The treatment sits after `sample_type` and before the description: it is a categorical
+    fact about the sample, as the type is, and the columns then read where the sample sits,
+    what kind it is, what it was grown under, what it is called, what is wrong with it, and
+    what it was made from.
     """
     from mutint_experiment.coordinates import format_time_point
 
     flags = flag_columns()
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(("sample", "population", "time_point", "sample_type",
+    writer.writerow(("sample", "population", "time_point", "sample_type", TREATMENT_COLUMN,
                      DESCRIPTION_COLUMN) + tuple(flags) + ("data",))
     for entry in entries:
         placed = entry.get("time_point") is not None
@@ -372,6 +441,7 @@ def write(entries):
              entry.get("population", "") if placed else "",
              format_time_point(entry["time_point"]) if placed else "",
              "clone" if entry.get("is_clonal", True) else "population",
+             entry.get("treatment") or "",
              entry.get("description") or ""]
             + ["yes" if entry_flags.get(field) else "no" for field in flags.values()]
             + [data])
@@ -384,9 +454,11 @@ def coordinate_from_headers(mapping, where="the file's header", filename_identit
 
     `mapping` is whatever the document exposes -- a `.gd`'s `MetadataDict`, or the dict the
     VCF import builds from its `##` lines. Keys are matched through `SYNONYMS`, an exact
-    column name winning over a synonym (`#=POPULATION` over `#=TREATMENT` when a file carries
-    both, as the LTEE's do). `#=SAMPLE_TYPE population` says the sample is mixed, the way
-    the CSV column does.
+    column name winning over a synonym (`#=TIME_POINT` over `#=TIME` when a file carries
+    both). `#=SAMPLE_TYPE population` says the sample is mixed, the way the CSV column does,
+    and `#=TREATMENT` rides along on the row without placing anything: a header that names
+    only a treatment answers None here, and `header_treatment` is how such a file's
+    treatment still reaches the sample.
 
     **Each field the header names overrides the filename's; each it leaves out comes from
     there.** `filename_identity` is what `parse_sample_identity` read out of the name, or
@@ -413,7 +485,7 @@ def coordinate_from_headers(mapping, where="the file's header", filename_identit
         value = ("" if value is None else str(value)).strip()
         if value:
             found[column] = value
-    if not found:
+    if not any(column in found for column in PLACEMENT_COLUMNS):
         return None
 
     if "sample" not in found:
@@ -436,7 +508,8 @@ def coordinate_from_headers(mapping, where="the file's header", filename_identit
     sample, population, time_point = _clean_coordinate(
         found["sample"], found.get("population", ""), found.get("time_point", ""), where)
     return Row(0, sample, population, time_point, [],
-               _clean_sample_type(found.get("sample_type", ""), where))
+               _clean_sample_type(found.get("sample_type", ""), where),
+               treatment=found.get("treatment"))
 
 
 def sample_label_of(identity):

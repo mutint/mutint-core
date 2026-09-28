@@ -18,7 +18,7 @@ Experiment ── Population ── Sample ── MutationCall ── Mutation
 |---|---|
 | `Experiment` | one evolution experiment; the unit access is granted below and the unit almost every page is scoped to |
 | `Population` | one ALE — a lineage within the experiment, with its strain and species |
-| `Sample` | one sequenced sample -- a clone or a mixed population -- drawn from a `Population` at a `time_point`; carries three flags, `is_hypermutator`, `is_contaminated`, `is_low_coverage` (`mutint_sample.flags`) |
+| `Sample` | one sequenced sample -- a clone or a mixed population -- drawn from a `Population` at a `time_point`; carries three flags, `is_hypermutator`, `is_contaminated`, `is_low_coverage` (`mutint_sample.flags`), and an optional `treatment` label, free text, that the sample selectors filter on beside the population |
 | `Mutation` | one genomic change, **per experiment**, with its annotation |
 | `MutationCall` | one caller's assertion about one mutation in one sample |
 

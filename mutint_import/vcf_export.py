@@ -161,6 +161,8 @@ def _with_placement(header, sample, column):
         placement["population"] = population
         placement["time_point"] = format_time_point(sample.time_point)
     placement["sample_type"] = "clone" if sample.is_clonal else "population"
+    if sample.treatment:
+        placement["treatment"] = sample.treatment
 
     parts = ["ID=%s" % column]
     parts += ["%s=%s" % (key, _quoted(value)) for key, value in placement.items()]

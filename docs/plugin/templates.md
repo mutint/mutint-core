@@ -68,10 +68,13 @@ one listed sample carries it; each sample cell is that sample's frequency, linke
 browser when the sample has reads. The `browse_url(call)` and `refseq_url(mutation)` callables
 can be replaced if your page links elsewhere.
 
-Then either render **`mutation_matrix/page.html`** — the ALE and sample-type pickers, the
-reader's filter controls and summary, and the matrix — with `experiment_id, population_names, population,
-sample_type, experiment_name, project_name, project_id, template_header, title, matrix,
-empty_message` in the context; or put the tag in a page of your own:
+Then either render **`mutation_matrix/page.html`** — the ALE, treatment and sample-type
+pickers, the reader's filter controls and summary, and the matrix — with `experiment_id,
+population_names, population, treatment_names, treatment, sample_type, experiment_name,
+project_name, project_id, template_header, title, matrix, empty_message` in the context; or
+put the tag in a page of your own. The treatment picker renders only when `treatment_names`
+is non-empty, and a view reads the choice with `common.get_treatment(request)` and hands it
+to `get_ordered_sample_dict(..., treatment=...)`, exactly as it does the population:
 
 ```django
 {% load mutation_matrix %}

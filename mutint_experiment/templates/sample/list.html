@@ -8,6 +8,7 @@
         /* Wide enough to read what is in them; the box scrolls sideways past the window. */
         #mutint-content .sb-label { min-width: 12em; }
         #mutint-content .sb-description { min-width: 28em; }
+        #mutint-content .sb-treatment { min-width: 10em; }
         /* Population names are short (`Ara-1`), so the column is as wide as its heading:
            width 1% on the header shrinks it, and a 100%-wide box does not hold it open. */
         #mutint-content .sb-population-col { width: 1%; white-space: nowrap; }
@@ -65,9 +66,17 @@
                 <th>Sample</th>
                 <th width="50">Mixed</th>
                 {% for flag in flags %}<th width="50" title="{{ flag.label }}">{{ flag.column_heading }}</th>{% endfor %}
+                <th title="The condition this sample was grown under: pick one already in use, or type a new one">Treatment</th>
                 <th>Description</th>
             </tr>
             </thead>
+            {% comment %} The experiment's treatments are the values its samples carry, so
+               the suggestions are drawn from the table itself. One list shared by every
+               box; a browser shows it whatever autocomplete says, since that attribute
+               governs autofill and restoration rather than a list the page supplied. {% endcomment %}
+            <datalist id="sb-treatments">
+                {% for name in treatment_names %}<option value="{{ name }}">{% endfor %}
+            </datalist>
             {% comment %} Every input here is autocomplete="off", and not for autofill: it is
                what stops a browser restoring typed values on reload. Save ends in a reload,
                the rows come back sorted by their *new* coordinates, and restoration matches
@@ -103,6 +112,9 @@
                         <input autocomplete="off" type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
                                data-flag="{{ flag.field }}" {% if flag.on %}checked{% endif %}></td>
                     {% endfor %}
+                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-treatment" maxlength="100"
+                               id="sb-treatment-{{ sample.id }}" list="sb-treatments"
+                               value="{{ sample.treatment }}"></td>
                     <td><input autocomplete="off" type="text" class="form-control input-sm sb-description" maxlength="300"
                                id="sb-description-{{ sample.id }}"
                                value="{{ sample.description }}"></td>
@@ -166,6 +178,9 @@
         changed = setText(document.getElementById("sb-sample-" + id), values.name) || changed;
         if ("description" in values) {
             changed = setText(document.getElementById("sb-description-" + id), values.description) || changed;
+        }
+        if ("treatment" in values) {
+            changed = setText(document.getElementById("sb-treatment-" + id), values.treatment) || changed;
         }
         if ("is_mixed" in values) {
             changed = setBox(document.getElementById("sb-mixed-" + id), values.is_mixed) || changed;
@@ -243,6 +258,7 @@
                     time_point: value("time-point", id),
                     name: value("sample", id),
                     is_mixed: document.getElementById("sb-mixed-" + id).checked ? 1 : 0,
+                    treatment: value("treatment", id),
                     description: value("description", id)
                 };
                 Array.prototype.forEach.call(tr.querySelectorAll("input[data-flag]"), function (box) {

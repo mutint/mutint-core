@@ -140,6 +140,16 @@ class Sample(SupplementalDataMixin):
     #: What a person calls this sample. Preferred over the computed coordinate wherever a
     #: sample is labeled -- see `label`.
     description = models.CharField(max_length=300, **blank_field)
+    #: The condition this sample was evolved or grown under -- a medium, a temperature, a
+    #: drug -- as a factor for analyses that group samples across populations. **A label,
+    #: not a row**: the experiment's list of treatments is the distinct values its samples
+    #: carry, which the edit pages offer back as suggestions and the experiment page can
+    #: rename in one stroke. A `Treatment` model would have bought descriptions and a
+    #: constraint at the cost of a second row to create before a sample can be filed, and
+    #: nothing reads a treatment except to group by it. Descriptive in the
+    #: `mutint_experiment.samples` sense: changing it moves no row and rebuilds nothing.
+    #: Blank and NULL both mean "none"; writers normalize to the empty string.
+    treatment = models.CharField(max_length=100, db_index=True, **blank_field)
     #: What the file or folder this was imported from was called. `source_name`, because
     #: `sample_name` on a model called `Sample` says nothing about which of its several
     #: names it is -- this is the one the import read, not the one the product displays.

@@ -219,6 +219,48 @@ class DescriptiveEditTestCase(SampleEditTestCase):
         self.single(self.sample, source_name="renamed")
         self.assertEqual(before, self.chain_counts())
 
+    def test_the_treatment_saves_on_both_pages_and_can_be_cleared(self):
+        """A treatment is a label on the sample, edited where the description is."""
+        response = self.single(self.sample, treatment="  glucose ")
+        self.assertEqual(200, response.status_code, response.content)
+        self.sample.refresh_from_db()
+        self.assertEqual("glucose", self.sample.treatment)
+
+        response = self.bulk([self.row(self.sample, treatment="lactose")])
+        self.assertEqual(200, response.status_code, response.content)
+        self.sample.refresh_from_db()
+        self.assertEqual("lactose", self.sample.treatment)
+
+        self.assertEqual(200, self.single(self.sample, treatment="").status_code)
+        self.sample.refresh_from_db()
+        self.assertEqual("", self.sample.treatment)
+
+    def test_a_row_that_does_not_mention_the_treatment_leaves_it_alone(self):
+        """A client that predates the column -- or a spreadsheet without it -- cannot clear
+        it by not knowing about it, the rule every descriptive field follows."""
+        self.sample.treatment = "glucose"
+        self.sample.save(update_fields=["treatment"])
+        self.assertEqual(200, self.bulk([self.row(self.sample, population=2)]).status_code)
+        self.assertEqual(200, self.single(self.sample).status_code)
+        self.sample.refresh_from_db()
+        self.assertEqual("glucose", self.sample.treatment)
+
+    def test_an_over_long_treatment_is_refused(self):
+        response = self.single(self.sample, treatment="x" * 101)
+        self.assertEqual(400, response.status_code)
+        self.assertIn("treatment", response.json()["error"])
+
+    def test_the_edit_page_offers_the_experiments_treatments(self):
+        other = self.make_sample(2, 1, "2-1", source_name="second")
+        other.treatment = "lactose"
+        other.save(update_fields=["treatment"])
+        self.sample.treatment = "glucose"
+        self.sample.save(update_fields=["treatment"])
+        body = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
+        self.assertIn('id="se-treatment"', body)
+        self.assertIn('value="glucose"', body)
+        self.assertIn('<option value="lactose">', body)
+
     def test_the_bulk_table_does_not_blank_fields_it_has_no_column_for(self):
         """It shows no medium description; a missing key must leave the stored value alone,
         and so must a flag the row does not mention. (This used to set a `medium_description`

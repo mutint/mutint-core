@@ -20,8 +20,8 @@ from mutint_experiment.sample_views import (
 from mutint_experiment.storage_views import experiment_storage_clear
 from mutint_experiment.views import (
     experiment_ancestor, experiment_ancestor_apply, experiment_create, experiment_delete,
-    experiment_detail, experiment_edit, experiment_lock, experiment_new, experiment_update,
-    experiments,
+    experiment_detail, experiment_edit, experiment_lock, experiment_new,
+    experiment_treatment_rename, experiment_update, experiments,
 )
 
 urlpatterns = [
@@ -48,6 +48,12 @@ urlpatterns = [
     # The sidebar's Samples entry. Experiment-section links carry the experiment as
     # `?experiment_id=`, and this page names it in the path, so this redirects there.
     re_path(r'^samples/$', experiment_samples_selected, name="experiment_samples_selected"),
+
+    # Renaming one of the experiment's treatments across every sample carrying it. On the
+    # experiment's edit page, since that is where the list of them is maintained; the label
+    # itself is a column on the sample. See mutint_experiment/treatments.py.
+    re_path(r'^(?P<pk>[0-9]+)/treatments/rename/$',
+            experiment_treatment_rename, name="experiment_treatment_rename"),
 
     # Locking. Its own endpoint rather than a field on the edit form: a locked experiment
     # refuses `experiment_update` outright, so a checkbox there could lock and never unlock.

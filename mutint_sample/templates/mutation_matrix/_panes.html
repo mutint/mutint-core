@@ -18,7 +18,7 @@
             </button>
             <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="samples">
                 {% for sample in matrix.samples %}
-                    <li data-value="{{ sample.id }}" class="active"><a href="#">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></li>
+                    <li data-value="{{ sample.id }}" class="active"><a href="#">{{ sample.label }}{% if sample.treatment %} <span class="text-muted">{{ sample.treatment }}</span>{% endif %} {% sample_flag_badges flags=sample.flags %}</a></li>
                 {% endfor %}
             </ul>
         </div>

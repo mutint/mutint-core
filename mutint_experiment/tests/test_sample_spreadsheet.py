@@ -23,6 +23,7 @@ class SpreadsheetTestCase(SampleEditTestCase):
         super().setUp()
         self.clone = self.make_sample("Ara-2", 500, "763A", source_name="Ara-2_500gen_763A")
         self.clone.description = "the clone"
+        self.clone.treatment = "glucose"
         self.clone.is_hypermutator = True
         self.clone.save()
         self.mix = self.make_sample("Ara-2", 2000, "mix", source_name="mix.gd", is_mixed=True)
@@ -44,11 +45,14 @@ class SpreadsheetTestCase(SampleEditTestCase):
         self.assertIn("_metadata.csv", response["Content-Disposition"])
         parsed = metadata.parse(response.content)
         clone = parsed.lookup("Ara-2_500gen_763A")
-        self.assertEqual(("763A", "Ara-2", 500, True, "the clone"),
+        self.assertEqual(("763A", "Ara-2", 500, True, "the clone", "glucose"),
                          (clone.sample, clone.population, clone.time_point, clone.is_clonal,
-                          clone.description))
+                          clone.description, clone.treatment))
         self.assertTrue(clone.flags["is_hypermutator"])
         self.assertFalse(parsed.lookup("mix").is_clonal)
+        # A sample with no treatment writes a blank cell, which reads back as "" and not None
+        # -- the file has the column, so it has an opinion.
+        self.assertEqual("", parsed.lookup("mix").treatment)
 
     def test_the_download_includes_the_ancestor(self):
         self.experiment.ancestor = self.mix
@@ -70,6 +74,7 @@ class SpreadsheetTestCase(SampleEditTestCase):
         clone = answer["samples"][str(self.clone.pk)]
         self.assertEqual({"population": "Ara-2", "time_point": 500, "name": "763A",
                           "is_mixed": False, "description": "the clone",
+                          "treatment": "glucose",
                           "flags": {"is_hypermutator": True, "is_contaminated": False,
                                     "is_low_coverage": False}}, clone)
         self.assertEqual([], answer["unmatched_rows"])
@@ -85,6 +90,7 @@ class SpreadsheetTestCase(SampleEditTestCase):
                          (clone["population"], clone["time_point"], clone["name"]))
         # Columns the file left out are not in the answer, so those boxes are left alone.
         self.assertNotIn("description", clone)
+        self.assertNotIn("treatment", clone)
         self.assertNotIn("is_mixed", clone)
         self.assertEqual({}, clone["flags"])
         self.assertEqual(1, len(answer["unmatched_rows"]))
@@ -133,6 +139,7 @@ class SpreadsheetTestCase(SampleEditTestCase):
         read = re.findall(r'(\w+): value\("([\w-]+)", id\)', script)
         self.assertEqual({"population": "population",
                           "time_point": "time-point", "name": "sample",
+                          "treatment": "treatment",
                           "description": "description"}, dict(read))
         for _field, prefix in read:
             self.assertIn('id="sb-%s-%d"' % (prefix, self.clone.pk), body, prefix)
@@ -150,6 +157,24 @@ class SpreadsheetTestCase(SampleEditTestCase):
         self.clone.refresh_from_db()
         self.assertEqual(("Ara-2_500gen_763A", 600),
                          (self.clone.source_name, self.clone.time_point))
+
+    def test_the_treatment_boxes_offer_the_experiments_treatments(self):
+        """The list of treatments is the samples' own values, offered back as suggestions
+        through one datalist every box points at -- so a person filing the fortieth sample
+        picks the word the first thirty-nine used rather than retyping it."""
+        self.mix.treatment = "lactose"
+        self.mix.save(update_fields=["treatment"])
+        body = self.client.get("/experiment/%d/samples/" % self.experiment.id).content.decode()
+        self.assertIn('<datalist id="sb-treatments">', body)
+        self.assertIn('<option value="glucose">', body)
+        self.assertIn('<option value="lactose">', body)
+        tag = body[body.index('id="sb-treatment-%d"' % self.clone.pk) - 200:]
+        tag = tag[tag.rindex("<input", 0, 200):]
+        self.assertIn('list="sb-treatments"', tag[:tag.index(">")])
+        # An uploaded file with a blank treatment cell blanks the box -- the file said so.
+        answer = self.upload("sample,population,time_point,treatment,data\n"
+                             "763A,Ara-2,500,,Ara-2_500gen_763A\n").json()
+        self.assertEqual("", answer["samples"][str(self.clone.pk)]["treatment"])
 
     def test_no_box_in_the_table_is_restored_by_the_browser_on_reload(self):
         """Save reloads the page, which comes back sorted by the new coordinates, and a

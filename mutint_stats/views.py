@@ -43,9 +43,11 @@ def stats(request):
         exp_name = experiment.name
         experiment_id=experiment.id
         population = common.get_population(request)
+        treatment = common.get_treatment(request)
+        treatment_names = common.get_treatment_names(experiment.id)
 
-        population = population
-        sample_queryset = get_ordered_sample_queryset(experiment.id, population)
+        sample_queryset = get_ordered_sample_queryset(experiment.id, population,
+                                                     treatment=treatment)
         population_counts = count_per_population(sample_queryset)
         population_count = len(population_counts)
         time_point_count = 0
@@ -74,6 +76,10 @@ def stats(request):
         panels = render_overview_panels(experiment, request)
         context.update({"experiment_name": exp_name,
                         "population": population,
+                        "treatment": treatment,
+                        # The sample table draws a Treatment column only when any sample
+                        # carries one: a column of blanks on every experiment says nothing.
+                        "treatment_names": treatment_names,
                         "experiment_id": experiment_id,
                         "protein_change_type_count_dict": protein_change_type_count_dict,
                         "protein_change_sum": sum(protein_change_type_count_dict.values()),

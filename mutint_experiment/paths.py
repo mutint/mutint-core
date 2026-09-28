@@ -89,6 +89,10 @@ SAMPLE_LABEL = "name"
 #: Whether the sample is one genotype. It was `is_population`, with the opposite meaning.
 SAMPLE_CLONAL = "is_clonal"
 
+#: The condition the sample was grown under -- a label on the sample, filtered on by the
+#: selectors beside the population's. Here so core and mutint-phylogeny spell one path.
+SAMPLE_TREATMENT = "treatment"
+
 
 #: The same chain read **downward**. Django spells a reverse relation with the lowercased
 #: model name, because none of these declares a `related_name` -- so it is not simply
@@ -130,6 +134,11 @@ def to_sample(prefix="", field=""):
 
 def to_sample_label(prefix=""):
     return join(prefix, SAMPLE_LABEL)
+
+
+def to_sample_treatment(prefix=""):
+    """The sample's treatment label -- a column on the sample, like its time point."""
+    return join(prefix, SAMPLE_TREATMENT)
 
 
 def clonal_filter(prefix=""):

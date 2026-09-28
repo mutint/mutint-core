@@ -40,6 +40,17 @@
                             value="{{ ale }}">{{ ale }}</option>
                 {% endfor %}
             </select>
+            {% comment %} Only when the experiment has any: a picker of one entry that says
+               "All treatments" is a control that does nothing. {% endcomment %}
+            {% if treatment_names %}
+            <select name="{{ PARAM_TREATMENT }}" class="form-control">
+                <option value="{{ PARAM_ALL }}">All treatments</option>
+                {% for name in treatment_names %}
+                    <option {% if name == treatment %}selected="selected" {% endif %}
+                            value="{{ name }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
             <select name="{{ PARAM_SAMPLE_TYPE }}" class="form-control">
                 <option value="{{ PARAM_ALL }}">All sample types</option>
                 <option {% if sample_type == SAMPLE_TYPE_CLONAL %}selected="selected" {% endif %}

@@ -156,6 +156,7 @@ def _sample_entry(sample, file):
         "name": sample.name,
         "population": sample.population.name,
         "time_point": sample.time_point,
+        "treatment": sample.treatment or "",
         "description": sample.description or "",
         "is_clonal": bool(sample.is_clonal),
         "supplemental_data": {group: sample.record(group)
@@ -200,6 +201,7 @@ def metadata_csv(manifest):
          "population": entry["population"],
          "time_point": entry.get("time_point"),
          "is_clonal": entry.get("is_clonal", True),
+         "treatment": entry.get("treatment") or "",
          "description": entry.get("description") or "",
          "flags": {field: bool(entry.get(field)) for field in FLAG_FIELDS},
          "data": os.path.basename(entry["file"])}
@@ -368,6 +370,10 @@ def apply_manifest(experiment, manifest, imported, user=None):
             continue
         sample.source_name = entry.get("source_name") or sample.source_name
         sample.description = (entry.get("description") or "")[:300]
+        # Only when the manifest has the key: an archive written before the column existed
+        # has not said the sample had no treatment.
+        if "treatment" in entry:
+            sample.treatment = (entry.get("treatment") or "")[:100]
         sample.is_clonal = bool(entry.get("is_clonal", sample.is_clonal))
         for field in FLAG_FIELDS:
             if field in entry:

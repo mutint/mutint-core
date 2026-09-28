@@ -93,6 +93,7 @@ def _row_context(sample):
         "name": coordinate[2],
         "is_mixed": sample.is_mixed,
         "description": sample.description or "",
+        "treatment": sample.treatment or "",
         "medium_description": sample.curation.get("medium_description") or "",
         # The flags as the templates draw them: what to call each, and whether it is on.
         "flags": [{"field": flag.field, "key": flag.key, "label": flag.label,
@@ -116,8 +117,22 @@ def sample_edit(request, pk):
     context.update({
         "experiment": experiment,
         "sample": _row_context(sample),
+        "treatment_names": _treatment_names(experiment),
     })
     return render(request, "sample/edit.html", context)
+
+
+def _treatment_names(experiment):
+    """The treatments this experiment's samples carry, for the boxes' suggestion list.
+
+    The experiment's list of treatments *is* its samples' distinct values (see
+    `Sample.treatment`), so a page that edits one offers the others back rather than a
+    vocabulary somebody has to maintain first. Asked with the ancestor included, since this
+    page shows it.
+    """
+    from mutint_sample.views.common import get_treatment_names
+
+    return get_treatment_names(experiment.pk, include_ancestor=True)
 
 
 @ensure_csrf_cookie
@@ -134,6 +149,7 @@ def experiment_samples(request, pk):
         "samples": [_row_context(sample) for sample in _experiment_samples(experiment)],
         # For the table's header row; each sample row carries its own resolved copy.
         "flags": FLAGS,
+        "treatment_names": _treatment_names(experiment),
     })
     return render(request, "sample/list.html", context)
 
@@ -189,6 +205,7 @@ def experiment_samples_metadata(request, pk):
             "population": coordinate[0],
             "time_point": coordinate[1],
             "is_clonal": not sample.is_mixed,
+            "treatment": sample.treatment or "",
             "description": sample.description or "",
             "flags": {field: bool(getattr(sample, field)) for field in FLAG_FIELDS},
             "data": _data_name(sample),
@@ -239,6 +256,8 @@ def experiment_samples_read_metadata(request, pk):
                 values["is_mixed"] = not row.is_clonal
             if row.description is not None:
                 values["description"] = row.description
+            if row.treatment is not None:
+                values["treatment"] = row.treatment
             samples[str(sample.pk)] = values
     except metadata.MetadataError as error:
         return JsonResponse({"error": str(error)}, status=400)
@@ -302,8 +321,9 @@ def sample_update(request, pk):
         "medium_description": request.POST.get("medium_description"),
     }
     # Only the flags the form sent: an absent key leaves the flag alone, so a client that
-    # predates one of them cannot clear it by not knowing about it.
-    for field in FLAG_FIELDS:
+    # predates one of them cannot clear it by not knowing about it. The treatment is the
+    # same: it arrived after the page had users.
+    for field in FLAG_FIELDS + ("treatment",):
         if field in request.POST:
             row[field] = request.POST.get(field)
     try:

@@ -231,11 +231,42 @@ class MetadataImportTestCase(_DropTestCase):
 
     def test_a_breseq_folder_header_places_it_too(self):
         root = self.drop()
-        gd = "#=GENOME_DIFF\t1.0\n#=NAME\tclone16\n#=TREATMENT\tAra-3\n#=TIME\t30000\n" \
+        gd = "#=GENOME_DIFF\t1.0\n#=NAME\tclone16\n#=POPULATION\tAra-3\n#=TIME\t30000\n" \
+             "#=TREATMENT\tglucose\n" \
              "#=REFSEQ\ttest_ref\n" + breseq_fixture.GD_TEXT.split("\n", 2)[2]
         breseq_fixture.write_sample(root, "ZDB16", gd_text=gd)
         self._run(root)
         self.assertEqual(("Ara-3", 30000, "clone16"), self._coordinate(self._sample("ZDB16")))
+        self.assertEqual("glucose", self._sample("ZDB16").treatment)
+
+    def test_a_header_treatment_reaches_a_sample_placed_by_its_name(self):
+        """The treatment is descriptive: a `.gd` carrying `#=TREATMENT` and nothing else
+        about where it sits is placed by its filename, and still says what it was grown
+        under. A CSV row without a treatment column defers to the header too."""
+        gd = "#=GENOME_DIFF\t1.0\n#=TREATMENT\tglucose\n#=REFSEQ\ttest_ref\n" \
+             + breseq_fixture.GD_TEXT.split("\n", 2)[2]
+        summary = self._run(self._mixed_drop(None, gd_text=gd, gd_name="3-30000-1-1.gd"))
+        self.assertEqual(metadata.BY_FILENAME,
+                         [f for f in summary["files"] if f["file"] == "3-30000-1-1.gd"][0]["named_by"])
+        sample = self._sample("3-30000-1-1")
+        self.assertEqual(("3", 30000, "1-1"), self._coordinate(sample))
+        self.assertEqual("glucose", sample.treatment)
+
+        csv = "sample,population,time_point,data\nc1,Ara-1,10,3-30000-1-1.gd\n"
+        self._run(self._mixed_drop(csv, gd_text=gd, gd_name="3-30000-1-1.gd"))
+        sample = self._sample("3-30000-1-1")
+        self.assertEqual(("Ara-1", 10, "c1"), self._coordinate(sample))
+        self.assertEqual("glucose", sample.treatment)
+
+    def test_a_csv_treatment_wins_and_a_blank_cell_leaves_it(self):
+        gd = "#=GENOME_DIFF\t1.0\n#=TREATMENT\tglucose\n#=REFSEQ\ttest_ref\n" \
+             + breseq_fixture.GD_TEXT.split("\n", 2)[2]
+        csv = "sample,population,time_point,treatment,data\nc1,Ara-1,10,lactose,loose.gd\n"
+        self._run(self._mixed_drop(csv, gd_text=gd))
+        self.assertEqual("lactose", self._sample("loose").treatment)
+        csv = "sample,population,time_point,treatment,data\nc1,Ara-1,10,,loose.gd\n"
+        self._run(self._mixed_drop(csv, gd_text=gd))
+        self.assertEqual("lactose", self._sample("loose").treatment)
 
     def test_a_header_overrides_a_parseable_filename_field_by_field(self):
         gd = "#=GENOME_DIFF\t1.0\n#=POPULATION\tAra-3\n#=REFSEQ\ttest_ref\n" \

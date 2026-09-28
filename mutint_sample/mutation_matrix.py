@@ -64,6 +64,9 @@ class SampleColumn:
     #: Which of the header palette's colors the column wears: the same for every sample of
     #: one population (ALE), the next for the next population met, wrapping after PALETTE_SIZE.
     palette: int = 0
+    #: The sample's treatment label, or "". Named in the header's tooltip and the Samples
+    #: menu; it colors nothing, the palette being the population's.
+    treatment: str = ""
 
 
 @dataclass(frozen=True)
@@ -238,7 +241,8 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
                             label=sample.qualified_label if labels == "qualified" else sample.label,
                             index=index, bam_stored=bool(sample.bam_stored),
                             flags=tuple(flags_of(sample)),
-                            url=sample_page_url(sample, experiment), palette=palette[index])
+                            url=sample_page_url(sample, experiment), palette=palette[index],
+                            treatment=sample.treatment or "")
                for index, sample in enumerate(sample_dict.values())]
     column_of = {sample.id: sample.index for sample in samples}
     browse_url = browse_url or browse_url_for(sample_dict)

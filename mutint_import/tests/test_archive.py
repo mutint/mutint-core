@@ -86,6 +86,7 @@ class ArchiveTestCase(TestCase):
         first = Sample.objects.get(population=population, time_point=500)
         first.is_hypermutator = True
         first.description = "the starting clone"
+        first.treatment = "glucose"
         first.set_record(Sample.COMPONENT, Sample.CURATION,
                          {"medium_description": "DM25", "person": "somebody"})
         # The fixture folder has no summary.json; the group is what a real one records.
@@ -138,6 +139,8 @@ class ArchiveTestCase(TestCase):
         self.assertTrue(first["is_hypermutator"])
         self.assertTrue(first["is_clonal"])
         self.assertEqual("the starting clone", first["description"])
+        self.assertEqual("glucose", first["treatment"])
+        self.assertEqual("", by_source["1-1000-1-1"]["treatment"])
         self.assertEqual({"medium_description": "DM25", "person": "somebody"},
                          first["supplemental_data"]["curation"])
         self.assertIn("breseq", first["supplemental_data"])
@@ -167,12 +170,13 @@ class ArchiveTestCase(TestCase):
         manifest, _names = self._manifest_from(self._archive())
         text = archive.metadata_csv(manifest)
         lines = text.splitlines()
-        self.assertEqual("sample,population,time_point,sample_type,description,"
+        self.assertEqual("sample,population,time_point,sample_type,treatment,description,"
                          "hypermutator,contaminated,low_coverage,data", lines[0])
-        # The description and the flags ride along, so the CSV alone places and describes.
-        self.assertIn("1-1,1,500,clone,the starting clone,yes,no,no,1-500-1-1.gd", lines)
-        self.assertIn("1-1,1,1000,population,,no,yes,no,1-1000-1-1.gd", lines)
-        self.assertIn("c9,Ara-2,500,clone,Ara-2_500gen_c9,no,no,no,Ara-2_500gen_c9.vcf", lines)
+        # The treatment, the description and the flags ride along, so the CSV alone places
+        # and describes.
+        self.assertIn("1-1,1,500,clone,glucose,the starting clone,yes,no,no,1-500-1-1.gd", lines)
+        self.assertIn("1-1,1,1000,population,,,no,yes,no,1-1000-1-1.gd", lines)
+        self.assertIn("c9,Ara-2,500,clone,,Ara-2_500gen_c9,no,no,no,Ara-2_500gen_c9.vcf", lines)
 
     def test_two_samples_with_one_source_name_get_two_files(self):
         population = Population.objects.get(experiment=self.experiment, name="1")
@@ -229,6 +233,7 @@ class ArchiveTestCase(TestCase):
         self.assertTrue(first.is_hypermutator)
         self.assertTrue(first.is_clonal)
         self.assertEqual("the starting clone", first.description)
+        self.assertEqual("glucose", first.treatment)
         self.assertEqual({"medium_description": "DM25", "person": "somebody"}, first.curation)
         self.assertEqual("0.39.0", first.breseq["version"])
         second = samples["1-1000-1-1"]

@@ -533,12 +533,42 @@ def experiment_edit(request, pk):
         return render(request, "403.html", context, status=403)
 
     from mutint_bibliome.publication import dois_for
+    from mutint_experiment import treatments
     context.update({
         "experiment": experiment,
         "dois": " ".join(dois_for(experiment)),
         "editable_projects": _editable_projects(request.user),
+        # The experiment's treatments are its samples' labels, listed here so the list can
+        # be maintained -- a rename across every sample -- and so a population whose samples
+        # disagree is named rather than silently split. See mutint_experiment/treatments.py.
+        "treatments": treatments.treatments_in_use(experiment),
+        "mixed_populations": treatments.mixed_populations(experiment),
     })
     return render(request, "experiment/edit.html", context)
+
+
+@require_POST
+def experiment_treatment_rename(request, pk):
+    """Rename one treatment across every sample of the experiment; a blank name clears it.
+
+    Its own endpoint rather than a field of `experiment_update`, because it acts on the
+    samples and not on the experiment row, and because a rename is a thing done once and
+    seen at once rather than a value saved with the form.
+    """
+    from mutint_experiment import treatments
+    from mutint_experiment.samples import SampleEditError
+
+    experiment = get_object_or_404(Experiment, pk=pk)
+    if not can_edit_experiment(request.user, experiment):
+        return JsonResponse(
+            {"error": experiment_lock_refusal(experiment)
+                      or "You cannot edit this experiment."}, status=403)
+    try:
+        renamed = treatments.rename_treatment(
+            experiment, request.POST.get("old"), request.POST.get("new"))
+    except SampleEditError as error:
+        return JsonResponse({"error": error.message}, status=error.status)
+    return JsonResponse({"experiment_id": experiment.id, "renamed": renamed})
 
 
 @require_POST

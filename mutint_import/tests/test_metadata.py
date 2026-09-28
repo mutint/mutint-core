@@ -143,10 +143,32 @@ class HeaderTestCase(SimpleTestCase):
 
     def test_headers_place_a_sample_under_any_synonym(self):
         row = metadata.coordinate_from_headers(
-            {"SAMPLE": "763A", "TREATMENT": "Ara-2", "GENERATION": "500"})
+            {"SAMPLE": "763A", "POPULATION": "Ara-2", "GENERATION": "500"})
         self.assertEqual(("763A", "Ara-2", 500), (row.sample, row.population, row.time_point))
-        row = metadata.coordinate_from_headers({"name": "x", "condition": "c", "Time Point": "7"})
+        row = metadata.coordinate_from_headers({"name": "x", "population": "c", "Time Point": "7"})
         self.assertEqual(("x", "c", 7), (row.sample, row.population, row.time_point))
+
+    def test_a_header_may_carry_the_treatment_and_it_places_nothing(self):
+        """`treatment` and `condition` meant population once. They name the treatment now,
+        which rides the row without placing it: a header naming only a treatment is not a
+        placement, and `header_treatment` is what the filename path reads it with."""
+        row = metadata.coordinate_from_headers(
+            {"SAMPLE": "763A", "POPULATION": "Ara-2", "GENERATION": "500",
+             "TREATMENT": "glucose"})
+        self.assertEqual(("Ara-2", "glucose"), (row.population, row.treatment))
+        row = metadata.coordinate_from_headers({"sample": "x", "condition": "37C"})
+        self.assertEqual("37C", row.treatment)
+        self.assertIsNone(metadata.coordinate_from_headers({"sample": "x"}).treatment)
+        self.assertIsNone(metadata.coordinate_from_headers({"TREATMENT": "glucose"}))
+        self.assertEqual("glucose", metadata.header_treatment({"TREATMENT": "glucose"}))
+        self.assertEqual("37C", metadata.header_treatment({"condition": ["x", "37C"]}))
+        self.assertIsNone(metadata.header_treatment({"TREATMENT": " "}))
+        self.assertIsNone(metadata.header_treatment({"POPULATION": "Ara-2"}))
+        self.assertIsNone(metadata.header_treatment(None))
+        # Placing by a treatment alone is what it used to do, and is refused now: a time
+        # point with no population.
+        with self.assertRaises(metadata.MetadataError):
+            metadata.coordinate_from_headers({"SAMPLE": "x", "TREATMENT": "Ara-2", "TIME": "5"})
 
     def test_a_header_may_say_the_sample_type(self):
         row = metadata.coordinate_from_headers({"SAMPLE": "x", "SAMPLE_TYPE": "population"})
@@ -157,8 +179,13 @@ class HeaderTestCase(SimpleTestCase):
 
     def test_an_exact_key_beats_a_synonym(self):
         row = metadata.coordinate_from_headers(
+            {"TIME": "1", "TIME_POINT": "30000", "SAMPLE": "A", "POPULATION": "Ara-3"})
+        self.assertEqual(30000, row.time_point)
+        # The LTEE's own header: `TREATMENT LTEE` was a losing synonym for population once
+        # and is the treatment now, beside the population it used to lose to.
+        row = metadata.coordinate_from_headers(
             {"TREATMENT": "LTEE", "POPULATION": "Ara-3", "TIME": "30000", "SAMPLE": "A"})
-        self.assertEqual("Ara-3", row.population)
+        self.assertEqual(("Ara-3", "LTEE"), (row.population, row.treatment))
 
     def test_nothing_placing_is_none(self):
         self.assertIsNone(metadata.coordinate_from_headers({"REFSEQ": "x", "AUTHOR": "y"}))

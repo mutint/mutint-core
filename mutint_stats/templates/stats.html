@@ -347,6 +347,7 @@
             <thead>
             <tr>
                 <th>Population, Time point, Sample</th>
+                {% if treatment_names %}<th>Treatment</th>{% endif %}
                 <th>Predicted Mutations</th>
                 <th>Uncalled bases</th>
                 <th>Coverage</th>
@@ -365,6 +366,7 @@
                     <td class="source_name">
                         {{ row.sample.label }} {% sample_flag_badges row.sample %}
                     </td>
+                    {% if treatment_names %}<td class="treatment">{{ row.sample.treatment|default_if_none:"" }}</td>{% endif %}
                     <td class="mutation_count">{{ row.mutation_count }}</td>
                     {% comment %} Bases, not regions: one region can be a single base or a
                        megabase, so their count said nothing about how much of the genome

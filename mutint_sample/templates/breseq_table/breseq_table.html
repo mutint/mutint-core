@@ -92,7 +92,10 @@
                    coincidences. {% endcomment %}
                 {% for sample in sample_list %}
                     <li class="{% if sample.id == selected_sample_id %}active {% endif %}{% if sample.id == experiment_ancestor_id %}sample-ancestor{% endif %}">
-                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">{{ sample.label }}{% if sample.id == experiment_ancestor_id %} <span class="sample-ancestor-tag">ancestor</span>{% endif %} {% sample_flag_badges sample %}</a>
+                        {% comment %} The picker keeps the narrowing the page arrived with,
+                           so a reader who came by `?population=` or `?treatment=` moves
+                           between the samples they asked for. {% endcomment %}
+                        <a href="?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}{% if population %}&amp;{{ PARAM_POPULATION }}={{ population|urlencode }}{% endif %}{% if treatment %}&amp;{{ PARAM_TREATMENT }}={{ treatment|urlencode }}{% endif %}">{{ sample.label }}{% if sample.id == experiment_ancestor_id %} <span class="sample-ancestor-tag">ancestor</span>{% endif %} {% sample_flag_badges sample %}</a>
                     </li>
                 {% endfor %}
             </ul>

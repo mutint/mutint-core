@@ -35,6 +35,44 @@
             <textarea class="form-control" id="ee-notes" rows="5">{{ experiment.notes|default_if_none:'' }}</textarea>
         </div>
 
+        {% comment %} The experiment's treatments: the labels its samples carry, which is the
+           whole of the list (there is no Treatment row). Each can be renamed across every
+           sample here, so a typo that made a second factor level is mended in one stroke;
+           a sample's own treatment is set on the Samples page. Rendered only when there
+           are any -- an empty table under a heading says less than nothing. {% endcomment %}
+        {% if treatments %}
+        <h4 style="margin-top: 2em;">Treatments</h4>
+        <p style="color: #666;">
+            The conditions this experiment's samples were grown under, as set on the
+            <a href="/experiment/{{ experiment.id }}/samples/">Samples</a> page. Renaming one
+            changes every sample carrying it; renaming it to a name already in use merges the
+            two, and renaming it to nothing clears it.
+        </p>
+        <table class="table table-condensed" id="ee-treatments" style="max-width: 40em;">
+            <thead><tr><th>Treatment</th><th>Samples</th><th>Rename to</th><th></th></tr></thead>
+            <tbody>
+            {% for entry in treatments %}
+                <tr data-treatment="{{ entry.name }}">
+                    <td>{{ entry.name }}</td>
+                    <td>{{ entry.count }}</td>
+                    <td><input type="text" class="form-control input-sm" maxlength="100"
+                               autocomplete="off" value="{{ entry.name }}"></td>
+                    <td><button type="button" class="btn btn-default btn-sm ee-rename">Rename</button></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if mixed_populations %}
+        <div class="alert alert-warning" style="max-width: 40em;">
+            A treatment is usually a property of a whole population, and these populations
+            hold samples under more than one:
+            {% for entry in mixed_populations %}<b>{{ entry.population }}</b>
+                ({% for name in entry.treatments %}{% if name %}{{ name }}{% else %}<i>none</i>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}){% if not forloop.last %}; {% endif %}{% endfor %}.
+            That may be what you meant; if not, the Samples page is where to correct it.
+        </div>
+        {% endif %}
+        {% endif %}
+
         <div style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="ee-save">Save experiment</button>
             <a class="btn btn-default"
@@ -60,6 +98,20 @@
             window.location.href = "/stats?experiment_id={{ experiment.id }}";
         }).catch(function (err) {
             document.getElementById("ee-error").textContent = err.message;
+        });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll("#ee-treatments .ee-rename"), function (button) {
+        button.addEventListener("click", function () {
+            var row = button.closest("tr");
+            window.mutintPost("/experiment/{{ experiment.id }}/treatments/rename/", {
+                old: row.getAttribute("data-treatment"),
+                new: row.querySelector("input").value
+            }).then(function () {
+                window.location.reload();
+            }).catch(function (err) {
+                document.getElementById("ee-error").textContent = err.message;
+            });
         });
     });
 })();

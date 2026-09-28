@@ -9,6 +9,9 @@ REQUEST_EXPERIMENT_ID = "experiment_id"
 #: text since `mutint_experiment.0008` and holds `Ara-1` as readily as `3`.
 REQUEST_POPULATION = "population"
 
+#: Which treatment to narrow to -- the label on the samples, beside the population's.
+REQUEST_TREATMENT = "treatment"
+
 #: One sample, by primary key. It was `sample_id`, after `ResequencingExperiment`.
 REQUEST_SAMPLE_ID = "sample_id"
 

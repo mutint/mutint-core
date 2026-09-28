@@ -733,12 +733,12 @@ class ExportHeaderTestCase(GdImportTestCase):
         self.assertIn("#=REFSEQ\tBarrickLab-Public:release/reference/REL606.6.gbk", lines)
         # One READSEQ: the replayed one, not a second copy from the recorded inputs.
         self.assertEqual(1, len([line for line in lines if line.startswith("#=READSEQ\t")]))
-        # `TIME`, `POPULATION` and `TREATMENT` (a synonym for population) place the sample,
-        # and MutInt writes the coordinate itself -- so the population appears once, as
-        # MutInt's line, and the file's `TIME` spelling not at all.
-        for key in ("#=TIME\t", "#=TREATMENT\t"):
-            self.assertFalse([line for line in lines if line.startswith(key)], key)
+        # `TIME` and `POPULATION` place the sample and `TREATMENT` describes it, and MutInt
+        # writes all three from the row itself -- so the population and the treatment each
+        # appear once, as MutInt's lines, and the file's `TIME` spelling not at all.
+        self.assertFalse([line for line in lines if line.startswith("#=TIME\t")])
         self.assertEqual(1, lines.count("#=POPULATION\tAra-3"))
+        self.assertEqual(1, lines.count("#=TREATMENT\tLTEE"))
 
     def test_the_export_writes_the_coordinate(self):
         self._import(CLEAN_GD)
@@ -748,10 +748,11 @@ class ExportHeaderTestCase(GdImportTestCase):
         self.assertIn("#=POPULATION\tAra-3", lines)
         self.assertIn("#=TIME_POINT\t30000", lines)
         self.assertIn("#=SAMPLE_TYPE\tclone", lines)
-        # The coordinate comes after the replayed header, and in this order.
+        # The coordinate comes after the replayed header, and in this order; the treatment
+        # (this fixture carries one) last, being descriptive rather than placement.
         keys = [line.split("\t")[0] for line in lines]
-        self.assertEqual(["#=SAMPLE", "#=POPULATION", "#=TIME_POINT", "#=SAMPLE_TYPE"],
-                         keys[-4:])
+        self.assertEqual(["#=SAMPLE", "#=POPULATION", "#=TIME_POINT", "#=SAMPLE_TYPE",
+                          "#=TREATMENT"], keys[-5:])
 
     def test_an_unplaced_sample_writes_no_population_or_time_point(self):
         self._ensure_reference()

@@ -95,7 +95,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2930 run, 0 failures** standalone; **3563** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 2960 run, 0 failures** standalone; **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -2217,6 +2217,58 @@ and keeps any other text under `supplemental_data["mutint_core"]["curation"]["le
 nobody here can see. **It is the first `RunPython` in the repository**: there was none because
 the history was regenerated from scratch, not because there is a rule against them.
 
+### A sample's treatment is a label, not a model
+
+`Sample.treatment` is the condition a sample was grown under -- a medium, a temperature, a
+drug -- as a **factor** analyses can group by across populations. It is a `CharField`,
+indexed, and there is deliberately no `Treatment` row: the experiment's list of treatments
+*is* the distinct values its samples carry. A model would have bought descriptions and a
+constraint at the cost of a row to create before a sample could be filed, and nothing reads
+a treatment except to group by it. What makes the list maintainable without one is on the
+experiment's edit page (`mutint_experiment/treatments.py`): the values in use with their
+counts, a rename that is one UPDATE over the samples carrying the old label (a blank
+clears; a name in use merges), and a warning naming the populations whose samples carry
+more than one -- because in an ALE a treatment is usually a property of the lineage, and
+storing it per sample **permits** a population to be split without enforcing anything.
+The edit pages offer the values in use back through a `<datalist>`, so the fortieth sample
+gets the word the first thirty-nine used.
+
+**It is descriptive**, in `mutint_experiment/samples.py`'s sense: in `DESCRIPTIVE_FIELDS`,
+so a change moves no row and rebuilds nothing, and an absent key leaves it alone. No derived
+data groups by it -- convergence counts populations, fixation time points within one --
+so that classification is correct today and is the thing to revisit if a rebuilder ever
+reads the label.
+
+**Every population selector has a treatment counterpart.** `get_ordered_sample_queryset`
+and `get_ordered_sample_dict` take `treatment=` (keyword-only, like `include_ancestor`),
+`common.get_treatment` reads `?treatment=` with `get_population`'s rule, and
+`common.get_treatment_names` lists the values in use among the visible samples. The matrix
+page renders a second `<select>` **only when the experiment has any** (a picker of one
+entry is a control that does nothing), so Compare, `/stats`, the per-sample Mutations page
+and its picker links, the needle panel's links and mutint-phylogeny's session selection all
+narrow by it. The filter narrows *samples*; Compare's sets are decided over the samples
+shown, so "at least N populations" under a treatment counts the populations with a sample
+under it, and the rules were not taught the word. The matrix names a sample's treatment in
+its header tooltip and Samples menu and colors nothing by it: the palette stays the
+population's.
+
+**`treatment` and `condition` were synonyms for population**, and are the treatment now, in
+the CSV header, the `.gd` header and the VCF's `##` lines alike. That is the one place this
+changes what an existing file does: a `.gd` that placed itself by `#=TREATMENT Ara-3` and
+`#=TIME 30000` with no `#=POPULATION` is refused now (a time point with no population)
+unless its filename parses, and the LTEE fixture's `#=TREATMENT LTEE` -- a losing synonym
+`#=POPULATION` outranked -- lands as the treatment. The key stays in `SYNONYMS` so
+`is_placement_key` is true of it, which is what makes both exports drop the replayed line
+and write the sample's current value (`#=TREATMENT`, `##SAMPLE=<...,treatment=...>`); but
+it is **not** placement, so `coordinate_from_headers` answers None for a header naming
+only a treatment and `header_treatment` is how the filename path still reads it. On import
+a blank cell **leaves** the treatment (the flags' rule, since an import is additive) where
+the Edit samples page, which sends every box, clears it. Precedence is the CSV row, then
+the header, then nothing. The CSV column sits after `sample_type` and before `description`
+-- a categorical fact about the sample, as the type is -- and the archive's `metadata.csv`
+and manifest carry it, the manifest reader touching the field only when the key is present
+so an archive written before the column existed clears nothing.
+
 ### Per-user preferences
 
 `mutint_common.preferences` is a key/value store per signed-in user -- `UserPreference(user,
@@ -2405,8 +2457,11 @@ try/except.
 the filename's -- so the LTEE's `3-30000-1-1.gd`, carrying `#=POPULATION Ara-3` and
 `#=TIME 30000`, lands at Ara-3 / 30000 / 1-1. That is what `#=TIME` means in those files,
 which is why `time` stays a synonym though breseq's own `output.gd` never writes it. An
-exact key beats a synonym, so `#=POPULATION` wins over `#=TREATMENT` when a file carries
-both. `test_gd_import`'s renaming helpers strip these headers from the fixture, because
+exact key beats a synonym, so `#=TIME_POINT` wins over `#=TIME` when a file carries both.
+(`#=TREATMENT` was a synonym for population that `#=POPULATION` outranked; it is the
+sample's **treatment** now -- see **A sample's treatment is a label** below -- so the
+LTEE fixture's `#=TREATMENT LTEE` lands as a treatment rather than being discarded.)
+`test_gd_import`'s renaming helpers strip these headers from the fixture, because
 those tests are about filenames; the tests that import the fixture as itself let its header
 win. A VCF row that names the *file* reaches its sample through an `aliases=` argument at
 the seam, for a single-column file only -- for several columns the two cannot mean the same

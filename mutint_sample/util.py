@@ -72,8 +72,12 @@ def calls_for_samples(sample_id_list, experiment_id):
 
 
 def get_ordered_sample_queryset(experiment_id, population=None, sample_type=None, *,
-                               include_ancestor=False):
+                               treatment=None, include_ancestor=False):
     """An experiment's samples in A/F/I/R order, without its designated ancestor.
+
+    `treatment` narrows to the samples carrying that label, the way `population` narrows to
+    a lineage; the two are orthogonal and a page may pass both. Keyword-only, being the
+    newer of the two and for the reason below.
 
     **The ancestor is excluded by default**, and the few callers that curate rather than
     read pass `include_ancestor=True`: the Edit-samples page and the mutation editor, which
@@ -100,6 +104,8 @@ def get_ordered_sample_queryset(experiment_id, population=None, sample_type=None
     # so quietly selected every ALE instead of that one.
     if population is not None and population != "":
         sample_qryset = sample_qryset.filter(**{paths.to_population_label(): population})
+    if treatment:
+        sample_qryset = sample_qryset.filter(**{paths.to_sample_treatment(): treatment})
     if sample_type:
         # Two named filters rather than a computed boolean. `get_sample_type` has already
         # refused anything that is not one of the two, so this is a genuine two-way choice
@@ -114,18 +120,19 @@ def get_ordered_sample_queryset(experiment_id, population=None, sample_type=None
 
 
 def get_ordered_sample_dict(experiment_id, population=None, sample_type=None,
-                           *, include_ancestor=False):
+                           *, treatment=None, include_ancestor=False):
     """An experiment's samples as `{id: Sample}`, in the order their columns should appear.
 
-    `population` and `sample_type` narrow the set; `include_ancestor` keeps the designated
-    ancestor, for a page that curates rather than reads. See `get_ordered_sample_queryset`,
-    which this wraps.
+    `population`, `sample_type` and `treatment` narrow the set; `include_ancestor` keeps the
+    designated ancestor, for a page that curates rather than reads. See
+    `get_ordered_sample_queryset`, which this wraps.
 
     It took a `request` too, for a `tag_select` query parameter that showed or hid sample
     columns by their tags. Tagging is gone; the parameter went first, so a caller cannot pass
     one and believe it filtered.
     """
     sample_queryset = get_ordered_sample_queryset(experiment_id, population, sample_type,
+                                                treatment=treatment,
                                                 include_ancestor=include_ancestor)
     return collections.OrderedDict((sample.id, sample) for sample in sample_queryset)
 

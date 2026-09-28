@@ -2,8 +2,8 @@
 
 An experiment can leave one MutInt and arrive in another as a single zip: the reference
 genome, every sample's mutations, and the details that no mutation file carries -- the
-experiment's name and notes, each population's species and strain, each sample's flags and
-description, the publications, and which sample is the ancestor.
+experiment's name and notes, each population's species and strain, each sample's flags,
+treatment and description, the publications, and which sample is the ancestor.
 
 ## Getting the archive
 
@@ -53,8 +53,9 @@ What happens, in order:
    archive's own `metadata.csv`. Importing the same archive twice lands on the same samples
    rather than making a second set.
 3. The **manifest** is applied, and it is authoritative: the experiment's name and notes,
-   the populations' descriptions, species and strains, every sample's flags, description and
-   recorded details, the publications and the ancestor all replace whatever the target had.
+   the populations' descriptions, species and strains, every sample's flags, treatment,
+   description and recorded details, the publications and the ancestor all replace whatever
+   the target had.
 
 Two things deliberately do not travel. A **lock** is a decision about one installation's
 copy of the data, so the target is left unlocked for its owner to lock. And nothing about

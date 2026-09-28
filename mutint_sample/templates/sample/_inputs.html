@@ -12,6 +12,8 @@
     <div class="sample-inputs-coordinate">
         <b>{{ sample.population_name }}</b> / <b>{{ sample.time_point|time_point }}</b> /
         <b>{{ sample.name }}</b>
+        {% if sample.treatment %}<span class="sample-inputs-source">treatment
+            {{ sample.treatment }}</span>{% endif %}
         {% if sample.source_name %}<span class="sample-inputs-source">imported as
             {{ sample.source_name }}</span>{% endif %}
     </div>

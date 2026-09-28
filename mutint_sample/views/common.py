@@ -2,7 +2,8 @@ import mutint_experiment.models
 from mutint_experiment.models import Experiment
 from mutint_experiment.permissions import can_view_project
 from mutint_common.constants import (REQUEST_EXPERIMENT_ID, REQUEST_POPULATION,
-                                    REQUEST_ALL, REQUEST_SAMPLE_TYPE, SAMPLE_TYPES)
+                                    REQUEST_ALL, REQUEST_SAMPLE_TYPE, REQUEST_TREATMENT,
+                                    SAMPLE_TYPES)
 import logging
 
 from mutint_common.logger import user_extra
@@ -109,6 +110,38 @@ def get_time_points(experiment_id):
               .values_list(paths.to_time_point_value(), flat=True)
               .distinct())
     return [format_time_point(value) for value in sorted(set(values))]
+
+
+def get_treatment_names(experiment_id, *, include_ancestor=False):
+    """The treatments this experiment's samples carry, in order, for a picker.
+
+    The counterpart to `get_population_names`, asked of the samples for the same reason --
+    and there is nothing else to ask: a treatment is a label on the sample, and the
+    experiment's list of them *is* these values (see `Sample.treatment`). Blank and NULL
+    are dropped rather than offered, since "no treatment" is the picker's own first entry.
+    Natural order, so `10 mM` sorts after `2 mM`.
+    """
+    from mutint_sample.util import get_ordered_sample_queryset
+    from mutint_experiment.ordering import PAD
+
+    values = (get_ordered_sample_queryset(experiment_id, include_ancestor=include_ancestor)
+              .order_by()
+              .exclude(**{paths.to_sample_treatment() + "__isnull": True})
+              .exclude(**{paths.to_sample_treatment(): ""})
+              .values_list(paths.to_sample_treatment(), flat=True)
+              .distinct())
+    # The padding `ordering.natural` applies in SQL, so `2 mM` sorts before `10 mM` here as
+    # a population called `2` sorts before `10` in every sample list.
+    return sorted(set(values), key=lambda value: value.rjust(PAD, "0"))
+
+
+def get_treatment(request):
+    """The treatment picked in the query string, or None for "all" -- `get_population`'s
+    rule, for the same two reasons: the value is text, and a cleared picker means all."""
+    treatment = request.GET.get(REQUEST_TREATMENT)
+    if treatment is None or treatment in ("", REQUEST_ALL):
+        return None
+    return treatment
 
 
 def get_population(request):

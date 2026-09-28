@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 # Fields a user may change that do not affect identity. Editing one of these must not
 # create a row, delete a row, or trigger a rebuild -- see `rows_are_structural`.
-DESCRIPTIVE_FIELDS = ("source_name", "description", "medium_description")
+DESCRIPTIVE_FIELDS = ("source_name", "description", "medium_description", "treatment")
 # The form's field names, which are the query-string vocabulary and change with it rather
 # than with the columns behind them.
 STRUCTURAL_FIELDS = ("population", "time_point", "name", "is_mixed")
@@ -258,10 +258,11 @@ def _label(raw, label, row_label):
 # somebody types into a form still wants a bound, and because the sample edit page's
 # `maxlength` attribute mirrors it client-side.
 _MAX_LENGTHS = {"source_name": 200, "description": 300,
-                "medium_description": 500}
+                "medium_description": 500, "treatment": 100}
 _FIELD_LABELS = {"source_name": "sample name",
                  "description": "description",
-                 "medium_description": "medium description"}
+                 "medium_description": "medium description",
+                 "treatment": "treatment"}
 
 
 def _check_lengths(descriptive, row_label):
@@ -533,7 +534,8 @@ def apply_rows(experiment, parsed):
                 setattr(sample, field, descriptive[field])
                 always.append(field)
         _write(sample, {"source_name": "source_name",
-                       "description": "description"},
+                       "description": "description",
+                       "treatment": "treatment"},
                descriptive, always,
                curation={"medium_description": "medium_description"})
 

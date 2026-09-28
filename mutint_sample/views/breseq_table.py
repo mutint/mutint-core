@@ -44,6 +44,7 @@ def breseq_table(request):
         started = time.time()
         experiment = mutint_sample.views.common.get_experiment(request)
         population = mutint_sample.views.common.get_population(request)
+        treatment = mutint_sample.views.common.get_treatment(request)
         sample_type = mutint_sample.views.common.get_sample_type(request)
 
         # `include_ancestor=True`, unlike every other reading page. This one shows a single
@@ -52,7 +53,8 @@ def breseq_table(request):
         # unreachable rather than merely excluded. It is listed first and tinted; the
         # analyses that aggregate across samples still leave it out.
         sample_dict = get_ordered_sample_dict(experiment.id, population,
-                                            sample_type, include_ancestor=True)
+                                            sample_type, treatment=treatment,
+                                            include_ancestor=True)
         sample_dict = _ancestor_first(sample_dict, experiment.ancestor_id)
         sample = _selected_sample(request, sample_dict, experiment)
         is_ancestor = sample is not None and sample.id == experiment.ancestor_id
@@ -72,6 +74,7 @@ def breseq_table(request):
         context.update({
             "population_names": mutint_sample.views.common.get_population_names(experiment.id),
             "population": population,
+            "treatment": treatment,
             "experiment_name": experiment.name,
             "sample_type": sample_type,
             "sample_list": list(sample_dict.values()),

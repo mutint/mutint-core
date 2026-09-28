@@ -276,6 +276,13 @@ def import_document_as_sample(document, sample_name, context, aliases=()):
         placed_by = sample_metadata.BY_FILENAME
     context.setdefault("placements", {})[sample_name] = placed_by
 
+    # The treatment is descriptive rather than placement, so it is read from the header
+    # whichever source placed the sample: a CSV row that has no treatment column defers to
+    # the file, and a file placed by its name still says what it was grown under.
+    header_treatment = sample_metadata.header_treatment(getattr(document, "metadata", None))
+    if row is not None and row.treatment is None and header_treatment:
+        row = row._replace(treatment=header_treatment)
+
     if row is not None:
         seq_experiment = _place_by_metadata(context, document, row, sample_name)
     elif identity is None:
@@ -293,6 +300,9 @@ def import_document_as_sample(document, sample_name, context, aliases=()):
             # relabel every table column with the filename it came from.
             description=(sample_name
                                  if identity.shape == sample_names.SHAPE_TRIPLE else ""))
+    if row is None and header_treatment and seq_experiment.treatment != header_treatment:
+        seq_experiment.treatment = header_treatment
+        seq_experiment.save(update_fields=["treatment"])
 
     # Counted before the write, which is what clears them.
     replaced = MutationCall.objects.filter(
@@ -382,21 +392,44 @@ def _place_by_metadata(context, document, row, sample_name):
 
 
 def _apply_row_details(sample, row):
-    """Set the description and flags a metadata row carries; returns the fields changed.
+    """Set the description, treatment and flags a metadata row carries; returns the fields
+    changed.
 
     A non-blank description is set; otherwise the placement's own rule stands, which the
     caller has already applied -- a sample placed by metadata is labelled by its coordinate.
-    Only the flags the row named are touched: a blank cell has not said the flag is off.
+    Only the flags the row named are touched: a blank cell has not said the flag is off. The
+    treatment follows the flags -- a blank cell leaves it -- since an import is additive and
+    the Edit samples page is where a treatment is cleared.
+    """
+    return apply_sample_details(sample, sample_metadata.details_of(row), save=False)
+
+
+def apply_sample_details(sample, details, save=True):
+    """Set the description, treatment and flags in `details` on `sample`; returns the fields
+    changed, saved unless `save=False`.
+
+    `details` is `metadata.details_of`'s dict -- `treatment`, `description`, `flags` -- and
+    the rules are the import path's: a non-blank description or treatment is set, a blank one
+    leaves what is there, and only the flags named are touched. Public for a component that
+    places a sample by another route and applies a row's details when the sample exists;
+    mutint-breseq stores them on its run and calls this after the import.
     """
     fields = []
-    description = (row.description or "").strip()
+    details = details or {}
+    description = (details.get("description") or "").strip()
     if description and sample.description != description:
         sample.description = description
         fields.append("description")
-    for field, value in (row.flags or {}).items():
+    treatment = (details.get("treatment") or "").strip()
+    if treatment and sample.treatment != treatment:
+        sample.treatment = treatment
+        fields.append("treatment")
+    for field, value in (details.get("flags") or {}).items():
         if getattr(sample, field) != value:
             setattr(sample, field, value)
             fields.append(field)
+    if fields and save:
+        sample.save(update_fields=fields)
     return fields
 
 
@@ -747,6 +780,7 @@ _SAMPLE_KEY = "SAMPLE"
 _POPULATION_KEY = "POPULATION"
 _TIME_POINT_KEY = "TIME_POINT"
 _SAMPLE_TYPE_KEY = "SAMPLE_TYPE"
+_TREATMENT_KEY = "TREATMENT"
 
 
 def export_gd_header(sample):
@@ -762,8 +796,9 @@ def export_gd_header(sample):
     **Then where the sample sits**, in the spelling `coordinate_from_headers` reads back:
     `SAMPLE`, then `POPULATION` and `TIME_POINT` together or not at all -- the importer
     refuses one without the other, and a sample not placed yet has neither -- then
-    `SAMPLE_TYPE clone|population`. Last, one `READSEQ` per read file the sample records,
-    only when the replayed header named none, since a header breseq wrote already has them.
+    `SAMPLE_TYPE clone|population`, then `TREATMENT` when the sample has one. Last, one
+    `READSEQ` per read file the sample records, only when the replayed header named none,
+    since a header breseq wrote already has them.
     """
     stored = sample.record(GD_RECORD).get("header") or []
     lines = ["#=GENOME_DIFF\t1.0"]
@@ -789,6 +824,8 @@ def export_gd_header(sample):
         lines.append("#=%s\t%s" % (_TIME_POINT_KEY, format_time_point(sample.time_point)))
     lines.append("#=%s\t%s" % (_SAMPLE_TYPE_KEY,
                                 "clone" if sample.is_clonal else "population"))
+    if sample.treatment:
+        lines.append("#=%s\t%s" % (_TREATMENT_KEY, sample.treatment))
     if "READSEQ" not in replayed_keys:
         for item in sample.inputs:
             if item.get("kind") == inputs.KIND_READS and item.get("value"):

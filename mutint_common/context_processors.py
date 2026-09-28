@@ -86,6 +86,7 @@ def request_vocabulary(request):
     return {
         'PARAM_EXPERIMENT': constants.REQUEST_EXPERIMENT_ID,
         'PARAM_POPULATION': constants.REQUEST_POPULATION,
+        'PARAM_TREATMENT': constants.REQUEST_TREATMENT,
         'PARAM_SAMPLE_TYPE': constants.REQUEST_SAMPLE_TYPE,
         'PARAM_ALL': constants.REQUEST_ALL,
         'SAMPLE_TYPE_CLONAL': constants.SAMPLE_TYPE_CLONAL,

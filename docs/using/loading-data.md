@@ -64,11 +64,11 @@ Drop a file called `metadata.csv` beside the data, on the Import data page or am
 files on the Run breseq page. It has a header row and then one row per sample:
 
 ```
-sample,population,time_point,sample_type,description,hypermutator,data
-763A,Ara-2,500,clone,Ara-2 500 gen clone A,yes,Ara-2_500gen_763A.gd
-ZDB16,Ara-3,30000,,,,ZDB16
-A1,glucose,10,population,,,s1;s1_lane2
-mystery,,,,,,mystery_sample.gd
+sample,population,time_point,sample_type,treatment,description,hypermutator,data
+763A,Ara-2,500,clone,glucose,Ara-2 500 gen clone A,yes,Ara-2_500gen_763A.gd
+ZDB16,Ara-3,30000,,,,,ZDB16
+A1,glucose,10,population,37C,,,s1;s1_lane2
+mystery,,,,,,,mystery_sample.gd
 ```
 
 - `sample` is the name within its population; `population` and `time_point` place it.
@@ -77,6 +77,12 @@ mystery,,,,,,mystery_sample.gd
   `clone`, `individual` or `isolate` one genotype. Left blank, or with the column absent,
   the data decides (breseq's `-p` in the `.gd`'s command line). On the Run breseq page it
   also sets the **Population sample** option for that sample's run.
+- `treatment` is optional: the condition the sample was grown under -- a medium, a
+  temperature, a drug -- as a label that groups samples across populations. Every page
+  that picks samples by population can pick them by treatment too. The experiment's list of
+  treatments is simply the values its samples carry; the Samples page offers them back as
+  you type, and the experiment's edit page renames one across every sample. A blank cell
+  leaves a sample's treatment as it is.
 - `description`, `hypermutator`, `contaminated` and `low_coverage` are optional too. A
   description is what the sample is called throughout the site in place of its coordinate;
   blank means none. The three flags take `yes` or `no`, and a blank cell leaves the flag
@@ -109,11 +115,15 @@ as they were.
 
 ### Naming a sample inside the file
 
-The same three fields can be written into the file's header, which suits data that travels:
-a `.gd` with `#=POPULATION Ara-3` and `#=TIME 30000` places itself, as the LTEE's do. The
+The same fields can be written into the file's header, which suits data that travels:
+a `.gd` with `#=POPULATION Ara-3` and `#=TIME 30000` places itself, as the LTEE's do, and
+one with `#=TREATMENT glucose` says what it was grown under. The
 keys accept synonyms, matched without regard to case, spaces or underscores: `sample` or
-`name`; `population`, `treatment` or `condition`; `time_point`, `time`, `generation` or
-`transfer`; and `sample_type`, with the values the CSV column takes. In a VCF the same keys go on `##key=value` lines and apply to every sample
+`name`; `population`; `time_point`, `time`, `generation` or
+`transfer`; `sample_type`, with the values the CSV column takes; and `treatment` or
+`condition`. (`treatment` and `condition` used to be read as the population. A file that
+placed itself by `#=TREATMENT` alone needs a `#=POPULATION` line now, or a filename that
+parses.) In a VCF the same keys go on `##key=value` lines and apply to every sample
 column in the file; a multi-sample file places columns separately with the spec's own
 `##SAMPLE=<ID=col,population=Ara-2,generation=500>` lines. A header that names some fields
 takes the rest from the filename, so `3-30000-1-1.gd` carrying only `#=POPULATION Ara-3`

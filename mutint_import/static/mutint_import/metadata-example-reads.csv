@@ -7,13 +7,15 @@
 #
 # sample_type sets that sample's Population sample option: population or mixed runs breseq
 # with -p, clone or individual or isolate without. Blank uses the checkbox on the page.
-sample,population,time_point,sample_type,data
+# treatment, description and the flags (hypermutator, contaminated, low_coverage: yes or
+# no) are recorded on the sample once breseq has run, exactly as on the Import data page.
+sample,population,time_point,sample_type,treatment,description,hypermutator,data
 # Two clones from the same population at different generations:
-763A,Ara-2,500,clone,Ara-2_500gen_763A
-763B,Ara-2,500,clone,Ara-2_500gen_763B
+763A,Ara-2,500,clone,glucose,,no,Ara-2_500gen_763A
+763B,Ara-2,500,clone,glucose,,no,Ara-2_500gen_763B
 # A population sample sequenced on two lanes, so two stems name one sample:
-mix,Ara-2,2000,population,Ara-2_2000gen_L001;Ara-2_2000gen_L002
+mix,Ara-2,2000,population,glucose,,,Ara-2_2000gen_L001;Ara-2_2000gen_L002
 # Reads with names that say nothing, placed here instead:
-c7,glucose,120,clone,SRR37077254
+c7,glucose,120,clone,37C,clone 7,,SRR37077254
 # A sample that is not placed yet: population and time_point both blank.
-mystery,,,,run17
+mystery,,,,,,,run17
