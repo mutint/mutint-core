@@ -2055,7 +2055,11 @@ tag alone, as Search does, gets the three client-side tabs from the tag. The scr
 its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
 `.tab-content`. The DataTables toolbars -- length, search, count, pager, Export CSV -- sit
 under the strip on every tab; the Frequency display menu and the View switch are in the
-Display pane, not in those toolbars.
+Display pane, not in those toolbars. **Hide Options**, first in the pager's row before
+Export CSV, folds the strip and its panes away to give the table the height, and
+remembers it as `mutation_matrix.options` -- shown by default. It hides the `.tab-content`
+it found and the strip immediately before it, and never the container: on a page with no
+pane box the script's `controls` *is* the container, and hiding that hides the table.
 
 **Row sets are the seam for a page that wants a subset of its rows without being a second
 page.** `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))` annotates each row with

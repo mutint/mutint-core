@@ -26,6 +26,8 @@
  *     through `[data-mutation-matrix-controls]` because the page may own the strip; the
  *     DataTables toolbars -- length, search, count, pager, Export CSV -- stay under the strip
  *     on every tab;
+ *   - Hide Options / Show Options, first in the pager's row, folds the strip and its panes
+ *     away and remembers that it did (`mutation_matrix.options`); shown unless told otherwise;
  *   - the table lives in a scroll box as wide as itself and no wider than the window: the
  *     header sticks to its top and the descriptive columns to its left, each pinned column's
  *     `left` being the sum of the widths before it, recomputed after every draw and whenever
@@ -47,6 +49,7 @@
     var FREQUENCY_KEY = "mutation_matrix.frequency";
     var VIEW_KEY = "mutation_matrix.view";
     var SHOW_KEY = "mutation_matrix.show";
+    var OPTIONS_KEY = "mutation_matrix.options";
     var VIEWS = { normal: true, condensed: true };
     var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
@@ -116,6 +119,20 @@
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
+        // The strip and its panes, folded away by Hide Options. `controls` is the container
+        // itself when no pane box was found, and hiding that would hide the table.
+        var optionPanes = controls !== container ? controls : container.querySelector(".tab-content");
+        var optionStrip = optionPanes && optionPanes.previousElementSibling &&
+            optionPanes.previousElementSibling.matches("[data-control-tabs]")
+            ? optionPanes.previousElementSibling : null;
+        var storedOptions = prefs.get(OPTIONS_KEY, null);
+        var optionsShown = !(storedOptions && storedOptions.hidden === true);
+        function applyOptions() {
+            [optionStrip, optionPanes].forEach(function (el) { if (el) { el.hidden = !optionsShown; } });
+        }
+        // Before the first draw, like every other remembered choice, so the scroll box is
+        // sized against the page as it will stay.
+        applyOptions();
         var storedView = prefs.get(VIEW_KEY, null);
         var view = storedView && VIEWS[storedView.view] ? storedView.view : "condensed";
         table.classList.add("view-" + view);
@@ -233,7 +250,21 @@
             // -- or every row the server produced. Visible columns only, either way. Ancestral
             // rows the reader asked to see are rows the server produced, so both include them;
             // they are in no row set, so choosing one in the Show menu drops them.
-            buttons: [{
+            // Hide Options goes first, before Export CSV: it is about the page rather than
+            // the data. Absent where there is nothing to fold.
+            buttons: (optionPanes ? [{
+                text: optionsShown ? "Hide Options" : "Show Options",
+                className: "mutation-matrix-options-toggle",
+                action: function (e, api, node) {
+                    optionsShown = !optionsShown;
+                    applyOptions();
+                    api.button(node).text(optionsShown ? "Hide Options" : "Show Options");
+                    prefs.set(OPTIONS_KEY, { hidden: !optionsShown });
+                    // The box's top moved; the ResizeObserver on the body catches it too, but
+                    // not where ResizeObserver is missing.
+                    sizeScrollBox();
+                }
+            }] : []).concat([{
                 extend: "collection",
                 text: "Export CSV",
                 autoClose: true,
@@ -248,7 +279,7 @@
                     title: container.getAttribute("data-csv-title") || "mutations",
                     exportOptions: { columns: ":visible", modifier: { search: "none" } }
                 }]
-            }],
+            }]),
             language: { emptyTable: container.getAttribute("data-empty-message") || "No mutations to show." },
             // breseq shades by displayed row, so a filtered table stripes like a full one.
             // A row the server marked ancestral gets the per-sample table's red -- toggled
