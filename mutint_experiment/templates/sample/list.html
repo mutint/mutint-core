@@ -5,9 +5,9 @@
     <style>
         /* A box the uploaded spreadsheet changed and nobody has saved yet. */
         #mutint-content .sb-changed { background-color: #fcf8e3; }
-        /* Wide enough to read what is in them; the box scrolls sideways past the window. */
-        #mutint-content .sb-label { min-width: 14em; }
-        #mutint-content .sb-description { min-width: 28em; }
+        /* Wide enough to read what is in them; the table scrolls sideways in its box. */
+        /* Sample ID and Label are the same width, sharing what the two had between them. */
+        #mutint-content .sb-label, #mutint-content .sb-description { min-width: 21em; }
         #mutint-content .sb-treatment { min-width: 10em; }
         /* Population names are short (`Ara-1`) and a time point is a number (30000, 1500.5)
            narrower than the word "Time point", so each column is as wide as its heading:
@@ -21,12 +21,21 @@
            name -- is the size input-sm sets for the boxes beside it. */
         #mutint-content .sb-table > tbody > tr > td { vertical-align: middle; }
         #mutint-content .sb-name { font-size: 12px; white-space: nowrap; }
+        /* The table scrolls in a box of its own, both ways, and the script below sizes the
+           box to the bottom of the window: its horizontal scrollbar is then always in view,
+           where a box round the whole page put it under the last of forty rows. 70vh is the
+           height before the script runs, or without it. */
+        #mutint-content .sb-scroll { overflow: auto; max-height: 70vh; }
+        #mutint-content .sb-scroll .sb-table { margin-bottom: 0; }
+        /* The heading stays put while the rows scroll under it; z-index keeps the boxes
+           from painting over it, and the row's own dark fill is what makes it opaque. */
+        #mutint-content .sb-scroll .sb-table > thead > tr > th { position: sticky; top: 0; z-index: 1; }
     </style>
     {% comment %} A plain table, deliberately not a DataTable. The Metadata page's table
        uses deferRender, which never builds the DOM for rows it has not drawn -- values
        typed into those rows would not exist to be read back on save. Experiments run to
        tens or a few hundred samples, so paging buys nothing here anyway. {% endcomment %}
-    <div style="max-width: 100%; overflow-x: auto;">
+    <div>
         {% csrf_token %}
 
         <p style="color: #666;">
@@ -39,10 +48,16 @@
         </p>
 
         {% if samples %}
-        {% comment %} The import's own metadata.csv, filled in with this table, and that file
-           read back into the boxes. The upload fills the table and saves nothing: Save below
-           is still the one write, through the same validation as anything typed. {% endcomment %}
+        {% comment %} One row of controls above the table: Save and Cancel first, then the
+           import's own metadata.csv, filled in with this table, and that file read back into
+           the boxes. The upload fills the table and saves nothing: Save is still the one
+           write, through the same validation as anything typed. The row is above the table
+           rather than under it so that nothing sits below the scroll box, which then reaches
+           the window's edge and keeps its scrollbars on screen however many rows there are. {% endcomment %}
         <div class="btn-row" style="margin-bottom: 0.5em;">
+            <button type="button" class="btn btn-primary btn-sm" id="sb-save">Save all samples</button>
+            <a class="btn btn-default btn-sm"
+               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
             <a class="btn btn-default btn-sm"
                href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download spreadsheet</a>
             <button type="button" class="btn btn-default btn-sm" id="sb-upload">Upload spreadsheet&hellip;</button>
@@ -54,7 +69,9 @@
             <b>Save all samples</b>.
         </p>
         <div id="sb-upload-status" style="margin-bottom: 1em; white-space: pre-line;"></div>
+        <div id="sb-error" style="color: #a00; margin-bottom: 1em; white-space: pre-line;"></div>
 
+        <div class="sb-scroll">
         <table class="table table-striped table-bordered sb-table" style="width: 100%;">
             <thead>
             <tr>
@@ -126,13 +143,7 @@
             {% endfor %}
             </tbody>
         </table>
-
-        <div style="margin-top: 1.5em;">
-            <button type="button" class="btn btn-primary" id="sb-save">Save all samples</button>
-            <a class="btn btn-default"
-               href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
         </div>
-        <div id="sb-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
         {% else %}
         <p>This experiment has no samples yet.
            <a href="/import/?experiment_id={{ experiment.id }}">Import data</a>.</p>
@@ -147,6 +158,32 @@
 (function () {
     "use strict";
     if (!document.getElementById("sb-save")) { return; }
+
+    // --- the scroll box: down to the bottom of the window ---
+
+    // The mutation matrix's sizing (mutation_matrix.js sizeScrollBox), with one addition:
+    // whatever follows the box on the page is measured and left room for, so a deployment's
+    // footer under it stays in view rather than being pushed off by the box.
+    var scrollBox = document.querySelector(".sb-scroll");
+    function sizeScrollBox() {
+        if (!scrollBox) { return; }
+        var root = document.documentElement;
+        var rect = scrollBox.getBoundingClientRect();
+        var top = rect.top + window.pageYOffset;
+        var below = root.scrollHeight - (rect.bottom + window.pageYOffset);
+        var height = Math.max(240, Math.floor(root.clientHeight - top - below));
+        scrollBox.style.maxHeight = height + "px";
+        // A fraction of a pixel left over gives the page a scrollbar with nothing to scroll.
+        var excess = root.scrollHeight - root.clientHeight;
+        if (excess > 0 && height - excess >= 240) { scrollBox.style.maxHeight = (height - excess) + "px"; }
+    }
+    sizeScrollBox();
+    window.addEventListener("resize", sizeScrollBox);
+    window.addEventListener("load", sizeScrollBox);
+    if (window.ResizeObserver) {
+        // The upload status and the error line grow and shrink under and above the box.
+        new ResizeObserver(function () { sizeScrollBox(); }).observe(document.body);
+    }
 
     function value(prefix, id) {
         var field = document.getElementById("sb-" + prefix + "-" + id);

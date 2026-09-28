@@ -1761,6 +1761,14 @@ wrong ones for real. The sample-name link is server-rendered and never restored,
 how to tell. `test_sample_spreadsheet` asserts the attribute on every input, because a
 column added without it fails silently.
 
+**The bulk page's table scrolls in a box of its own, sized to the window.** A scroll box
+round the whole page put the horizontal scrollbar under the last row, off screen on any
+experiment of more than a screenful. `.sb-scroll` wraps only the table, its script sizes
+the box to the bottom of the window the way `mutation_matrix.js` sizes the matrix's (less
+whatever a deployment puts under it, measured), and the heading is `position: sticky`. Save
+and Cancel sit in the one control row *above* the table beside the spreadsheet buttons, with
+the error line under that row, precisely so nothing sits below the box.
+
 **The source name is read-only on the bulk page**: a link to the sample's own page, which
 is the one place it is changed. It is what a re-import finds the sample by, so it is not a
 box to change by accident while renumbering forty rows. The pages call the three names
