@@ -6,7 +6,7 @@
         {% csrf_token %}
 
         <div class="form-group">
-            <label for="se-name">Sample name</label>
+            <label for="se-name">Source Name</label>
             <input type="text" class="form-control" id="se-name" maxlength="200"
                    value="{{ sample.source_name|default_if_none:'' }}" autofocus>
             <small class="help-block">
@@ -61,10 +61,22 @@
                 anything: `3-30000-1-2` is a sample called `1-2` in flask 30000, so the
                 label is one field and holds whatever the filename spelled. {% endcomment %}
             <div class="col-sm-3 form-group">
-                <label for="se-sample">Sample</label>
+                <label for="se-sample">Sample ID</label>
                 <input type="text" class="form-control" id="se-sample" maxlength="100"
                        value="{{ sample.name }}">
             </div>
+        </div>
+
+        {% comment %} Part of the identity, beside the coordinate it overrides: the label is
+           what every page shows for the sample when it is set. {% endcomment %}
+        <div class="form-group">
+            <label for="se-description">Label</label>
+            <input type="text" class="form-control" id="se-description"
+                   maxlength="300" value="{{ sample.description }}">
+            <small class="help-block">
+                When set, this is what the sample is called throughout the site, in place
+                of its coordinate. Clear it to show the coordinate instead.
+            </small>
         </div>
 
         <div class="checkbox">
@@ -90,18 +102,8 @@
             </small>
         </div>
 
-        <div class="form-group">
-            <label for="se-description">Description</label>
-            <input type="text" class="form-control" id="se-description"
-                   maxlength="300" value="{{ sample.description }}">
-            <small class="help-block">
-                When set, this is what the sample is called throughout the site, in place
-                of its coordinate. Clear it to show the coordinate instead.
-            </small>
-        </div>
-
-        {% comment %} The sentence that stood here said the description and the population
-           flag described the *isolate*, so they applied to every technical replicate of it
+        {% comment %} The sentence that stood here said the label and the population flag
+           described the *isolate*, so they applied to every technical replicate of it
            rather than to this sample alone. There is one row now, so they apply to this
            sample and to nothing else -- and a caveat that is no longer true is worse than
            no caveat. {% endcomment %}

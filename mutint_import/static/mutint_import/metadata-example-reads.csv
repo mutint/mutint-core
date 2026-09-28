@@ -7,9 +7,9 @@
 #
 # sample_type sets that sample's Population sample option: population or mixed runs breseq
 # with -p, clone or individual or isolate without. Blank uses the checkbox on the page.
-# treatment, description and the flags (hypermutator, contaminated, low_coverage: yes or
+# treatment, label and the flags (hypermutator, contaminated, low_coverage: yes or
 # no) are recorded on the sample once breseq has run, exactly as on the Import data page.
-sample,population,time_point,sample_type,treatment,description,hypermutator,data
+sample_id,population,time_point,sample_type,treatment,label,hypermutator,data
 # Two clones from the same population at different generations:
 763A,Ara-2,500,clone,glucose,,no,Ara-2_500gen_763A
 763B,Ara-2,500,clone,glucose,,no,Ara-2_500gen_763B

@@ -259,8 +259,8 @@ def _label(raw, label, row_label):
 # `maxlength` attribute mirrors it client-side.
 _MAX_LENGTHS = {"source_name": 200, "description": 300,
                 "medium_description": 500, "treatment": 100}
-_FIELD_LABELS = {"source_name": "sample name",
-                 "description": "description",
+_FIELD_LABELS = {"source_name": "source name",
+                 "description": "label",
                  "medium_description": "medium description",
                  "treatment": "treatment"}
 
@@ -312,7 +312,7 @@ def parse_rows(rows, samples_by_id):
                 # One label where there were two. A replicate was never a level of
                 # anything -- `1-2` is what the sample is called, and the form has one box
                 # for it.
-                _label(row.get("name"), "sample label", row_label),
+                _label(row.get("name"), "sample ID", row_label),
             )
         except SampleEditError as error:
             errors[raw_id] = error.message
@@ -370,7 +370,7 @@ def _check_names(parsed, samples_by_id):
             continue
         if name in taken:
             errors[str(sample.pk)] = (
-                'A sample named "%s" already exists in this experiment.' % name)
+                'A sample with the source name "%s" already exists in this experiment.' % name)
         taken[name] = str(sample.pk)
     if errors:
         raise SampleEditError(_summarize(errors, samples_by_id), errors)
@@ -416,7 +416,7 @@ def plan_moves(parsed, samples_by_id):
                 continue
             errors[str(sample.pk)] = (
                 '%s is already "%s". Two samples cannot share one identity -- move that '
-                'one first, or give this one a different label.'
+                'one first, or give this one a different sample ID.'
                 % (label, occupant.source_name or occupant.pk))
     if errors:
         raise SampleEditError(_summarize(errors, samples_by_id), errors)

@@ -4,11 +4,13 @@ A sample's coordinate -- population, time point, sample -- used to come from one
 filename, read by `sample_names.parse_sample_identity`. That rule stays, and two others rank
 above it, asked in this order at the one seam (`gd_import.import_document_as_sample`):
 
-1. **A `metadata.csv` dropped with the data.** Columns `sample,population,time_point,data`,
-   with an optional `sample_type` (population/mixed, or clone/individual/isolate) between
-   the last two, and optional `treatment`, `description`, `hypermutator`, `contaminated`
-   and `low_coverage` after them (a header row, any column order); `#` lines and blank lines
-   are ignored; `data` names the
+1. **A `metadata.csv` dropped with the data.** Columns `sample_id,population,time_point,
+   data`, with an optional `sample_type` (population/mixed, or clone/individual/isolate)
+   between the last two, and optional `treatment`, `label`, `hypermutator`, `contaminated`
+   and `low_coverage` after them (a header row, any column order; `sample` and
+   `description` are accepted for the first and the label, being what the header said
+   before the edit pages called them Sample ID and Label); `#` lines and blank lines are
+   ignored; `data` names the
    inputs the row places, several separated by `;`, and rows with the same coordinate may
    repeat to name more. An input is a breseq results folder's name, a `.gd` or VCF filename
    (the extension may be left off), or -- on the breseq launcher -- a read file's name or a
@@ -69,10 +71,22 @@ POPULATION_TYPES = ("population", "mixed")
 CLONE_TYPES = ("clone", "individual", "isolate")
 DATA_SEPARATOR = ";"
 
-#: The descriptive columns, CSV only: the column as written, and (normalized header ->
-#: column). The flags are named by `mutint_sample.flags`' form keys, so the spreadsheet
-#: and the edit page's checkboxes use one word for each.
+#: The descriptive columns, CSV only. The flags are named by `mutint_sample.flags`' form
+#: keys, so the spreadsheet and the edit page's checkboxes use one word for each.
+#: `description` is the column's internal name -- the `Sample` field, the `Row` attribute,
+#: the manifest key -- and `label` is the header `write` puts on it, the word the edit pages
+#: use for the same field.
 DESCRIPTION_COLUMN = "description"
+LABEL_HEADER = "label"
+#: Likewise `sample` is the internal name of the coordinate's third part and `sample_id`
+#: the header written for it, the edit pages' "Sample ID".
+SAMPLE_HEADER = "sample_id"
+#: Headers `parse` accepts for CSV-only columns, beside `SYNONYMS` (normalized header ->
+#: column). Not in `SYNONYMS`, which also decides which `.gd` header keys the export drops
+#: as ones MutInt writes itself: a `#=LABEL` line, like `#=DESCRIPTION`, must survive
+#: replay. Both spellings of each column read the same, so a `metadata.csv` or an archive
+#: written before the header changed imports unchanged.
+CSV_ALIASES = {"label": DESCRIPTION_COLUMN}
 FLAG_TRUE = ("yes", "y", "true", "1")
 FLAG_FALSE = ("no", "n", "false", "0")
 
@@ -88,7 +102,7 @@ def flag_columns():
 #: `time_point` and `TIMEPOINT` are one key. `treatment` and `condition` were synonyms for
 #: `population` until the treatment became a column of its own.
 SYNONYMS = {
-    "sample": "sample", "name": "sample",
+    "sample": "sample", "name": "sample", "sampleid": "sample",
     "population": "population",
     "timepoint": "time_point", "time": "time_point", "generation": "time_point",
     "generations": "time_point", "transfer": "time_point", "transfers": "time_point",
@@ -335,7 +349,7 @@ def parse(text, source=FILENAME):
     header = [_normalize_key(cell) for cell in next(reader)]
     mapped = []
     for cell in header:
-        mapped.append(SYNONYMS.get(cell, cell))
+        mapped.append(SYNONYMS.get(cell, CSV_ALIASES.get(cell, cell)))
     missing = [column for column in COLUMNS if column not in mapped]
     if missing:
         raise MetadataError(
@@ -347,8 +361,8 @@ def parse(text, source=FILENAME):
             index[column] = mapped.index(column)
     flags = flag_columns()
     for column in (DESCRIPTION_COLUMN,) + tuple(flags):
-        if _normalize_key(column) in header:
-            index[column] = header.index(_normalize_key(column))
+        if _normalize_key(column) in mapped:
+            index[column] = mapped.index(_normalize_key(column))
 
     rows = {}      # coordinate -> Row, so repeated rows merge their data
     order = []
@@ -428,8 +442,8 @@ def write(entries):
     flags = flag_columns()
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(("sample", "population", "time_point", "sample_type", TREATMENT_COLUMN,
-                     DESCRIPTION_COLUMN) + tuple(flags) + ("data",))
+    writer.writerow((SAMPLE_HEADER, "population", "time_point", "sample_type",
+                     TREATMENT_COLUMN, LABEL_HEADER) + tuple(flags) + ("data",))
     for entry in entries:
         placed = entry.get("time_point") is not None
         data = entry.get("data") or ""

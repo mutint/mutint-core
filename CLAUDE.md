@@ -1761,9 +1761,13 @@ wrong ones for real. The sample-name link is server-rendered and never restored,
 how to tell. `test_sample_spreadsheet` asserts the attribute on every input, because a
 column added without it fails silently.
 
-**The sample name is read-only on the bulk page**: a link to the sample's own page, which
+**The source name is read-only on the bulk page**: a link to the sample's own page, which
 is the one place it is changed. It is what a re-import finds the sample by, so it is not a
-box to change by accident while renumbering forty rows. The save script sends no
+box to change by accident while renumbering forty rows. The pages call the three names
+what they are -- **Source Name** (`source_name`), **Sample ID** (`name`, the coordinate's
+third part) and **Label** (`description`, what the site shows in place of the coordinate)
+-- and `metadata.csv` writes `sample_id` and `label` for the last two while still reading
+`sample` and `description`, so nothing written before the headers changed stops importing. The save script sends no
 `source_name`, and `parse_rows` reads an absent key as "leave it".
 
 **`Sample.time_point` is the only numeric member of the coordinate**, because it is the
@@ -1781,8 +1785,9 @@ recorded everywhere it matters. `--owner` on `./mutint import` resolves a real `
 **The trap to know about:** a renumber often changes no visible label.
 `label` returns `Sample.description` verbatim whenever it is set, and the
 import path fills it with the filename for every sample whose name is not `A-F-I-R`. So the
-sample page shows the computed coordinate beside the effective label, and the bulk page
-shows the coordinate's three parts and the description as boxes side by side. A duplicate source name within an
+sample page shows the computed coordinate beside the effective label, and both pages put
+the Label box (the `description` column) right beside the coordinate's three parts -- in the
+Identity section, and as the column after Sample ID. A duplicate source name within an
 experiment is refused for a related reason -- re-import finds an existing sample by name --
 but only when the name actually *changed*, or an experiment that already had a duplicate pair
 could never be saved at all.

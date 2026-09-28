@@ -64,15 +64,16 @@ Drop a file called `metadata.csv` beside the data, on the Import data page or am
 files on the Run breseq page. It has a header row and then one row per sample:
 
 ```
-sample,population,time_point,sample_type,treatment,description,hypermutator,data
+sample_id,population,time_point,sample_type,treatment,label,hypermutator,data
 763A,Ara-2,500,clone,glucose,Ara-2 500 gen clone A,yes,Ara-2_500gen_763A.gd
 ZDB16,Ara-3,30000,,,,,ZDB16
 A1,glucose,10,population,37C,,,s1;s1_lane2
 mystery,,,,,,,mystery_sample.gd
 ```
 
-- `sample` is the name within its population; `population` and `time_point` place it.
-  Leave both blank for a sample that is not placed yet.
+- `sample_id` is the sample's ID within its population; `population` and `time_point`
+  place it. Leave both blank for a sample that is not placed yet. (`sample` is accepted
+  too: it is what this column was called before the Samples page said Sample ID.)
 - `sample_type` is optional: `population` or `mixed` marks a sample of many genotypes,
   `clone`, `individual` or `isolate` one genotype. Left blank, or with the column absent,
   the data decides (breseq's `-p` in the `.gd`'s command line). On the Run breseq page it
@@ -83,10 +84,10 @@ mystery,,,,,,,mystery_sample.gd
   treatments is simply the values its samples carry; the Samples page offers them back as
   you type, and the experiment's edit page renames one across every sample. A blank cell
   leaves a sample's treatment as it is.
-- `description`, `hypermutator`, `contaminated` and `low_coverage` are optional too. A
-  description is what the sample is called throughout the site in place of its coordinate;
-  blank means none. The three flags take `yes` or `no`, and a blank cell leaves the flag
-  as it is.
+- `label`, `hypermutator`, `contaminated` and `low_coverage` are optional too. The label
+  is what the sample is called throughout the site in place of its coordinate; blank means
+  none (`description`, the column's older name, is accepted too). The three flags take
+  `yes` or `no`, and a blank cell leaves the flag as it is.
 - `data` names the inputs the row covers: a breseq results folder by its name, a `.gd` or
   VCF by its filename (the extension may be left off), or on the Run breseq page a read
   file's name or a stem its mates share (`s1` covers `s1_R1.fastq.gz` and `s1_R2.fastq.gz`).
@@ -118,8 +119,8 @@ as they were.
 The same fields can be written into the file's header, which suits data that travels:
 a `.gd` with `#=POPULATION Ara-3` and `#=TIME 30000` places itself, as the LTEE's do, and
 one with `#=TREATMENT glucose` says what it was grown under. The
-keys accept synonyms, matched without regard to case, spaces or underscores: `sample` or
-`name`; `population`; `time_point`, `time`, `generation` or
+keys accept synonyms, matched without regard to case, spaces or underscores: `sample`,
+`sample_id` or `name`; `population`; `time_point`, `time`, `generation` or
 `transfer`; `sample_type`, with the values the CSV column takes; and `treatment` or
 `condition`. (`treatment` and `condition` used to be read as the population. A file that
 placed itself by `#=TREATMENT` alone needs a `#=POPULATION` line now, or a filename that
@@ -139,7 +140,7 @@ Ara-2_500gen_763A.gd    population Ara-2, time point 500,   sample 763A
 ```
 
 The first is four whole numbers separated by dashes. The second is three fields separated by
-underscores: a population name, a time point, and a sample name. **The population and the sample are
+underscores: a population name, a time point, and a sample ID. **The population and the sample are
 kept exactly as written** — `Ara-1` and `Ara+1` are two different populations, and `763A` and
 `763B` two different clones from one time point, so nothing is stripped off either. Only the middle
 field is read as a number, because a time point is one: `500gen` is time point 500. A middle field
@@ -147,7 +148,7 @@ that does not start with a digit (`t0`) is not a time point, and the name falls 
 auto-numbering.
 
 Anything else — `REL606_clone.gd` — gets its own sample under a population called
-**Unspecified**, with **no time point**, and the filename kept as its description so it
+**Unspecified**, with **no time point**, and the filename kept as its label so it
 displays by name. Both say plainly that nobody has placed the sample: an unspecified sample
 sorts before the placed ones and is left out of anything that reads the time point as an axis.
 

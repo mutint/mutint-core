@@ -170,7 +170,7 @@ class ArchiveTestCase(TestCase):
         manifest, _names = self._manifest_from(self._archive())
         text = archive.metadata_csv(manifest)
         lines = text.splitlines()
-        self.assertEqual("sample,population,time_point,sample_type,treatment,description,"
+        self.assertEqual("sample_id,population,time_point,sample_type,treatment,label,"
                          "hypermutator,contaminated,low_coverage,data", lines[0])
         # The treatment, the description and the flags ride along, so the CSV alone places
         # and describes.

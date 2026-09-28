@@ -1,14 +1,15 @@
 # metadata.csv -- an example. Lines starting with # are ignored; delete them or keep them.
 #
-# Each row places one sample: its name within the population, the population, the time
+# Each row places one sample: its ID within the population, the population, the time
 # point (a whole number), whether it is a population (mixed) or a clone (individual,
 # isolate) -- blank keeps what the data says -- and which inputs it covers. A breseq results folder is named by
 # its folder; a .gd or VCF by its filename, extension optional; read files on the Run
 # breseq page by name or by a stem their mates share. The five optional columns
-# before data -- a treatment (the condition the sample was grown under), a description,
+# before data -- a treatment (the condition the sample was grown under), a label (what the
+# sample is called throughout the site),
 # and the flags hypermutator, contaminated and low_coverage (yes or no; blank leaves a
 # flag as it is) -- may be left blank.
-sample,population,time_point,sample_type,treatment,description,hypermutator,contaminated,low_coverage,data
+sample_id,population,time_point,sample_type,treatment,label,hypermutator,contaminated,low_coverage,data
 # A breseq results folder called ZDB16 in the drop, and a .gd beside it:
 ZDB16,Ara-3,30000,clone,,,,,,ZDB16
 763A,Ara-2,500,clone,glucose,Ara-2 500 gen clone A,yes,no,no,Ara-2_500gen_763A.gd

@@ -267,9 +267,21 @@ class DescriptiveColumnsTestCase(SimpleTestCase):
             metadata.parse(self.WIDE + "s,p,1,one,,,,a.gd\ns,p,1,two,,,,b.gd\n")
 
     def test_the_columns_are_not_header_placement_keys(self):
-        # A `#=DESCRIPTION` line in a .gd must survive the export's replay.
+        # A `#=DESCRIPTION` or `#=LABEL` line in a .gd must survive the export's replay.
         self.assertFalse(metadata.is_placement_key("DESCRIPTION"))
+        self.assertFalse(metadata.is_placement_key("LABEL"))
         self.assertFalse(metadata.is_placement_key("HYPERMUTATOR"))
+
+    def test_both_spellings_of_the_header_read_the_same(self):
+        """`write` puts `sample_id` and `label` on the columns the edit pages call Sample ID
+        and Label; `sample` and `description` are what every file written before that said,
+        and an archive or a metadata.csv kept from then must import unchanged."""
+        old = metadata.parse("sample,population,time_point,description,data\n"
+                             "763A,Ara-2,500,clone A,x.gd\n").rows[0]
+        new = metadata.parse("sample_id,population,time_point,label,data\n"
+                             "763A,Ara-2,500,clone A,x.gd\n").rows[0]
+        self.assertEqual(old, new)
+        self.assertEqual(("763A", "clone A"), (new.sample, new.description))
 
 
 class WriteTestCase(SimpleTestCase):
@@ -282,6 +294,8 @@ class WriteTestCase(SimpleTestCase):
             {"sample": "mix", "population": "Unspecified", "time_point": None,
              "is_clonal": False, "description": "", "flags": {}, "data": ["a", "b"]},
         ])
+        self.assertEqual("sample_id,population,time_point,sample_type,treatment,label,"
+                         "hypermutator,contaminated,low_coverage,data", text.splitlines()[0])
         rows = metadata.parse(text).rows
         self.assertEqual(("763A", "Ara-2", 500, True, "a, quoted one"),
                          (rows[0].sample, rows[0].population, rows[0].time_point,

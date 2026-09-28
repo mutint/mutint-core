@@ -718,6 +718,25 @@ class TimePointLabelingTestCase(SampleEditTestCase):
                 self.assertNotIn(">TimePoint<", html)
                 self.assertNotIn(">TimePoint</", html)
 
+    def test_both_pages_label_the_three_names(self):
+        """`source_name` is Source Name, `name` is Sample ID and `description` is Label,
+        which sits with the coordinate it overrides: in the Identity section of the single
+        page, and between Sample ID and Mixed on the bulk page."""
+        for url in ("/sample/%d/edit/" % self.sample.pk,
+                    "/experiment/%d/samples/" % self.experiment.id):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                for label in ("Source Name", "Sample ID", ">Label<"):
+                    self.assertIn(label, html)
+                for old in (">Sample name<", ">Sample<", ">Description<"):
+                    self.assertNotIn(old, html)
+        bulk = self.client.get("/experiment/%d/samples/" % self.experiment.id).content.decode()
+        self.assertLess(bulk.index(">Sample ID<"), bulk.index(">Label<"))
+        self.assertLess(bulk.index(">Label<"), bulk.index(">Mixed<"))
+        single = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
+        self.assertLess(single.index("Identity"), single.index('id="se-description"'))
+        self.assertLess(single.index('id="se-description"'), single.index('id="se-mixed"'))
+
     def test_the_time_point_input_has_no_stepper(self):
         """type=number puts up/down arrows on a value that runs to five figures."""
         html = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
