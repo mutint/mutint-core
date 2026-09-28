@@ -131,11 +131,25 @@ class SpreadsheetTestCase(SampleEditTestCase):
         body = self.client.get("/experiment/%d/samples/" % self.experiment.id).content.decode()
         script = body[body.index('addEventListener("click", function () {\n        var rows'):]
         read = re.findall(r'(\w+): value\("([\w-]+)", id\)', script)
-        self.assertEqual({"source_name": "name", "population": "population",
+        self.assertEqual({"population": "population",
                           "time_point": "time-point", "name": "sample",
                           "description": "description"}, dict(read))
         for _field, prefix in read:
             self.assertIn('id="sb-%s-%d"' % (prefix, self.clone.pk), body, prefix)
+
+    def test_the_sample_name_is_a_link_to_its_own_page_and_not_a_box(self):
+        """The name is what a re-import finds a sample by, so it is changed on the sample's
+        own page only. The table shows it as a link there, and the save leaves it alone."""
+        body = self.client.get("/experiment/%d/samples/" % self.experiment.id).content.decode()
+        self.assertNotIn('id="sb-name-', body)
+        self.assertIn('<a href="/sample/%d/edit/"' % self.clone.pk, body)
+        self.assertIn(">Ara-2_500gen_763A</a>", body)
+        row = self.row(self.clone, time_point=600)
+        row.pop("source_name")
+        self.assertEqual(200, self.bulk([row]).status_code)
+        self.clone.refresh_from_db()
+        self.assertEqual(("Ara-2_500gen_763A", 600),
+                         (self.clone.source_name, self.clone.time_point))
 
     def test_no_box_in_the_table_is_restored_by_the_browser_on_reload(self):
         """Save reloads the page, which comes back sorted by the new coordinates, and a

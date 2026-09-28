@@ -1,10 +1,13 @@
 {% extends 'base.html' %}
 {% block title %}Samples in {{ experiment.name }}{% endblock %}
-{% block header %}Edit samples: {{ experiment.name }}{% endblock %}
+{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - Samples{% endblock %}
 {% block content %}
     <style>
         /* A box the uploaded spreadsheet changed and nobody has saved yet. */
         #mutint-content .sb-changed { background-color: #fcf8e3; }
+        /* Wide enough to read what is in them; the box scrolls sideways past the window. */
+        #mutint-content .sb-label { min-width: 12em; }
+        #mutint-content .sb-description { min-width: 28em; }
     </style>
     {% comment %} A plain table, deliberately not a DataTable. The Metadata page's table
        uses deferRender, which never builds the DOM for rows it has not drawn -- values
@@ -14,12 +17,12 @@
         {% csrf_token %}
 
         <p style="color: #666;">
-            Everything saves in one step, or not at all. The <b>Shown as</b> column is what
-            the sample is called throughout the site: it follows the description when there
-            is one, and the coordinate beneath it when there is not &mdash; so renumbering a
-            sample that carries a description changes no label until you clear it. Every
-            column here belongs to the sample alone; nothing you change on one row affects
-            another.
+            Everything saves in one step, or not at all. A sample is shown throughout the
+            site by its description when it has one, and by its population, time point and
+            sample otherwise &mdash; so renumbering a sample that carries a description
+            changes no label until you clear it. To rename a sample, follow its name to its
+            own page. Every column here belongs to the sample alone; nothing you change on
+            one row affects another.
         </p>
 
         {% if samples %}
@@ -42,17 +45,15 @@
         <table class="table table-striped table-bordered" style="width: 100%;">
             <thead>
             <tr>
-                <th>Shown as</th>
                 <th>Sample name</th>
-                <th width="70">Population</th>
+                <th>Population</th>
                 {% comment %} The column is `TimePoint.value` and the label has always said "Time
                    point" -- the two agree now. Fixation orders samples by it. {% endcomment %}
                 <th width="90">Time point</th>
-                <th width="70">Sample</th>
+                <th>Sample</th>
                 <th width="50">Mixed</th>
                 {% for flag in flags %}<th width="50">{{ flag.label }}</th>{% endfor %}
                 <th>Description</th>
-                <th width="50"></th>
             </tr>
             </thead>
             {% comment %} Every input here is autocomplete="off", and not for autofill: it is
@@ -64,23 +65,23 @@
             <tbody>
             {% for sample in samples %}
                 <tr data-sample-id="{{ sample.id }}">
+                    {% comment %} Read-only here: the name is what a re-import finds the sample
+                       by, so it is changed on the sample's own page and nowhere else. The save
+                       script sends no source_name, which parse_rows reads as "leave it". {% endcomment %}
                     <td style="white-space: nowrap;">
-                        {{ sample.label }}
-                        <br><small style="color: #888;">{{ sample.coordinate }}</small>
+                        <a href="/sample/{{ sample.id }}/edit/"
+                           title="Edit this sample, including its name">{{ sample.source_name|default:"(unnamed)" }}</a>
                     </td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="200"
-                               id="sb-name-{{ sample.id }}"
-                               value="{{ sample.source_name|default_if_none:'' }}"></td>
                     {% comment %} ALE and sample label are text: a lineage is called `Ara-1`,
                        a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
                        three -- silently, by sending an empty value. The time point is text
                        for the reason `sample_edit.html` gives. {% endcomment %}
-                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="100"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-label" maxlength="100"
                                id="sb-population-{{ sample.id }}" value="{{ sample.population }}"></td>
                     <td><input autocomplete="off" type="text" class="form-control input-sm"
                                id="sb-time-point-{{ sample.id }}"
                                value="{{ sample.time_point|default_if_none:'' }}"></td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="100"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-label" maxlength="100"
                                id="sb-sample-{{ sample.id }}" value="{{ sample.name }}"></td>
                     <td style="text-align: center;">
                         <input autocomplete="off" type="checkbox" id="sb-mixed-{{ sample.id }}"
@@ -90,10 +91,9 @@
                         <input autocomplete="off" type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
                                data-flag="{{ flag.field }}" {% if flag.on %}checked{% endif %}></td>
                     {% endfor %}
-                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="300"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-description" maxlength="300"
                                id="sb-description-{{ sample.id }}"
                                value="{{ sample.description }}"></td>
-                    <td><a href="/sample/{{ sample.id }}/edit/">Edit</a></td>
                 </tr>
             {% endfor %}
             </tbody>
@@ -227,7 +227,6 @@
                 tr.classList.remove("danger");
                 var row = {
                     id: id,
-                    source_name: value("name", id),
                     population: value("population", id),
                     time_point: value("time-point", id),
                     name: value("sample", id),

@@ -1757,9 +1757,14 @@ ends in a reload, and the rows come back sorted by their *new* coordinates -- wh
 browser restores typed values on reload by the field's position in the document, not its
 id. So a renumber that moved rows put each row's old values into whichever sample now sat
 in its slot: the database was right, the boxes were wrong, and the next Save wrote the
-wrong ones for real. The grey coordinate under **Shown as** is server-rendered and never
-restored, which is how to tell. `test_sample_spreadsheet` asserts the attribute on every
-input, because a column added without it fails silently.
+wrong ones for real. The sample-name link is server-rendered and never restored, which is
+how to tell. `test_sample_spreadsheet` asserts the attribute on every input, because a
+column added without it fails silently.
+
+**The sample name is read-only on the bulk page**: a link to the sample's own page, which
+is the one place it is changed. It is what a re-import finds the sample by, so it is not a
+box to change by accident while renumbering forty rows. The save script sends no
+`source_name`, and `parse_rows` reads an absent key as "leave it".
 
 **`Sample.time_point` is the only numeric member of the coordinate**, because it is the
 ordinal that places a sample along a population -- the Fixed set sorts by it and takes the
@@ -1775,8 +1780,9 @@ recorded everywhere it matters. `--owner` on `./mutint import` resolves a real `
 
 **The trap to know about:** a renumber often changes no visible label.
 `label` returns `Sample.description` verbatim whenever it is set, and the
-import path fills it with the filename for every sample whose name is not `A-F-I-R`. So both pages show the computed `A# F# I# R#` beside the effective label and
-keep the description editable in the same form. A duplicate source name within an
+import path fills it with the filename for every sample whose name is not `A-F-I-R`. So the
+sample page shows the computed coordinate beside the effective label, and the bulk page
+shows the coordinate's three parts and the description as boxes side by side. A duplicate source name within an
 experiment is refused for a related reason -- re-import finds an existing sample by name --
 but only when the name actually *changed*, or an experiment that already had a duplicate pair
 could never be saved at all.

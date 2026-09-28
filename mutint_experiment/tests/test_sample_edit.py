@@ -126,20 +126,19 @@ class SampleEditPagesTestCase(SampleEditTestCase):
         self.assertIn('data-sample-id="%d"' % self.sample.pk, html)
         self.assertNotIn('data-sample-id="%d"' % stranger_sample.pk, html)
 
-    def test_the_pages_show_the_coordinate_beside_the_displayed_label(self):
+    def test_the_sample_page_shows_the_coordinate_beside_the_displayed_label(self):
         """A renumber can change no visible label at all: label returns
         the isolate description whenever it is set, and the import path fills it with the
-        filename. Both pages must show the numbers as well, or a successful save looks
+        filename. The page must show the numbers as well, or a successful save looks
         like it did nothing."""
         self.sample.description = "Ara-1_500gen_762B"
         self.sample.save()
 
-        for url in ("/sample/%d/edit/" % self.sample.pk,
-                    "/experiment/%d/samples/" % self.experiment.id):
-            with self.subTest(url=url):
-                html = self.client.get(url).content.decode()
-                self.assertIn("Ara-1_500gen_762B", html)
-                self.assertIn("1 / 1 / 1-1", html)
+        # The sample's own page only: the Edit samples table shows the coordinate in its
+        # three boxes and the description in a fourth, with no computed label beside them.
+        html = self.client.get("/sample/%d/edit/" % self.sample.pk).content.decode()
+        self.assertIn("Ara-1_500gen_762B", html)
+        self.assertIn("1 / 1 / 1-1", html)
 
     def test_signed_out_they_are_forbidden(self):
         self.client.logout()
