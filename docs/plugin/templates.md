@@ -98,9 +98,9 @@ set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>` and
 `mutation_matrix.references.<experiment_id>` (shared by every matrix page of that experiment,
 the second by the per-sample Mutations page as well) — and in the browser's localStorage
 otherwise. The store's client half is `js/mutint_preferences.js`, loaded from `base.html`, and
-a page of your own may call `window.mutintPreferences(...)` the same way. Export CSV is a menu
-of two: the rows showing, after every menu and the search box, or every row the server
-produced; visible columns only, either way.
+a page of your own may call `window.mutintPreferences(...)` the same way. The Export tab
+holds Export CSV, a menu of two — the rows showing, after every menu and the search box, or
+every row the server produced; visible columns only, either way — and Export SVG.
 
 **Row sets** are how a page offers a subset of its rows without being a second page. Hand
 `build_matrix` `sets=(RowSet("fixed", "Fixed", mutation_ids), ...)`: each row is annotated

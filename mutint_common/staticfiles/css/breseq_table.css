@@ -302,9 +302,34 @@ table.dataTable.breseq-table thead .sorting_desc:after {
    because sticky offsets have to add up the widths of the columns before them. Pinned cells
    take their row's background so scrolled content does not show through; the header, which
    is both sticky-top and sticky-left at the corner, sits above both. */
-/* DataTables' own controls, in two rows above the box, outside anything that scrolls: the
-   options toggle, the length menu, the search box and the count; the pager and Export CSV.
-   The length menu is
+/* The collapse bar between the panes and the table: the sidebar's strip (#sidebarbutton in
+   common.css) laid flat, so it folds the filtering and display options the way that one
+   folds the sidebar -- same grey, same gradient on hover, the same double chevron, rounded
+   on the edge that faces the table. One line of the page's type tall, which is the width
+   the sidebar's strip has for one glyph. The script draws it (mutation_matrix.js); nothing
+   in the markup. */
+.mutation-matrix-collapse {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    line-height: 1;
+    padding: 2px 0;
+    margin-bottom: 0.5em;
+    background-color: #f8f8f8;
+    border-radius: 0 0 5px 5px;
+    color: #444;
+    cursor: pointer;
+    user-select: none;
+}
+
+.mutation-matrix-collapse:hover,
+.mutation-matrix-collapse:focus-visible {
+    background-image: linear-gradient(to bottom, #f8f8f8, #c4dce8);
+}
+
+/* DataTables' own controls, in one row above the box, outside anything that scrolls: the
+   length menu, the search box, the count and the pager (the Export buttons are made here
+   too and moved into the Export tab's pane). The length menu is
    given the search box's size rather than the theme's 75px, and both the page's 14px type
    rather than Bootstrap's 12px for a small input, which read as two sizes side by side. The
    row gap is the one every wrapping control row has (.btn-row), so a narrow window stacks
@@ -329,8 +354,8 @@ div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_info {
 }
 
 /* The pager is an inline-block list in a block, which leaves a line box's descender space
-   under it: the pager sat at the top of a 39px box beside a 34px Export CSV button centered
-   on the row, three pixels lower. A flex box is exactly as tall as the list. */
+   under it: the pager sat at the top of a 39px box beside a 34px button centered on the
+   row, three pixels lower. A flex box is exactly as tall as the list. */
 div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate {
     display: flex;
     align-items: center;

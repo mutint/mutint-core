@@ -1,5 +1,5 @@
-{% comment %} The tab strip above a mutation table: Filter, Samples, Rows, Display, in that
-   order, and a page passes only the ones it has content for.
+{% comment %} The tab strip above a mutation table: Filter, Samples, Rows, Display, Export,
+   in that order, and a page passes only the ones it has content for.
 
    **`single_sample` changes two things at once, and they are one fact.** Where the picker
    chooses exactly one sample -- the per-sample Mutations page, whose whole subject is that
@@ -25,4 +25,5 @@
     {% if samples and not single_sample %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Samples</a></li>{% endif %}
     {% if rows %}<li{% if active == "rows" %} class="active"{% endif %}><a data-toggle="tab" data-tab="rows" href="#{{ page }}-pane-rows">Rows</a></li>{% endif %}
     {% if display %}<li{% if active == "display" %} class="active"{% endif %}><a data-toggle="tab" data-tab="display" href="#{{ page }}-pane-display">Display</a></li>{% endif %}
+    {% if export %}<li{% if active == "export" %} class="active"{% endif %}><a data-toggle="tab" data-tab="export" href="#{{ page }}-pane-export">Export</a></li>{% endif %}
 </ul>

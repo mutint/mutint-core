@@ -315,15 +315,15 @@ class PartialTestCase(_Fixture):
         self.assertLess(source.index("{% block matrix_form_fields %}"), source.index('value="Apply"'))
         self.assertLess(source.index("{% view_filter_summary"), source.index("{% block matrix_summary %}"))
 
-    def test_the_controls_are_four_tabs_in_order(self):
-        """Filter, Samples, Rows, Display: the Import data page's strip, client-side, with
-        the page's Filter pane first and the tag's three after it."""
+    def test_the_controls_are_five_tabs_in_order(self):
+        """Filter, Samples, Rows, Display, Export: the Import data page's strip, client-side,
+        with the page's Filter pane first and the tag's four after it."""
         html = self._render()
         self.assertIn('class="nav nav-tabs"', html)
         self.assertIn('data-control-tabs="mutation_matrix"', html)
-        self.assertEqual(["filter", "samples", "rows", "display"],
+        self.assertEqual(["filter", "samples", "rows", "display", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
-        for key in ("filter", "samples", "rows", "display"):
+        for key in ("filter", "samples", "rows", "display", "export"):
             self.assertIn('id="mutation_matrix-pane-%s"' % key, html)
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', html)
         self.assertIn('class="tab-pane active" id="mutation_matrix-pane-filter"', html)
@@ -341,13 +341,15 @@ class PartialTestCase(_Fixture):
         rows = pane("rows", 'id="mutation_matrix-pane-display"')
         self.assertIn('data-role="types"', rows)
         self.assertIn('data-role="references"', rows)
-        display = pane("display", "<table")
+        display = pane("display", 'id="mutation_matrix-pane-export"')
         for role in ("columns", "frequency-control", "view-control"):
             self.assertIn('data-role="%s"' % role, display)
+        # Empty until the script moves DataTables' Export buttons into it.
+        self.assertIn('data-role="export"', pane("export", "<table"))
         # The page rendered the panes; the tag did not render them again.
         self.assertEqual(1, html.count('data-role="columns"'))
 
-    def test_the_tag_alone_renders_the_three_client_side_tabs(self):
+    def test_the_tag_alone_renders_the_four_client_side_tabs(self):
         """Search renders the tag with no page around it and still gets a strip."""
         from django.template import engines
         request = RequestFactory().get("/")
@@ -356,7 +358,7 @@ class PartialTestCase(_Fixture):
         html = engines["django"].from_string(
             "{% load mutation_matrix %}{% mutation_matrix matrix %}").render(
             {"matrix": self.matrix()}, request)
-        self.assertEqual(["samples", "rows", "display"],
+        self.assertEqual(["samples", "rows", "display", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="samples"', html)
         self.assertNotIn("pane-filter", html)

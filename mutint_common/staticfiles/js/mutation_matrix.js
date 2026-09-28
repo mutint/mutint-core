@@ -22,13 +22,13 @@
  *     it was read from (the store itself is mutint_preferences.js);
  *   - a row the server marked `ancestral` -- observed in the designated ancestor, drawn
  *     because the reader asked -- is tinted red on every draw, the per-sample table's tint;
- *   - the menus sit in a tab strip above the table (Filter, Samples, Rows, Display), found
- *     through `[data-mutation-matrix-controls]` because the page may own the strip; the
- *     DataTables toolbars -- length, search, count, pager, Export CSV -- stay under the strip
- *     on every tab;
- *   - "Show/Hide display and filtering options", first in the length-and-search row, folds
- *     the strip and its panes away and remembers that it did (`mutation_matrix.options`);
- *     shown unless told otherwise;
+ *   - the menus sit in a tab strip above the table (Filter, Samples, Rows, Display, Export),
+ *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
+ *     the DataTables toolbar -- length, search, count, pager, in one row -- stays under the
+ *     strip on every tab, and the Export buttons are moved into the Export pane;
+ *   - a collapse bar under the panes, the sidebar's strip laid flat, folds the strip and
+ *     its panes away and remembers that it did (`mutation_matrix.options`); shown unless
+ *     told otherwise;
  *   - the table lives in a scroll box as wide as itself and no wider than the window: the
  *     header sticks to its top and the descriptive columns to its left, each pinned column's
  *     `left` being the sum of the widths before it, recomputed after every draw and whenever
@@ -120,7 +120,7 @@
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
-        // The strip and its panes, folded away by the options toggle. `controls` is the container
+        // The strip and its panes, folded away by the collapse bar. `controls` is the container
         // itself when no pane box was found, and hiding that would hide the table.
         var optionPanes = controls !== container ? controls : container.querySelector(".tab-content");
         var optionStrip = optionPanes && optionPanes.previousElementSibling &&
@@ -254,11 +254,12 @@
             // The server's order, and no sort handles on the headers: a click on a sample's
             // header follows its link instead.
             ordering: false,
-            // Two rows of controls above the table -- the options toggle (prepended below),
-            // length, search and the count; then the pager, Export CSV and Export SVG -- and the table
-            // alone in the box that scrolls. The box
-            // itself is DataTables' doing, so that it wraps only the table.
-            dom: '<"mutation-matrix-toolbar"lfi><"mutation-matrix-toolbar"pB>r<"mutation-matrix-scroll"t>',
+            // One row of controls above the table -- length, search, the count and the pager
+            // -- and the table alone in the box that scrolls. The box itself is DataTables'
+            // doing, so that it wraps only the table. `B` is where Buttons makes the two
+            // Export buttons; they are moved into the Export tab's pane below, so the row
+            // never shows them.
+            dom: '<"mutation-matrix-toolbar"lfipB>r<"mutation-matrix-scroll"t>',
             // Export is a menu of two: the rows showing -- after the Show menu, the hidden
             // samples and types, and the search box, which is what `search: "applied"` means
             // -- or every row the server produced. Visible columns only, either way. Ancestral
@@ -294,7 +295,12 @@
                     setTimeout(function () { URL.revokeObjectURL(link.href); }, 0);
                 }
             }],
-            language: { emptyTable: container.getAttribute("data-empty-message") || "No mutations to show." },
+            language: {
+                emptyTable: container.getAttribute("data-empty-message") || "No mutations to show.",
+                // DataTables' own empty-count line is "Showing 0 to 0 of 0 entries", which
+                // with the filtered suffix reads as three zeros in a row.
+                infoEmpty: "Showing 0 entries"
+            },
             // breseq shades by displayed row, so a filtered table stripes like a full one.
             // A row the server marked ancestral gets the per-sample table's red -- toggled
             // rather than added, because deferRender reuses row nodes across draws.
@@ -308,28 +314,48 @@
             drawCallback: function () { if (dt) { pinColumns(); } }
         });
 
-        /* The options toggle leads the first toolbar row, ahead of the length menu and the
-           search box: it is about the page rather than the data, and it sits nearest the
-           strip it folds. A plain button rather than a DataTables one, because Buttons render
-           only where `B` is in `dom`, which is the pager's row. One label for both states --
-           `aria-expanded` carries which. Absent where there is nothing to fold. */
-        var firstToolbar = container.querySelector(".mutation-matrix-toolbar");
-        if (optionPanes && firstToolbar) {
-            var optionsToggle = document.createElement("button");
-            optionsToggle.type = "button";
-            optionsToggle.className = "btn btn-default mutation-matrix-options-toggle";
-            optionsToggle.textContent = "Show/Hide display and filtering options";
-            optionsToggle.setAttribute("aria-expanded", String(optionsShown));
-            optionsToggle.addEventListener("click", function () {
+        /* Export CSV and Export SVG live in the Export tab. Buttons makes them where `B` is
+           in `dom`, which is always a DataTables toolbar; their container is moved into the
+           pane once they exist. */
+        var exportPane = controls.querySelector('[data-role="export"]');
+        if (exportPane) { dt.buttons().container().appendTo(exportPane); }
+
+        /* The collapse bar sits directly under the panes, the sidebar's strip laid flat: a
+           full-width bar with a chevron, clicked to fold the strip and its panes away and
+           clicked again to bring them back. It stays where it is in both states, as the
+           sidebar's strip does, so what was folded is always one click from being unfolded;
+           the chevron and `aria-expanded` say which state it is in. Inserted after the pane
+           box rather than into a toolbar row, so it is between the options it folds and the
+           table they leave the height to. Absent where there is nothing to fold. */
+        if (optionPanes) {
+            var collapseBar = document.createElement("div");
+            collapseBar.className = "mutation-matrix-collapse";
+            collapseBar.setAttribute("role", "button");
+            collapseBar.tabIndex = 0;
+            var chevron = document.createElement("i");
+            chevron.setAttribute("aria-hidden", "true");
+            collapseBar.appendChild(chevron);
+            function drawCollapseBar() {
+                chevron.className = "fa " + (optionsShown ? "fa-angle-double-up" : "fa-angle-double-down");
+                collapseBar.title = (optionsShown ? "Collapse" : "Expand") + " the filtering and display options";
+                collapseBar.setAttribute("aria-label", collapseBar.title);
+                collapseBar.setAttribute("aria-expanded", String(optionsShown));
+            }
+            function toggleOptions() {
                 optionsShown = !optionsShown;
                 applyOptions();
-                optionsToggle.setAttribute("aria-expanded", String(optionsShown));
+                drawCollapseBar();
                 prefs.set(OPTIONS_KEY, { hidden: !optionsShown });
                 // The box's top moved; the ResizeObserver on the body catches it too, but
                 // not where ResizeObserver is missing.
                 sizeScrollBox();
+            }
+            drawCollapseBar();
+            collapseBar.addEventListener("click", toggleOptions);
+            collapseBar.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleOptions(); }
             });
-            firstToolbar.insertBefore(optionsToggle, firstToolbar.firstChild);
+            optionPanes.parentNode.insertBefore(collapseBar, optionPanes.nextSibling);
         }
 
         /* The descriptive columns stay put while the samples scroll. `position: sticky`

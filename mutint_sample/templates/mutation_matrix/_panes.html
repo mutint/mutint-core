@@ -1,5 +1,5 @@
 {% load sample_flags %}
-{% comment %} The mutation matrix's three client-side tabs -- Samples, Rows, Display -- as
+{% comment %} The mutation matrix's four client-side tabs -- Samples, Rows, Display, Export -- as
    panes of one `.tab-content` (control_tabs.html says why they must share one). Rendered by
    mutation_matrix/page.html beside its own Filter pane, and by the mutation_matrix tag's
    partial for a page that renders the tag alone. Takes `matrix`, `page` and `active`.
@@ -111,4 +111,10 @@
             </span>
         </span>
     </div>
+</div>
+{% comment %} Export CSV and Export SVG. The buttons are DataTables' own (the Buttons
+   extension makes them), so the script moves their container in here once the table is
+   drawn; the pane is empty until then. {% endcomment %}
+<div class="tab-pane{% if active == "export" %} active{% endif %}" id="{{ page }}-pane-export">
+    <div class="mutation-matrix-controls" data-role="export"></div>
 </div>
