@@ -2075,24 +2075,37 @@ has to stay in `page.html`. So `page.html` renders the strip, the Filter pane an
 four panes (`_panes.html`), and calls the tag with `controls=False`; a page that renders the
 tag alone, as Search does, gets the four client-side tabs from the tag. The script finds
 its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
-`.tab-content`. The DataTables toolbar -- length, search, count and pager, in one row -- sits
-under the strip on every tab; the Frequency display menu and the View switch are in the
-Display pane, not in that toolbar. **Export CSV and Export SVG are the Export tab**: the
+`.tab-content`. The DataTables toolbar -- one row, the pager at the left, then length and
+the count, and the search box pushed to the far right -- sits under the strip on every tab;
+the Frequency display menu and the View switch are in the Display pane, not in that toolbar. **Export CSV and Export SVG are the Export tab**: the
 Buttons extension makes them only where `B` sits in `dom`, which is a toolbar, so the script
 moves their container into the pane once the table is drawn. DataTables' empty count line
 is overridden to *Showing 0 entries*, since its own *Showing 0 to 0 of 0 entries*, followed
-by the filtered-from suffix, read as three zeros in a row on an empty Search. **A collapse bar under the panes folds the strip and
-its panes away** to give the table the height, and remembers it as
-`mutation_matrix.options` -- shown by default. It is the sidebar's strip laid flat: a
+by the filtered-from suffix, read as three zeros in a row on an empty Search.
+
+**A collapse bar under the panes folds away everything above it** -- the panes, the strip,
+and the page header with its button bar -- to give the table the height, and remembers it
+as `mutation_matrix.options`, shown by default. It is the sidebar's strip laid flat: a
 full-width bar the script inserts after the `.tab-content`, with the same grey, the same
 hover gradient and the same double chevron, pointing up while the options show and down
 once they are folded, and it stays put in both states so what was folded is one click from
 coming back. A bar at the edge of the area rather than a button among the toolbar's
 controls, because a button there reads as one more control over the table's data, and
 what this one folds is the page. `aria-expanded` and the title say which state it is in,
-and Enter or Space toggles it from the keyboard. It hides the `.tab-content` it found and the
-strip immediately before it, and never the container: on a page with no pane box the
-script's `controls` *is* the container, and hiding that hides the table.
+and Enter or Space toggles it from the keyboard. What it folds is gathered by walking from
+the `.tab-content` up to `#mutint-content` and taking every earlier sibling at each level,
+so the header is found without the script knowing the shell's markup and on Search the
+search form goes with it; it never touches the container, because on a page with no pane
+box the script's `controls` *is* the container, and folding that folds the table. Folded
+elements take a class with `display: none !important` rather than the `hidden` attribute,
+which any `display` rule on the element overrides.
+
+**The pinned cells sit above a sample cell's number.** A sample cell's digits are a span
+positioned at z-index 1 so they paint over the bar drawn behind them, and at the same
+z-index a later element in the row wins -- so pinned cells at 1 covered the sample cells'
+backgrounds and let the digits scroll across the Gene column. The three levels are ordered
+in `breseq_table.css`: pinned cell (2) over the numbers, header (3) over the pinned cells
+that scroll up under it, pinned header (4) over all.
 
 **Row sets are the seam for a page that wants a subset of its rows without being a second
 page.** `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))` annotates each row with
@@ -2140,8 +2153,8 @@ took -- measured on an eight-sample page: hiding Annotation and Gene left the pi
 the box scrolls as before; with fewer, the header shade ends at the last sample.
 
 **The table scrolls in its own box, and the samples are the point of it.** DataTables' `dom`
-puts its controls in one row above the table -- length, search, the count and the pager --
-and wraps the table alone in `.mutation-matrix-scroll`. The box is `fit-content` wide,
+puts its controls in one row above the table -- the pager, length, the count and the search
+box -- and wraps the table alone in `.mutation-matrix-scroll`. The box is `fit-content` wide,
 clamped to `calc(100% + 25px)`: as wide as the table, so with two samples its vertical
 scrollbar sits at the table's right edge, and no wider than the window, which the negative
 right margin (breaking out of `#mutint-content`'s padding; not on the left, where the table,

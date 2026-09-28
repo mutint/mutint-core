@@ -26,9 +26,9 @@
  *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
  *     the DataTables toolbar -- length, search, count, pager, in one row -- stays under the
  *     strip on every tab, and the Export buttons are moved into the Export pane;
- *   - a collapse bar under the panes, the sidebar's strip laid flat, folds the strip and
- *     its panes away and remembers that it did (`mutation_matrix.options`); shown unless
- *     told otherwise;
+ *   - a collapse bar under the panes, the sidebar's strip laid flat, folds away everything
+ *     above it -- the panes, the strip, the page header -- and remembers that it did
+ *     (`mutation_matrix.options`); shown unless told otherwise;
  *   - the table lives in a scroll box as wide as itself and no wider than the window: the
  *     header sticks to its top and the descriptive columns to its left, each pinned column's
  *     `left` being the sum of the widths before it, recomputed after every draw and whenever
@@ -120,16 +120,28 @@
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
-        // The strip and its panes, folded away by the collapse bar. `controls` is the container
-        // itself when no pane box was found, and hiding that would hide the table.
+        // The pane box the collapse bar folds, with everything above it. `controls` is the
+        // container itself when no pane box was found, and folding that would fold the table.
         var optionPanes = controls !== container ? controls : container.querySelector(".tab-content");
-        var optionStrip = optionPanes && optionPanes.previousElementSibling &&
-            optionPanes.previousElementSibling.matches("[data-control-tabs]")
-            ? optionPanes.previousElementSibling : null;
         var storedOptions = prefs.get(OPTIONS_KEY, null);
         var optionsShown = !(storedOptions && storedOptions.hidden === true);
+        /* Everything on the page above the pane box: its earlier siblings (the strip), and
+           walking up to the content box, each ancestor's earlier siblings -- the page header
+           with its button bar, and on Search the search form. Gathered when applied rather
+           than once, so a late-arriving element above is folded too. */
+        function foldable() {
+            var found = [], el = optionPanes;
+            while (el && el.id !== "mutint-content") {
+                for (var sib = el.previousElementSibling; sib; sib = sib.previousElementSibling) { found.push(sib); }
+                el = el.parentElement;
+            }
+            return found;
+        }
         function applyOptions() {
-            [optionStrip, optionPanes].forEach(function (el) { if (el) { el.hidden = !optionsShown; } });
+            if (!optionPanes) { return; }
+            [optionPanes].concat(foldable()).forEach(function (el) {
+                el.classList.toggle("mutation-matrix-folded", !optionsShown);
+            });
         }
         // Before the first draw, like every other remembered choice, so the scroll box is
         // sized against the page as it will stay.
@@ -254,12 +266,13 @@
             // The server's order, and no sort handles on the headers: a click on a sample's
             // header follows its link instead.
             ordering: false,
-            // One row of controls above the table -- length, search, the count and the pager
-            // -- and the table alone in the box that scrolls. The box itself is DataTables'
+            // One row of controls above the table -- the pager at the left, then length and
+            // the count, and the search box at the far right (the stylesheet pushes it) --
+            // and the table alone in the box that scrolls. The box itself is DataTables'
             // doing, so that it wraps only the table. `B` is where Buttons makes the two
             // Export buttons; they are moved into the Export tab's pane below, so the row
             // never shows them.
-            dom: '<"mutation-matrix-toolbar"lfipB>r<"mutation-matrix-scroll"t>',
+            dom: '<"mutation-matrix-toolbar"plifB>r<"mutation-matrix-scroll"t>',
             // Export is a menu of two: the rows showing -- after the Show menu, the hidden
             // samples and types, and the search box, which is what `search: "applied"` means
             // -- or every row the server produced. Visible columns only, either way. Ancestral
@@ -321,12 +334,13 @@
         if (exportPane) { dt.buttons().container().appendTo(exportPane); }
 
         /* The collapse bar sits directly under the panes, the sidebar's strip laid flat: a
-           full-width bar with a chevron, clicked to fold the strip and its panes away and
-           clicked again to bring them back. It stays where it is in both states, as the
-           sidebar's strip does, so what was folded is always one click from being unfolded;
-           the chevron and `aria-expanded` say which state it is in. Inserted after the pane
-           box rather than into a toolbar row, so it is between the options it folds and the
-           table they leave the height to. Absent where there is nothing to fold. */
+           full-width bar with a chevron, clicked to fold away everything above it -- the
+           panes, the strip, the page header -- and clicked again to bring it all back. It
+           stays where it is in both states, as the sidebar's strip does, so what was folded
+           is always one click from being unfolded; the chevron and `aria-expanded` say
+           which state it is in. Inserted after the pane box rather than into a toolbar row,
+           so it is between what it folds and the table that gets the height. Absent where
+           there is nothing to fold. */
         if (optionPanes) {
             var collapseBar = document.createElement("div");
             collapseBar.className = "mutation-matrix-collapse";
@@ -337,7 +351,7 @@
             collapseBar.appendChild(chevron);
             function drawCollapseBar() {
                 chevron.className = "fa " + (optionsShown ? "fa-angle-double-up" : "fa-angle-double-down");
-                collapseBar.title = (optionsShown ? "Collapse" : "Expand") + " the filtering and display options";
+                collapseBar.title = optionsShown ? "Collapse everything above the table" : "Expand the header and the options";
                 collapseBar.setAttribute("aria-label", collapseBar.title);
                 collapseBar.setAttribute("aria-expanded", String(optionsShown));
             }

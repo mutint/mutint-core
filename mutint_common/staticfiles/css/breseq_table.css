@@ -328,8 +328,9 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 }
 
 /* DataTables' own controls, in one row above the box, outside anything that scrolls: the
-   length menu, the search box, the count and the pager (the Export buttons are made here
-   too and moved into the Export tab's pane). The length menu is
+   pager at the left, then the length menu and the count, and the search box pushed to the
+   far right (the Export buttons are made here too and moved into the Export tab's pane).
+   The length menu is
    given the search box's size rather than the theme's 75px, and both the page's 14px type
    rather than Bootstrap's 12px for a small input, which read as two sizes side by side. The
    row gap is the one every wrapping control row has (.btn-row), so a narrow window stacks
@@ -340,6 +341,18 @@ table.dataTable.breseq-table thead .sorting_desc:after {
     align-items: center;
     gap: 5px 1.5em;
     margin-bottom: 0.5em;
+}
+
+.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_filter {
+    margin-left: auto;
+}
+
+/* What the collapse bar folded: the strip, its panes, and everything above them on the
+   page, the header included. A class rather than the `hidden` attribute, because any
+   `display` rule on the element -- Bootstrap's on a .row, DataTables' on its wrapper --
+   overrides the attribute. */
+.mutation-matrix-folded {
+    display: none !important;
 }
 
 .mutation-matrix div.dataTables_wrapper div.dataTables_length select,
@@ -410,15 +423,22 @@ div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_paginate ul.pagin
 table.dataTable.mutation-matrix-table thead > tr > th {
     position: sticky;
     top: 0;
-    z-index: 2;
+    z-index: 3;
     background-color: #4b5158;
 }
 
 /* A stuck cell has to be opaque, or what scrolls under it shows through: the row's stripe
-   is painted on the row, and a cell inherits nothing from that once it is positioned. */
+   is painted on the row, and a cell inherits nothing from that once it is positioned.
+
+   And it has to sit above a sample cell's number. `.mutation-matrix-cell > span` is
+   positioned at z-index 1 so the digits paint over the bar drawn behind them, and at the
+   same z-index a later element in the row wins -- so at 1 the pinned cells hid the sample
+   cells' backgrounds and let their digits through, which showed as numbers scrolling
+   across the Gene column. The three levels here are ordered: pinned cell over the
+   numbers, header over the pinned cells that scroll up under it, pinned header over all. */
 table.dataTable.mutation-matrix-table .pinned {
     position: sticky;
-    z-index: 1;
+    z-index: 2;
     background-color: rgb(255, 255, 255);
 }
 
@@ -434,7 +454,7 @@ table.dataTable.mutation-matrix-table tr.ancestral_table_row > td.pinned {
 }
 
 table.dataTable.mutation-matrix-table thead > tr > th.pinned {
-    z-index: 3;
+    z-index: 4;
     background-color: #4b5158;
 }
 
