@@ -2,6 +2,10 @@
 {% block title %}Samples in {{ experiment.name }}{% endblock %}
 {% block header %}Edit samples: {{ experiment.name }}{% endblock %}
 {% block content %}
+    <style>
+        /* A box the uploaded spreadsheet changed and nobody has saved yet. */
+        #mutint-content .sb-changed { background-color: #fcf8e3; }
+    </style>
     {% comment %} A plain table, deliberately not a DataTable. The Metadata page's table
        uses deferRender, which never builds the DOM for rows it has not drawn -- values
        typed into those rows would not exist to be read back on save. Experiments run to
@@ -19,6 +23,22 @@
         </p>
 
         {% if samples %}
+        {% comment %} The import's own metadata.csv, filled in with this table, and that file
+           read back into the boxes. The upload fills the table and saves nothing: Save below
+           is still the one write, through the same validation as anything typed. {% endcomment %}
+        <div class="btn-row" style="margin-bottom: 0.5em;">
+            <a class="btn btn-default btn-sm"
+               href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download spreadsheet</a>
+            <button type="button" class="btn btn-default btn-sm" id="sb-upload">Upload spreadsheet&hellip;</button>
+            <input type="file" id="sb-upload-file" accept=".csv,text/csv" hidden>
+        </div>
+        <p style="color: #666;">
+            The spreadsheet is the <code>metadata.csv</code> an import reads. Uploading one
+            fills the table and highlights what changed; nothing is saved until you press
+            <b>Save all samples</b>.
+        </p>
+        <div id="sb-upload-status" style="margin-bottom: 1em; white-space: pre-line;"></div>
+
         <table class="table table-striped table-bordered" style="width: 100%;">
             <thead>
             <tr>
@@ -99,6 +119,98 @@
         return field ? field.value : "";
     }
 
+    // --- the spreadsheet: fill the boxes, mark what moved, save nothing ---
+
+    function setText(field, text) {
+        if (!field) { return false; }
+        text = (text === null || text === undefined) ? "" : String(text);
+        if (field.value === text) { return false; }
+        field.value = text;
+        field.classList.add("sb-changed");
+        return true;
+    }
+
+    function setBox(box, on) {
+        if (!box || box.checked === !!on) { return false; }
+        box.checked = !!on;
+        box.parentNode.classList.add("sb-changed");
+        return true;
+    }
+
+    function fill(id, values) {
+        var tr = document.querySelector('tr[data-sample-id="' + id + '"]');
+        if (!tr) { return false; }
+        var changed = false;
+        if ("population" in values) {
+            changed = setText(document.getElementById("sb-population-" + id), values.population) || changed;
+        }
+        changed = setText(document.getElementById("sb-time-point-" + id), values.time_point) || changed;
+        changed = setText(document.getElementById("sb-sample-" + id), values.name) || changed;
+        if ("description" in values) {
+            changed = setText(document.getElementById("sb-description-" + id), values.description) || changed;
+        }
+        if ("is_mixed" in values) {
+            changed = setBox(document.getElementById("sb-mixed-" + id), values.is_mixed) || changed;
+        }
+        Object.keys(values.flags || {}).forEach(function (field) {
+            changed = setBox(tr.querySelector('input[data-flag="' + field + '"]'),
+                             values.flags[field]) || changed;
+        });
+        return changed;
+    }
+
+    var picker = document.getElementById("sb-upload-file");
+    document.getElementById("sb-upload").addEventListener("click", function () {
+        picker.click();
+    });
+    picker.addEventListener("change", function () {
+        var file = picker.files[0];
+        if (!file) { return; }
+        var status = document.getElementById("sb-upload-status");
+        var error = document.getElementById("sb-error");
+        status.textContent = "Reading " + file.name + "…";
+        error.textContent = "";
+        var form = new FormData();
+        form.append("file", file);
+        fetch("/experiment/{{ experiment.id }}/samples/metadata/", {
+            method: "POST",
+            headers: { "X-CSRFToken": window.mutintCsrfHeader() },
+            credentials: "same-origin",
+            body: form
+        }).then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (body) {
+                if (!response.ok) {
+                    throw new Error(body.error || ("The upload failed (" + response.status + ")."));
+                }
+                return body;
+            });
+        }).then(function (body) {
+            Array.prototype.forEach.call(document.querySelectorAll(".sb-changed"), function (el) {
+                el.classList.remove("sb-changed");
+            });
+            var changed = 0;
+            Object.keys(body.samples || {}).forEach(function (id) {
+                if (fill(id, body.samples[id])) { changed += 1; }
+            });
+            var lines = [file.name + ": " + (changed === 1 ? "1 sample" : changed + " samples") +
+                         " changed in the table. Press Save all samples to keep the changes."];
+            if ((body.unmatched_rows || []).length) {
+                lines.push("Rows that named no sample here: " + body.unmatched_rows.join("; "));
+            }
+            if ((body.unnamed_samples || []).length) {
+                lines.push("Samples no row named (left as they were): " +
+                           body.unnamed_samples.join(", "));
+            }
+            status.textContent = lines.join("\n");
+        }).catch(function (err) {
+            status.textContent = "";
+            error.textContent = err.message;
+        }).then(function () {
+            // So choosing the same file again, after editing it, still fires `change`.
+            picker.value = "";
+        });
+    });
+
     document.getElementById("sb-save").addEventListener("click", function () {
         var rows = [];
         var ids = [];
@@ -111,8 +223,8 @@
                     id: id,
                     source_name: value("name", id),
                     population: value("population", id),
-                    time_point: value("time_point", id),
-                    name: value("name", id),
+                    time_point: value("time-point", id),
+                    name: value("sample", id),
                     is_mixed: document.getElementById("sb-mixed-" + id).checked ? 1 : 0,
                     description: value("description", id)
                 };

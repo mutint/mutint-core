@@ -167,10 +167,12 @@ class ArchiveTestCase(TestCase):
         manifest, _names = self._manifest_from(self._archive())
         text = archive.metadata_csv(manifest)
         lines = text.splitlines()
-        self.assertEqual("sample,population,time_point,sample_type,data", lines[0])
-        self.assertIn("1-1,1,500,clone,1-500-1-1.gd", lines)
-        self.assertIn("1-1,1,1000,population,1-1000-1-1.gd", lines)
-        self.assertIn("c9,Ara-2,500,clone,Ara-2_500gen_c9.vcf", lines)
+        self.assertEqual("sample,population,time_point,sample_type,description,"
+                         "hypermutator,contaminated,low_coverage,data", lines[0])
+        # The description and the flags ride along, so the CSV alone places and describes.
+        self.assertIn("1-1,1,500,clone,the starting clone,yes,no,no,1-500-1-1.gd", lines)
+        self.assertIn("1-1,1,1000,population,,no,yes,no,1-1000-1-1.gd", lines)
+        self.assertIn("c9,Ara-2,500,clone,Ara-2_500gen_c9,no,no,no,Ara-2_500gen_c9.vcf", lines)
 
     def test_two_samples_with_one_source_name_get_two_files(self):
         population = Population.objects.get(experiment=self.experiment, name="1")

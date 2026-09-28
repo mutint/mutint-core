@@ -95,7 +95,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2907 run, 0 failures** standalone; **3540** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 2930 run, 0 failures** standalone; **3563** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -1724,6 +1724,24 @@ nothing about a renumber changes a mutation count, and paying for the whole data
 rename is what would make this feel broken in production. A descriptive-only save rebuilds
 nothing.
 
+**The bulk page reads and writes the import's `metadata.csv`.** *Download spreadsheet* is
+`metadata.write` over the table, with `data` set to each sample's source name; *Upload
+spreadsheet* is `metadata.parse` plus `Metadata.lookup` per sample, which is the import's
+own matching. **The upload saves nothing**: it returns values, the page fills its boxes and
+highlights what moved, and **Save all samples** posts them through `_save` like anything
+typed. That keeps one validation path, and an upload that turns out wrong costs a reload
+rather than a restore. The answer carries only what a row said -- a blank flag cell, or a
+column the file lacks, leaves that box alone.
+
+**The sidebar's Samples entry is `/experiment/samples/?experiment_id=`, which redirects
+here.** Every experiment-section link is its url with `?experiment_id=` appended, and this
+page names the experiment in its path. `requires_edit`, since the page refuses anyone else.
+
+**Its save script reads each box by id, and no test runs the script.** The endpoint tests
+post directly, so a script reading an id the page does not render passes all of them while
+every save blanks that field. `test_sample_spreadsheet` checks the ids the script reads
+against the ids the page renders; rename an input and change both.
+
 **`Sample.time_point` is the only numeric member of the coordinate**, because it is the
 ordinal that places a sample along a population -- the Fixed set sorts by it and takes the
 last two -- while the population and sample names are text. Real data carries values like
@@ -2311,6 +2329,13 @@ its coordinate and mint a second sample. Deciding before the row exists makes a
 same-metadata re-import a no-op, because the chain is `get_or_create` on the coordinate.
 An optional `sample_type` column (population/mixed, clone/individual/isolate) sets `is_clonal`
 through the same placement and outranks the `-p` rule; blank leaves that rule in force.
+`description` and the three flag columns (`hypermutator`, `contaminated`, `low_coverage`)
+ride the same row and are applied by `_apply_row_details` on every path. A blank
+description keeps the placement's own rule -- cleared, so the label is the coordinate -- and
+a blank flag cell leaves the flag alone. They are **not** in `SYNONYMS`, which also decides
+which `.gd` header keys are placement, so a `#=DESCRIPTION` line still survives the export's
+replay. `metadata.write` is the one writer of the format; the archive and the Edit samples
+page both call it.
 `_place_by_metadata` still has to handle the one transition -- a sample imported before the
 metadata existed -- and does so by **moving** it (through `samples.resolve_population` and
 `prune_orphans`, not `apply_rows`, which also writes `is_clonal`), unless another sample
@@ -3143,8 +3168,8 @@ NCBI record it is -- and carries the box that records an accession. It has a **n
 led that section for a while, on the reading that an experiment goes top-down from what it was
 aligned to and then to what was found in it; what people actually open an experiment for is
 its mutations, and a section whose first row is the thing nobody came for costs every reader a
-click. The order in that section now is Mutations, Reference, Import Data, Curate, then the
-plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
+click. The order in that section now is Samples (`mutint_experiment`, for editors only),
+Mutations, Reference, Import Data, Curate, then the plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
 always. There is still no `order=`.
 
 **The nav entry is not decoration, and neither is linking every contig.** A viewer link gated

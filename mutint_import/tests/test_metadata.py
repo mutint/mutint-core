@@ -198,3 +198,79 @@ class FileTestCase(SimpleTestCase):
         with metadata.applying(parsed):
             self.assertEqual("s", metadata.row_for("x").sample)
         self.assertIsNone(metadata.current())
+
+
+class DescriptiveColumnsTestCase(SimpleTestCase):
+    """`description` and the three flags: optional, CSV-only, and blank means two things."""
+
+    WIDE = ("sample,population,time_point,description,hypermutator,contaminated,"
+            "low_coverage,data\n")
+
+    def test_absent_columns_leave_the_row_saying_nothing(self):
+        row = metadata.parse(HEADER + "s,p,1,x.gd\n").rows[0]
+        self.assertIsNone(row.description)
+        self.assertEqual({}, row.flags)
+
+    def test_the_columns_parse_and_a_blank_flag_is_untouched(self):
+        row = metadata.parse(self.WIDE + "s,p,1,my clone,yes,,No,x.gd\n").rows[0]
+        self.assertEqual("my clone", row.description)
+        self.assertEqual({"is_hypermutator": True, "is_low_coverage": False}, row.flags)
+        # A present but blank description is "none", which is not the same as absent.
+        self.assertEqual("", metadata.parse(self.WIDE + "s,p,1,,,,,x.gd\n").rows[0].description)
+
+    def test_the_flag_header_is_matched_like_every_other(self):
+        for header in ("low_coverage", "Low Coverage", "LOWCOVERAGE"):
+            row = metadata.parse("sample,population,time_point,%s,data\ns,p,1,1,x.gd\n"
+                                 % header).rows[0]
+            self.assertEqual({"is_low_coverage": True}, row.flags, header)
+
+    def test_a_flag_that_is_not_yes_or_no_is_refused_naming_the_line(self):
+        with self.assertRaises(metadata.MetadataError) as raised:
+            metadata.parse(self.WIDE + "s,p,1,,maybe,,,x.gd\n")
+        self.assertIn("line 2", str(raised.exception))
+        self.assertIn("hypermutator", str(raised.exception))
+
+    def test_repeated_rows_merge_and_must_agree(self):
+        merged = metadata.parse(self.WIDE + "s,p,1,d,yes,,,a.gd\ns,p,1,,,no,,b.gd\n").rows[0]
+        self.assertEqual("d", merged.description)
+        self.assertEqual({"is_hypermutator": True, "is_contaminated": False}, merged.flags)
+        with self.assertRaises(metadata.MetadataError):
+            metadata.parse(self.WIDE + "s,p,1,,yes,,,a.gd\ns,p,1,,no,,,b.gd\n")
+        with self.assertRaises(metadata.MetadataError):
+            metadata.parse(self.WIDE + "s,p,1,one,,,,a.gd\ns,p,1,two,,,,b.gd\n")
+
+    def test_the_columns_are_not_header_placement_keys(self):
+        # A `#=DESCRIPTION` line in a .gd must survive the export's replay.
+        self.assertFalse(metadata.is_placement_key("DESCRIPTION"))
+        self.assertFalse(metadata.is_placement_key("HYPERMUTATOR"))
+
+
+class WriteTestCase(SimpleTestCase):
+
+    def test_what_is_written_reads_back(self):
+        text = metadata.write([
+            {"sample": "763A", "population": "Ara-2", "time_point": 500.0, "is_clonal": True,
+             "description": "a, quoted one", "flags": {"is_contaminated": True},
+             "data": "Ara-2_500gen_763A"},
+            {"sample": "mix", "population": "Unspecified", "time_point": None,
+             "is_clonal": False, "description": "", "flags": {}, "data": ["a", "b"]},
+        ])
+        rows = metadata.parse(text).rows
+        self.assertEqual(("763A", "Ara-2", 500, True, "a, quoted one"),
+                         (rows[0].sample, rows[0].population, rows[0].time_point,
+                          rows[0].is_clonal, rows[0].description))
+        # Every flag is written, so the reader gets all three back rather than the one set.
+        self.assertEqual({"is_hypermutator": False, "is_contaminated": True,
+                          "is_low_coverage": False}, rows[0].flags)
+        # No time point: unplaced, so the population is not written either.
+        self.assertEqual(("", None, ["a", "b"], False),
+                         (rows[1].population, rows[1].time_point, rows[1].data,
+                          rows[1].is_clonal))
+
+    def test_the_shipped_example_uses_the_columns(self):
+        with open(finders.find("mutint_import/metadata-example.csv"), encoding="utf-8") as handle:
+            parsed = metadata.parse(handle.read())
+        row = parsed.lookup("Ara-2_500gen_763A")
+        self.assertTrue(row.description)
+        self.assertTrue(row.flags["is_hypermutator"])
+        self.assertEqual({"is_low_coverage": True}, parsed.lookup("mystery_sample").flags)

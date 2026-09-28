@@ -64,11 +64,11 @@ Drop a file called `metadata.csv` beside the data, on the Import data page or am
 files on the Run breseq page. It has a header row and then one row per sample:
 
 ```
-sample,population,time_point,sample_type,data
-763A,Ara-2,500,clone,Ara-2_500gen_763A.gd
-ZDB16,Ara-3,30000,,ZDB16
-A1,glucose,10,population,s1;s1_lane2
-mystery,,,,mystery_sample.gd
+sample,population,time_point,sample_type,description,hypermutator,data
+763A,Ara-2,500,clone,Ara-2 500 gen clone A,yes,Ara-2_500gen_763A.gd
+ZDB16,Ara-3,30000,,,,ZDB16
+A1,glucose,10,population,,,s1;s1_lane2
+mystery,,,,,,mystery_sample.gd
 ```
 
 - `sample` is the name within its population; `population` and `time_point` place it.
@@ -77,6 +77,10 @@ mystery,,,,mystery_sample.gd
   `clone`, `individual` or `isolate` one genotype. Left blank, or with the column absent,
   the data decides (breseq's `-p` in the `.gd`'s command line). On the Run breseq page it
   also sets the **Population sample** option for that sample's run.
+- `description`, `hypermutator`, `contaminated` and `low_coverage` are optional too. A
+  description is what the sample is called throughout the site in place of its coordinate;
+  blank means none. The three flags take `yes` or `no`, and a blank cell leaves the flag
+  as it is.
 - `data` names the inputs the row covers: a breseq results folder by its name, a `.gd` or
   VCF by its filename (the extension may be left off), or on the Run breseq page a read
   file's name or a stem its mates share (`s1` covers `s1_R1.fastq.gz` and `s1_R2.fastq.gz`).
@@ -90,6 +94,18 @@ read at all -- a missing column, say -- refuses the whole drop, because everythi
 would otherwise land unplaced. Importing the same data with the same file again changes
 nothing; importing it with a *different* placement moves the sample, unless another sample
 already holds that place, which is reported.
+
+### Changing samples with the same spreadsheet
+
+An experiment's **Samples** page -- in the sidebar, for anyone who can edit it -- is a table
+of every sample, and it speaks this format too. **Download spreadsheet** gives you a
+`metadata.csv` filled in with what the table shows now, one row per sample, with `data`
+holding each sample's source name. Edit it in any spreadsheet program, then **Upload
+spreadsheet** to read it back: the table's boxes fill with the file's values and the ones
+that changed are highlighted. Nothing is saved until you press **Save all samples**, which
+checks the whole table the way it checks anything typed. Rows that name no sample in the
+experiment, and samples no row names, are listed under the buttons; those samples are left
+as they were.
 
 ### Naming a sample inside the file
 

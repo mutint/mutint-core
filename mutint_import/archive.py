@@ -29,7 +29,6 @@ Written and read side by side, like `vcf_import` and `vcf_export`, so the two ha
 drift apart about what a key means.
 """
 
-import csv
 import io
 import json
 import logging
@@ -48,7 +47,6 @@ from mutint_import import reference_store
 from mutint_import.gd_import import (
     UNSPECIFIED_POPULATION,
     export_gd_text,
-    format_time_point,
 )
 from mutint_import.vcf_export import VCF_RECORD, export_vcf_text
 from mutint_sample.flags import FLAG_FIELDS
@@ -189,9 +187,6 @@ def _unique_files(samples):
     return files
 
 
-METADATA_COLUMNS = ("sample", "population", "time_point", "sample_type", "data")
-
-
 def metadata_csv(manifest):
     """The archive's `metadata.csv`, from the manifest's samples.
 
@@ -200,19 +195,15 @@ def metadata_csv(manifest):
     directions. Population and time point go together or not at all, as that parser
     requires; an unplaced sample has neither.
     """
-    out = io.StringIO()
-    writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(METADATA_COLUMNS)
-    for entry in manifest["samples"]:
-        placed = entry.get("time_point") is not None
-        writer.writerow([
-            entry["name"],
-            entry["population"] if placed else "",
-            format_time_point(entry["time_point"]) if placed else "",
-            "clone" if entry.get("is_clonal", True) else "population",
-            os.path.basename(entry["file"]),
-        ])
-    return out.getvalue()
+    return sample_metadata.write(
+        {"sample": entry["name"],
+         "population": entry["population"],
+         "time_point": entry.get("time_point"),
+         "is_clonal": entry.get("is_clonal", True),
+         "description": entry.get("description") or "",
+         "flags": {field: bool(entry.get(field)) for field in FLAG_FIELDS},
+         "data": os.path.basename(entry["file"])}
+        for entry in manifest["samples"])
 
 
 def write_archive(experiment, fileobj):

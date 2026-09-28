@@ -160,6 +160,41 @@ class MetadataImportTestCase(_DropTestCase):
         self._run(self._mixed_drop(typed + "a,p,1,clone,ZDB16\n"))
         self.assertTrue(self._sample("ZDB16").is_clonal)
 
+    def test_description_and_flags_land_on_new_and_moved_samples(self):
+        wide = ("sample,population,time_point,description,hypermutator,contaminated,"
+                "low_coverage,data\n")
+        self._run(self._mixed_drop(None))
+        # Both samples exist from the first drop, so both are moved -- one with a
+        # description, one with a blank one.
+        self._run(self._mixed_drop(
+            wide + "763A,Ara-2,500,the clone,yes,,,loose\n"
+                   "c16,Ara-3,30000,,,yes,no,ZDB16\n"))
+        loose = self._sample("loose")
+        self.assertEqual(("Ara-2", 500, "763A"), self._coordinate(loose))
+        self.assertEqual("the clone", loose.description)
+        self.assertTrue(loose.is_hypermutator)
+        zdb = self._sample("ZDB16")
+        # A blank description is still the placement's rule: labelled by the coordinate.
+        self.assertEqual("", zdb.description)
+        self.assertTrue(zdb.is_contaminated)
+        self.assertFalse(zdb.is_low_coverage)
+        # A blank flag cell left the flag alone rather than clearing it.
+        loose.is_contaminated = True
+        loose.save(update_fields=["is_contaminated"])
+        self._run(self._mixed_drop(wide + "763A,Ara-2,500,the clone,,,,loose\n"))
+        loose.refresh_from_db()
+        self.assertTrue(loose.is_contaminated)
+        self.assertTrue(loose.is_hypermutator)
+        self.assertEqual("the clone", loose.description)
+
+    def test_description_and_flags_land_on_a_sample_the_drop_creates(self):
+        self._run(self._mixed_drop(
+            "sample,population,time_point,description,low_coverage,data\n"
+            "763A,Ara-2,500,first look,yes,loose\n"))
+        created = self._sample("loose")
+        self.assertEqual("first look", created.description)
+        self.assertTrue(created.is_low_coverage)
+
     def test_a_gd_header_may_say_the_sample_type(self):
         gd = ("#=GENOME_DIFF\t1.0\n#=SAMPLE\tx\n#=SAMPLE_TYPE\tmixed\n#=REFSEQ\ttest_ref\n"
               + breseq_fixture.GD_TEXT.split("\n", 2)[2])

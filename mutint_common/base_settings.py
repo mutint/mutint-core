@@ -206,7 +206,7 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             # selected experiment's pages. Its position here no longer decides that.
             'mutint_dashboard',       # nav: none (the sidebar's brand links to it)
             'mutint_search',          # nav: Search
-            'mutint_experiment',      # nav: Projects, Experiments (Groups is an account entry)
+            'mutint_experiment',      # nav: Projects, Experiments, Samples (Groups is an account entry)
             'mutint_sample',          # nav: Mutations, Reference
             'mutint_filter',          # nav: none (installed for its template tags)
             'mutint_import',          # nav: Import Data

@@ -347,7 +347,9 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
 
         self.assertIn('data-tab="samples" href="#breseq_table-pane-samples">Sample</a>',
                       content)
-        self.assertNotIn(">Samples</a>", content)
+        # The tab's own markup only: the sidebar has a Samples entry of its own.
+        self.assertNotIn('data-tab="samples" href="#breseq_table-pane-samples">Samples</a>',
+                         content)
 
     def test_each_control_sits_in_its_own_pane(self):
         content = self.content()

@@ -6,13 +6,19 @@ class ExperimentConfig(AppConfig):
 
     def ready(self):
         from mutint_common.nav_registry import (
-            MAIN_SECTION, register_nav_item,
+            EXPERIMENT_SECTION, MAIN_SECTION, register_nav_item,
         )
         # `key='projects'` is what lets base.html put the selected project's own row
         # directly under this entry. See mutint_common/nav_registry.py.
         register_nav_item('Projects', url='/project/', section=MAIN_SECTION,
                           key='projects')
         register_nav_item('Experiments', url='/experiment/', section=MAIN_SECTION)
+        # First in the experiment section, ahead of mutint_sample's Mutations, because this
+        # app is ahead of that one in INSTALLED_APPS. `requires_edit`: the page edits, and
+        # refuses a reader who cannot. The url redirects to `/experiment/<pk>/samples/`,
+        # since every entry in this section is its url with `?experiment_id=` appended.
+        register_nav_item('Samples', url='/experiment/samples/', section=EXPERIMENT_SECTION,
+                          requires_edit=True)
         # Groups is deliberately not registered. It is a per-user thing -- the groups you own
         # or belong to -- so it lives in base.html's account block beside Jobs and Change
         # Password, where `{% if user.is_authenticated %}` already governs it. Registered here

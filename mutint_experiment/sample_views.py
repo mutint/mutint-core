@@ -138,6 +138,116 @@ def experiment_samples(request, pk):
     return render(request, "sample/list.html", context)
 
 
+def experiment_samples_selected(request):
+    """The sidebar's **Samples** entry: `?experiment_id=` to the page's own address.
+
+    Every experiment-section link is its url with the experiment appended as a query
+    parameter, and this page names the experiment in its path. A redirect rather than a
+    second rendering keeps one address for the page. Permission is the page's to check.
+    """
+    from django.http import Http404
+    from django.shortcuts import redirect
+
+    raw = request.GET.get("experiment_id", "")
+    if not raw.isdigit():
+        raise Http404("No experiment selected.")
+    experiment = get_object_or_404(Experiment, pk=int(raw))
+    return redirect("experiment_samples", pk=experiment.pk)
+
+
+# --- the spreadsheet -----------------------------------------------------------------------
+#
+# The Edit samples page's table as the import's own `metadata.csv`, and that file read back
+# into the table. **Reading it writes nothing**: the values go into the page's boxes, the
+# person sees what changed, and Save posts them through `_save` like anything typed. One
+# validation path, and an upload that is wrong costs a reload rather than a restore.
+
+#: A spreadsheet of samples, not a genome: a few hundred rows is tens of kilobytes.
+MAX_METADATA_BYTES = 2 * 1024 * 1024
+
+
+def _data_name(sample):
+    """What the spreadsheet's `data` column calls a sample -- the name import matches on."""
+    return sample.source_name or "sample_%d" % sample.pk
+
+
+def experiment_samples_metadata(request, pk):
+    """The experiment's samples as a `metadata.csv`, filled in with what is stored now."""
+    from django.http import HttpResponse
+    from mutint_import import metadata
+    from mutint_import.archive import slug
+
+    experiment = get_object_or_404(Experiment, pk=pk)
+    if not can_edit_experiment(request.user, experiment):
+        return render(request, "403.html", get_user_context(request.user), status=403)
+
+    entries = []
+    for sample in _experiment_samples(experiment):
+        coordinate = sample_coordinate(sample)
+        entries.append({
+            "sample": coordinate[2],
+            "population": coordinate[0],
+            "time_point": coordinate[1],
+            "is_clonal": not sample.is_mixed,
+            "description": sample.description or "",
+            "flags": {field: bool(getattr(sample, field)) for field in FLAG_FIELDS},
+            "data": _data_name(sample),
+        })
+    response = HttpResponse(metadata.write(entries), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = (
+        'attachment; filename="%s_metadata.csv"' % slug(experiment.name or "experiment"))
+    return response
+
+
+@require_POST
+def experiment_samples_read_metadata(request, pk):
+    """Read an uploaded `metadata.csv` into values for the table's boxes; writes nothing.
+
+    Each sample is found by its `data` name, through `Metadata.lookup` -- the import's own
+    matching, extension optional. The answer carries only what a row said: a blank flag
+    cell leaves that checkbox alone, and a row with no time point sends a blank one and no
+    population, so the population box keeps what it had and Save still asks for one.
+    """
+    from mutint_import import metadata
+
+    experiment = get_object_or_404(Experiment, pk=pk)
+    if not can_edit_experiment(request.user, experiment):
+        return JsonResponse({"error": "You cannot edit this experiment's samples."},
+                            status=403)
+    upload = request.FILES.get("file")
+    if upload is None:
+        return JsonResponse({"error": "Choose a metadata.csv to upload."}, status=400)
+    if upload.size > MAX_METADATA_BYTES:
+        return JsonResponse({"error": "%s is too large to be a sample spreadsheet."
+                             % upload.name}, status=400)
+
+    try:
+        parsed = metadata.parse(upload.read(), source=upload.name)
+        samples = {}
+        unnamed = []
+        for sample in _experiment_samples(experiment):
+            row = parsed.lookup(_data_name(sample))
+            if row is None:
+                unnamed.append(sample.label)
+                continue
+            values = {"name": row.sample,
+                      "time_point": format_time_point(row.time_point),
+                      "flags": dict(row.flags)}
+            if row.population:
+                values["population"] = row.population
+            if row.is_clonal is not None:
+                values["is_mixed"] = not row.is_clonal
+            if row.description is not None:
+                values["description"] = row.description
+            samples[str(sample.pk)] = values
+    except metadata.MetadataError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+
+    return JsonResponse({"samples": samples,
+                         "unmatched_rows": parsed.report()["unmatched_rows"],
+                         "unnamed_samples": unnamed})
+
+
 # --- endpoints -----------------------------------------------------------------------------
 
 

@@ -358,6 +358,8 @@ def _place_by_metadata(context, document, row, sample_name):
         if row.is_clonal is not None and existing.is_clonal != row.is_clonal:
             existing.is_clonal = row.is_clonal
             fields.append("is_clonal")
+        fields += [field for field in _apply_row_details(existing, row)
+                   if field not in fields]
         if fields:
             existing.save(update_fields=fields)
         if old is not None and old.pk != existing.population_id:
@@ -367,12 +369,35 @@ def _place_by_metadata(context, document, row, sample_name):
     created = _get_or_create_chain(context, document, population_name, row.time_point,
                                    row.sample, None, sample_name, description="",
                                    is_clonal=row.is_clonal)
+    fields = []
     if row.is_clonal is not None and created.is_clonal != row.is_clonal:
         # A row that reused a sample already at the coordinate: `get_or_create`'s defaults
         # did not apply, and the metadata's word still stands.
         created.is_clonal = row.is_clonal
-        created.save(update_fields=["is_clonal"])
+        fields.append("is_clonal")
+    fields += _apply_row_details(created, row)
+    if fields:
+        created.save(update_fields=fields)
     return created
+
+
+def _apply_row_details(sample, row):
+    """Set the description and flags a metadata row carries; returns the fields changed.
+
+    A non-blank description is set; otherwise the placement's own rule stands, which the
+    caller has already applied -- a sample placed by metadata is labelled by its coordinate.
+    Only the flags the row named are touched: a blank cell has not said the flag is off.
+    """
+    fields = []
+    description = (row.description or "").strip()
+    if description and sample.description != description:
+        sample.description = description
+        fields.append("description")
+    for field, value in (row.flags or {}).items():
+        if getattr(sample, field) != value:
+            setattr(sample, field, value)
+            fields.append(field)
+    return fields
 
 
 def _parse_document(uploaded):

@@ -6,7 +6,9 @@ above it, asked in this order at the one seam (`gd_import.import_document_as_sam
 
 1. **A `metadata.csv` dropped with the data.** Columns `sample,population,time_point,data`,
    with an optional `sample_type` (population/mixed, or clone/individual/isolate) between
-   the last two (a header row, any column order); `#` lines and blank lines are ignored; `data` names the
+   the last two, and optional `description`, `hypermutator`, `contaminated` and
+   `low_coverage` after them (a header row, any column order); `#` lines and blank lines
+   are ignored; `data` names the
    inputs the row places, several separated by `;`, and rows with the same coordinate may
    repeat to name more. An input is a breseq results folder's name, a `.gd` or VCF filename
    (the extension may be left off), or -- on the breseq launcher -- a read file's name or a
@@ -24,6 +26,15 @@ next import of that file would find nothing at its coordinate and create a secon
 Deciding before the row exists means a same-metadata re-import is a no-op, because the
 chain is `get_or_create` on the coordinate. `source_name` stays the filename either way; it
 is what re-import and mutint-breseq match on.
+
+**The four descriptive columns ride the same row, and a blank cell means different things.**
+A blank `description` is a sample with no description, because that is what the placement
+has always done -- it clears the filename so the label is the coordinate. A blank flag cell
+leaves the flag as it is, which is `sample_type`'s rule: a flag is a fact somebody recorded,
+and a spreadsheet that does not mention it has not said it is false. The Edit samples page
+downloads this same file filled in and reads it back, so there is one format for both.
+These columns are **not** in `SYNONYMS`: that map also decides which `.gd` header keys are
+placement, and a `#=DESCRIPTION` line is not one.
 
 **A malformed CSV refuses the whole drop.** A missing column or a row that cannot be read
 would otherwise land everything unplaced, which is the outcome the file exists to prevent.
@@ -47,6 +58,20 @@ OPTIONAL_COLUMNS = ("sample_type",)
 POPULATION_TYPES = ("population", "mixed")
 CLONE_TYPES = ("clone", "individual", "isolate")
 DATA_SEPARATOR = ";"
+
+#: The descriptive columns, CSV only: the column as written, and (normalized header ->
+#: column). The flags are named by `mutint_sample.flags`' form keys, so the spreadsheet
+#: and the edit page's checkboxes use one word for each.
+DESCRIPTION_COLUMN = "description"
+FLAG_TRUE = ("yes", "y", "true", "1")
+FLAG_FALSE = ("no", "n", "false", "0")
+
+
+def flag_columns():
+    """`{column: Sample field}` for every flag, in `FLAGS` order."""
+    from mutint_sample.flags import FLAGS
+
+    return {flag.key: flag.field for flag in FLAGS}
 
 #: Header keys a file may place itself with, each mapped to the column it means. Matched
 #: after lowercasing and dropping spaces and underscores, so `Time point`, `time_point` and
@@ -88,8 +113,10 @@ class MetadataConflict(MetadataError):
 #: One row of the CSV: the coordinate and the inputs it places. `time_point` is an int or
 #: None; `population` is "" for an unplaced sample; `is_clonal` is True for a clone, False
 #: for a population sample, None when the row said nothing; `line` is the CSV line number.
-Row = namedtuple("Row", "line sample population time_point data is_clonal",
-                 defaults=(None,))
+#: `description` is None when the file has no such column; `flags` holds only the flags the
+#: row set, `{Sample field: bool}`.
+Row = namedtuple("Row", "line sample population time_point data is_clonal description flags",
+                 defaults=(None, None, {}))
 
 
 def _normalize_key(key):
@@ -135,6 +162,18 @@ def _clean_sample_type(value, where):
     raise MetadataError(
         "%s: sample_type must be one of %s (a population) or %s (a clone), not %r."
         % (where, ", ".join(POPULATION_TYPES), ", ".join(CLONE_TYPES), value))
+
+
+def _clean_flag(value, column, where):
+    """True, False, or None for a blank cell -- which leaves the flag alone."""
+    value = ("" if value is None else str(value)).strip().lower()
+    if not value:
+        return None
+    if value in FLAG_TRUE:
+        return True
+    if value in FLAG_FALSE:
+        return False
+    raise MetadataError("%s: %s must be yes or no, not %r." % (where, column, value))
 
 
 class Metadata:
@@ -247,6 +286,10 @@ def parse(text, source=FILENAME):
     for column in OPTIONAL_COLUMNS:
         if column in mapped:
             index[column] = mapped.index(column)
+    flags = flag_columns()
+    for column in (DESCRIPTION_COLUMN,) + tuple(flags):
+        if _normalize_key(column) in header:
+            index[column] = header.index(_normalize_key(column))
 
     rows = {}      # coordinate -> Row, so repeated rows merge their data
     order = []
@@ -263,6 +306,12 @@ def parse(text, source=FILENAME):
         sample, population, time_point = _clean_coordinate(
             cell("sample"), cell("population"), cell("time_point"), where)
         is_clonal = _clean_sample_type(cell("sample_type"), where)
+        description = (cell(DESCRIPTION_COLUMN) if DESCRIPTION_COLUMN in index else None)
+        row_flags = {}
+        for column, field in flags.items():
+            value = _clean_flag(cell(column), column, where)
+            if value is not None:
+                row_flags[field] = value
         data = [token.strip() for token in cell("data").split(DATA_SEPARATOR)
                 if token.strip()]
         if not data:
@@ -275,13 +324,58 @@ def parse(text, source=FILENAME):
                 raise MetadataError(
                     "%s: the same sample is a clone on one row and a population on another."
                     % where)
+            if existing.description and description and existing.description != description:
+                raise MetadataError(
+                    "%s: the same sample has a different description on another row." % where)
+            for field, value in row_flags.items():
+                if existing.flags.get(field, value) != value:
+                    raise MetadataError(
+                        "%s: the same sample has a flag set one way here and the other way "
+                        "on another row." % where)
             rows[key] = existing._replace(
                 data=existing.data + data,
-                is_clonal=existing.is_clonal if is_clonal is None else is_clonal)
+                is_clonal=existing.is_clonal if is_clonal is None else is_clonal,
+                description=existing.description or description,
+                flags=dict(existing.flags, **row_flags))
         else:
-            rows[key] = Row(number, sample, population, time_point, data, is_clonal)
+            rows[key] = Row(number, sample, population, time_point, data, is_clonal,
+                            description, row_flags)
             order.append(key)
     return Metadata([rows[key] for key in order], source=source)
+
+
+def write(entries):
+    """The CSV text `parse` reads, one row per entry; the one writer of this format.
+
+    Each entry is a dict: `sample`, `population`, `time_point` (a number or None),
+    `is_clonal`, `description`, `flags` (`{Sample field: bool}`) and `data` (a string, or a
+    list joined with `;`). Population and time point are written together or not at all, as
+    `parse` requires -- a sample with no time point is an unplaced one, whatever population
+    it was filed under. The archive writes its `metadata.csv` with this, and the Edit samples
+    page its spreadsheet.
+    """
+    from mutint_experiment.coordinates import format_time_point
+
+    flags = flag_columns()
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(("sample", "population", "time_point", "sample_type",
+                     DESCRIPTION_COLUMN) + tuple(flags) + ("data",))
+    for entry in entries:
+        placed = entry.get("time_point") is not None
+        data = entry.get("data") or ""
+        if not isinstance(data, str):
+            data = DATA_SEPARATOR.join(data)
+        entry_flags = entry.get("flags") or {}
+        writer.writerow(
+            [entry["sample"],
+             entry.get("population", "") if placed else "",
+             format_time_point(entry["time_point"]) if placed else "",
+             "clone" if entry.get("is_clonal", True) else "population",
+             entry.get("description") or ""]
+            + ["yes" if entry_flags.get(field) else "no" for field in flags.values()]
+            + [data])
+    return out.getvalue()
 
 
 def coordinate_from_headers(mapping, where="the file's header", filename_identity=None,
