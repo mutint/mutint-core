@@ -1752,6 +1752,15 @@ post directly, so a script reading an id the page does not render passes all of 
 every save blanks that field. `test_sample_spreadsheet` checks the ids the script reads
 against the ids the page renders; rename an input and change both.
 
+**Every input in that table is `autocomplete="off"`, and autofill is not the reason.** Save
+ends in a reload, and the rows come back sorted by their *new* coordinates -- while a
+browser restores typed values on reload by the field's position in the document, not its
+id. So a renumber that moved rows put each row's old values into whichever sample now sat
+in its slot: the database was right, the boxes were wrong, and the next Save wrote the
+wrong ones for real. The grey coordinate under **Shown as** is server-rendered and never
+restored, which is how to tell. `test_sample_spreadsheet` asserts the attribute on every
+input, because a column added without it fails silently.
+
 **`Sample.time_point` is the only numeric member of the coordinate**, because it is the
 ordinal that places a sample along a population -- the Fixed set sorts by it and takes the
 last two -- while the population and sample names are text. Real data carries values like

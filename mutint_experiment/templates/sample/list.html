@@ -55,6 +55,12 @@
                 <th width="50"></th>
             </tr>
             </thead>
+            {% comment %} Every input here is autocomplete="off", and not for autofill: it is
+               what stops a browser restoring typed values on reload. Save ends in a reload,
+               the rows come back sorted by their *new* coordinates, and restoration matches
+               fields by position rather than id -- so without it each row's old values land
+               in whichever row now sits in its slot, and the next Save writes them for real.
+               test_sample_spreadsheet asserts it on every input. {% endcomment %}
             <tbody>
             {% for sample in samples %}
                 <tr data-sample-id="{{ sample.id }}">
@@ -62,29 +68,29 @@
                         {{ sample.label }}
                         <br><small style="color: #888;">{{ sample.coordinate }}</small>
                     </td>
-                    <td><input type="text" class="form-control input-sm" maxlength="200"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="200"
                                id="sb-name-{{ sample.id }}"
                                value="{{ sample.source_name|default_if_none:'' }}"></td>
                     {% comment %} ALE and sample label are text: a lineage is called `Ara-1`,
                        a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
                        three -- silently, by sending an empty value. The time point is text
                        for the reason `sample_edit.html` gives. {% endcomment %}
-                    <td><input type="text" class="form-control input-sm" maxlength="100"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="100"
                                id="sb-population-{{ sample.id }}" value="{{ sample.population }}"></td>
-                    <td><input type="text" class="form-control input-sm"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm"
                                id="sb-time-point-{{ sample.id }}"
                                value="{{ sample.time_point|default_if_none:'' }}"></td>
-                    <td><input type="text" class="form-control input-sm" maxlength="100"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="100"
                                id="sb-sample-{{ sample.id }}" value="{{ sample.name }}"></td>
                     <td style="text-align: center;">
-                        <input type="checkbox" id="sb-mixed-{{ sample.id }}"
+                        <input autocomplete="off" type="checkbox" id="sb-mixed-{{ sample.id }}"
                                {% if sample.is_mixed %}checked{% endif %}></td>
                     {% for flag in sample.flags %}
                     <td style="text-align: center;">
-                        <input type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
+                        <input autocomplete="off" type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
                                data-flag="{{ flag.field }}" {% if flag.on %}checked{% endif %}></td>
                     {% endfor %}
-                    <td><input type="text" class="form-control input-sm" maxlength="300"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="300"
                                id="sb-description-{{ sample.id }}"
                                value="{{ sample.description }}"></td>
                     <td><a href="/sample/{{ sample.id }}/edit/">Edit</a></td>

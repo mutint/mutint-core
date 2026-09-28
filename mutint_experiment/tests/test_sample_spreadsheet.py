@@ -137,6 +137,17 @@ class SpreadsheetTestCase(SampleEditTestCase):
         for _field, prefix in read:
             self.assertIn('id="sb-%s-%d"' % (prefix, self.clone.pk), body, prefix)
 
+    def test_no_box_in_the_table_is_restored_by_the_browser_on_reload(self):
+        """Save reloads the page, which comes back sorted by the new coordinates, and a
+        browser restores typed values by position rather than by id -- so a renumber put each
+        row's old values into another sample's row, and the next Save wrote them."""
+        body = self.client.get("/experiment/%d/samples/" % self.experiment.id).content.decode()
+        table = body[body.index("<tbody>"):body.index("</tbody>")]
+        inputs = re.findall(r"<input\b[^>]*>", table)
+        self.assertTrue(inputs)
+        for tag in inputs:
+            self.assertIn('autocomplete="off"', tag, tag)
+
 
 class SamplesNavTestCase(SampleEditTestCase):
 
