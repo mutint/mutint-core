@@ -46,8 +46,8 @@
    on the active <li>, but its <a> covers the row, so that gray is never the color you see --
    do not copy it.) The scrollbar past a screenful is `.mutint-menu` in common.css, shared with
    the Mutations page's picker, and the gestures are `.mutint-select-list` beside it, shared
-   with the mutation editor's three sample lists -- which are not dropdowns and so need the
-   row box and the fill written out, where this one has both from Bootstrap. */
+   with the mutation editor's sample lists -- Add and Edit's are not dropdowns and so need the
+   row box and the fill written out, where this one and Copy's have both from Bootstrap. */
 
 /* The green tint on the track label of a sample carrying the mutation is NOT here, and
    cannot be: igv builds its UI inside a shadow root on #igv-browser and adopts its own

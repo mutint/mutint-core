@@ -257,17 +257,27 @@ else they share with the Metadata page's column menu.
 
 **A list whose highlight is its selection carries `.mutint-select-list` as well**, and
 `mutint_common/staticfiles/js/mutint_select_list.js` drives every one of them -- the genome
-browser's sample menu and the three curate pages that pick a set of samples. `active`
+browser's sample menu, the Copy tab's target menu, and the Add and Edit pages' sample
+lists. `active`
 on the `<li>` is the selection; there is no checkbox anywhere to hold a second opinion about it.
 The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
 toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range.
 
-**`{toggle: true}` is the other mode, for the genome browser's sample menu.** There every
-click toggles the row it lands on and shift adds a range -- a list of checkboxes rather than a
-selection. The distinction is whether the rows are independent: the mutation editor's three
-lists choose *a* set of samples to act on, where "only this one" is a useful gesture, while
-each row of the browser's menu is a BAM that is either loaded or not, and a plain click that
-unloaded every other sample would cost reloading each by hand.
+**`{toggle: true}` is the other mode, for the two dropdowns.** There every click toggles the
+row it lands on and shift adds a range -- a list of checkboxes rather than a selection. The
+distinction is whether the rows are independent and whether the list is in view: Add and
+Edit's lists sit open beside their form and choose *a* set of samples, where "only this one"
+is a useful gesture, while each row of the browser's menu is a BAM that is either loaded or
+not, and a plain click that unloaded every other sample would cost reloading each by hand.
+The Copy tab's **Copy to** menu is the browser's shape for a different reason: it lives in a
+dropdown, where the rest of the selection is out of sight when a plain click would silently
+replace it.
+
+**Copy's targets are a dropdown, not a column, because its page is a table.** They were a
+`select_list.html` column beside the mutation table, and the table -- as wide as its gene
+lists -- ran underneath the list, which was drawn on top of its right-hand columns. The
+dropdown sits in the button row with Select none / Select all beside it and the count in its
+own button (`controls: null`), and the table has the page's width.
 
 Two things the CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
 selection across the rows it is selecting; and the fill written on `> li.active > a` rather than
@@ -286,11 +296,11 @@ title -- which leaves the list touching the form, measured at 0px. The column ca
 puts 30px back on its left, which is what Bootstrap puts between two columns anyway. Doing it on
 the list instead would indent it away from whatever else the column holds.
 
-The browser's menu is a dropdown and gets its row box and fill from Bootstrap; the editor's
-three are not, and cannot borrow `.dropdown-menu` to get them -- `position: absolute; display:
+The two dropdowns get their row box and fill from Bootstrap; Add and Edit's lists are not
+dropdowns, and cannot borrow `.dropdown-menu` to get them -- `position: absolute; display:
 none` comes with it. So `.mutint-select-list` writes both out to match. `select_list.html` in
-`mutint_common/templates/` is the markup the editor's three share; the browser writes its own
-rows, because they carry a track's URLs and a mutant flag.
+`mutint_common/templates/` is the markup those two share; the dropdowns write their own rows,
+the browser's because they carry a track's URLs and a mutant flag.
 
 ### The account pages, and the sidebar block that reaches them
 
@@ -3456,9 +3466,7 @@ Creation and deletion are nested under the objects they act on:
   reader who can create nothing, since searching and exporting need no write access.
   The mutation editor's **Delete** tab uses it too, and being paged it hands over its length
   menu as well, whose rules are wrapper-scoped the same way; the checkbox reaches every
-  page, not only the one drawn. The **Copy** tab calls it with no toolbar id and gets the
-  checkbox alone: its table is one column of the page under a button row spanning both, so
-  its search box stays over the table it searches.
+  page, not only the one drawn. The **Copy** tab does the same, beside its Copy to menu.
 - **Which confirm dialog a control gets is decided by whether the person can undo it
   themselves.** `mutintConfirm(title, text, verb)` is a plain accept and is what a removal
   they can put back from the page gets: revoking a grant, removing a group member, and the

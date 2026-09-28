@@ -50,58 +50,66 @@
             </p>
         </div>
 
-        <div class="row" style="margin-bottom: 10px;">
-            <button type="button" class="btn btn-primary" id="me-apply">+ Copy to selected samples</button>
-            <div id="me-error" style="color: #a00; margin-top: 0.5em;"></div>
+        {% comment %} The targets are a dropdown beside the button rather than a column beside
+           the table -- the genome browser's Samples menu, in the same toggle mode. The table is
+           as wide as its gene lists make it, and a list sharing the row with it sat on top of
+           its right-hand columns; here the table has the page. {% endcomment %}
+        <div class="btn-row" id="me-toolbar">
+            {% if targets %}
+                <div class="btn-group" id="target-menu">
+                    <button type="button" class="btn btn-default dropdown-toggle"
+                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Copy to (<span id="target-count">0</span> of {{ targets|length }})
+                        <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu mutint-menu mutint-select-list" id="me-targets">
+                        {% for sample in targets %}
+                            <li data-value="{{ sample.id }}"><a href="#">{{ sample.label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-default" data-targets="none">Select none</button>
+                    <button type="button" class="btn btn-default" data-targets="all">Select all</button>
+                </div>
+                <button type="button" class="btn btn-primary" id="me-apply">Copy to selected samples</button>
+            {% else %}
+                <span>This experiment has only one sample, so there is nowhere to copy to.</span>
+            {% endif %}
         </div>
+        <div id="me-error" style="color: #a00; margin: 0.5em 0;"></div>
 
-        {% comment %} The mutations first and the samples on the right, which is where Add and
-           Change put their sample list too. The two columns are read in that order -- what to
-           copy, then where to -- and a page whose sample list is on the left and another's on
-           the right is a difference the person has to notice. {% endcomment %}
-        <div class="col-lg-8" style="padding-left: 0;">
-            <h4>Mutations in {{ source_sample.label }}</h4>
-            {% comment %} Same DataTables-with-Select reasoning as the edit page: no cell here
-               is an input, so selection lives in DataTables' data model and survives paging
-               and searching. {% endcomment %}
-            <table class="table breseq-table" id="me-table">
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" class="mutint-select-all"
-                                   title="Select every row showing"></th>
-                        <th class="breseq-evidence">Type</th>
-                        <th class="breseq-seq-id">Reference</th>
-                        <th class="breseq-position">Position</th>
-                        <th class="breseq-mutation">Mutation</th>
-                        <th class="breseq-gene">Gene</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for row in rows %}
-                    <tr data-mutation-id="{{ row.mutation_id }}">
-                        <td></td>
-                        <td class="breseq-evidence">{{ row.mutation_type }}</td>
-                        <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
-                        <td class="breseq-position">{{ row.position|safe }}</td>
-                        <td class="breseq-mutation">{{ row.mutation|safe }}</td>
-                        <td class="breseq-gene">{{ row.gene|safe }}</td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="6">This sample has no mutations stored.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        {% comment %} A bare column under #mutint-content has its gutter zeroed by
-           common.css, so this one would touch the column beside it. 30px is what
-           Bootstrap puts between two columns (15px each side), put back on the one
-           side that needs it -- the page still lines up with the title on the left
-           and the content edge on the right. {% endcomment %}
-        <div class="col-lg-4" style="padding-left: 30px;">
-            <h4>Copy to</h4>
-            {% include "select_list.html" with items=targets id="me-targets" empty_message="This experiment has only one sample, so there is nowhere to copy to." %}
-        </div>
+        <h4>Mutations in {{ source_sample.label }}</h4>
+        {% comment %} Same DataTables-with-Select reasoning as the edit page: no cell here
+           is an input, so selection lives in DataTables' data model and survives paging
+           and searching. {% endcomment %}
+        <table class="table breseq-table" id="me-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" class="mutint-select-all"
+                               title="Select every row showing"></th>
+                    <th class="breseq-evidence">Type</th>
+                    <th class="breseq-seq-id">Reference</th>
+                    <th class="breseq-position">Position</th>
+                    <th class="breseq-mutation">Mutation</th>
+                    <th class="breseq-gene">Gene</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+                <tr data-mutation-id="{{ row.mutation_id }}">
+                    <td></td>
+                    <td class="breseq-evidence">{{ row.mutation_type }}</td>
+                    <td class="breseq-seq-id">{{ row.seq_id|safe }}</td>
+                    <td class="breseq-position">{{ row.position|safe }}</td>
+                    <td class="breseq-mutation">{{ row.mutation|safe }}</td>
+                    <td class="breseq-gene">{{ row.gene|safe }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6">This sample has no mutations stored.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
     {% endif %}
 
     <script type="text/javascript">
@@ -113,9 +121,7 @@
     // reason.
     $(document).ready(function () {
         "use strict";
-        if (!document.getElementById("me-apply")) { return; }
-
-        var targets = window.mutintSelectList(document.getElementById("me-targets"));
+        if (!document.getElementById("me-table")) { return; }
 
         var table = $("#me-table").DataTable({
             paging: true,
@@ -127,9 +133,30 @@
             select: { style: "multi", selector: "td:first-child" },
             dom: 'l<"pull-right"f>rt<<"pull-left"i><"pull-right"p>>'
         });
-        // No toolbar id: this table is one column of the page, and the button row above it
-        // spans both, so the search box stays over the table it searches.
-        window.mutintListToolbar(table);
+        // The table has the page's width, so its search box and length menu join the button
+        // row, as on the Delete tab.
+        window.mutintListToolbar(table, "me-toolbar");
+
+        // Nowhere to copy to: the table still draws, and there is no menu or button to wire.
+        if (!document.getElementById("me-apply")) { return; }
+
+        // `toggle: true`, as in the genome browser's Samples menu: a click adds or removes
+        // one sample, so picking twelve targets does not take twelve ctrl-clicks, and the
+        // menu stays open throughout. `controls: null` because the presets sit beside the
+        // dropdown and the count is in its button.
+        var count = document.getElementById("target-count");
+        var targets = window.mutintSelectList(document.getElementById("me-targets"), {
+            controls: null,
+            toggle: true,
+            onChange: function () { count.textContent = targets.count(); }
+        });
+        Array.prototype.forEach.call(
+            document.querySelectorAll("#me-toolbar [data-targets]"), function (button) {
+                var on = button.getAttribute("data-targets") === "all";
+                button.addEventListener("click", function () {
+                    targets.select(function () { return on; });
+                });
+            });
 
         document.getElementById("me-apply").addEventListener("click", function () {
             var mutationIds = [];
