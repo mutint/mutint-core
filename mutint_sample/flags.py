@@ -20,12 +20,18 @@ class Flag:
     key: str         # the form field and the CSS suffix
     label: str       # what the checkbox and the badge say
     help: str        # what the edit page says under the checkbox
+    heading: str = ""  # a column heading, where the label is wider than the column needs
+
+    @property
+    def column_heading(self):
+        return self.heading or self.label
 
 
 FLAGS = (
     Flag("is_hypermutator", "hypermutator", "Hypermutator",
          "This sample acquired mutations at a much higher rate than its lineage -- a mutator "
-         "allele, usually -- so its mutation count is not comparable with the others'."),
+         "allele, usually -- so its mutation count is not comparable with the others'.",
+         heading="Mutator"),
     Flag("is_contaminated", "contaminated", "Contaminated",
          "The reads are not, or not only, this sample: a cross-contamination or a mix-up, so "
          "its calls should not be trusted."),

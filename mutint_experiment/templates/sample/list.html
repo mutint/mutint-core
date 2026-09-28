@@ -8,6 +8,18 @@
         /* Wide enough to read what is in them; the box scrolls sideways past the window. */
         #mutint-content .sb-label { min-width: 12em; }
         #mutint-content .sb-description { min-width: 28em; }
+        /* Population names are short (`Ara-1`), so the column is as wide as its heading:
+           width 1% on the header shrinks it, and a 100%-wide box does not hold it open. */
+        #mutint-content .sb-population-col { width: 1%; white-space: nowrap; }
+        /* Room for a cumulative count such as 30000 or 1500.5 without scrolling. */
+        #mutint-content .sb-time-point { min-width: 7em; }
+        /* Bootstrap's input-sm pads 10px either side; in a table of boxes that is most of
+           a short value's width. */
+        #mutint-content td > input.form-control { padding: 2px 5px; height: 26px; }
+        /* Every cell is centered on its row, and the one cell of plain text -- the sample's
+           name -- is the size input-sm sets for the boxes beside it. */
+        #mutint-content .sb-table > tbody > tr > td { vertical-align: middle; }
+        #mutint-content .sb-name { font-size: 12px; white-space: nowrap; }
     </style>
     {% comment %} A plain table, deliberately not a DataTable. The Metadata page's table
        uses deferRender, which never builds the DOM for rows it has not drawn -- values
@@ -42,17 +54,17 @@
         </p>
         <div id="sb-upload-status" style="margin-bottom: 1em; white-space: pre-line;"></div>
 
-        <table class="table table-striped table-bordered" style="width: 100%;">
+        <table class="table table-striped table-bordered sb-table" style="width: 100%;">
             <thead>
             <tr>
                 <th>Sample name</th>
-                <th>Population</th>
+                <th class="sb-population-col">Population</th>
                 {% comment %} The column is `TimePoint.value` and the label has always said "Time
                    point" -- the two agree now. Fixation orders samples by it. {% endcomment %}
-                <th width="90">Time point</th>
+                <th>Time point</th>
                 <th>Sample</th>
                 <th width="50">Mixed</th>
-                {% for flag in flags %}<th width="50">{{ flag.label }}</th>{% endfor %}
+                {% for flag in flags %}<th width="50" title="{{ flag.label }}">{{ flag.column_heading }}</th>{% endfor %}
                 <th>Description</th>
             </tr>
             </thead>
@@ -68,7 +80,7 @@
                     {% comment %} Read-only here: the name is what a re-import finds the sample
                        by, so it is changed on the sample's own page and nowhere else. The save
                        script sends no source_name, which parse_rows reads as "leave it". {% endcomment %}
-                    <td style="white-space: nowrap;">
+                    <td class="sb-name">
                         <a href="/sample/{{ sample.id }}/edit/"
                            title="Edit this sample, including its name">{{ sample.source_name|default:"(unnamed)" }}</a>
                     </td>
@@ -76,9 +88,9 @@
                        a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
                        three -- silently, by sending an empty value. The time point is text
                        for the reason `sample_edit.html` gives. {% endcomment %}
-                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-label" maxlength="100"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="100"
                                id="sb-population-{{ sample.id }}" value="{{ sample.population }}"></td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm"
+                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-time-point"
                                id="sb-time-point-{{ sample.id }}"
                                value="{{ sample.time_point|default_if_none:'' }}"></td>
                     <td><input autocomplete="off" type="text" class="form-control input-sm sb-label" maxlength="100"
