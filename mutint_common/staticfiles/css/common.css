@@ -29,6 +29,12 @@
     display: none;
 }
 
+/* The list pages' delete-error line keeps its margins only while it says something;
+   empty, it put a blank band between the toolbar and the table. */
+#del-error:empty {
+    display: none;
+}
+
 #mutint-content .page-header {
     margin-top: 0;
     padding-bottom: 4px;

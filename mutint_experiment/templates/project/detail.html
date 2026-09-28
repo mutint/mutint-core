@@ -57,6 +57,69 @@
         </div>
     </div>
 
+    <div class="row">
+        <br>
+        <h4>Experiments in the Project</h4>
+        {% comment %} Deleting from here, and not only from the installation-wide list:
+           this is the page that shows a project's experiments in context, so it is where
+           somebody is standing when they decide one of them should go.
+
+           Gated on `can_edit` -- project write -- rather than on being signed in, as the
+           flat list is: that list spans projects and cannot tell, while this page knows
+           exactly one. An experiment that is *locked* still refuses from the endpoint and
+           is named in #del-error, because the lock lives on the experiment and only the
+           experiment can answer for it. {% endcomment %}
+        {% comment %} The row renders for a reader too: mutintListToolbar moves the
+           table's Export menu and search box into it, and neither needs write access. {% endcomment %}
+        <div class="btn-row" id="list-toolbar" style="margin-bottom: 1em;">
+            {% if can_edit %}
+            <a class="btn btn-primary"
+               href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
+            <button type="button" class="btn btn-danger" id="delete-selected">
+                &minus; Delete selected</button>
+            {% endif %}
+        </div>
+        {% if can_edit %}
+        <div id="del-error" style="color: #a00; margin-bottom: 1em;"></div>
+        {% endif %}
+
+        <table id="exp_table" class="table table-striped table-bordered" style="width: 100%;">
+            <thead>
+            <tr>
+                <th width="30"><input type="checkbox" class="mutint-select-all"
+                           title="Select every row showing"></th>
+                <th>Exp ID</th>
+                <th>Exp Name</th>
+                <th>Project</th>
+                <th>Publication</th>
+                <th>Date</th>
+                <th>Stored data</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for experiment in experiments %}
+                <tr>
+                    <td></td>
+                    <td width="90">{{ experiment.id }}</td>
+                    <td>
+                        <a href="/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
+                    </td>
+                    <td>
+                        <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
+                    </td>
+                    <td>
+                        {% for pub in experiment.publication_set.all %}
+                            <a href="{{ pub.url }}">{{ pub.title }}</a>
+                        {% endfor %}
+                    </td>
+                    <td>{{ experiment.date }}</td>
+                    <td data-order="{{ experiment.storage_bytes }}" title="{{ experiment.storage_bytes }} bytes">{{ experiment.storage_bytes|filesizeformat }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
     {% comment %} Stored data across the project's live experiments, per kind, with a Clear
        for each kind that can be -- the Overview's Storage panel summed. Stored numbers
        only: this page does not measure, so an experiment nobody has measured yet counts 0
@@ -103,75 +166,6 @@
             not yet measured; opening an experiment's Overview measures it.</small>
         {% endif %}
         <div id="storage-result" style="color: #a00; margin-top: 0.5em;"></div>
-    </div>
-
-    <div class="row">
-        <br>
-        <h4>Experiments in the Project:</h4>
-        <div id='loadingmessage' style='display:none'>
-            <img src='{% static "img/Ajax-loader.gif" %}'>
-        </div>
-        <br>
-        {% comment %} Deleting from here, and not only from the installation-wide list:
-           this is the page that shows a project's experiments in context, so it is where
-           somebody is standing when they decide one of them should go.
-
-           Gated on `can_edit` -- project write -- rather than on being signed in, as the
-           flat list is: that list spans projects and cannot tell, while this page knows
-           exactly one. An experiment that is *locked* still refuses from the endpoint and
-           is named in #del-error, because the lock lives on the experiment and only the
-           experiment can answer for it. {% endcomment %}
-        {% comment %} The row renders for a reader too: mutintListToolbar moves the
-           table's Export menu and search box into it, and neither needs write access. {% endcomment %}
-        <div class="btn-row" id="list-toolbar" style="margin-bottom: 1em;">
-            {% if can_edit %}
-            <a class="btn btn-primary"
-               href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
-            <button type="button" class="btn btn-danger" id="delete-selected">
-                &minus; Delete selected</button>
-            {% endif %}
-        </div>
-        {% if can_edit %}
-        <div style="margin-bottom: 1em;">
-            <div id="del-error" style="color: #a00; margin-top: 0.5em;"></div>
-        </div>
-        {% endif %}
-
-        <table id="exp_table" class="table table-striped table-bordered" style="width: 100%;">
-            <thead>
-            <tr>
-                <th width="30"><input type="checkbox" class="mutint-select-all"
-                           title="Select every row showing"></th>
-                <th>Exp ID</th>
-                <th>Exp Name</th>
-                <th>Project</th>
-                <th>Publication</th>
-                <th>Date</th>
-                <th>Stored data</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for experiment in experiments %}
-                <tr>
-                    <td></td>
-                    <td width="90">{{ experiment.id }}</td>
-                    <td>
-                        <a href="/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
-                    </td>
-                    <td>
-                        <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
-                    </td>
-                    <td>
-                        {% for pub in experiment.publication_set.all %}
-                            <a href="{{ pub.url }}">{{ pub.title }}</a>
-                        {% endfor %}
-                    </td>
-                    <td>{{ experiment.date }}</td>
-                    <td data-order="{{ experiment.storage_bytes }}" title="{{ experiment.storage_bytes }} bytes">{{ experiment.storage_bytes|filesizeformat }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
     </div>
 
 <script type="text/javascript">
