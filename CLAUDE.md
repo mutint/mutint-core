@@ -2100,6 +2100,37 @@ box the script's `controls` *is* the container, and folding that folds the table
 elements take a class with `display: none !important` rather than the `hidden` attribute,
 which any `display` rule on the element overrides.
 
+**Every column is divided by a faint rule, and the pinned ones can be resized.** The rule
+on the header is a translucent white, so it reads alike over the grey pinned headers and
+over each population's color; the sample columns get the rule and no handle, being a fixed
+32px. Each pinned header cell
+carries a handle on its right edge: dragged, it sets that column's width, remembered per
+column key as `mutation_matrix.widths`; double-clicked, it hands the column back to its
+content. The width goes on the header cell as `width`, `min-width` and `max-width` at once,
+which is what makes it hold in auto table layout against Description's own floor and
+ceiling; `autoWidth` is off, so DataTables writes no width over it. A table cell's `width`
+is its content width whatever `box-sizing` says, so the script applies, measures and takes
+the padding off -- without that every reload grew a resized column by 17px. Auto layout
+refuses a column narrower than its cells' min-content, so the cells of a resized column
+take a `resized` class with `max-width: 0` and `overflow: hidden`, which takes them out of
+that measure: the column is then exactly the header's width and what no longer fits is
+clipped, with an ellipsis where the cell is nowrap. The class is put on at pointerdown,
+before the first move, because put on at the end of the drag the content held the column
+open for the whole of it. The handle is 14px wide, inside the header cell's right edge
+rather than straddling the divider (the next header is sticky at the same z-index and would
+paint over the half that hung past), and invisible: the resize cursor over it is the whole of how it announces itself, as a spreadsheet's column edges do. A lit strip in every header was tried and was far too loud. **Description has a floor of
+20em** for the opposite reason: `overflow-wrap: anywhere` counts every character as a break
+for the min-content measure, so when the table was wider than its box that one wrapping
+column was crushed to a few characters a line; it is `break-word` now, which leaves
+min-content alone.
+
+**The collapse bar runs edge to edge and, folded, sits at the top of the window**, through
+`#mutint-content`'s 25px of padding on both sides and, with the `folded` class the script
+sets, the top -- a strip of the frame, the way the sidebar's runs the window's height.
+"Show [100] entries" and "Search:" are Bootstrap labels, whose 5px bottom margin put their
+text above the pager's middle in a centered row; the toolbar zeroes it and makes each label
+a centered row of its own. The bar is 10px tall, the width of the sidebar's strip, whose arrow lost a 3px border in the strip's own grey and a rounded corner that showed as a notch beside the glyph under the hover gradient.
+
 **The pinned cells sit above a sample cell's number.** A sample cell's digits are a span
 positioned at z-index 1 so they paint over the bar drawn behind them, and at the same
 z-index a later element in the row wins -- so pinned cells at 1 covered the sample cells'

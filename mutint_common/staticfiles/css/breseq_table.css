@@ -106,8 +106,16 @@
    max-width is the second line of defense -- past 15 genes the list is collapsed
    behind a Show button, as it is in breseq's own report. */
 .breseq-table .breseq-description {
+    /* And a floor, for the opposite failure. Auto table layout squeezes a table wider than
+       its box down toward each column's min-content width, and `overflow-wrap: anywhere`
+       counts every character as a break for that measure -- so Description, the one column
+       allowed to wrap, was crushed to a few characters a line while the nowrap columns kept
+       their width. `break-word` still breaks a word too long for the cell but leaves the
+       min-content measure alone, and the floor keeps a sentence readable; the box scrolls
+       sideways for whatever no longer fits. */
+    min-width: 20em;
     max-width: 40em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 /* The collapsed gene list. `[hidden]` is the plain HTML attribute rather than
@@ -305,21 +313,32 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 /* The collapse bar between the panes and the table: the sidebar's strip (#sidebarbutton in
    common.css) laid flat, so it folds the filtering and display options the way that one
    folds the sidebar -- same grey, same gradient on hover, the same double chevron, rounded
-   on the edge that faces the table. One line of the page's type tall, which is the width
-   the sidebar's strip has for one glyph. The script draws it (mutation_matrix.js); nothing
-   in the markup. */
+   on the edge that faces the table. 10px tall, which is the width the sidebar's strip has
+   for its glyph, with the chevron scaled to fit. The script draws it (mutation_matrix.js);
+   nothing in the markup.
+
+   It runs edge to edge, out through #mutint-content's 25px of side padding, as the sidebar's
+   strip runs the window's height: a strip of the frame rather than a control in the page.
+   Folded, it takes the top padding as well, so it sits flush with the top of the window the
+   way the sidebar's strip sits flush with the sidebar. */
 .mutation-matrix-collapse {
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 10px;
+    font-size: 11px;
     line-height: 1;
-    padding: 2px 0;
-    margin-bottom: 0.5em;
+    padding: 0;
+    margin: 0 -25px 0.5em;
     background-color: #f8f8f8;
     border-radius: 0 0 5px 5px;
     color: #444;
     cursor: pointer;
     user-select: none;
+}
+
+.mutation-matrix-collapse.folded {
+    margin-top: -25px;
 }
 
 .mutation-matrix-collapse:hover,
@@ -345,6 +364,18 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 
 .mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_filter {
     margin-left: auto;
+}
+
+/* "Show [100] entries" and "Search: [ ]" are each a Bootstrap <label> round an input, and a
+   label carries a 5px bottom margin meant for a stacked form: the row centers the label's
+   margin box, so its text sat above the pager's and the count's. No margin, and the label
+   is itself a centered row so the text and the input share a middle. */
+.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_length label,
+.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_filter label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-bottom: 0;
 }
 
 /* What the collapse bar folded: the strip, its panes, and everything above them on the
@@ -456,6 +487,61 @@ table.dataTable.mutation-matrix-table tr.ancestral_table_row > td.pinned {
 table.dataTable.mutation-matrix-table thead > tr > th.pinned {
     z-index: 4;
     background-color: #4b5158;
+}
+
+/* Every column is divided by a rule -- faint on the white and grey rows, and on the header
+   a translucent white, so it reads the same over the grey of the pinned headers and over
+   each population's color on the sample headers. On a pinned column the rule is also the
+   edge a resize is seen against; a sample column is a fixed 32px and has no handle. The
+   sample cell's border fits inside its 32px because Bootstrap sets border-box on
+   everything, and the inner cell fills only the content box, so a heat-map fill stops at
+   the rule rather than covering it. */
+table.dataTable.mutation-matrix-table td.pinned,
+table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
+    border-right: 1px solid #e3e3e3;
+}
+table.dataTable.mutation-matrix-table thead > tr > th.pinned,
+table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* The resize handle: an invisible 14px strip down the inside of the header cell's right
+   edge, announced only by the pointer turning into the resize cursor over it -- the way a
+   spreadsheet's column edges work; a lit strip in every header was far too loud. Inside
+   the cell rather than straddling the divider, because the next header is sticky at the
+   same z-index and later in the document, so it would paint over the half that hung past
+   the edge. The header is `position: sticky`, which is what the absolute child measures
+   against. `touch-action: none` hands the drag to the script on a touch screen rather
+   than to scrolling. */
+.mutation-matrix-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 14px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    z-index: 1;
+}
+
+/* A column somebody has resized keeps that width whatever its cells hold. Auto table
+   layout never makes a column narrower than a cell's min-content width, so left alone a
+   column could be widened and not narrowed; `max-width: 0` on the cell takes it out of that
+   measure, and the column is then exactly the header's width. What no longer fits is
+   clipped, with an ellipsis where the cell is nowrap. Only on resized columns, because on
+   every column it would collapse each to its header's width. */
+table.dataTable.mutation-matrix-table td.pinned.resized {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* The header too, or its own title holds the column open; its max-width is the inline
+   one the script wrote, which caps its measure the same way. The handle sits inside the
+   cell, so the clip does not touch it. */
+table.dataTable.mutation-matrix-table thead > tr > th.pinned.resized {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* A sample column is colored by population: `sample-palette-<n>` from

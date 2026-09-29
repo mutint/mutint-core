@@ -33,6 +33,8 @@
  *     header sticks to its top and the descriptive columns to its left, each pinned column's
  *     `left` being the sum of the widths before it, recomputed after every draw and whenever
  *     the table's size changes, because widths change with the data on the page;
+ *   - each pinned column has a handle on its right edge: dragged to set the column's width,
+ *     double-clicked to reset it, remembered as `mutation_matrix.widths`;
  *   - nothing sorts. The rows arrive in breseq's order, reference then position, and a
  *     sample's header is a link to that sample's own page rather than a sort handle.
  *
@@ -51,6 +53,8 @@
     var VIEW_KEY = "mutation_matrix.view";
     var SHOW_KEY = "mutation_matrix.show";
     var OPTIONS_KEY = "mutation_matrix.options";
+    var WIDTHS_KEY = "mutation_matrix.widths";
+    var MIN_COLUMN_WIDTH = 40;
     var VIEWS = { normal: true, condensed: true };
     var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
     var SAMPLES_KEY_PREFIX = "mutation_matrix.samples.";
@@ -354,6 +358,8 @@
                 collapseBar.title = optionsShown ? "Collapse everything above the table" : "Expand the header and the options";
                 collapseBar.setAttribute("aria-label", collapseBar.title);
                 collapseBar.setAttribute("aria-expanded", String(optionsShown));
+                // Folded, the stylesheet moves it up to the top of the window.
+                collapseBar.classList.toggle("folded", !optionsShown);
             }
             function toggleOptions() {
                 optionsShown = !optionsShown;
@@ -378,6 +384,7 @@
            whenever the table's size changes, which is how a late font or a resized window
            reach it. */
         var scrollBox = container.querySelector(".mutation-matrix-scroll");
+        var widths = prefs.get(WIDTHS_KEY, null) || {};  // the resized columns, below
         function pinColumns() {
             var left = 0;
             ths.forEach(function (th, i) {
@@ -388,10 +395,74 @@
                     nodes.forEach(function (el) { el.classList.remove("pinned"); el.style.left = ""; });
                     return;
                 }
-                nodes.forEach(function (el) { el.classList.add("pinned"); el.style.left = left + "px"; });
+                var resized = typeof widths[th.getAttribute("data-key")] === "number";
+                nodes.forEach(function (el) {
+                    el.classList.add("pinned");
+                    el.classList.toggle("resized", resized);
+                    el.style.left = left + "px";
+                });
                 left += th.getBoundingClientRect().width;
             });
         }
+
+        /* The pinned columns can be resized: a handle on each one's right edge, dragged to
+           set that column's width, double-clicked to let the content size it again. The
+           width goes on the header cell as width, min-width and max-width at once, which
+           is what makes it stick in auto table layout against the stylesheet's own floor
+           and ceiling on Description; `autoWidth` is off, so DataTables writes no width of
+           its own over it. Remembered per column key as `mutation_matrix.widths`. Pointer
+           capture keeps the drag alive once the pointer leaves the handle. */
+        function setWidth(th, value) {
+            th.style.width = value; th.style.minWidth = value; th.style.maxWidth = value;
+        }
+        /* `px` is the column's outer width, what the handle was dragged to and what is
+           stored. A table cell's `width` is its content width whatever `box-sizing` says,
+           so the cell comes out wider by its padding and border: apply, measure, and take
+           the difference off. */
+        function applyWidth(th, px) {
+            if (!px) { setWidth(th, ""); return; }
+            setWidth(th, px + "px");
+            var drift = th.getBoundingClientRect().width - px;
+            if (drift > 0.5 && px - drift >= MIN_COLUMN_WIDTH) { setWidth(th, (px - drift) + "px"); }
+        }
+        ths.forEach(function (th) {
+            var key = th.getAttribute("data-key");
+            if (key === null) { return; }
+            if (typeof widths[key] === "number") { applyWidth(th, widths[key]); }
+            var handle = document.createElement("span");
+            handle.className = "mutation-matrix-resizer";
+            handle.title = "Drag to resize this column; double-click to reset";
+            var startX, startWidth;
+            handle.addEventListener("pointerdown", function (event) {
+                startX = event.clientX;
+                startWidth = th.getBoundingClientRect().width;
+                // Resized from this moment: the cells take the class that lets the column
+                // go narrower than what they hold, before the first move asks it to.
+                widths[key] = Math.round(startWidth);
+                pinColumns();
+                handle.setPointerCapture(event.pointerId);
+                event.preventDefault();
+            });
+            handle.addEventListener("pointermove", function (event) {
+                if (startX === undefined) { return; }
+                applyWidth(th, Math.max(MIN_COLUMN_WIDTH, Math.round(startWidth + event.clientX - startX)));
+                pinColumns();
+            });
+            handle.addEventListener("pointerup", function () {
+                if (startX === undefined) { return; }
+                startX = undefined;
+                widths[key] = Math.round(th.getBoundingClientRect().width);
+                prefs.set(WIDTHS_KEY, widths);
+                pinColumns();
+            });
+            handle.addEventListener("dblclick", function () {
+                applyWidth(th, null);
+                delete widths[key];
+                prefs.set(WIDTHS_KEY, widths);
+                pinColumns();
+            });
+            th.appendChild(handle);
+        });
 
         /* The box reaches the bottom of the window, whatever sits above it on the page, so
            its bottom scrollbar is the window's edge; its side is the table's own edge or the

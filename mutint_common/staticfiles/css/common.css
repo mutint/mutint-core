@@ -300,12 +300,12 @@
     background-image: linear-gradient(to right, #f8f8f8, #c4dce8);
 }
 
+/* The arrow is a glyph and nothing else. It carried a 3px right border in the strip's own
+   grey and a 1vw radius, invisible at rest and a flat notch beside the glyph the moment the
+   strip's hover gradient painted behind them. */
 .sidebar_arrows {
     text-align: center;
-    border-radius: 1vw;
-    border-left-style: none;
-    border-right-style: solid;
-    border-color: #f8f8f8;
+    padding: 0 1px;
 }
 
 .fab-container {
