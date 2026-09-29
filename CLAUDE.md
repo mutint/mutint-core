@@ -95,7 +95,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 2960 run, 0 failures** standalone; **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 3014 run, 0 failures** standalone; **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -773,11 +773,23 @@ need it, because deciding that per page is what went wrong.
 the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
 silently.
 
-**Its controls are the matrix's strip minus Display** -- Filter (the reader's filter form and
+**Its controls are the matrix's strip minus Export** -- Filter (the reader's filter form and
 the summary line with the ancestral toggle), Samples (the picker and the crosslinks), Rows
-(the References menu) -- from `control_tabs.html`, remembered as `breseq_table.tab`; the
-view embeds that key beside the References choice. The ancestor banner stays above the
-strip: it is a warning, not a control.
+(the References menu), Display (the Columns menu) -- from `control_tabs.html`, remembered as
+`breseq_table.tab`; the view embeds that key beside the References and Columns choices. The
+ancestor banner stays above the strip: it is a warning, not a control.
+
+**Its Columns menu is the matrix's partial over this table's columns**
+(`mutation_matrix/_columns_menu.html`): breseq's own, shown, and the gene lists, hidden
+-- see **breseq's gene lists are columns, not data** below. Every `th` and `td` in the table
+partial carries `data-column`, and `js/breseq_columns.js` sets `hidden` on every cell of a
+column the reader turned off. Its own key, `breseq_table.columns`, rather than the matrix's:
+the two tables offer different columns, and Description is shown here by default, being
+breseq's report column, where Compare hides it. The gene-list cells are rendered
+`hidden`, so the common case paints right the first time; a reader who turned one on sees it
+appear a paint late, as with the References menu. **Only this page passes
+`gene_list_columns` to the partial**: the genome browser and the curate listings render the
+same rows with exactly the columns they had, and curate's script holds column indices.
 
 **It carries the matrix's References menu**, in the Rows tab, and the choice is
 the matrix's own key (`mutation_matrix.references.<exp>`), so a contig hidden on Compare is
@@ -1124,6 +1136,45 @@ sample would mint a second `Mutation` and split its calls across both. It wrote
 `mutint_sample/tests/test_gene_cap.py` still asserts that equality rather than that the string
 merely got shorter -- which is the half worth keeping, the migration itself having gone with
 the collapse.
+
+### breseq's gene lists are columns, not data
+
+The annotator writes breseq's `genes_inactivated`, `genes_overlapping` and `genes_promoter`,
+and a `locus_tags_*` twin of each, into `Mutation.annotation` exactly as `gdtools ANNOTATE`
+does -- a gene is inactivated by a nonsense SNP, a frameshift, a new stop, a change of more
+than 15 bp, a MOB, INV or INT in its first 80%, or a DEL covering it whole; its promoter holds
+an intergenic mutation within 150 bp upstream of its start codon, the nearest gene each side
+only. `test_annotator` pins all six against gdtools' own output.
+
+**`single_gene_affected` and `single_locus_tag_affected` are MutInt's own**, beside them in the
+blob: the union of the three lists -- names and locus tags decided separately -- when it holds
+exactly one distinct value, absent when it holds several or none. So a nonsense SNP or an
+intergenic SNP upstream of one gene names it, and a deletion across genes or a SNP between two
+divergent promoters names nothing. `annotation.single_affected` is the rule, applied in
+`annotation_values` rather than in the annotator: the annotator is a port checked field by field
+against gdtools and writes only what gdtools writes, while `annotation_values` is the one
+function every path storing an annotation shares -- import with or without a reference,
+`reannotate_experiment` and so `install_annotation`, the editor, a contig rename -- so the two
+keys cannot fall out of step with the lists. A data migration in `mutint_sample` backfilled the
+rows written before them, with its own copy of the rule, from the stored lists and no
+reference; it is elidable, having nothing to do on a database created after it.
+
+`breseq_report.GENE_LIST_FIELDS` names all eight once, and both mutation tables offer them as
+columns hidden by default
+(`mutation_matrix.GENE_LIST_COLUMNS`), rendered by `display.html_gene_list`: italic names,
+escaped -- they are a reference's text, with none of breseq's markup in them -- collapsed
+behind the Description column's Show button past 15 and a count past `GENE_LIST_LIMIT`.
+
+**Each row carries a `<key>_text` twin**, the plain list, and the matrix's CSV export reads it
+through DataTables' `export` rendering, so a collapsed list exports whole rather than as its
+button. The server `mut` CSV carries all eight after "Details", which moved every sample
+column eight places right -- a script reading samples by header name is unaffected, one reading
+by position is not.
+
+**Nothing filters or counts by them, so they stay in the JSON**: `annotation.PROMOTED_COLUMNS`
+is for keys something filters, counts or sorts on. The Convergent set counting inactivated
+genes rather than `Mutation.gene` is the obvious first reader, and would be the reason to
+promote one.
 
 ### Functional change is counted from `snp_type`
 
@@ -2052,8 +2103,8 @@ definitions from those attributes. Rows travel as `json_script`.
 
 **The four menus are the genome browser's sample menu, four times**: `ul.dropdown-menu
 .mutint-menu.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being
-shown. Columns lists the descriptive columns (Description off by default: it is prose, and the
-widest column); Samples lists the samples, Mutation Types the types the rows hold and
+shown. Columns lists the descriptive columns (Description and the eight gene-list fields off by
+default: prose, the widest column, and lists as long as a deletion is wide); Samples lists the samples, Mutation Types the types the rows hold and
 References the reference sequences they are on, each with Show all / Hide all beside it. A row
 whose type or reference is hidden, or whose mutation is in no shown sample, leaves the table
 through `$.fn.dataTable.ext.search`, so paging and the count describe what is visible, and the
@@ -2255,8 +2306,14 @@ holds `mutation_matrix.columns`, `mutation_matrix.types`, `mutation_matrix.frequ
 `mutation_matrix.references.<exp>` per experiment -- a sample id or a contig name means
 something only within one experiment; Search has no experiment and both selections are
 transient there. The store's client half is `js/mutint_preferences.js`, loaded from
-`base.html`, so the second page that remembers something did not need a copy of it. Stored as the *hidden* set, so a column or sample that did not exist when
-the choice was made shows by default. The tag embeds a signed-in reader's preferences in the page
+`base.html`, so the second page that remembers something did not need a copy of it. Samples,
+types and references are stored as the *hidden* set, so one that did not exist when the
+choice was made shows by default. **Columns are stored as both sets**, `{hidden, shown}`,
+naming every column the menu offered, and read through `columnHiddenSet` in that script: a
+column neither list names takes its own default. A bare hidden set could not do that for a
+column hidden *by default* -- the gene lists would have appeared for everybody who had ever
+touched the menu. A choice saved in the old shape is read with Description as the only
+column it could have meant to show, which is what it meant. The tag embeds a signed-in reader's preferences in the page
 and the script reads them before the first draw, so nothing flashes; an anonymous reader (ALEdb
 is public) gets the same from localStorage.
 

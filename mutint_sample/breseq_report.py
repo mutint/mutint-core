@@ -11,7 +11,41 @@ from. Those fall back to the flat columns the ordinary mutation table uses -- th
 same information, without breseq's markup.
 """
 
-from mutint_import.annotate.display import add_html_fields, commify
+from mutint_import.annotate.display import (add_html_fields, commify, gene_list_names,
+                                             html_gene_list)
+
+#: The gene-association fields, as `(key, title, italic)`: the genes a mutation is predicted
+#: to inactivate, the genes it touches without that, and the genes whose promoter it sits in --
+#: each as names and as locus tags, written into `Mutation.annotation` by the annotator exactly
+#: as `gdtools ANNOTATE` does -- and then MutInt's own single gene and single locus tag
+#: affected, the union of those three when it is one (`annotation.SINGLE_AFFECTED_FIELDS`).
+#: These are the optional columns both mutation tables offer, hidden until asked for. `italic`
+#: is whether the values are gene symbols, which breseq sets in italics, or locus tags, which it
+#: does not.
+GENE_LIST_FIELDS = (
+    ("genes_inactivated", "Genes inactivated", True),
+    ("genes_overlapping", "Genes overlapping", True),
+    ("genes_promoter", "Genes promoter", True),
+    ("locus_tags_inactivated", "Locus tags inactivated", False),
+    ("locus_tags_overlapping", "Locus tags overlapping", False),
+    ("locus_tags_promoter", "Locus tags promoter", False),
+    ("single_gene_affected", "Single gene affected", True),
+    ("single_locus_tag_affected", "Single locus tag affected", False),
+)
+
+
+def gene_list_text(annotation, key):
+    """One gene-list field as plain text, `thrA, thrB`: what a CSV carries for it."""
+    return ", ".join(gene_list_names((annotation or {}).get(key)))
+
+
+def _gene_list_cells(annotation):
+    """The gene-list cells for a row, each as HTML and as `<key>_text` for export."""
+    cells = {}
+    for key, _title, italic in GENE_LIST_FIELDS:
+        cells[key] = html_gene_list((annotation or {}).get(key), italic=italic)
+        cells[key + "_text"] = gene_list_text(annotation, key)
+    return cells
 
 
 def is_mixed(sample):
@@ -44,7 +78,7 @@ def gd_entry(mutation):
 
 def _annotated_row(entry):
     add_html_fields(entry)
-    return {
+    row = {
         "seq_id": entry.get("html_seq_id", ""),
         "position": entry.get("html_position", ""),
         "mutation": entry.get("html_mutation", ""),
@@ -53,11 +87,17 @@ def _annotated_row(entry):
         "description": entry.get("html_gene_product", ""),
         "annotated": True,
     }
+    row.update(_gene_list_cells(entry))
+    return row
 
 
 def _plain_row(mutation):
-    """A row for a mutation with no stored annotation."""
-    return {
+    """A row for a mutation with no stored annotation.
+
+    The gene lists are still read from `annotation`: a `.gd` that breseq had annotated, imported
+    before the experiment had a reference, keeps whatever gene fields it carried there.
+    """
+    row = {
         "seq_id": mutation.seq_id or "",
         "position": commify(str(mutation.start_position)),
         "mutation": mutation.sequence_change or "",
@@ -66,6 +106,8 @@ def _plain_row(mutation):
         "description": mutation.product or "",
         "annotated": False,
     }
+    row.update(_gene_list_cells(mutation.annotation))
+    return row
 
 
 def describe_mutation(mutation):
@@ -136,5 +178,7 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
         row["row_class"] = ("polymorphism_table_row" if is_polymorphism
                             else "alternate_table_row_%d" % (index % 2))
         row["ancestral"] = call.mutation_id in ancestral_mutation_ids
+        # In column order, for a template, which cannot look a key up by a variable.
+        row["gene_list_cells"] = [(key, row[key]) for key, _title, _italic in GENE_LIST_FIELDS]
         rows.append(row)
     return rows

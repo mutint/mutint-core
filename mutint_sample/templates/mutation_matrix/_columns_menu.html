@@ -1,0 +1,20 @@
+{% comment %} The Columns menu: which descriptive columns a mutation table shows. One partial for
+   the two tables that offer it -- the mutation matrix (Compare, Search) and the per-sample
+   Mutations page -- so the two cannot drift. mutintSelectList in toggle mode, `active` being
+   shown; each entry starts at its column's default and the page's script applies whatever the
+   reader chose. Driven by mutation_matrix.js on the matrix and breseq_columns.js on the
+   per-sample page, which remember separate keys because the tables' columns differ. Takes
+   `columns`, a list of objects with `key`, `title` and `default_visible`. {% endcomment %}
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle"
+            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        Columns <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="columns">
+        {% for column in columns %}
+            <li data-value="{{ column.key }}"{% if column.default_visible %} class="active"{% endif %}>
+                <a href="#">{{ column.title }}</a>
+            </li>
+        {% endfor %}
+    </ul>
+</div>

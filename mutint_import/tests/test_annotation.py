@@ -14,7 +14,7 @@ from datetime import datetime
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from mutint_common import store
 from mutint_import import annotation, gd_import, reference, reference_store
@@ -140,6 +140,16 @@ class AnnotatedImportTestCase(TestCase):
         self.assertEqual("thrA,thrB", mutation.annotation["genes_inactivated"])
         self.assertEqual(1089, mutation.end_position)
 
+    def test_a_mutation_about_one_gene_names_it(self):
+        blob = self.mutation_at(130).annotation
+        self.assertEqual("thrA", blob["single_gene_affected"])
+        self.assertEqual("b0001", blob["single_locus_tag_affected"])
+
+    def test_a_mutation_about_several_genes_names_none(self):
+        blob = self.mutation_at(90).annotation
+        self.assertNotIn("single_gene_affected", blob)
+        self.assertNotIn("single_locus_tag_affected", blob)
+
     def test_gd_data_stays_verbatim(self):
         # to_gd_line() splats every gd_data key onto the line it emits for
         # gdtools APPLY, so annotation must not leak in there.
@@ -235,3 +245,105 @@ class UnannotatedImportTestCase(TestCase):
         self._import()
 
         self.assertEqual(0, Mutation.objects.count())
+
+
+class SingleAffectedTestCase(SimpleTestCase):
+    """`single_gene_affected` and `single_locus_tag_affected`: the union of breseq's three
+    gene lists, named only when it is one gene -- and the locus tags decided on their own."""
+
+    def values(self, **record):
+        record.setdefault("gene_name", "x")
+        return annotation.annotation_values(record)["annotation"]
+
+    def test_one_inactivated_gene(self):
+        blob = self.values(genes_inactivated="thrA", locus_tags_inactivated="b0001")
+        self.assertEqual("thrA", blob["single_gene_affected"])
+        self.assertEqual("b0001", blob["single_locus_tag_affected"])
+
+    def test_one_promoter_gene(self):
+        blob = self.values(genes_promoter="thrB", locus_tags_promoter="b0002")
+        self.assertEqual("thrB", blob["single_gene_affected"])
+
+    def test_genes_from_two_lists_are_several(self):
+        blob = self.values(genes_inactivated="thrA", genes_promoter="thrB")
+        self.assertNotIn("single_gene_affected", blob)
+
+    def test_a_divergent_promoter_pair_is_several(self):
+        blob = self.values(genes_promoter="thrA,thrB", locus_tags_promoter="b0001,b0002")
+        self.assertNotIn("single_gene_affected", blob)
+        self.assertNotIn("single_locus_tag_affected", blob)
+
+    def test_one_gene_named_in_two_lists_is_one(self):
+        blob = self.values(genes_inactivated="thrA", genes_overlapping="thrA")
+        self.assertEqual("thrA", blob["single_gene_affected"])
+
+    def test_locus_tags_are_decided_on_their_own(self):
+        """One name over two locus tags -- or a gene with none -- leaves the tag blank."""
+        blob = self.values(genes_inactivated="insB,insB", locus_tags_inactivated="b1,b2")
+        self.assertEqual("insB", blob["single_gene_affected"])
+        self.assertNotIn("single_locus_tag_affected", blob)
+        blob = self.values(genes_overlapping="orfX", locus_tags_overlapping="")
+        self.assertEqual("orfX", blob["single_gene_affected"])
+        self.assertNotIn("single_locus_tag_affected", blob)
+
+    def test_no_genes_names_nothing(self):
+        blob = self.values(genes_inactivated="", genes_promoter="")
+        self.assertNotIn("single_gene_affected", blob)
+        self.assertNotIn("single_locus_tag_affected", blob)
+
+    def test_a_breseq_annotated_record_imported_without_a_reference_gets_them(self):
+        """`annotation_values` is also what copies a breseq-annotated `.gd`'s own fields when
+        there is no reference to annotate against."""
+        blob = self.values(gene_name="ddl", snp_type="nonsense", genes_inactivated="ddl",
+                           locus_tags_inactivated="ECB_00093")
+        self.assertEqual("ddl", blob["single_gene_affected"])
+        self.assertEqual("ECB_00093", blob["single_locus_tag_affected"])
+
+
+class SingleAffectedBackfillTestCase(TestCase):
+    """The backfill migration fills the two keys into rows written before they existed, from
+    the lists already stored, and clears one the lists no longer support.
+
+    Run against the models as they stood at that migration, not today's, so a later change
+    to `Mutation` cannot fail this for a migration that would still run correctly.
+    """
+
+    MIGRATION = ("mutint_sample", "0003_single_gene_affected")
+
+    def run_migration(self, function="forwards"):
+        import importlib
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+        historical = MigrationExecutor(connection).loader.project_state(self.MIGRATION).apps
+        migration = importlib.import_module("%s.migrations.%s" % self.MIGRATION)
+        getattr(migration, function)(historical, None)
+
+    def test_it_backfills_and_corrects(self):
+        from mutint_experiment.models import Experiment
+        experiment = Experiment.objects.create(name="E")
+        one = Mutation.objects.create(
+            experiment=experiment, mutation_type="SNP", start_position=1, seq_id="S",
+            annotation={"gene_name": "thrA", "genes_inactivated": "thrA",
+                        "locus_tags_inactivated": "b0001"})
+        stale = Mutation.objects.create(
+            experiment=experiment, mutation_type="DEL", start_position=5, seq_id="S",
+            annotation={"gene_name": "thrA–thrB", "genes_inactivated": "thrA,thrB",
+                        "single_gene_affected": "thrA"})
+        bare = Mutation.objects.create(
+            experiment=experiment, mutation_type="SNP", start_position=9, seq_id="S",
+            annotation={})
+
+        self.run_migration()
+
+        one.refresh_from_db()
+        stale.refresh_from_db()
+        bare.refresh_from_db()
+        self.assertEqual("thrA", one.annotation["single_gene_affected"])
+        self.assertEqual("b0001", one.annotation["single_locus_tag_affected"])
+        self.assertNotIn("single_gene_affected", stale.annotation)
+        self.assertEqual({}, bare.annotation)
+
+        self.run_migration("backwards")
+        one.refresh_from_db()
+        self.assertNotIn("single_gene_affected", one.annotation)
+        self.assertEqual("thrA", one.annotation["genes_inactivated"])

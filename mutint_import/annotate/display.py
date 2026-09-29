@@ -17,9 +17,11 @@ MutInt needs them twice over:
   * The per-sample breseq-style table renders the HTML directly.
 """
 
-from html import unescape
+from html import escape, unescape
 
 from bs4 import BeautifulSoup
+
+from mutint_common.util import GENE_LIST_LIMIT
 
 MAX_NUCLEOTIDES_TO_SHOW = 20  # settings.cpp:1411
 
@@ -197,6 +199,43 @@ def _collapsed_gene_list(count, joined):
             '<span class="breseq_gene_list" hidden>%s</span>'
             '<button type="button" class="breseq_gene_toggle">Show</button>'
             % (count, joined, joined))
+
+
+def gene_list_names(value):
+    """The names in one of breseq's gene-list fields (`genes_inactivated`, ...), in order.
+
+    breseq joins these with a bare `GENE_LIST_SEPARATOR` and sanitises every name so it cannot
+    contain one (`make_safe`), so splitting is exact.
+    """
+    value = '' if value is None else str(value)
+    return [name for name in value.split(GENE_LIST_SEPARATOR) if name]
+
+
+def html_gene_list(value, italic=True):
+    """One of breseq's gene-list fields as a table cell.
+
+    Not a breseq port: breseq writes `genes_inactivated`, `genes_overlapping` and
+    `genes_promoter` (and their `locus_tags_*` twins) into the .gd but draws none of them.
+    Styled like the Description column of a gene range -- names italic, a comma and a space
+    between them, collapsed behind the same Show button past `MAX_GENES_BEFORE_SUMMARY` -- and
+    reduced to a count past `GENE_LIST_LIMIT`, the Gene column's own ceiling. Locus tags are
+    identifiers rather than gene symbols, so they are not italicized.
+
+    Escaped, unlike the breseq-generated fields beside it: this is a reference's own names
+    with nothing of breseq's markup in them.
+    """
+    names = gene_list_names(value)
+    if not names:
+        return ''
+    if len(names) > GENE_LIST_LIMIT:
+        return '%d genes' % len(names)
+    rendered = [escape(name) for name in names]
+    if italic:
+        rendered = [_italic(name) for name in rendered]
+    joined = htmlize((GENE_LIST_SEPARATOR + ' ').join(rendered))
+    if len(names) < MAX_GENES_BEFORE_SUMMARY:
+        return joined
+    return _collapsed_gene_list(len(names), joined)
 
 
 def _html_gene_fields(mutation):

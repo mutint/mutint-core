@@ -296,7 +296,10 @@ class PreferencesScriptTestCase(unittest.TestCase):
 
     STATIC = os.path.join(CORE, "mutint_common", "staticfiles", "js")
     STORE = "mutint_preferences.js"
-    CALLERS = ("mutation_matrix.js", "breseq_references.js", "mutint_control_tabs.js")
+    CALLERS = ("mutation_matrix.js", "breseq_references.js", "breseq_columns.js",
+               "mutint_control_tabs.js")
+    #: The two Columns menus, which must read and write a column choice the same way.
+    COLUMN_CALLERS = ("mutation_matrix.js", "breseq_columns.js")
 
     def read(self, name):
         with open(os.path.join(self.STATIC, name)) as handle:
@@ -318,6 +321,17 @@ class PreferencesScriptTestCase(unittest.TestCase):
             self.assertIn("window.mutintPreferences(", script, caller)
             for marker in ("localStorage", "mutintPostJson"):
                 self.assertNotIn(marker, script, "%s carries its own store" % caller)
+
+    def test_both_columns_menus_share_one_rule(self):
+        """A column choice is `{hidden, shown}`, so a column hidden by default stays hidden
+        for a reader whose choice predates it. Two readings of that would drift."""
+        store = self.read(self.STORE)
+        self.assertIn("store.columnHiddenSet = function", store)
+        self.assertIn("store.columnChoice = function", store)
+        for caller in self.COLUMN_CALLERS:
+            script = self.read(caller)
+            self.assertIn("mutintPreferences.columnHiddenSet(", script, caller)
+            self.assertIn("mutintPreferences.columnChoice(", script, caller)
 
 
 class AssetVersionTestCase(unittest.TestCase):

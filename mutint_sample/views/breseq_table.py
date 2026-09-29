@@ -28,7 +28,8 @@ from mutint_filter.util import filter_mutation_calls
 from mutint_filter.view_filter import get_view_filter
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.models import ReferenceSequences, MutationCall
-from mutint_sample.mutation_matrix import REFERENCES_PREFERENCE_PREFIX
+from mutint_sample.mutation_matrix import (GENE_LIST_COLUMNS, REFERENCES_PREFERENCE_PREFIX,
+                                           Column)
 from mutint_experiment.ancestor import (ancestral_mutation_ids, ancestral_shown,
                                         describe_ancestor)
 from mutint_sample.util import get_ordered_sample_dict
@@ -95,6 +96,10 @@ def breseq_table(request):
             # remembered choice -- the matrix's own key, so Compare and this page agree.
             "seq_ids": sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]}),
             "embedded_preferences": _embedded_preferences(request.user, experiment.id),
+            # The Display tab's Columns menu, and the optional gene-list columns the table partial
+            # adds after Description.
+            "table_columns": _columns(is_mixed(sample)),
+            "gene_list_columns": GENE_LIST_COLUMNS,
             "preferences_url": reverse("preferences"),
             "reference": _reference(experiment),
             "title": "%s mutations" % experiment.name,
@@ -123,9 +128,34 @@ def breseq_table(request):
 #: The tab the reader left open on this page, remembered by mutint_control_tabs.js.
 TAB_PREFERENCE_KEY = "breseq_table.tab"
 
+#: Which columns this page shows, remembered by breseq_columns.js as `{hidden, shown}`. Its
+#: own key rather than Compare's `mutation_matrix.columns`: the two tables' columns differ --
+#: Freq is here, the samples are there -- and Description is shown here by default, being
+#: breseq's own report column, where Compare hides it.
+COLUMNS_PREFERENCE_KEY = "breseq_table.columns"
+
+
+def _columns(mixed):
+    """What the Columns menu offers, in the table's order: breseq's own columns, shown, then
+    the gene lists, hidden. Freq only where the table has it."""
+    columns = [
+        Column("type", "Type", "breseq-evidence"),
+        Column("seq_id", "Reference", "breseq-seq-id"),
+        Column("position", "Position", "breseq-position"),
+        Column("mutation", "Mutation", "breseq-mutation"),
+    ]
+    if mixed:
+        columns.append(Column("freq", "Freq", "breseq-freq"))
+    columns += [
+        Column("annotation", "Annotation", "breseq-annotation"),
+        Column("gene", "Gene", "breseq-gene"),
+        Column("description", "Description", "breseq-description"),
+    ]
+    return columns + list(GENE_LIST_COLUMNS)
+
 
 def _embedded_preferences(user, experiment_id):
-    """`{key: value}` for the two preferences this page embeds, each only when stored.
+    """`{key: value}` for the preferences this page embeds, each only when stored.
 
     The same shape the matrix embeds its whole prefix in, so the scripts read them through
     the same `get(key)`; named keys rather than a prefix, because this page has one experiment
@@ -134,7 +164,8 @@ def _embedded_preferences(user, experiment_id):
     if not getattr(user, "is_authenticated", False):
         return {}
     embedded = {}
-    for key in (REFERENCES_PREFERENCE_PREFIX + str(experiment_id), TAB_PREFERENCE_KEY):
+    for key in (REFERENCES_PREFERENCE_PREFIX + str(experiment_id), TAB_PREFERENCE_KEY,
+                COLUMNS_PREFERENCE_KEY):
         stored = get_preference(user, key)
         if stored is not None:
             embedded[key] = stored

@@ -15,6 +15,9 @@
     {% comment %} The References menu is this page's alone, unlike the row handler above:
        it hides rows by `data-seq-id` and re-stripes what is left. {% endcomment %}
     <script src="{% static 'js/breseq_references.js' %}?v={{ asset_version }}"></script>
+    {% comment %} So is the Columns menu, which hides a column by setting `hidden` on every
+       cell carrying its `data-column`. {% endcomment %}
+    <script src="{% static 'js/breseq_columns.js' %}?v={{ asset_version }}"></script>
 {% endblock %}
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 
@@ -37,13 +40,13 @@
     {% if selected_sample %}
         {% include "sample/_inputs.html" with sample=selected_sample %}
     {% endif %}
-    {% comment %} The same strip as Compare's, minus Display: Sample for the picker, Filter
-       for the reader's own filter, Rows for the References menu. `single_sample` puts the
+    {% comment %} The same strip as Compare's, minus Export: Sample for the picker, Filter
+       for the reader's own filter, Rows for the References menu, Display for the Columns menu. `single_sample` puts the
        picker first and names it in the singular -- this page shows one sample and the tab
        that chooses it decides what everything else is about. The chosen tab is remembered as
        `breseq_table.tab`, embedded beside the References choice in the json_script below.
        {% endcomment %}
-    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True rows=selected_sample %}
+    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True rows=selected_sample display=selected_sample %}
     <div class="tab-content">
     {% if selected_sample %}
     <div class="tab-pane active" id="breseq_table-pane-filter">
@@ -146,6 +149,19 @@
             </span>
         </div>
     </div>
+    <div class="tab-pane" id="breseq_table-pane-display">
+        <div class="mutation-matrix-controls">
+            {% comment %} Which columns the table shows: the matrix's Columns menu over this
+               table's own columns, remembered as `breseq_table.columns` (embedded in the
+               json_script above). breseq's gene lists -- Genes inactivated and the rest -- are
+               here and nowhere else on this page, hidden until asked for. {% endcomment %}
+            <span data-breseq-columns
+                  data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+                  data-preferences-url="{{ preferences_url }}">
+                {% include "mutation_matrix/_columns_menu.html" with columns=table_columns %}
+            </span>
+        </div>
+    </div>
     {% endif %}
     </div>
 
@@ -153,7 +169,7 @@
         <p>This experiment has no samples to show.</p>
     {% else %}
         <div class="row">
-            {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." %}
+            {% include "breseq_table/_mutation_table.html" with empty_message="No mutations passed the current filters for this sample." gene_list_columns=gene_list_columns %}
         </div>
 
         <div class="breseq-legend">

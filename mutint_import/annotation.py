@@ -23,6 +23,7 @@ from mutint_import import reference_store
 from mutint_import.annotate.annotator import ANNOTATION_KEYS, annotate_mutations
 from mutint_import.annotate.display import (
     add_html_fields,
+    gene_list_names,
     text_mutation_annotation,
 )
 from mutint_import.annotate.loader import UnsupportedReferenceFormat, load_reference
@@ -107,6 +108,42 @@ def annotate_records_with(records, references, experiment_id=None):
     return True
 
 
+#: MutInt's own annotation keys, derived from breseq's gene lists: the one gene -- and,
+#: decided separately, the one locus tag -- a mutation affects, when the union of the genes it
+#: inactivates, overlaps and sits in the promoter of holds exactly one. Absent when the union
+#: holds several (a deletion across genes, a SNP between two divergent promoters) or none.
+#:
+#: Derived here rather than in `annotate.annotator`, which is a port of breseq checked field by
+#: field against gdtools and writes only what gdtools writes. `annotation_values` is the one
+#: function every path storing an annotation goes through -- import with or without a
+#: reference, `reannotate_experiment` and so `install_annotation`, the curate editor, a contig
+#: rename -- so computing them there keeps them in step with the lists they come from.
+#: A data migration in `mutint_sample` backfilled the rows written before they existed, with
+#: its own copy of this rule.
+SINGLE_AFFECTED_FIELDS = (
+    ("single_gene_affected", ("genes_inactivated", "genes_overlapping", "genes_promoter")),
+    ("single_locus_tag_affected",
+     ("locus_tags_inactivated", "locus_tags_overlapping", "locus_tags_promoter")),
+)
+
+
+def single_affected(record):
+    """`{key: value}` for each of `SINGLE_AFFECTED_FIELDS` whose union is exactly one value.
+
+    Distinct values, so a gene named in two lists -- a split-location gene a deletion removes
+    one segment of and clips the other -- is still one gene. Empty entries are dropped: breseq
+    lists a gene with no locus tag as an empty string in `locus_tags_*`.
+    """
+    values = {}
+    for key, sources in SINGLE_AFFECTED_FIELDS:
+        union = set()
+        for source in sources:
+            union.update(gene_list_names(record.get(source)))
+        if len(union) == 1:
+            values[key] = union.pop()
+    return values
+
+
 def annotation_values(record):
     """The Mutation field values implied by an annotated GD record.
 
@@ -118,6 +155,7 @@ def annotation_values(record):
 
     blob = {key: record[key] for key in ANNOTATION_KEYS
             if record.get(key) not in (None, '')}
+    blob.update(single_affected(record))
 
     values = {'annotation': blob}
     for column in PROMOTED_COLUMNS:

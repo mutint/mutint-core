@@ -9,18 +9,25 @@
 
    "Type" and "Reference" are what these columns hold: the first renders mutation_type
    (SNP, DEL, ...), the second the reference sequence name. breseq's own field names,
-   evidence and seq id, named the .gd field. {% endcomment %}
+   evidence and seq id, named the .gd field.
+
+   `data-column` names each column for the per-sample page's Columns menu
+   (breseq_columns.js), which hides a column by setting `hidden` on every cell carrying its
+   key. `gene_list_columns` adds the gene-list fields after Description, rendered
+   hidden because each is hidden until the reader asks for it; only that page passes it, so
+   the genome browser and the curate listings keep exactly the columns they had. {% endcomment %}
 <table class="table breseq-table">
     <thead>
         <tr>
-            <th class="breseq-evidence">Type</th>
-            <th class="breseq-seq-id">Reference</th>
-            <th class="breseq-position">Position</th>
-            <th class="breseq-mutation">Mutation</th>
-            {% if is_mixed %}<th class="breseq-freq">Freq</th>{% endif %}
-            <th class="breseq-annotation">Annotation</th>
-            <th class="breseq-gene">Gene</th>
-            <th class="breseq-description">Description</th>
+            <th class="breseq-evidence" data-column="type">Type</th>
+            <th class="breseq-seq-id" data-column="seq_id">Reference</th>
+            <th class="breseq-position" data-column="position">Position</th>
+            <th class="breseq-mutation" data-column="mutation">Mutation</th>
+            {% if is_mixed %}<th class="breseq-freq" data-column="freq">Freq</th>{% endif %}
+            <th class="breseq-annotation" data-column="annotation">Annotation</th>
+            <th class="breseq-gene" data-column="gene">Gene</th>
+            <th class="breseq-description" data-column="description">Description</th>
+            {% for column in gene_list_columns %}<th class="breseq-gene-list" data-column="{{ column.key }}" hidden>{{ column.title }}</th>{% endfor %}
         </tr>
     </thead>
     <tbody>
@@ -28,7 +35,7 @@
         {% comment %} `data-seq-id` is what the Mutations page's References menu hides rows
            by (breseq_references.js); the browser and NCBI pages render it and ignore it. {% endcomment %}
         <tr class="{{ row.row_class }}{% if row.ancestral %} ancestral_table_row{% endif %}" data-seq-id="{{ row.seq_id_text }}">
-            <td class="breseq-evidence">
+            <td class="breseq-evidence" data-column="type">
                 {% if row.evidence_url %}
                     <a href="{{ row.evidence_url }}"
                        title="Show the read alignment here">{{ row.mutation_type }}</a>
@@ -36,7 +43,7 @@
                     {{ row.mutation_type }}
                 {% endif %}
             </td>
-            <td class="breseq-seq-id">
+            <td class="breseq-seq-id" data-column="seq_id">
                 {% if row.refseq_url %}
                     <a href="{{ row.refseq_url }}"
                        title="Show this position in the NCBI annotation">{{ row.seq_id|safe }}</a>
@@ -44,18 +51,20 @@
                     {{ row.seq_id|safe }}
                 {% endif %}
             </td>
-            <td class="breseq-position">{{ row.position|safe }}</td>
-            <td class="breseq-mutation">{{ row.mutation|safe }}</td>
-            {% if is_mixed %}<td class="breseq-freq">{{ row.freq }}</td>{% endif %}
-            <td class="breseq-annotation">{{ row.annotation|safe }}</td>
-            <td class="breseq-gene">{{ row.gene|safe }}</td>
-            <td class="breseq-description">{{ row.description|safe }}</td>
+            <td class="breseq-position" data-column="position">{{ row.position|safe }}</td>
+            <td class="breseq-mutation" data-column="mutation">{{ row.mutation|safe }}</td>
+            {% if is_mixed %}<td class="breseq-freq" data-column="freq">{{ row.freq }}</td>{% endif %}
+            <td class="breseq-annotation" data-column="annotation">{{ row.annotation|safe }}</td>
+            <td class="breseq-gene" data-column="gene">{{ row.gene|safe }}</td>
+            <td class="breseq-description" data-column="description">{{ row.description|safe }}</td>
+            {% if gene_list_columns %}{% for key, html in row.gene_list_cells %}<td class="breseq-gene-list" data-column="{{ key }}" hidden>{{ html|safe }}</td>{% endfor %}{% endif %}
         </tr>
     {% empty %}
         <tr>
             {% comment %} Seven columns on a clonal sample: Freq is conditional. This was
-               hardcoded to 8, so the message ran a column past the table. {% endcomment %}
-            <td colspan="{% if is_mixed %}8{% else %}7{% endif %}">{{ empty_message }}</td>
+               hardcoded to 8, so the message ran a column past the table. Plus the gene-list
+               columns where the page has them. {% endcomment %}
+            <td colspan="{% if is_mixed %}{{ gene_list_columns|length|add:8 }}{% else %}{{ gene_list_columns|length|add:7 }}{% endif %}">{{ empty_message }}</td>
         </tr>
     {% endfor %}
     </tbody>

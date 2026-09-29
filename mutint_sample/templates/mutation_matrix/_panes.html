@@ -71,19 +71,7 @@
 </div>
 <div class="tab-pane{% if active == "display" %} active{% endif %}" id="{{ page }}-pane-display">
     <div class="mutation-matrix-controls">
-        <div class="btn-group">
-            <button type="button" class="btn btn-default dropdown-toggle"
-                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Columns <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="columns">
-                {% for column in matrix.columns %}
-                    <li data-value="{{ column.key }}"{% if column.default_visible %} class="active"{% endif %}>
-                        <a href="#">{{ column.title }}</a>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
+        {% include "mutation_matrix/_columns_menu.html" with columns=matrix.columns %}
         {% comment %} How a sample cell shows its frequency; the legend beside it shows in the
            two heat-map formats. One choice at a time, so the list runs in plain (replacing)
            mode. {% endcomment %}

@@ -2,15 +2,20 @@ from django.utils.html import strip_tags
 
 from mutint_common.plugin_registry import get_export_handler
 from mutint_filter.util import filter_mutation_calls
+from mutint_sample.breseq_report import GENE_LIST_FIELDS, gene_list_text
 from mutint_sample.util import get_mutation_call_queryset, samples_in_calls
 
 MUT_TYPE_STR = "mut"
 
-#: The CSV's own header, byte-identical to what the shared table's header used to lend it.
-#: Kept as it was -- "Gene (Scrollable)" included -- because changing the header of a file
-#: people have scripts reading is a different decision from changing a page.
+#: The CSV's own header. The first eight are byte-identical to what the shared table's header
+#: used to lend it -- "Gene (Scrollable)" included -- because changing the header of a file
+#: people have scripts reading is a different decision from changing a page. The gene-list
+#: fields (`GENE_LIST_FIELDS`) follow "Details", before the sample columns, which moved every
+#: sample column along by as many: a script reading samples by position needs updating, one
+#: reading them by header name does not.
 CSV_MUTATION_HEADER = ["Reference Seq", "Position", "Mutation Type", "Sequence Change",
-                       "Gene (Scrollable)", "Product", "Mut ID", "Details"]
+                       "Gene (Scrollable)", "Product", "Mut ID", "Details"] + [
+                           title for _key, title, _italic in GENE_LIST_FIELDS]
 
 #: A present call with no frequency -- a hand-added mutation. The character, where the table
 #: this borrowed from wrote the HTML entity and `strip_tags` left it in the file verbatim.
@@ -82,7 +87,9 @@ def get_csv_str(exp_id, mut_type_str, view_filter=None):
             mutation.gene,
             "" if mutation.product is None else mutation.product,
             mutation.id,
-            strip_tags(mutation.protein_change or "")] + cells[mutation_id])
+            strip_tags(mutation.protein_change or "")]
+            + [gene_list_text(mutation.annotation, key) for key, _title, _italic in GENE_LIST_FIELDS]
+            + cells[mutation_id])
     return rows
 
 

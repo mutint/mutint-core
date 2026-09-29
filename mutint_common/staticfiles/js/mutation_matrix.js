@@ -38,8 +38,10 @@
  *   - nothing sorts. The rows arrive in breseq's order, reference then position, and a
  *     sample's header is a link to that sample's own page rather than a sort handle.
  *
- * Stored as the *hidden* set, not the visible one, so a column, sample or type that did not
- * exist when the choice was made shows by default rather than vanishing.
+ * Samples, types and references are stored as the *hidden* set, not the visible one, so one
+ * that did not exist when the choice was made shows by default rather than vanishing. Columns
+ * are stored as both lists, so a column added later takes its own default -- which for
+ * Description and the gene lists is hidden (see mutint_preferences.js).
  *
  * Loaded from the page beside breseq_table.js; jQuery, DataTables (with Buttons) and
  * mutint_select_list.js come from base.html.
@@ -77,6 +79,25 @@
 
     function renderHtml(data) { return data === null || data === undefined ? "" : data; }
 
+    /* A column choice saved as a bare hidden set, before columns could be hidden by default
+       other than Description. Description absent from it was shown on purpose; every column
+       added since takes its default. */
+    function legacyColumnChoice(stored) {
+        if (!stored || Array.isArray(stored.shown)) { return stored; }
+        var hidden = Array.isArray(stored.hidden) ? stored.hidden : [];
+        return { hidden: hidden, shown: hidden.indexOf("description") < 0 ? ["description"] : [] };
+    }
+
+    /* A gene-list column (genes_inactivated and the rest, GENE_LIST_FIELDS): the markup to
+       display, and the plain list -- which the server sends beside it as `<key>_text` -- for
+       searching and exporting, since a long list is collapsed behind a Show button. */
+    function renderGeneList(key) {
+        return function (data, type, row) {
+            if (type === "display") { return renderHtml(data); }
+            return renderHtml(row[key + "_text"]);
+        };
+    }
+
     /* A sample cell: filter and export on the text, display a bare percentage -- `100`,
        `42` -- with the full text as the title, so the column can be narrow. Linked when the
        server gave a URL. The frequency rides along as `--f` for the bar and heat formats; a
@@ -87,7 +108,8 @@
     }
     function renderSample(cell, type) {
         if (!cell) { return ""; }
-        if (type !== "display") { return cell.f; }
+        // Export as displayed: the CSV has always carried the bare number a cell shows.
+        if (type !== "display" && type !== "export") { return cell.f; }
         var node = document.createElement(cell.u ? "a" : "span");
         if (cell.u) { node.href = cell.u; }
         node.className = "mutation-matrix-cell" + (cell.p ? " polymorphic" : "");
@@ -111,13 +133,14 @@
         var samplesKey = experimentId ? SAMPLES_KEY_PREFIX + experimentId : null;
         var referencesKey = experimentId ? REFERENCES_KEY_PREFIX + experimentId : null;
 
-        var hiddenColumns = hiddenSet(prefs.get(COLUMNS_KEY, null));
-        if (prefs.get(COLUMNS_KEY, null) === null) {
-            // Nothing remembered yet: the server's defaults, read off the menu it rendered.
-            Array.prototype.forEach.call(controls.querySelectorAll('[data-role="columns"] li[data-value]'), function (li) {
-                if (!li.classList.contains("active")) { hiddenColumns[li.getAttribute("data-value")] = true; }
-            });
-        }
+        // The server's defaults, read off the menu it rendered; a column the stored choice does
+        // not name takes its default (mutint_preferences.js says why).
+        var columnDefaults = {};
+        Array.prototype.forEach.call(controls.querySelectorAll('[data-role="columns"] li[data-value]'), function (li) {
+            columnDefaults[li.getAttribute("data-value")] = li.classList.contains("active");
+        });
+        var hiddenColumns = window.mutintPreferences.columnHiddenSet(
+            legacyColumnChoice(prefs.get(COLUMNS_KEY, null)), columnDefaults);
         var hiddenSamples = samplesKey ? hiddenSet(prefs.get(samplesKey, null)) : {};
         var hiddenTypes = hiddenSet(prefs.get(TYPES_KEY, null));
         var hiddenReferences = referencesKey ? hiddenSet(prefs.get(referencesKey, null)) : {};
@@ -188,7 +211,7 @@
                 defaultContent: "",
                 className: th.className,
                 visible: !hiddenColumns[key],
-                render: renderHtml
+                render: th.classList.contains("breseq-gene-list") ? renderGeneList(key) : renderHtml
             };
             // The Type cell links into the genome browser with every sample carrying the
             // mutation shown -- the per-sample table's Type link, for a row that is a mutation.
@@ -281,7 +304,9 @@
             // samples and types, and the search box, which is what `search: "applied"` means
             // -- or every row the server produced. Visible columns only, either way. Ancestral
             // rows the reader asked to see are rows the server produced, so both include them;
-            // they are in no row set, so choosing one in the Show menu drops them.
+            // they are in no row set, so choosing one in the Show menu drops them. Cells are
+            // exported through the `export` rendering, which is the displayed one except for
+            // a gene list, whose whole plain list is exported rather than its Show button.
             buttons: [{
                 extend: "collection",
                 text: "Export CSV",
@@ -290,12 +315,12 @@
                     extend: "csv",
                     text: "Filtered mutations",
                     title: (container.getAttribute("data-csv-title") || "mutations") + "_showing",
-                    exportOptions: { columns: ":visible", modifier: { search: "applied" } }
+                    exportOptions: { columns: ":visible", orthogonal: "export", modifier: { search: "applied" } }
                 }, {
                     extend: "csv",
                     text: "All mutations",
                     title: container.getAttribute("data-csv-title") || "mutations",
-                    exportOptions: { columns: ":visible", modifier: { search: "none" } }
+                    exportOptions: { columns: ":visible", orthogonal: "export", modifier: { search: "none" } }
                 }]
             }, {
                 // A vector drawing of the filtered rows, as the Display settings show them;
@@ -514,7 +539,7 @@
                 });
                 dt.columns.adjust().draw(false);
                 pinColumns();
-                prefs.set(COLUMNS_KEY, { hidden: keys(hiddenColumns) });
+                prefs.set(COLUMNS_KEY, window.mutintPreferences.columnChoice(hiddenColumns, columnDefaults));
             }
         });
         var typeCounter = controls.querySelector('[data-role="type-count"]');

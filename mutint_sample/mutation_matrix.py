@@ -29,7 +29,7 @@ from typing import Optional
 
 from django.urls import reverse
 
-from mutint_sample.breseq_report import _frequency, describe_mutation
+from mutint_sample.breseq_report import GENE_LIST_FIELDS, _frequency, describe_mutation
 from mutint_sample.flags import flags_of
 from mutint_sample.ncbi import verified_contig_names
 
@@ -115,6 +115,17 @@ class MutationMatrix:
         return len(self.columns) + len(self.samples)
 
 
+#: The class every gene-list column's header and cells carry, and what the script keys the
+#: plain-text export of those columns on.
+GENE_LIST_CSS_CLASS = "breseq-gene-list"
+
+#: The gene-list fields (`GENE_LIST_FIELDS`) as columns, hidden until asked for: most readers of a
+#: mutation table never want them, and they run as long as a deletion is wide. Both tables
+#: offer them, after Description. The per-sample table's partial renders their cells hidden and
+#: carries this class literally, as the matrix's script does.
+GENE_LIST_COLUMNS = tuple(Column(key, title, GENE_LIST_CSS_CLASS, default_visible=False)
+                          for key, title, _italic in GENE_LIST_FIELDS)
+
 #: The per-sample table's columns, minus Freq. Description is hidden until asked for: it is
 #: prose, and the widest column by far.
 DESCRIPTIVE = (
@@ -125,7 +136,7 @@ DESCRIPTIVE = (
     Column("annotation", "Annotation", "breseq-annotation"),
     Column("gene", "Gene", "breseq-gene"),
     Column("description", "Description", "breseq-description", default_visible=False),
-)
+) + GENE_LIST_COLUMNS
 
 
 #: How many colors breseq_table.css defines for `.sample-palette-<n>`.

@@ -20,6 +20,7 @@ from mutint_experiment.models import Experiment
 from mutint_import import annotation, gd_import, reference, reference_store
 from mutint_import.tests.test_annotation import _uploaded_as
 from mutint_sample.breseq_report import build_rows, gd_entry
+from mutint_sample.mutation_matrix import GENE_LIST_COLUMNS
 from mutint_sample.models import Mutation, MutationCall, Sample
 
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
@@ -98,8 +99,8 @@ class BreseqTablePageTestCase(TestCase):
         content = self.content()
         for column in ("evidence", "seq-id", "position", "mutation", "annotation",
                        "gene", "description"):
-            self.assertIn('<th class="breseq-%s">' % column, content)
-            self.assertIn('<td class="breseq-%s">' % column, content)
+            self.assertIn('<th class="breseq-%s" data-column=' % column, content)
+            self.assertIn('<td class="breseq-%s" data-column=' % column, content)
 
     # --- breseq's markup ------------------------------------------------------
 
@@ -165,14 +166,14 @@ class BreseqTablePageTestCase(TestCase):
         This was assertNotIn("<th>freq</th>"), which after the headers were
         renamed passed for a population sample too -- green while testing nothing.
         """
-        self.assertEqual(7, self.content().count("<th "))
+        self.assertEqual(7 + len(GENE_LIST_COLUMNS), self.content().count("<th "))
         self.assertNotIn("Freq", self.content())
 
     def test_a_population_sample_has_one(self):
         self._make_population()
         content = self.content()
-        self.assertEqual(8, content.count("<th "))
-        self.assertIn('<th class="breseq-freq">Freq</th>', content)
+        self.assertEqual(8 + len(GENE_LIST_COLUMNS), content.count("<th "))
+        self.assertIn('<th class="breseq-freq" data-column="freq">Freq</th>', content)
         self.assertIn("100%", content)
 
     # --- the empty state ------------------------------------------------------
@@ -321,7 +322,7 @@ class ReferencesMenuTestCase(BreseqTablePageTestCase):
 
 
 class ControlTabsTestCase(BreseqTablePageTestCase):
-    """The same strip as Compare's, minus Display -- and with the picker first.
+    """The same strip as Compare's, minus Export -- and with the picker first.
 
     This page shows **one** sample, so its picker is called `Sample` and leads: the tab that
     decides what the page is about belongs before the ones that adjust how it is shown.
@@ -332,11 +333,11 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         start = content.index('id="breseq_table-pane-%s"' % key)
         return content[start:content.index(next_marker, start)]
 
-    def test_three_tabs_in_order(self):
+    def test_four_tabs_in_order(self):
         content = self.content()
         self.assertIn('data-control-tabs="breseq_table"', content)
         self.assertIn('data-prefs-id="breseq-references-prefs"', content)
-        self.assertEqual(["samples", "filter", "rows"],
+        self.assertEqual(["samples", "filter", "rows", "display"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', content))
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', content)
 
@@ -357,7 +358,9 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
                       self.pane(content, "filter", 'id="breseq_table-pane-samples"'))
         self.assertIn('id="sample_picker"',
                       self.pane(content, "samples", 'id="breseq_table-pane-rows"'))
-        self.assertIn("data-breseq-references", self.pane(content, "rows", "<table"))
+        self.assertIn("data-breseq-references",
+                      self.pane(content, "rows", 'id="breseq_table-pane-display"'))
+        self.assertIn("data-breseq-columns", self.pane(content, "display", "<table"))
 
     def test_a_signed_in_readers_tab_is_embedded(self):
         from mutint_common.preferences import set_preference
@@ -371,3 +374,69 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         content = self.content()
         self.assertEqual(["samples"], re.findall(r'data-toggle="tab" data-tab="(\w+)"', content))
         self.assertIn("This experiment has no samples to show.", content)
+
+
+class ColumnsMenuTestCase(BreseqTablePageTestCase):
+    """The Display tab's Columns menu, and the gene lists behind it: rendered on
+    every row, hidden until the reader asks, and only on this page."""
+
+    KEY = "breseq_table.columns"
+
+    def test_the_menu_offers_every_column_with_breseqs_own_shown(self):
+        content = self.content()
+        self.assertIn("data-breseq-columns", content)
+        self.assertIn('<li data-value="description" class="active">', content)
+        self.assertIn('<li data-value="type" class="active">', content)
+        for column in GENE_LIST_COLUMNS:
+            self.assertIn('<li data-value="%s">' % column.key, content)
+        self.assertNotIn('<li data-value="freq"', content, "a clonal sample has no Freq")
+
+    def test_a_mixed_samples_menu_offers_freq(self):
+        self.sample.is_clonal = False
+        self.sample.save()
+        self.assertIn('<li data-value="freq" class="active">', self.content())
+
+    def test_the_gene_list_columns_render_hidden(self):
+        content = self.content()
+        for column in GENE_LIST_COLUMNS:
+            self.assertIn('<th class="breseq-gene-list" data-column="%s" hidden>%s</th>'
+                          % (column.key, column.title), content)
+        rows = content.count('<tr class="')
+        self.assertEqual(rows * len(GENE_LIST_COLUMNS),
+                         content.count('<td class="breseq-gene-list" data-column="'))
+        self.assertEqual(rows * len(GENE_LIST_COLUMNS),
+                         len(re.findall(r'<td class="breseq-gene-list" data-column="\w+" hidden>',
+                                        content)))
+
+    def test_the_cells_carry_what_the_annotator_decided(self):
+        """The synthetic fixture's nonsense SNP inactivates thrA, a synonymous one only
+        overlaps it, and an intergenic one sits in thrB's promoter -- gdtools' own answers,
+        which test_annotator pins against the same fixture."""
+        content = self.content()
+        self.assertIn('data-column="genes_inactivated" hidden><i>thrA</i></td>', content)
+        self.assertIn('data-column="genes_overlapping" hidden><i>thrA</i></td>', content)
+        self.assertIn('data-column="genes_promoter" hidden><i>thrB</i></td>', content)
+        self.assertIn('data-column="locus_tags_inactivated" hidden>b0001</td>', content)
+        self.assertIn('data-column="single_gene_affected" hidden><i>thrA</i></td>', content)
+        self.assertIn('data-column="single_locus_tag_affected" hidden>b0001</td>', content)
+
+    def test_the_script_is_loaded(self):
+        self.assertIn("js/breseq_columns.js", self.content())
+
+    def test_a_signed_in_readers_choice_is_embedded(self):
+        from mutint_common.preferences import set_preference
+        set_preference(self.user, self.KEY, {"hidden": [], "shown": ["genes_inactivated"]})
+        content = self.content()
+        self.assertIn(self.KEY, content)
+        self.assertIn('"shown": ["genes_inactivated"]', content)
+
+    def test_the_other_pages_rendering_these_rows_get_no_gene_lists(self):
+        """The genome browser and the curate listings render the same partial and pass no
+        `gene_list_columns`, so their columns -- and curate's column indices -- are as they
+        were."""
+        from django.template import loader
+        rows = build_rows(list(MutationCall.objects.all()))
+        html = loader.get_template("breseq_table/_mutation_table.html").render(
+            {"rows": rows, "empty_message": "Nothing."})
+        self.assertNotIn("breseq-gene-list", html)
+        self.assertEqual(7, html.count("<th "))

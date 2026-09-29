@@ -10,8 +10,9 @@ import warnings
 
 from bs4 import BeautifulSoup
 
+from mutint_common.util import GENE_LIST_LIMIT
 from mutint_import.annotate.display import (
-    MAX_GENES_BEFORE_SUMMARY, add_html_fields, text_from_html,
+    MAX_GENES_BEFORE_SUMMARY, add_html_fields, gene_list_names, html_gene_list, text_from_html,
 )
 
 
@@ -144,3 +145,38 @@ class TextFromHtmlTestCase(unittest.TestCase):
     def test_empty_input(self):
         self.assertEqual("", text_from_html(""))
         self.assertEqual("", text_from_html(None))
+
+
+class GeneListFieldTestCase(unittest.TestCase):
+    """`genes_inactivated` and its five siblings, which breseq writes and never draws."""
+
+    def test_gene_names_are_italic_and_spaced(self):
+        self.assertEqual("<i>thrA</i>, <i>thrB</i>", html_gene_list("thrA,thrB"))
+
+    def test_locus_tags_are_not_italic(self):
+        self.assertEqual("b0001, b0002", html_gene_list("b0001,b0002", italic=False))
+
+    def test_a_hyphen_does_not_wrap(self):
+        self.assertEqual("<i>insB&#8209;14</i>", html_gene_list("insB-14"))
+
+    def test_a_name_is_escaped(self):
+        """A reference's own text, with none of breseq's markup in it."""
+        self.assertEqual("<i>a&lt;b&gt;</i>", html_gene_list("a<b>"))
+
+    def test_nothing_renders_nothing(self):
+        for value in ("", None):
+            with self.subTest(value=value):
+                self.assertEqual("", html_gene_list(value))
+                self.assertEqual([], gene_list_names(value))
+
+    def test_a_long_list_collapses_like_description(self):
+        names = ",".join("gene%02d" % index for index in range(MAX_GENES_BEFORE_SUMMARY))
+        html = html_gene_list(names)
+        self.assertIn("<b>%d genes</b>" % MAX_GENES_BEFORE_SUMMARY, html)
+        self.assertIn("breseq_gene_toggle", html)
+        self.assertNotIn("breseq_gene_toggle", html_gene_list(
+            ",".join("gene%02d" % index for index in range(MAX_GENES_BEFORE_SUMMARY - 1))))
+
+    def test_past_the_gene_list_limit_only_the_count_renders(self):
+        names = ",".join("g%d" % index for index in range(GENE_LIST_LIMIT + 1))
+        self.assertEqual("%d genes" % (GENE_LIST_LIMIT + 1), html_gene_list(names))

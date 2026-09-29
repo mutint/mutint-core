@@ -65,23 +65,27 @@ class ColumnsTestCase(_Fixture):
     def test_the_descriptive_columns_are_the_per_sample_tables_minus_freq(self):
         keys = [c.key for c in self.matrix().columns]
         self.assertEqual(["type", "seq_id", "position", "mutation", "annotation", "gene",
-                          "description"], keys)
+                          "description", "genes_inactivated", "genes_overlapping",
+                          "genes_promoter", "locus_tags_inactivated", "locus_tags_overlapping",
+                          "locus_tags_promoter", "single_gene_affected",
+                          "single_locus_tag_affected"], keys)
         self.assertNotIn("freq", keys)
 
     def test_every_column_carries_a_breseq_class(self):
         for column in self.matrix().columns:
             self.assertTrue(column.css_class.startswith("breseq-"), column.key)
 
-    def test_description_is_the_only_column_hidden_by_default(self):
+    def test_description_and_the_gene_lists_are_hidden_by_default(self):
         hidden = [c.key for c in self.matrix().columns if not c.default_visible]
-        self.assertEqual(["description"], hidden)
+        self.assertEqual(["description"] + [c.key for c in mutation_matrix.GENE_LIST_COLUMNS],
+                         hidden)
 
     def test_one_sample_column_per_listed_sample_in_order(self):
         matrix = self.matrix()
         self.assertEqual([s.id for s in self.sample_dict.values()],
                          [s.id for s in matrix.samples])
         self.assertEqual(list(range(len(self.sample_dict))), [s.index for s in matrix.samples])
-        self.assertEqual(len(self.sample_dict) + 7, matrix.width)
+        self.assertEqual(len(self.sample_dict) + len(mutation_matrix.DESCRIPTIVE), matrix.width)
 
 
 class RowsTestCase(_Fixture):
@@ -163,6 +167,23 @@ class RowsTestCase(_Fixture):
         self.assertIn("thrA", row["gene"])
         self.assertIn("aspartokinase", row["description"])
         self.assertTrue(row["annotated"])
+
+    def test_the_gene_lists_are_the_annotations_as_markup_and_as_text(self):
+        """breseq's `genes_inactivated` and siblings, read from the stored annotation: markup
+        for the cell, and `<key>_text` beside it, which the CSV export reads instead of a
+        collapsed list's Show button."""
+        mutation = Mutation.objects.get(start_position=100)
+        mutation.annotation = dict(mutation.annotation, genes_inactivated="thrA,thrB",
+                                   locus_tags_inactivated="b0001,b0002",
+                                   genes_promoter="")
+        mutation.save()
+        self.calls = get_all_calls_filtered(self.experiment.id)
+        row = self.row(self.matrix(), 100)
+        self.assertEqual("<i>thrA</i>, <i>thrB</i>", row["genes_inactivated"])
+        self.assertEqual("thrA, thrB", row["genes_inactivated_text"])
+        self.assertEqual("b0001, b0002", row["locus_tags_inactivated"])
+        self.assertEqual("", row["genes_promoter"])
+        self.assertEqual("", row["genes_promoter_text"])
 
     def test_the_reference_links_to_ncbi_and_says_it_is_unverified(self):
         row = self.row(self.matrix(), 100)
@@ -257,7 +278,8 @@ class PartialTestCase(_Fixture):
 
     def test_the_header_has_one_th_per_column_each_with_its_class(self):
         html = self._render()
-        self.assertEqual(7 + len(self.sample_dict), html.count("<th "))
+        self.assertEqual(len(mutation_matrix.DESCRIPTIVE) + len(self.sample_dict),
+                         html.count("<th "))
         for column in mutation_matrix.DESCRIPTIVE:
             self.assertIn('<th class="%s" data-key="%s"' % (column.css_class, column.key), html)
         self.assertEqual(len(self.sample_dict), html.count('class="breseq-sample sample-palette-0"'))

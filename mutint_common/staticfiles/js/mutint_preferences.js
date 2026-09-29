@@ -10,14 +10,20 @@
  * choice and a save that failed costs a reload's worth of memory, not correctness. An
  * anonymous reader gets localStorage under `mutint.<key>`, one browser's memory.
  *
- * Two helpers ride along because every caller needs them: `embedded(id)` reads a json_script
- * node by id, and `hiddenSet({hidden: [...]})` turns a stored choice into a lookup. Choices
- * are stored as the *hidden* set, never the visible one, so a column, sample, type or
- * reference that did not exist when the choice was made shows by default.
+ * Three helpers ride along because every caller needs them: `embedded(id)` reads a json_script
+ * node by id, and `hiddenSet({hidden: [...]})` turns a stored choice into a lookup. Samples,
+ * types and references are stored as the *hidden* set, never the visible one, so one that did
+ * not exist when the choice was made shows by default.
  *
- * Used by mutation_matrix.js (Compare and Search) and breseq_references.js (the per-sample
- * Mutations page), which share `mutation_matrix.references.<experiment>` between them. Loaded
- * from base.html after mutint_crud.js, which owns mutintPostJson and the CSRF cookie read.
+ * Columns cannot be stored that way, because a column can be hidden *by default*: a hidden set
+ * saved before such a column existed does not name it, and it would appear for everybody who
+ * had ever chosen. So a column choice is `{hidden: [...], shown: [...]}`, naming every column
+ * the menu offered when it was saved, and `columnHiddenSet(stored, defaults)` reads it: a
+ * column in either list is as it says, and any other takes its default.
+ *
+ * Used by mutation_matrix.js (Compare and Search), breseq_references.js and breseq_columns.js
+ * (the per-sample Mutations page); the first two share `mutation_matrix.references.<experiment>`.
+ * Loaded from base.html after mutint_crud.js, which owns mutintPostJson and the CSRF cookie read.
  */
 (function () {
     "use strict";
@@ -57,6 +63,30 @@
         var set = {};
         hidden.forEach(function (value) { set[String(value)] = true; });
         return set;
+    };
+
+    /* `defaults` is `{key: visible}` for every column on offer. Returns the hidden set. */
+    store.columnHiddenSet = function (stored, defaults) {
+        var hidden = store.hiddenSet(stored);
+        var shown = {};
+        (stored && Array.isArray(stored.shown) ? stored.shown : []).forEach(function (key) {
+            shown[String(key)] = true;
+        });
+        var set = {};
+        Object.keys(defaults).forEach(function (key) {
+            if (shown[key]) { return; }
+            if (hidden[key] || !defaults[key]) { set[key] = true; }
+        });
+        return set;
+    };
+
+    /* The value to store for a column choice: every offered column, in one list or the other. */
+    store.columnChoice = function (hiddenSet, defaults) {
+        var choice = { hidden: [], shown: [] };
+        Object.keys(defaults).forEach(function (key) {
+            choice[hiddenSet[key] ? "hidden" : "shown"].push(key);
+        });
+        return choice;
     };
 
     window.mutintPreferences = store;
