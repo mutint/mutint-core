@@ -113,7 +113,7 @@
        their width. `break-word` still breaks a word too long for the cell but leaves the
        min-content measure alone, and the floor keeps a sentence readable; the box scrolls
        sideways for whatever no longer fits. */
-    min-width: 20em;
+    min-width: 12em;
     max-width: 40em;
     overflow-wrap: break-word;
 }
@@ -496,11 +496,11 @@ table.dataTable.mutation-matrix-table thead > tr > th.pinned {
    sample cell's border fits inside its 32px because Bootstrap sets border-box on
    everything, and the inner cell fills only the content box, so a heat-map fill stops at
    the rule rather than covering it. */
-table.dataTable.mutation-matrix-table td.pinned,
+table.dataTable.mutation-matrix-table td.descriptive,
 table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
     border-right: 1px solid #e3e3e3;
 }
-table.dataTable.mutation-matrix-table thead > tr > th.pinned,
+table.dataTable.mutation-matrix-table thead > tr > th.descriptive,
 table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     border-right: 1px solid rgba(255, 255, 255, 0.3);
 }
@@ -531,7 +531,7 @@ table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
    measure, and the column is then exactly the header's width. What no longer fits is
    clipped, with an ellipsis where the cell is nowrap. Only on resized columns, because on
    every column it would collapse each to its header's width. */
-table.dataTable.mutation-matrix-table td.pinned.resized {
+table.dataTable.mutation-matrix-table td.descriptive.resized {
     max-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -539,7 +539,7 @@ table.dataTable.mutation-matrix-table td.pinned.resized {
 /* The header too, or its own title holds the column open; its max-width is the inline
    one the script wrote, which caps its measure the same way. The handle sits inside the
    cell, so the clip does not touch it. */
-table.dataTable.mutation-matrix-table thead > tr > th.pinned.resized {
+table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
     overflow: hidden;
     text-overflow: ellipsis;
 }

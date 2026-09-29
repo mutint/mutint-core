@@ -2119,7 +2119,7 @@ before the first move, because put on at the end of the drag the content held th
 open for the whole of it. The handle is 14px wide, inside the header cell's right edge
 rather than straddling the divider (the next header is sticky at the same z-index and would
 paint over the half that hung past), and invisible: the resize cursor over it is the whole of how it announces itself, as a spreadsheet's column edges do. A lit strip in every header was tried and was far too loud. **Description has a floor of
-20em** for the opposite reason: `overflow-wrap: anywhere` counts every character as a break
+12em** for the opposite reason: `overflow-wrap: anywhere` counts every character as a break
 for the min-content measure, so when the table was wider than its box that one wrapping
 column was crushed to a few characters a line; it is `break-word` now, which leaves
 min-content alone.
@@ -2130,6 +2130,14 @@ sets, the top -- a strip of the frame, the way the sidebar's runs the window's h
 "Show [100] entries" and "Search:" are Bootstrap labels, whose 5px bottom margin put their
 text above the pager's middle in a centered row; the toolbar zeroes it and makes each label
 a centered row of its own. The bar is 10px tall, the width of the sidebar's strip, whose arrow lost a 3px border in the strip's own grey and a rounded corner that showed as a notch beside the glyph under the hover gradient.
+
+**Only as many leading columns are pinned as leave room for the samples.** Pinned columns
+adding up to the box's width left nothing that moves in view, so scrolling sideways looked
+like nothing happening. `pinColumns` stops pinning at the first descriptive column that
+would not fit inside the box less three sample columns' width, and that column and every
+later one scroll with the samples -- a spreadsheet freezes only what fits. Recomputed on
+every draw, on the table's resize and on the window's. A descriptive column carries
+`descriptive` (its divider) and `resized` (its clip) whether or not it is `pinned`.
 
 **The pinned cells sit above a sample cell's number.** A sample cell's digits are a span
 positioned at z-index 1 so they paint over the bar drawn behind them, and at the same

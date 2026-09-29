@@ -385,8 +385,16 @@
            reach it. */
         var scrollBox = container.querySelector(".mutation-matrix-scroll");
         var widths = prefs.get(WIDTHS_KEY, null) || {};  // the resized columns, below
+        /* Only as many leading columns are pinned as leave room for the samples. Pinned
+           columns adding up to the box's width would leave nothing that moves in view, so
+           scrolling looked like nothing happening; past the room for SAMPLES_IN_VIEW
+           sample columns the rest of the descriptive columns scroll with the samples, as a
+           spreadsheet freezes only what fits. A descriptive column keeps `descriptive`
+           (its divider) and `resized` (its clip) whether or not it is pinned. */
+        var SAMPLES_IN_VIEW = 3;
         function pinColumns() {
-            var left = 0;
+            var left = 0, room = scrollBox ? scrollBox.clientWidth - SAMPLES_IN_VIEW * 32 : Infinity;
+            var pinning = true;
             ths.forEach(function (th, i) {
                 if (th.getAttribute("data-key") === null) { return; }
                 var column = dt.column(i);
@@ -396,12 +404,15 @@
                     return;
                 }
                 var resized = typeof widths[th.getAttribute("data-key")] === "number";
+                var width = th.getBoundingClientRect().width;
+                if (left + width > room) { pinning = false; }
                 nodes.forEach(function (el) {
-                    el.classList.add("pinned");
+                    el.classList.add("descriptive");
+                    el.classList.toggle("pinned", pinning);
                     el.classList.toggle("resized", resized);
-                    el.style.left = left + "px";
+                    el.style.left = pinning ? left + "px" : "";
                 });
-                left += th.getBoundingClientRect().width;
+                left += width;
             });
         }
 
@@ -480,7 +491,7 @@
             if (excess > 0 && height - excess >= 240) { scrollBox.style.maxHeight = (height - excess) + "px"; }
         }
         sizeScrollBox();
-        window.addEventListener("resize", sizeScrollBox);
+        window.addEventListener("resize", function () { sizeScrollBox(); pinColumns(); });
         // Once more when everything has loaded: an image above the box arriving after this
         // ran moves the box's top, and a box sized before that overflows the page.
         window.addEventListener("load", sizeScrollBox);
