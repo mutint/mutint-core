@@ -52,6 +52,11 @@ register_example_dataset(
     description='What this shows.')
 ```
 
+If the experiment has an ancestor, name its sample with `ancestor=` -- the file's name without
+its extension, which is what the sample's source name is. `./mutint load_example` designates it
+once the data is imported and rebuilds, just as designating it on the Samples page does. A
+`metadata.csv` beside the data places the samples, if their filenames do not.
+
 Ship a `README.md` beside the data stating the expected answer as a table, and assert that
 answer in your tests. The reason this exists at all: a plugin's page renders an empty table
 when there is nothing to show *and* when the feature is broken, and there was no data anywhere

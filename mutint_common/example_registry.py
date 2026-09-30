@@ -30,7 +30,7 @@ shadowing another's example is worse than a startup error.
 _example_datasets = {}
 
 
-def register_example_dataset(name, directory, description="", component=None):
+def register_example_dataset(name, directory, description="", component=None, ancestor=None):
     """Register a named example dataset.
 
     name        stable slug, and what `./mutint load_example` takes. Hyphens are fine and
@@ -44,6 +44,12 @@ def register_example_dataset(name, directory, description="", component=None):
                 the thing the loader cannot tell from the files.
     component   the repo it belongs to, for the listing. Defaults to the leading part of
                 `name`, which by convention is the component.
+    ancestor    the source name of the sample to designate as the experiment's ancestor once
+                the data is imported -- the file's name without its extension, which is what
+                `Sample.source_name` holds. None designates nothing. A dataset needs this
+                rather than a column in its `metadata.csv` because being the ancestor is a
+                property of the experiment, not of the sample: there is one, and the import
+                path has no notion of it.
     """
     if name in _example_datasets:
         raise ValueError("example dataset %r is already registered" % (name,))
@@ -52,6 +58,7 @@ def register_example_dataset(name, directory, description="", component=None):
         "directory": directory,
         "description": description,
         "component": component or name.split("-example")[0],
+        "ancestor": ancestor,
     }
 
 

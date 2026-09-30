@@ -143,6 +143,32 @@ class Command(BaseCommand):
             shutil.rmtree(staged_root, ignore_errors=True)
 
         self._report(dataset, experiment, summary)
+        if dataset.get("ancestor"):
+            self._designate_ancestor(dataset, experiment, user)
+
+    def _designate_ancestor(self, dataset, experiment, user):
+        """Make the dataset's named sample the experiment's ancestor, and rebuild after it.
+
+        The rebuild is the ancestor endpoint's own (`mutint_experiment.views`): the ancestor's
+        mutations leave every other sample, so everything derived is marked and the
+        experiment's own derived data rerun. A name that matches no sample is an error, not a
+        silent skip -- the example would otherwise load looking complete while every analysis
+        counted the ancestor's mutations as evolution.
+        """
+        from mutint_common.rebuild_registry import EXPERIMENT_SCOPE, request_rebuild, run_rebuilds
+        from mutint_sample.util import get_ordered_sample_queryset
+
+        name = dataset["ancestor"]
+        sample = get_ordered_sample_queryset(
+            experiment.id, include_ancestor=True).filter(source_name=name).first()
+        if sample is None:
+            raise CommandError(
+                "%s names %s as its ancestor, and no sample was imported under that name."
+                % (dataset["name"], name))
+        experiment.set_ancestor(sample, user)
+        request_rebuild(experiment.id, reason="ancestor designated")
+        run_rebuilds(experiment.id, scope=EXPERIMENT_SCOPE)
+        self.stdout.write("  Ancestor: %s." % sample.label)
 
     def _resolve_user(self, username):
         from django.contrib.auth.models import User

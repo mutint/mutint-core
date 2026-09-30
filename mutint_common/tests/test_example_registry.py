@@ -50,6 +50,13 @@ class ExampleRegistryTestCase(TestCase):
 
         self.assertEqual("mutint-thing", get_example_dataset("mutint-thing-example")["component"])
 
+    def test_the_ancestor_is_recorded(self):
+        register_example_dataset("thing-example", "/tmp/nowhere", ancestor="REL1207")
+
+        self.assertEqual("REL1207", get_example_dataset("thing-example")["ancestor"])
+        register_example_dataset("other-example", "/tmp/nowhere")
+        self.assertIsNone(get_example_dataset("other-example")["ancestor"])
+
     def test_an_explicit_component_wins(self):
         register_example_dataset("odd-name", "/tmp/nowhere", component="mutint-thing")
 
@@ -207,6 +214,36 @@ class LoadExampleCommandTestCase(TestCase):
         self.assertNotEqual(first.id, alive.first().id, "a fresh experiment")
         first.refresh_from_db()
         self.assertIsNotNone(first.deleted_at, "the old one is soft-deleted, not destroyed")
+
+    def test_a_named_ancestor_is_designated(self):
+        from mutint_experiment.models import Experiment
+
+        example_registry._example_datasets["test-example"]["ancestor"] = "1-100-1-1"
+
+        output = self._load("test-example")
+
+        experiment = Experiment.objects.get(name="test-example")
+        self.assertIsNotNone(experiment.ancestor_id)
+        self.assertEqual("1-100-1-1", experiment.ancestor.source_name)
+        self.assertEqual(self.admin, experiment.ancestor_set_by)
+        self.assertIn("Ancestor:", output)
+
+    def test_an_ancestor_that_was_not_imported_is_an_error(self):
+        """Silently skipping it would load an example whose analyses count the ancestor's
+        mutations as evolution, looking complete."""
+        example_registry._example_datasets["test-example"]["ancestor"] = "no-such-sample"
+
+        with self.assertRaises(CommandError) as caught:
+            self._load("test-example")
+
+        self.assertIn("no-such-sample", str(caught.exception))
+
+    def test_no_ancestor_designates_none(self):
+        from mutint_experiment.models import Experiment
+
+        self._load("test-example")
+
+        self.assertIsNone(Experiment.objects.get(name="test-example").ancestor_id)
 
     def test_a_named_user_owns_it(self):
         from mutint_experiment.models import Experiment
