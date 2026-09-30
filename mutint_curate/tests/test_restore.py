@@ -144,8 +144,8 @@ class SweptMutationTestCase(EditorTestCase):
     """Restoring after the orphan sweep has taken the Mutation row.
 
     `mutint_import.experiments._delete_all_orphaned_mutations` hard-deletes every Mutation
-    with no MutationCall, and it runs after an experiment delete and after `delete_sample`
-    -- neither of which this app is involved in. So removing a mutation's last call can
+    with no MutationCall, and it runs after an experiment delete -- which this app is not
+    involved in. So removing a mutation's last call can
     leave a Mutation that some later, unrelated operation destroys. This is the whole reason
     `MutationEdit.mutation_identity` exists rather than the log just holding a foreign key.
     """

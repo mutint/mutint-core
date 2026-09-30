@@ -93,27 +93,21 @@ def _delete_all_orphaned_mutations():
 def delete_sample(experiment_pk, population_name, time_point, sample_name):
     """Delete the sample at a coordinate.
 
-    Executed from Django ipython shell.
+    Executed from Django ipython shell. `sample_name` is the whole label (`1-2`).
 
-    It deleted an `Isolate` and took its replicates and their runs with it by cascade.
-    There is one row now, so the cascade it relied on is the row itself -- and `sample_name`
-    is the whole label (`1-2`), not the isolate half of a pair.
+    The shell's spelling of `mutint_experiment.samples.delete_samples`, which the sample
+    pages call too, so the two cannot disagree about what a deleted sample takes with it --
+    its mutations, its population if emptied, its files in the store, and the derived data.
+    Like every management path it ignores the experiment lock.
     """
-    from mutint_common.rebuild_registry import request_rebuild
+    from mutint_experiment.samples import delete_samples
 
-    for sample in mutint_sample.models.Sample.objects.filter(name=sample_name):
-        if sample.population.experiment_id == experiment_pk and \
-                sample.population.name == population_name and \
-                sample.time_point == time_point:
-            sample.delete()
-            print("Successfully removed: ", population_name, time_point, sample_name)
-    _delete_all_orphaned_mutations()
-    # This marked nothing, where its sibling `remove_time_point` always has. Deleting a
-    # sample changes both dashboard counts -- the sample count directly, the mutation counts
-    # through the calls that go with it and the mutations left orphaned -- so without
-    # this the Overview kept reporting a sample that was gone until some unrelated write
-    # happened to mark the totals stale.
-    request_rebuild(experiment_pk, reason='sample removed')
+    experiment = Experiment.objects.get(pk=experiment_pk)
+    samples = mutint_sample.models.Sample.objects.filter(
+        name=sample_name, population__experiment_id=experiment_pk,
+        population__name=population_name, time_point=time_point)
+    for label in delete_samples(experiment, samples):
+        print("Successfully removed: ", label)
 
 
 def _print_metadata_report(report):

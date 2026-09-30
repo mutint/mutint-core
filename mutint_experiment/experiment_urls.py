@@ -15,7 +15,7 @@ from django.urls import re_path
 
 from mutint_experiment.sample_views import (
     experiment_samples, experiment_samples_metadata, experiment_samples_read_metadata,
-    experiment_samples_selected, experiment_samples_update,
+    experiment_samples_delete, experiment_samples_selected, experiment_samples_update,
 )
 from mutint_experiment.storage_views import experiment_storage_clear
 from mutint_experiment.views import (
@@ -39,6 +39,8 @@ urlpatterns = [
     re_path(r'^(?P<pk>[0-9]+)/samples/$', experiment_samples, name="experiment_samples"),
     re_path(r'^(?P<pk>[0-9]+)/samples/update/$',
             experiment_samples_update, name="experiment_samples_update"),
+    re_path(r'^(?P<pk>[0-9]+)/samples/delete/$',
+            experiment_samples_delete, name="experiment_samples_delete"),
     # The same samples as a metadata.csv -- the import's own format -- and that file read
     # back into the table. Reading writes nothing; the page's Save does.
     re_path(r'^(?P<pk>[0-9]+)/samples/metadata\.csv$',

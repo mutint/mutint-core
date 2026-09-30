@@ -974,9 +974,8 @@ snapshot** of the row (`call`) and of its mutation's identity (`mutation_identit
   before the change holds a string and restoring one would put a string in a float column.
 - **`mutation_identity` exists because the Mutation row may not outlive the log.**
   `mutint_import.experiments._delete_all_orphaned_mutations` hard-deletes any Mutation with
-  no MutationCall, and runs after an experiment delete and after `delete_sample` -- so
-  removing a mutation's last call makes it eligible for a sweep triggered by something
-  else entirely. The snapshot is the exact `get_or_create` key plus `supplemental_data` and
+  no MutationCall, and runs after an experiment delete -- so removing a mutation's last
+  call makes it eligible for a sweep triggered by something else entirely. The snapshot is the exact `get_or_create` key plus `supplemental_data` and
   `annotation`,
   which is enough to put it back indistinguishable from an imported row. `mutint_import` needed
   no edit for this, and `test_restore.SweptMutationTestCase` is what pins it.
@@ -3756,6 +3755,29 @@ Creation and deletion are nested under the objects they act on:
 `./mutint purge_deleted --older-than <days>` finally removes them. `objects` is deliberately
 unfiltered — a filtered default manager would silence the import paths' `get_or_create` — so
 user-facing lists exclude deleted rows explicitly via `mutint_experiment.models.live()`.
+
+**A sample's delete is hard**, from **Delete sample** on its own page and **Delete selected**
+on the Edit samples table (`/sample/<pk>/delete/`, `/experiment/<pk>/samples/delete/`), both
+behind a typed `DELETE`. There is no soft delete below the experiment, and the edit log
+cannot restore it -- its `MutationEdit` rows cascade with it -- so re-importing is the way
+back, which the confirm says. Both endpoints and the shell's `experiments.delete_sample` end
+in `mutint_experiment.samples.delete_samples`, which takes the calls, **the mutations only
+that sample observed** (scoped to its own calls rather than the installation-wide orphan
+sweep), a population it empties (`prune_orphans`), and its store directory after the rows
+commit -- left behind, that directory would sit on the dashboard's unattributed line for
+good. It asks `can_edit_experiment` and holds the import lock as a request (409 when
+somebody is importing), since an import writing into a sample being deleted either fails on
+the foreign key or recreates it half-imported. The bulk endpoint is all or none: an id that
+is not this experiment's sample deletes nothing. Deleting the designated ancestor is
+allowed; `ancestor.note_sample_deleted` marks what that invalidates.
+
+The sample page also carries the **Ancestor** section -- *Designate as ancestor*, or *Remove
+ancestor designation* on the ancestor itself -- posting to the experiment's own
+`experiment_ancestor_apply` with the Designate ancestor page's confirm, so there is one
+endpoint and one set of words for it. Below the Save row, because Save does not apply it.
+The Edit samples table has the same thing as **Designate ancestor** beside Delete selected:
+it takes exactly one ticked row, offers to remove the designation when that row is the
+ancestor already, and the ancestor's row carries a red *ancestor* badge by its source name.
 
 ### Import types are pluggable
 

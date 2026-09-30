@@ -103,9 +103,10 @@ class MutationEdit(models.Model):
 
     `mutation` is nullable and `mutation_identity` exists because the Mutation row is not
     guaranteed to outlive the log. `mutint_import.experiments._delete_all_orphaned_mutations`
-    hard-deletes any Mutation with no MutationCall, and it runs after an experiment delete
-    and after `delete_sample` -- so removing a mutation's last call makes it eligible
-    for a sweep triggered by something else entirely. `mutation_identity` carries the exact
+    hard-deletes any Mutation with no MutationCall, and it runs after an experiment delete --
+    so removing a mutation's last call makes it eligible for a sweep triggered by something
+    else entirely. (Deleting a sample, `mutint_experiment.samples.delete_samples`, removes
+    the mutations only it observed, and cascades its own edit rows with it.) `mutation_identity` carries the exact
     seven-field `get_or_create` tuple `gd_import` dedups on, plus `supplemental_data` and
     `annotation`,
     which is enough to put the row back indistinguishable from an imported one. It is also

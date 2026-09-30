@@ -8,9 +8,10 @@ page and lives in `experiment_urls`.
 
 from django.urls import re_path
 
-from mutint_experiment.sample_views import sample_edit, sample_update
+from mutint_experiment.sample_views import sample_delete, sample_edit, sample_update
 
 urlpatterns = [
     re_path(r'^(?P<pk>[0-9]+)/edit/$', sample_edit, name="sample_edit"),
     re_path(r'^(?P<pk>[0-9]+)/update/$', sample_update, name="sample_update"),
+    re_path(r'^(?P<pk>[0-9]+)/delete/$', sample_delete, name="sample_delete"),
 ]

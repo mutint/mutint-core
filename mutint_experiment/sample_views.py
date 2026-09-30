@@ -25,7 +25,7 @@ from django.views.decorators.http import require_POST
 
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
-from mutint_experiment.permissions import can_edit_experiment
+from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
 from mutint_experiment.samples import (
     SampleEditError, apply_rows, coordinate_str, parse_rows, plan_moves,
     rebuild_after_structural_change, rows_are_structural, sample_coordinate,
@@ -118,6 +118,11 @@ def sample_edit(request, pk):
         "experiment": experiment,
         "sample": _row_context(sample),
         "treatment_names": _treatment_names(experiment),
+        # For the Ancestor section, which posts to the experiment's own
+        # `experiment_ancestor_apply` rather than to an endpoint of this page's.
+        "is_ancestor": experiment.ancestor_id == sample.pk,
+        "other_ancestor": (experiment.ancestor
+                           if experiment.ancestor_id not in (None, sample.pk) else None),
     })
     return render(request, "sample/edit.html", context)
 
@@ -366,3 +371,62 @@ def experiment_samples_update(request, pk):
     return JsonResponse({"experiment_id": experiment.id,
                          "updated": touched,
                          "structural": structural})
+
+
+def _delete(request, experiment, samples):
+    """Both delete endpoints, after each has resolved its samples and checked permission."""
+    from mutint_experiment.samples import delete_samples
+    from mutint_import import import_lock
+
+    try:
+        deleted = delete_samples(experiment, samples)
+    except import_lock.ImportInProgress as error:
+        return JsonResponse({"error": str(error)}, status=409)
+    logger.info("user %s deleted sample(s) %s from experiment %s",
+                request.user.get_username(), ", ".join(deleted), experiment.id)
+    return JsonResponse({"experiment_id": experiment.id, "deleted": deleted})
+
+
+def _delete_refusal(experiment):
+    return JsonResponse(
+        {"error": experiment_lock_refusal(experiment)
+                  or "You cannot delete this experiment's samples."}, status=403)
+
+
+@require_POST
+def sample_delete(request, pk):
+    """Delete one sample, from its own page. `can_edit_experiment`, so a lock refuses it."""
+    sample, experiment = _get_sample(pk)
+    if not can_edit_experiment(request.user, experiment):
+        return _delete_refusal(experiment)
+    return _delete(request, experiment, [sample])
+
+
+@require_POST
+def experiment_samples_delete(request, pk):
+    """Delete the samples ticked on the Edit samples table, all or none.
+
+    `sample_ids` is one JSON list, for the reason `experiment_samples_update` gives. Every id
+    must be one of *this* experiment's samples or nothing is deleted: a stale page naming a
+    sample somebody else already removed should say so rather than delete the rest and
+    leave the reader to work out which ones went.
+    """
+    experiment = get_object_or_404(Experiment, pk=pk)
+    if not can_edit_experiment(request.user, experiment):
+        return _delete_refusal(experiment)
+
+    try:
+        raw = json.loads(request.POST.get("sample_ids") or "[]")
+        wanted = {int(sample_id) for sample_id in raw}
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Malformed request: sample_ids was not a list of ids."},
+                            status=400)
+    if not wanted:
+        return JsonResponse({"error": "Tick the samples to delete."}, status=400)
+
+    samples = [sample for sample in _experiment_samples(experiment) if sample.pk in wanted]
+    if len(samples) != len(wanted):
+        return JsonResponse(
+            {"error": "Some of those samples are no longer in this experiment. "
+                      "Reload the page and try again; nothing was deleted."}, status=404)
+    return _delete(request, experiment, samples)

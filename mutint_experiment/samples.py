@@ -587,3 +587,76 @@ def rebuild_after_structural_change(experiment):
     request_rebuild(experiment.id, only=changed + ('mutint_phylogeny',),
                     reason='samples renumbered')
     run_rebuilds(experiment.id, only=changed)
+
+
+# --- deleting -------------------------------------------------------------------------------
+
+
+def delete_samples(experiment, samples):
+    """Hard-delete `samples` from `experiment`, with their calls and their stored files.
+
+    The one way a sample is removed: the sample page, the Edit samples table and the shell's
+    `mutint_import.experiments.delete_sample` all come here. Returns the labels deleted.
+
+    **Hard, and not restorable.** Unlike a project or an experiment there is no soft delete
+    below the experiment, and the mutation editor's log cannot bring it back: its
+    `MutationEdit` rows cascade with the sample, which is right, since a restore would have
+    nothing to put the calls on. Re-importing the sample is the way back.
+
+    What goes with it, and why each is here rather than left to a sweep:
+
+    - its calls, uncalled regions and edit log, by cascade; a plugin's rows follow whatever
+      `on_delete` it chose (mutint-breseq's run keeps its row, mutint-fastqc's report goes);
+    - **the mutations only it observed.** Scoped to the ones its calls named rather than
+      `_delete_all_orphaned_mutations`, which walks every mutation in the installation;
+    - a population it leaves empty, through `prune_orphans`, for the reason given there;
+    - **its directory in the store** -- alignments, coverage and breseq's report -- after
+      the rows commit. Keyed by primary key, so collected before the rows go. Left behind,
+      it would be the dashboard's unattributed line forever, owned by nobody.
+
+    Holds the import lock, as a request (`ImportInProgress` when somebody else has it): an
+    import writing calls into a sample while this deletes it would fail on the foreign key
+    or, worse, recreate it half-imported. The designated ancestor may be deleted; the
+    `pre_delete` receiver in `ancestor.py` marks what that invalidates.
+
+    Everything derived is rebuilt, as a mutation edit does (`rebuild_after_edit`):
+    unnarrowed, experiment scope run now, the dashboard's totals left marked for its own
+    `ensure_fresh`.
+    """
+    import shutil
+
+    from mutint_common import store
+    from mutint_common.rebuild_registry import EXPERIMENT_SCOPE, request_rebuild, run_rebuilds
+    from mutint_import import import_lock
+    from mutint_sample.models import Mutation, MutationCall, Sample
+
+    samples = list(samples)
+    if not samples:
+        return []
+    sample_ids = [sample.pk for sample in samples]
+    labels = [sample.label for sample in samples]
+    directories = [store.sample_dir(pk) for pk in sample_ids]
+    populations = list(Population.objects.filter(
+        pk__in={sample.population_id for sample in samples if sample.population_id}))
+
+    with import_lock.hold():
+        with transaction.atomic():
+            mutation_ids = set(MutationCall.objects
+                               .filter(sample_id__in=sample_ids)
+                               .values_list("mutation_id", flat=True))
+            Sample.objects.filter(pk__in=sample_ids).delete()
+            still_observed = (MutationCall.objects
+                              .filter(mutation_id__in=mutation_ids)
+                              .values("mutation_id"))
+            (Mutation.objects.filter(pk__in=mutation_ids)
+             .exclude(pk__in=still_observed).delete())
+            prune_orphans(populations)
+
+    for directory in directories:
+        shutil.rmtree(directory, ignore_errors=True)
+    logger.info("deleted %d sample(s) from experiment %s: %s",
+                len(labels), experiment.id, ", ".join(labels))
+
+    request_rebuild(experiment.id, reason="samples deleted")
+    run_rebuilds(experiment.id, scope=EXPERIMENT_SCOPE)
+    return labels

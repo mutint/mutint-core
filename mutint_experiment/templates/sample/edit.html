@@ -1,5 +1,11 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Edit sample {{ sample.label }}{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} base.html does not load sweetalert; the ancestor and delete confirms call
+       swal(). {% endcomment %}
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+{% endblock %}
 {% block header %}Edit sample: {{ sample.label }}{% endblock %}
 {% block content %}
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
@@ -131,12 +137,42 @@
         </div>
         {% endfor %}
 
-        <div style="margin-top: 1.5em;">
+        {% comment %} Delete sits in the Save row, apart from it like the bulk page's Discard
+           changes, and asks for DELETE typed: it is a hard delete with no restore. {% endcomment %}
+        <div class="btn-row" style="margin-top: 1.5em;">
             <button type="button" class="btn btn-primary" id="se-save">Save sample</button>
             <a class="btn btn-default"
                href="/experiment/{{ experiment.id }}/samples/">Cancel</a>
+            <button type="button" class="btn btn-danger" id="se-delete"
+                    style="margin-left: 15px;">Delete sample</button>
         </div>
         <div id="se-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+
+        {% comment %} Below the Save row rather than among the fields, because Save does not
+           apply it: the button acts at once, through the same endpoint and with the same
+           confirm as the experiment's Designate ancestor page. {% endcomment %}
+        <h4 style="margin-top: 2em;">Ancestor</h4>
+        {% if is_ancestor %}
+            <p style="color: #666;">
+                <b>This sample is the experiment's designated ancestor.</b> It is excluded from
+                every view and analysis, and its mutations are subtracted from every other
+                sample.
+            </p>
+            <button type="button" class="btn btn-default" id="se-ancestor"
+                    data-sample-id="">Remove ancestor designation</button>
+        {% else %}
+            <p style="color: #666;">
+                The ancestor is the sample the experiment started from: it is excluded from
+                every view and analysis, and its mutations are subtracted from every other
+                sample, for everyone.
+                {% if other_ancestor %}This replaces <b>{{ other_ancestor.label }}</b>, the
+                    current ancestor.{% endif %}
+            </p>
+            <button type="button" class="btn btn-default" id="se-ancestor"
+                    data-sample-id="{{ sample.id }}">Designate as ancestor</button>
+        {% endif %}
+        <a href="/experiment/{{ experiment.id }}/ancestor/"
+           style="margin-left: 10px;">Choose from all samples</a>
     </div>
 
 <script type="text/javascript">
@@ -167,6 +203,45 @@
         }).catch(function (err) {
             document.getElementById("se-error").textContent = err.message;
         });
+    });
+
+    function showError(err) {
+        document.getElementById("se-error").textContent =
+            (err && err.message) || "The request failed.";
+    }
+
+    document.getElementById("se-delete").addEventListener("click", function () {
+        window.mutintConfirmTyped("Delete this sample?",
+            "Its mutations, alignments and breseq report are removed and cannot be restored; "
+            + "re-import it to get it back. Type DELETE to confirm.", "Delete", "DELETE")
+            .then(function (confirmed) {
+                if (!confirmed) { return; }
+                return window.mutintPost("/sample/{{ sample.id }}/delete/", {}).then(function () {
+                    // The page it was on is gone; the experiment's samples are where the
+                    // rest of them are.
+                    window.location.href = "/experiment/{{ experiment.id }}/samples/";
+                });
+            }).catch(showError);
+    });
+
+    // The confirm's words are the Designate ancestor page's, so the two say the same thing
+    // about the one setting that changes what everyone sees.
+    var ancestor = document.getElementById("se-ancestor");
+    ancestor.addEventListener("click", function () {
+        var sampleId = ancestor.getAttribute("data-sample-id");
+        var question = sampleId ? "Designate this ancestor?" : "Remove the designation?";
+        var detail = sampleId
+            ? "This sample will be excluded from every view and analysis, and its mutations "
+              + "subtracted from every other sample. Everyone sees this change."
+            : "Every sample will be shown and analyzed again, including the mutations "
+              + "currently subtracted. Everyone sees this change.";
+        swal({title: question, text: detail, icon: "warning", buttons: true})
+            .then(function (confirmed) {
+                if (!confirmed) { return; }
+                return window.mutintPost("/experiment/{{ experiment.id }}/ancestor/apply/",
+                                         sampleId ? {sample_id: sampleId} : {})
+                    .then(function () { window.location.reload(); });
+            }).catch(showError);
     });
 })();
 </script>
