@@ -22,7 +22,10 @@
  *     it was read from (the store itself is mutint_preferences.js);
  *   - a row the server marked `ancestral` -- observed in the designated ancestor, drawn
  *     because the reader asked -- is tinted red on every draw, the per-sample table's tint;
- *   - the menus sit in a tab strip above the table (Filter, Samples, Rows, Display, Export),
+ *   - on Compare (mutation_matrix/page.html), everything else is decided here as well -- see
+ *     "Compare decides in the browser" below;
+ *   - the menus sit in a tab strip above the table (Mutations, Treatments, Populations,
+ *     Samples, Time, Rows, Display, Export),
  *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
  *     the DataTables toolbar -- length, search, count, pager, in one row -- stays under the
  *     strip on every tab, and the Export buttons are moved into the Export pane;
@@ -43,11 +46,45 @@
  * are stored as both lists, so a column added later takes its own default -- which for
  * Description and the gene lists is hidden (see mutint_preferences.js).
  *
+ * **Compare decides in the browser.** Its page sends every sample and every call, unfiltered,
+ * with the designated ancestor's rows flagged, and carries a Mutations pane
+ * (`[data-role="view-filter"]`). Where that pane exists, every change runs `refresh`:
+ *
+ *   1. which sample columns show: ticked in Samples, and not hidden by the Populations,
+ *      Treatments or Sample types menus or outside the Time range -- each a layer of its own,
+ *      remembered per experiment, a sample hidden by a layer dimmed in the Samples menu;
+ *   2. the data the table holds: the reader's frequency range drops cells (below the floor
+ *      *or* above the ceiling; a call with no recorded frequency never), the ignored-gene rule
+ *      drops rows (`gene_is_filtered`'s subset rule), the ancestral rows are dropped unless
+ *      asked for, and a row left with no cell is no row -- so "All mutations" in Export is what
+ *      the server used to produce, and the filter is written back to the session through
+ *      `/filter/set` so every other page reads the same one;
+ *   3. the row sets the page registered with `window.mutintMatrixSets` (Compare's Convergent
+ *      and Fixed, compare_sets.js), asked what they hold over the shown samples and the kept
+ *      cells of the non-ancestral rows, and counted in the Show menu;
+ *   4. one draw.
+ *
+ * Search has no such pane and none of this happens there.
+ *
  * Loaded from the page beside breseq_table.js; jQuery, DataTables (with Buttons) and
  * mutint_select_list.js come from base.html.
  */
 (function () {
     "use strict";
+
+    /* The browser-side row sets: a page's script registers `fn(state, params)` under the key
+       its `ClientSet` names, and gets `state = {samples: [{index, population, time}], rows:
+       [{id, genes, cells}]}` -- the shown samples, and the rows a set may hold with only
+       their kept cells -- and `params`, the values of the page's `[data-set-param]` inputs.
+       It returns `{ids: [...], note: "...", error: "..."}`. Defined by whichever script loads
+       first, so the page's may load before or after this one. */
+    window.mutintMatrixSets = window.mutintMatrixSets || (function () {
+        var registered = {};
+        return {
+            register: function (key, fn) { registered[key] = fn; },
+            get: function (key) { return registered[key]; }
+        };
+    }());
 
     var COLUMNS_KEY = "mutation_matrix.columns";
     var TYPES_KEY = "mutation_matrix.types";
@@ -63,6 +100,13 @@
     // Per experiment, like samples: a contig name means something only within one reference
     // genome. Shared with the per-sample Mutations page (breseq_references.js).
     var REFERENCES_KEY_PREFIX = "mutation_matrix.references.";
+    // Compare's layers over the samples, and its row sets' parameters: per experiment, since a
+    // population, a treatment or a time point means something only within one.
+    var POPULATIONS_KEY_PREFIX = "mutation_matrix.populations.";
+    var TREATMENTS_KEY_PREFIX = "mutation_matrix.treatments.";
+    var SAMPLE_TYPES_KEY_PREFIX = "mutation_matrix.sample_types.";
+    var TIME_KEY_PREFIX = "mutation_matrix.time.";
+    var SET_PARAMS_KEY_PREFIX = "mutation_matrix.set_params.";
 
     /* The reader's store, from mutint_preferences.js: the embedded choices and the save
        endpoint for a signed-in reader, the browser's own storage otherwise. */
@@ -130,8 +174,28 @@
         var rows = rowsNode ? JSON.parse(rowsNode.textContent) : [];
         var prefs = storage(container, table);
         var experimentId = container.getAttribute("data-experiment-id");
-        var samplesKey = experimentId ? SAMPLES_KEY_PREFIX + experimentId : null;
-        var referencesKey = experimentId ? REFERENCES_KEY_PREFIX + experimentId : null;
+        function perExperiment(prefix) { return experimentId ? prefix + experimentId : null; }
+        var samplesKey = perExperiment(SAMPLES_KEY_PREFIX);
+        var referencesKey = perExperiment(REFERENCES_KEY_PREFIX);
+        var populationsKey = perExperiment(POPULATIONS_KEY_PREFIX);
+        var treatmentsKey = perExperiment(TREATMENTS_KEY_PREFIX);
+        var sampleTypesKey = perExperiment(SAMPLE_TYPES_KEY_PREFIX);
+        var timeKey = perExperiment(TIME_KEY_PREFIX);
+        var setParamsKey = perExperiment(SET_PARAMS_KEY_PREFIX);
+
+        // The rows as the server sent them; `samples` is what the table draws, and on Compare
+        // it is these cells less the ones the reader's frequency range drops.
+        rows.forEach(function (row) { row._cells = row.samples; row._sets = row.sets || []; });
+        var allRows = rows;
+        var filterBox = controls.querySelector('[data-role="view-filter"]');
+        var decidesHere = !!filterBox;
+        var viewFilter = { min_freq: null, max_freq: null, genes: [] };
+        var ancestralShown = true;
+        if (filterBox) {
+            var stateNode = document.getElementById(filterBox.getAttribute("data-state-id"));
+            if (stateNode) { viewFilter = JSON.parse(stateNode.textContent); }
+            ancestralShown = filterBox.getAttribute("data-ancestral-shown") === "1";
+        }
 
         // The server's defaults, read off the menu it rendered; a column the stored choice does
         // not name takes its default (mutint_preferences.js says why).
@@ -142,6 +206,14 @@
         var hiddenColumns = window.mutintPreferences.columnHiddenSet(
             legacyColumnChoice(prefs.get(COLUMNS_KEY, null)), columnDefaults);
         var hiddenSamples = samplesKey ? hiddenSet(prefs.get(samplesKey, null)) : {};
+        var hiddenPopulations = populationsKey ? hiddenSet(prefs.get(populationsKey, null)) : {};
+        var hiddenTreatments = treatmentsKey ? hiddenSet(prefs.get(treatmentsKey, null)) : {};
+        var hiddenSampleTypes = sampleTypesKey ? hiddenSet(prefs.get(sampleTypesKey, null)) : {};
+        var storedTime = timeKey ? prefs.get(timeKey, null) : null;
+        var timeRange = {
+            min: storedTime && typeof storedTime.min === "number" ? storedTime.min : null,
+            max: storedTime && typeof storedTime.max === "number" ? storedTime.max : null
+        };
         var hiddenTypes = hiddenSet(prefs.get(TYPES_KEY, null));
         var hiddenReferences = referencesKey ? hiddenSet(prefs.get(referencesKey, null)) : {};
         var stored = prefs.get(FREQUENCY_KEY, null);
@@ -188,12 +260,83 @@
 
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
-        var columns = ths.map(function (th) {
+        // What each sample column is, read off its header: which layers can hide it.
+        var sampleMeta = [];
+        ths.forEach(function (th, column) {
+            if (th.getAttribute("data-sample") === null) { return; }
+            var time = th.getAttribute("data-time");
+            sampleMeta.push({
+                id: th.getAttribute("data-sample"),
+                index: parseInt(th.getAttribute("data-index"), 10),
+                column: column,
+                population: th.getAttribute("data-population") || "",
+                treatment: th.getAttribute("data-treatment") || "",
+                time: time ? parseFloat(time) : null,
+                clonal: th.getAttribute("data-clonal") !== "0"
+            });
+        });
+        /* Which layer hides a sample, by the name of its tab, or "" when none does. The
+           Samples menu's own choice is not a layer: it is the sample, one at a time. */
+        function hiddenBy(meta) {
+            if (hiddenSampleTypes[meta.clonal ? "clonal" : "mixed"]) { return "Samples tab's Sample types menu"; }
+            if (hiddenPopulations[meta.population]) { return "Populations tab"; }
+            if (hiddenTreatments[meta.treatment]) { return "Treatments tab"; }
+            if (meta.time !== null && ((timeRange.min !== null && meta.time < timeRange.min) ||
+                                       (timeRange.max !== null && meta.time > timeRange.max))) {
+                return "Time tab";
+            }
+            return "";
+        }
+        function isShown(meta) { return !hiddenSamples[meta.id] && !hiddenBy(meta); }
+        var metaByColumn = {};
+        sampleMeta.forEach(function (meta) {
+            metaByColumn[meta.column] = meta;
+            if (isShown(meta)) { shownSampleIndexes[meta.index] = true; }
+        });
+
+        /* Step 2: the data the table holds -- see the header. Everywhere but Compare it is the
+           rows as sent. */
+        function cellKept(cell) {
+            if (!cell) { return false; }
+            if (cell.n) { return true; }
+            if (viewFilter.min_freq !== null && cell.s < viewFilter.min_freq / 100) { return false; }
+            if (viewFilter.max_freq !== null && cell.s > viewFilter.max_freq / 100) { return false; }
+            return true;
+        }
+        /* `gene_is_filtered`: every gene the mutation touches is ignored -- subset, not
+           intersection -- with the same set sizes compared first. */
+        function geneFiltered(row) {
+            var ignored = {}, ignoredCount = 0;
+            (viewFilter.genes || []).forEach(function (g) { if (!ignored[g]) { ignored[g] = true; ignoredCount++; } });
+            if (!ignoredCount) { return false; }
+            var genes = {}, geneCount = 0;
+            (row.genes || []).forEach(function (g) { if (!genes[g]) { genes[g] = true; geneCount++; } });
+            if (ignoredCount < geneCount) { return false; }
+            return Object.keys(genes).every(function (g) { return ignored[g]; });
+        }
+        function buildData() {
+            if (!decidesHere) { return allRows; }
+            var out = [];
+            allRows.forEach(function (row) {
+                if (row.ancestral && !ancestralShown) { return; }
+                if (geneFiltered(row)) { return; }
+                var any = false;
+                row.samples = row._cells.map(function (cell) {
+                    var kept = cellKept(cell);
+                    if (kept) { any = true; }
+                    return kept ? cell : null;
+                });
+                if (any) { out.push(row); }
+            });
+            return out;
+        }
+        var data = buildData();
+
+        var columns = ths.map(function (th, column) {
             var sample = th.getAttribute("data-sample");
             if (sample !== null) {
                 var index = parseInt(th.getAttribute("data-index"), 10);
-                var visible = !hiddenSamples[sample];
-                if (visible) { shownSampleIndexes[index] = true; }
+                var visible = isShown(metaByColumn[column]);
                 // The header's population color, on every cell of the column too: the bar
                 // format draws in it.
                 var paletteClass = (th.className.match(/sample-palette-\d+/) || [""])[0];
@@ -282,7 +425,7 @@
         }
 
         var dt = $(table).DataTable({
-            data: rows,
+            data: data,
             columns: columns,
             deferRender: true,
             autoWidth: false,
@@ -582,20 +725,42 @@
                 referencePicker.select(function () { return all; });
             });
         });
+        /* Steps 1, 3 and 4 of a change (step 2 when `dataChanged`): which columns show, what
+           the row sets hold, and one draw. Every control below ends here. */
+        var setNotes = [];
+        function refresh(dataChanged) {
+            shownSampleIndexes = {};
+            sampleMeta.forEach(function (meta) {
+                var on = isShown(meta);
+                if (on) { shownSampleIndexes[meta.index] = true; }
+                dt.column(meta.column).visible(on, false);
+                var li = sampleList.querySelector('li[data-value="' + meta.id + '"]');
+                if (li) {
+                    var reason = hiddenBy(meta);
+                    li.classList.toggle("mutint-select-excluded", !!reason);
+                    li.title = reason ? "Hidden by the " + reason : "";
+                }
+            });
+            if (dataChanged) {
+                data = buildData();
+                dt.clear();
+                dt.rows.add(data);
+            }
+            computeSets();
+            if (counter) { counter.textContent = samplePicker.count(); }
+            writeSummary();
+            dt.columns.adjust().draw();
+            pinColumns();
+        }
+
         var samplePicker = window.mutintSelectList(sampleList, {
             toggle: true, controls: null,
             onChange: function (changed) {
                 changed.forEach(function (li) {
-                    var id = li.getAttribute("data-value"), on = samplePicker.isSelected(li);
-                    var th = ths[indexOfSample(id)];
-                    var index = parseInt(th.getAttribute("data-index"), 10);
-                    dt.column(indexOfSample(id)).visible(on, false);
-                    if (on) { shownSampleIndexes[index] = true; delete hiddenSamples[id]; }
-                    else { delete shownSampleIndexes[index]; hiddenSamples[id] = true; }
+                    var id = li.getAttribute("data-value");
+                    if (samplePicker.isSelected(li)) { delete hiddenSamples[id]; } else { hiddenSamples[id] = true; }
                 });
-                if (counter) { counter.textContent = samplePicker.count(); }
-                // A full draw: which rows show depends on which samples do.
-                dt.columns.adjust().draw();
+                refresh(false);
                 if (samplesKey) {
                     prefs.set(samplesKey, { hidden: keys(hiddenSamples).map(Number) });
                 }
@@ -609,6 +774,295 @@
                 samplePicker.select(function () { return all; });
             });
         });
+
+        /* The layers: Populations, Treatments and Sample types are the Samples menu again,
+           over what samples share, each remembered as its own hidden set. Absent menus --
+           Search has none, an experiment with no treatment has no Treatments tab -- are
+           skipped. */
+        function layerPicker(role, hidden, key, buttonAttr, countRole) {
+            var list = controls.querySelector('[data-role="' + role + '"]');
+            if (!list) { return null; }
+            Array.prototype.forEach.call(list.querySelectorAll("li[data-value]"), function (li) {
+                li.classList.toggle("active", !hidden[li.getAttribute("data-value")]);
+            });
+            var count = controls.querySelector('[data-role="' + countRole + '"]');
+            var picker = window.mutintSelectList(list, {
+                toggle: true, controls: null,
+                onChange: function (changed) {
+                    changed.forEach(function (li) {
+                        var value = li.getAttribute("data-value");
+                        if (picker.isSelected(li)) { delete hidden[value]; } else { hidden[value] = true; }
+                    });
+                    if (count) { count.textContent = picker.count(); }
+                    if (key) { prefs.set(key, { hidden: keys(hidden) }); }
+                    refresh(false);
+                }
+            });
+            if (count) { count.textContent = picker.count(); }
+            Array.prototype.forEach.call(controls.querySelectorAll("[" + buttonAttr + "]"), function (button) {
+                button.addEventListener("click", function () {
+                    var all = button.getAttribute(buttonAttr) === "all";
+                    picker.select(function () { return all; });
+                });
+            });
+            return picker;
+        }
+        var populationPicker = layerPicker("populations", hiddenPopulations, populationsKey,
+                                           "data-populations", "population-count");
+        var treatmentPicker = layerPicker("treatments", hiddenTreatments, treatmentsKey,
+                                          "data-treatments", "treatment-count");
+        var sampleTypePicker = layerPicker("sample-types", hiddenSampleTypes, sampleTypesKey,
+                                           "data-sample-types", "sample-type-count");
+
+        /* The Time tab: two range inputs over the index of the time points some sample was
+           taken at, so the stops are evenly spaced, and two boxes holding the range itself,
+           which take any number. A handle moved sets its box to that stop; a number typed
+           sets the bound and puts its handle on the nearest stop inside it. The table follows
+           when a handle is let go, not on every pixel of the drag. */
+        var timeBox = controls.querySelector('[data-role="time"]');
+        if (timeBox) {
+            var times = timeBox.getAttribute("data-times").split(",").map(parseFloat);
+            var last = times.length - 1;
+            var low = timeBox.querySelector('[data-role="time-low"]');
+            var high = timeBox.querySelector('[data-role="time-high"]');
+            var minBox = timeBox.querySelector('[data-role="time-min"]');
+            var maxBox = timeBox.querySelector('[data-role="time-max"]');
+            var fill = timeBox.querySelector('[data-role="time-fill"]');
+            var timeCount = timeBox.querySelector('[data-role="time-count"]');
+            var firstAtLeast = function (value) {
+                for (var i = 0; i <= last; i++) { if (times[i] >= value) { return i; } }
+                return last;
+            };
+            var lastAtMost = function (value) {
+                for (var i = last; i >= 0; i--) { if (times[i] <= value) { return i; } }
+                return 0;
+            };
+            var drawTime = function (lowIndex, highIndex) {
+                if (lowIndex === undefined) {
+                    lowIndex = timeRange.min === null ? 0 : firstAtLeast(timeRange.min);
+                    highIndex = timeRange.max === null ? last : lastAtMost(timeRange.max);
+                }
+                low.value = lowIndex;
+                high.value = Math.max(lowIndex, highIndex);
+                // The upper input is on top, so with both handles at the far end its thumb
+                // would cover the lower one, which could then never move left.
+                low.style.zIndex = lowIndex === last ? "2" : "";
+                minBox.value = String(timeRange.min === null ? times[0] : timeRange.min);
+                maxBox.value = String(timeRange.max === null ? times[last] : timeRange.max);
+                fill.style.left = (100 * lowIndex / last) + "%";
+                fill.style.right = (100 * (last - Math.max(lowIndex, highIndex)) / last) + "%";
+                var inRange = times.filter(function (t) {
+                    return (timeRange.min === null || t >= timeRange.min) && (timeRange.max === null || t <= timeRange.max);
+                }).length;
+                timeCount.textContent = inRange + " of " + times.length + " time points";
+            };
+            var saveTime = function () {
+                if (timeKey) { prefs.set(timeKey, { min: timeRange.min, max: timeRange.max }); }
+                drawTime();
+                refresh(false);
+            };
+            /* A handle at either end is no bound at all, so a time point added later is in. */
+            var fromHandles = function () {
+                var lowIndex = Math.min(parseInt(low.value, 10), parseInt(high.value, 10));
+                var highIndex = Math.max(parseInt(low.value, 10), parseInt(high.value, 10));
+                timeRange.min = lowIndex === 0 ? null : times[lowIndex];
+                timeRange.max = highIndex === last ? null : times[highIndex];
+                return [lowIndex, highIndex];
+            };
+            [low, high].forEach(function (handle) {
+                handle.addEventListener("input", function () {
+                    // Neither handle passes the other.
+                    if (handle === low && parseInt(low.value, 10) > parseInt(high.value, 10)) { low.value = high.value; }
+                    if (handle === high && parseInt(high.value, 10) < parseInt(low.value, 10)) { high.value = low.value; }
+                    var span = fromHandles();
+                    drawTime(span[0], span[1]);
+                });
+                handle.addEventListener("change", function () { fromHandles(); saveTime(); });
+            });
+            var typed = function (box, isMin) {
+                var text = box.value.trim(), value = text === "" ? null : Number(text);
+                if (value !== null && !isFinite(value)) { drawTime(); return; }
+                if (isMin) {
+                    if (value !== null && timeRange.max !== null && value > timeRange.max) { value = timeRange.max; }
+                    timeRange.min = value === null || value <= times[0] ? null : value;
+                } else {
+                    if (value !== null && timeRange.min !== null && value < timeRange.min) { value = timeRange.min; }
+                    timeRange.max = value === null || value >= times[last] ? null : value;
+                }
+                saveTime();
+            };
+            [[minBox, true], [maxBox, false]].forEach(function (pair) {
+                pair[0].addEventListener("change", function () { typed(pair[0], pair[1]); });
+                pair[0].addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") { event.preventDefault(); typed(pair[0], pair[1]); }
+                });
+            });
+            timeBox.querySelector('[data-role="time-reset"]').addEventListener("click", function () {
+                timeRange.min = null;
+                timeRange.max = null;
+                saveTime();
+            });
+            drawTime();
+        }
+
+        /* Step 3: the row sets the page registered, over the shown samples and the kept cells
+           of the rows a set may hold. Parameters come from the page's `[data-set-param]`
+           inputs, remembered per experiment. */
+        var setParams = setParamsKey ? (prefs.get(setParamsKey, null) || {}) : {};
+        var paramInputs = Array.prototype.slice.call(controls.querySelectorAll("[data-set-param]"));
+        paramInputs.forEach(function (input) {
+            var name = input.getAttribute("data-set-param");
+            if (typeof setParams[name] === "string") { input.value = setParams[name]; }
+            var changed = function () {
+                setParams[name] = input.value;
+                if (setParamsKey) { prefs.set(setParamsKey, setParams); }
+                refresh(false);
+            };
+            input.addEventListener("change", changed);
+            input.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") { event.preventDefault(); changed(); }
+            });
+        });
+        function currentParams() {
+            var out = {};
+            paramInputs.forEach(function (input) { out[input.getAttribute("data-set-param")] = input.value; });
+            return out;
+        }
+        function computeSets() {
+            var allCount = controls.querySelector('[data-role="all-count"]');
+            if (allCount) { allCount.textContent = data.length; }
+            setNotes = [];
+            var items = showList ? showList.querySelectorAll("li[data-client-set]") : [];
+            if (!items.length) { return; }
+            var state = {
+                samples: sampleMeta.filter(function (meta) { return shownSampleIndexes[meta.index]; })
+                    .map(function (meta) { return { index: meta.index, population: meta.population, time: meta.time }; }),
+                rows: data.filter(function (row) { return !row.ancestral; })
+                    .map(function (row) { return { id: row.id, genes: row.genes || [], cells: row.samples }; })
+            };
+            var params = currentParams(), membership = {};
+            Array.prototype.forEach.call(items, function (li) {
+                var key = li.getAttribute("data-value"), fn = window.mutintMatrixSets.get(key);
+                var result = fn ? fn(state, params) : { ids: [], note: "" };
+                (result.ids || []).forEach(function (id) { (membership[id] = membership[id] || []).push(key); });
+                var count = li.querySelector('[data-role="set-count"]');
+                if (count) { count.textContent = (result.ids || []).length; }
+                setNotes.push(result);
+            });
+            data.forEach(function (row) { row.sets = row._sets.concat(membership[row.id] || []); });
+        }
+
+        /* What is hidden and why, under the Mutations pane's controls: the ancestor, the
+           reader's filter in the server's own words (mutint_filter's _summary.html), and each
+           row set's sentence. Built from nodes, since names are the reader's text. */
+        var summary = controls.querySelector('[data-role="matrix-summary"]');
+        var ancestralToggle = controls.querySelector('[data-role="ancestral-toggle"]');
+        var ancestralCount = allRows.filter(function (row) { return row.ancestral; }).length;
+        function line(parent, text) {
+            var div = document.createElement("div");
+            if (text) { div.textContent = text; }
+            parent.appendChild(div);
+            return div;
+        }
+        function writeSummary() {
+            if (ancestralToggle) {
+                ancestralToggle.textContent = ancestralShown ? "Hide ancestral mutations"
+                    : "Show " + ancestralCount + " ancestral mutation" + (ancestralCount === 1 ? "" : "s");
+                ancestralToggle.classList.toggle("active", ancestralShown);
+            }
+            if (!summary) { return; }
+            summary.textContent = "";
+            var ancestorName = summary.getAttribute("data-ancestor-name");
+            if (ancestorName) {
+                var div = line(summary, "Mutations in the designated ancestor (");
+                var a = document.createElement("a");
+                a.href = summary.getAttribute("data-ancestor-url");
+                a.textContent = ancestorName;
+                div.appendChild(a);
+                div.appendChild(document.createTextNode(ancestralShown
+                    ? ") are shown, shaded red; nothing counted here includes them."
+                    : ") are hidden."));
+            }
+            var cutoff = viewFilter.min_freq !== null || viewFilter.max_freq !== null;
+            var genes = viewFilter.genes || [];
+            if (!cutoff && !genes.length) {
+                line(summary, ancestorName ? "No filtering of your own: every other stored mutation is shown."
+                                           : "No filtering: every stored mutation for this experiment is shown.");
+            } else {
+                var parts = [];
+                if (cutoff) {
+                    parts.push("frequencies " + (viewFilter.min_freq || 0) + "\u2013" +
+                               (viewFilter.max_freq === null ? 100 : viewFilter.max_freq) + "%");
+                }
+                if (genes.length) {
+                    parts.push("mutations outside " + genes.length + " ignored gene" +
+                               (genes.length === 1 ? "" : "s") + " (" + genes.join(", ") + ")");
+                }
+                line(summary, "Showing only " + parts.join(", and ") +
+                              ". This is your own view; nobody else's page is affected.");
+            }
+            setNotes.forEach(function (result) {
+                if (result.note) { line(summary, result.note); }
+                if (result.error) { line(summary, result.error).className = "text-danger"; }
+            });
+        }
+
+        /* The reader's filter: applied here, and written back to the session -- the one
+           filter every other page reads -- through `/filter/set`, which answers with the value
+           normalized the server's way; that answer is what is applied. A value it refuses
+           is said under the boxes, and nothing changes. */
+        if (filterBox) {
+            var minInput = filterBox.querySelector('[data-role="filter-min"]');
+            var maxInput = filterBox.querySelector('[data-role="filter-max"]');
+            var genesInput = filterBox.querySelector('[data-role="filter-genes"]');
+            var filterError = controls.querySelector('[data-role="filter-error"]');
+            var filterUrl = filterBox.getAttribute("data-url");
+            var sendState = function (payload) {
+                payload.experiment_id = parseInt(experimentId, 10);
+                return window.mutintPostJson(filterUrl, payload);
+            };
+            var showFilter = function () {
+                minInput.value = viewFilter.min_freq === null ? "" : viewFilter.min_freq;
+                maxInput.value = viewFilter.max_freq === null ? "" : viewFilter.max_freq;
+                genesInput.value = (viewFilter.genes || []).join(", ");
+            };
+            var submitFilter = function () {
+                sendState({ filter: { min_freq: minInput.value, max_freq: maxInput.value,
+                                      genes: genesInput.value } })
+                    .then(function (body) {
+                        viewFilter = body.filter;
+                        filterError.hidden = true;
+                        showFilter();
+                        refresh(true);
+                    })
+                    .catch(function (failure) {
+                        filterError.textContent = failure.message;
+                        filterError.hidden = false;
+                    });
+            };
+            [minInput, maxInput, genesInput].forEach(function (input) {
+                input.addEventListener("change", submitFilter);
+                input.addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") { event.preventDefault(); submitFilter(); }
+                });
+            });
+            filterBox.querySelector('[data-role="filter-clear"]').addEventListener("click", function () {
+                minInput.value = "";
+                maxInput.value = "";
+                genesInput.value = "";
+                submitFilter();
+            });
+            if (ancestralToggle) {
+                ancestralToggle.addEventListener("click", function () {
+                    ancestralShown = !ancestralShown;
+                    refresh(true);
+                    sendState({ ancestral: ancestralShown }).catch(function (failure) {
+                        filterError.textContent = failure.message;
+                        filterError.hidden = false;
+                    });
+                });
+            }
+        }
 
         /* The Frequency display menu, in the Display tab. Choosing a format swaps one class
            on the table. */
@@ -678,8 +1132,12 @@
             });
         });
 
+        // The first refresh: the sets need the table, and the summary needs the sets.
+        if (decidesHere) { refresh(false); }
+
         // For a harness or a console: the DataTable behind the container.
-        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, references: referencePicker, frequency: frequencyPicker, show: showPicker };
+        container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, references: referencePicker, frequency: frequencyPicker, show: showPicker,
+                                     populations: populationPicker, treatments: treatmentPicker, sampleTypes: sampleTypePicker };
     }
 
     $(function () {

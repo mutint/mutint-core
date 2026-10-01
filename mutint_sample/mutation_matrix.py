@@ -29,6 +29,7 @@ from typing import Optional
 
 from django.urls import reverse
 
+from mutint_common.util import get_gene_list
 from mutint_sample.breseq_report import GENE_LIST_FIELDS, _frequency, describe_mutation
 from mutint_sample.flags import flags_of
 from mutint_sample.ncbi import verified_contig_names
@@ -67,6 +68,12 @@ class SampleColumn:
     #: The sample's treatment label, or "". Named in the header's tooltip and the Samples
     #: menu; it colors nothing, the palette being the population's.
     treatment: str = ""
+    #: What the Populations, Time and Sample types tabs hide a column by. On the header as
+    #: `data-*` attributes; the script decides, the server only describes.
+    population_id: Optional[int] = None
+    population: str = ""
+    time_point: Optional[float] = None
+    clonal: bool = True
 
 
 @dataclass(frozen=True)
@@ -94,6 +101,17 @@ class RowSet:
 REFERENCES_PREFERENCE_PREFIX = "mutation_matrix.references."
 
 
+@dataclass(frozen=True)
+class ClientSet:
+    """A row set the *browser* decides: the Show menu offers it, and a script registered
+    under `key` with `window.mutintMatrixSets` computes which rows it holds every time what
+    is shown changes. The server sends no ids, because the answer depends on choices the
+    reader makes without a round trip -- which samples, which frequencies. Compare's
+    Convergent and Fixed are the producers."""
+    key: str
+    label: str
+
+
 @dataclass
 class MutationMatrix:
     columns: list
@@ -109,6 +127,23 @@ class MutationMatrix:
     #: The `RowSet`s the Show menu offers, each with the count of rows it holds. Empty for a
     #: page with nothing to offer, and then the menu is not rendered.
     sets: tuple = ()
+    #: The `ClientSet`s the Show menu offers, counted by the browser.
+    client_sets: tuple = ()
+    #: `(population_id, name)` in column order, for the Populations tab.
+    populations: tuple = ()
+    #: The treatment labels the samples carry, sorted, for the Treatments tab; and whether
+    #: some sample carries none, which is an entry of its own there.
+    treatments: tuple = ()
+    has_untreated: bool = False
+    #: The distinct time points the samples were taken at, sorted: the Time tab's stops.
+    time_points: tuple = ()
+    #: How many samples have no time point, which the Time tab never hides.
+    untimed: int = 0
+
+    @property
+    def offers_time(self):
+        """Whether the Time tab has anything to choose: two time points at least."""
+        return len(self.time_points) > 1
 
     @property
     def width(self):
@@ -211,6 +246,10 @@ def _sample_cell(call, browse_url):
     cell = {"f": text or PRESENT_MARK,
             "s": float(call.frequency) if call.frequency is not None else 1.0,
             "p": polymorphic}
+    if call.frequency is None:
+        # No recorded frequency: a frequency cutoff never removes it, which is what the
+        # server's exclusion does with a NULL, and `s` above is only how it is drawn.
+        cell["n"] = True
     url = browse_url(call) if browse_url else None
     if url:
         cell["u"] = url
@@ -219,7 +258,8 @@ def _sample_cell(call, browse_url):
 
 def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain",
                  browse_url=None, refseq_url=None, csv_title="mutations",
-                 dom_id="mutation-matrix", sets=(), ancestral_mutation_ids=frozenset()):
+                 dom_id="mutation-matrix", sets=(), client_sets=(),
+                 ancestral_mutation_ids=frozenset()):
     """Lay `mutation_calls` out against the samples in `sample_dict`.
 
     `sample_dict` is `{sample_id: Sample}` in the order the columns should appear -- what
@@ -240,6 +280,8 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     hold its mutation, and the sets are offered in the Show menu, counted by the rows they
     hold here rather than by the ids handed in: an id no listed sample carries is no row.
 
+    `client_sets` is a sequence of `ClientSet`s, which the browser computes; see that class.
+
     `ancestral_mutation_ids` marks the rows observed in the experiment's designated ancestor,
     for the script to tint the way the per-sample table tints them -- the same argument
     `build_rows` takes, for the same reason. Display only: the matrix filters nothing and
@@ -253,7 +295,11 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
                             index=index, bam_stored=bool(sample.bam_stored),
                             flags=tuple(flags_of(sample)),
                             url=sample_page_url(sample, experiment), palette=palette[index],
-                            treatment=sample.treatment or "")
+                            treatment=sample.treatment or "",
+                            population_id=sample.population_id,
+                            population=sample.population_name or "",
+                            time_point=sample.time_point,
+                            clonal=bool(sample.is_clonal))
                for index, sample in enumerate(sample_dict.values())]
     column_of = {sample.id: sample.index for sample in samples}
     browse_url = browse_url or browse_url_for(sample_dict)
@@ -280,12 +326,22 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     if ancestral_mutation_ids:
         for row in rows:
             row["ancestral"] = row["id"] in ancestral_mutation_ids
+    populations = []
+    for sample in samples:
+        if (sample.population_id, sample.population) not in populations:
+            populations.append((sample.population_id, sample.population))
     return MutationMatrix(columns=list(DESCRIPTIVE), samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,
                           types=tuple(sorted({row["type"] for row in rows if row["type"]})),
                           seq_ids=tuple(sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]})),
-                          sets=sets)
+                          sets=sets, client_sets=tuple(client_sets),
+                          populations=tuple(populations),
+                          treatments=tuple(sorted({s.treatment for s in samples if s.treatment})),
+                          has_untreated=any(not s.treatment for s in samples),
+                          time_points=tuple(sorted({s.time_point for s in samples
+                                                    if s.time_point is not None})),
+                          untimed=sum(1 for s in samples if s.time_point is None))
 
 
 def _type_url(cells):
@@ -314,6 +370,10 @@ def _describe(mutation, refseq_url, width):
         "seq_id_url": url,
         "seq_id_title": title,
         "position_sort": mutation.start_position,
+        # The gene names as the reader's filter splits them -- `get_gene_list`, unstripped,
+        # empties included -- so the browser applies the ignored-gene rule exactly as
+        # `mutint_filter.util.gene_is_filtered` does, and a row set can count genes.
+        "genes": get_gene_list(mutation.gene) if mutation.gene is not None else [],
         "samples": [None] * width,
     })
     return row

@@ -71,4 +71,7 @@ class NoSharedFilterRemainsTestCase(TestCase):
 
         self.assertNotIn('name="show_global_filtered"', markup)
         self.assertNotIn('name="show_exp_filtered"', markup)
-        self.assertIn("view_filter_fields", markup)
+        # The reader's own filter, which the page applies in the browser and writes back to
+        # the reader's session -- never a shared row.
+        self.assertIn('data-role="filter-min"', markup)
+        self.assertIn("filter_set", markup)

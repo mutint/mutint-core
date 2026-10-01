@@ -1,0 +1,87 @@
+{% comment %} Treatments, Populations and Time: the panes that hide sample columns by what the
+   samples share, beside the Samples pane that hides them one at a time. Rendered by
+   mutation_matrix/page.html only -- Compare's -- into the same `.tab-content` as the rest.
+   Takes `matrix` and `page`.
+
+   Each is a layer: a column shows when its sample is ticked in Samples *and* its population,
+   its treatment and its type are ticked *and* its time point is in range. The menus are the
+   Samples menu's markup, driven the same way (mutintSelectList in toggle mode), so being
+   active is being shown; js/mutation_matrix.js finds them by `data-role`. {% endcomment %}
+{% if matrix.treatments %}
+<div class="tab-pane" id="{{ page }}-pane-treatments">
+    <div class="mutation-matrix-controls">
+        <div class="btn-group">
+            <button type="button" class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                Treatments (<span data-role="treatment-count"></span>
+                of {{ matrix.treatments|length|add:matrix.has_untreated }}) <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="treatments">
+                {% for treatment in matrix.treatments %}
+                    <li data-value="{{ treatment }}" class="active"><a href="#">{{ treatment }}</a></li>
+                {% endfor %}
+                {% if matrix.has_untreated %}
+                    <li data-value="" class="active"><a href="#"><span class="text-muted">(no treatment)</span></a></li>
+                {% endif %}
+            </ul>
+        </div>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-default" data-treatments="all">Show all treatments</button>
+            <button type="button" class="btn btn-default" data-treatments="none">Hide all treatments</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="tab-pane" id="{{ page }}-pane-populations">
+    <div class="mutation-matrix-controls">
+        <div class="btn-group">
+            <button type="button" class="btn btn-default dropdown-toggle"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                Populations (<span data-role="population-count"></span>
+                of {{ matrix.populations|length }}) <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="populations">
+                {% for population_id, name in matrix.populations %}
+                    <li data-value="{{ population_id }}" class="active"><a href="#">{{ name }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-default" data-populations="all">Show all populations</button>
+            <button type="button" class="btn btn-default" data-populations="none">Hide all populations</button>
+        </div>
+    </div>
+</div>
+{% if matrix.offers_time %}
+{% comment %} Two range inputs laid over one track, each an index into the time points some
+   sample was taken at -- so the stops are evenly spaced whatever the numbers are, and 0, 500,
+   1000 and 50000 are four equal steps rather than three crowded into the first two percent.
+   The boxes beside them are the range itself and take any number; a typed bound that is no
+   stop moves its handle to the nearest stop inside it. A sample with no time point is never
+   hidden here. {% endcomment %}
+<div class="tab-pane" id="{{ page }}-pane-time">
+    <div class="mutation-matrix-controls mutation-matrix-time" data-role="time"
+         data-times="{% for t in matrix.time_points %}{{ t|stringformat:'r' }}{% if not forloop.last %},{% endif %}{% endfor %}">
+        <label class="view-filter-field">From
+            <input type="text" class="form-control" size="7" data-role="time-min"/>
+        </label>
+        <div class="mutation-matrix-range">
+            <div class="mutation-matrix-range-track"><div class="mutation-matrix-range-fill" data-role="time-fill"></div></div>
+            <input type="range" min="0" max="{{ matrix.time_points|length|add:-1 }}" step="1" value="0"
+                   data-role="time-low" aria-label="Earliest time point shown"/>
+            <input type="range" min="0" max="{{ matrix.time_points|length|add:-1 }}" step="1"
+                   value="{{ matrix.time_points|length|add:-1 }}"
+                   data-role="time-high" aria-label="Latest time point shown"/>
+        </div>
+        <label class="view-filter-field">to
+            <input type="text" class="form-control" size="7" data-role="time-max"/>
+        </label>
+        <button type="button" class="btn btn-default" data-role="time-reset">Reset</button>
+        <span class="text-muted" data-role="time-count"></span>
+        {% if matrix.untimed %}
+            <span class="text-muted">{{ matrix.untimed }} sample{{ matrix.untimed|pluralize }}
+                with no time point {{ matrix.untimed|pluralize:"is,are" }} always shown.</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

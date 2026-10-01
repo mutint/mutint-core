@@ -68,13 +68,8 @@ one listed sample carries it; each sample cell is that sample's frequency, linke
 browser when the sample has reads. The `browse_url(call)` and `refseq_url(mutation)` callables
 can be replaced if your page links elsewhere.
 
-Then either render **`mutation_matrix/page.html`** — the ALE, treatment and sample-type
-pickers, the reader's filter controls and summary, and the matrix — with `experiment_id,
-population_names, population, treatment_names, treatment, sample_type, experiment_name,
-project_name, project_id, template_header, title, matrix, empty_message` in the context; or
-put the tag in a page of your own. The treatment picker renders only when `treatment_names`
-is non-empty, and a view reads the choice with `common.get_treatment(request)` and hands it
-to `get_ordered_sample_dict(..., treatment=...)`, exactly as it does the population:
+Then either render **`mutation_matrix/page.html`** — Compare's page, where every control
+works in the browser — or put the tag in a page of your own:
 
 ```django
 {% load mutation_matrix %}
@@ -85,11 +80,10 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-The controls above the table are four tabs -- Filter (the page's form), Samples, Rows
-(mutation types, reference sequences, row sets) and Display (columns, frequency display, row
-spacing) -- from `control_tabs.html`; a page rendering the tag alone gets the three
-client-side tabs from the tag, and a page that renders its own strip, as
-`mutation_matrix/page.html` does, passes `controls=False`. The menus let the reader show and
+The tag alone draws four tabs above the table -- Samples, Rows (mutation types, reference
+sequences, row sets), Display (columns, frequency display, row spacing) and Export -- from
+`control_tabs.html`. `mutation_matrix/page.html` renders its own strip and passes
+`controls=False`; see below for what it adds. The menus let the reader show and
 hide descriptive columns, samples, mutation types and reference sequences. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
@@ -107,22 +101,34 @@ every row the server produced; visible columns only, either way — and Export S
 with the keys of the sets holding its mutation, and a **Show** menu — All, then one entry per
 set with its count — appears above the table, remembered like the other menus. The matrix
 does not filter and asks nothing about what a set means; how the ids were chosen is your
-page's business. Compare computes convergent and fixed mutations this way, from the same
-filtered calls its rows are built from, so a page with no sets to offer gets no menu.
+page's business, and a page with no sets to offer gets no menu.
+
+A set can instead be decided **in the browser**, so it follows what the reader shows:
+`client_sets=(ClientSet("convergent", "Convergent"), ...)` puts the entry in the menu with no
+ids, and your page's script registers the rule,
+`window.mutintMatrixSets.register("convergent", function (state, params) {...})`. It is
+called on every change with `state.samples` (the shown sample columns: `index`,
+`population`, `time`) and `state.rows` (`id`, `genes`, and `cells` by sample index, null
+where nothing is shown), plus `params`, the values of your `[data-set-param]` inputs, and
+returns `{ids: [...], note: "...", error: "..."}`. Compare's Convergent and Fixed are the
+worked example (`mutint_compare/static/mutint_compare/compare_sets.js`).
 
 **Ancestral rows are tinted, not filtered.** Pass `build_matrix(...,
 ancestral_mutation_ids=ancestral_mutation_ids(experiment_id))` and each row gains
-`ancestral: true|false`, which the script turns into the per-sample table's red. It is the
-display half of the toggle described in [filtering](filtering.md): build the rows from
-`get_all_calls_filtered(..., include_ancestral=True)` when `ancestral_shown` says so, and set
-`ancestral_mode = "toggle"` in the context so the page offers the button. Such a row is in no
-row set, so the Show menu drops it.
+`ancestral: true|false`, which the script turns into the per-sample table's red. Such a row
+is in no row set, so the Show menu drops it.
 
-**Extending the page rather than copying it.** `mutation_matrix/page.html` has two blocks:
-`matrix_form_fields`, inside the GET form before Apply, for controls of your own that change
-which rows the server produces; and `matrix_summary`, under the reader's filter sentence, to
-say what those controls did. Compare's thresholds for what counts as convergent or fixed are
-the worked example. The table scrolls inside its own box
+**`mutation_matrix/page.html` decides everything in the browser.** Its view sends every
+sample and every call -- `get_all_calls_filtered(experiment_id, include_ancestral=True)`,
+with no view filter -- and the page's tabs are Mutations (the reader's frequency range and
+ignored genes, written back to their session through `/filter/set`, and the Show/Hide
+ancestral mutations button), Treatments, Populations, Samples (with Sample types), Time, and
+the tag's own. It wants `experiment_id, experiment_name, project_name, project_id,
+template_header, title, matrix, empty_message`, plus `view_filter_state` (the reader's filter
+as `mutint_filter.views.filter_json` gives it), `ancestor` (`describe_ancestor`) and
+`ancestral_shown`. It has two blocks: `matrix_controls`, among the Mutations pane's controls,
+for inputs your sets read (`data-set-param`); and `matrix_summary`, under the sentence the
+script writes. Compare is the page that uses it. The table scrolls inside its own box
 with the header and the descriptive columns pinned, in the order `build_matrix` produced the
 rows — nothing sorts — and each sample's header links to that sample's Mutations page and is
 colored by population (`SampleColumn.palette`), so an experiment's ALEs read as bands.

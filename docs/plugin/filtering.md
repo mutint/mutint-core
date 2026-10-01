@@ -44,13 +44,13 @@ that test; do not write a second one.
 ```
 
 `{% view_filter_form %}` is the inputs wrapped in their own GET form. If your page already has a
-form carrying its view state — the shared `mutation_matrix/page.html` keeps ALE, sample type and
-the filter in one form behind one Apply button — use `{% view_filter_fields %}` instead and put
-them inside it. Two Apply buttons on one page means each discards the other's pending edits.
+form carrying its view state, use `{% view_filter_fields %}` instead and put them inside it. Two
+Apply buttons on one page means each discards the other's pending edits.
 
-**If you render `mutation_matrix/page.html` you already have both.** That is what the tags are
-tags for: Compare, Fixed Mutations and Converged Mutations got their controls without an edit to
-any of their repositories.
+**`mutation_matrix/page.html` applies the filter in the browser instead**, and writes each
+change back to the reader's session through `/filter/set`, so it is still the one filter every
+other page reads. A page rendering it hands over the calls unfiltered and the filter as
+`view_filter_state` -- see [templates](templates.md).
 
 Both render **nothing** when the context has no `experiment_id`. That is deliberate and it is
 the rule to keep: a control that does nothing is worse than no control. There used to be a
@@ -105,11 +105,12 @@ experiment, remembered in the session like the filter, hidden by default
 it. A page that wants the same behaviour does three things: builds its rows from
 `get_all_calls_filtered(experiment_id, view_filter=..., include_ancestral=True)` when
 `ancestral_shown` says so, hands `build_matrix(..., ancestral_mutation_ids=
-ancestral_mutation_ids(experiment_id))` the ids so the script tints them, and puts
-`ancestral_mode = "toggle"` in its context so `mutation_matrix/page.html` renders the
-Show/Hide button in the summary sentence. Convergent, Fixed and anything else derived are
-still computed from the evolved calls, so an ancestral row belongs to no row set. A page
-rendering the tag itself passes `{% view_filter_summary ancestral="toggle" %}`; the ancestor's
+ancestral_mutation_ids(experiment_id))` the ids so the script tints them, and passes
+`{% view_filter_summary ancestral="toggle" %}` so the summary sentence carries the Show/Hide
+button. Convergent, Fixed and anything else derived leave the ancestor's mutations out, so an
+ancestral row belongs to no row set. `mutation_matrix/page.html` does it in the browser
+instead: it always carries the ancestral rows, flagged, and its button in the Mutations tab
+draws or drops them with no reload. The ancestor's
 own sample page passes `ancestral="own"`, which says nothing about a subtraction there is
 nothing to make.
 

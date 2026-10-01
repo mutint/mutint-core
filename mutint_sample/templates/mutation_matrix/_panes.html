@@ -26,6 +26,21 @@
             <button type="button" class="btn btn-default" data-samples="all">Show all samples</button>
             <button type="button" class="btn btn-default" data-samples="none">Hide all samples</button>
         </div>
+        {% comment %} Clonal and mixed, as one more layer over the samples -- what was a
+           server-side picker behind Apply. Only where the page asks for it (Compare); a
+           sample hidden here stays in the Samples menu above, dimmed. {% endcomment %}
+        {% if sample_types %}
+            <div class="btn-group">
+                <button type="button" class="btn btn-default dropdown-toggle"
+                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    Sample types (<span data-role="sample-type-count">2</span> of 2) <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="sample-types">
+                    <li data-value="clonal" class="active"><a href="#">Clonal samples</a></li>
+                    <li data-value="mixed" class="active"><a href="#">Mixed samples</a></li>
+                </ul>
+            </div>
+        {% endif %}
     </div>
 </div>
 <div class="tab-pane{% if active == "rows" %} active{% endif %}" id="{{ page }}-pane-rows">
@@ -52,16 +67,20 @@
         {% comment %} Which of the caller's row sets to show -- All, or one of them. Only when
            the caller handed some over: a page with none to offer has no menu, rather than a
            menu of one entry. One choice at a time, so the list runs in plain mode. {% endcomment %}
-        {% if matrix.sets %}
+        {% if matrix.sets or matrix.client_sets %}
             <div class="btn-group">
                 <button type="button" class="btn btn-default dropdown-toggle"
                         data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     Show: <span data-role="show-label">All</span> <span class="caret"></span>
                 </button>
                 <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="show">
-                    <li data-value="" class="active"><a href="#">All ({{ matrix.rows|length }})</a></li>
+                    <li data-value="" class="active"><a href="#">All (<span data-role="all-count">{{ matrix.rows|length }}</span>)</a></li>
                     {% for set in matrix.sets %}
                         <li data-value="{{ set.key }}"><a href="#">{{ set.label }} ({{ set.count }})</a></li>
+                    {% endfor %}
+                    {% comment %} Counted by the browser, which decides what they hold. {% endcomment %}
+                    {% for set in matrix.client_sets %}
+                        <li data-value="{{ set.key }}" data-client-set><a href="#">{{ set.label }} (<span data-role="set-count">0</span>)</a></li>
                     {% endfor %}
                 </ul>
             </div>

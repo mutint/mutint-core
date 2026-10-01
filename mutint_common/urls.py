@@ -47,6 +47,8 @@ def get_core_urlpatterns():
         re_path(r'^mutations/', include('mutint_sample.urls')),
         re_path(r'^search/', include('mutint_search.urls')),
         re_path(r'^stats/', include('mutint_stats.urls')),
+        # Writing the reader's filter back from a page that applies it in the browser.
+        re_path(r'^filter/', include('mutint_filter.urls')),
         # What a page remembers about one person -- see mutint_common/preferences.py. Here
         # rather than under an app because the store is any component's to write to.
         re_path(r'^preferences/$', preferences, name='preferences'),

@@ -1564,6 +1564,12 @@ False and loses the write with no error. Query parameters win over the session a
 remembered into it; presence is what is tested, not truthiness, which is how a URL says "no
 filter" and how the clear link works.
 
+**Compare applies it in the browser and writes it back through `/filter/set`** (`views.py`),
+a JSON POST that parses with `ViewFilter.parse`, stores with `set_view_filter` and answers
+with the normalized value -- so there is still one parse and one filter, and the other pages
+read what was typed there. It sets `ancestral_shown` too, which is the same kind of choice.
+See **Compare decides in the browser**.
+
 **No permission gate and no lock check**: a reader's own view has nothing to protect.
 
 Two consequences worth knowing. **`/stats` and Search do not filter at all** -- neither is a page
@@ -1590,10 +1596,11 @@ experiment, remembered in the session the way `get_view_filter` remembers the fi
 the same reason -- the sidebar's links carry no parameters -- hidden by default, and shared by
 `/mutations/breseq` and Compare. It is **display only**: the rows come back tinted
 `ancestral_table_row`, and nothing computed reads the flag -- the sets, the counts, the
-trees and the exports subtract whatever the reader is looking at. The button sits in the
-`{% view_filter_summary %}` sentence, because that is where the state is described, and only
-for a page passing `ancestral="toggle"`; `mutation_matrix/page.html` passes it when the view
-put `ancestral_mode` in the context, so a view that ignores the flag draws no button.
+trees and the exports subtract whatever the reader is looking at. On the per-sample page the
+button sits in the `{% view_filter_summary %}` sentence, for a page passing
+`ancestral="toggle"`, and reloads. **On Compare it is a button in the Mutations tab** and
+reloads nothing: the page always carries the ancestral rows, flagged, and the script draws
+or drops them, writing the choice back through `/filter/set` (`set_ancestral_shown`).
 `get_all_calls_filtered(include_ancestral=True)` and `build_matrix(ancestral_mutation_ids=)`
 are the two display-only seams a page uses to honour it.
 
@@ -2119,17 +2126,21 @@ per-sample Mutations page renders the same menu over its server-rendered rows an
 the same key, so a plasmid hidden on Compare is hidden there and back -- see **The per-sample
 mutation page**.
 
-**The controls are five tabs -- Filter, Samples, Rows, Display, Export -- and the page owns
-the strip.** `mutint_common/templates/control_tabs.html` is the Import data page's strip made
+**The controls are tabs -- Mutations, Treatments, Populations, Samples, Time, Rows, Display,
+Export on Compare, the last four on Search -- and the page owns the strip.** `mutint_common/templates/control_tabs.html` is the Import data page's strip made
 client-side: Bootstrap's tab plugin switches the panes (it arrives inside the DataTables
 bundle at the end of body; `bootstrap.min.js` on its own would bind every handler twice), and
 `mutint_control_tabs.js` restores and remembers the tab as `<page>.tab` through the
 preference store. Two facts decide the structure: the plugin deactivates only the target
 pane's *siblings*, so every pane must sit in one `.tab-content`; and a `{% block %}` cannot
-cross an inclusion tag, so the Filter pane's form -- with the two blocks Compare fills --
-has to stay in `page.html`. So `page.html` renders the strip, the Filter pane and the tag's
-four panes (`_panes.html`), and calls the tag with `controls=False`; a page that renders the
-tag alone, as Search does, gets the four client-side tabs from the tag. The script finds
+cross an inclusion tag, so the Mutations pane -- with the two blocks Compare fills -- has to
+stay in `page.html`. So `page.html` renders the strip, the Mutations pane, the Treatments,
+Populations and Time panes (`_group_panes.html`) and the tag's four (`_panes.html`, with the
+Samples pane's Sample types menu switched on), and calls the tag with `controls=False`; a
+page that renders the tag alone, as Search does, gets the four from the tag and nothing else.
+The Mutations tab is `filter` underneath -- its pane id and the remembered `<page>.tab` value
+-- so a reader's remembered tab survived the label changing; the per-sample Mutations page
+shares the strip and the label. The script finds
 its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
 `.tab-content`. The DataTables toolbar -- one row, the pager at the left, then length and
 the count, and the search box pushed to the far right -- sits under the strip on every tab;
@@ -2203,18 +2214,62 @@ in `breseq_table.css`: pinned cell (2) over the numbers, header (3) over the pin
 that scroll up under it, pinned header (4) over all.
 
 **Row sets are the seam for a page that wants a subset of its rows without being a second
-page.** `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))` annotates each row with
-the keys of the sets holding it, and `_table.html` renders a **Show** menu -- All, then one
-entry per set with its count -- only when there are sets; the script filters through the same
-search hook the samples and types use, and remembers the choice as `mutation_matrix.show`,
-falling back to All on a table that does not offer the remembered set. The matrix still
-filters nothing and asks nothing about what a set means. mutint-compare is the producer: its
-convergent and fixed sets, with thresholds the reader sets, replaced the two plugins that were
-each the matrix over a narrower queryset. **Export CSV is a menu** -- the rows showing (after
-every menu and the search box, `search: "applied"`) or every row the server produced -- so
+page**, and there are two kinds. `build_matrix(sets=(RowSet(key, label, mutation_ids), ...))`
+is decided on the server: each row carries the keys of the sets holding it.
+`build_matrix(client_sets=(ClientSet(key, label), ...))` is decided in the browser: the page
+registers `fn(state, params)` under that key with `window.mutintMatrixSets`, and the script
+asks it what it holds on every change -- see **Compare decides in the browser** below. Either
+way `_panes.html` renders a **Show** menu -- All, then one entry per set with its count --
+the script filters through the same search hook the samples and types use, and remembers the
+choice as `mutation_matrix.show`, falling back to All on a table that does not offer the
+remembered set. The matrix asks nothing about what a set means. mutint-compare's Convergent
+and Fixed are the client sets there are. **Export CSV is a menu** -- the rows showing (after
+every menu and the search box, `search: "applied"`) or every row the table holds -- so
 "export what I am looking at" and "export the experiment" are both one click and neither is
-a page. `page.html` has two blocks, `matrix_form_fields` and `matrix_summary`, so such a page
-can extend it rather than copy it.
+a page. `page.html` has two blocks, `matrix_controls` (among the Mutations pane's controls)
+and `matrix_summary` (under the sentence the script writes), so such a page can extend it
+rather than copy it.
+
+**Compare decides in the browser.** Its view sends every sample and every call, unfiltered,
+with the designated ancestor's rows flagged, and `page.html` carries the Mutations pane
+(`[data-role="view-filter"]`). Where that pane exists, every control ends in the script's
+`refresh`, which does four things in order:
+
+1. **Which sample columns show.** A column shows when its sample is ticked in Samples and
+   no layer hides it: the Populations, Treatments and Sample types menus (each a hidden set,
+   like Samples) and the Time range. Each sample header carries `data-population`,
+   `data-treatment`, `data-time` and `data-clonal` for this; a sample with no time point is
+   never hidden by Time, and one with no treatment is the "(no treatment)" entry. A sample a
+   layer hides stays in the Samples menu, dimmed, its title naming the tab -- so the Samples
+   menu never contradicts the table.
+2. **What the table holds.** The reader's frequency range drops cells, below the floor *or*
+   above the ceiling (a cell with `n`, no recorded frequency, never -- the server's NULL never
+   matched its exclusion); each row's `genes` -- `get_gene_list`, unstripped -- meet
+   `gene_is_filtered`'s subset rule; the ancestral rows are dropped unless asked for; and a
+   row left with no cell is no row. The table's data is replaced (`clear` + `rows.add`), so
+   "All mutations" in Export is the filtered experiment, as it was when the server filtered.
+3. **What the row sets hold**, over the shown samples and the kept cells of the
+   non-ancestral rows, counted in the Show menu, with each set's sentence under the controls.
+4. **One draw.**
+
+**The filter is still one filter, and the reader's.** The page starts from
+`get_view_filter`'s value and writes every change back through `/filter/set`
+(`mutint_filter/views.py`), which parses it with `ViewFilter.parse` and answers with the
+normalized value -- the one the script then applies; a value parse refuses is a 400 and a
+sentence under the boxes, and nothing changes. So the per-sample Mutations page, the export
+and phylogeny read what was typed on Compare. The same endpoint sets `ancestral_shown`, for
+the Show/Hide ancestral mutations button in the Mutations pane. The layers, the time range
+and the set parameters (`[data-set-param]` inputs) are preferences, per experiment:
+`mutation_matrix.populations.<exp>`, `.treatments.<exp>`, `.sample_types.<exp>`,
+`.time.<exp>` (`{min, max}`, null for open) and `.set_params.<exp>`.
+
+**The Time tab's stops are the time points, not a scale.** Two range inputs over the index of
+the distinct time points the samples carry, so 0, 500, 1000 and 50000 are four equal steps;
+the From and To boxes are the range itself and take any number, a typed bound putting its
+handle on the nearest stop inside it. A handle at either end is no bound, so a time point
+added later is in. The table follows when a handle is let go, not during the drag. Offered
+only with two time points to choose between (`MutationMatrix.offers_time`), and Treatments
+only when some sample carries one.
 
 **Export SVG draws the table for a figure**, from `js/mutation_matrix_svg.js` -- the fourth
 asset every page rendering the tag links, which `test_templates` enforces. It builds the
@@ -2236,8 +2291,9 @@ stripe rule paints the pinned cells the same red -- a positioned cell inherits n
 its row, the reason the stripe grey is written twice in `breseq_table.css`, and the two
 copies of that grey (`rgb(245, 245, 245)`, a shade off white) move together. Such a row is
 in no row set, so choosing one in the Show menu drops it, and both Export CSV entries include
-it because it is a row the server produced. Compare is the producer; see **The ancestor
-belongs to the dataset** for the toggle that decides whether it hands those rows over.
+it while it is drawn. Compare is the producer: it always sends them, and the script drops
+them unless the reader asked -- the Show/Hide button in the Mutations pane, the
+`ancestral_shown` session choice the per-sample page reads too.
 
 **The table is as wide as its columns, not the box.** `.breseq-table` is `width: 100%` for
 the per-sample table, and inside the scroll box the matrix overrides it to `auto`. With every
@@ -2382,13 +2438,13 @@ reads the label.
 **Every population selector has a treatment counterpart.** `get_ordered_sample_queryset`
 and `get_ordered_sample_dict` take `treatment=` (keyword-only, like `include_ancestor`),
 `common.get_treatment` reads `?treatment=` with `get_population`'s rule, and
-`common.get_treatment_names` lists the values in use among the visible samples. The matrix
-page renders a second `<select>` **only when the experiment has any** (a picker of one
-entry is a control that does nothing), so Compare, `/stats`, the per-sample Mutations page
-and its picker links, the needle panel's links and mutint-phylogeny's session selection all
-narrow by it. The filter narrows *samples*; Compare's sets are decided over the samples
-shown, so "at least N populations" under a treatment counts the populations with a sample
-under it, and the rules were not taught the word. The matrix names a sample's treatment in
+`common.get_treatment_names` lists the values in use among the visible samples, so `/stats`,
+the per-sample Mutations page and its picker links, the needle panel's links and
+mutint-phylogeny's session selection all narrow by it. **Compare's is a tab instead**, the
+Treatments tab, decided in the browser like Samples and offered only when some sample carries
+a treatment (a picker of one entry is a control that does nothing); its sets are decided over
+the samples shown, so "at least N populations" with a treatment hidden counts the populations
+still shown, and the rules were not taught the word. The matrix names a sample's treatment in
 its header tooltip and Samples menu and colors nothing by it: the palette stays the
 population's.
 
@@ -3632,9 +3688,9 @@ All apps use the `mutint_*` namespace. Key apps:
   confirmed to be the accession somebody claimed — see **The NCBI Sequence Viewer** above.
   Note `/mutations/` itself is **not** a page: it was Compare, now the mutint-compare plugin.
 - **`mutint_filter/`** — The reader's filter: frequency cutoffs and ignored genes, held in
-  the session (`view_filter.py`), applied by `util.py`, rendered by its template tags. **No
-  models, no URLs, no nav** -- it is installed so its `templatetags` are found. See **There is
-  one filter, and it belongs to the reader** below.
+  the session (`view_filter.py`), applied by `util.py`, rendered by its template tags, and
+  written back by `/filter/set` from Compare, which applies it in the browser. No models and
+  no nav. See **There is one filter, and it belongs to the reader** below.
 - **`mutint_curate/`** — Editing, adding, deleting and copying a sample's mutations, with an
   append-only edit log you can restore from. See **Editing a sample's mutations** and
   **Adding a mutation by hand** above.

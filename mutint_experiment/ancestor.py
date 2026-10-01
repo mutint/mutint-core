@@ -258,23 +258,34 @@ def ancestral_shown(request, experiment_id):
     if key in cache:
         return cache[key]
 
-    stored = request.session.get(ANCESTRAL_SESSION_KEY)
-    stored = dict(stored) if isinstance(stored, dict) else {}
     if ANCESTRAL_PARAM in request.GET:
         shown = request.GET.get(ANCESTRAL_PARAM) == ANCESTRAL_SHOW
-        # Rebuild and reassign the top-level dict: assigning into the nested one leaves
-        # `session.modified` False and loses the write with no error.
-        stored.pop(key, None)
-        if shown:
-            stored[key] = True
-        while len(stored) > MAX_REMEMBERED_EXPERIMENTS:
-            del stored[next(iter(stored))]
-        request.session[ANCESTRAL_SESSION_KEY] = stored
+        set_ancestral_shown(request, experiment_id, shown)
     else:
-        shown = bool(stored.get(key))
+        stored = request.session.get(ANCESTRAL_SESSION_KEY)
+        shown = bool(isinstance(stored, dict) and stored.get(key))
 
     cache[key] = shown
     return shown
+
+
+def set_ancestral_shown(request, experiment_id, shown):
+    """Remember the choice `ancestral_shown` reads -- from its query parameter, or from
+    `/filter/set`, which is how Compare flips it without reloading the page."""
+    key = str(experiment_id)
+    stored = request.session.get(ANCESTRAL_SESSION_KEY)
+    stored = dict(stored) if isinstance(stored, dict) else {}
+    # Rebuild and reassign the top-level dict: assigning into the nested one leaves
+    # `session.modified` False and loses the write with no error.
+    stored.pop(key, None)
+    if shown:
+        stored[key] = True
+    while len(stored) > MAX_REMEMBERED_EXPERIMENTS:
+        del stored[next(iter(stored))]
+    request.session[ANCESTRAL_SESSION_KEY] = stored
+    cache = getattr(request, "_mutint_ancestral_shown_cache", None)
+    if cache is not None:
+        cache[key] = bool(shown)
 
 
 def ancestral_toggle_url(request, shown):

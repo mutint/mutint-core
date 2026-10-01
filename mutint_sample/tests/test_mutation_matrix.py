@@ -61,6 +61,55 @@ class _Fixture(TestCase):
         return [r for r in matrix.rows if r["position_sort"] == position][0]
 
 
+class WhatTheBrowserDecidesByTestCase(_Fixture):
+    """Compare decides in the browser, so the matrix carries what it decides by: each
+    column's population, treatment, time point and type, each row's gene names, and which
+    cells have no recorded frequency."""
+
+    def test_each_sample_column_says_what_can_hide_it(self):
+        matrix = self.matrix()
+        for column in matrix.samples:
+            sample = self.sample_dict[column.id]
+            self.assertEqual(sample.population_id, column.population_id)
+            self.assertEqual(sample.population_name, column.population)
+            self.assertEqual(sample.time_point, column.time_point)
+            self.assertEqual(sample.is_clonal, column.clonal)
+        self.assertEqual((1.0, 2.0), matrix.time_points)
+        self.assertTrue(matrix.offers_time)
+        self.assertEqual(1, len(matrix.populations))
+        self.assertEqual((), matrix.treatments)
+        self.assertTrue(matrix.has_untreated)
+
+    def test_a_row_carries_its_genes_as_the_filter_splits_them(self):
+        self.assertEqual(["thrA"], self.row(self.matrix(), 100)["genes"])
+
+    def test_a_cell_with_no_recorded_frequency_says_so(self):
+        """A frequency cutoff never removes such a call -- the server's NULL never matched
+        its exclusion -- and `s` alone, drawn as 1, cannot tell the script that."""
+        call = [c for c in self.calls if c.mutation.start_position == 100][0]
+        call.frequency = None
+        cell = mutation_matrix._sample_cell(call, None)
+        self.assertTrue(cell["n"])
+        call.frequency = 0.5
+        self.assertNotIn("n", mutation_matrix._sample_cell(call, None))
+
+    def test_each_header_carries_them(self):
+        from django.template import engines
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        SessionMiddleware(lambda r: None).process_request(request)
+        html = engines["django"].from_string(
+            "{% load mutation_matrix %}{% mutation_matrix matrix %}").render(
+            {"matrix": self.matrix()}, request)
+        for column in self.matrix().samples:
+            self.assertIn('data-sample="%d" data-index="%d" data-population="%d" data-treatment="" '
+                          'data-time="%r" data-clonal="1"'
+                          % (column.id, column.index, column.population_id, column.time_point), html)
+        # Search renders the tag alone, and gets none of Compare's layers.
+        for role in ("populations", "treatments", "sample-types", "time", "view-filter"):
+            self.assertNotIn('data-role="%s"' % role, html)
+
+
 class ColumnsTestCase(_Fixture):
     def test_the_descriptive_columns_are_the_per_sample_tables_minus_freq(self):
         keys = [c.key for c in self.matrix().columns]
@@ -271,8 +320,9 @@ class PartialTestCase(_Fixture):
         request = RequestFactory().get("/")
         request.user = user or AnonymousUser()
         SessionMiddleware(lambda r: None).process_request(request)
-        context = {"experiment_id": self.experiment.id, "population_names": ["1"],
-                   "matrix": self.matrix(), "empty_message": "Nothing."}
+        context = {"experiment_id": self.experiment.id, "matrix": self.matrix(),
+                   "view_filter_state": {"min_freq": None, "max_freq": None, "genes": []},
+                   "empty_message": "Nothing."}
         context.update(extra)
         return loader.get_template("mutation_matrix/page.html").render(context, request)
 
@@ -324,28 +374,41 @@ class PartialTestCase(_Fixture):
         sets = (mutation_matrix.RowSet("fixed", "Fixed", frozenset({snp.id})),)
         html = self._render(matrix=self.matrix(sets=sets))
         self.assertIn('data-role="show"', html)
-        self.assertIn('<li data-value="" class="active"><a href="#">All (2)</a></li>', html)
+        self.assertIn('<li data-value="" class="active"><a href="#">All (<span data-role="all-count">2</span>)</a></li>', html)
         self.assertIn('<li data-value="fixed"><a href="#">Fixed (1)</a></li>', html)
         self.assertIn('data-role="show-label">All<', html)
 
-    def test_a_page_that_extends_this_one_can_add_form_fields_and_a_summary(self):
-        """The two blocks a plugin fills, in the form before Apply and under the filter's
-        own sentence, so it extends the page rather than copying it."""
-        source = loader.get_template("mutation_matrix/page.html").template.source
-        self.assertIn("{% block matrix_form_fields %}{% endblock %}", source)
-        self.assertIn("{% block matrix_summary %}{% endblock %}", source)
-        self.assertLess(source.index("{% block matrix_form_fields %}"), source.index('value="Apply"'))
-        self.assertLess(source.index("{% view_filter_summary"), source.index("{% block matrix_summary %}"))
+    def test_a_client_set_is_offered_and_counted_by_the_browser(self):
+        """Compare's sets are decided in the browser: the menu carries the entry, marked
+        `data-client-set`, with a count the script fills in, and the server sends no ids."""
+        html = self._render(matrix=self.matrix(
+            client_sets=(mutation_matrix.ClientSet("convergent", "Convergent"),)))
+        self.assertIn('<li data-value="convergent" data-client-set><a href="#">Convergent '
+                      '(<span data-role="set-count">0</span>)</a></li>', html)
 
-    def test_the_controls_are_five_tabs_in_order(self):
-        """Filter, Samples, Rows, Display, Export: the Import data page's strip, client-side,
-        with the page's Filter pane first and the tag's four after it."""
+    def test_a_page_that_extends_this_one_can_add_controls_and_a_summary(self):
+        """The two blocks a plugin fills -- its controls among the reader's filter's, and a
+        summary under the sentence the script writes -- so it extends the page rather than
+        copying it. There is no form and no Apply: every control works in the browser."""
+        source = loader.get_template("mutation_matrix/page.html").template.source
+        self.assertIn("{% block matrix_controls %}{% endblock %}", source)
+        self.assertIn("{% block matrix_summary %}{% endblock %}", source)
+        self.assertLess(source.index('data-role="filter-genes"'), source.index("{% block matrix_controls %}"))
+        self.assertLess(source.index('data-role="matrix-summary"'), source.index("{% block matrix_summary %}"))
+        self.assertNotIn("<form", source)
+        self.assertNotIn('value="Apply"', source)
+
+    def test_the_controls_are_tabs_in_order(self):
+        """Mutations (the `filter` tab), Populations, Samples, Time, Rows, Display, Export;
+        and Treatments only where some sample carries one, which no sample here does. The
+        fixture's two samples are at time points 1 and 2, so Time has a range to offer."""
         html = self._render()
         self.assertIn('class="nav nav-tabs"', html)
         self.assertIn('data-control-tabs="mutation_matrix"', html)
-        self.assertEqual(["filter", "samples", "rows", "display", "export"],
+        self.assertEqual(["filter", "populations", "samples", "time", "rows", "display", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
-        for key in ("filter", "samples", "rows", "display", "export"):
+        self.assertIn('data-tab="filter" href="#mutation_matrix-pane-filter">Mutations</a>', html)
+        for key in ("filter", "populations", "samples", "rows", "display", "export"):
             self.assertIn('id="mutation_matrix-pane-%s"' % key, html)
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', html)
         self.assertIn('class="tab-pane active" id="mutation_matrix-pane-filter"', html)
@@ -356,10 +419,13 @@ class PartialTestCase(_Fixture):
         def pane(key, next_marker):
             start = html.index('id="mutation_matrix-pane-%s"' % key)
             return html[start:html.index(next_marker, start)]
-        filter_pane = pane("filter", 'id="mutation_matrix-pane-samples"')
-        self.assertIn("<form", filter_pane)
-        self.assertIn('value="Apply"', filter_pane)
-        self.assertIn('data-role="samples"', pane("samples", 'id="mutation_matrix-pane-rows"'))
+        filter_pane = pane("filter", 'id="mutation_matrix-pane-populations"')
+        for role in ("filter-min", "filter-max", "filter-genes", "matrix-summary"):
+            self.assertIn('data-role="%s"' % role, filter_pane)
+        self.assertIn('data-role="populations"', pane("populations", 'id="mutation_matrix-pane-samples"'))
+        samples = pane("samples", 'id="mutation_matrix-pane-rows"')
+        self.assertIn('data-role="samples"', samples)
+        self.assertIn('data-role="sample-types"', samples)
         rows = pane("rows", 'id="mutation_matrix-pane-display"')
         self.assertIn('data-role="types"', rows)
         self.assertIn('data-role="references"', rows)
@@ -393,13 +459,32 @@ class PartialTestCase(_Fixture):
         self.assertIn("mutation_matrix.tab", html)
         self.assertIn('data-prefs-id="mutation-matrix-prefs"', html)
 
-    def test_the_ancestral_button_needs_a_view_that_honours_it(self):
-        """The page draws the Show/Hide button only for a view that put `ancestral_mode` in
-        the context -- a button whose view ignores it is a control that does nothing."""
-        from mutint_sample.models import Sample
-        self.experiment.set_ancestor(Sample.objects.order_by("pk").first(), self.user)
+    def test_the_ancestral_button_is_on_the_mutations_pane_when_there_is_an_ancestor(self):
+        """The Show/Hide button sits among the reader's filter controls, and only when the
+        experiment designates an ancestor -- otherwise there is nothing for it to show."""
         self.assertNotIn('data-role="ancestral-toggle"', self._render())
-        self.assertIn('data-role="ancestral-toggle"', self._render(ancestral_mode="toggle"))
+        html = self._render(ancestor={"name": "REL606", "sample_id": 1})
+        start = html.index('id="mutation_matrix-pane-filter"')
+        self.assertIn('data-role="ancestral-toggle"',
+                      html[start:html.index('id="mutation_matrix-pane-populations"')])
+        self.assertIn('data-ancestor-name="REL606"', html)
+
+    def test_treatments_and_time_appear_when_they_can_do_something(self):
+        from mutint_sample.models import Sample
+        samples = list(Sample.objects.filter(pk__in=self.sample_dict.keys()).order_by("pk"))
+        samples[0].treatment = "glucose"
+        samples[0].save(update_fields=["treatment"])
+        for index, sample in enumerate(samples):
+            sample.time_point = 500 * (index + 1)
+            sample.save(update_fields=["time_point"])
+        self.sample_dict = {s.id: s for s in samples}
+        html = self._render()
+        self.assertEqual(["filter", "treatments", "populations", "samples", "time",
+                          "rows", "display", "export"],
+                         re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
+        self.assertIn('<li data-value="glucose" class="active">', html)
+        self.assertIn('(no treatment)', html)
+        self.assertRegex(html, r'data-times="500(\.0)?,1000(\.0)?"')
 
     def test_the_view_switch_offers_normal_and_condensed(self):
         html = self._render()

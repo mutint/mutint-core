@@ -325,8 +325,11 @@ class PreferencesScriptTestCase(unittest.TestCase):
         for caller in self.CALLERS:
             script = self.read(caller)
             self.assertIn("window.mutintPreferences(", script, caller)
-            for marker in ("localStorage", "mutintPostJson"):
-                self.assertNotIn(marker, script, "%s carries its own store" % caller)
+            self.assertNotIn("localStorage", script, "%s carries its own store" % caller)
+            # The matrix posts the reader's *filter* to `/filter/set`, which is the session's
+            # and no preference; anything else posted is a second store.
+            self.assertNotRegex(script, r"mutintPostJson\((?!filterUrl)",
+                                "%s carries its own store" % caller)
 
     def test_both_columns_menus_share_one_rule(self):
         """A column choice is `{hidden, shown}`, so a column hidden by default stays hidden

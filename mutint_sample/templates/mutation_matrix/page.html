@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% load static %}
-{% load view_filter %}
 {% load mutation_matrix %}
 {% block title %}{{ title|default:"Mutations" }}{% endblock %}
 {% block scripts_and_style %}
@@ -16,65 +15,70 @@
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 {% block content %}
     {% if experiment_id %}
-        {% comment %} The controls are five tabs -- Filter, Samples, Rows, Display, Export -- and this
-           page owns the strip and the one `.tab-content` every pane must share, because the
-           Filter pane's form carries blocks a page that extends this one fills, and a block
-           cannot cross the {% mutation_matrix %} tag; the tag is told `controls=False` and
-           renders the table alone. The strip is the Import data page's, client-side; the
-           chosen tab is remembered as `mutation_matrix.tab`, which the tag embeds with the
-           rest of its prefix. {% endcomment %}
+        {% comment %} The controls are eight tabs -- Mutations, Treatments, Populations, Samples,
+           Time, Rows, Display, Export -- and this page owns the strip and the one
+           `.tab-content` every pane must share: the Mutations pane carries blocks a page that
+           extends this one fills, and a block cannot cross the {% mutation_matrix %} tag, so
+           the tag is told `controls=False` and renders the table alone. Compare is the page.
+
+           **Every control on it works in the browser, with no Apply.** The view sends every
+           sample and every call, unfiltered, the designated ancestor's mutations flagged;
+           js/mutation_matrix.js applies the reader's filter, hides columns by sample,
+           population, treatment, type and time, draws or drops the ancestral rows and asks
+           the page's registered row sets what they hold -- on every change. Treatments and
+           Time are offered only where they could do something: a treatment some sample
+           carries, two time points to choose between. {% endcomment %}
         {% url 'preferences' as preferences_url %}
-        {% include "control_tabs.html" with page="mutation_matrix" active="filter" prefs_id=matrix.dom_id|add:"-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=True samples=True rows=True display=True export=True %}
+        {% include "control_tabs.html" with page="mutation_matrix" active="filter" prefs_id=matrix.dom_id|add:"-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=True treatments=matrix.treatments populations=True samples=True time=matrix.offers_time rows=True display=True export=True %}
         <div class="tab-content" data-mutation-matrix-controls="{{ matrix.dom_id }}">
         <div class="tab-pane active" id="mutation_matrix-pane-filter">
-        {% comment %} One GET form for every control that changes which rows and columns the
-           server produces -- ALE, sample type, the reader's filter -- behind one Apply. What
-           the reader shows or hides of what was produced is the matrix's own business, in the
-           other tabs, and needs no round trip. {% endcomment %}
-        <form action="" method="get" class="form-inline mutation-matrix-form">
-            <input type="hidden" name="experiment_id" value="{{ experiment_id }}"/>
-            <select name="{{ PARAM_POPULATION }}" class="form-control">
-                <option value="{{ PARAM_ALL }}">All populations</option>
-                {% for ale in population_names %}
-                    <option {% if ale == population %}selected="selected" {% endif %}
-                            value="{{ ale }}">{{ ale }}</option>
-                {% endfor %}
-            </select>
-            {% comment %} Only when the experiment has any: a picker of one entry that says
-               "All treatments" is a control that does nothing. {% endcomment %}
-            {% if treatment_names %}
-            <select name="{{ PARAM_TREATMENT }}" class="form-control">
-                <option value="{{ PARAM_ALL }}">All treatments</option>
-                {% for name in treatment_names %}
-                    <option {% if name == treatment %}selected="selected" {% endif %}
-                            value="{{ name }}">{{ name }}</option>
-                {% endfor %}
-            </select>
+        {% comment %} The reader's filter -- one filter, theirs, shared with every other page that
+           reads it -- applied here as it is typed and written back to the session through
+           `/filter/set`, which answers with the value as the server normalized it. A value it
+           refuses is said under the boxes and changes nothing. {% endcomment %}
+        <div class="form-inline mutation-matrix-controls" data-role="view-filter"
+             data-url="{% url 'filter_set' %}" data-experiment-id="{{ experiment_id }}"
+             data-state-id="{{ matrix.dom_id }}-view-filter"
+             data-ancestral-shown="{% if ancestral_shown %}1{% else %}0{% endif %}">
+            <b>Showing:</b>
+            <label class="view-filter-field" style="margin-left: 6px;">
+                frequency
+                <input type="text" data-role="filter-min" size="3" placeholder="0" class="form-control"
+                       value="{% if view_filter_state.min_freq is not None %}{{ view_filter_state.min_freq }}{% endif %}"/>
+                &ndash;
+                <input type="text" data-role="filter-max" size="3" placeholder="100" class="form-control"
+                       value="{% if view_filter_state.max_freq is not None %}{{ view_filter_state.max_freq }}{% endif %}"/>%
+            </label>
+            <label class="view-filter-field" style="margin-left: 10px;">
+                ignoring genes
+                <input type="text" data-role="filter-genes" size="18" placeholder="none" class="form-control"
+                       value="{{ view_filter_state.genes|join:", " }}"/>
+            </label>
+            <button type="button" class="btn btn-link btn-sm" data-role="filter-clear">clear</button>
+            {% comment %} A page that extends this one puts the controls of its row sets here
+               -- Compare's two thresholds -- as inputs carrying `data-set-param`, which the
+               script remembers and hands to the set's function. {% endcomment %}
+            {% block matrix_controls %}{% endblock %}
+            {% if ancestor %}
+                {% comment %} Display only: the ancestral rows are drawn, tinted, or not. They
+                   are in no row set either way. The same session choice the per-sample page
+                   reads. {% endcomment %}
+                <button type="button" class="btn btn-default" data-role="ancestral-toggle"
+                        style="margin-left: 10px;">Show ancestral mutations</button>
             {% endif %}
-            <select name="{{ PARAM_SAMPLE_TYPE }}" class="form-control">
-                <option value="{{ PARAM_ALL }}">All sample types</option>
-                <option {% if sample_type == SAMPLE_TYPE_CLONAL %}selected="selected" {% endif %}
-                        value="{{ SAMPLE_TYPE_CLONAL }}">Clonal samples</option>
-                <option {% if sample_type == SAMPLE_TYPE_MIXED %}selected="selected" {% endif %}
-                        value="{{ SAMPLE_TYPE_MIXED }}">Mixed samples</option>
-            </select>
-            {% view_filter_fields %}
-            {% comment %} A page that extends this one puts its own controls here -- what
-               they change is still which rows the server produces, behind the same Apply --
-               and says what it did with them in matrix_summary, under the filter's own
-               sentence. {% endcomment %}
-            {% block matrix_form_fields %}{% endblock %}
-            <input type="submit" class="btn btn-primary" value="Apply"/>
-        </form>
-        {% comment %} A view that draws the designated ancestor's rows on request -- Compare
-           does, through `ancestral_shown` -- puts `ancestral_mode = "toggle"` in its context
-           and gets the Show/Hide button in the sentence below. Absent, the sentence says the
-           rows are excluded and offers nothing: a button whose view ignores it is a control
-           that does nothing, and Search never gets one. {% endcomment %}
-        {% view_filter_summary ancestral=ancestral_mode|default:"subtracted" %}
+        </div>
+        <div class="text-danger" data-role="filter-error" style="margin: 4px 0;" hidden></div>
+        {% with state_id=matrix.dom_id|add:"-view-filter" %}{{ view_filter_state|json_script:state_id }}{% endwith %}
+        {% comment %} What is hidden and why, written by the script as it changes: the ancestor,
+           the reader's filter, and each row set's own sentence. {% endcomment %}
+        <div class="mutation-matrix-summary" data-role="matrix-summary"
+             {% if ancestor %}data-ancestor-name="{{ ancestor.name }}"
+             data-ancestor-url="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ ancestor.sample_id }}"{% endif %}>
+        </div>
         {% block matrix_summary %}{% endblock %}
         </div>
-        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active="filter" %}
+        {% include "mutation_matrix/_group_panes.html" with matrix=matrix page="mutation_matrix" %}
+        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active="filter" sample_types=True %}
         </div>
         {% mutation_matrix matrix empty_message=empty_message controls=False %}
     {% endif %}

@@ -1,5 +1,9 @@
-{% comment %} The tab strip above a mutation table: Filter, Samples, Rows, Display, Export,
-   in that order, and a page passes only the ones it has content for.
+{% comment %} The tab strip above a mutation table: Mutations, Treatments, Populations,
+   Samples, Time, Rows, Display, Export, in that order, and a page passes only the ones it has
+   content for. Mutations is the reader's filter, and is the `filter` tab underneath -- its
+   pane id and the remembered `<page>.tab` value kept the old name, so a reader's remembered
+   tab survived the label changing. Treatments, Populations and Time are Compare's, through
+   mutation_matrix/page.html.
 
    **`single_sample` changes two things at once, and they are one fact.** Where the picker
    chooses exactly one sample -- the per-sample Mutations page, whose whole subject is that
@@ -21,8 +25,11 @@
     data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
     data-preferences-url="{{ preferences_url }}">
     {% if samples and single_sample %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Sample</a></li>{% endif %}
-    {% if filter %}<li{% if active == "filter" %} class="active"{% endif %}><a data-toggle="tab" data-tab="filter" href="#{{ page }}-pane-filter">Filter</a></li>{% endif %}
+    {% if filter %}<li{% if active == "filter" %} class="active"{% endif %}><a data-toggle="tab" data-tab="filter" href="#{{ page }}-pane-filter">Mutations</a></li>{% endif %}
+    {% if treatments %}<li{% if active == "treatments" %} class="active"{% endif %}><a data-toggle="tab" data-tab="treatments" href="#{{ page }}-pane-treatments">Treatments</a></li>{% endif %}
+    {% if populations %}<li{% if active == "populations" %} class="active"{% endif %}><a data-toggle="tab" data-tab="populations" href="#{{ page }}-pane-populations">Populations</a></li>{% endif %}
     {% if samples and not single_sample %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Samples</a></li>{% endif %}
+    {% if time %}<li{% if active == "time" %} class="active"{% endif %}><a data-toggle="tab" data-tab="time" href="#{{ page }}-pane-time">Time</a></li>{% endif %}
     {% if rows %}<li{% if active == "rows" %} class="active"{% endif %}><a data-toggle="tab" data-tab="rows" href="#{{ page }}-pane-rows">Rows</a></li>{% endif %}
     {% if display %}<li{% if active == "display" %} class="active"{% endif %}><a data-toggle="tab" data-tab="display" href="#{{ page }}-pane-display">Display</a></li>{% endif %}
     {% if export %}<li{% if active == "export" %} class="active"{% endif %}><a data-toggle="tab" data-tab="export" href="#{{ page }}-pane-export">Export</a></li>{% endif %}
