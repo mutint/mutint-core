@@ -79,7 +79,7 @@ The two flags on a `Job` are different kinds of statement, and it is worth keepi
 `cancellable` is a **promise about behaviour** — this task polls — and your task is what keeps
 it. `annotates_reference` is a **claim about effect** — this job will rewrite the experiment's
 annotation through `install_annotation` — and your task does nothing with it at all. Core reads
-it, to draw the panel under the Import data page's tab strip and to hold every Import button on
+it, to draw the panel under the Import page's tab strip and to hold every Import button on
 that experiment until the job is over. Set it only if that is true; see
 [Integrating](integrating.md#an-annotator-that-runs-on-the-reference).
 

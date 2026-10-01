@@ -213,7 +213,7 @@ class ImportPageTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("/import/?experiment_id=%d" % self.experiment.id, html)
-        self.assertIn("+ Import data", html)
+        self.assertIn("+ Import", html)
         self.assertNotIn("Add data", html)
         self.assertIn("delete-experiment", html)
         # The dialog copy used to be inlined here, and this asserted the literal

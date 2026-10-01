@@ -212,50 +212,56 @@
                 {% endif %}
                 {% for item in nav_main_items %}
                     <li><a href="{{ item.url }}">{{ item.label }}</a></li>
-                    {% comment %} The selected project, under the entry that lists them --
+                    {% comment %} The selection, under the Experiments entry: the selected
+                       project, its experiment, and that experiment's pages, as one block --
                        the third thing in this sidebar that is not a nav entry, after the
                        brand and the account block above. A name a request happens to have
                        selected is not something an app can register in `ready()`, so the
                        shell draws it; `key` is how nav_registry says which entry it goes
                        under (matching on the URL would work until the URL changed).
 
+                       All three are drawn here, inside the splice, so nothing a later app
+                       registers in MAIN_SECTION can land between them. The tints are on the
+                       <li>s (see .mutint-sidebar-project in common.css): the project's row
+                       one shade, the experiment's row and every page under it a deeper one,
+                       so the pages read as belonging to the experiment named above them.
+
                        Every experiment-scoped page carries `project_id` and `project_name`
                        from `Experiment.experiment_context()`, and the three pages scoped to
                        one project get them from `Project.project_context()`. An experiment
-                       whose `project` is null has no row rather than an empty one.
+                       whose `project` is null has no project row rather than an empty one,
+                       and its name then carries no arrow, there being nothing it is under.
                        {% endcomment %}
-                    {% if item.key == 'projects' and project_id %}
-                        <li>
-                            <a href="/project/{{ project_id }}/" class="mutint-sidebar-selection"><b>{{ project_name }}</b></a>
-                        </li>
+                    {% if item.key == 'experiments' %}
+                        {% if project_id %}
+                            <li class="mutint-sidebar-project">
+                                <a href="/project/{{ project_id }}/" class="mutint-sidebar-selection"><b>{{ project_name }}</b></a>
+                            </li>
+                        {% endif %}
+                        {% if experiment_id %}
+                            <li class="mutint-sidebar-experiment">
+                                {% comment %} The padlock goes here rather than in the page
+                                   header, because `{% block header %}` is overridden by almost
+                                   every experiment page and a badge added to the default would
+                                   render on none of them. This block is not overridden
+                                   anywhere. {% endcomment %}
+                                <a href="/stats?experiment_id={{ experiment_id }}" class="mutint-sidebar-selection{% if project_id %} mutint-sidebar-nested{% endif %}">{% if project_id %}<span class="mutint-sidebar-under" aria-hidden="true">&#8627;</span>{% endif %}<b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ experiment_name }}</b></a>
+                            </li>
+                            {% comment %} Through the tag, not the raw list: an entry marked
+                               `requires_edit` is left out for a reader with no write role on
+                               this project, because those pages have nothing to offer them.
+                               Only the template knows which experiment is selected, which is
+                               why the registry carries the flag and does not apply it.
+                               {% endcomment %}
+                            {% experiment_nav_items as visible_experiment_items %}
+                            {% for page in visible_experiment_items %}
+                                <li class="mutint-sidebar-experiment">
+                                    <a href="{{ page.url }}?experiment_id={{ experiment_id }}">&nbsp;&nbsp;&nbsp;{{ page.label }}</a>
+                                </li>
+                            {% endfor %}
+                        {% endif %}
                     {% endif %}
                 {% endfor %}
-
-                {% if experiment_id %}
-                    <li>
-                        {% comment %} The experiment's own name, and the project's is not
-                           repeated here: it has its own row under Projects above. This read
-                           `{{ project_name }}: {{ experiment_name }}` when it was the only
-                           place either name appeared in the sidebar.
-
-                           The padlock goes here rather than in the page header, because
-                           `{% block header %}` is overridden by almost every experiment page
-                           and a badge added to the default would render on none of them.
-                           This block is not overridden anywhere. {% endcomment %}
-                        <a href="/stats?experiment_id={{ experiment_id }}" class="mutint-sidebar-selection"><b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ experiment_name }}</b></a>
-                    </li>
-                    {% comment %} Through the tag, not the raw list: an entry marked
-                       `requires_edit` is left out for a reader with no write role on this
-                       project, because those pages have nothing to offer them. Only the
-                       template knows which experiment is selected, which is why the registry
-                       carries the flag and does not apply it. {% endcomment %}
-                    {% experiment_nav_items as visible_experiment_items %}
-                    {% for item in visible_experiment_items %}
-                        <li>
-                            <a href="{{ item.url }}?experiment_id={{ experiment_id }}">&nbsp;&nbsp;&nbsp;{{ item.label }}</a>
-                        </li>
-                    {% endfor %}
-                {% endif %}
                 {% comment %} END_SECTION: About, under the selected experiment's pages rather
                    than above them. {% endcomment %}
                 {% for item in nav_end_items %}

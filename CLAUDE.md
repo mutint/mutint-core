@@ -359,7 +359,7 @@ Logout, Change Password, Change Email, Jobs, Groups and -- for a superuser -- Dj
 `base.html` rather than registered, because `nav_registry`'s one per-user gate --
 `requires_edit`, write access to the selected experiment's project -- is not the question any
 of these asks, and `base.html` already has `user`. A `visible_to=` predicate for one entry
-would be a mechanism with a single producer; `requires_edit` exists only because Import Data
+would be a mechanism with a single producer; `requires_edit` exists only because Import
 and Curate both wanted exactly the same gate.
 
 **Groups belongs here rather than in `MAIN_SECTION`**: what `/group/` lists is
@@ -403,30 +403,36 @@ absence, which is the whole of the mechanism.
 
 ### The selected project and experiment are rows, not nav entries
 
-Two bolded rows name what a request has selected: the **project**, under the Projects entry,
-and the **experiment**, heading its own pages. They are the third thing in this sidebar that
-`nav_registry` does not produce, after the brand and the account block, and for a reason of
-the same kind -- a name a request happens to have selected is not something an app can
-register in `ready()`.
+Two bolded rows name what a request has selected, both under the **Experiments** entry: the
+**project**, and under it the **experiment**, marked with a `↳` and heading its own pages.
+They are the third thing in this sidebar that `nav_registry` does not produce, after the brand
+and the account block, and for a reason of the same kind -- a name a request happens to have
+selected is not something an app can register in `ready()`.
 
-**They were one row**, reading `{{ project_name }}: {{ experiment_name }}`, which meant the
-selected project was named only when an *experiment* was: `/project/<pk>/` lists a project's
-experiments and had no bolded row at all.
+**The selection is tinted, in two shades of the Apply button's blue.** The project's row is
+`li.mutint-sidebar-project`; the experiment's row and every one of its pages are
+`li.mutint-sidebar-experiment`, a deeper shade, so the pages read as belonging to the
+experiment named above them and the whole block reads as what this page is about rather than
+as more places to go. The tint is on the `<li>`, not the `<a>`, so the block has no seams and
+the hover gradient still draws over it. The arrow is drawn only when there is a project row
+for it to sit under, and the experiment's link carries a hanging indent so a wrapped name
+lines up after it.
 
-**`register_nav_item(key=...)` is how the shell says which entry the project's row goes
-under.** Projects is third in `MAIN_SECTION` (Dashboard, Search, Projects, Experiments), so
-the row is spliced into the middle of `base.html`'s loop and *some* literal has to encode
-where. A key the owning app supplies survives a URL change, which matching on `/project/`
-would not, and `key` is already this codebase's idiom for entry identity --
-`import_tab_registry`. It is identity, not ordering and not behaviour: there is still no
-`order=` and no `visible_to=`. `test_nav_sections` asserts the key, because without it the
-`{% if %}` matches no entry and the row silently stops rendering everywhere.
+**`register_nav_item(key=...)` is how the shell says which entry the selection goes under**,
+and the project row, the experiment row and the experiment's pages are all drawn inside that
+one splice. Experiments is last in `MAIN_SECTION` today, but drawing the pages after the loop
+would let any later `MAIN_SECTION` entry land between an experiment and its pages. A key the
+owning app supplies survives a URL change, which matching on `/experiment/` would not, and
+`key` is already this codebase's idiom for entry identity -- `import_tab_registry`. It is
+identity, not ordering and not behaviour: there is still no `order=` and no `visible_to=`.
+`test_nav_sections` asserts the key, because without it the `{% if %}` matches no entry and
+the whole selection silently stops rendering everywhere.
 
 **Both `project_id` and `project_name` come from the view.** `Experiment.experiment_context()`
 supplies them on every experiment-scoped page, and `Project.project_context()` on the three
 scoped to one project -- `project_detail`, `project_edit` and `project_access`, each **after**
 its permission check, so a 403 body never names the project it refused. An experiment whose
-`project` is null gets no row rather than an empty one.
+`project` is null gets no project row rather than an empty one, and no arrow.
 
 **These two rows wrap; every other entry does not.** `.sidebar .nav > li > a` is
 `white-space: nowrap` and the sidebar is capped at 260px, so a long name was trimmed
@@ -3410,7 +3416,7 @@ led that section for a while, on the reading that an experiment goes top-down fr
 aligned to and then to what was found in it; what people actually open an experiment for is
 its mutations, and a section whose first row is the thing nobody came for costs every reader a
 click. The order in that section now is Samples (`mutint_experiment`, for editors only),
-Mutations, Reference, Import Data, Curate, then the plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
+Mutations, Reference, Import, Curate, then the plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
 always. There is still no `order=`.
 
 **The nav entry is not decoration, and neither is linking every contig.** A viewer link gated
@@ -3743,7 +3749,7 @@ Creation and deletion are nested under the objects they act on:
   them. Use `gd_import.prepare_experiment_by_id` for anything web-facing.
   There is **no unscoped form of this page**: without a usable `experiment_id` the route is a
   plain 404. Its sidebar entry is therefore in `EXPERIMENT_SECTION`, which is the only section
-  whose links carry one — **Import Data**, registered with `requires_edit=True`, since a
+  whose links carry one — **Import**, registered with `requires_edit=True`, since a
   read-only reader can do nothing here.
 - Everything records the logged-in user; there are no person fields to fill in.
 - Editing lives beside all of this -- see **Editing is three pages** above. The controls in

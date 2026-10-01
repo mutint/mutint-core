@@ -1,7 +1,7 @@
 # Taking a file upload
 
 If what your plugin accepts is a *mutation file*, you want
-[an import handler](registries.md) — register one, and the Import data page's drag-and-drop, its
+[an import handler](registries.md) — register one, and the Import page's drag-and-drop, its
 type dropdown, its per-file progress table and its summary all reach you with no page of your
 own.
 
@@ -9,7 +9,7 @@ This page is about the other case: a drop that is **not** something to import. `
 takes FASTQ reads, which are the input to a job whose *output* is imported hours later, and
 which needs a sample name and a command line beside them. An import handler cannot carry
 either — `handle()` is given the experiment, the staged root, the paths and the user, and the
-Import data page has no box to put anything else in.
+Import page has no box to put anything else in.
 
 So core splits the two halves. It keeps the part that is about bytes arriving safely, and you
 keep the part that is about what they are for.

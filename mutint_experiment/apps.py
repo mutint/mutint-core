@@ -8,11 +8,12 @@ class ExperimentConfig(AppConfig):
         from mutint_common.nav_registry import (
             EXPERIMENT_SECTION, MAIN_SECTION, register_nav_item,
         )
-        # `key='projects'` is what lets base.html put the selected project's own row
-        # directly under this entry. See mutint_common/nav_registry.py.
-        register_nav_item('Projects', url='/project/', section=MAIN_SECTION,
-                          key='projects')
-        register_nav_item('Experiments', url='/experiment/', section=MAIN_SECTION)
+        register_nav_item('Projects', url='/project/', section=MAIN_SECTION)
+        # `key='experiments'` is what lets base.html put the selection -- the selected
+        # project, its experiment and that experiment's pages -- directly under this entry.
+        # See mutint_common/nav_registry.py.
+        register_nav_item('Experiments', url='/experiment/', section=MAIN_SECTION,
+                          key='experiments')
         # First in the experiment section, ahead of mutint_sample's Mutations, because this
         # app is ahead of that one in INSTALLED_APPS. `requires_edit`: the page edits, and
         # refuses a reader who cannot. The url redirects to `/experiment/<pk>/samples/`,

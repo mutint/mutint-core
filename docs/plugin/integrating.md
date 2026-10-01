@@ -51,7 +51,7 @@ register_import_handler(
     priority=50)
 ```
 
-That routes drops of your type. To give it a **tab on the Import data page**, register one
+That routes drops of your type. To give it a **tab on the Import page**, register one
 too, from the same `ready()`:
 
 ```python
@@ -60,7 +60,7 @@ from mutint_common.import_tab_registry import register_import_tab
 register_import_tab('yourthing', 'Your measurements', import_type='yourthing')
 ```
 
-The tab lands on the Import data page with your type chosen. `import_types=(...)` names
+The tab lands on the Import page with your type chosen. `import_types=(...)` names
 several in preference order, and the page takes the first the experiment can run. A tab may
 instead be a page of your own -- `register_import_tab('run_thing', 'Run thing',
 url_name='your_route')` -- when a drop needs something the Import page has no box for;
@@ -80,7 +80,7 @@ anything hash-checked against it, so core registers `reference` at 10, `breseq_f
 and `genomediff` at 60. Pick a number that puts you after whatever your files depend on.
 
 `patterns` does more than route. `identify()` uses it to tell somebody who chose the wrong
-type what their file looks like instead, and the Import data page serializes it to say the same
+type what their file looks like instead, and the Import page serializes it to say the same
 thing *before* anything uploads. Both come free from registering.
 
 Two optional declarations worth knowing:
@@ -210,7 +210,7 @@ register_reference_annotator(self, name='isescan', label='ISEScan IS elements',
                              description='Predicts insertion sequences and annotates them.')
 ```
 
-The Import data page's two reference tabs — **Reference Sequence** and **Update Annotation** —
+The Import page's two reference tabs — **Reference Sequence** and **Update Annotation** —
 draw a fieldset per registered annotator: an enable box and your description, which core
 owns, and your template underneath. When the box is ticked and the reference lands, `run` is
 called; the Update Annotation tab also has a **Run annotators** button that calls it against

@@ -196,8 +196,9 @@ class ButtonsAreNotFloatedTestCase(unittest.TestCase):
 class ExperimentSidebarLabelTestCase(TestCase):
     """The sidebar names the project and the experiment on two rows of its own.
 
-    The project's row sits under the Projects entry and the experiment's heads its pages,
-    and each is bold. They were one row reading `{{ project_name }}: {{ experiment_name }}`.
+    Both sit under the Experiments entry -- the project's row, then the experiment's, marked
+    with an arrow as under it, heading its pages -- and each is bold. They were one row
+    reading `{{ project_name }}: {{ experiment_name }}`.
 
     The two names have to stay apart in the context for either row to be right, and that is
     the older bug these tests were written for: `Experiment.experiment_context()` used to
@@ -241,7 +242,8 @@ class ExperimentSidebarLabelTestCase(TestCase):
         import re
 
         match = re.search(
-            r'<a href="/stats\?experiment_id=%d"[^>]*><b>(.*?)</b>' % self.experiment.id,
+            r'<a href="/stats\?experiment_id=%d"[^>]*>(?:<span[^>]*>[^<]*</span>)?<b>(.*?)</b>'
+            % self.experiment.id,
             html)
         return match.group(1).strip() if match else None
 
@@ -264,17 +266,21 @@ class ExperimentSidebarLabelTestCase(TestCase):
             with self.subTest(page=name):
                 self.assertEqual("Exp", self._sidebar_label(self._html(url)))
 
-    def test_the_project_row_sits_between_projects_and_experiments(self):
-        """Position is the whole point of the `key` base.html matches on: the row belongs to
-        the entry that lists projects, not to the end of the main section."""
+    def test_the_selection_sits_under_experiments_in_order(self):
+        """Position is the whole point of the `key` base.html matches on: Experiments, then
+        the project, then the experiment with its arrow, then the experiment's pages."""
         html = self._html("/stats/?experiment_id=%d" % self.experiment.id)
 
         self.assertEqual("Proj", self._project_row(html))
         menu = html[html.index('id="side-menu"'):]
-        self.assertLess(menu.index('href="/project/"'),
-                        menu.index('href="/project/%d/"' % self.experiment.project_id))
-        self.assertLess(menu.index('href="/project/%d/"' % self.experiment.project_id),
-                        menu.index('href="/experiment/"'))
+        order = [
+            menu.index('href="/experiment/"'),
+            menu.index('href="/project/%d/"' % self.experiment.project_id),
+            menu.index('href="/stats?experiment_id=%d"' % self.experiment.id),
+            menu.index('href="/mutations/breseq?experiment_id=%d"' % self.experiment.id),
+        ]
+        self.assertEqual(sorted(order), order)
+        self.assertIn("mutint-sidebar-under", menu[order[2]:order[3]])
 
     def test_a_project_page_names_the_project_and_no_experiment(self):
         """`project_detail` supplies the two keys itself -- nothing else on that page would,

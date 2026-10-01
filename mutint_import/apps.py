@@ -13,7 +13,7 @@ class ImportConfig(AppConfig):
         # `requires_edit`: the page refuses a reader with no write role, so an entry
         # leading them to it would be a dead end -- which is the objection this
         # codebase raises against every nav entry that 403s.
-        register_nav_item('Import Data', url='/import/', section=EXPERIMENT_SECTION,
+        register_nav_item('Import', url='/import/', section=EXPERIMENT_SECTION,
                           requires_edit=True)
 
         # The tabs core ships, in the order the page shows them. Core is a caller of the tab

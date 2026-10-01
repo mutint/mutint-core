@@ -164,6 +164,32 @@
     overflow-wrap: break-word;
 }
 
+/* The selection, under Experiments, is tinted so it reads as what this page is about rather
+   than as more places to go: the project's row in one shade of the Apply button's blue, and
+   the experiment's row with every page under it in a deeper one, so those pages read as the
+   experiment's. On the <li>, not the <a>, so the block has no seams; the hover gradient on
+   the <a> still draws over it. */
+.sidebar .nav > li.mutint-sidebar-project {
+    background-color: rgba(51, 122, 183, 0.10);
+}
+
+.sidebar .nav > li.mutint-sidebar-experiment {
+    background-color: rgba(51, 122, 183, 0.20);
+}
+
+/* The experiment's name sits under its project's, and the arrow says so. A hanging indent,
+   so a long name that wraps lines up after the arrow rather than under it. */
+.sidebar .nav > li > a.mutint-sidebar-nested {
+    padding-left: calc(15px + 1.3em);
+    text-indent: -1.3em;
+}
+
+.mutint-sidebar-under {
+    display: inline-block;
+    width: 1.3em;
+    text-indent: 0;
+}
+
 .nav > li > a:focus, .nav > li > a:hover {
     text-decoration: none;
     background-image: linear-gradient(to right, rgb(0, 0, 0, 0), #eee);

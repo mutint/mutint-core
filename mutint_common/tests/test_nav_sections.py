@@ -25,16 +25,17 @@ class NavSectionsTestCase(TestCase):
         self.assertLess(source.index("{% for item in nav_end_items %}"),
                         source.index("mutint-watermark"))
 
-    def test_the_projects_entry_carries_the_key_the_shell_anchors_to(self):
-        """base.html draws the selected project's row under `key == 'projects'`.
+    def test_the_experiments_entry_carries_the_key_the_shell_anchors_to(self):
+        """base.html draws the selection under `key == 'experiments'`.
 
-        Drop the key, or rename it, and that `{% if %}` matches no entry: the row silently
-        stops rendering on every page while the sidebar still looks intact.
+        Drop the key, or rename it, and that `{% if %}` matches no entry: the selected
+        project, the experiment and every one of its pages silently stop rendering on every
+        page while the rest of the sidebar still looks intact.
         """
         keys = {i["label"]: i["key"] for i in get_nav_items(MAIN_SECTION)}
 
-        self.assertEqual("projects", keys["Projects"])
-        self.assertIsNone(keys["Experiments"], "only Projects needs a key today")
+        self.assertEqual("experiments", keys["Experiments"])
+        self.assertIsNone(keys["Projects"], "only Experiments needs a key today")
 
     def test_the_renamed_entries(self):
         """Reference (not Reference Sequence) and Curate (not Edit Mutations), at /curate/."""

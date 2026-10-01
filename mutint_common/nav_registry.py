@@ -41,17 +41,18 @@ def register_nav_item(label, url=None, url_name=None, section=MAIN_SECTION, key=
 
               This is the per-user visibility this registry deliberately did without for a
               long time, on the grounds that adding it for one producer would be a mechanism
-              with a single user. There are two now -- Curate and Import Data -- and both lead
+              with a single user. There are two now -- Curate and Import -- and both lead
               a reader to a page they cannot act on. It is a flag rather than a predicate
               because "can this person write here" is the only question the sidebar has ever
               needed to ask, and a callable would invite others.
 
     key       an identifier base.html can anchor something of its own to. It is
               identity, not ordering and not behaviour: the shell renders the
-              selected project's name directly under the Projects entry, and had
+              selection -- the selected project, its experiment and that
+              experiment's pages -- directly under the Experiments entry, and had
               no way to say which entry that is. Matching on the entry's URL
               would have worked until the URL changed; a key the owning app
-              supplies survives that. `projects` is the only one today, and an
+              supplies survives that. `experiments` is the only one today, and an
               entry needs one only when the shell reaches for it by name.
     """
     if (url is None) == (url_name is None):

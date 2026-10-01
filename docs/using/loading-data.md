@@ -21,7 +21,7 @@ finally removes them.
 
 ## From the browser
 
-Drop breseq result folders on the Import data page. Five files per sample are uploaded and
+Drop breseq result folders on the Import page. Five files per sample are uploaded and
 nothing else, so the bulk of a run never leaves your machine:
 
 ```
@@ -60,7 +60,7 @@ a re-import matches on.
 
 ### Naming samples with metadata.csv
 
-Drop a file called `metadata.csv` beside the data, on the Import data page or among read
+Drop a file called `metadata.csv` beside the data, on the Import page or among read
 files on the Run breseq page. It has a header row and then one row per sample:
 
 ```
@@ -94,7 +94,7 @@ mystery,,,,,,,mystery_sample.gd
   Several in one cell, separated by `;`, or the same row repeated.
 - Lines beginning with `#` are ignored, so the file can carry notes.
 
-The Import data page links to a blank template and a worked example under its drop zone. A
+The Import page links to a blank template and a worked example under its drop zone. A
 row that names nothing in the drop, and an input no row names, are reported after the
 import and do not stop it; an input named by two rows is refused. A file that cannot be
 read at all -- a missing column, say -- refuses the whole drop, because everything under it

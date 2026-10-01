@@ -17,12 +17,12 @@ holds core's five import types. A plugin is just another caller.
 | [`rebuild_registry`](../reference/rebuild_registry.md) | a function that recomputes derived data | marks it stale when the mutations change, and runs it |
 | [`nav_registry`](../reference/nav_registry.md) | a label and a URL | draws a sidebar entry |
 | [`import_registry`](../reference/import_registry.md) | a file type and a handler | routes drops of that type to it |
-| [`import_tab_registry`](../reference/import_tab_registry.md) | a label and an import type, or a page of your own | draws a tab on the Import data page |
+| [`import_tab_registry`](../reference/import_tab_registry.md) | a label and an import type, or a page of your own | draws a tab on the Import page |
 | [`about_registry`](../reference/about_registry.md) | a template | gives your component a section on `/about` |
 | [`example_registry`](../reference/example_registry.md) | a directory of data | loads it with `./mutint load_example` |
 | [`context_registry`](../reference/context_registry.md) | a callable | adds to the experiment views' context |
 | [`panel_registry`](../reference/panel_registry.md) | a template and a context callable | draws your panel on the experiment Overview |
-| [`annotator_registry`](../reference/annotator_registry.md) | a panel of options and a callable | draws the panel on the reference tabs of the Import data page, and runs the callable on the reference after it lands |
+| [`annotator_registry`](../reference/annotator_registry.md) | a panel of options and a callable | draws the panel on the reference tabs of the Import page, and runs the callable on the reference after it lands |
 | [`storage_registry`](../reference/storage_registry.md) | a label and a measure, optionally a clear | counts your files on the dashboard and the Overview, and offers a Clear button |
 | [`read_step_registry`](../reference/read_step_registry.md) | a step on a sample's reads, and its stage | offers it as a checkbox wherever reads are analysed, and a producer runs it before predicting mutations |
 | [`sample_link_registry`](../reference/sample_link_registry.md) | a callable returning links | draws them in the box at the top of a sample's page |

@@ -8,7 +8,7 @@ treatment and description, the publications, and which sample is the ancestor.
 ## Getting the archive
 
 **Export experiment** is on the experiment's **Reference** page, beside the reference
-download, and the Import data page links to it under the tab strip. Either gives a zip named
+download, and the Import page links to it under the tab strip. Either gives a zip named
 for the experiment. Anyone who can view the experiment can take it.
 
 On an installation that publishes the API, a public experiment's archive is also at
@@ -35,7 +35,7 @@ MutInt does reads the mutations.
 
 ## Importing it
 
-Create an experiment on the other MutInt, open its Import data page and choose the **MutInt
+Create an experiment on the other MutInt, open its Import page and choose the **MutInt
 Archive** tab. Drop the zip, or the folder you unzipped it into. The tab is offered whether
 or not the experiment has a reference yet, because the archive brings one.
 

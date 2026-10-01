@@ -2,7 +2,7 @@
 {% block title %}New experiment{% endblock %}
 {% block header %}New experiment{% endblock %}
 {% block content %}
-    {% comment %} A page of its own, matching the Import data page and the new-project page.
+    {% comment %} A page of its own, matching the Import page and the new-project page.
        The project picker lists only projects this user may edit, so it never offers one
        the create endpoint would 403 on. {% endcomment %}
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
@@ -39,7 +39,7 @@
                     Reference genome <small class="text-muted">(optional)</small>
                 </label>
                 <select class="form-control" id="ne-reference-project">
-                    <option value="">None &mdash; add one on the Import data page</option>
+                    <option value="">None &mdash; add one on the Import page</option>
                     {% for source in reference_sources %}
                         <option value="{{ source.id }}"
                                 {% if source.id == reference_from_project %}selected{% endif %}>{{ source.name }}</option>
