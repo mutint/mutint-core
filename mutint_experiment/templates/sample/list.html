@@ -56,10 +56,14 @@
            write, through the same validation as anything typed. The row is above the table
            rather than under it so that nothing sits below the scroll box, which then reaches
            the window's edge and keeps its scrollbars on screen however many rows there are. {% endcomment %}
-        {% comment %} Three groups in one row -- Save; the CSV pair; Discard -- with a wider
-           gap between groups than the row's 5px between buttons. {% endcomment %}
+        {% comment %} Save and Discard changes; the CSV pair; Designate ancestor; Delete selected --
+           15px between groups, wider than the row's 5px between buttons, and 40px either side of
+           the two that are easy to regret: Discard throws away what was typed, and Delete
+           selected removes samples, so neither sits where a click aimed at its neighbour lands. {% endcomment %}
         <div class="btn-row" style="margin-bottom: 0.5em;">
             <button type="button" class="btn btn-primary" id="sb-save">Save</button>
+            <a class="btn btn-danger" style="margin-left: 40px;"
+               href="/stats?experiment_id={{ experiment.id }}">Discard changes</a>
             <a class="btn btn-default" style="margin-left: 15px;"
                href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download CSV</a>
             <button type="button" class="btn btn-default" id="sb-upload">Upload CSV&hellip;</button>
@@ -71,9 +75,7 @@
                     style="margin-left: 15px;"
                     data-ancestor-id="{{ experiment.ancestor_id|default_if_none:'' }}"
                     data-ancestor-label="{{ experiment.ancestor.label|default_if_none:'' }}">Designate ancestor</button>
-            <button type="button" class="btn btn-danger" id="sb-delete">Delete selected</button>
-            <a class="btn btn-danger" style="margin-left: 15px;"
-               href="/stats?experiment_id={{ experiment.id }}">Discard changes</a>
+            <button type="button" class="btn btn-danger" id="sb-delete" style="margin-left: 40px;">Delete selected</button>
             {% comment %} display: none inline rather than the hidden attribute: Bootstrap's
                `input[type=file] { display: block }` outranks `[hidden]`, and the browser's own
                Choose File control then sat in the row beside the button that opens it. {% endcomment %}
