@@ -148,6 +148,8 @@
         dt.columns().indexes().toArray().forEach(function (i) {
             if (!dt.column(i).visible()) { return; }
             var th = dt.column(i).header();
+            // The Curate column is buttons, not data.
+            if (th.getAttribute("data-key") === "curate") { return; }
             if (th.getAttribute("data-key") !== null) {
                 var key = th.getAttribute("data-key");
                 var texts = rows.map(function (row) { return plainText(row[key]); });

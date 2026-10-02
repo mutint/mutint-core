@@ -50,6 +50,13 @@ class Column:
     title: str
     css_class: str
     default_visible: bool = True
+    #: What the header cell says, when that is not `title` -- the Curate column's is empty, so
+    #: the column is only as wide as its buttons. The Columns menu always names it by `title`.
+    header: Optional[str] = None
+
+    @property
+    def header_text(self):
+        return self.title if self.header is None else self.header
 
 
 @dataclass(frozen=True)
@@ -143,6 +150,10 @@ class MutationMatrix:
     time_points: tuple = ()
     #: How many samples have no time point, which the Time Points tab never hides.
     untimed: int = 0
+    #: For the Curate menu's "Copy to ancestor": the designated ancestor's sample id, and the
+    #: endpoint the copy is posted to. None where there is no ancestor or no Curate column.
+    curate_ancestor_id: Optional[int] = None
+    curate_copy_apply_url: str = ""
 
     @property
     def offers_sets(self):
@@ -169,6 +180,10 @@ GENE_LIST_CSS_CLASS = "breseq-gene-list"
 #: carries this class literally, as the matrix's script does.
 GENE_LIST_COLUMNS = tuple(Column(key, title, GENE_LIST_CSS_CLASS, default_visible=False)
                           for key, title, _italic in GENE_LIST_FIELDS)
+
+#: A row's actions -- Edit and Copy, from a small menu -- for a reader who can curate this
+#: experiment. First, and with no header so it stays slim; see `build_matrix(curate=)`.
+CURATE_COLUMN = Column("curate", "Curate", "breseq-curate", header="")
 
 #: The per-sample table's columns, minus Freq. Description is hidden until asked for: it is
 #: prose, and the widest column by far.
@@ -268,7 +283,7 @@ def _sample_cell(call, browse_url):
 def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain",
                  browse_url=None, refseq_url=None, csv_title="mutations",
                  dom_id="mutation-matrix", sets=(), client_sets=(),
-                 ancestral_mutation_ids=frozenset()):
+                 ancestral_mutation_ids=frozenset(), curate=False):
     """Lay `mutation_calls` out against the samples in `sample_dict`.
 
     `sample_dict` is `{sample_id: Sample}` in the order the columns should appear -- what
@@ -290,6 +305,13 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     hold here rather than by the ids handed in: an id no listed sample carries is no row.
 
     `client_sets` is a sequence of `ClientSet`s, which the browser computes; see that class.
+
+    `curate=True` -- for a reader who can edit the experiment -- puts the Curate column first,
+    and gives each row the two places its menu leads: `curate_edit_url`, the mutation's edit
+    page with every sample carrying it selected, and `curate_copy_url`, the Copy tab with the
+    mutation selected in the first sample, in column order, that carries it. Where the
+    experiment designates an ancestor, `curate_copy_source` names that sample as well, so the
+    menu can offer "Copy to ancestor" and post the copy directly.
 
     `ancestral_mutation_ids` marks the rows observed in the experiment's designated ancestor,
     for the script to tint the way the per-sample table tints them -- the same argument
@@ -338,11 +360,23 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     if ancestral_mutation_ids:
         for row in rows:
             row["ancestral"] = row["id"] in ancestral_mutation_ids
+    if curate and experiment is not None:
+        edit_url, copy_url = reverse("mutation_edit"), reverse("mutation_copy")
+        for row in rows:
+            row["curate_edit_url"] = "%s?experiment_id=%d&mutation_id=%d" % (
+                edit_url, experiment.id, row["id"])
+            first = next((samples[i].id for i, cell in enumerate(row["samples"]) if cell), None)
+            if first is not None:
+                row["curate_copy_source"] = first
+                row["curate_copy_url"] = "%s?experiment_id=%d&source_sample_id=%d&mutation_id=%d" % (
+                    copy_url, experiment.id, first, row["id"])
     populations = []
     for sample in samples:
         if (sample.population_id, sample.population) not in populations:
             populations.append((sample.population_id, sample.population))
-    return MutationMatrix(columns=list(DESCRIPTIVE), samples=samples, rows=rows,
+    curating = curate and experiment is not None
+    columns = ([CURATE_COLUMN] if curating else []) + list(DESCRIPTIVE)
+    return MutationMatrix(columns=columns, samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,
                           types=tuple(sorted({row["type"] for row in rows if row["type"]})),
@@ -353,7 +387,9 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
                           has_untreated=any(not s.treatment for s in samples),
                           time_points=tuple(sorted({s.time_point for s in samples
                                                     if s.time_point is not None})),
-                          untimed=sum(1 for s in samples if s.time_point is None))
+                          untimed=sum(1 for s in samples if s.time_point is None),
+                          curate_ancestor_id=experiment.ancestor_id if curating else None,
+                          curate_copy_apply_url=reverse("mutation_copy_apply") if curating else "")
 
 
 def _type_url(cells):

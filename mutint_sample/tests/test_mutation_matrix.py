@@ -110,6 +110,45 @@ class WhatTheBrowserDecidesByTestCase(_Fixture):
             self.assertNotIn('data-role="%s"' % role, html)
 
 
+class CurateColumnTestCase(_Fixture):
+    """For a reader who can curate, a slim first column whose menu leads to the mutation's
+    edit page and to the Copy tab with it selected in the first sample carrying it."""
+
+    def test_it_is_first_unlabelled_and_offered_in_the_columns_menu(self):
+        matrix = self.matrix(curate=True)
+        self.assertEqual("curate", matrix.columns[0].key)
+        self.assertEqual("", matrix.columns[0].header_text)
+        self.assertEqual("Curate", matrix.columns[0].title)
+        self.assertTrue(matrix.columns[0].default_visible)
+        self.assertNotIn("curate", [c.key for c in self.matrix().columns])
+
+    def test_each_row_links_to_edit_and_to_copy_from_its_first_carrying_sample(self):
+        matrix = self.matrix(curate=True)
+        amp = self.row(matrix, 120)   # carried only by the first sample
+        self.assertEqual("/curate/edit?experiment_id=%d&mutation_id=%d" % (self.experiment.id, amp["id"]),
+                         amp["curate_edit_url"])
+        first = matrix.samples[0].id
+        self.assertEqual("/curate/copy?experiment_id=%d&source_sample_id=%d&mutation_id=%d"
+                         % (self.experiment.id, first, amp["id"]), amp["curate_copy_url"])
+        self.assertNotIn("curate_edit_url", self.row(self.matrix(), 120))
+
+    def test_copy_to_ancestor_is_offered_only_with_an_ancestor(self):
+        """The row names the sample to copy from; the matrix names the ancestor and the copy
+        endpoint, for the script's "Copy to ancestor". No ancestor, no target."""
+        matrix = self.matrix(curate=True)
+        self.assertIsNone(matrix.curate_ancestor_id)
+        self.assertEqual(matrix.samples[0].id, self.row(matrix, 120)["curate_copy_source"])
+
+        from mutint_sample.models import Sample
+        ancestor = Sample.objects.order_by("pk").last()
+        self.experiment.set_ancestor(ancestor, self.user)
+        self.experiment.refresh_from_db()
+        matrix = self.matrix(curate=True)
+        self.assertEqual(ancestor.id, matrix.curate_ancestor_id)
+        self.assertEqual("/curate/copy/apply", matrix.curate_copy_apply_url)
+        self.assertIsNone(self.matrix().curate_ancestor_id)
+
+
 class ColumnsTestCase(_Fixture):
     def test_the_descriptive_columns_are_the_per_sample_tables_minus_freq(self):
         keys = [c.key for c in self.matrix().columns]

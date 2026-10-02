@@ -257,27 +257,36 @@ else they share with the Metadata page's column menu.
 
 **A list whose highlight is its selection carries `.mutint-select-list` as well**, and
 `mutint_common/staticfiles/js/mutint_select_list.js` drives every one of them -- the genome
-browser's sample menu, the Copy tab's target menu, and the Add and Edit pages' sample
-lists. `active`
+browser's sample menu, the Copy and Add tabs' target menus, and the Edit page's sample
+list. `active`
 on the `<li>` is the selection; there is no checkbox anywhere to hold a second opinion about it.
 The gestures are the ones a list normally has: plain click selects only that row, ctrl/cmd
 toggles one, shift takes the range from the anchor, ctrl/cmd+shift adds a range.
 
-**`{toggle: true}` is the other mode, for the two dropdowns.** There every click toggles the
+**`{toggle: true}` is the other mode, for the dropdowns.** There every click toggles the
 row it lands on and shift adds a range -- a list of checkboxes rather than a selection. The
-distinction is whether the rows are independent and whether the list is in view: Add and
-Edit's lists sit open beside their form and choose *a* set of samples, where "only this one"
-is a useful gesture, while each row of the browser's menu is a BAM that is either loaded or
-not, and a plain click that unloaded every other sample would cost reloading each by hand.
-The Copy tab's **Copy to** menu is the browser's shape for a different reason: it lives in a
-dropdown, where the rest of the selection is out of sight when a plain click would silently
-replace it.
+distinction is whether the rows are independent and whether the list is in view: Edit's list
+sits open beside its form and chooses *a* set of samples, where "only this one" is a useful
+gesture, while each row of the browser's menu is a BAM that is either loaded or not, and a
+plain click that unloaded every other sample would cost reloading each by hand. The Copy
+tab's **Copy to** and the Add tab's **Add to** menus are the browser's shape for a different
+reason: they live in a dropdown, where the rest of the selection is out of sight when a plain
+click would silently replace it.
 
-**Copy's targets are a dropdown, not a column, because its page is a table.** They were a
-`select_list.html` column beside the mutation table, and the table -- as wide as its gene
-lists -- ran underneath the list, which was drawn on top of its right-hand columns. The
-dropdown sits in the button row with Select none / Select all beside it and the count in its
-own button (`controls: null`), and the table has the page's width.
+**Copy's and Add's targets are a dropdown, not a column.** The dropdown sits in the button
+row with Select none / Select all beside it and the count in its own button (`controls:
+null`), so the table or the form has the page's width. On Copy that is what keeps the table
+-- as wide as its gene lists -- from running underneath a list beside it; on Add it is the
+same control as Copy's, for the same choice.
+
+**A checkbox in a table cell answers a click anywhere in its cell.** Two kinds sit in the
+same columns: the Select extension *draws* a row's box and selects on a click anywhere in
+that cell, while a real `<input type="checkbox">` -- every header select-all, the curate
+grid's row boxes, the sharing and samples tables -- took a click on its own 13px and nowhere
+else, so a click a few pixels off it did nothing (measured: 4px off a drawn box toggled, 3px
+off a real one did not). One delegated handler in `mutint_crud.js` clicks the checkbox when
+a cell whose only control is that one checkbox is clicked; clicks on the box itself, on a
+link, button, label or field, or in a cell with more than one control, are left alone.
 
 Two things the CSS has to do that are easy to miss -- `user-select: none`, or shift-click drags a text
 selection across the rows it is selecting; and the fill written on `> li.active > a` rather than
@@ -2299,6 +2308,22 @@ JS because its CSS `color-mix` means nothing to an SVG reader. Headers come from
 `dt.column(i).header()`, never a fresh `querySelectorAll`: a hidden column's `<th>` leaves the
 document and every later index would be off by one -- found by measuring, when a probe that
 did it dropped the first sample column. A collapsed gene list exports as its summary.
+
+**A reader who can curate gets a Curate column on Compare.** `build_matrix(curate=True)`,
+which Compare passes when `can_edit_project` says so, puts `CURATE_COLUMN` first -- its
+`header` empty so the column is only as wide as its caret, its `title` still naming it in
+the Columns menu -- and gives each row `curate_edit_url` (the edit page, every carrying
+sample selected) and `curate_copy_url` (the Copy tab, from the first sample in column order
+that carries it, with `?mutation_id=` selecting that row). Where the experiment designates an
+ancestor, the menu also offers **Copy to ancestor** on every row that is not already
+ancestral, which posts straight to the Copy tab's endpoint (`curate_copy_source` to
+`curate_ancestor_id`) with `frequency=1` -- an ancestor's mutations are fixed, whatever the
+source sample reached; the endpoint takes an optional frequency for every copy, and the Copy
+tab sends none so its copies keep the source's -- recorded and restorable like any copy -- and reloads, since the
+mutation is then subtracted from every sample and every set. The menu is a Bootstrap dropdown
+the script fixes to the window when it opens, because the scroll box is `overflow: auto`
+and would clip it, and raises its cell over the pinned cells around it; scrolling the box
+closes it. CSV and SVG exports leave the column out.
 
 **Ancestral rows are marked, not filtered.** `build_matrix(ancestral_mutation_ids=...)` puts
 `ancestral: true|false` on each row, `rowCallback` toggles `ancestral_table_row` from it on

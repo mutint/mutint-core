@@ -536,6 +536,7 @@ def mutation_copy(request):
         experiment = _experiment_for_page(request, context)
         sample_dict = get_ordered_sample_dict(experiment.id, include_ancestor=True)
         source = _selected_sample(request, sample_dict, REQUEST_SOURCE_SAMPLE_ID)
+        rows = _rows_for(source) if source is not None else []
 
         context = _page_context(request, experiment)
         context.update({
@@ -544,13 +545,26 @@ def mutation_copy(request):
             "source_sample_id": source.id if source is not None else None,
             "targets": [sample for sample in sample_dict.values()
                         if source is None or sample.id != source.id],
-            "rows": _rows_for(source) if source is not None else [],
+            "rows": rows,
+            # `?mutation_id=` -- Compare's Curate menu -- opens the page with that mutation
+            # already selected, when the source sample carries it. Anything else selects
+            # nothing, as a page opened from the toolbar does.
+            "preselect_mutation_id": _preselected(request, rows),
             "title": "Copy mutations in %s" % experiment.name,
             "template_header": "Copy Mutations",
         })
         return render(request, "curate/copy.html", context)
     except _NotForYou as refusal:
         return refusal.response
+
+
+def _preselected(request, rows):
+    """The `?mutation_id=` to start selected, if it is one of these rows; None otherwise."""
+    try:
+        wanted = int(request.GET.get("mutation_id"))
+    except (TypeError, ValueError):
+        return None
+    return wanted if any(row["mutation_id"] == wanted for row in rows) else None
 
 
 def mutation_history(request):
@@ -658,6 +672,11 @@ def mutation_copy_apply(request):
     A target that already carries the mutation is skipped rather than given a second
     call of it: "make sure this call is on these samples too" is what the button means,
     and duplicating a row would quietly double that sample's count of it.
+
+    A copied call keeps the source's frequency unless `frequency` is posted, which sets
+    every copy's -- Compare's "Copy to ancestor" posts 1, because an ancestor is the clone
+    everything started from and a mutation in it is fixed, whatever share of the population
+    it reached in the sample it was copied from.
     """
     try:
         experiment = _experiment_for_write(request)
@@ -668,6 +687,7 @@ def mutation_copy_apply(request):
         if not target_ids:
             raise EditorError("Select at least one sample to copy to.")
 
+        frequency = _frequency(request) if request.POST.get("frequency", "").strip() else None
         source_id = request.POST.get(REQUEST_SOURCE_SAMPLE_ID)
         sources = list(history.calls_for(experiment)
                        .filter(sample_id=source_id,
@@ -681,7 +701,7 @@ def mutation_copy_apply(request):
         if not targets:
             raise EditorError("Those samples are not in this experiment.", status=404)
 
-        additions, already = _plan_copy(experiment, sources, targets)
+        additions, already = _plan_copy(experiment, sources, targets, frequency=frequency)
         edit_set = history.apply_edits(
             experiment, request.user, KIND_COPY, additions=additions,
             note="Copied %d mutation(s) to %d sample(s)." % (len(sources), len(targets)))
@@ -697,8 +717,9 @@ def mutation_copy_apply(request):
                          "edit_set_id": edit_set.pk if edit_set else None})
 
 
-def _plan_copy(experiment, sources, targets):
-    """Additions for copying each source call onto each target that lacks it.
+def _plan_copy(experiment, sources, targets, frequency=None):
+    """Additions for copying each source call onto each target that lacks it, at the source
+    call's frequency or at `frequency` when one is given.
 
     Returns `(additions, already)` -- the targets that were skipped at least once, by name. A
     count would say how many calls were not copied, which is not a number anybody can
@@ -710,6 +731,8 @@ def _plan_copy(experiment, sources, targets):
     for call in sources:
         identity = history.mutation_identity(call.mutation)
         snapshot = history.call_snapshot(call)
+        if frequency is not None:
+            snapshot["frequency"] = frequency
         for target_id in targets:
             key = (target_id, history.key_from_identity(identity), snapshot.get("source"))
             if existing.get(key):

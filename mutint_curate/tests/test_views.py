@@ -228,6 +228,38 @@ class PageTestCase(EditorTestCase):
                     "/curate/history?experiment_id=%d" % self.experiment.id)
 
 
+class CurateLinksTestCase(PageTestCase):
+    """Where Compare's Curate menu and the Add page's samples land."""
+
+    def test_copy_opens_with_the_mutation_it_was_asked_for_selected(self):
+        """Compare's Curate menu links here with `?mutation_id=`; the page selects that row.
+        A mutation the source sample does not carry selects nothing."""
+        html = self.get(COPY, source_sample_id=self.sample_a.id,
+                        mutation_id=self.mut_1.id).content.decode()
+        self.assertIn('table.row(\'[data-mutation-id="%d"]\')' % self.mut_1.id, html)
+        carried_by_a = set(MutationCall.objects.filter(sample=self.sample_a)
+                           .values_list("mutation_id", flat=True))
+        elsewhere = self.make_mutation(position=900, sequence_change="T>C")
+        self.assertNotIn(elsewhere.id, carried_by_a)
+        html = self.get(COPY, source_sample_id=self.sample_a.id,
+                        mutation_id=elsewhere.id).content.decode()
+        self.assertNotIn("table.row('[data-mutation-id=", html)
+
+    def test_add_chooses_its_samples_from_a_dropdown(self):
+        """The Copy tab's shape: an "Add to" menu with its count, Select none and Select
+        all beside it, and the Add button in the same row."""
+        html = self.get(ADD).content.decode()
+        start = html.index('id="me-toolbar"')
+        toolbar = html[start:html.index('id="me-error"', start)]
+        self.assertIn('class="dropdown-menu mutint-menu mutint-select-list" id="me-targets"', toolbar)
+        self.assertIn('Add to (<span id="target-count">0</span>', toolbar)
+        self.assertIn('data-targets="none"', toolbar)
+        self.assertIn('data-targets="all"', toolbar)
+        self.assertIn('id="me-apply"', toolbar)
+        for sample in (self.sample_a, self.sample_b):
+            self.assertIn('<li data-value="%d">' % sample.id, toolbar)
+
+
 class NoExperimentTestCase(EditorTestCase):
 
     def test_opening_a_page_with_no_experiment_is_not_an_error(self):

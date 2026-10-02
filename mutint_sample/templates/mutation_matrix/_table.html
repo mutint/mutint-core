@@ -19,7 +19,9 @@
      data-authenticated="{% if authenticated %}1{% else %}0{% endif %}"
      data-preferences-url="{{ preferences_url }}"
      data-csv-title="{{ matrix.csv_title }}"
-     data-empty-message="{{ empty_message }}">
+     data-empty-message="{{ empty_message }}"{% if matrix.curate_ancestor_id %}
+     data-curate-ancestor-id="{{ matrix.curate_ancestor_id }}"
+     data-curate-copy-apply="{{ matrix.curate_copy_apply_url }}"{% endif %}>
     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
     {% if controls %}
         {% include "control_tabs.html" with page="mutation_matrix" active="samples" prefs_id=prefs_id authenticated=authenticated preferences_url=preferences_url samples=True types=True references=True sets=matrix.offers_sets columns=True frequency=True export=True %}
@@ -41,7 +43,7 @@
         <thead>
             <tr>
                 {% for column in matrix.columns %}
-                    <th class="{{ column.css_class }}" data-key="{{ column.key }}">{{ column.title }}</th>
+                    <th class="{{ column.css_class }}" data-key="{{ column.key }}">{{ column.header_text }}</th>
                 {% endfor %}
                 {% for sample in matrix.samples %}
                     <th class="breseq-sample sample-palette-{{ sample.palette }} treatment-palette-{{ sample.treatment_palette|default_if_none:'none' }}" data-sample="{{ sample.id }}" data-index="{{ sample.index }}" data-population="{{ sample.population_id|default_if_none:'' }}" data-treatment="{{ sample.treatment }}" data-time="{% if sample.time_point is not None %}{{ sample.time_point|stringformat:'r' }}{% endif %}" data-clonal="{% if sample.clonal %}1{% else %}0{% endif %}"><a class="mutation-matrix-vertical" href="{{ sample.url }}" title="{{ sample.label }}{% if sample.treatment %} ({{ sample.treatment }}){% endif %} &mdash; view this sample's mutations">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></th>

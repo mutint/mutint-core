@@ -270,6 +270,11 @@
             shownSet = storedShow.set;
         }
 
+        // The Curate menu's "Copy to ancestor": present only where the page has a Curate
+        // column and the experiment designates an ancestor.
+        var curateAncestorId = container.getAttribute("data-curate-ancestor-id");
+        var curateCopyApply = container.getAttribute("data-curate-copy-apply");
+
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
         // What each sample column is, read off its header: which layers can hide it.
@@ -384,6 +389,55 @@
                     return a.outerHTML;
                 };
             }
+            // A row's actions, for a reader who can curate: a caret opening Edit and Copy, and
+            // "Copy to ancestor" where the experiment designates one and the row is not
+            // already its. The links are the server's (`curate_edit_url`, `curate_copy_url`);
+            // Copy is absent where no sample carries the row. Nothing in an export.
+            if (key === "curate") {
+                column.orderable = false;
+                column.render = function (data, type, row) {
+                    if (type !== "display" || !row.curate_edit_url) { return ""; }
+                    var group = document.createElement("div");
+                    group.className = "btn-group mutation-matrix-curate";
+                    var toggle = document.createElement("button");
+                    toggle.type = "button";
+                    toggle.className = "btn btn-default btn-xs dropdown-toggle";
+                    toggle.setAttribute("data-toggle", "dropdown");
+                    toggle.setAttribute("aria-haspopup", "true");
+                    toggle.setAttribute("aria-expanded", "false");
+                    toggle.title = "Curate this mutation";
+                    var caret = document.createElement("span");
+                    caret.className = "caret";
+                    toggle.appendChild(caret);
+                    var menu = document.createElement("ul");
+                    menu.className = "dropdown-menu";
+                    [["Edit", row.curate_edit_url, "Edit this mutation in every sample that carries it"],
+                     ["Copy", row.curate_copy_url, "Copy this mutation to other samples"]].forEach(function (item) {
+                        if (!item[1]) { return; }
+                        var li = document.createElement("li");
+                        var a = document.createElement("a");
+                        a.href = item[1];
+                        a.textContent = item[0];
+                        a.title = item[2];
+                        li.appendChild(a);
+                        menu.appendChild(li);
+                    });
+                    if (curateAncestorId && row.curate_copy_source && !row.ancestral) {
+                        var li = document.createElement("li");
+                        var a = document.createElement("a");
+                        a.href = "#";
+                        a.textContent = "Copy to ancestor";
+                        a.title = "Add this mutation to the designated ancestor, which subtracts it from every sample";
+                        a.setAttribute("data-copy-to-ancestor", row.id);
+                        a.setAttribute("data-source", row.curate_copy_source);
+                        li.appendChild(a);
+                        menu.appendChild(li);
+                    }
+                    group.appendChild(toggle);
+                    group.appendChild(menu);
+                    return group.outerHTML;
+                };
+            }
             if (key === "seq_id") {
                 column.render = function (data, type, row) {
                     if (type !== "display") { return renderHtml(data); }
@@ -474,12 +528,12 @@
                     extend: "csv",
                     text: "Filtered mutations",
                     title: (container.getAttribute("data-csv-title") || "mutations") + "_showing",
-                    exportOptions: { columns: ":visible", orthogonal: "export", modifier: { search: "applied" } }
+                    exportOptions: { columns: ":visible:not(.breseq-curate)", orthogonal: "export", modifier: { search: "applied" } }
                 }, {
                     extend: "csv",
                     text: "All mutations",
                     title: container.getAttribute("data-csv-title") || "mutations",
-                    exportOptions: { columns: ":visible", orthogonal: "export", modifier: { search: "none" } }
+                    exportOptions: { columns: ":visible:not(.breseq-curate)", orthogonal: "export", modifier: { search: "none" } }
                 }]
             }, {
                 // A vector drawing of the filtered rows, as the Display settings show them;
@@ -622,7 +676,8 @@
         }
         ths.forEach(function (th) {
             var key = th.getAttribute("data-key");
-            if (key === null) { return; }
+            // The Curate column is as wide as its buttons and has nothing to resize to.
+            if (key === null || key === "curate") { return; }
             if (typeof widths[key] === "number") { applyWidth(th, widths[key]); }
             var handle = document.createElement("span");
             handle.className = "mutation-matrix-resizer";
@@ -676,6 +731,58 @@
         }
         sizeScrollBox();
         window.addEventListener("resize", function () { sizeScrollBox(); pinColumns(); });
+
+        /* The Curate menu opens over the scroll box rather than inside it. The box is
+           `overflow: auto`, so a menu positioned in the cell would be clipped or would scroll
+           the box; it is fixed to the window at its caret instead, above it when there is no
+           room below. A pinned cell is its own stacking context, so the open one is raised
+           over its neighbours for as long as its menu is open. Scrolling the box closes it,
+           since a fixed menu would otherwise stay put while its row moved. */
+        $(table).on("shown.bs.dropdown", ".mutation-matrix-curate", function () {
+            var toggle = this.querySelector(".dropdown-toggle");
+            var menu = this.querySelector(".dropdown-menu");
+            var cell = this.closest("td");
+            if (cell) { cell.classList.add("mutation-matrix-curate-open"); }
+            var r = toggle.getBoundingClientRect();
+            menu.style.position = "fixed";
+            menu.style.left = r.left + "px";
+            menu.style.top = r.bottom + 2 + "px";
+            var below = window.innerHeight - r.bottom;
+            if (menu.offsetHeight > below - 8 && r.top > menu.offsetHeight + 8) {
+                menu.style.top = (r.top - menu.offsetHeight - 2) + "px";
+            }
+        });
+        /* "Copy to ancestor" does it directly: the Copy tab's own endpoint, from the row's
+           first carrying sample to the ancestor, at 100% -- an ancestor's mutations are fixed
+           -- and recorded and restorable like any copy. The
+           mutation is then ancestral -- subtracted from every sample and every set -- so the
+           page reloads to show that rather than patching a table the server now describes
+           differently. A refusal (a locked experiment, say) is said and changes nothing. */
+        $(table).on("click", "a[data-copy-to-ancestor]", function (event) {
+            event.preventDefault();
+            var link = this;
+            window.mutintPost(curateCopyApply, {
+                experiment_id: experimentId,
+                source_sample_id: link.getAttribute("data-source"),
+                mutation_ids: JSON.stringify([parseInt(link.getAttribute("data-copy-to-ancestor"), 10)]),
+                target_sample_ids: JSON.stringify([parseInt(curateAncestorId, 10)]),
+                // Fixed in the ancestor, whatever it reached in the sample it came from.
+                frequency: "1"
+            }).then(function () {
+                window.location.reload();
+            }).catch(function (failure) {
+                window.alert("Could not copy to the ancestor: " + failure.message);
+            });
+        });
+        $(table).on("hidden.bs.dropdown", ".mutation-matrix-curate", function () {
+            var cell = this.closest("td");
+            if (cell) { cell.classList.remove("mutation-matrix-curate-open"); }
+        });
+        if (scrollBox) {
+            scrollBox.addEventListener("scroll", function () {
+                $(table).find(".mutation-matrix-curate.open > .dropdown-toggle").dropdown("toggle");
+            });
+        }
         // Once more when everything has loaded: an image above the box arriving after this
         // ran moves the box's top, and a box sized before that overflows the page.
         window.addEventListener("load", sizeScrollBox);

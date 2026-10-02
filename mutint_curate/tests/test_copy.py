@@ -16,12 +16,13 @@ COPY = "/curate/copy/apply"
 
 class CopyTestCase(EditorTestCase):
 
-    def _copy(self, mutations, targets, source=None):
+    def _copy(self, mutations, targets, source=None, **extra):
         return self.client.post(COPY, {
             "experiment_id": self.experiment.id,
             "source_sample_id": (source or self.sample_a).id,
             "mutation_ids": json.dumps([m.id for m in mutations]),
             "target_sample_ids": json.dumps([t.id for t in targets]),
+            **extra,
         })
 
     def test_a_mutation_lands_on_the_target(self):
@@ -40,6 +41,22 @@ class CopyTestCase(EditorTestCase):
         self.assertEqual(source.frequency, copied.frequency)
         self.assertEqual(source.evidence, copied.evidence)
         self.assertEqual(source.source, copied.source)
+
+    def test_a_posted_frequency_sets_every_copys(self):
+        """Compare's "Copy to ancestor" posts 1: a mutation in the ancestor is fixed, whatever
+        it reached in the sample it was copied from. The source call is left as it was."""
+        source = MutationCall.objects.get(sample=self.sample_a, mutation=self.mut_2)
+        source.frequency = 0.42
+        source.save(update_fields=["frequency"])
+
+        self.assertEqual(200, self._copy([self.mut_2], [self.sample_b], frequency="1").status_code)
+
+        self.assertEqual(1.0, MutationCall.objects.get(sample=self.sample_b, mutation=self.mut_2).frequency)
+        self.assertEqual(0.42, MutationCall.objects.get(sample=self.sample_a, mutation=self.mut_2).frequency)
+
+    def test_a_frequency_out_of_range_is_refused(self):
+        self.assertEqual(400, self._copy([self.mut_2], [self.sample_b], frequency="2").status_code)
+        self.assertFalse(MutationCall.objects.filter(sample=self.sample_b, mutation=self.mut_2).exists())
 
     def test_a_batch_is_one_edit_set(self):
         third = self.make_sample(time_point=3)

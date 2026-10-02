@@ -251,4 +251,30 @@
                 });
             });
     };
+
+    /* A checkbox in a table cell answers a click anywhere in its cell.
+
+       Two kinds of box sit in the same columns here and took clicks differently. The Select
+       extension *draws* a row's box on its cell and selects on a click anywhere in that cell;
+       a real <input type="checkbox"> -- every select-all in a header, the curate grid's row
+       boxes, the sharing and samples tables -- took a click on its own 13px and nowhere else,
+       so a click a few pixels off it, still well inside the cell that looked like its target,
+       did nothing. Measured: 4px either side of a drawn box toggled the row, 3px off a real
+       one did not.
+
+       So a click on a cell whose only control is one checkbox clicks that checkbox. Clicks
+       on the checkbox itself, or on anything else that acts -- a link, a button, a label, a
+       field -- are left alone, as is a cell holding more than one control, where the click
+       could mean either. Delegated from the document, so a header DataTables cloned for its
+       scroll box and rows drawn after load are covered with nothing to re-bind. */
+    document.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!target.closest || target.closest("input, a, button, label, select, textarea")) { return; }
+        var cell = target.closest("td, th");
+        if (!cell) { return; }
+        var boxes = cell.querySelectorAll('input[type="checkbox"]');
+        if (boxes.length !== 1 || boxes[0].disabled) { return; }
+        if (cell.querySelector('a, button, select, textarea, input:not([type="checkbox"])')) { return; }
+        boxes[0].click();
+    });
 })();

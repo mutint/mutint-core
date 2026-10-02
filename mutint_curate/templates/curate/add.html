@@ -37,14 +37,14 @@
         <div class="row">
             <p style="color: #666;">
                 Records a mutation no sample carries yet. It is added to every sample you
-                highlight, as one entry in the
+                choose in <b>Add to</b>, as one entry in the
                 <a href="/curate/history?experiment_id={{ experiment_id }}">history</a>,
                 and can be restored away from there. A sample that already has this mutation is
                 skipped rather than given a second copy of it.
             </p>
         </div>
 
-        <div class="col-lg-7" style="padding-left: 0;">
+        <div style="max-width: 50em;">
             <div class="form-group">
                 <label for="me-type">Mutation type</label>
                 <select class="form-control" id="me-type">
@@ -65,21 +65,33 @@
                 <label for="me-f-frequency">Frequency</label>
                 <input type="text" class="form-control" id="me-f-frequency"
                        data-name="frequency" value="1.0">
-                <p class="help-block">Applied to every sample below. 1.0 is a fixed mutation.</p>
+                <p class="help-block">Applied to every sample in <b>Add to</b>. 1.0 is a fixed mutation.</p>
             </div>
 
-            <button type="button" class="btn btn-primary" id="me-apply">+ Add mutation</button>
+            {% comment %} The samples are a dropdown beside the button, as on the Copy tab -- the
+               genome browser's Samples menu in the same toggle mode: a click adds or removes
+               one sample and the menu stays open, so picking twelve is twelve clicks rather than
+               twelve ctrl-clicks. The count is in its button and the presets beside it. {% endcomment %}
+            <div class="btn-row" id="me-toolbar">
+                <div class="btn-group" id="target-menu">
+                    <button type="button" class="btn btn-default dropdown-toggle"
+                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Add to (<span id="target-count">0</span> of {{ targets|length }})
+                        <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu mutint-menu mutint-select-list" id="me-targets">
+                        {% for sample in targets %}
+                            <li data-value="{{ sample.id }}"><a href="#">{{ sample.label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-default" data-targets="none">Select none</button>
+                    <button type="button" class="btn btn-default" data-targets="all">Select all</button>
+                </div>
+                <button type="button" class="btn btn-primary" id="me-apply">+ Add mutation</button>
+            </div>
             <div id="me-error" style="color: #a00; margin-top: 0.5em; white-space: pre-line;"></div>
-        </div>
-
-        {% comment %} A bare column under #mutint-content has its gutter zeroed by
-           common.css, so this one would touch the column beside it. 30px is what
-           Bootstrap puts between two columns (15px each side), put back on the one
-           side that needs it -- the page still lines up with the title on the left
-           and the content edge on the right. {% endcomment %}
-        <div class="col-lg-5" style="padding-left: 30px;">
-            <h4>Add to</h4>
-            {% include "select_list.html" with items=targets id="me-targets" %}
         </div>
     {% endif %}
 
@@ -91,7 +103,21 @@
         if (!document.getElementById("me-apply")) { return; }
 
         var form = mutintMutationForm(null);
-        var targets = window.mutintSelectList(document.getElementById("me-targets"));
+        // Toggle mode with the presets beside the dropdown and the count in its button --
+        // copy.html's wiring.
+        var count = document.getElementById("target-count");
+        var targets = window.mutintSelectList(document.getElementById("me-targets"), {
+            controls: null,
+            toggle: true,
+            onChange: function () { count.textContent = targets.count(); }
+        });
+        Array.prototype.forEach.call(
+            document.querySelectorAll("#me-toolbar [data-targets]"), function (button) {
+                var on = button.getAttribute("data-targets") === "all";
+                button.addEventListener("click", function () {
+                    targets.select(function () { return on; });
+                });
+            });
 
         document.getElementById("me-apply").addEventListener("click", function () {
             var targetIds = targets.selected().map(function (id) {

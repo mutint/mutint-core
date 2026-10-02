@@ -837,3 +837,26 @@ table.dataTable.mutation-matrix-table tbody > tr > td.breseq-sample {
 table.dataTable.mutation-matrix-table thead th.breseq-sample {
     padding-right: 3px;
 }
+
+/* The Curate column: a caret per row and no header text, so it is no wider than the caret.
+   Its menu is fixed to the window by the script (it would be clipped by the scroll box), and
+   the cell whose menu is open is raised over the pinned cells around it: a pinned cell is a
+   stacking context of its own, so the menu could otherwise only ever be as high as its cell. */
+table.dataTable.mutation-matrix-table th.breseq-curate,
+table.dataTable.mutation-matrix-table td.breseq-curate {
+    width: 1px;
+    padding-left: 4px;
+    padding-right: 4px;
+    text-align: center;
+    white-space: nowrap;
+}
+table.dataTable.mutation-matrix-table td.breseq-curate .btn-xs {
+    padding: 0 5px;
+    line-height: 16px;
+}
+table.dataTable.mutation-matrix-table td.mutation-matrix-curate-open {
+    z-index: 6;
+}
+.mutation-matrix-curate .dropdown-menu {
+    min-width: 0;
+}

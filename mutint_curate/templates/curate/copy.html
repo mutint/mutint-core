@@ -137,6 +137,22 @@
         // row, as on the Delete tab.
         window.mutintListToolbar(table, "me-toolbar");
 
+        {% if preselect_mutation_id %}
+        // Opened for one mutation (Compare's Curate menu): select its row, turn to the page
+        // that holds it and bring it into view, so the reader starts where they pointed.
+        (function () {
+            var row = table.row('[data-mutation-id="{{ preselect_mutation_id }}"]');
+            if (!row.any()) { return; }
+            row.select();
+            var position = table.rows({ order: "applied", search: "applied" }).indexes()
+                .toArray().indexOf(row.index());
+            var length = table.page.len();
+            if (position >= 0 && length > 0) { table.page(Math.floor(position / length)).draw(false); }
+            var node = row.node();
+            if (node && node.scrollIntoView) { node.scrollIntoView({ block: "center" }); }
+        })();
+        {% endif %}
+
         // Nowhere to copy to: the table still draws, and there is no menu or button to wire.
         if (!document.getElementById("me-apply")) { return; }
 
