@@ -87,6 +87,7 @@ its frequency), Sets when the matrix has row sets, and Export -- from `control_t
 hide descriptive columns, samples, mutation types and reference sequences. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
+`mutation_matrix.page_length` (Show N entries, All included),
 `mutation_matrix.view` (Normal or Condensed cell padding) and `mutation_matrix.show` (which row
 set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>` and
 `mutation_matrix.references.<experiment_id>` (shared by every matrix page of that experiment,

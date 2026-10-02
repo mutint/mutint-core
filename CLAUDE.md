@@ -2323,7 +2323,8 @@ tab sends none so its copies keep the source's -- recorded and restorable like a
 mutation is then subtracted from every sample and every set. The menu is a Bootstrap dropdown
 the script fixes to the window when it opens, because the scroll box is `overflow: auto`
 and would clip it, and raises its cell over the pinned cells around it; scrolling the box
-closes it. CSV and SVG exports leave the column out.
+closes it. Copy to ancestor's reload returns the reader to the page and scroll position they
+left, through a one-time `mutation_matrix.return` entry in session storage. CSV and SVG exports leave the column out.
 
 **Ancestral rows are marked, not filtered.** `build_matrix(ancestral_mutation_ids=...)` puts
 `ancestral: true|false` on each row, `rowCallback` toggles `ancestral_table_row` from it on
@@ -2413,8 +2414,9 @@ them, reference then position, which is breseq's own; a header is not a sort han
 sample's header is a link to that sample's Mutations page (`SampleColumn.url`) instead.
 
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
-holds `mutation_matrix.columns`, `mutation_matrix.types`, `mutation_matrix.frequency` and
-`mutation_matrix.view` for the reader everywhere, and `mutation_matrix.samples.<exp>` and
+holds `mutation_matrix.columns`, `mutation_matrix.types`, `mutation_matrix.frequency`,
+`mutation_matrix.view` and `mutation_matrix.page_length` (Show N entries, All included) for the
+reader everywhere, and `mutation_matrix.samples.<exp>` and
 `mutation_matrix.references.<exp>` per experiment -- a sample id or a contig name means
 something only within one experiment; Search has no experiment and both selections are
 transient there. The store's client half is `js/mutint_preferences.js`, loaded from

@@ -98,6 +98,13 @@
     var SHOW_KEY = "mutation_matrix.show";
     var OPTIONS_KEY = "mutation_matrix.options";
     var WIDTHS_KEY = "mutation_matrix.widths";
+    // How many rows a page shows -- "Show N entries" -- remembered like every other choice, so
+    // a reload (Copy to ancestor makes one) does not drop "All" back to 100.
+    var PAGE_LENGTH_KEY = "mutation_matrix.page_length";
+    var PAGE_LENGTHS = [50, 100, 500, 1000, -1];
+    // Where the reader was, carried across the reload Copy to ancestor makes. Session storage:
+    // it is about this tab, this once, and is taken as soon as it is read.
+    var RETURN_KEY = "mutation_matrix.return";
     var MIN_COLUMN_WIDTH = 40;
     var VIEWS = { normal: true, condensed: true };
     var FORMATS = { number: "Number", bars: "Bars", heat: "Heat map", both: "Number and heat map" };
@@ -274,6 +281,9 @@
         // column and the experiment designates an ancestor.
         var curateAncestorId = container.getAttribute("data-curate-ancestor-id");
         var curateCopyApply = container.getAttribute("data-curate-copy-apply");
+
+        var storedLength = prefs.get(PAGE_LENGTH_KEY, null);
+        var pageLength = storedLength && PAGE_LENGTHS.indexOf(storedLength.length) >= 0 ? storedLength.length : 100;
 
         var ths = Array.prototype.slice.call(table.querySelectorAll("thead th"));
         var shownSampleIndexes = {};
@@ -501,8 +511,8 @@
             autoWidth: false,
             paging: true,
             pagingType: "full_numbers",
-            pageLength: 100,
-            lengthMenu: [[50, 100, 500, 1000, -1], [50, 100, 500, 1000, "All"]],
+            pageLength: pageLength,
+            lengthMenu: [PAGE_LENGTHS, [50, 100, 500, 1000, "All"]],
             // The server's order, and no sort handles on the headers: a click on a sample's
             // header follows its link instead.
             ordering: false,
@@ -769,6 +779,13 @@
                 // Fixed in the ancestor, whatever it reached in the sample it came from.
                 frequency: "1"
             }).then(function () {
+                try {
+                    window.sessionStorage.setItem(RETURN_KEY, JSON.stringify({
+                        path: window.location.pathname + window.location.search,
+                        page: dt.page(), top: scrollBox ? scrollBox.scrollTop : 0,
+                        left: scrollBox ? scrollBox.scrollLeft : 0, window: window.pageYOffset
+                    }));
+                } catch (ignored) { /* storage refused: the reload simply starts at the top */ }
                 window.location.reload();
             }).catch(function (failure) {
                 window.alert("Could not copy to the ancestor: " + failure.message);
@@ -1284,6 +1301,22 @@
 
         // The first refresh: the sets need the table, and the summary needs the sets.
         if (decidesHere) { refresh(false); }
+
+        dt.on("length.dt", function (event, settings, length) {
+            prefs.set(PAGE_LENGTH_KEY, { length: length });
+        });
+
+        // Back where the reader was, if this load is the one Copy to ancestor made.
+        var returning = null;
+        try {
+            returning = JSON.parse(window.sessionStorage.getItem(RETURN_KEY) || "null");
+            window.sessionStorage.removeItem(RETURN_KEY);
+        } catch (ignored) { returning = null; }
+        if (returning && returning.path === window.location.pathname + window.location.search) {
+            if (returning.page > 0 && returning.page < dt.page.info().pages) { dt.page(returning.page).draw(false); }
+            if (scrollBox) { scrollBox.scrollTop = returning.top || 0; scrollBox.scrollLeft = returning.left || 0; }
+            window.scrollTo(0, returning.window || 0);
+        }
 
         // For a harness or a console: the DataTable behind the container.
         container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, references: referencePicker, frequency: frequencyPicker, show: showPicker,
