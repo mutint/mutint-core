@@ -8,7 +8,7 @@
  * Illustrator, Inkscape and browsers all read the same way.
  *
  * It follows what the reader chose: the visible columns and samples in table order, the
- * Frequency display format and the Normal / Condensed view. Colors come from the page --
+ * Frequency display format and the vertical padding (Normal or Condensed). Colors come from the page --
  * each sample header's `--sample-color` is read back from the stylesheet, so the CSS stays
  * the one palette -- except the heat map, whose CSS is a `color-mix(in oklab ...)` no SVG
  * reader understands; it is mixed here in oklab the same way, so the file matches the screen.

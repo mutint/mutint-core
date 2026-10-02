@@ -15,71 +15,63 @@
 {% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
 {% block content %}
     {% if experiment_id %}
-        {% comment %} The controls are eight tabs -- Mutations, Treatments, Populations, Samples,
-           Time, Rows, Display, Export -- and this page owns the strip and the one
-           `.tab-content` every pane must share: the Mutations pane carries blocks a page that
-           extends this one fills, and a block cannot cross the {% mutation_matrix %} tag, so
-           the tag is told `controls=False` and renders the table alone. Compare is the page.
+        {% comment %} The controls are tabs -- Treatments, Populations, Samples, Time, Ancestral,
+           Mutation Types, References, Sets, Columns, Frequency, Export -- and this page owns
+           the strip and the one `.tab-content` every pane must share: the Sets pane carries
+           blocks a page that extends this one fills, and a block cannot cross the
+           {% mutation_matrix %} tag, so the tag is told `controls=False` and renders the table
+           alone. Compare is the page.
 
            **Every control on it works in the browser, with no Apply.** The view sends every
            sample and every call, unfiltered, the designated ancestor's mutations flagged;
-           js/mutation_matrix.js applies the reader's filter, hides columns by sample,
+           js/mutation_matrix.js applies the reader's frequency range, hides columns by sample,
            population, treatment, type and time, draws or drops the ancestral rows and asks
-           the page's registered row sets what they hold -- on every change. Treatments and
-           Time are offered only where they could do something: a treatment some sample
-           carries, two time points to choose between. {% endcomment %}
+           the page's registered row sets what they hold -- on every change. Treatments, Time
+           and Ancestral are offered only where they could do something: a treatment some
+           sample carries, two time points to choose between, an ancestor designated.
+
+           **The Mutations tab is not offered for now**, and with it the ignored-genes box: the
+           script applies the reader's gene list only where that box is on the page, and
+           leaves it in their session for the pages that do offer it. {% endcomment %}
         {% url 'preferences' as preferences_url %}
-        {% include "control_tabs.html" with page="mutation_matrix" active="filter" prefs_id=matrix.dom_id|add:"-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=True treatments=matrix.treatments populations=True samples=True time=matrix.offers_time rows=True display=True export=True %}
+        {% url 'filter_set' as filter_url %}
+        {% with active_tab=matrix.treatments|yesno:"treatments,populations" state_id=matrix.dom_id|add:"-view-filter" %}
+        {% include "control_tabs.html" with page="mutation_matrix" active=active_tab prefs_id=matrix.dom_id|add:"-prefs" authenticated=user.is_authenticated preferences_url=preferences_url treatments=matrix.treatments populations=True samples=True time=matrix.offers_time ancestral=ancestor types=True references=True sets=matrix.offers_sets columns=True frequency=True export=True %}
         <div class="tab-content" data-mutation-matrix-controls="{{ matrix.dom_id }}">
-        <div class="tab-pane active" id="mutation_matrix-pane-filter">
-        {% comment %} The reader's filter -- one filter, theirs, shared with every other page that
-           reads it -- applied here as it is typed and written back to the session through
-           `/filter/set`, which answers with the value as the server normalized it. A value it
-           refuses is said under the boxes and changes nothing. {% endcomment %}
-        <div class="form-inline mutation-matrix-controls" data-role="view-filter"
-             data-url="{% url 'filter_set' %}" data-experiment-id="{{ experiment_id }}"
-             data-state-id="{{ matrix.dom_id }}-view-filter"
-             data-ancestral-shown="{% if ancestral_shown %}1{% else %}0{% endif %}">
-            <b>Showing:</b>
-            <label class="view-filter-field" style="margin-left: 6px;">
-                frequency
-                <input type="text" data-role="filter-min" size="3" placeholder="0" class="form-control"
-                       value="{% if view_filter_state.min_freq is not None %}{{ view_filter_state.min_freq }}{% endif %}"/>
-                &ndash;
-                <input type="text" data-role="filter-max" size="3" placeholder="100" class="form-control"
-                       value="{% if view_filter_state.max_freq is not None %}{{ view_filter_state.max_freq }}{% endif %}"/>%
-            </label>
-            <label class="view-filter-field" style="margin-left: 10px;">
-                ignoring genes
-                <input type="text" data-role="filter-genes" size="18" placeholder="none" class="form-control"
-                       value="{{ view_filter_state.genes|join:", " }}"/>
-            </label>
-            <button type="button" class="btn btn-link btn-sm" data-role="filter-clear">clear</button>
-            {% comment %} A page that extends this one puts the controls of its row sets here
-               -- Compare's two thresholds -- as inputs carrying `data-set-param`, which the
-               script remembers and hands to the set's function. {% endcomment %}
-            {% block matrix_controls %}{% endblock %}
-            {% if ancestor %}
-                {% comment %} Display only: the ancestral rows are drawn, tinted, or not. They
-                   are in no row set either way. The same session choice the per-sample page
-                   reads. {% endcomment %}
-                <button type="button" class="btn btn-default" data-role="ancestral-toggle"
-                        style="margin-left: 10px;">Show ancestral mutations</button>
-            {% endif %}
+        {% include "mutation_matrix/_group_panes.html" with matrix=matrix page="mutation_matrix" active=active_tab %}
+        {% if ancestor %}
+            {% comment %} Display only: the ancestral rows are drawn, tinted, or not, and are in
+               no row set either way -- the same session choice the per-sample page reads. The
+               sentence beside the button is the script's. {% endcomment %}
+            <div class="tab-pane" id="mutation_matrix-pane-ancestral">
+                <div class="mutation-matrix-controls">
+                    <button type="button" class="btn btn-default" data-role="ancestral-toggle">Show ancestral mutations</button>
+                </div>
+                <div class="mutation-matrix-summary" data-role="ancestral-summary"
+                     data-ancestor-name="{{ ancestor.name }}"
+                     data-ancestor-url="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ ancestor.sample_id }}">
+                </div>
+            </div>
+        {% endif %}
+        {% if matrix.offers_sets %}
+            <div class="tab-pane" id="mutation_matrix-pane-sets">
+                <div class="form-inline mutation-matrix-controls mutation-matrix-sets">
+                    {% include "mutation_matrix/_show_menu.html" with matrix=matrix %}
+                    {% comment %} A page that extends this one puts the controls of its row sets
+                       here -- Compare's two thresholds -- as inputs carrying `data-set-param`,
+                       which the script remembers and hands to the set's function. {% endcomment %}
+                    {% block matrix_controls %}{% endblock %}
+                </div>
+                {% comment %} Each row set's own sentence, written by the script as it
+                   changes. {% endcomment %}
+                <div class="mutation-matrix-summary" data-role="set-notes"></div>
+                {% block matrix_summary %}{% endblock %}
+            </div>
+        {% endif %}
+        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active=active_tab sample_types=True frequency_bounds=True own_sets_pane=True %}
         </div>
-        <div class="text-danger" data-role="filter-error" style="margin: 4px 0;" hidden></div>
-        {% with state_id=matrix.dom_id|add:"-view-filter" %}{{ view_filter_state|json_script:state_id }}{% endwith %}
-        {% comment %} What is hidden and why, written by the script as it changes: the ancestor,
-           the reader's filter, and each row set's own sentence. {% endcomment %}
-        <div class="mutation-matrix-summary" data-role="matrix-summary"
-             {% if ancestor %}data-ancestor-name="{{ ancestor.name }}"
-             data-ancestor-url="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ ancestor.sample_id }}"{% endif %}>
-        </div>
-        {% block matrix_summary %}{% endblock %}
-        </div>
-        {% include "mutation_matrix/_group_panes.html" with matrix=matrix page="mutation_matrix" %}
-        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active="filter" sample_types=True %}
-        </div>
+        {{ view_filter_state|json_script:state_id }}
+        {% endwith %}
         {% mutation_matrix matrix empty_message=empty_message controls=False %}
     {% endif %}
 {% endblock %}

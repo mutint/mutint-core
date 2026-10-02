@@ -1,14 +1,19 @@
 {% comment %} Treatments, Populations and Time: the panes that hide sample columns by what the
    samples share, beside the Samples pane that hides them one at a time. Rendered by
    mutation_matrix/page.html only -- Compare's -- into the same `.tab-content` as the rest.
-   Takes `matrix` and `page`.
+   Takes `matrix`, `page` and `active`.
+
+   Treatments and Populations each carry a "Color sample columns by" box, and the two are one
+   choice: the sample headers -- and the bars drawn in their color -- wear the population's
+   palette, the treatment's, or none. Ticking one unticks the other; unticking the one ticked
+   leaves the columns uncolored. The script remembers it per experiment.
 
    Each is a layer: a column shows when its sample is ticked in Samples *and* its population,
    its treatment and its type are ticked *and* its time point is in range. The menus are the
    Samples menu's markup, driven the same way (mutintSelectList in toggle mode), so being
    active is being shown; js/mutation_matrix.js finds them by `data-role`. {% endcomment %}
 {% if matrix.treatments %}
-<div class="tab-pane" id="{{ page }}-pane-treatments">
+<div class="tab-pane{% if active == "treatments" %} active{% endif %}" id="{{ page }}-pane-treatments">
     <div class="mutation-matrix-controls">
         <div class="btn-group">
             <button type="button" class="btn btn-default dropdown-toggle"
@@ -29,10 +34,13 @@
             <button type="button" class="btn btn-default" data-treatments="all">Show all treatments</button>
             <button type="button" class="btn btn-default" data-treatments="none">Hide all treatments</button>
         </div>
+        <label class="mutation-matrix-color">
+            <input type="checkbox" data-color="treatment"/> Color sample columns by treatment
+        </label>
     </div>
 </div>
 {% endif %}
-<div class="tab-pane" id="{{ page }}-pane-populations">
+<div class="tab-pane{% if active == "populations" %} active{% endif %}" id="{{ page }}-pane-populations">
     <div class="mutation-matrix-controls">
         <div class="btn-group">
             <button type="button" class="btn btn-default dropdown-toggle"
@@ -50,6 +58,9 @@
             <button type="button" class="btn btn-default" data-populations="all">Show all populations</button>
             <button type="button" class="btn btn-default" data-populations="none">Hide all populations</button>
         </div>
+        <label class="mutation-matrix-color">
+            <input type="checkbox" data-color="population" checked/> Color sample columns by population
+        </label>
     </div>
 </div>
 {% if matrix.offers_time %}

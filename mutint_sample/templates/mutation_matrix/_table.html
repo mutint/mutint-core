@@ -9,7 +9,7 @@
    are drawn by the script -- a thousand mutations by forty samples is not a table to render
    twice.
 
-   The menus live in a tab strip (control_tabs.html) with four panes (_panes.html). A page
+   The menus live in a tab strip (control_tabs.html) with the matrix's own panes (_panes.html). A page
    that renders the tag alone -- Search -- gets the strip from here; mutation_matrix/page.html
    renders its own, with a Filter tab for its form in front, and passes `controls=False`,
    because every pane has to sit in one `.tab-content` and a block cannot cross an inclusion
@@ -22,7 +22,7 @@
      data-empty-message="{{ empty_message }}">
     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
     {% if controls %}
-        {% include "control_tabs.html" with page="mutation_matrix" active="samples" prefs_id=prefs_id authenticated=authenticated preferences_url=preferences_url samples=True rows=True display=True export=True %}
+        {% include "control_tabs.html" with page="mutation_matrix" active="samples" prefs_id=prefs_id authenticated=authenticated preferences_url=preferences_url samples=True types=True references=True sets=matrix.offers_sets columns=True frequency=True export=True %}
         <div class="tab-content" data-mutation-matrix-controls="{{ matrix.dom_id }}">
             {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active="samples" %}
         </div>
@@ -44,7 +44,7 @@
                     <th class="{{ column.css_class }}" data-key="{{ column.key }}">{{ column.title }}</th>
                 {% endfor %}
                 {% for sample in matrix.samples %}
-                    <th class="breseq-sample sample-palette-{{ sample.palette }}" data-sample="{{ sample.id }}" data-index="{{ sample.index }}" data-population="{{ sample.population_id|default_if_none:'' }}" data-treatment="{{ sample.treatment }}" data-time="{% if sample.time_point is not None %}{{ sample.time_point|stringformat:'r' }}{% endif %}" data-clonal="{% if sample.clonal %}1{% else %}0{% endif %}"><a class="mutation-matrix-vertical" href="{{ sample.url }}" title="{{ sample.label }}{% if sample.treatment %} ({{ sample.treatment }}){% endif %} &mdash; view this sample's mutations">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></th>
+                    <th class="breseq-sample sample-palette-{{ sample.palette }} treatment-palette-{{ sample.treatment_palette|default_if_none:'none' }}" data-sample="{{ sample.id }}" data-index="{{ sample.index }}" data-population="{{ sample.population_id|default_if_none:'' }}" data-treatment="{{ sample.treatment }}" data-time="{% if sample.time_point is not None %}{{ sample.time_point|stringformat:'r' }}{% endif %}" data-clonal="{% if sample.clonal %}1{% else %}0{% endif %}"><a class="mutation-matrix-vertical" href="{{ sample.url }}" title="{{ sample.label }}{% if sample.treatment %} ({{ sample.treatment }}){% endif %} &mdash; view this sample's mutations">{{ sample.label }} {% sample_flag_badges flags=sample.flags %}</a></th>
                 {% endfor %}
             </tr>
         </thead>

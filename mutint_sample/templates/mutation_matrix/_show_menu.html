@@ -1,0 +1,21 @@
+{% comment %} The Show menu: All, or one of the row sets the caller handed the matrix -- each with
+   its count, which the script fills in for a set the browser decides. Rendered on the Sets tab,
+   by _panes.html or by a page that draws that tab itself (mutation_matrix/page.html). {% endcomment %}
+{% if matrix.offers_sets %}
+    <div class="btn-group">
+        <button type="button" class="btn btn-default dropdown-toggle"
+                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Show: <span data-role="show-label">All</span> <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="show">
+            <li data-value="" class="active"><a href="#">All (<span data-role="all-count">{{ matrix.rows|length }}</span>)</a></li>
+            {% for set in matrix.sets %}
+                <li data-value="{{ set.key }}"><a href="#">{{ set.label }} ({{ set.count }})</a></li>
+            {% endfor %}
+            {% comment %} Counted by the browser, which decides what they hold. {% endcomment %}
+            {% for set in matrix.client_sets %}
+                <li data-value="{{ set.key }}" data-client-set><a href="#">{{ set.label }} (<span data-role="set-count">0</span>)</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}

@@ -24,8 +24,9 @@
  *     because the reader asked -- is tinted red on every draw, the per-sample table's tint;
  *   - on Compare (mutation_matrix/page.html), everything else is decided here as well -- see
  *     "Compare decides in the browser" below;
- *   - the menus sit in a tab strip above the table (Mutations, Treatments, Populations,
- *     Samples, Time, Rows, Display, Export),
+ *   - the menus sit in a tab strip above the table (on Compare: Treatments, Populations,
+ *     Samples, Time, Ancestral, Mutation Types, References, Sets, Columns, Frequency,
+ *     Export; Search has the matrix's own six),
  *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
  *     the DataTables toolbar -- length, search, count, pager, in one row -- stays under the
  *     strip on every tab, and the Export buttons are moved into the Export pane;
@@ -47,15 +48,16 @@
  * Description and the gene lists is hidden (see mutint_preferences.js).
  *
  * **Compare decides in the browser.** Its page sends every sample and every call, unfiltered,
- * with the designated ancestor's rows flagged, and carries a Mutations pane
- * (`[data-role="view-filter"]`). Where that pane exists, every change runs `refresh`:
+ * with the designated ancestor's rows flagged, and carries the reader's frequency range on its
+ * Frequency tab (`[data-role="view-filter"]`). Where that exists, every change runs `refresh`:
  *
  *   1. which sample columns show: ticked in Samples, and not hidden by the Populations,
  *      Treatments or Sample types menus or outside the Time range -- each a layer of its own,
  *      remembered per experiment, a sample hidden by a layer dimmed in the Samples menu;
  *   2. the data the table holds: the reader's frequency range drops cells (below the floor
  *      *or* above the ceiling; a call with no recorded frequency never), the ignored-gene rule
- *      drops rows (`gene_is_filtered`'s subset rule), the ancestral rows are dropped unless
+ *      drops rows (`gene_is_filtered`'s subset rule) where the page offers the gene box --
+ *      Compare does not, for now -- the ancestral rows are dropped unless
  *      asked for, and a row left with no cell is no row -- so "All mutations" in Export is what
  *      the server used to produce, and the filter is written back to the session through
  *      `/filter/set` so every other page reads the same one;
@@ -63,6 +65,9 @@
  *      and Fixed, compare_sets.js), asked what they hold over the shown samples and the kept
  *      cells of the non-ancestral rows, and counted in the Show menu;
  *   4. one draw.
+ *
+ * The sample columns are colored by population, by treatment or not at all -- one choice made
+ * with the boxes on the Populations and Treatments tabs, one class on the table.
  *
  * Search has no such pane and none of this happens there.
  *
@@ -107,6 +112,9 @@
     var SAMPLE_TYPES_KEY_PREFIX = "mutation_matrix.sample_types.";
     var TIME_KEY_PREFIX = "mutation_matrix.time.";
     var SET_PARAMS_KEY_PREFIX = "mutation_matrix.set_params.";
+    // How the sample columns are colored -- by population, by treatment, or not at all.
+    var COLOR_KEY_PREFIX = "mutation_matrix.color.";
+    var COLOR_MODES = { population: true, treatment: true, none: true };
 
     /* The reader's store, from mutint_preferences.js: the embedded choices and the save
        endpoint for a signed-in reader, the browser's own storage otherwise. */
@@ -168,7 +176,7 @@
     function init(container) {
         var table = container.querySelector("table");
         // The menus sit in the tab strip's panes: the page's own when it rendered the strip
-        // (mutation_matrix/page.html, with a Filter tab in front), the container's otherwise.
+        // (mutation_matrix/page.html, with tabs of its own around these), the container's otherwise.
         var controls = document.querySelector('[data-mutation-matrix-controls="' + table.id + '"]') || container;
         var rowsNode = document.getElementById(table.id + "-rows");
         var rows = rowsNode ? JSON.parse(rowsNode.textContent) : [];
@@ -196,6 +204,10 @@
             if (stateNode) { viewFilter = JSON.parse(stateNode.textContent); }
             ancestralShown = filterBox.getAttribute("data-ancestral-shown") === "1";
         }
+        // The ignored-gene half of the reader's filter applies only where its box is on the
+        // page. Compare does not offer it for now, so there the list stays in the session for
+        // the pages that do, and filters nothing here.
+        var applyGenes = !!controls.querySelector('[data-role="filter-genes"]');
 
         // The server's defaults, read off the menu it rendered; a column the stored choice does
         // not name takes its default (mutint_preferences.js says why).
@@ -306,6 +318,7 @@
         /* `gene_is_filtered`: every gene the mutation touches is ignored -- subset, not
            intersection -- with the same set sizes compared first. */
         function geneFiltered(row) {
+            if (!applyGenes) { return false; }
             var ignored = {}, ignoredCount = 0;
             (viewFilter.genes || []).forEach(function (g) { if (!ignored[g]) { ignored[g] = true; ignoredCount++; } });
             if (!ignoredCount) { return false; }
@@ -339,7 +352,10 @@
                 var visible = isShown(metaByColumn[column]);
                 // The header's population color, on every cell of the column too: the bar
                 // format draws in it.
-                var paletteClass = (th.className.match(/sample-palette-\d+/) || [""])[0];
+                // And the treatment palette's, which colors the column instead when the reader
+                // asks (the color boxes below).
+                var paletteClass = (th.className.match(/sample-palette-\d+/) || [""])[0] + " " +
+                    (th.className.match(/treatment-palette-\w+/) || [""])[0];
                 return {
                     data: "samples." + index,
                     defaultContent: "",
@@ -952,10 +968,14 @@
             data.forEach(function (row) { row.sets = row._sets.concat(membership[row.id] || []); });
         }
 
-        /* What is hidden and why, under the Mutations pane's controls: the ancestor, the
-           reader's filter in the server's own words (mutint_filter's _summary.html), and each
-           row set's sentence. Built from nodes, since names are the reader's text. */
-        var summary = controls.querySelector('[data-role="matrix-summary"]');
+        /* What is hidden and why, each beside its controls: the ancestor on the Ancestral
+           tab, the reader's frequency range on the Frequency tab (in the server's own words,
+           mutint_filter's _summary.html), and each row set's sentence on the Sets tab. Built
+           from nodes, since names are the reader's text. A target the page does not have is
+           skipped. */
+        var ancestralSummary = controls.querySelector('[data-role="ancestral-summary"]');
+        var filterSummary = controls.querySelector('[data-role="filter-summary"]');
+        var setNotesBox = controls.querySelector('[data-role="set-notes"]');
         var ancestralToggle = controls.querySelector('[data-role="ancestral-toggle"]');
         var ancestralCount = allRows.filter(function (row) { return row.ancestral; }).length;
         function line(parent, text) {
@@ -970,41 +990,44 @@
                     : "Show " + ancestralCount + " ancestral mutation" + (ancestralCount === 1 ? "" : "s");
                 ancestralToggle.classList.toggle("active", ancestralShown);
             }
-            if (!summary) { return; }
-            summary.textContent = "";
-            var ancestorName = summary.getAttribute("data-ancestor-name");
-            if (ancestorName) {
-                var div = line(summary, "Mutations in the designated ancestor (");
+            if (ancestralSummary) {
+                ancestralSummary.textContent = "";
+                var div = line(ancestralSummary, "Mutations in the designated ancestor (");
                 var a = document.createElement("a");
-                a.href = summary.getAttribute("data-ancestor-url");
-                a.textContent = ancestorName;
+                a.href = ancestralSummary.getAttribute("data-ancestor-url");
+                a.textContent = ancestralSummary.getAttribute("data-ancestor-name");
                 div.appendChild(a);
                 div.appendChild(document.createTextNode(ancestralShown
                     ? ") are shown, shaded red; nothing counted here includes them."
-                    : ") are hidden."));
+                    : ") are hidden, and nothing counted here includes them."));
             }
-            var cutoff = viewFilter.min_freq !== null || viewFilter.max_freq !== null;
-            var genes = viewFilter.genes || [];
-            if (!cutoff && !genes.length) {
-                line(summary, ancestorName ? "No filtering of your own: every other stored mutation is shown."
-                                           : "No filtering: every stored mutation for this experiment is shown.");
-            } else {
-                var parts = [];
-                if (cutoff) {
-                    parts.push("frequencies " + (viewFilter.min_freq || 0) + "\u2013" +
-                               (viewFilter.max_freq === null ? 100 : viewFilter.max_freq) + "%");
+            if (filterSummary) {
+                filterSummary.textContent = "";
+                var cutoff = viewFilter.min_freq !== null || viewFilter.max_freq !== null;
+                var genes = applyGenes ? (viewFilter.genes || []) : [];
+                if (!cutoff && !genes.length) {
+                    line(filterSummary, "Every frequency is shown.");
+                } else {
+                    var parts = [];
+                    if (cutoff) {
+                        parts.push("frequencies " + (viewFilter.min_freq || 0) + "\u2013" +
+                                   (viewFilter.max_freq === null ? 100 : viewFilter.max_freq) + "%");
+                    }
+                    if (genes.length) {
+                        parts.push("mutations outside " + genes.length + " ignored gene" +
+                                   (genes.length === 1 ? "" : "s") + " (" + genes.join(", ") + ")");
+                    }
+                    line(filterSummary, "Showing only " + parts.join(", and ") +
+                                        ". This is your own view; nobody else's page is affected.");
                 }
-                if (genes.length) {
-                    parts.push("mutations outside " + genes.length + " ignored gene" +
-                               (genes.length === 1 ? "" : "s") + " (" + genes.join(", ") + ")");
-                }
-                line(summary, "Showing only " + parts.join(", and ") +
-                              ". This is your own view; nobody else's page is affected.");
             }
-            setNotes.forEach(function (result) {
-                if (result.note) { line(summary, result.note); }
-                if (result.error) { line(summary, result.error).className = "text-danger"; }
-            });
+            if (setNotesBox) {
+                setNotesBox.textContent = "";
+                setNotes.forEach(function (result) {
+                    if (result.note) { line(setNotesBox, result.note); }
+                    if (result.error) { line(setNotesBox, result.error).className = "text-danger"; }
+                });
+            }
         }
 
         /* The reader's filter: applied here, and written back to the session -- the one
@@ -1014,7 +1037,7 @@
         if (filterBox) {
             var minInput = filterBox.querySelector('[data-role="filter-min"]');
             var maxInput = filterBox.querySelector('[data-role="filter-max"]');
-            var genesInput = filterBox.querySelector('[data-role="filter-genes"]');
+            var genesInput = controls.querySelector('[data-role="filter-genes"]');
             var filterError = controls.querySelector('[data-role="filter-error"]');
             var filterUrl = filterBox.getAttribute("data-url");
             var sendState = function (payload) {
@@ -1024,11 +1047,14 @@
             var showFilter = function () {
                 minInput.value = viewFilter.min_freq === null ? "" : viewFilter.min_freq;
                 maxInput.value = viewFilter.max_freq === null ? "" : viewFilter.max_freq;
-                genesInput.value = (viewFilter.genes || []).join(", ");
+                if (genesInput) { genesInput.value = (viewFilter.genes || []).join(", "); }
             };
             var submitFilter = function () {
                 sendState({ filter: { min_freq: minInput.value, max_freq: maxInput.value,
-                                      genes: genesInput.value } })
+                                      // Without its box, the session's list goes back as
+                                      // it was, for the pages that do offer it.
+                                      genes: genesInput ? genesInput.value
+                                                        : (viewFilter.genes || []).join(", ") } })
                     .then(function (body) {
                         viewFilter = body.filter;
                         filterError.hidden = true;
@@ -1040,7 +1066,7 @@
                         filterError.hidden = false;
                     });
             };
-            [minInput, maxInput, genesInput].forEach(function (input) {
+            [minInput, maxInput, genesInput].filter(Boolean).forEach(function (input) {
                 input.addEventListener("change", submitFilter);
                 input.addEventListener("keydown", function (event) {
                     if (event.key === "Enter") { event.preventDefault(); submitFilter(); }
@@ -1049,7 +1075,7 @@
             filterBox.querySelector('[data-role="filter-clear"]').addEventListener("click", function () {
                 minInput.value = "";
                 maxInput.value = "";
-                genesInput.value = "";
+                if (genesInput) { genesInput.value = ""; }
                 submitFilter();
             });
             if (ancestralToggle) {
@@ -1064,7 +1090,7 @@
             }
         }
 
-        /* The Frequency display menu, in the Display tab. Choosing a format swaps one class
+        /* The Frequency display menu, in the Frequency tab. Choosing a format swaps one class
            on the table. */
         var frequencyList = controls.querySelector('[data-role="frequency"]');
         var frequencyLabel = controls.querySelector('[data-role="frequency-label"]');
@@ -1113,7 +1139,37 @@
             });
         }
 
-        /* The View switch, in the Display tab: Normal is the Mutations page's cell padding,
+        /* The two "Color sample columns by" boxes, on the Populations and Treatments tabs, are
+           one choice: population (the default), treatment, or none. Ticking one unticks the
+           other, unticking the ticked one leaves the columns uncolored. It is one class on
+           the table; the stylesheet does the rest, header and bars alike, and the SVG export
+           reads the colors back from it. A remembered "treatment" on an experiment that no
+           longer has a Treatments tab reads as population. */
+        var colorBoxes = Array.prototype.slice.call(controls.querySelectorAll("[data-color]"));
+        if (colorBoxes.length) {
+            var colorKey = perExperiment(COLOR_KEY_PREFIX);
+            var storedColor = colorKey ? prefs.get(colorKey, null) : null;
+            var colorMode = storedColor && COLOR_MODES[storedColor.by] ? storedColor.by : "population";
+            if (colorMode === "treatment" && !controls.querySelector('[data-color="treatment"]')) {
+                colorMode = "population";
+            }
+            var showColor = function () {
+                Object.keys(COLOR_MODES).forEach(function (mode) {
+                    table.classList.toggle("color-" + mode, mode === colorMode);
+                });
+                colorBoxes.forEach(function (box) { box.checked = box.getAttribute("data-color") === colorMode; });
+            };
+            showColor();
+            colorBoxes.forEach(function (box) {
+                box.addEventListener("change", function () {
+                    colorMode = box.checked ? box.getAttribute("data-color") : "none";
+                    showColor();
+                    if (colorKey) { prefs.set(colorKey, { by: colorMode }); }
+                });
+            });
+        }
+
+        /* Vertical padding, in the Columns tab: Normal is the Mutations page's cell padding,
            Condensed one line per row. One class on the table, and the pinned offsets
            recomputed, since the descriptive columns' widths move with their padding. */
         function showView(name) {

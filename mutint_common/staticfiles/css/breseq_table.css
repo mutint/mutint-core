@@ -644,6 +644,31 @@ table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
 .mutation-matrix-table .sample-palette-6 { --sample-color: #a0762b; }
 .mutation-matrix-table .sample-palette-7 { --sample-color: #5d6d7e; }
 
+/* Colored by treatment instead -- the Treatments tab's box -- the same eight colors, keyed by
+   the experiment's treatments in sorted order (`SampleColumn.treatment_palette`), and a
+   neutral grey for a sample with none. Or not colored at all: every column the first color,
+   which is how a one-population experiment always looks. A class on the table chooses, and
+   the extra class is what outranks the population rules above. */
+.mutation-matrix-table.color-treatment .treatment-palette-0 { --sample-color: #337ab7; }
+.mutation-matrix-table.color-treatment .treatment-palette-1 { --sample-color: #b35c00; }
+.mutation-matrix-table.color-treatment .treatment-palette-2 { --sample-color: #2a8a3e; }
+.mutation-matrix-table.color-treatment .treatment-palette-3 { --sample-color: #8e44ad; }
+.mutation-matrix-table.color-treatment .treatment-palette-4 { --sample-color: #c0392b; }
+.mutation-matrix-table.color-treatment .treatment-palette-5 { --sample-color: #0e8a8a; }
+.mutation-matrix-table.color-treatment .treatment-palette-6 { --sample-color: #a0762b; }
+.mutation-matrix-table.color-treatment .treatment-palette-7 { --sample-color: #5d6d7e; }
+.mutation-matrix-table.color-treatment .treatment-palette-none { --sample-color: #9aa1a8; }
+.mutation-matrix-table.color-none .breseq-sample { --sample-color: #337ab7; }
+
+/* The two "Color sample columns by" boxes, set off from the menu and its presets. */
+.mutation-matrix-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    margin: 0 0 0 1em;
+    font-weight: normal;
+}
+
 table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     background-color: var(--sample-color, #337ab7);
 }
@@ -681,10 +706,11 @@ table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     margin-top: 0.4em;
 }
 
-/* Two views of the rows. Normal keeps the Mutations page's cell padding (Bootstrap's 8px,
-   a 38px row); Condensed drops it to 1px on a 20px line, so a row is one line tall and forty
-   rows fit where twenty did. The sample cell's height and the bar's reach follow the row
-   through two variables, so every Frequency display format draws right in both. */
+/* Two vertical paddings for the rows, chosen in the Columns tab. Normal keeps the Mutations
+   page's cell padding (Bootstrap's 8px, a 38px row); Condensed drops it to 1px on a 20px
+   line, so a row is one line tall and forty rows fit where twenty did. The sample cell's
+   height and the bar's reach follow the row through two variables, so every Frequency display
+   format draws right in both. */
 table.dataTable.mutation-matrix-table.view-normal {
     --cell-height: 36px;
     --bar-height: 34px;

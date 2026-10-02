@@ -70,6 +70,10 @@ class SampleColumn:
     treatment: str = ""
     #: What the Populations, Time and Sample types tabs hide a column by. On the header as
     #: `data-*` attributes; the script decides, the server only describes.
+    #: Which palette color the column wears when the reader colors by treatment: the
+    #: experiment's treatments in sorted order, wrapping like `palette`; None for a sample
+    #: with no treatment, which then wears a neutral grey.
+    treatment_palette: Optional[int] = None
     population_id: Optional[int] = None
     population: str = ""
     time_point: Optional[float] = None
@@ -139,6 +143,11 @@ class MutationMatrix:
     time_points: tuple = ()
     #: How many samples have no time point, which the Time tab never hides.
     untimed: int = 0
+
+    @property
+    def offers_sets(self):
+        """Whether there is a Show menu, and so a Sets tab: any row set at all."""
+        return bool(self.sets or self.client_sets)
 
     @property
     def offers_time(self):
@@ -290,12 +299,15 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
     nothing here changes.
     """
     palette = palette_indexes(s.population_id for s in sample_dict.values())
+    treatment_order = {name: i % PALETTE_SIZE for i, name in enumerate(
+        sorted({s.treatment for s in sample_dict.values() if s.treatment}))}
     samples = [SampleColumn(id=sample.id,
                             label=sample.qualified_label if labels == "qualified" else sample.label,
                             index=index, bam_stored=bool(sample.bam_stored),
                             flags=tuple(flags_of(sample)),
                             url=sample_page_url(sample, experiment), palette=palette[index],
                             treatment=sample.treatment or "",
+                            treatment_palette=treatment_order.get(sample.treatment),
                             population_id=sample.population_id,
                             population=sample.population_name or "",
                             time_point=sample.time_point,

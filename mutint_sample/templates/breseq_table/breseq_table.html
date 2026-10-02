@@ -46,7 +46,7 @@
        that chooses it decides what everything else is about. The chosen tab is remembered as
        `breseq_table.tab`, embedded beside the References choice in the json_script below.
        {% endcomment %}
-    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True rows=selected_sample display=selected_sample %}
+    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True references=selected_sample columns=selected_sample %}
     <div class="tab-content">
     {% if selected_sample %}
     <div class="tab-pane active" id="breseq_table-pane-filter">
@@ -131,7 +131,7 @@
         {% endif %}
     </div>
     {% if selected_sample %}
-    <div class="tab-pane" id="breseq_table-pane-rows">
+    <div class="tab-pane" id="breseq_table-pane-references">
         <div class="mutation-matrix-controls">
             {% comment %} Which reference sequences the rows may be on: the matrix's References
                menu, remembering the matrix's own key for this experiment, so a plasmid hidden
@@ -149,7 +149,7 @@
             </span>
         </div>
     </div>
-    <div class="tab-pane" id="breseq_table-pane-display">
+    <div class="tab-pane" id="breseq_table-pane-columns">
         <div class="mutation-matrix-controls">
             {% comment %} Which columns the table shows: the matrix's Columns menu over this
                table's own columns, remembered as `breseq_table.columns` (embedded in the

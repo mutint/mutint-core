@@ -332,7 +332,10 @@ class PartialTestCase(_Fixture):
                          html.count("<th "))
         for column in mutation_matrix.DESCRIPTIVE:
             self.assertIn('<th class="%s" data-key="%s"' % (column.css_class, column.key), html)
-        self.assertEqual(len(self.sample_dict), html.count('class="breseq-sample sample-palette-0"'))
+        # Each sample header carries both palettes: the population's, which colors it by
+        # default, and the treatment's, which colors it when the reader asks.
+        self.assertEqual(len(self.sample_dict),
+                         html.count('class="breseq-sample sample-palette-0 treatment-palette-none"'))
 
     def test_the_menus_list_columns_and_samples(self):
         html = self._render()
@@ -387,58 +390,79 @@ class PartialTestCase(_Fixture):
                       '(<span data-role="set-count">0</span>)</a></li>', html)
 
     def test_a_page_that_extends_this_one_can_add_controls_and_a_summary(self):
-        """The two blocks a plugin fills -- its controls among the reader's filter's, and a
-        summary under the sentence the script writes -- so it extends the page rather than
-        copying it. There is no form and no Apply: every control works in the browser."""
+        """The two blocks a plugin fills -- the controls of its row sets beside the Show menu,
+        and a summary under the sets' own sentences, all on the Sets tab -- so it extends the
+        page rather than copying it. There is no form and no Apply: every control works in
+        the browser."""
         source = loader.get_template("mutation_matrix/page.html").template.source
-        self.assertIn("{% block matrix_controls %}{% endblock %}", source)
-        self.assertIn("{% block matrix_summary %}{% endblock %}", source)
-        self.assertLess(source.index('data-role="filter-genes"'), source.index("{% block matrix_controls %}"))
-        self.assertLess(source.index('data-role="matrix-summary"'), source.index("{% block matrix_summary %}"))
+        start = source.index('id="mutation_matrix-pane-sets"')
+        sets_pane = source[start:source.index("{% endif %}", start)]
+        self.assertIn("_show_menu.html", sets_pane)
+        self.assertIn("{% block matrix_controls %}{% endblock %}", sets_pane)
+        self.assertIn('data-role="set-notes"', sets_pane)
+        self.assertIn("{% block matrix_summary %}{% endblock %}", sets_pane)
         self.assertNotIn("<form", source)
         self.assertNotIn('value="Apply"', source)
 
     def test_the_controls_are_tabs_in_order(self):
-        """Mutations (the `filter` tab), Populations, Samples, Time, Rows, Display, Export;
-        and Treatments only where some sample carries one, which no sample here does. The
-        fixture's two samples are at time points 1 and 2, so Time has a range to offer."""
+        """Populations, Samples, Time, Mutation Types, References, Columns, Frequency,
+        Export. Treatments only where some sample carries one, Ancestral only with an
+        ancestor and Sets only with sets, none of which this fixture has; its two samples are
+        at time points 1 and 2, so Time has a range to offer. Mutations is not offered."""
         html = self._render()
         self.assertIn('class="nav nav-tabs"', html)
         self.assertIn('data-control-tabs="mutation_matrix"', html)
-        self.assertEqual(["filter", "populations", "samples", "time", "rows", "display", "export"],
-                         re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
-        self.assertIn('data-tab="filter" href="#mutation_matrix-pane-filter">Mutations</a>', html)
-        for key in ("filter", "populations", "samples", "rows", "display", "export"):
+        keys = ["populations", "samples", "time", "types", "references", "columns",
+                "frequency", "export"]
+        self.assertEqual(keys, re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
+        for key, label in (("types", "Mutation Types"), ("references", "References"),
+                           ("columns", "Columns"), ("frequency", "Frequency")):
+            self.assertIn('data-tab="%s" href="#mutation_matrix-pane-%s">%s</a>' % (key, key, label), html)
+        for key in keys:
             self.assertIn('id="mutation_matrix-pane-%s"' % key, html)
-        self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', html)
-        self.assertIn('class="tab-pane active" id="mutation_matrix-pane-filter"', html)
+        self.assertNotIn("pane-filter", html)
+        self.assertIn('<li class="active"><a data-toggle="tab" data-tab="populations"', html)
+        self.assertIn('class="tab-pane active" id="mutation_matrix-pane-populations"', html)
         self.assertIn('data-mutation-matrix-controls="mutation-matrix"', html)
 
     def test_each_control_sits_in_its_own_pane(self):
-        html = self._render()
-        def pane(key, next_marker):
+        html = self._render(matrix=self.matrix(
+            client_sets=(mutation_matrix.ClientSet("convergent", "Convergent"),)),
+            ancestor={"name": "REL606", "sample_id": 1})
+        def pane(key):
             start = html.index('id="mutation_matrix-pane-%s"' % key)
-            return html[start:html.index(next_marker, start)]
-        filter_pane = pane("filter", 'id="mutation_matrix-pane-populations"')
-        for role in ("filter-min", "filter-max", "filter-genes", "matrix-summary"):
-            self.assertIn('data-role="%s"' % role, filter_pane)
-        self.assertIn('data-role="populations"', pane("populations", 'id="mutation_matrix-pane-samples"'))
-        samples = pane("samples", 'id="mutation_matrix-pane-rows"')
+            end = html.find('class="tab-pane', start)
+            return html[start:end if end > 0 else html.index("<table", start)]
+        populations = pane("populations")
+        self.assertIn('data-role="populations"', populations)
+        self.assertIn('data-color="population" checked', populations)
+        samples = pane("samples")
         self.assertIn('data-role="samples"', samples)
         self.assertIn('data-role="sample-types"', samples)
-        rows = pane("rows", 'id="mutation_matrix-pane-display"')
-        self.assertIn('data-role="types"', rows)
-        self.assertIn('data-role="references"', rows)
-        display = pane("display", 'id="mutation_matrix-pane-export"')
-        for role in ("columns", "frequency-control", "view-control"):
-            self.assertIn('data-role="%s"' % role, display)
+        self.assertIn('data-role="ancestral-toggle"', pane("ancestral"))
+        self.assertIn('data-role="ancestral-summary"', pane("ancestral"))
+        self.assertIn('data-role="types"', pane("types"))
+        self.assertIn('data-role="references"', pane("references"))
+        for role in ("show", "set-notes"):
+            self.assertIn('data-role="%s"' % role, pane("sets"))
+        columns = pane("columns")
+        self.assertIn('data-role="columns"', columns)
+        self.assertIn("Vertical padding:", columns)
+        self.assertIn('data-role="view-control"', columns)
+        frequency = pane("frequency")
+        for role in ("frequency-control", "view-filter", "filter-min", "filter-max",
+                     "filter-summary"):
+            self.assertIn('data-role="%s"' % role, frequency)
+        # The ignored-genes box is not offered, so the script applies no gene list here.
+        self.assertNotIn('data-role="filter-genes"', html)
         # Empty until the script moves DataTables' Export buttons into it.
-        self.assertIn('data-role="export"', pane("export", "<table"))
+        self.assertIn('data-role="export"', pane("export"))
         # The page rendered the panes; the tag did not render them again.
         self.assertEqual(1, html.count('data-role="columns"'))
 
-    def test_the_tag_alone_renders_the_four_client_side_tabs(self):
-        """Search renders the tag with no page around it and still gets a strip."""
+    def test_the_tag_alone_renders_the_matrix_tabs(self):
+        """Search renders the tag with no page around it and still gets a strip -- the
+        matrix's own tabs, and none of Compare's."""
         from django.template import engines
         request = RequestFactory().get("/")
         request.user = AnonymousUser()
@@ -446,27 +470,30 @@ class PartialTestCase(_Fixture):
         html = engines["django"].from_string(
             "{% load mutation_matrix %}{% mutation_matrix matrix %}").render(
             {"matrix": self.matrix()}, request)
-        self.assertEqual(["samples", "rows", "display", "export"],
+        self.assertEqual(["samples", "types", "references", "columns", "frequency", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="samples"', html)
         self.assertNotIn("pane-filter", html)
+        self.assertNotIn('data-role="view-filter"', html)
+        self.assertNotIn("data-color", html)
         self.assertIn('data-mutation-matrix-controls="mutation-matrix"', html)
 
     def test_a_signed_in_readers_tab_is_embedded(self):
         from mutint_common.preferences import set_preference
-        set_preference(self.user, "mutation_matrix.tab", {"tab": "rows"})
+        set_preference(self.user, "mutation_matrix.tab", {"tab": "references"})
         html = self._render(user=self.user)
         self.assertIn("mutation_matrix.tab", html)
         self.assertIn('data-prefs-id="mutation-matrix-prefs"', html)
 
-    def test_the_ancestral_button_is_on_the_mutations_pane_when_there_is_an_ancestor(self):
-        """The Show/Hide button sits among the reader's filter controls, and only when the
-        experiment designates an ancestor -- otherwise there is nothing for it to show."""
-        self.assertNotIn('data-role="ancestral-toggle"', self._render())
+    def test_the_ancestral_tab_appears_with_an_ancestor(self):
+        """The Show/Hide button and the sentence about the ancestor have a tab of their own,
+        offered only when the experiment designates one -- otherwise there is nothing for it
+        to show."""
+        html = self._render()
+        self.assertNotIn('data-tab="ancestral"', html)
+        self.assertNotIn('data-role="ancestral-toggle"', html)
         html = self._render(ancestor={"name": "REL606", "sample_id": 1})
-        start = html.index('id="mutation_matrix-pane-filter"')
-        self.assertIn('data-role="ancestral-toggle"',
-                      html[start:html.index('id="mutation_matrix-pane-populations"')])
+        self.assertIn('data-tab="ancestral" href="#mutation_matrix-pane-ancestral">Ancestral</a>', html)
         self.assertIn('data-ancestor-name="REL606"', html)
 
     def test_treatments_and_time_appear_when_they_can_do_something(self):
@@ -479,16 +506,20 @@ class PartialTestCase(_Fixture):
             sample.save(update_fields=["time_point"])
         self.sample_dict = {s.id: s for s in samples}
         html = self._render()
-        self.assertEqual(["filter", "treatments", "populations", "samples", "time",
-                          "rows", "display", "export"],
+        self.assertEqual(["treatments", "populations", "samples", "time", "types",
+                          "references", "columns", "frequency", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
+        # Treatments leads now, and carries the other half of the coloring choice.
+        self.assertIn('class="tab-pane active" id="mutation_matrix-pane-treatments"', html)
+        self.assertIn('data-color="treatment"', html)
+        self.assertIn('treatment-palette-0', html)
         self.assertIn('<li data-value="glucose" class="active">', html)
         self.assertIn('(no treatment)', html)
         self.assertRegex(html, r'data-times="500(\.0)?,1000(\.0)?"')
 
-    def test_the_view_switch_offers_normal_and_condensed(self):
+    def test_vertical_padding_offers_normal_and_condensed(self):
         html = self._render()
-        self.assertIn('data-role="view-control"', html)
+        self.assertIn('data-role="view-control">Vertical padding:', html)
         self.assertIn('data-view="normal">Normal</button>', html)
         self.assertIn('class="btn btn-default active" data-view="condensed">Condensed</button>', html)
 

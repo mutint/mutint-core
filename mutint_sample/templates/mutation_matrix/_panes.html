@@ -1,8 +1,11 @@
 {% load sample_flags %}
-{% comment %} The mutation matrix's four client-side tabs -- Samples, Rows, Display, Export -- as
-   panes of one `.tab-content` (control_tabs.html says why they must share one). Rendered by
-   mutation_matrix/page.html beside its own Filter pane, and by the mutation_matrix tag's
-   partial for a page that renders the tag alone. Takes `matrix`, `page` and `active`.
+{% comment %} The mutation matrix's own client-side tabs -- Samples, Mutation Types, References,
+   Sets (when the matrix has sets), Columns, Frequency, Export -- as panes of one `.tab-content`
+   (control_tabs.html says why they must share one). Rendered by mutation_matrix/page.html beside
+   its own panes, and by the mutation_matrix tag's partial for a page that renders the tag alone.
+   Takes `matrix`, `page` and `active`; `sample_types` adds the Sample types menu,
+   `frequency_bounds` the reader's frequency range (with `filter_url` and `state_id` for the
+   script), and `own_sets_pane` says the page draws the Sets pane itself.
 
    Every menu is the genome browser's Samples menu again: a Bootstrap dropdown whose rows are
    <li class="active"><a>, driven by mutintSelectList in toggle mode. Being active IS being
@@ -43,7 +46,7 @@
         {% endif %}
     </div>
 </div>
-<div class="tab-pane{% if active == "rows" %} active{% endif %}" id="{{ page }}-pane-rows">
+<div class="tab-pane{% if active == "types" %} active{% endif %}" id="{{ page }}-pane-types">
     <div class="mutation-matrix-controls">
         {% comment %} Which mutation types the rows may be. Only the types this table holds are
            offered; a hidden one that is absent here is still remembered for the next table. {% endcomment %}
@@ -63,34 +66,35 @@
             <button type="button" class="btn btn-default" data-types="all">Show all types</button>
             <button type="button" class="btn btn-default" data-types="none">Hide all types</button>
         </div>
-        {% include "mutation_matrix/_reference_menu.html" with seq_ids=matrix.seq_ids %}
-        {% comment %} Which of the caller's row sets to show -- All, or one of them. Only when
-           the caller handed some over: a page with none to offer has no menu, rather than a
-           menu of one entry. One choice at a time, so the list runs in plain mode. {% endcomment %}
-        {% if matrix.sets or matrix.client_sets %}
-            <div class="btn-group">
-                <button type="button" class="btn btn-default dropdown-toggle"
-                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Show: <span data-role="show-label">All</span> <span class="caret"></span>
-                </button>
-                <ul class="dropdown-menu mutint-menu mutint-select-list" data-role="show">
-                    <li data-value="" class="active"><a href="#">All (<span data-role="all-count">{{ matrix.rows|length }}</span>)</a></li>
-                    {% for set in matrix.sets %}
-                        <li data-value="{{ set.key }}"><a href="#">{{ set.label }} ({{ set.count }})</a></li>
-                    {% endfor %}
-                    {% comment %} Counted by the browser, which decides what they hold. {% endcomment %}
-                    {% for set in matrix.client_sets %}
-                        <li data-value="{{ set.key }}" data-client-set><a href="#">{{ set.label }} (<span data-role="set-count">0</span>)</a></li>
-                    {% endfor %}
-                </ul>
-            </div>
-        {% endif %}
-
     </div>
 </div>
-<div class="tab-pane{% if active == "display" %} active{% endif %}" id="{{ page }}-pane-display">
+<div class="tab-pane{% if active == "references" %} active{% endif %}" id="{{ page }}-pane-references">
+    <div class="mutation-matrix-controls">
+        {% include "mutation_matrix/_reference_menu.html" with seq_ids=matrix.seq_ids %}
+    </div>
+</div>
+{% if not own_sets_pane %}{% if matrix.offers_sets %}
+<div class="tab-pane{% if active == "sets" %} active{% endif %}" id="{{ page }}-pane-sets">
+    <div class="mutation-matrix-controls">
+        {% include "mutation_matrix/_show_menu.html" with matrix=matrix %}
+    </div>
+</div>
+{% endif %}{% endif %}
+<div class="tab-pane{% if active == "columns" %} active{% endif %}" id="{{ page }}-pane-columns">
     <div class="mutation-matrix-controls">
         {% include "mutation_matrix/_columns_menu.html" with columns=matrix.columns %}
+        {% comment %} Normal is the Mutations page's cell padding, Condensed one line per
+           row. {% endcomment %}
+        <span class="mutation-matrix-view" data-role="view-control">Vertical padding:
+            <span class="btn-group" role="group">
+                <button type="button" class="btn btn-default" data-view="normal">Normal</button>
+                <button type="button" class="btn btn-default active" data-view="condensed">Condensed</button>
+            </span>
+        </span>
+    </div>
+</div>
+<div class="tab-pane{% if active == "frequency" %} active{% endif %}" id="{{ page }}-pane-frequency">
+    <div class="mutation-matrix-controls">
         {% comment %} How a sample cell shows its frequency; the legend beside it shows in the
            two heat-map formats. One choice at a time, so the list runs in plain (replacing)
            mode. {% endcomment %}
@@ -109,15 +113,31 @@
             </div>
             <span class="mutation-matrix-legend" data-role="frequency-legend" hidden>0% <span class="mutation-matrix-legend-bar"></span> 100%</span>
         </div>
-        {% comment %} Row spacing: Normal is the Mutations page's cell padding, Condensed is
-           one line per row. {% endcomment %}
-        <span class="mutation-matrix-view" data-role="view-control">View:
-            <span class="btn-group" role="group">
-                <button type="button" class="btn btn-default" data-view="normal">Normal</button>
-                <button type="button" class="btn btn-default active" data-view="condensed">Condensed</button>
-            </span>
-        </span>
     </div>
+    {% if frequency_bounds %}
+        {% comment %} The reader's frequency range -- their own filter, shared with every other
+           page that reads it -- applied in the browser as it is typed and written back to the
+           session through `/filter/set`, which answers with the value as the server normalized
+           it. A value it refuses is said under the boxes and changes nothing. The ignored-genes
+           half of the filter is applied only where its box is offered, and Compare does not
+           offer it for now. {% endcomment %}
+        <div class="form-inline mutation-matrix-controls" data-role="view-filter"
+             data-url="{{ filter_url }}" data-experiment-id="{{ matrix.experiment_id }}"
+             data-state-id="{{ state_id }}"
+             data-ancestral-shown="{% if ancestral_shown %}1{% else %}0{% endif %}">
+            <label class="view-filter-field">
+                Show frequencies
+                <input type="text" data-role="filter-min" size="3" placeholder="0" class="form-control"
+                       value="{% if view_filter_state.min_freq is not None %}{{ view_filter_state.min_freq }}{% endif %}"/>
+                &ndash;
+                <input type="text" data-role="filter-max" size="3" placeholder="100" class="form-control"
+                       value="{% if view_filter_state.max_freq is not None %}{{ view_filter_state.max_freq }}{% endif %}"/>%
+            </label>
+            <button type="button" class="btn btn-link btn-sm" data-role="filter-clear">clear</button>
+        </div>
+        <div class="text-danger" data-role="filter-error" style="margin: 4px 0;" hidden></div>
+        <div class="mutation-matrix-summary" data-role="filter-summary"></div>
+    {% endif %}
 </div>
 {% comment %} Export CSV and Export SVG. The buttons are DataTables' own (the Buttons
    extension makes them), so the script moves their container in here once the table is

@@ -1,9 +1,9 @@
-{% comment %} The tab strip above a mutation table: Mutations, Treatments, Populations,
-   Samples, Time, Rows, Display, Export, in that order, and a page passes only the ones it has
-   content for. Mutations is the reader's filter, and is the `filter` tab underneath -- its
-   pane id and the remembered `<page>.tab` value kept the old name, so a reader's remembered
-   tab survived the label changing. Treatments, Populations and Time are Compare's, through
-   mutation_matrix/page.html.
+{% comment %} The tab strip above a mutation table, in this order: Mutations, Treatments,
+   Populations, Samples, Time, Ancestral, Mutation Types, References, Sets, Columns,
+   Frequency, Export -- and a page passes only the ones it has content for. Compare passes most
+   of them (mutation_matrix/page.html), Search the matrix's own six, the per-sample page four.
+   Mutations is the reader's filter and is the `filter` tab underneath; Compare does not offer
+   it for now.
 
    **`single_sample` changes two things at once, and they are one fact.** Where the picker
    chooses exactly one sample -- the per-sample Mutations page, whose whole subject is that
@@ -30,7 +30,11 @@
     {% if populations %}<li{% if active == "populations" %} class="active"{% endif %}><a data-toggle="tab" data-tab="populations" href="#{{ page }}-pane-populations">Populations</a></li>{% endif %}
     {% if samples and not single_sample %}<li{% if active == "samples" %} class="active"{% endif %}><a data-toggle="tab" data-tab="samples" href="#{{ page }}-pane-samples">Samples</a></li>{% endif %}
     {% if time %}<li{% if active == "time" %} class="active"{% endif %}><a data-toggle="tab" data-tab="time" href="#{{ page }}-pane-time">Time</a></li>{% endif %}
-    {% if rows %}<li{% if active == "rows" %} class="active"{% endif %}><a data-toggle="tab" data-tab="rows" href="#{{ page }}-pane-rows">Rows</a></li>{% endif %}
-    {% if display %}<li{% if active == "display" %} class="active"{% endif %}><a data-toggle="tab" data-tab="display" href="#{{ page }}-pane-display">Display</a></li>{% endif %}
+    {% if ancestral %}<li{% if active == "ancestral" %} class="active"{% endif %}><a data-toggle="tab" data-tab="ancestral" href="#{{ page }}-pane-ancestral">Ancestral</a></li>{% endif %}
+    {% if types %}<li{% if active == "types" %} class="active"{% endif %}><a data-toggle="tab" data-tab="types" href="#{{ page }}-pane-types">Mutation Types</a></li>{% endif %}
+    {% if references %}<li{% if active == "references" %} class="active"{% endif %}><a data-toggle="tab" data-tab="references" href="#{{ page }}-pane-references">References</a></li>{% endif %}
+    {% if sets %}<li{% if active == "sets" %} class="active"{% endif %}><a data-toggle="tab" data-tab="sets" href="#{{ page }}-pane-sets">Sets</a></li>{% endif %}
+    {% if columns %}<li{% if active == "columns" %} class="active"{% endif %}><a data-toggle="tab" data-tab="columns" href="#{{ page }}-pane-columns">Columns</a></li>{% endif %}
+    {% if frequency %}<li{% if active == "frequency" %} class="active"{% endif %}><a data-toggle="tab" data-tab="frequency" href="#{{ page }}-pane-frequency">Frequency</a></li>{% endif %}
     {% if export %}<li{% if active == "export" %} class="active"{% endif %}><a data-toggle="tab" data-tab="export" href="#{{ page }}-pane-export">Export</a></li>{% endif %}
 </ul>

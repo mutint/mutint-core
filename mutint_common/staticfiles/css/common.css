@@ -853,3 +853,14 @@ th.select-checkbox > input.mutint-select-all {
     color: #777;
     font-size: 13px;
 }
+
+/* The tab strips above a mutation table (control_tabs.html) carry up to eleven tabs on Compare,
+   and at Bootstrap's 15px of padding a side they wrapped to a second row on an ordinary laptop
+   screen. Half that, and no gap between tabs, keeps them on one; below the width that fits,
+   Bootstrap's own wrap still applies. Scoped to these strips: the Import page's tabs and every
+   other .nav-tabs keep Bootstrap's spacing. */
+.nav-tabs[data-control-tabs] > li > a {
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-right: 0;
+}

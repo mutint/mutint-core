@@ -334,11 +334,15 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         return content[start:content.index(next_marker, start)]
 
     def test_four_tabs_in_order(self):
+        """Sample, Mutations, References, Columns -- the same names Compare gives the same
+        controls."""
         content = self.content()
         self.assertIn('data-control-tabs="breseq_table"', content)
         self.assertIn('data-prefs-id="breseq-references-prefs"', content)
-        self.assertEqual(["samples", "filter", "rows", "display"],
+        self.assertEqual(["samples", "filter", "references", "columns"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', content))
+        self.assertIn('href="#breseq_table-pane-references">References</a>', content)
+        self.assertIn('href="#breseq_table-pane-columns">Columns</a>', content)
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', content)
 
     def test_the_picker_is_singular_here(self):
@@ -357,14 +361,14 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         self.assertIn("<b>Showing: </b>",
                       self.pane(content, "filter", 'id="breseq_table-pane-samples"'))
         self.assertIn('id="sample_picker"',
-                      self.pane(content, "samples", 'id="breseq_table-pane-rows"'))
+                      self.pane(content, "samples", 'id="breseq_table-pane-references"'))
         self.assertIn("data-breseq-references",
-                      self.pane(content, "rows", 'id="breseq_table-pane-display"'))
-        self.assertIn("data-breseq-columns", self.pane(content, "display", "<table"))
+                      self.pane(content, "references", 'id="breseq_table-pane-columns"'))
+        self.assertIn("data-breseq-columns", self.pane(content, "columns", "<table"))
 
     def test_a_signed_in_readers_tab_is_embedded(self):
         from mutint_common.preferences import set_preference
-        set_preference(self.user, "breseq_table.tab", {"tab": "rows"})
+        set_preference(self.user, "breseq_table.tab", {"tab": "references"})
         content = self.content()
         self.assertIn('id="breseq-references-prefs"', content)
         self.assertIn("breseq_table.tab", content)
