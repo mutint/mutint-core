@@ -139,9 +139,9 @@ class MutationMatrix:
     #: some sample carries none, which is an entry of its own there.
     treatments: tuple = ()
     has_untreated: bool = False
-    #: The distinct time points the samples were taken at, sorted: the Time tab's stops.
+    #: The distinct time points the samples were taken at, sorted: the Time Points tab's stops.
     time_points: tuple = ()
-    #: How many samples have no time point, which the Time tab never hides.
+    #: How many samples have no time point, which the Time Points tab never hides.
     untimed: int = 0
 
     @property
@@ -151,7 +151,7 @@ class MutationMatrix:
 
     @property
     def offers_time(self):
-        """Whether the Time tab has anything to choose: two time points at least."""
+        """Whether the Time Points tab has anything to choose: two time points at least."""
         return len(self.time_points) > 1
 
     @property

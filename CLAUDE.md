@@ -1599,7 +1599,7 @@ the same reason -- the sidebar's links carry no parameters -- hidden by default,
 `ancestral_table_row`, and nothing computed reads the flag -- the sets, the counts, the
 trees and the exports subtract whatever the reader is looking at. On the per-sample page the
 button sits in the `{% view_filter_summary %}` sentence, for a page passing
-`ancestral="toggle"`, and reloads. **On Compare it is a button on the Ancestral tab** and
+`ancestral="toggle"`, and reloads. **On Compare it is a button on the Mutations tab** and
 reloads nothing: the page always carries the ancestral rows, flagged, and the script draws
 or drops them, writing the choice back through `/filter/set` (`set_ancestral_shown`).
 `get_all_calls_filtered(include_ancestral=True)` and `build_matrix(ancestral_mutation_ids=)`
@@ -2127,32 +2127,34 @@ per-sample Mutations page renders the same menu over its server-rendered rows an
 the same key, so a plasmid hidden on Compare is hidden there and back -- see **The per-sample
 mutation page**.
 
-**The controls are tabs -- on Compare Treatments, Populations, Samples, Time, Ancestral,
-Mutation Types, References, Sets, Columns, Frequency, Export; on Search the matrix's own six,
-Samples, Mutation Types, References, Columns, Frequency, Export -- and the page owns the
-strip.** `mutint_common/templates/control_tabs.html` is the Import data page's strip made
+**The controls are tabs -- on Compare Treatments, Populations, Samples, Time Points,
+Mutations, References, Columns, Frequencies, Sets, Export; on Search the matrix's own six,
+Samples, Mutations, References, Columns, Frequencies, Export -- and the page owns the
+strip.** Mutations is the mutation-type menu (tab key `types`); the per-sample page's
+Mutations tab is the reader's filter (key `filter`), and the two never share a strip. `mutint_common/templates/control_tabs.html` is the Import data page's strip made
 client-side: Bootstrap's tab plugin switches the panes (it arrives inside the DataTables
 bundle at the end of body; `bootstrap.min.js` on its own would bind every handler twice), and
 `mutint_control_tabs.js` restores and remembers the tab as `<page>.tab` through the
 preference store. Two facts decide the structure: the plugin deactivates only the target
 pane's *siblings*, so every pane must sit in one `.tab-content`; and a `{% block %}` cannot
 cross an inclusion tag, so the Sets pane -- with the two blocks Compare fills -- has to stay
-in `page.html`. So `page.html` renders the strip, the Treatments, Populations and Time panes
-(`_group_panes.html`), the Ancestral and Sets panes, and the matrix's own (`_panes.html`, with
-the Samples pane's Sample types menu and the Frequency pane's bounds switched on and its
-own Sets pane switched off), and calls the tag with `controls=False`; a page that renders
-the tag alone, as Search does, gets the matrix's own from the tag and nothing else.
-Treatments, Time, Ancestral and Sets are offered only where they could do something. The
+in `page.html`. So `page.html` renders the strip, the Treatments, Populations and Time Points
+panes (`_group_panes.html`), the Sets pane, and the matrix's own (`_panes.html`, with the
+Samples pane's Sample types menu, the Frequencies pane's bounds and the Mutations pane's
+Show/Hide ancestral mutations button switched on, and its own Sets pane switched off), and
+calls the tag with `controls=False`; a page that renders the tag alone, as Search does, gets
+the matrix's own from the tag and nothing else. Treatments, Time Points and Sets are offered
+only where they could do something, and the ancestral button only with an ancestor. The
 Show menu is a partial of its own (`_show_menu.html`) because two places render it.
-**Compare offers no Mutations tab for now**, and with it no ignored-genes box; the tab key
-is `filter` on the per-sample page, which still has one. The strips' tabs carry half
+**Compare offers no tab for the reader's filter for now**, and with it no ignored-genes
+box. The strips' tabs carry half
 Bootstrap's side padding (`.nav-tabs[data-control-tabs]` in `common.css`), which keeps
-Compare's eleven on one row from about 1200px wide with the sidebar open, measured. The
+Compare's ten on one row from about 1200px wide with the sidebar open, measured. The
 script finds
 its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
 `.tab-content`. The DataTables toolbar -- one row, the pager at the left, then length and
 the count, and the search box pushed to the far right -- sits under the strip on every tab;
-the Frequency display menu is in the Frequency pane and the Vertical padding switch in the
+the Frequency display menu is in the Frequencies pane and the Cell padding switch in the
 Columns pane, not in that toolbar. **Export CSV and Export SVG are the Export tab**: the
 Buttons extension makes them only where `B` sits in `dom`, which is a toolbar, so the script
 moves their container into the pane once the table is drawn. DataTables' empty count line
@@ -2241,7 +2243,7 @@ page can extend it rather than copy it.
 
 **Compare decides in the browser.** Its view sends every sample and every call, unfiltered,
 with the designated ancestor's rows flagged, and `page.html` carries the reader's frequency
-range on its Frequency tab (`[data-role="view-filter"]`). Where that exists, every control
+range on its Frequencies tab (`[data-role="view-filter"]`). Where that exists, every control
 ends in the script's
 `refresh`, which does four things in order:
 
@@ -2249,7 +2251,7 @@ ends in the script's
    no layer hides it: the Populations, Treatments and Sample types menus (each a hidden set,
    like Samples) and the Time range. Each sample header carries `data-population`,
    `data-treatment`, `data-time` and `data-clonal` for this; a sample with no time point is
-   never hidden by Time, and one with no treatment is the "(no treatment)" entry. A sample a
+   never hidden by Time Points, and one with no treatment is the "(no treatment)" entry. A sample a
    layer hides stays in the Samples menu, dimmed, its title naming the tab -- so the Samples
    menu never contradicts the table.
 2. **What the table holds.** The reader's frequency range drops cells, below the floor *or*
@@ -2268,7 +2270,7 @@ ends in the script's
 normalized value -- the one the script then applies; a value parse refuses is a 400 and a
 sentence under the boxes, and nothing changes. So the per-sample Mutations page, the export
 and phylogeny read what was typed on Compare. The same endpoint sets `ancestral_shown`, for
-the Show/Hide ancestral mutations button on the Ancestral tab. **The ignored-gene list is
+the Show/Hide ancestral mutations button on the Mutations tab. **The ignored-gene list is
 applied only where its box is on the page**, and Compare offers none for now: the script
 leaves the list in the session -- `/filter/set` is sent it back unchanged with every
 frequency change -- and filters nothing by it, so a gene list nobody can see never hides
@@ -2277,7 +2279,7 @@ and the set parameters (`[data-set-param]` inputs) are preferences, per experime
 `mutation_matrix.populations.<exp>`, `.treatments.<exp>`, `.sample_types.<exp>`,
 `.time.<exp>` (`{min, max}`, null for open) and `.set_params.<exp>`.
 
-**The Time tab's stops are the time points, not a scale.** Two range inputs over the index of
+**The Time Points tab's stops are the time points, not a scale.** Two range inputs over the index of
 the distinct time points the samples carry, so 0, 500, 1000 and 50000 are four equal steps;
 the From and To boxes are the range itself and take any number, a typed bound putting its
 handle on the nearest stop inside it. A handle at either end is no bound, so a time point
@@ -2306,7 +2308,8 @@ its row, the reason the stripe grey is written twice in `breseq_table.css`, and 
 copies of that grey (`rgb(245, 245, 245)`, a shade off white) move together. Such a row is
 in no row set, so choosing one in the Show menu drops it, and both Export CSV entries include
 it while it is drawn. Compare is the producer: it always sends them, and the script drops
-them unless the reader asked -- the Show/Hide button on the Ancestral tab, the
+them unless the reader asked -- the Show/Hide button on the Mutations tab (no count and no
+sentence: the rows it draws are tinted and say what they are), the
 `ancestral_shown` session choice the per-sample page reads too.
 
 **The table is as wide as its columns, not the box.** `.breseq-table` is `width: 100%` for
@@ -2363,7 +2366,7 @@ Treatments tabs are that one choice -- ticking one unticks the other, unticking 
 none -- remembered as `mutation_matrix.color.<exp>`. The bars and the SVG export read
 `--sample-color` and follow. Search carries no boxes and stays colored by population.
 
-**Frequency display.** A menu in the Frequency tab chooses how a sample cell shows its frequency: Number (the default; no tint -- the number is
+**Frequency display.** A menu in the Frequencies tab chooses how a sample cell shows its frequency: Number (the default; no tint -- the number is
 the information),
 Bars (the fraction of the cell's height in the population's color, a half tone of it for a
 polymorphic call), Heat map (yellow through teal to blue, YlGnBu), or Number and heat map. A
@@ -2373,7 +2376,7 @@ the rest, so a format change redraws nothing. Every cell is a fixed 22 by 32 pix
 formats never reflow the table, and an absent cell stays blank in every format. The choice is
 `mutation_matrix.frequency`, remembered like the other three.
 
-**Vertical padding: Normal or Condensed.** A two-button switch in the Columns tab.
+**Cell padding: Normal or Condensed.** A two-button switch in the Columns tab.
 Normal keeps the Mutations page's cell padding (Bootstrap's 8px, a 38px row); Condensed, the
 default, drops it to 1px on a 20px line, one line per row. One class on the table
 (`view-<name>`) sets two variables, the sample cell's height and the bar's reach, so every

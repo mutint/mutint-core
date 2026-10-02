@@ -405,9 +405,9 @@ class PartialTestCase(_Fixture):
         self.assertNotIn('value="Apply"', source)
 
     def test_the_controls_are_tabs_in_order(self):
-        """Populations, Samples, Time, Mutation Types, References, Columns, Frequency,
-        Export. Treatments only where some sample carries one, Ancestral only with an
-        ancestor and Sets only with sets, none of which this fixture has; its two samples are
+        """Populations, Samples, Time Points, Mutations, References, Columns, Frequencies,
+        Export. Treatments only where some sample carries one and Sets only with sets, neither
+        of which this fixture has; its two samples are
         at time points 1 and 2, so Time has a range to offer. Mutations is not offered."""
         html = self._render()
         self.assertIn('class="nav nav-tabs"', html)
@@ -415,8 +415,9 @@ class PartialTestCase(_Fixture):
         keys = ["populations", "samples", "time", "types", "references", "columns",
                 "frequency", "export"]
         self.assertEqual(keys, re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
-        for key, label in (("types", "Mutation Types"), ("references", "References"),
-                           ("columns", "Columns"), ("frequency", "Frequency")):
+        for key, label in (("time", "Time Points"), ("types", "Mutations"),
+                           ("references", "References"), ("columns", "Columns"),
+                           ("frequency", "Frequencies")):
             self.assertIn('data-tab="%s" href="#mutation_matrix-pane-%s">%s</a>' % (key, key, label), html)
         for key in keys:
             self.assertIn('id="mutation_matrix-pane-%s"' % key, html)
@@ -439,15 +440,16 @@ class PartialTestCase(_Fixture):
         samples = pane("samples")
         self.assertIn('data-role="samples"', samples)
         self.assertIn('data-role="sample-types"', samples)
-        self.assertIn('data-role="ancestral-toggle"', pane("ancestral"))
-        self.assertIn('data-role="ancestral-summary"', pane("ancestral"))
-        self.assertIn('data-role="types"', pane("types"))
+        types = pane("types")
+        self.assertIn('data-role="types"', types)
+        self.assertIn('data-role="ancestral-toggle"', types)
+        self.assertNotIn('data-role="ancestral-summary"', html)
         self.assertIn('data-role="references"', pane("references"))
         for role in ("show", "set-notes"):
             self.assertIn('data-role="%s"' % role, pane("sets"))
         columns = pane("columns")
         self.assertIn('data-role="columns"', columns)
-        self.assertIn("Vertical padding:", columns)
+        self.assertIn("Cell padding:", columns)
         self.assertIn('data-role="view-control"', columns)
         frequency = pane("frequency")
         for role in ("frequency-control", "view-filter", "filter-min", "filter-max",
@@ -485,16 +487,16 @@ class PartialTestCase(_Fixture):
         self.assertIn("mutation_matrix.tab", html)
         self.assertIn('data-prefs-id="mutation-matrix-prefs"', html)
 
-    def test_the_ancestral_tab_appears_with_an_ancestor(self):
-        """The Show/Hide button and the sentence about the ancestor have a tab of their own,
-        offered only when the experiment designates one -- otherwise there is nothing for it
-        to show."""
+    def test_the_ancestral_button_appears_with_an_ancestor(self):
+        """The Show/Hide button sits on the Mutations tab, offered only when the experiment
+        designates an ancestor -- otherwise there is nothing for it to show. It carries no
+        count and no sentence: the rows it draws are tinted and say what they are."""
         html = self._render()
-        self.assertNotIn('data-tab="ancestral"', html)
         self.assertNotIn('data-role="ancestral-toggle"', html)
         html = self._render(ancestor={"name": "REL606", "sample_id": 1})
-        self.assertIn('data-tab="ancestral" href="#mutation_matrix-pane-ancestral">Ancestral</a>', html)
-        self.assertIn('data-ancestor-name="REL606"', html)
+        self.assertIn('data-role="ancestral-toggle">Show ancestral mutations</button>', html)
+        self.assertNotIn('data-tab="ancestral"', html)
+        self.assertNotIn("REL606", html)
 
     def test_treatments_and_time_appear_when_they_can_do_something(self):
         from mutint_sample.models import Sample
@@ -519,7 +521,7 @@ class PartialTestCase(_Fixture):
 
     def test_vertical_padding_offers_normal_and_condensed(self):
         html = self._render()
-        self.assertIn('data-role="view-control">Vertical padding:', html)
+        self.assertIn('data-role="view-control">Cell padding:', html)
         self.assertIn('data-view="normal">Normal</button>', html)
         self.assertIn('class="btn btn-default active" data-view="condensed">Condensed</button>', html)
 

@@ -1,11 +1,12 @@
 {% load sample_flags %}
-{% comment %} The mutation matrix's own client-side tabs -- Samples, Mutation Types, References,
-   Sets (when the matrix has sets), Columns, Frequency, Export -- as panes of one `.tab-content`
+{% comment %} The mutation matrix's own client-side tabs -- Samples, Mutations, References,
+   Columns, Frequencies, Sets (when the matrix has sets), Export -- as panes of one `.tab-content`
    (control_tabs.html says why they must share one). Rendered by mutation_matrix/page.html beside
    its own panes, and by the mutation_matrix tag's partial for a page that renders the tag alone.
    Takes `matrix`, `page` and `active`; `sample_types` adds the Sample types menu,
    `frequency_bounds` the reader's frequency range (with `filter_url` and `state_id` for the
-   script), and `own_sets_pane` says the page draws the Sets pane itself.
+   script), `ancestral_toggle` the Show/Hide ancestral mutations button, and `own_sets_pane`
+   says the page draws the Sets pane itself.
 
    Every menu is the genome browser's Samples menu again: a Bootstrap dropdown whose rows are
    <li class="active"><a>, driven by mutintSelectList in toggle mode. Being active IS being
@@ -66,6 +67,13 @@
             <button type="button" class="btn btn-default" data-types="all">Show all types</button>
             <button type="button" class="btn btn-default" data-types="none">Hide all types</button>
         </div>
+        {% if ancestral_toggle %}
+            {% comment %} Whether the designated ancestor's mutations are drawn, tinted, among
+               the rest. Display only: they are in no row set either way -- the same session
+               choice the per-sample page reads. Compare passes it when there is an
+               ancestor. {% endcomment %}
+            <button type="button" class="btn btn-default" data-role="ancestral-toggle">Show ancestral mutations</button>
+        {% endif %}
     </div>
 </div>
 <div class="tab-pane{% if active == "references" %} active{% endif %}" id="{{ page }}-pane-references">
@@ -85,7 +93,7 @@
         {% include "mutation_matrix/_columns_menu.html" with columns=matrix.columns %}
         {% comment %} Normal is the Mutations page's cell padding, Condensed one line per
            row. {% endcomment %}
-        <span class="mutation-matrix-view" data-role="view-control">Vertical padding:
+        <span class="mutation-matrix-view" data-role="view-control">Cell padding:
             <span class="btn-group" role="group">
                 <button type="button" class="btn btn-default" data-view="normal">Normal</button>
                 <button type="button" class="btn btn-default active" data-view="condensed">Condensed</button>

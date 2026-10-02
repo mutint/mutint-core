@@ -25,8 +25,8 @@
  *   - on Compare (mutation_matrix/page.html), everything else is decided here as well -- see
  *     "Compare decides in the browser" below;
  *   - the menus sit in a tab strip above the table (on Compare: Treatments, Populations,
- *     Samples, Time, Ancestral, Mutation Types, References, Sets, Columns, Frequency,
- *     Export; Search has the matrix's own six),
+ *     Samples, Time Points, Mutations, References, Columns, Frequencies, Sets, Export;
+ *     Search has the matrix's own six),
  *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
  *     the DataTables toolbar -- length, search, count, pager, in one row -- stays under the
  *     strip on every tab, and the Export buttons are moved into the Export pane;
@@ -49,7 +49,7 @@
  *
  * **Compare decides in the browser.** Its page sends every sample and every call, unfiltered,
  * with the designated ancestor's rows flagged, and carries the reader's frequency range on its
- * Frequency tab (`[data-role="view-filter"]`). Where that exists, every change runs `refresh`:
+ * Frequencies tab (`[data-role="view-filter"]`). Where that exists, every change runs `refresh`:
  *
  *   1. which sample columns show: ticked in Samples, and not hidden by the Populations,
  *      Treatments or Sample types menus or outside the Time range -- each a layer of its own,
@@ -295,7 +295,7 @@
             if (hiddenTreatments[meta.treatment]) { return "Treatments tab"; }
             if (meta.time !== null && ((timeRange.min !== null && meta.time < timeRange.min) ||
                                        (timeRange.max !== null && meta.time > timeRange.max))) {
-                return "Time tab";
+                return "Time Points tab";
             }
             return "";
         }
@@ -830,7 +830,7 @@
         var sampleTypePicker = layerPicker("sample-types", hiddenSampleTypes, sampleTypesKey,
                                            "data-sample-types", "sample-type-count");
 
-        /* The Time tab: two range inputs over the index of the time points some sample was
+        /* The Time Points tab: two range inputs over the index of the time points some sample was
            taken at, so the stops are evenly spaced, and two boxes holding the range itself,
            which take any number. A handle moved sets its box to that stop; a number typed
            sets the bound and puts its handle on the nearest stop inside it. The table follows
@@ -968,16 +968,14 @@
             data.forEach(function (row) { row.sets = row._sets.concat(membership[row.id] || []); });
         }
 
-        /* What is hidden and why, each beside its controls: the ancestor on the Ancestral
-           tab, the reader's frequency range on the Frequency tab (in the server's own words,
+        /* What is hidden and why, each beside its controls: the reader's frequency range on
+           the Frequencies tab (in the server's own words,
            mutint_filter's _summary.html), and each row set's sentence on the Sets tab. Built
            from nodes, since names are the reader's text. A target the page does not have is
            skipped. */
-        var ancestralSummary = controls.querySelector('[data-role="ancestral-summary"]');
         var filterSummary = controls.querySelector('[data-role="filter-summary"]');
         var setNotesBox = controls.querySelector('[data-role="set-notes"]');
         var ancestralToggle = controls.querySelector('[data-role="ancestral-toggle"]');
-        var ancestralCount = allRows.filter(function (row) { return row.ancestral; }).length;
         function line(parent, text) {
             var div = document.createElement("div");
             if (text) { div.textContent = text; }
@@ -987,19 +985,8 @@
         function writeSummary() {
             if (ancestralToggle) {
                 ancestralToggle.textContent = ancestralShown ? "Hide ancestral mutations"
-                    : "Show " + ancestralCount + " ancestral mutation" + (ancestralCount === 1 ? "" : "s");
+                                                             : "Show ancestral mutations";
                 ancestralToggle.classList.toggle("active", ancestralShown);
-            }
-            if (ancestralSummary) {
-                ancestralSummary.textContent = "";
-                var div = line(ancestralSummary, "Mutations in the designated ancestor (");
-                var a = document.createElement("a");
-                a.href = ancestralSummary.getAttribute("data-ancestor-url");
-                a.textContent = ancestralSummary.getAttribute("data-ancestor-name");
-                div.appendChild(a);
-                div.appendChild(document.createTextNode(ancestralShown
-                    ? ") are shown, shaded red; nothing counted here includes them."
-                    : ") are hidden, and nothing counted here includes them."));
             }
             if (filterSummary) {
                 filterSummary.textContent = "";
@@ -1090,7 +1077,7 @@
             }
         }
 
-        /* The Frequency display menu, in the Frequency tab. Choosing a format swaps one class
+        /* The Frequency display menu, in the Frequencies tab. Choosing a format swaps one class
            on the table. */
         var frequencyList = controls.querySelector('[data-role="frequency"]');
         var frequencyLabel = controls.querySelector('[data-role="frequency-label"]');
@@ -1169,7 +1156,7 @@
             });
         }
 
-        /* Vertical padding, in the Columns tab: Normal is the Mutations page's cell padding,
+        /* Cell padding, in the Columns tab: Normal is the Mutations page's cell padding,
            Condensed one line per row. One class on the table, and the pinned offsets
            recomputed, since the descriptive columns' widths move with their padding. */
         function showView(name) {

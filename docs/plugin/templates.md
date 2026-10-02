@@ -80,14 +80,14 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-The tag alone draws six tabs above the table -- Samples, Mutation Types, References, Columns
-(descriptive columns and vertical padding), Frequency (how a cell shows its frequency) and
-Export, and Sets when the matrix has row sets -- from `control_tabs.html`. `mutation_matrix/page.html` renders its own strip and passes
+The tag alone draws six tabs above the table -- Samples, Mutations (the mutation types),
+References, Columns (descriptive columns and cell padding), Frequencies (how a cell shows
+its frequency), Sets when the matrix has row sets, and Export -- from `control_tabs.html`. `mutation_matrix/page.html` renders its own strip and passes
 `controls=False`; see below for what it adds. The menus let the reader show and
 hide descriptive columns, samples, mutation types and reference sequences. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
-`mutation_matrix.view` (Normal or Condensed vertical padding) and `mutation_matrix.show` (which row
+`mutation_matrix.view` (Normal or Condensed cell padding) and `mutation_matrix.show` (which row
 set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>` and
 `mutation_matrix.references.<experiment_id>` (shared by every matrix page of that experiment,
 the second by the per-sample Mutations page as well) — and in the browser's localStorage
@@ -121,8 +121,9 @@ is in no row set, so the Show menu drops it.
 **`mutation_matrix/page.html` decides everything in the browser.** Its view sends every
 sample and every call -- `get_all_calls_filtered(experiment_id, include_ancestral=True)`,
 with no view filter -- and the page's tabs are Treatments and Populations (each with a
-"Color sample columns by" box), Samples (with Sample types), Time, Ancestral (the Show/Hide
-ancestral mutations button), the tag's own, and Sets; its Frequency tab also carries the
+"Color sample columns by" box), Samples (with Sample types), Time Points, and the tag's own
+with Sets; its Mutations tab also carries the Show/Hide ancestral mutations button, and its
+Frequencies tab the
 reader's frequency range, written back to their session through `/filter/set`. The
 ignored-genes box is not offered for now, and the page applies no gene list without it. It wants `experiment_id, experiment_name, project_name, project_id,
 template_header, title, matrix, empty_message`, plus `view_filter_state` (the reader's filter

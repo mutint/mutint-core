@@ -109,7 +109,7 @@ ancestral_mutation_ids(experiment_id))` the ids so the script tints them, and pa
 `{% view_filter_summary ancestral="toggle" %}` so the summary sentence carries the Show/Hide
 button. Convergent, Fixed and anything else derived leave the ancestor's mutations out, so an
 ancestral row belongs to no row set. `mutation_matrix/page.html` does it in the browser
-instead: it always carries the ancestral rows, flagged, and its button on the Ancestral tab
+instead: it always carries the ancestral rows, flagged, and its button on the Mutations tab
 draws or drops them with no reload. The ancestor's
 own sample page passes `ancestral="own"`, which says nothing about a subtraction there is
 nothing to make.

@@ -314,7 +314,7 @@
     opacity: 0.45;
 }
 
-/* The Time tab: two range inputs laid over one track, the span between the handles filled.
+/* The Time Points tab: two range inputs laid over one track, the span between the handles filled.
    The inputs ignore the pointer except on their thumbs, or the upper one would swallow every
    press meant for the lower. */
 .mutation-matrix-time {
@@ -706,7 +706,7 @@ table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     margin-top: 0.4em;
 }
 
-/* Two vertical paddings for the rows, chosen in the Columns tab. Normal keeps the Mutations
+/* Two cell paddings for the rows, chosen in the Columns tab. Normal keeps the Mutations
    page's cell padding (Bootstrap's 8px, a 38px row); Condensed drops it to 1px on a 20px
    line, so a row is one line tall and forty rows fit where twenty did. The sample cell's
    height and the bar's reach follow the row through two variables, so every Frequency display
