@@ -169,10 +169,10 @@
 
 /* The two colors a project and an experiment wear everywhere one is named -- the sidebar's
    selection, the page header, the button bar under it, the list pages, a page's prose -- are
-   the logo's orange and green, defined once here. The first custom properties on :root in
+   the logo's purple and green, defined once here. The first custom properties on :root in
    this stylesheet; a deployment's own stylesheet may redefine them. */
 :root {
-    --mutint-project: #d18b1e;
+    --mutint-project: #7c4bd3;
     --mutint-experiment: #2f9e5f;
 }
 
@@ -195,7 +195,7 @@ a.mutint-experiment-name:hover, a.mutint-experiment-name:focus {
     color: color-mix(in srgb, var(--mutint-experiment) 80%, black);
 }
 
-/* The selection, under Experiments: the project's row in its orange, and the experiment's
+/* The selection, under Experiments: the project's row in its purple, and the experiment's
    row with every page under it in its green, so those pages read as the experiment's and
    the block as what this page is about rather than as more places to go. The pages are
    indented as the account block's entries are (sb-admin-2's .nav-second-level, 37px). No

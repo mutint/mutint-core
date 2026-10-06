@@ -418,8 +418,8 @@ They are the third thing in this sidebar that `nav_registry` does not produce, a
 and the account block, and for a reason of the same kind -- a name a request happens to have
 selected is not something an app can register in `ready()`.
 
-**A project is orange and an experiment is green, everywhere one is named.** The two are
-the logo's colors, defined once as `--mutint-project` (`#d18b1e`) and `--mutint-experiment`
+**A project is purple and an experiment is green, everywhere one is named.** The two are
+the logo's colors, defined once as `--mutint-project` (`#7c4bd3`) and `--mutint-experiment`
 (`#2f9e5f`) on `:root` in `common.css` -- the first custom properties there -- and worn
 through two classes, `mutint-project-name` and `mutint-experiment-name`: by the sidebar's
 selection (`li.mutint-sidebar-project` and `li.mutint-sidebar-experiment`, so the pages read
