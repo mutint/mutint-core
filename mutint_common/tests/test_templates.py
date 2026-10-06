@@ -286,15 +286,17 @@ class ExperimentSidebarLabelTestCase(TestCase):
 
     def test_the_header_is_one_include_wearing_the_two_colors(self):
         """Every experiment page's header is `experiment_header.html`: the project linked in
-        its class, the experiment in its own, a dash, then the page's word. It was eighteen
-        copies of the line with three different separators."""
+        its class, the experiment in its own, then the page's word, joined by `»`. It was
+        eighteen copies of the line with three different separators."""
         for url, page in (("/stats/?experiment_id=%d" % self.experiment.id, "Experiment Overview"),
                           ("/experiment/samples/?experiment_id=%d" % self.experiment.id, "Samples"),
                           ("/import/?experiment_id=%d" % self.experiment.id, "Import")):
             with self.subTest(page=page):
                 html = self._html(url)
-                self.assertIn('<a href="/project/%d" class="mutint-project-name">Proj</a>: '
-                              '<span class="mutint-experiment-name">Exp</span></b> &mdash; %s'
+                self.assertIn('<a href="/project/%d" class="mutint-project-name">Proj</a> '
+                              '<span class="mutint-header-sep">&raquo;</span> '
+                              '<span class="mutint-experiment-name">Exp</span></b> '
+                              '<span class="mutint-header-sep">&raquo;</span> %s'
                               % (self.experiment.project_id, page), html)
 
     def test_a_page_with_no_experiment_renders_no_dangling_project_link(self):

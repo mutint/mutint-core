@@ -185,6 +185,9 @@ a.mutint-experiment-name:hover, a.mutint-experiment-name:focus {
     color: color-mix(in srgb, var(--mutint-experiment) 80%, black);
 }
 
+/* The `»` between the header's three parts: a path's separator, lighter than the names. */
+.page-header .mutint-header-sep { color: #9aa1a8; font-weight: normal; }
+
 /* The button bar under the header -- Overview and the experiment's pages -- is the sidebar's
    green block laid flat. */
 .page-header a.btn-primary2 { color: var(--mutint-experiment); }

@@ -27,7 +27,7 @@ mutint_yourthing/static/mutint_yourthing/thing.css   ->  {% static 'mutint_yourt
 ```
 
 The header is core's `experiment_header.html`: the project, linked and in its orange, the
-experiment in its green, then your page's word after a dash. Pass `page=template_header` when
+experiment in its green, then your page's word, joined by `»`. Pass `page=template_header` when
 your view supplies the word, and do not spell the line yourself -- the two colors and the
 separator are the include's to keep.
 

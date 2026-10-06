@@ -430,7 +430,7 @@ name links on the Projects and Experiments lists and the Project detail page, by
 experiment in prose (Import, the breseq launcher, a job's log and the Jobs list).
 
 **The page header is one include, `experiment_header.html`**: project linked, experiment,
-`&mdash;`, then `page` -- a view's `template_header` or a literal -- with `name` overriding
+then `page`, the three joined by a light `»` as a path reads -- a view's `template_header` or a literal -- with `name` overriding
 `experiment_name` for a template that carries the experiment as an object, and `project_id`
 and `project_name` passed explicitly where `experiment_context()` did not supply them
 (mutint-breseq's and mutint-refsniff's pages). It was eighteen copies of the line, with three

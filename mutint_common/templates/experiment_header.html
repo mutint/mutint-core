@@ -1,8 +1,9 @@
 {% comment %} The header of every experiment page: the project, linked and in the logo's
-   orange; the experiment, in its green; then the page's own word after a dash. One include
+   orange; the experiment, in its green; then the page's own word -- the three joined by `»`,
+   as a path reads. One include
    rather than the eighteen copies of this line the templates used to carry, which had drifted
    to three separators. `page` is the suffix (a view's `template_header`, or a literal);
    `name` overrides `experiment_name` for a template that carries the experiment as an object;
    `project_id` and `project_name` come from `Experiment.experiment_context()` on every
    experiment-scoped page, and a page without them passes its own. {% endcomment %}
-<b><a href="/project/{{ project_id }}" class="mutint-project-name">{{ project_name }}</a>: <span class="mutint-experiment-name">{% if name %}{{ name }}{% else %}{{ experiment_name }}{% endif %}</span></b>{% if page %} &mdash; {{ page }}{% endif %}
+<b><a href="/project/{{ project_id }}" class="mutint-project-name">{{ project_name }}</a> <span class="mutint-header-sep">&raquo;</span> <span class="mutint-experiment-name">{% if name %}{{ name }}{% else %}{{ experiment_name }}{% endif %}</span></b>{% if page %} <span class="mutint-header-sep">&raquo;</span> {{ page }}{% endif %}
