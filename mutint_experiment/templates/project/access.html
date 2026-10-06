@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Sharing {{ project.name }}{% endblock %}
-{% block header %}Sharing: {{ project.name }}{% endblock %}
+{% block header %}Sharing: <span class="mutint-project-name">{{ project.name }}</span>{% endblock %}
 {% block scripts_and_style %}
     {% comment %} base.html does not load sweetalert; mutintConfirmTyped calls swal(),
        so every page using it pulls it in for itself. {% endcomment %}

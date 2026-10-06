@@ -9,7 +9,7 @@
         {% csrf_token %}
 
         {% if project %}
-            <p>In project <b>{{ project.name }}</b>.</p>
+            <p>In project <b class="mutint-project-name">{{ project.name }}</b>.</p>
             <input type="hidden" id="ne-project" value="{{ project.id }}">
         {% else %}
             <div class="form-group">

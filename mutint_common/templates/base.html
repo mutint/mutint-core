@@ -221,16 +221,16 @@
                        under (matching on the URL would work until the URL changed).
 
                        All three are drawn here, inside the splice, so nothing a later app
-                       registers in MAIN_SECTION can land between them. The tints are on the
-                       <li>s (see .mutint-sidebar-project in common.css): the project's row
-                       one shade, the experiment's row and every page under it a deeper one,
-                       so the pages read as belonging to the experiment named above them.
+                       registers in MAIN_SECTION can land between them. The project's row is
+                       the logo's orange and the experiment's row with every page under it
+                       its green (see .mutint-sidebar-project in common.css), so the pages
+                       read as belonging to the experiment named above them; the pages are
+                       indented as the account block's entries are.
 
                        Every experiment-scoped page carries `project_id` and `project_name`
                        from `Experiment.experiment_context()`, and the three pages scoped to
                        one project get them from `Project.project_context()`. An experiment
-                       whose `project` is null has no project row rather than an empty one,
-                       and its name then carries no arrow, there being nothing it is under.
+                       whose `project` is null has no project row rather than an empty one.
                        {% endcomment %}
                     {% if item.key == 'experiments' %}
                         {% if project_id %}
@@ -245,7 +245,7 @@
                                    every experiment page and a badge added to the default would
                                    render on none of them. This block is not overridden
                                    anywhere. {% endcomment %}
-                                <a href="/stats?experiment_id={{ experiment_id }}" class="mutint-sidebar-selection{% if project_id %} mutint-sidebar-nested{% endif %}">{% if project_id %}<span class="mutint-sidebar-under" aria-hidden="true">&#8627;</span>{% endif %}<b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ experiment_name }}</b></a>
+                                <a href="/stats?experiment_id={{ experiment_id }}" class="mutint-sidebar-selection"><b>{% if experiment_locked %}<i class="fa fa-lock" aria-hidden="true" title="This experiment is locked"></i> {% endif %}{{ experiment_name }}</b></a>
                             </li>
                             {% comment %} Through the tag, not the raw list: an entry marked
                                `requires_edit` is left out for a reader with no write role on
@@ -255,8 +255,8 @@
                                {% endcomment %}
                             {% experiment_nav_items as visible_experiment_items %}
                             {% for page in visible_experiment_items %}
-                                <li class="mutint-sidebar-experiment">
-                                    <a href="{{ page.url }}?experiment_id={{ experiment_id }}">&nbsp;&nbsp;&nbsp;{{ page.label }}</a>
+                                <li class="mutint-sidebar-experiment mutint-sidebar-page">
+                                    <a href="{{ page.url }}?experiment_id={{ experiment_id }}">{{ page.label }}</a>
                                 </li>
                             {% endfor %}
                         {% endif %}
@@ -297,9 +297,7 @@
             <div class="body">
                 <div class="col-lg-12">
                     <div class="page-header">
-                        <h2>{% block header %}
-                            <b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}
-                            </b>{% endblock %}
+                        <h2>{% block header %}{% if experiment_id %}{% include "experiment_header.html" %}{% endif %}{% endblock %}
                             {% if branding.logo %}
                                 <a href="/"><img src="{% static branding.logo %}"
                                                  style="max-width: 10%; max-height: 10%; float: right"></a>

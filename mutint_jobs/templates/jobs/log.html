@@ -9,7 +9,7 @@
 
     <p class="mutint-job-log-meta">
         {% if job.component %}<code>{{ job.component }}</code> &middot; {% endif %}
-        {% if job.experiment %}{{ job.experiment.name }} &middot; {% endif %}
+        {% if job.experiment %}<span class="mutint-experiment-name">{{ job.experiment.name }}</span> &middot; {% endif %}
         started {{ job.created_at }}
         {% comment %} In a span of its own so the poll can flip it in place: a job that
            finishes while somebody is watching should not need a reload to say so. {% endcomment %}

@@ -69,7 +69,7 @@
     </style>
 
 {% endblock %}
-{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - Experiment Overview{% endblock %}
+{% block header %}{% include "experiment_header.html" with page="Experiment Overview" %}{% endblock %}
 {% block experiment_actions %}
     {% comment %} All of these were rendered to everyone once. Every endpoint behind them
        refuses a caller who may not edit, so nothing unsafe followed -- but clicking one

@@ -413,19 +413,37 @@ absence, which is the whole of the mechanism.
 ### The selected project and experiment are rows, not nav entries
 
 Two bolded rows name what a request has selected, both under the **Experiments** entry: the
-**project**, and under it the **experiment**, marked with a `↳` and heading its own pages.
+**project**, and under it the **experiment**, heading its own pages.
 They are the third thing in this sidebar that `nav_registry` does not produce, after the brand
 and the account block, and for a reason of the same kind -- a name a request happens to have
 selected is not something an app can register in `ready()`.
 
-**The selection is tinted, in two shades of the Apply button's blue.** The project's row is
-`li.mutint-sidebar-project`; the experiment's row and every one of its pages are
-`li.mutint-sidebar-experiment`, a deeper shade, so the pages read as belonging to the
-experiment named above them and the whole block reads as what this page is about rather than
-as more places to go. The tint is on the `<li>`, not the `<a>`, so the block has no seams and
-the hover gradient still draws over it. The arrow is drawn only when there is a project row
-for it to sit under, and the experiment's link carries a hanging indent so a wrapped name
-lines up after it.
+**A project is orange and an experiment is green, everywhere one is named.** The two are
+the logo's colors, defined once as `--mutint-project` (`#d18b1e`) and `--mutint-experiment`
+(`#2f9e5f`) on `:root` in `common.css` -- the first custom properties there -- and worn
+through two classes, `mutint-project-name` and `mutint-experiment-name`: by the sidebar's
+selection (`li.mutint-sidebar-project` and `li.mutint-sidebar-experiment`, so the pages read
+as belonging to the experiment named above them), by the page header, by the button bar
+under it (Overview and the experiment's pages, the sidebar's green block laid flat), by the
+name links on the Projects and Experiments lists and the Project detail page, by the
+`Project:` / `Sharing:` / `Designate ancestor:` headings, and by the places a page names the
+experiment in prose (Import, the breseq launcher, a job's log and the Jobs list).
+
+**The page header is one include, `experiment_header.html`**: project linked, experiment,
+`&mdash;`, then `page` -- a view's `template_header` or a literal -- with `name` overriding
+`experiment_name` for a template that carries the experiment as an object, and `project_id`
+and `project_name` passed explicitly where `experiment_context()` did not supply them
+(mutint-breseq's and mutint-refsniff's pages). It was eighteen copies of the line, with three
+separators between them and three pages that passed a `template_header` the line never
+showed; `base.html`'s default now renders it only with an `experiment_id`, so the 404 page no
+longer carries `<a href="/project/"></a>: `. A plugin page uses the include rather than
+spelling the line. The experiment's row and pages and the whole block reads as what this page is about rather than
+as more places to go. The pages carry `mutint-sidebar-page` as well and are indented as the
+account block's entries are (37px, sb-admin-2's second level). The current page's row -- the link sb-admin-2
+marks `active` -- takes a pale wash of its own color in place of the theme's `#eee`; hover
+stays the grey gradient everywhere. This was two blue tints on the `<li>`s and a `↳` before
+the experiment's name, and both went: a tinted block read as a highlight and the arrow as
+clutter, where one secondary color and one indent say the same.
 
 **`register_nav_item(key=...)` is how the shell says which entry the selection goes under**,
 and the project row, the experiment row and the experiment's pages are all drawn inside that

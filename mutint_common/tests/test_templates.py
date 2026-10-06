@@ -268,7 +268,7 @@ class ExperimentSidebarLabelTestCase(TestCase):
 
     def test_the_selection_sits_under_experiments_in_order(self):
         """Position is the whole point of the `key` base.html matches on: Experiments, then
-        the project, then the experiment with its arrow, then the experiment's pages."""
+        the project, then the experiment, then the experiment's pages, indented under it."""
         html = self._html("/stats/?experiment_id=%d" % self.experiment.id)
 
         self.assertEqual("Proj", self._project_row(html))
@@ -280,7 +280,30 @@ class ExperimentSidebarLabelTestCase(TestCase):
             menu.index('href="/mutations/breseq?experiment_id=%d"' % self.experiment.id),
         ]
         self.assertEqual(sorted(order), order)
-        self.assertIn("mutint-sidebar-under", menu[order[2]:order[3]])
+        self.assertNotIn("&#8627;", menu)
+        self.assertIn('class="mutint-sidebar-experiment mutint-sidebar-page"', menu[order[2]:order[3]])
+        self.assertNotIn("&nbsp;&nbsp;&nbsp;", menu[order[3]:order[3] + 200])
+
+    def test_the_header_is_one_include_wearing_the_two_colors(self):
+        """Every experiment page's header is `experiment_header.html`: the project linked in
+        its class, the experiment in its own, a dash, then the page's word. It was eighteen
+        copies of the line with three different separators."""
+        for url, page in (("/stats/?experiment_id=%d" % self.experiment.id, "Experiment Overview"),
+                          ("/experiment/samples/?experiment_id=%d" % self.experiment.id, "Samples"),
+                          ("/import/?experiment_id=%d" % self.experiment.id, "Import")):
+            with self.subTest(page=page):
+                html = self._html(url)
+                self.assertIn('<a href="/project/%d" class="mutint-project-name">Proj</a>: '
+                              '<span class="mutint-experiment-name">Exp</span></b> &mdash; %s'
+                              % (self.experiment.project_id, page), html)
+
+    def test_a_page_with_no_experiment_renders_no_dangling_project_link(self):
+        """base.html's default header used to render `<a href="/project/"></a>: ` on the 404
+        page, where no experiment is selected; the include is guarded now."""
+        html = self.client.get("/no-such-page/").content.decode()
+        header = html[html.index('<div class="page-header">'):html.index("</h2>")]
+        self.assertNotIn("/project/", header)
+        self.assertNotIn("mutint-project-name", html)
 
     def test_a_project_page_names_the_project_and_no_experiment(self):
         """`project_detail` supplies the two keys itself -- nothing else on that page would,

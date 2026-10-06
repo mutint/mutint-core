@@ -14,7 +14,7 @@ saying before it is chosen: this is the only setting in the product that changes
        to pull it in. {% endcomment %}
     <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
 {% endblock %}
-{% block header %}Designate ancestor: {{ experiment.name }}{% endblock %}
+{% block header %}Designate ancestor: <span class="mutint-experiment-name">{{ experiment.name }}</span>{% endblock %}
 {% block content %}
     <div class="container" style="margin-left: 0; padding-left: 0; max-width: 46em;">
         {% csrf_token %}

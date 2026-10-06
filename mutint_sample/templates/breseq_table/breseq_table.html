@@ -19,7 +19,7 @@
        cell carrying its `data-column`. {% endcomment %}
     <script src="{% static 'js/breseq_columns.js' %}?v={{ asset_version }}"></script>
 {% endblock %}
-{% block header %}<b><a href="/project/{{ project_id }}">{{ project_name }}</a>: {{ experiment_name }}</b> - {{ template_header }}{% endblock %}
+{% block header %}{% include "experiment_header.html" with page=template_header %}{% endblock %}
 
 {% block content %}
     {% if is_ancestor %}

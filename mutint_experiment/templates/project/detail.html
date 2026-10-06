@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}Project {{ project.name }}{% endblock %}
-{% block header %}Project: {{ project.name }}{% endblock %}
+{% block header %}Project: <span class="mutint-project-name">{{ project.name }}</span>{% endblock %}
 {% block scripts_and_style %}
     <script type="text/javascript">
         var project_id = {{ project.id }};
@@ -102,10 +102,10 @@
                     <td></td>
                     <td width="90">{{ experiment.id }}</td>
                     <td>
-                        <a href="/experiment/{{ experiment.id }}">{{ experiment.name }}</a>
+                        <a href="/experiment/{{ experiment.id }}" class="mutint-experiment-name">{{ experiment.name }}</a>
                     </td>
                     <td>
-                        <a href="/project/{{ experiment.project.id }}">{{ experiment.project.name }}</a>
+                        <a href="/project/{{ experiment.project.id }}" class="mutint-project-name">{{ experiment.project.name }}</a>
                     </td>
                     <td>
                         {% for pub in experiment.publication_set.all %}

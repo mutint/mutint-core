@@ -19,12 +19,17 @@ mutint_yourthing/static/mutint_yourthing/thing.css   ->  {% static 'mutint_yourt
 {% block scripts_and_style %}
     <link rel="stylesheet" href="{% static 'mutint_yourthing/thing.css' %}">
 {% endblock %}
-{% block header %}<b>{{ project_name }}: {{ experiment_name }}</b> - Your Thing{% endblock %}
+{% block header %}{% include "experiment_header.html" with page="Your Thing" %}{% endblock %}
 
 {% block content %}
     ...
 {% endblock %}
 ```
+
+The header is core's `experiment_header.html`: the project, linked and in its orange, the
+experiment in its green, then your page's word after a dash. Pass `page=template_header` when
+your view supplies the word, and do not spell the line yourself -- the two colors and the
+separator are the include's to keep.
 
 `base.html` draws the sidebar from `nav_registry`, so your entry appears without the template
 knowing anything about it.

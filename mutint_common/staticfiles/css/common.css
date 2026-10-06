@@ -148,6 +148,9 @@
    are laid out by Bootstrap and are none of this rule's business. */
 .sidebar .nav > li > a {
     white-space: nowrap;
+    /* Bootstrap's 10px top and bottom made a tall row; 7px keeps the list within a screen. */
+    padding-top: 7px;
+    padding-bottom: 7px;
 }
 
 /* The two bolded rows -- the selected project and the selected experiment -- are the
@@ -164,30 +167,57 @@
     overflow-wrap: break-word;
 }
 
-/* The selection, under Experiments, is tinted so it reads as what this page is about rather
-   than as more places to go: the project's row in one shade of the Apply button's blue, and
-   the experiment's row with every page under it in a deeper one, so those pages read as the
-   experiment's. On the <li>, not the <a>, so the block has no seams; the hover gradient on
-   the <a> still draws over it. */
-.sidebar .nav > li.mutint-sidebar-project {
-    background-color: rgba(51, 122, 183, 0.10);
+/* The two colors a project and an experiment wear everywhere one is named -- the sidebar's
+   selection, the page header, the button bar under it, the list pages, a page's prose -- are
+   the logo's orange and green, defined once here. The first custom properties on :root in
+   this stylesheet; a deployment's own stylesheet may redefine them. */
+:root {
+    --mutint-project: #d18b1e;
+    --mutint-experiment: #2f9e5f;
 }
 
-.sidebar .nav > li.mutint-sidebar-experiment {
-    background-color: rgba(51, 122, 183, 0.20);
+.mutint-project-name, a.mutint-project-name { color: var(--mutint-project); }
+.mutint-experiment-name, a.mutint-experiment-name { color: var(--mutint-experiment); }
+a.mutint-project-name:hover, a.mutint-project-name:focus {
+    color: color-mix(in srgb, var(--mutint-project) 80%, black);
+}
+a.mutint-experiment-name:hover, a.mutint-experiment-name:focus {
+    color: color-mix(in srgb, var(--mutint-experiment) 80%, black);
 }
 
-/* The experiment's name sits under its project's, and the arrow says so. A hanging indent,
-   so a long name that wraps lines up after the arrow rather than under it. */
-.sidebar .nav > li > a.mutint-sidebar-nested {
-    padding-left: calc(15px + 1.3em);
-    text-indent: -1.3em;
+/* The button bar under the header -- Overview and the experiment's pages -- is the sidebar's
+   green block laid flat. */
+.page-header a.btn-primary2 { color: var(--mutint-experiment); }
+.page-header a.btn-primary2:hover, .page-header a.btn-primary2:focus {
+    color: color-mix(in srgb, var(--mutint-experiment) 80%, black);
 }
 
-.mutint-sidebar-under {
-    display: inline-block;
-    width: 1.3em;
-    text-indent: 0;
+/* The selection, under Experiments: the project's row in its orange, and the experiment's
+   row with every page under it in its green, so those pages read as the experiment's and
+   the block as what this page is about rather than as more places to go. The pages are
+   indented as the account block's entries are (sb-admin-2's .nav-second-level, 37px). No
+   tint and no arrow: the colors and the indent say what they said. */
+.sidebar .nav > li.mutint-sidebar-project > a {
+    color: var(--mutint-project);
+}
+
+.sidebar .nav > li.mutint-sidebar-experiment > a {
+    color: var(--mutint-experiment);
+}
+
+/* The current page's row (sb-admin-2 marks the link whose href is the location `active`
+   and fills it #eee) takes a pale wash of its own color instead; hover stays the grey
+   gradient for every row. */
+.sidebar .nav > li.mutint-sidebar-project > a.active {
+    background-color: color-mix(in srgb, var(--mutint-project) 15%, white);
+}
+
+.sidebar .nav > li.mutint-sidebar-experiment > a.active {
+    background-color: color-mix(in srgb, var(--mutint-experiment) 15%, white);
+}
+
+.sidebar .nav > li.mutint-sidebar-page > a {
+    padding-left: 37px;
 }
 
 .nav > li > a:focus, .nav > li > a:hover {

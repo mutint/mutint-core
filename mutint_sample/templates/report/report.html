@@ -2,10 +2,7 @@
 
 {% block title %}breseq report — {{ sample_label }}{% endblock %}
 
-{% block header %}
-    <b><a href="/project/{{ project_id }}">{{ project_name }}</a>:
-       {{ experiment_name }}</b> &mdash; breseq report for {{ sample_label }}
-{% endblock %}
+{% block header %}{% with "breseq report for "|add:sample_label as page %}{% include "experiment_header.html" with page=page %}{% endwith %}{% endblock %}
 
 {% block content %}
 <div id="report-bar" class="report-bar">

@@ -137,7 +137,7 @@
         jobs.forEach(function (job) {
             html.push("<tr>", "<td>" + esc(job.label) + "</td>");
             if (IS_SUPERUSER) { html.push("<td>" + esc(job.user) + "</td>"); }
-            html.push("<td>" + esc(job.experiment) + "</td>",
+            html.push("<td>" + (job.experiment ? '<span class="mutint-experiment-name">' + esc(job.experiment) + "</span>" : "") + "</td>",
                       "<td><small>" + esc(whenLocal(job.created_at)) + "</small></td>",
                       "<td>" + statusCell(job) + "</td>",
                       "<td>" + actionCell(job) + "</td>",
