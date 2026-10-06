@@ -2387,10 +2387,12 @@ are bold.
 `treatment-palette-<n>` -- the experiment's treatments in sorted order, the same eight
 colors, `none` for a sample with no treatment -- and a class on the table chooses which
 palette is in force: `color-population` (the default), `color-treatment`, or `color-none`
-(every column the first color). The "Color sample columns by" boxes on the Populations and
-Treatments tabs are that one choice -- ticking one unticks the other, unticking it leaves
-none -- remembered as `mutation_matrix.color.<exp>`. The bars and the SVG export read
-`--sample-color` and follow. Search carries no boxes and stays colored by population.
+(every column the first color). The **Color samples by** menu on the Samples tab is that one
+choice -- population, treatment (offered only where some sample carries one), or nothing --
+remembered as `mutation_matrix.color.<exp>`. (It was two "Color sample columns by" boxes, one
+on the Populations tab and one on Treatments, ticking one unticking the other; one menu
+beside the samples it colors says the same thing once.) The bars and the SVG export read
+`--sample-color` and follow. Search carries no menu and stays colored by population.
 
 **Frequency display.** A menu in the Frequencies tab chooses how a sample cell shows its frequency: Number (the default; no tint -- the number is
 the information),

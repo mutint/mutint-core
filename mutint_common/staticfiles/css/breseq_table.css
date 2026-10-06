@@ -660,7 +660,7 @@ table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
 .mutation-matrix-table.color-treatment .treatment-palette-none { --sample-color: #9aa1a8; }
 .mutation-matrix-table.color-none .breseq-sample { --sample-color: #337ab7; }
 
-/* The two "Color sample columns by" boxes, set off from the menu and its presets. */
+/* The Color samples by menu on the Samples tab, set off from the menu and its presets. */
 .mutation-matrix-color {
     display: inline-flex;
     align-items: center;
@@ -668,6 +668,8 @@ table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
     margin: 0 0 0 1em;
     font-weight: normal;
 }
+.mutation-matrix-color select { display: inline-block; width: auto; }
+.mutation-matrix-color { white-space: nowrap; }
 
 table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     background-color: var(--sample-color, #337ab7);

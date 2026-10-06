@@ -475,10 +475,16 @@ class PartialTestCase(_Fixture):
             return html[start:end if end > 0 else html.index("<table", start)]
         populations = pane("populations")
         self.assertIn('data-role="populations"', populations)
-        self.assertIn('data-color="population" checked', populations)
+        self.assertNotIn("data-color", populations)
         samples = pane("samples")
         self.assertIn('data-role="samples"', samples)
         self.assertIn('data-role="sample-types"', samples)
+        # Color samples by lives on the Samples tab: population and nothing, and treatment
+        # only where some sample carries one (see the treatments test).
+        self.assertIn('data-role="color-by"', samples)
+        self.assertIn('<option value="population">', samples)
+        self.assertIn('<option value="none">', samples)
+        self.assertNotIn('<option value="treatment">', samples)
         types = pane("types")
         self.assertIn('data-role="types"', types)
         self.assertIn('data-role="ancestral-toggle"', types)
@@ -516,7 +522,7 @@ class PartialTestCase(_Fixture):
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="samples"', html)
         self.assertNotIn("pane-filter", html)
         self.assertNotIn('data-role="view-filter"', html)
-        self.assertNotIn("data-color", html)
+        self.assertNotIn('data-role="color-by"', html)
         self.assertIn('data-mutation-matrix-controls="mutation-matrix"', html)
 
     def test_a_signed_in_readers_tab_is_embedded(self):
@@ -550,9 +556,9 @@ class PartialTestCase(_Fixture):
         self.assertEqual(["treatments", "populations", "samples", "time", "types",
                           "references", "columns", "frequency", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
-        # Treatments leads now, and carries the other half of the coloring choice.
+        # Treatments leads now, and the Color samples by menu offers it.
         self.assertIn('class="tab-pane active" id="mutation_matrix-pane-treatments"', html)
-        self.assertIn('data-color="treatment"', html)
+        self.assertIn('<option value="treatment">', html)
         self.assertIn('treatment-palette-0', html)
         self.assertIn('<li data-value="glucose" class="active">', html)
         self.assertIn('(no treatment)', html)

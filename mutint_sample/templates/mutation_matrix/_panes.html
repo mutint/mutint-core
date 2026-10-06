@@ -4,7 +4,8 @@
    (control_tabs.html says why they must share one). Rendered by mutation_matrix/page.html beside
    its own panes, and by the mutation_matrix tag's partial for a page that renders the tag alone.
    Takes `matrix`, `page` and `active`; `sample_types` adds the Sample types menu,
-   `frequency_bounds` the reader's frequency range (with `filter_url` and `state_id` for the
+   `color_by` the Color samples by menu (population, treatment where some sample carries
+   one, or nothing -- one class on the table, remembered per experiment), `frequency_bounds` the reader's frequency range (with `filter_url` and `state_id` for the
    script), `ancestral_toggle` the Show/Hide ancestral mutations button, and `own_sets_pane`
    says the page draws the Sets pane itself.
 
@@ -44,6 +45,15 @@
                     <li data-value="mixed" class="active"><a href="#">Mixed samples</a></li>
                 </ul>
             </div>
+        {% endif %}
+        {% if color_by %}
+            <label class="view-filter-field mutation-matrix-color" title="What the sample columns are colored by: the sample's population, its treatment, or nothing">Color samples by:
+                <select class="form-control" data-role="color-by">
+                    <option value="population">population</option>
+                    {% if matrix.treatments %}<option value="treatment">treatment</option>{% endif %}
+                    <option value="none">nothing</option>
+                </select>
+            </label>
         {% endif %}
     </div>
 </div>

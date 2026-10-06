@@ -1250,33 +1250,27 @@
             });
         }
 
-        /* The two "Color sample columns by" boxes, on the Populations and Treatments tabs, are
-           one choice: population (the default), treatment, or none. Ticking one unticks the
-           other, unticking the ticked one leaves the columns uncolored. It is one class on
-           the table; the stylesheet does the rest, header and bars alike, and the SVG export
-           reads the colors back from it. A remembered "treatment" on an experiment that no
-           longer has a Treatments tab reads as population. */
-        var colorBoxes = Array.prototype.slice.call(controls.querySelectorAll("[data-color]"));
-        if (colorBoxes.length) {
+        /* The Color samples by menu on the Samples tab: population (the default), treatment,
+           or none. It is one class on the table; the stylesheet does the rest, header and
+           bars alike, and the SVG export reads the colors back from it. A remembered
+           "treatment" on an experiment that no longer offers it reads as population. */
+        var colorMenu = controls.querySelector("[data-role='color-by']");
+        if (colorMenu) {
             var colorKey = perExperiment(COLOR_KEY_PREFIX);
             var storedColor = colorKey ? prefs.get(colorKey, null) : null;
             var colorMode = storedColor && COLOR_MODES[storedColor.by] ? storedColor.by : "population";
-            if (colorMode === "treatment" && !controls.querySelector('[data-color="treatment"]')) {
-                colorMode = "population";
-            }
+            if (!colorMenu.querySelector('option[value="' + colorMode + '"]')) { colorMode = "population"; }
             var showColor = function () {
                 Object.keys(COLOR_MODES).forEach(function (mode) {
                     table.classList.toggle("color-" + mode, mode === colorMode);
                 });
-                colorBoxes.forEach(function (box) { box.checked = box.getAttribute("data-color") === colorMode; });
+                colorMenu.value = colorMode;
             };
             showColor();
-            colorBoxes.forEach(function (box) {
-                box.addEventListener("change", function () {
-                    colorMode = box.checked ? box.getAttribute("data-color") : "none";
-                    showColor();
-                    if (colorKey) { prefs.set(colorKey, { by: colorMode }); }
-                });
+            colorMenu.addEventListener("change", function () {
+                colorMode = COLOR_MODES[colorMenu.value] ? colorMenu.value : "population";
+                showColor();
+                if (colorKey) { prefs.set(colorKey, { by: colorMode }); }
             });
         }
 

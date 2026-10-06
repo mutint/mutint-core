@@ -3,10 +3,8 @@
    mutation_matrix/page.html only -- Compare's -- into the same `.tab-content` as the rest.
    Takes `matrix`, `page` and `active`.
 
-   Treatments and Populations each carry a "Color sample columns by" box, and the two are one
-   choice: the sample headers -- and the bars drawn in their color -- wear the population's
-   palette, the treatment's, or none. Ticking one unticks the other; unticking the one ticked
-   leaves the columns uncolored. The script remembers it per experiment.
+   The Color samples by menu that chooses which palette the columns wear is on the Samples
+   tab (_panes.html), not here.
 
    Each is a layer: a column shows when its sample is ticked in Samples *and* its population,
    its treatment and its type are ticked *and* its time point is in range. The menus are the
@@ -34,9 +32,6 @@
             <button type="button" class="btn btn-default" data-treatments="all">Show all treatments</button>
             <button type="button" class="btn btn-default" data-treatments="none">Hide all treatments</button>
         </div>
-        <label class="mutation-matrix-color">
-            <input type="checkbox" data-color="treatment"/> Color sample columns by treatment
-        </label>
     </div>
 </div>
 {% endif %}
@@ -58,9 +53,6 @@
             <button type="button" class="btn btn-default" data-populations="all">Show all populations</button>
             <button type="button" class="btn btn-default" data-populations="none">Hide all populations</button>
         </div>
-        <label class="mutation-matrix-color">
-            <input type="checkbox" data-color="population" checked/> Color sample columns by population
-        </label>
     </div>
 </div>
 {% if matrix.offers_time %}

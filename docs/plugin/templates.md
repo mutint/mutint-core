@@ -121,8 +121,8 @@ is in no row set, so the Show menu drops it.
 
 **`mutation_matrix/page.html` decides everything in the browser.** Its view sends every
 sample and every call -- `get_all_calls_filtered(experiment_id, include_ancestral=True)`,
-with no view filter -- and the page's tabs are Treatments and Populations (each with a
-"Color sample columns by" box), Samples (with Sample types), Time Points, and the tag's own
+with no view filter -- and the page's tabs are Treatments and Populations, Samples (with
+Sample types and the Color samples by menu), Time Points, and the tag's own
 with Sets; its Mutations tab also carries the Show/Hide ancestral mutations button, and its
 Frequencies tab the
 reader's frequency range, written back to their session through `/filter/set`. The

@@ -54,7 +54,7 @@
                 {% block matrix_summary %}{% endblock %}
             </div>
         {% endif %}
-        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active=active_tab sample_types=True frequency_bounds=True own_sets_pane=True ancestral_toggle=ancestor %}
+        {% include "mutation_matrix/_panes.html" with matrix=matrix page="mutation_matrix" active=active_tab sample_types=True color_by=True frequency_bounds=True own_sets_pane=True ancestral_toggle=ancestor %}
         </div>
         {{ view_filter_state|json_script:state_id }}
         {% endwith %}
