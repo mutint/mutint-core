@@ -1,0 +1,23 @@
+{% comment %} The glyph sprite: one <symbol> per name in mutint_common.glyphs.GLYPHS, each in a
+   16x16 box, drawn once per page and referenced by <use href="#glyph-<name>"> from wherever a
+   mutation is drawn as a shape -- mutint-recurrent's cells, legend and gene plots,
+   mutint-circos's rings. The paths carry no fill or stroke of their own: the referencing
+   element decides. The tombstone is a half-circle on a rectangle, the bowtie two triangles
+   meeting at a point, the barbell two triangles pointing outward from a bar.
+   `data-glyph-sprite` is how a script finds the symbols to copy into a downloaded file. {% endcomment %}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" data-glyph-sprite>
+    <defs>
+        <symbol id="glyph-circle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></symbol>
+        <symbol id="glyph-square" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12"/></symbol>
+        <symbol id="glyph-tombstone" viewBox="0 0 16 16"><path d="M2 14 V8 A6 6 0 0 1 14 8 V14 Z"/></symbol>
+        <symbol id="glyph-diamond-down" viewBox="0 0 16 16"><path d="M8 1 L15 8 L8 15 L1 8 Z"/></symbol>
+        <symbol id="glyph-diamond" viewBox="0 0 16 16"><path d="M8 1 L13 8 L8 15 L3 8 Z"/></symbol>
+        <symbol id="glyph-triangle" viewBox="0 0 16 16"><path d="M8 2 L15 14 L1 14 Z"/></symbol>
+        <symbol id="glyph-triangle-down" viewBox="0 0 16 16"><path d="M1 2 L15 2 L8 14 Z"/></symbol>
+        <symbol id="glyph-bowtie" viewBox="0 0 16 16"><path d="M1 2 L8 8 L1 14 Z M15 2 L8 8 L15 14 Z"/></symbol>
+        <symbol id="glyph-trapezoid-down" viewBox="0 0 16 16"><path d="M1 3 L15 3 L11 13 L5 13 Z"/></symbol>
+        <symbol id="glyph-trapezoid" viewBox="0 0 16 16"><path d="M5 3 L11 3 L15 13 L1 13 Z"/></symbol>
+        <symbol id="glyph-parallelogram" viewBox="0 0 16 16"><path d="M5 3 L15 3 L11 13 L1 13 Z"/></symbol>
+        <symbol id="glyph-barbell" viewBox="0 0 16 16"><path d="M5 2 L1 8 L5 14 Z M11 2 L15 8 L11 14 Z M5 7 H11 V9 H5 Z"/></symbol>
+    </defs>
+</svg>
