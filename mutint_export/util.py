@@ -1,9 +1,21 @@
+import re
+
 from django.utils.html import strip_tags
 
 from mutint_common.plugin_registry import get_export_handler
 from mutint_filter.util import filter_mutation_calls
 from mutint_sample.breseq_report import GENE_LIST_FIELDS, gene_list_text
 from mutint_sample.util import get_mutation_call_queryset, samples_in_calls
+
+
+def safe_filename(name):
+    """A project or experiment name as a filename can carry it: letters, digits, `_`, `-`.
+
+    What every download is named by -- the export zip's members, Compare's CSV and SVG,
+    the Recurrent and Specificity downloads -- since a file is named by the project and the
+    experiment, never by an id.
+    """
+    return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
 MUT_TYPE_STR = "mut"
 

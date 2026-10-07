@@ -242,10 +242,13 @@ class BreseqTablePageTestCase(TestCase):
         self.assertEqual(mutation.sequence_change, row["mutation"])
 
     def test_the_page_says_how_to_fix_unannotated_rows(self):
+        """It says who can fix them, not the command: a page shows no shell command and
+        no experiment id. The command is in docs/using/reference-genomes.md."""
         Mutation.objects.update(annotation=None)
         response = self.get_page()
         self.assertEqual(200, response.status_code)
-        self.assertContains(response, "reannotate")
+        self.assertContains(response, "re-annotate")
+        self.assertNotContains(response, "./mutint")
 
 
 class BreseqTablePermissionTestCase(TestCase):

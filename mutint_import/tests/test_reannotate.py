@@ -180,6 +180,20 @@ class ReannotateTestCase(TestCase):
         with self.assertRaises(CommandError):
             call_command("reannotate", 9999, stdout=StringIO())
 
+    def test_the_experiment_can_be_named(self):
+        """The shell takes the project's and the experiment's names as the pages show
+        them, so a superuser reading a page need not look an id up."""
+        out = StringIO()
+        call_command("reannotate", project_name=self.experiment.project.name,
+                     experiment_name=self.experiment.name, dry_run=True, stdout=out, stderr=out)
+        self.assertIn("mutations:", out.getvalue())
+        with self.assertRaises(CommandError) as caught:
+            call_command("reannotate", project_name=self.experiment.project.name,
+                         experiment_name="no such", stdout=StringIO())
+        self.assertIn("no such", str(caught.exception))
+        with self.assertRaises(CommandError):
+            call_command("reannotate", stdout=StringIO())
+
     def test_missing_reference_file(self):
         with self.assertRaises(CommandError) as caught:
             self.run_command(reference_paths=["/nonexistent/ref.gbk"])

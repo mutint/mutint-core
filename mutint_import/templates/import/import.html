@@ -11,8 +11,8 @@
    form sits in. {% endcomment %}
 <div class="col-lg-12">{% import_tabs active_tab %}</div>
 <div class="col-lg-8">
-    <p>Everything you drop here goes into <b class="mutint-experiment-name">{{ experiment.name }}</b> (experiment
-       #{{ experiment.id }}) as <b>{{ import_type.label }}</b>.
+    <p>Everything you drop here goes into <b class="mutint-experiment-name">{{ experiment.name }}</b>
+       as <b>{{ import_type.label }}</b>.
        {% comment %} `safe`, and only here. A description is prose written in
           `handlers.py` beside the handler, never anything a person typed, and it carries a
           little markup -- a line break, an emphasis, a link to the format's specification.

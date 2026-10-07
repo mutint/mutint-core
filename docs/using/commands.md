@@ -27,8 +27,10 @@ its plugins ship.
 ./mutint purge_deleted --older-than 30
 ./mutint load_example         # list the datasets components ship; name one to load it
 ./mutint reannotate <id>      # recompute annotations against the stored reference
+                              #   (or --project "P" --experiment "E", as the pages name them)
 ./mutint coverage [<id>]      # backfill coverage for samples imported before it existed
 ./mutint rename_contigs <id>  # rename an experiment's contigs, telling every plugin
+                              #   (takes --project/--experiment too)
 ./mutint ncbi_accessions      # record or check NCBI accessions for stored references
 ./mutint relabel_samples <id> # one-shot cleanup of labels from the retired coordinate format; --dry-run first
 ./mutint project_access       # grant or revoke a role on a project from the shell

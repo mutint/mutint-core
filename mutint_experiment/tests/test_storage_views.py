@@ -200,7 +200,19 @@ class ProjectPageTestCase(StorageViewTestCase):
 
 
 class ColumnTestCase(StorageViewTestCase):
-    """The column is appended last, so the DataTables indexes stay where they were."""
+    """The column is appended last, so the DataTables indexes stay where they were -- and
+    nothing reads a cell by index any more: the experiment's id rides on its row, there
+    being no ID column to read it from."""
+
+    def test_no_table_shows_an_id_column_and_every_row_carries_its_id(self):
+        self.client.force_login(self.owner)
+        for path in ("/experiment/", "/project/%d/" % self.project.id):
+            with self.subTest(page=path):
+                html = self.client.get(path).content.decode()
+                head = html.split('id="exp_table"', 1)[1].split("</thead>", 1)[0]
+                self.assertNotIn(">ID<", head)
+                self.assertNotIn("Exp ID", head)
+                self.assertIn('<tr data-experiment-id="%d">' % self.experiment.id, html)
 
     def _last_header(self, html, table_id):
         head = html.split('id="%s"' % table_id, 1)[1].split("</thead>", 1)[0]

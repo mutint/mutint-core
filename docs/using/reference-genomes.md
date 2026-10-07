@@ -116,8 +116,12 @@ Gene, codon and amino-acid fields are **derived at import** from the stored refe
 out of the `.gd`. breseq's plain `output.gd` is enough; `gdtools ANNOTATE` is not needed.
 
 A mutation imported before a reference existed has no annotation and renders through a plainer
-fallback. Nothing is lost — the verbatim record is kept — and `./mutint reannotate <id>`
-recomputes annotations in place once a reference arrives. Re-importing is not needed.
+fallback and says an administrator can re-annotate it. Nothing is lost — the verbatim record
+is kept — and `./mutint reannotate --project "P" --experiment "E"` (or the experiment's id)
+recomputes annotations in place once a reference arrives. Re-importing is not needed. The
+same page is where an import's "ask an administrator to rename the contigs" leads:
+`./mutint rename_contigs`, with `--ref <file>`, or `--repair` for a reference stored before
+per-sequence hashes existed.
 
 ### Updating the annotation re-annotates everything
 

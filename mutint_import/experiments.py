@@ -206,6 +206,31 @@ def resolve_experiment(*, experiment_id=None, project_name=None, experiment_name
     return context["experiment"], user
 
 
+def find_experiment(experiment_id=None, project_name=None, experiment_name=None):
+    """An existing experiment, by id or by its project's and its own name.
+
+    The shell's lookup for commands that work on an experiment that is already there --
+    `reannotate`, `rename_contigs` -- where `resolve_experiment` would create one. An id
+    wins. Names reach a live experiment exactly; two experiments sharing a name in one
+    project is the one case names cannot settle, and the error says to use the id.
+    """
+    if experiment_id is not None:
+        try:
+            return Experiment.objects.get(pk=experiment_id)
+        except Experiment.DoesNotExist:
+            raise ValueError("No experiment with id %s." % experiment_id)
+    if not (project_name and experiment_name):
+        raise ValueError("Name the experiment by id, or with --project and --experiment.")
+    matches = list(mutint_experiment.models.live(Experiment.objects.filter(
+        project__name=project_name, name=experiment_name)))
+    if not matches:
+        raise ValueError("No experiment %r in project %r." % (experiment_name, project_name))
+    if len(matches) > 1:
+        raise ValueError("%d experiments in project %r are called %r; name one by id."
+                         % (len(matches), project_name, experiment_name))
+    return matches[0]
+
+
 def find_user(user):
     potential_user_list = []
     while len(potential_user_list) == 0:

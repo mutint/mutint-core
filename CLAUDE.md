@@ -3885,6 +3885,18 @@ Creation and deletion are nested under the objects they act on:
   `stats.html`'s `{% block experiment_actions %}` are gated on `can_edit`: a control that
   renders for everyone and whose endpoint refuses is a dead end dressed up as an action.
 
+**An id is an address, never a label.** The Experiments list and the Project page show no
+ID column -- the experiment's id rides on its row as `data-experiment-id`, which is what
+`_datatables.js`'s Export reads (it read the ID cell by index, and a column added before it
+would have sent the name's HTML to `/export/`). Every download is named by the project and
+the experiment through `mutint_export.util.safe_filename` -- the export zip's members (a
+counter where two of one name share a zip), Compare's CSV and SVG, and the plugins' -- and
+no page shows an experiment's number or a shell command: the Mutations page's unannotated
+note and the import's rename messages say an administrator can do it, and
+`docs/using/reference-genomes.md` says how. `reannotate` and `rename_contigs` take
+`--project`/`--experiment` as well as an id (`experiments.find_experiment`, which unlike
+`resolve_experiment` creates nothing), so a superuser reading a page need not look an id up.
+
 **Deletion is soft.** `Project` and `Experiment` carry `deleted_at`/`deleted_by`
 (`SoftDeleteMixin`); only those two are flagged, and children are reached by traversal when
 `./mutint purge_deleted --older-than <days>` finally removes them. `objects` is deliberately

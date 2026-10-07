@@ -12,10 +12,6 @@
                     targets: 0,
                     orderable: false,
                     className: 'select-checkbox',
-                },
-                {
-                    "targets": 1,
-                    "visible": true,
                 }
             ],
             select: {
@@ -57,12 +53,14 @@
     });
 
 
+    /* The id rides on each row as `data-experiment-id`: the table shows no ID column, an
+       id being an address rather than a label, and reading a cell by index is what broke
+       the moment a column moved. */
     function get_selected_experiment_ids(table) {
-        var selected_data = table.rows('.selected').data();
-        var experiment_ids = []
-        for (var i = 0; i < selected_data.length; i++) {
-            experiment_ids.push(selected_data[i][1])
-        }
+        var experiment_ids = [];
+        table.rows('.selected').nodes().each(function (row) {
+            experiment_ids.push(row.getAttribute('data-experiment-id'));
+        });
         return experiment_ids.join(",");
     }
 

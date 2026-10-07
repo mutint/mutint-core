@@ -33,8 +33,13 @@ class Command(BaseCommand):
             "Use --ref to establish a new reference first.")
 
     def add_arguments(self, parser):
-        parser.add_argument("experiment_id", type=int,
-                            help="Experiment primary key")
+        parser.add_argument("experiment_id", type=int, nargs="?",
+                            help="Experiment primary key; or name it with --project and "
+                                 "--experiment")
+        parser.add_argument("--project", dest="project_name",
+                            help="The project's name, with --experiment")
+        parser.add_argument("--experiment", dest="experiment_name",
+                            help="The experiment's name within that project")
         parser.add_argument("--ref", dest="reference_paths", default=None, nargs="+",
                             metavar="FILE",
                             help="GenBank, GFF3 or FASTA file(s) to establish before "
@@ -50,7 +55,7 @@ class Command(BaseCommand):
                                  "dashboard afterwards")
 
     def handle(self, *args, **options):
-        experiment = self._experiment(options["experiment_id"])
+        experiment = self._experiment(options)
         dry_run = options["dry_run"]
 
         references = self._reference(experiment, options["reference_paths"],
@@ -90,11 +95,13 @@ class Command(BaseCommand):
             run_post_processing(experiment)
         self.stdout.write(self.style.SUCCESS("Done."))
 
-    def _experiment(self, experiment_id):
+    def _experiment(self, options):
+        from mutint_import.experiments import find_experiment
         try:
-            return Experiment.objects.get(pk=experiment_id)
-        except Experiment.DoesNotExist:
-            raise CommandError("No experiment with primary key %s" % experiment_id)
+            return find_experiment(options["experiment_id"], options["project_name"],
+                                   options["experiment_name"])
+        except ValueError as error:
+            raise CommandError(str(error))
 
     def _reference(self, experiment, reference_paths, replace, dry_run):
         """Establish `reference_paths` if given, then load what we will annotate against."""

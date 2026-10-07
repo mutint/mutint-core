@@ -62,7 +62,8 @@ from mutint_sample.util import get_ordered_sample_dict
 
 sample_dict = get_ordered_sample_dict(experiment.id, population, sample_type)
 matrix = build_matrix(calls, sample_dict, experiment=experiment,
-                      csv_title="%s_ExpID%d" % (experiment.name, experiment.id))
+                      csv_title="%s_%s" % (safe_filename(experiment.project.name),
+                                           safe_filename(experiment.name)))
 ```
 
 `sample_dict` is `{sample_id: Sample}` in column order — `get_ordered_sample_dict` for one

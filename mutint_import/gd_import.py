@@ -643,10 +643,9 @@ def _check_seq_ids(document, experiment, sample_name):
         raise SeqIdMismatch(
             "%s names %s, which is not this experiment's reference (%s). The same "
             "genome under a different name has to be renamed to match -- upload that "
-            "reference on the Import data page, or run `./mutint rename_contigs %s --ref "
-            "<file>` -- and a different genome belongs in its own experiment."
-            % (sample_name, ", ".join(unknown), ", ".join(sorted(known)),
-               experiment.id if experiment is not None else "<id>"))
+            "reference on the Import data page, or ask an administrator to rename the "
+            "contigs -- and a different genome belongs in its own experiment."
+            % (sample_name, ", ".join(unknown), ", ".join(sorted(known))))
 
 
 def _database_gd_mutations(seq_experiment, document, experiment=None):

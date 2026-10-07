@@ -6,7 +6,7 @@ from mutint_experiment.permissions import can_view_project
 from mutint_experiment.models import Project, live
 from zipfile import ZipFile
 import io, csv
-from mutint_export.util import get_csv_str
+from mutint_export.util import safe_filename, get_csv_str
 from mutint_filter.view_filter import get_view_filter
 from mutint_common.logger import user_extra
 import logging
@@ -17,9 +17,6 @@ import os
 import zipfile
 
 logger = logging.getLogger(__name__)
-
-def safe_filename(name):
-    return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
 def export(request):
     logger.info("export", extra = user_extra(request))
@@ -51,6 +48,10 @@ def export(request):
                 tmp_file = NamedTemporaryFile(delete=False, suffix=".zip")
                 try:
                     with zipfile.ZipFile(tmp_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                        # Named by project and experiment; two experiments of one name in
+                        # one project take a counter, since a zip cannot hold two members
+                        # of one name.
+                        taken = set()
                         for experiment in exp_list:
                             csv_buffer = io.StringIO()
                             writer = csv.writer(csv_buffer)
@@ -60,7 +61,13 @@ def export(request):
                             writer.writerows(get_csv_str(
                                 experiment.id, mut_type_str,
                                 get_view_filter(request, experiment.id)))
-                            filename = f"Proj_{safe_filename(experiment.project.name)}_Exp_{safe_filename(experiment.name)}_ExpID{experiment.id}_{mut_type_str}.csv"
+                            stem = f"Proj_{safe_filename(experiment.project.name)}_Exp_{safe_filename(experiment.name)}"
+                            filename = f"{stem}_{mut_type_str}.csv"
+                            for n in range(2, 1000):
+                                if filename not in taken:
+                                    break
+                                filename = f"{stem}_{n}_{mut_type_str}.csv"
+                            taken.add(filename)
                             zf.writestr(filename, csv_buffer.getvalue())
                             logger.info(f"Added {filename} to zip", extra=user_extra(request))
 

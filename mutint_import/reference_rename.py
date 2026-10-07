@@ -215,9 +215,8 @@ def _stored_hashes(reference):
     if missing or not entries:
         raise RenameUnavailable(
             "This experiment's reference was recorded before per-sequence hashes existed, "
-            "so its contigs cannot be matched to the uploaded ones by sequence. Run "
-            "`./mutint rename_contigs %s --repair` to recompute them from the stored FASTA "
-            "first." % (reference.experiment_id,))
+            "so its contigs cannot be matched to the uploaded ones by sequence. Ask an "
+            "administrator to repair the stored reference's sequence identity first.")
     return [(entry["id"], entry["sha256"]) for entry in entries]
 
 

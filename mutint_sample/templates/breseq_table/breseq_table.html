@@ -182,8 +182,8 @@
             {% if unannotated_count %}
                 <div class="breseq-unannotated">
                     {{ unannotated_count }} of {{ rows|length }} mutations were imported before a
-                    reference was available and are shown without breseq formatting. Run
-                    <code>./mutint reannotate {{ experiment_id }}</code> to fill them in.
+                    reference was available and are shown without breseq formatting. An
+                    administrator can re-annotate the experiment to fill them in.
                 </div>
             {% endif %}
             <div>

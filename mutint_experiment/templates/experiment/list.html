@@ -46,7 +46,6 @@
         <tr>
             <th width="30"><input type="checkbox" class="mutint-select-all"
                        title="Select every row showing"></th>
-            <th width="60">ID</th>
             <th>Experiment Name</th>
             <th>Project</th>
             <th>Publication</th>
@@ -56,9 +55,8 @@
         </thead>
         <tbody>
         {% for experiment in experiments %}
-            <tr>
+            <tr data-experiment-id="{{ experiment.id }}">
                 <td></td>
-                <td>{{ experiment.id }}</td>
                 <td>
                     <a href="/experiment/{{ experiment.id }}" class="mutint-experiment-name">{{ experiment.name }}</a>
                 </td>

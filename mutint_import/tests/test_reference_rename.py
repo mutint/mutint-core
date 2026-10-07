@@ -198,7 +198,9 @@ class RenamePlanningTestCase(TestCase):
         with self.assertRaises(reference_rename.RenameUnavailable) as caught:
             reference_rename.plan_rename(reference, [("y", "ACGT")])
 
-        self.assertIn("rename_contigs", str(caught.exception))
+        # The message names what to do, never a command: it reaches a page.
+        self.assertIn("administrator", str(caught.exception))
+        self.assertNotIn("rename_contigs", str(caught.exception))
 
 
 class RenameApplicationTestCase(TestCase):
