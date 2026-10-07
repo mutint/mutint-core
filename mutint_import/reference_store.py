@@ -111,6 +111,9 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
                     new_gff3_text = reference_rename.rename_gff3_text(stored, plan.mapping)
 
             reference_rename.apply_rename(experiment, existing, plan, actor=actor)
+            # The entries now carry each contig's topology under its new name; the file
+            # about to be written has to say the same.
+            new_gff3_text = _settle_topology(existing, new_gff3_text)
             # Files after rows: a rollback cannot unwrite a file, so the store must never
             # lead the database.
             _write_store(experiment.id, new_gff3_text, fasta_text)
@@ -119,16 +122,22 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
             existing.save(update_fields=["gff3_sha256", "fasta_sha256"])
             return existing, False
 
-        if existing.gff3_sha256 == gff3_sha:
-            return existing, False
         # Sequence-only uploads never install annotation, whatever the caller asked for:
         # there is none in one to install.
         if not update_annotation or not reference_rename.has_annotation(gff3_text):
+            if existing.gff3_sha256 == gff3_sha:
+                return existing, False
             # Still refresh identity: `seq_ids` and `sequence_sha256` can be stale on a row
             # written before they existed, and being stale is what this branch used to do.
             _apply_sequence_fields(existing, sequences, fasta_sha, sequence_sha)
             return existing, False
-        # Same genome, same names, different annotation, and the caller asked for it.
+        # Same genome, same names, and the caller asked for the annotation. Its topology
+        # rows are settled against what is stored *before* anything is hashed or
+        # compared, so the digest is of the text that would be written.
+        gff3_text = _settle_topology(existing, gff3_text)
+        gff3_sha = digest(gff3_text)
+        if existing.gff3_sha256 == gff3_sha:
+            return existing, False
         _write_store(experiment.id, gff3_text, fasta_text)
         existing.gff3_sha256 = gff3_sha
         _apply_sequence_fields(existing, sequences, fasta_sha, sequence_sha,
@@ -137,44 +146,51 @@ def establish_or_check(experiment, gff3_text, sequences, replace=False,
 
     _write_store(experiment.id, gff3_text, fasta_text)
 
-    defaults = dict(_sequence_fields(sequences, fasta_sha, sequence_sha),
+    defaults = dict(_sequence_fields(sequences, fasta_sha, sequence_sha,
+                                     circular=reference_io.gff3_topologies(gff3_text)),
                     gff3_sha256=gff3_sha)
     reference, created = ReferenceSequences.objects.update_or_create(
         experiment=experiment, defaults=defaults)
     return reference, created
 
 
-def _sequence_fields(sequences, fasta_sha, sequence_sha):
+def _sequence_fields(sequences, fasta_sha, sequence_sha, circular=None):
     """Everything about a reference that the sequences alone determine.
 
     One definition, used by every path that writes it. It used to be inline in the
     create/replace branch only, so the same-sequence branch left `seq_ids` stale. That was
     invisible while identity included names -- a matching hash implied matching ids, lengths
     and order -- and stops being invisible the moment names can move.
+
+    `circular` is what the file being stored said about topology, for a create; a
+    rewrite carries the stored keys instead (`_apply_sequence_fields`).
     """
     return {
         "fasta_sha256": fasta_sha,
         "sequence_sha256": sequence_sha,
-        "seq_ids": reference_io.sequence_entries(sequences),
+        "seq_ids": reference_io.sequence_entries(sequences, circular=circular),
         "total_length": sum(len(seq) for _seq_id, seq in sequences),
     }
 
 
 def _apply_sequence_fields(reference, sequences, fasta_sha, sequence_sha, extra=()):
-    """Write `_sequence_fields` onto `reference`, preserving aliases and roles.
+    """Write `_sequence_fields` onto `reference`, preserving aliases, roles and topology.
 
     `sequence_entries` mints entries from the sequences alone, so anything a person
-    recorded *about* a contig has to be carried across by hand here. Two things are:
-    the names it used to have, and its breseq role (`reference_roles`). Both are keyed
-    by name, which is right for this path -- it runs when the sequences are the same and
-    only the annotation moved, so the names have not changed. A **rename** rebuilds the
-    entries elsewhere, and carries both across there; see `reference_rename._record_aliases`.
+    recorded *about* a contig has to be carried across by hand here. Three things are:
+    the names it used to have, its breseq role (`reference_roles`) and its topology
+    (`reference_topology`). All are keyed by name, which is right for this path -- it
+    runs when the sequences are the same and only the annotation moved, so the names have
+    not changed. A **rename** rebuilds the entries elsewhere, and carries all three across
+    there; see `reference_rename._record_aliases`.
     """
     aliases = {entry["id"]: entry["aliases"]
                for entry in (reference.seq_ids or []) if entry.get("aliases")}
     roles = {entry["id"]: entry["role"]
              for entry in (reference.seq_ids or []) if entry.get("role")}
-    fields = _sequence_fields(sequences, fasta_sha, sequence_sha)
+    circular = {entry["id"]: entry["circular"]
+                for entry in (reference.seq_ids or []) if "circular" in entry}
+    fields = _sequence_fields(sequences, fasta_sha, sequence_sha, circular=circular)
     for entry in fields["seq_ids"]:
         if entry["id"] in aliases:
             entry["aliases"] = aliases[entry["id"]]
@@ -183,6 +199,56 @@ def _apply_sequence_fields(reference, sequences, fasta_sha, sequence_sha, extra=
     for name, value in fields.items():
         setattr(reference, name, value)
     reference.save(update_fields=list(fields) + list(extra))
+
+
+def _settle_topology(reference, gff3_text):
+    """`gff3_text` with its topology rows made to agree with `reference.seq_ids`.
+
+    The rule is **a stored key wins and the file fills gaps**: a contig whose entry
+    already says circular or linear keeps that whatever the file says, and a contig whose
+    entry says nothing takes the file's word, which is written onto the entry. Returns
+    the text whose `region` rows state exactly what the entries then do, so the two
+    cannot disagree after the write. Saves `seq_ids` when a gap was filled.
+    """
+    entries = list(reference.seq_ids or [])
+    known = reference_io.gff3_topologies(gff3_text)
+    filled = False
+    for entry in entries:
+        if "circular" not in entry and entry.get("id") in known:
+            entry["circular"] = known[entry["id"]]
+            filled = True
+    if filled:
+        reference.seq_ids = entries
+        reference.save(update_fields=["seq_ids"])
+    circular = {entry["id"]: entry["circular"] for entry in entries if "circular" in entry}
+    return reference_io.with_topology(gff3_text, circular)
+
+
+def write_topology(experiment, circular):
+    """Rewrite the stored GFF3's `region` rows to state `circular` (`{seq_id: bool}`).
+
+    The other half of `reference_topology.set_topology`: the entries say what the page
+    chose, and the stored file -- which mutint-breseq hands to breseq untouched when
+    every contig shares a role, and which every export is rendered from -- has to say
+    the same. Only the GFF3 is written; the FASTA and its index are untouched, and
+    `gff3_sha256` follows the file. Returns False when there is no stored file to write.
+    """
+    from mutint_import import annotation
+
+    text = _stored_gff3_text(experiment.id)
+    if text is None:
+        return False
+    new_text = reference_io.with_topology(text, circular)
+    if new_text != text:
+        path = store.experiment_reference_path(experiment.id, store.REFERENCE_GFF3)
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(new_text)
+        annotation.clear_cache()
+    reference = ReferenceSequences.objects.filter(experiment=experiment).first()
+    if reference is not None and reference.gff3_sha256 != digest(new_text):
+        reference.gff3_sha256 = digest(new_text)
+        reference.save(update_fields=["gff3_sha256"])
+    return True
 
 
 def _stored_gff3_text(experiment_id):

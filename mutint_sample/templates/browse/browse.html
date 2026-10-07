@@ -170,6 +170,10 @@
             url: reference.gff3URL,
             displayMode: "EXPANDED",
             indexed: false,
+            // The stored GFF3 carries a `region` row per contig for its topology. igv
+            // leaves only `chromosome` out by default, so without this it paints a
+            // feature across the whole contig in the Genes track.
+            filterTypes: ["chromosome", "region"],
             order: 0
         };
 

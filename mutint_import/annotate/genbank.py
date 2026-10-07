@@ -178,6 +178,20 @@ def _record_seq_id(record):
     return ''
 
 
+TOPOLOGIES = {'circular': True, 'linear': False}
+
+
+def _record_topology(record):
+    """The LOCUS line's topology as True (circular), False (linear) or None (not said).
+
+    Biopython keeps it in ``record.annotations['topology']``; a LOCUS line whose field is
+    blank leaves the key out. None is kept distinct from False so a file that said
+    nothing is not stored as having said linear -- the page marks it *suggested*.
+    """
+    value = (record.annotations or {}).get('topology') or ''
+    return TOPOLOGIES.get(str(value).strip().lower())
+
+
 def load_genbank(*paths):
     """Load one or more GenBank files into a LoadedReferenceSequences."""
     references = LoadedReferenceSequences()
@@ -185,7 +199,8 @@ def load_genbank(*paths):
     for path in paths:
         for record in parse_records(path):
             seq_id = _record_seq_id(record)
-            annotated = AnnotatedSequence(seq_id, str(record.seq).upper())
+            annotated = AnnotatedSequence(seq_id, str(record.seq).upper(),
+                                          circular=_record_topology(record))
             labels = _gene_feature_labels(record.features)
 
             # A file annotated only with `gene` features has nothing else to

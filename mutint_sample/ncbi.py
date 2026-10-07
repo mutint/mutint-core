@@ -37,18 +37,25 @@ inside it.
 import hashlib
 import logging
 import re
+import time
 
 import requests
 from django.conf import settings
 from django.utils import timezone
 
-from mutint_import import reference_roles
+from mutint_import import reference_roles, reference_topology
 from mutint_sample.models import DatabaseSequenceLink, ReferenceSequences
 
 logger = logging.getLogger(__name__)
 
 ESUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+
+#: Seconds between consecutive requests to NCBI from one operation, so a loop cannot burst
+#: past the keyless 3/second limit. The same value and reasoning as
+#: `mutint_import.ncbi_fetch.POLITE_DELAY_SECONDS`, which cannot be imported from here
+#: because that module imports this one.
+POLITE_DELAY_SECONDS = 0.4
 
 #: Sent on every request. NCBI asks callers to identify their tool, and an unidentified
 #: caller is the one most likely to be throttled.
@@ -306,6 +313,108 @@ def check_and_store(sha256, length, accession, user=None,
     return record
 
 
+def record_verified(sha256, length, accession, detail, user=None,
+                    database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
+    """Store VERIFIED for a contig digest, with no call to `verify`.
+
+    The write both `record_downloaded` and `match_records` end in: each has already
+    established, its own way, that these bases are that record's. A row already here is
+    overwritten, MISMATCH and ERROR included -- the key is the digest, so whatever is being
+    replaced was a verdict about *this* sequence, and a verdict reached by comparing bases
+    supersedes one reached from a typed name.
+    """
+    record, _created = DatabaseSequenceLink.objects.update_or_create(
+        database=database,
+        sha256=sha256,
+        defaults={
+            "length": length,
+            "accession": accession,
+            "status": DatabaseSequenceLink.VERIFIED,
+            "detail": detail,
+            "checked_at": timezone.now(),
+            "proposed_by": user if (user is not None and user.is_authenticated) else None,
+        })
+    return record
+
+
+def match_records(experiment, records, user=None,
+                  database=DatabaseSequenceLink.NCBI_NUCLEOTIDE, sleep=None):
+    """Match NCBI records against whichever of `experiment`'s contigs they turn out to be.
+
+    `records` is `[{"accession", "length"}, ...]` as `mutint_import.ncbi_fetch.resolve`
+    returns them -- a nuccore accession is one record, an assembly accession every
+    sequence it lists. Nothing in that input claims which contig a record is meant to be,
+    which is what distinguishes this from `verify`: there, a wrong answer is a MISMATCH
+    worth storing; here, a record that matches nothing is simply unused, and **no row is
+    ever written for a contig that matched nothing**.
+
+    Cheapest first, as `verify` does. A record whose length equals no candidate's is
+    skipped without a download; one that does is fetched **on its own** -- the digest
+    stream merges every record of one efetch, so batching would digest a concatenation --
+    and compared to every still-unmatched candidate of that length. Two identical contigs
+    are both verified by one fetch. A contig already VERIFIED is not a candidate, so a
+    second match costs nothing and changes nothing.
+
+    Returns `{"matched": [{"seq_id", "accession", "detail"}], "unmatched": [seq_id, ...],
+    "errors": [sentence, ...]}`, where `unmatched` is every checkable contig still without
+    a verified record and `errors` is one line per record NCBI could not be asked about.
+    """
+    sleep = time.sleep if sleep is None else sleep
+    try:
+        reference = experiment.reference
+    except (ReferenceSequences.DoesNotExist, AttributeError):
+        reference = None
+    entries = [entry for entry in list(getattr(reference, "seq_ids", None) or [])
+               if entry.get("sha256") and entry.get("length") and entry.get("id")]
+    verdicts = records_for([entry["sha256"] for entry in entries], database)
+    pool = [entry for entry in entries
+            if not (verdicts.get(entry["sha256"]) and verdicts[entry["sha256"]].is_verified)]
+
+    matched, errors = [], []
+    seen = set()
+    fetched = 0
+    for record in records:
+        accession = (record.get("accession") or "").strip()
+        if not accession or accession.lower() in seen:
+            continue
+        seen.add(accession.lower())
+        if not pool:
+            break
+        try:
+            length = int(record.get("length") or 0)
+        except (TypeError, ValueError):
+            length = 0
+        candidates = [entry for entry in pool if entry["length"] == length]
+        if not candidates:
+            continue
+        if fetched:
+            sleep(POLITE_DELAY_SECONDS)
+        fetched += 1
+        try:
+            digest, counted = _fetch_digest(accession, length)
+        except Unreachable as error:
+            errors.append("Could not fetch %s from NCBI: %s" % (accession, error))
+            continue
+        if counted != length:
+            errors.append("NCBI reported %s bases for %s but sent %s."
+                          % (format(length, ",d"), accession, format(counted, ",d")))
+            continue
+        for entry in candidates:
+            if entry["sha256"] != digest:
+                continue
+            detail = ("%s matches this contig exactly (%s bases)."
+                      % (accession, format(length, ",d")))
+            record_verified(entry["sha256"], entry["length"], accession, detail,
+                            user=user, database=database)
+            matched.append({"seq_id": entry["id"], "accession": accession,
+                            "detail": detail})
+            pool.remove(entry)
+
+    return {"matched": matched,
+            "unmatched": [entry["id"] for entry in pool],
+            "errors": errors}
+
+
 def record_downloaded(sha256, length, accession, detail, user=None,
                       database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
     """Link a contig whose bases we *downloaded* to the record they came out of.
@@ -329,18 +438,7 @@ def record_downloaded(sha256, length, accession, detail, user=None,
     whatever is being replaced was a verdict about *this* sequence -- and a verdict reached
     from a typed name is exactly what direct provenance supersedes.
     """
-    record, _created = DatabaseSequenceLink.objects.update_or_create(
-        database=database,
-        sha256=sha256,
-        defaults={
-            "length": length,
-            "accession": accession,
-            "status": DatabaseSequenceLink.VERIFIED,
-            "detail": detail,
-            "checked_at": timezone.now(),
-            "proposed_by": user if (user is not None and user.is_authenticated) else None,
-        })
-    return record
+    return record_verified(sha256, length, accession, detail, user=user, database=database)
 
 
 def verified_contig_names(experiment, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
@@ -435,6 +533,12 @@ def contig_states(experiment, database=DatabaseSequenceLink.NCBI_NUCLEOTIDE):
             "role": reference_roles.entry_role(entry),
             "role_label": reference_roles.ROLE_LABELS[reference_roles.entry_role(entry)],
             "role_guessed": reference_roles.entry_is_guessed(entry),
+            # Circular or linear, and whether that is what the file or a person said or
+            # the default an entry with no answer takes. Same shape as the role.
+            "circular": reference_topology.entry_circular(entry),
+            "topology_label": reference_topology.label_for(
+                reference_topology.entry_circular(entry)),
+            "topology_guessed": reference_topology.entry_is_guessed(entry),
             "checkable": bool(entry.get("sha256") and entry.get("length")),
             "record": record,
             "status": record.status if record else DatabaseSequenceLink.UNCHECKED,

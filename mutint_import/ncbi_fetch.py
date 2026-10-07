@@ -154,7 +154,7 @@ class Plan:
 
 # --- resolving ------------------------------------------------------------------------------
 
-def resolve(tokens):
+def resolve(tokens, check_ceiling=True):
     """What each accession in `tokens` is, without downloading a genome.
 
     Raises `FetchError` naming the first token that cannot be used. This runs before a byte is
@@ -163,6 +163,11 @@ def resolve(tokens):
     again. It is the reason mutint-breseq preflights its command line before claiming the
     staged reads, and a better place for it, because here it is genuinely before the upload
     rather than before the claim.
+
+    `check_ceiling` applies `max_bases()` to the total, which is right for an import that
+    will download every record. The Reference page's match (`ncbi.match_records`) fetches
+    only the records whose length equals an unmatched contig's, so it passes False and
+    `_fetch_digest` applies the ceiling per record instead.
     """
     plans = []
     for index, token in enumerate(tokens):
@@ -174,7 +179,7 @@ def resolve(tokens):
             plans.append(_resolve_nucleotide(token))
 
     total = sum(plan.total_length for plan in plans)
-    if total > max_bases():
+    if check_ceiling and total > max_bases():
         # On the total rather than per record, deliberately: the drop is *one* reference, and
         # a ceiling applied per contig says nothing at all about a 900-scaffold assembly.
         raise FetchError(

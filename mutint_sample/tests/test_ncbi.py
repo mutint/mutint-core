@@ -330,3 +330,154 @@ class RecordDownloadedTestCase(TestCase):
         self.assertEqual(record.status, DatabaseSequenceLink.VERIFIED)
         self.assertEqual(record.accession, "NC_000913.3")
         self.assertEqual(1, DatabaseSequenceLink.objects.count())
+
+
+class MatchRecordsTestCase(TestCase):
+    """`match_records`: records in, verified contigs out, and nothing written for the rest.
+
+    The experiment is a stub carrying only what the function reads -- a `reference` with
+    `seq_ids` -- because the function asks the database for verdicts and nothing else.
+    """
+
+    OTHER = "GGCCTTAA" * 30  # a second sequence of a different length
+    SAME_LENGTH = "TTTT" * (LENGTH // 4)  # LENGTH bases, different from BASES
+
+    class _Reference:
+        def __init__(self, seq_ids):
+            self.seq_ids = seq_ids
+
+    class _Experiment:
+        def __init__(self, seq_ids):
+            self.reference = MatchRecordsTestCase._Reference(seq_ids)
+
+    def _experiment(self, *sequences):
+        return self._Experiment([
+            {"id": seq_id, "length": len(bases), "sha256": sequence_digest(bases)}
+            for seq_id, bases in sequences])
+
+    def _match(self, experiment, records, responses):
+        sleeps = []
+        with mock.patch("mutint_sample.ncbi.requests.get", side_effect=responses) as get:
+            result = ncbi.match_records(experiment, records, sleep=sleeps.append)
+        return result, get, sleeps
+
+    def test_an_exact_match_is_stored_verified_under_the_record_s_accession(self):
+        experiment = self._experiment(("chr", BASES))
+        result, get, _ = self._match(
+            experiment, [{"accession": "NC_000913.3", "length": LENGTH}],
+            [_Response(text=render_fasta([("x", BASES)]))])
+
+        self.assertEqual([hit["seq_id"] for hit in result["matched"]], ["chr"])
+        self.assertEqual(result["unmatched"], [])
+        self.assertEqual(result["errors"], [])
+        row = DatabaseSequenceLink.objects.get(sha256=DIGEST)
+        self.assertEqual(row.accession, "NC_000913.3")
+        self.assertTrue(row.is_verified)
+        self.assertEqual(get.call_count, 1)
+
+    def test_a_record_of_another_length_is_skipped_without_a_download(self):
+        experiment = self._experiment(("chr", BASES))
+        result, get, _ = self._match(
+            experiment, [{"accession": "NC_000001.1", "length": LENGTH + 7}], [])
+        self.assertFalse(get.called)
+        self.assertEqual(result["matched"], [])
+        self.assertEqual(result["unmatched"], ["chr"])
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
+
+    def test_the_same_length_and_different_bases_writes_nothing(self):
+        """Unlike `verify`, nobody claimed this record *was* this contig, so there is no
+        MISMATCH to record -- only a record that turned out to be unused."""
+        experiment = self._experiment(("chr", BASES))
+        result, _get, _ = self._match(
+            experiment, [{"accession": "NC_000001.1", "length": LENGTH}],
+            [_Response(text=render_fasta([("x", self.SAME_LENGTH)]))])
+        self.assertEqual(result["matched"], [])
+        self.assertEqual(result["unmatched"], ["chr"])
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
+
+    def test_a_network_failure_is_reported_and_costs_nothing_else(self):
+        import requests
+        experiment = self._experiment(("chr", BASES))
+        result, _get, _ = self._match(
+            experiment, [{"accession": "NC_000913.3", "length": LENGTH}],
+            [requests.ConnectionError("dns")])
+        self.assertEqual(result["matched"], [])
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertIn("NC_000913.3", result["errors"][0])
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
+
+    def test_a_verified_contig_is_not_a_candidate(self):
+        experiment = self._experiment(("chr", BASES))
+        ncbi.record_verified(DIGEST, LENGTH, "NC_000913.3", "already")
+        result, get, _ = self._match(
+            experiment, [{"accession": "NC_000913.3", "length": LENGTH}], [])
+        self.assertFalse(get.called)
+        self.assertEqual(result["matched"], [])
+        self.assertEqual(result["unmatched"], [])
+
+    def test_a_repeated_accession_is_fetched_once(self):
+        experiment = self._experiment(("chr", BASES), ("other", self.OTHER))
+        result, get, _ = self._match(
+            experiment,
+            [{"accession": "NC_000913.3", "length": LENGTH},
+             {"accession": "nc_000913.3", "length": LENGTH}],
+            [_Response(text=render_fasta([("x", BASES)]))])
+        self.assertEqual(get.call_count, 1)
+        self.assertEqual(result["unmatched"], ["other"])
+
+    def test_two_identical_contigs_are_both_verified_by_one_fetch(self):
+        experiment = self._experiment(("copy1", BASES), ("copy2", BASES))
+        result, get, _ = self._match(
+            experiment, [{"accession": "NC_000913.3", "length": LENGTH}],
+            [_Response(text=render_fasta([("x", BASES)]))])
+        self.assertEqual(get.call_count, 1)
+        self.assertEqual(sorted(hit["seq_id"] for hit in result["matched"]),
+                         ["copy1", "copy2"])
+
+    def test_an_assembly_s_records_each_find_their_contig(self):
+        """Several records, several contigs, matched by bases rather than by order --
+        with a pause between fetches so NCBI is not burst at."""
+        experiment = self._experiment(("chr", BASES), ("plasmid", self.OTHER))
+        result, get, sleeps = self._match(
+            experiment,
+            [{"accession": "NZ_P.1", "length": len(self.OTHER)},
+             {"accession": "NC_000913.3", "length": LENGTH}],
+            [_Response(text=render_fasta([("x", self.OTHER)])),
+             _Response(text=render_fasta([("x", BASES)]))])
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(sleeps, [ncbi.POLITE_DELAY_SECONDS])
+        self.assertEqual({hit["seq_id"]: hit["accession"] for hit in result["matched"]},
+                         {"chr": "NC_000913.3", "plasmid": "NZ_P.1"})
+        self.assertEqual(result["unmatched"], [])
+
+    def test_fetching_stops_once_nothing_is_left_to_match(self):
+        experiment = self._experiment(("chr", BASES))
+        result, get, _ = self._match(
+            experiment,
+            [{"accession": "NC_000913.3", "length": LENGTH},
+             {"accession": "NC_000001.1", "length": LENGTH}],
+            [_Response(text=render_fasta([("x", BASES)]))])
+        self.assertEqual(get.call_count, 1)
+        self.assertEqual(result["unmatched"], [])
+
+    def test_an_experiment_with_no_reference_matches_nothing(self):
+        result, get, _ = self._match(
+            self._Experiment([]), [{"accession": "NC_000913.3", "length": LENGTH}], [])
+        self.assertFalse(get.called)
+        self.assertEqual(result, {"matched": [], "unmatched": [], "errors": []})
+
+
+class RecordVerifiedTestCase(TestCase):
+    def test_it_stores_verified_without_asking_ncbi(self):
+        with mock.patch("mutint_sample.ncbi.requests.get") as get:
+            row = ncbi.record_verified(DIGEST, LENGTH, "NC_000913.3", "because")
+        self.assertFalse(get.called)
+        self.assertTrue(row.is_verified)
+        self.assertEqual(row.detail, "because")
+
+    def test_record_downloaded_is_the_same_write(self):
+        ncbi.record_downloaded(DIGEST, LENGTH, "NC_000913.3", "downloaded")
+        row = DatabaseSequenceLink.objects.get(sha256=DIGEST)
+        self.assertTrue(row.is_verified)
+        self.assertEqual(row.accession, "NC_000913.3")

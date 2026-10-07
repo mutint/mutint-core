@@ -23,12 +23,6 @@
                 {{ total_length }} bases in total.
                 {% if verified_count %}
                     {{ verified_count }} confirmed against NCBI.
-                {% else %}
-                    {% comment %} Said plainly rather than left to be inferred from a column
-                       of dashes: this is the state every experiment starts in, and the page
-                       has to explain what to do about it. {% endcomment %}
-                    None has been matched to an NCBI record yet, so no mutation can be shown
-                    in NCBI's annotation.
                 {% endif %}
             </p>
 
@@ -45,9 +39,10 @@
                 </div>
             {% endif %}
 
-            {% comment %} A sibling of the table, not a wrapper: every row below carries a
-               form of its own for the NCBI check, and HTML drops a form nested in a form.
-               The checkboxes claim this one through `form=`, so it works with no script. {% endcomment %}
+            {% comment %} A sibling of the table, not a wrapper: the row checkboxes reach it
+               through `form=`, so it works with no script, and the controls under the table
+               gather the same checkboxes rather than owning them -- an input may belong to
+               only one form. {% endcomment %}
             <form id="reference-download" class="btn-row reference-download" method="get"
                   action="{% url 'reference_download' experiment_id %}">
                 <label for="reference-format">Download selected as</label>
@@ -74,7 +69,8 @@
                         </th>
                         <th>Sequence</th>
                         <th class="reference-length">Length</th>
-                        <th>Role</th>
+                        <th>Topology</th>
+                        <th>Type</th>
                         <th>Previously named</th>
                         <th>NCBI record</th>
                     </tr>
@@ -89,6 +85,11 @@
                         </td>
                         <td><code>{{ contig.id }}</code></td>
                         <td class="reference-length">{{ contig.length_display }}</td>
+                        <td class="reference-topology">
+                            {{ contig.topology_label }}
+                            {% if contig.topology_guessed %}<span class="reference-role-guessed"
+                                title="The file this reference came from did not say. Set it below and it stops being a suggestion.">suggested</span>{% endif %}
+                        </td>
                         <td class="reference-role">
                             {{ contig.role_label }}
                             {% if contig.role_guessed %}<span class="reference-role-guessed"
@@ -109,28 +110,17 @@
                             {% elif not contig.checkable %}
                                 {% comment %} No per-sequence digest: established before
                                    hashing, so there is nothing to compare a record against
-                                   and offering a check would be theatre. {% endcomment %}
+                                   and offering a match would be theatre. {% endcomment %}
                                 <span class="reference-muted">
                                     cannot be checked &mdash; this reference was stored before
                                     per-sequence hashing
                                 </span>
                             {% else %}
+                                &mdash;
                                 {% if contig.detail %}
+                                    {% comment %} A MISMATCH or ERROR somebody paid for, from
+                                       `./mutint ncbi_accessions` or an earlier check. {% endcomment %}
                                     <div class="reference-problem">{{ contig.detail }}</div>
-                                {% endif %}
-                                {% if may_check %}
-                                    <form class="form-inline ncbi-check">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="experiment_id" value="{{ experiment_id }}">
-                                        <input type="hidden" name="seq_id" value="{{ contig.id }}">
-                                        <input type="text" class="form-control input-sm"
-                                               name="accession" value="{{ contig.accession }}"
-                                               placeholder="e.g. NC_000913.3" autocomplete="off">
-                                        <button type="submit" class="btn btn-default btn-sm">Check</button>
-                                        <span class="ncbi-check-status"></span>
-                                    </form>
-                                {% else %}
-                                    <span class="reference-muted">not recorded</span>
                                 {% endif %}
                             {% endif %}
                         </td>
@@ -140,16 +130,27 @@
             </table>
 
             {% if may_check %}
-                {% comment %} Not a <form>: the row checkboxes already belong to
+                {% comment %} Not forms: the row checkboxes already belong to
                    `reference-download` through `form=`, and an input may belong to only
-                   one form. The script gathers the checked ones. {% endcomment %}
-                <div class="reference-roles form-inline" id="reference-roles">
-                    {% comment %} mutintPostJson sends the CSRF token from the cookie, and
-                       rendering the tag is what sets it. It cannot be borrowed from the
-                       per-row check forms: those are gone once every contig is verified,
-                       which is exactly when this control still has to work. {% endcomment %}
+                   one form. The script gathers the checked ones. mutintPostJson sends the
+                   CSRF token from the cookie, and rendering the tag is what sets it. {% endcomment %}
+                <div class="reference-bulk form-inline" id="reference-topology">
                     {% csrf_token %}
-                    <label for="reference-role-select">Set role for selected:</label>
+                    <label for="reference-topology-select">Set topology for selected:</label>
+                    <select class="form-control input-sm" id="reference-topology-select">
+                        {% for topology in topologies %}
+                        <option value="{{ topology.key }}">{{ topology.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-default btn-sm"
+                            id="reference-topology-apply">Apply</button>
+                    <button type="button" class="btn btn-default btn-sm"
+                            id="reference-topology-reset"
+                            title="Forget what was set for the selected sequences, so they show the default again">Reset to suggested</button>
+                    <span class="reference-bulk-status" id="reference-topology-status"></span>
+                </div>
+                <div class="reference-bulk form-inline" id="reference-roles">
+                    <label for="reference-role-select">Set type for selected:</label>
                     <select class="form-control input-sm" id="reference-role-select">
                         {% for role in roles %}
                         <option value="{{ role.key }}" title="{{ role.description }}">{{ role.label }}</option>
@@ -159,42 +160,55 @@
                             id="reference-role-apply">Apply</button>
                     <button type="button" class="btn btn-default btn-sm"
                             id="reference-role-reset"
-                            title="Put the selected sequences back on the role suggested by their names">Reset to suggested</button>
-                    <span class="reference-role-status"></span>
+                            title="Put the selected sequences back on the type suggested by their names">Reset to suggested</button>
+                    <span class="reference-bulk-status" id="reference-role-status"></span>
                 </div>
+                {% if has_matchable %}
+                    {% comment %} One box for the whole reference rather than one per row:
+                       an assembly accession is many records, and the server finds which
+                       sequence each one is by comparing bases. Hidden once nothing is left
+                       to match. {% endcomment %}
+                    <form class="reference-bulk form-inline reference-match" id="reference-match">
+                        <label for="reference-match-accessions">Match NCBI record:</label>
+                        <input type="text" class="form-control input-sm"
+                               id="reference-match-accessions" name="accessions"
+                               placeholder="NC_000913.3 or GCF_000005845.2" autocomplete="off">
+                        <button type="submit" class="btn btn-default btn-sm"
+                                id="reference-match-button">Match</button>
+                        <span class="reference-bulk-status" id="reference-match-status"></span>
+                    </form>
+                {% endif %}
             {% endif %}
 
-            <p class="ncbi-footnote">
-                Downloads are generated from the stored reference, which keeps the sequence
-                and the genes breseq annotates against; the file it was imported from is not
-                kept. A GenBank download therefore carries CDS, RNA and repeat features with
-                their names, locus tags and products, and no translations or source record.
-            </p>
-
-            <p class="ncbi-footnote">
-                A sequence's <b>role</b> is which breseq reference option it is passed under
-                when a run is launched from this MutInt. <b>Reference (-r)</b> fits coverage
-                to it on its own. <b>Contig (-c)</b> fits one coverage distribution across
-                every sequence marked that way, which is what the contigs of a single draft
-                assembly want &mdash; and what stops a short contig being fitted alone.
-                <b>Junction-only (-s)</b> uses it only for calling junctions against the
-                others, with no coverage fitted and no mutations called on it; a transposon
-                that is not in the reference genome is the usual case. A role marked
-                <i>suggested</i> was read from the sequence's name and nobody has confirmed
-                it. Changing one alters no sequence and no annotation.
-            </p>
-
-            {% if may_check %}
-                <p class="ncbi-check-help">
-                    An accession is never guessed from a sequence name &mdash; a contig called
-                    <code>NC_000913</code> is usually one and a contig called <code>REL606</code>
-                    is not, and a wrong guess would draw a convincing picture of the wrong gene.
-                    What you enter is only a proposal: it is accepted only if NCBI's record for
-                    it is byte-for-byte this sequence. Confirming one lets every mutation on it
-                    be opened in NCBI's annotation from the Reference column of any mutation
-                    table.
+            <div class="ncbi-footnote">
+                <p>The <b>type</b> controls how the sequence is used by plugins that call mutations:</p>
+                <ul>
+                    <li><b>Reference</b> &ndash; Mutations are called in this completely assembled
+                        chromosome or plasmid.</li>
+                    <li><b>Contig</b> &ndash; Mutations are called in contigs from an incomplete
+                        assembly. Contigs are interpreted as pieces of the same chromosome or
+                        plasmid. Mutations near contig ends may be censored by mutation callers
+                        to avoid artifacts, and mutation callers may assume that all contigs in a
+                        set have the same read-depth coverage.</li>
+                    <li><b>Junction-only</b> &ndash; An additional engineered sequence, like an
+                        integration plasmid or a transposon. Mutations are not called in this
+                        sequence, but insertions of pieces of this sequence into other references
+                        may be reported.</li>
+                </ul>
+                {% if may_check and has_matchable %}
+                <p>
+                    <b>Match NCBI record</b> takes one or more accessions (for a
+                    <a href="https://www.ncbi.nlm.nih.gov/nuccore/" target="_blank" rel="noopener">nucleotide record</a>
+                    such as <a href="https://www.ncbi.nlm.nih.gov/nuccore/NC_000913.3" target="_blank" rel="noopener"><code>NC_000913.3</code></a>
+                    or a <a href="https://www.ncbi.nlm.nih.gov/datasets/genome/" target="_blank" rel="noopener">genome assembly</a>
+                    such as <a href="https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000005845.2/" target="_blank" rel="noopener"><code>GCF_000005845.2</code></a>)
+                    and matches them to
+                    <a href="https://www.ncbi.nlm.nih.gov/genbank/" target="_blank" rel="noopener">GenBank database</a>
+                    records. A confirmed sequence can be opened in NCBI's sequence viewer by
+                    clicking on the link in the <b>Reference</b> column of a mutation table.
                 </p>
-            {% endif %}
+                {% endif %}
+            </div>
         {% endif %}
     </div>
 </div>
@@ -231,14 +245,10 @@
 <script type="text/javascript">
 (function () {
     "use strict";
-    // The row checkboxes belong to the download form, so this reads them rather than
-    // submitting them, and posts JSON through the shared helper in mutint_crud.js.
-    var apply = document.getElementById("reference-role-apply");
-    var reset = document.getElementById("reference-role-reset");
-    var select = document.getElementById("reference-role-select");
-    var status = document.querySelector(".reference-role-status");
-    if (!apply) { return; }
-
+    // The row checkboxes belong to the download form, so the two bulk controls read them
+    // rather than submitting them, and post JSON through the shared helper in
+    // mutint_crud.js. One routine, two controls: they differ only in the endpoint and in
+    // the name of the value they send.
     function selected() {
         return Array.prototype.slice.call(
             document.querySelectorAll('input[name="seq_id"][form="reference-download"]'))
@@ -246,74 +256,81 @@
             .map(function (box) { return box.value; });
     }
 
-    function send(role) {
-        var seqIds = selected();
-        if (!seqIds.length) {
-            status.textContent = "Select at least one sequence.";
-            return;
+    function bulkControl(options) {
+        var apply = document.getElementById(options.applyId);
+        var reset = document.getElementById(options.resetId);
+        var select = document.getElementById(options.selectId);
+        var status = document.getElementById(options.statusId);
+        if (!apply) { return; }
+
+        function send(value) {
+            var seqIds = selected();
+            if (!seqIds.length) {
+                status.textContent = "Select at least one sequence.";
+                return;
+            }
+            apply.disabled = true;
+            reset.disabled = true;
+            status.textContent = "Saving…";
+            var payload = {experiment_id: {{ experiment_id }}, seq_ids: seqIds};
+            payload[options.key] = value;
+            mutintPostJson(options.url, payload).then(function () {
+                // Reload rather than rewriting the rows here: a change alters this column,
+                // the suggested markers and what the breseq launcher reports, and the
+                // server already decides all of it.
+                window.location.reload();
+            }).catch(function (error) {
+                apply.disabled = false;
+                reset.disabled = false;
+                status.textContent = (error && error.message) || "The change could not be saved.";
+            });
         }
-        apply.disabled = true;
-        reset.disabled = true;
-        status.textContent = "Saving…";
-        mutintPostJson("{% url 'reference_roles_set' %}", {
-            experiment_id: {{ experiment_id }},
-            seq_ids: seqIds,
-            role: role
-        }).then(function (data) {
-            // Reload rather than rewriting the rows here: a role changes this column, the
-            // suggested markers and the grouping the breseq page reports, and the server
-            // already decides all of it. Same rule as the accession check below.
-            window.location.reload();
-        }).catch(function (error) {
-            apply.disabled = false;
-            reset.disabled = false;
-            status.textContent = (error && error.message) || "The change could not be saved.";
-        });
+
+        apply.addEventListener("click", function () { send(select.value); });
+        reset.addEventListener("click", function () { send(null); });
     }
 
-    apply.addEventListener("click", function () { send(select.value); });
-    reset.addEventListener("click", function () { send(null); });
+    bulkControl({applyId: "reference-role-apply", resetId: "reference-role-reset",
+                 selectId: "reference-role-select", statusId: "reference-role-status",
+                 url: "{% url 'reference_roles_set' %}", key: "role"});
+    bulkControl({applyId: "reference-topology-apply", resetId: "reference-topology-reset",
+                 selectId: "reference-topology-select", statusId: "reference-topology-status",
+                 url: "{% url 'reference_topology_set' %}", key: "circular"});
 }());
 </script>
 
 <script type="text/javascript">
 (function () {
     "use strict";
-    var forms = document.querySelectorAll("form.ncbi-check");
-    Array.prototype.forEach.call(forms, function (form) {
-        var button = form.querySelector("button");
-        var status = form.querySelector(".ncbi-check-status");
+    var form = document.getElementById("reference-match");
+    if (!form) { return; }
+    var input = document.getElementById("reference-match-accessions");
+    var button = document.getElementById("reference-match-button");
+    var status = document.getElementById("reference-match-status");
 
-        form.addEventListener("submit", function (event) {
-            event.preventDefault();
-            // A check is one summary request plus, if that passes, a whole genome --
-            // seconds, not milliseconds. Saying so beats a button that looks ignored.
-            button.disabled = true;
-            status.textContent = "Asking NCBI…";
-
-            fetch("{% url 'ncbi_check' %}", {
-                method: "POST",
-                body: new FormData(form),
-                credentials: "same-origin"
-            }).then(function (response) {
-                return response.json().then(function (data) {
-                    return {ok: response.ok, data: data};
-                });
-            }).then(function (result) {
-                if (result.data.verified) {
-                    // Reload rather than rewriting the row here: a confirmed sequence
-                    // changes this row, the count above it and every mutation table's
-                    // Reference column, and the server already decides all of that.
-                    window.location.reload();
-                    return;
-                }
-                button.disabled = false;
-                status.textContent = result.data.detail || result.data.error
-                                     || "The check failed.";
-            }).catch(function () {
-                button.disabled = false;
-                status.textContent = "The check could not be sent.";
-            });
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        // A match is one lookup per accession plus a download for every record the same
+        // length as an unmatched sequence -- seconds, not milliseconds. Saying so beats a
+        // button that looks ignored.
+        button.disabled = true;
+        status.textContent = "Asking NCBI…";
+        mutintPostJson("{% url 'ncbi_match' %}", {
+            experiment_id: {{ experiment_id }},
+            accessions: input.value
+        }).then(function (data) {
+            if (data.matched && data.matched.length) {
+                // Reload rather than rewriting the rows: a confirmed sequence changes its
+                // row, the count above the table and every mutation table's Reference
+                // column, and the server already decides all of that.
+                window.location.reload();
+                return;
+            }
+            button.disabled = false;
+            status.textContent = data.message || "Nothing matched.";
+        }).catch(function (error) {
+            button.disabled = false;
+            status.textContent = (error && error.message) || "The match could not be sent.";
         });
     });
 }());

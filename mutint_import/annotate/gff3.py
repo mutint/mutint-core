@@ -34,6 +34,13 @@ FASTA_DIRECTIVE = '##FASTA'
 # a CDS with the pseudo flag set. reference_sequence.cpp:1571-1575
 PSEUDO_CDS_TYPE = 'fCDS'
 
+# One `region` row per sequence carries its topology, as breseq's own GFF3 does
+# (`Is_circular=true`). Read into `AnnotatedSequence.circular` and written back by
+# `render_breseq_gff3` only for a contig whose topology is known; never a feature.
+REGION_TYPE = 'region'
+CIRCULAR_ATTRIBUTE = 'Is_circular'
+REGION_SOURCE = 'mutint'
+
 GFF3_ESCAPES = (
     ('%3B', ';'), ('%3D', '='), ('%26', '&'), ('%2C', ','),
     ('%09', '\t'), ('%0A', '\n'), ('%0D', '\r'),
@@ -249,6 +256,18 @@ def load_gff3(*paths):
         for seq_id, sequence in sequences:
             contigs[seq_id] = AnnotatedSequence(seq_id, sequence.upper())
 
+        # breseq writes one `region` row per sequence carrying `Is_circular`, and so does
+        # the renderer below. It is topology, not a feature: `_build_feature` drops the
+        # row, and this is the one thing read off it. A region row with no `Is_circular`
+        # leaves the contig at None, the same as no region row at all.
+        for row in rows:
+            if row['type'] != REGION_TYPE:
+                continue
+            contig = contigs.get(row['seq_id'])
+            flag = _first(row['attributes'], CIRCULAR_ATTRIBUTE)
+            if contig is not None and flag:
+                contig.circular = _is_true(flag)
+
         promote_gene_rows = not any(
             row['type'] in GENE_TYPES or row['type'] == PSEUDO_CDS_TYPE for row in rows)
 
@@ -382,6 +401,22 @@ def _sort_key(feature):
             feature.get_locus_tag())
 
 
+def region_rows(topologies):
+    """The `region` rows for ``[(seq_id, length, circular), ...]``, skipping None.
+
+    One shape, used by the renderer and by `reference.with_topology`, so the stored
+    file and a rewrite of it cannot spell the row two ways.
+    """
+    rows = []
+    for seq_id, length, circular in topologies:
+        if circular is None:
+            continue
+        rows.append('\t'.join((
+            seq_id, REGION_SOURCE, REGION_TYPE, '1', str(length), '.', '+', '.',
+            '%s=%s' % (CIRCULAR_ATTRIBUTE, 'true' if circular else 'false'))))
+    return rows
+
+
 def render_breseq_gff3(references, line_length=70):
     """Render loaded reference sequences as breseq-dialect GFF3 with inline FASTA.
 
@@ -401,6 +436,11 @@ def render_breseq_gff3(references, line_length=70):
     lines = ['##gff-version 3']
     for contig in contigs:
         lines.append('##sequence-region\t%s\t1\t%d' % (contig.seq_id, len(contig)))
+    # The topology block: one row per contig whose topology is known, straight after
+    # the pragmas and before any feature, so `reference.with_topology` can rewrite it
+    # line-wise and reproduce these bytes exactly. Nothing for an unknown topology.
+    lines.extend(region_rows(
+        (contig.seq_id, len(contig), contig.circular) for contig in contigs))
 
     for contig in contigs:
         features = [f for f in contig.features if f.locations]

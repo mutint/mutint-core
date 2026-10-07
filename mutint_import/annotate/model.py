@@ -178,11 +178,18 @@ class Feature(object):
 
 
 class AnnotatedSequence(object):
-    """One reference contig: its sequence plus sorted gene and repeat locations."""
+    """One reference contig: its sequence plus sorted gene and repeat locations.
 
-    def __init__(self, seq_id, sequence):
+    `circular` is tri-state: True or False when the file said (a GenBank LOCUS topology,
+    a GFF3 `region` row's `Is_circular`), None when it did not -- a bare FASTA, or a
+    GenBank whose LOCUS line leaves the field blank. The renderer writes nothing for
+    None, so "unknown" survives a round trip rather than hardening into "linear".
+    """
+
+    def __init__(self, seq_id, sequence, circular=None):
         self.seq_id = seq_id
         self.sequence = sequence
+        self.circular = circular
         self.features = []
         self.gene_locations = []
         self.repeat_locations = []

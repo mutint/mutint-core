@@ -5,6 +5,7 @@ gene, so most of what is asserted here is what does **not** render: no viewer, a
 third-party script, until a contig's sequence has been confirmed.
 """
 
+import json
 import re
 import shutil
 import tempfile
@@ -15,7 +16,7 @@ from django.utils import timezone
 
 from mutint_experiment.models import Experiment
 from mutint_import import breseq_folder, reference_export
-from mutint_import.tests import breseq_fixture
+from mutint_import.tests import breseq_fixture  # noqa: F401 -- subclasses use SEQUENCE_*
 from mutint_sample.models import (ReferenceSequences, Mutation, DatabaseSequenceLink, MutationCall,
                               Sample)
 
@@ -74,7 +75,7 @@ class UnverifiedTestCase(_Fixture):
         html = self._get().content.decode("utf-8")
         self.assertNotIn(SVIEWER_SCRIPT, html)
         self.assertIn("Nobody has said which NCBI record", html)
-        self.assertIn("Check against NCBI", html)
+        self.assertIn("Match NCBI record", html)
 
     def test_nothing_is_guessed_from_the_contig_name(self):
         """The name may look like an accession; that is not evidence and must not prefill."""
@@ -119,7 +120,7 @@ class UnverifiedTestCase(_Fixture):
         self.reference.save()
         html = self._get().content.decode("utf-8")
         self.assertIn("no stored reference sequence", html)
-        self.assertNotIn("Check against NCBI", html)
+        self.assertNotIn("Match NCBI record", html)
 
 
 class VerifiedTestCase(_Fixture):
@@ -199,33 +200,43 @@ class AccessTestCase(_Fixture):
         self.client.force_login(stranger)
         self.assertEqual(self._get().status_code, 403)
 
-    def test_a_reader_cannot_state_an_accession(self):
-        """Stating one writes a row every experiment on this genome then reads."""
+    def _match(self, accessions="NC_000913.3"):
+        return self.client.post("/mutations/ncbi/match", data=json.dumps({
+            "experiment_id": self.experiment.id, "accessions": accessions,
+        }), content_type="application/json")
+
+    def test_a_reader_cannot_match_a_record(self):
+        """Matching writes a row every experiment on this genome then reads."""
         stranger = User.objects.create(username="reader", is_active=True)
         self.client.force_login(stranger)
-        response = self.client.post("/mutations/ncbi/check", {
-            "experiment_id": self.experiment.id,
-            "seq_id": self.entry["id"], "accession": "NC_000913.3"})
+        response = self._match()
         self.assertIn(response.status_code, (403, 404))
         self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
 
-    def test_a_locked_experiment_refuses_the_check(self):
+    def test_a_locked_experiment_refuses_the_match(self):
         """The case `can_edit_project` would have missed: a predicate handed the project
         cannot see a flag that lives on the experiment."""
         self.experiment.locked_at = timezone.now()
         self.experiment.locked_by = self.user
         self.experiment.save()
-        response = self.client.post("/mutations/ncbi/check", {
-            "experiment_id": self.experiment.id,
-            "seq_id": self.entry["id"], "accession": "NC_000913.3"})
+        response = self._match()
         self.assertEqual(response.status_code, 403)
         self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
 
     def test_an_empty_accession_is_refused_without_asking_ncbi(self):
-        response = self.client.post("/mutations/ncbi/check", {
-            "experiment_id": self.experiment.id,
-            "seq_id": self.entry["id"], "accession": "  "})
+        from unittest import mock
+        with mock.patch("mutint_sample.ncbi.requests.get") as get:
+            response = self._match("  ")
         self.assertEqual(response.status_code, 400)
+        self.assertFalse(get.called)
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
+
+    def test_something_that_is_not_an_accession_is_refused_without_asking_ncbi(self):
+        from unittest import mock
+        with mock.patch("mutint_sample.ncbi.requests.get") as get:
+            response = self._match("not an/accession")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(get.called)
         self.assertEqual(DatabaseSequenceLink.objects.count(), 0)
 
 
@@ -343,15 +354,30 @@ class ReferencePageTestCase(_Fixture):
         self.assertIn(self.entry["id"], html)
         self.assertIn(format(self.entry["length"], ",d"), html)
 
-    def test_it_says_when_nothing_is_matched_yet(self):
+    def test_it_offers_the_match_box(self):
+        """The whole point of the page existing: this is where an NCBI record is matched."""
         html = self._get_ref().content.decode("utf-8")
-        self.assertIn("None has been matched to an NCBI record", html)
+        self.assertIn('name="accessions"', html)
+        self.assertIn("Match NCBI record", html)
+        self.assertIn("/mutations/ncbi/match", html)
 
-    def test_it_offers_the_accession_box(self):
-        """The whole point of the page existing: this is where an accession is stated."""
+    def test_the_removed_help_text_stays_removed(self):
         html = self._get_ref().content.decode("utf-8")
-        self.assertIn('name="accession"', html)
-        self.assertIn('name="seq_id"', html)
+        self.assertNotIn("None has been matched", html)
+        self.assertNotIn("Downloads are generated from the stored reference", html)
+        self.assertNotIn("never guessed from a sequence name", html)
+        self.assertNotIn("(-r)", html)
+        self.assertNotIn("(-c)", html)
+        self.assertNotIn("(-s)", html)
+
+    def test_the_topology_column_renders_and_is_suggested_for_a_breseq_reference(self):
+        """breseq's fixture GFF3 carries no region row, so nothing said; the page shows
+        the default and says it is one."""
+        html = self._get_ref().content.decode("utf-8")
+        self.assertIn("<th>Topology</th>", html)
+        self.assertIn("linear", html)
+        self.assertIn("reference-topology-apply", html)
+        self.assertIn("/mutations/reference/topology", html)
 
     def test_a_verified_contig_shows_its_accession_and_links_to_ncbi(self):
         self._verify_contig()
@@ -359,11 +385,13 @@ class ReferencePageTestCase(_Fixture):
         self.assertIn("NC_000913.3", html)
         self.assertIn("ncbi.nlm.nih.gov/nuccore/NC_000913.3", html)
         self.assertIn("1 confirmed against NCBI", html)
-        self.assertNotIn('name="accession"', html)
+        # Nothing is left to match, so the box goes rather than offering what the
+        # endpoint would refuse.
+        self.assertNotIn('name="accessions"', html)
 
     def test_it_offers_a_download_of_the_selected_sequences(self):
-        """A form beside the table, not around it: each row carries the NCBI check's own
-        form, and a form inside a form is dropped by the parser."""
+        """A form beside the table, not around it, reached by the row checkboxes through
+        `form=` -- which is what lets the controls under the table read the same boxes."""
         html = self._get_ref().content.decode("utf-8")
         self.assertIn('<form id="reference-download"', html)
         self.assertIn('method="get"', html)
@@ -409,7 +437,7 @@ class ReferencePageTestCase(_Fixture):
         self.reference.save()
         html = self._get_ref().content.decode("utf-8")
         self.assertIn("cannot be checked", html)
-        self.assertNotIn('name="accession"', html)
+        self.assertNotIn('name="accessions"', html)
 
     def test_a_reader_is_not_offered_the_box(self):
         stranger = User.objects.create(username="reader2", is_active=True)
@@ -418,7 +446,8 @@ class ReferencePageTestCase(_Fixture):
         self.client.force_login(stranger)
         html = self._get_ref().content.decode("utf-8")
         self.assertIn(self.entry["id"], html)
-        self.assertNotIn('name="accession"', html)
+        self.assertNotIn('name="accessions"', html)
+        self.assertNotIn("reference-topology-apply", html)
 
     def test_no_experiment_selected_is_not_a_traceback(self):
         response = self.client.get("/mutations/reference")
@@ -447,7 +476,7 @@ class BootstrapJourneyTestCase(_Fixture):
         # 1. The Reference nav entry reaches a page that offers the box.
         page = self.client.get("/mutations/reference",
                                {"experiment_id": self.experiment.id})
-        self.assertIn('name="accession"', page.content.decode("utf-8"))
+        self.assertIn('name="accessions"', page.content.decode("utf-8"))
 
         # 2. So does the mutation table's Reference column, with nothing yet verified.
         table = self.client.get("/mutations/breseq", {
@@ -455,7 +484,8 @@ class BootstrapJourneyTestCase(_Fixture):
             "sample_id": self.sample.id}).content.decode("utf-8")
         self.assertIn("/mutations/ncbi?mutation_id=", table)
 
-        # 3. Stating an accession that really is this sequence verifies it.
+        # 3. Naming a record that really is this sequence matches it. `summary` (through
+        #    ncbi_fetch.resolve) and `_fetch_digest` both go through this one `requests.get`.
         bases = "N" * self.entry["length"]
         with mock.patch("mutint_sample.ncbi.requests.get", side_effect=[
                 _Response(payload={"result": {"uids": ["1"], "1": {
@@ -464,16 +494,70 @@ class BootstrapJourneyTestCase(_Fixture):
                 _Response(text=render_fasta([("x", bases)]))]):
             with mock.patch("mutint_sample.ncbi.sequence_digest_stream",
                             return_value=(self.entry["sha256"], self.entry["length"])):
-                response = self.client.post("/mutations/ncbi/check", {
+                response = self.client.post("/mutations/ncbi/match", data=json.dumps({
                     "experiment_id": self.experiment.id,
-                    "seq_id": self.entry["id"],
-                    "accession": "NC_000913"})
+                    "accessions": "NC_000913"}), content_type="application/json")
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()["verified"])
+        body = response.json()
+        self.assertEqual([hit["seq_id"] for hit in body["matched"]], [self.entry["id"]])
+        self.assertEqual(body["matched"][0]["accession"], "NC_000913.3")
+        self.assertEqual(body["unmatched"], [])
+        self.assertIn("Matched", body["message"])
 
         # 4. And the viewer now draws.
         html = self._get().content.decode("utf-8")
         self.assertIn(SVIEWER_SCRIPT, html)
+
+
+class AssemblyMatchTestCase(_Fixture):
+    """An assembly accession is many records; the page need not know which is which."""
+
+    SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A),
+                 ("pKD46", breseq_fixture.SEQUENCE_B)]
+
+    def test_an_assembly_matches_what_it_can_and_names_the_rest(self):
+        from unittest import mock
+        from mutint_import.reference import render_fasta
+        from mutint_sample.tests.test_ncbi import _Response
+
+        by_name = {entry["id"]: entry for entry in self.reference.seq_ids}
+        chromosome = by_name["test_ref"]
+        reports = [{"refseq_accession": "NC_000913.3", "genbank_accession": "U00096.3",
+                    "length": chromosome["length"]},
+                   # The same length as nothing here, so never fetched.
+                   {"refseq_accession": "NC_999999.1", "genbank_accession": "",
+                    "length": 12345}]
+        with mock.patch("mutint_import.ncbi_fetch._sequence_reports", return_value=reports):
+            with mock.patch("mutint_sample.ncbi.requests.get", side_effect=[
+                    _Response(text=render_fasta([("x", "N" * chromosome["length"])]))]) as get:
+                with mock.patch("mutint_sample.ncbi.sequence_digest_stream",
+                                return_value=(chromosome["sha256"], chromosome["length"])):
+                    response = self.client.post("/mutations/ncbi/match", data=json.dumps({
+                        "experiment_id": self.experiment.id,
+                        "accessions": "GCF_000005845.2"}), content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(get.call_count, 1, "only the length-matched record is fetched")
+        self.assertEqual(body["matched"],
+                         [{"seq_id": "test_ref", "accession": "NC_000913.3",
+                           "detail": body["matched"][0]["detail"]}])
+        self.assertEqual(body["unmatched"], ["pKD46"])
+        self.assertIn("pKD46", body["message"])
+        self.assertEqual(DatabaseSequenceLink.objects.count(), 1)
+
+    def test_once_everything_is_matched_the_box_is_refused_and_gone(self):
+        for entry in self.reference.seq_ids:
+            DatabaseSequenceLink.objects.create(
+                sha256=entry["sha256"], length=entry["length"], accession="X.1",
+                status=DatabaseSequenceLink.VERIFIED, detail="", checked_at=timezone.now())
+        response = self.client.post("/mutations/ncbi/match", data=json.dumps({
+            "experiment_id": self.experiment.id, "accessions": "NC_000913.3"}),
+            content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        html = self.client.get("/mutations/reference",
+                               {"experiment_id": self.experiment.id}).content.decode("utf-8")
+        self.assertNotIn('name="accessions"', html)
 
 
 class StartAnExperimentFromThisReferenceTestCase(_Fixture):

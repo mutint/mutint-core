@@ -62,30 +62,38 @@
     width: 1%;
 }
 
-/* The Role control under the contig table. Same shape as the download row above it: a
-   menu and buttons on one line, `form-control` sized to its contents because Bootstrap
-   makes it 100% wide and it would otherwise take the whole row. */
-.reference-roles {
+/* The three controls under the contig table -- topology, role and the NCBI match box.
+   Same shape as the download row above them: a menu or a box and buttons on one line,
+   `form-control` sized to its contents because Bootstrap makes it 100% wide and it would
+   otherwise take the whole row. */
+.reference-bulk {
     margin-top: 10px;
     align-items: center;
 }
 
-.reference-roles select.form-control {
+.reference-bulk select.form-control,
+.reference-bulk input.form-control {
     width: auto;
     display: inline-block;
     margin: 0 8px;
 }
 
-.reference-roles label {
+.reference-match input.form-control {
+    /* Wide enough for a few versioned accessions without wrapping the row. */
+    width: 320px;
+}
+
+.reference-bulk label {
     margin-bottom: 0;
 }
 
-.reference-role-status {
+.reference-bulk-status {
     margin-left: 10px;
 }
 
-/* Keeps a long contig name from being pushed onto two lines by the role beside it. */
-.reference-role {
+/* Keeps a long contig name from being pushed onto two lines by the columns beside it. */
+.reference-role,
+.reference-topology {
     white-space: nowrap;
 }
 

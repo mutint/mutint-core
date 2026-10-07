@@ -96,7 +96,7 @@ attributed to nobody, with no way back.
 ## NCBI
 
 Two features reach NCBI: confirming that a reference contig is the record somebody said it is
-(the **Reference** page's *Check* button), and importing a reference genome by accession in the
+(the **Reference** page's *Match NCBI record* box), and importing a reference genome by accession in the
 first place (see *Reference genomes*). Both are optional, and a deployment with no outbound
 network simply does neither — nothing else changes, and no page waits on NCBI to render.
 

@@ -47,10 +47,12 @@ ROLES = (ROLE_REFERENCE, ROLE_CONTIG, ROLE_JUNCTION_ONLY)
 
 DEFAULT_ROLE = ROLE_REFERENCE
 
+#: What a page calls each role. The breseq flag is `ROLE_FLAGS`, and `describe` spells it
+#: where a command line is what is being described.
 ROLE_LABELS = {
-    ROLE_REFERENCE: "Reference (-r)",
-    ROLE_CONTIG: "Contig (-c)",
-    ROLE_JUNCTION_ONLY: "Junction-only (-s)",
+    ROLE_REFERENCE: "Reference",
+    ROLE_CONTIG: "Contig",
+    ROLE_JUNCTION_ONLY: "Junction-only",
 }
 
 ROLE_FLAGS = {

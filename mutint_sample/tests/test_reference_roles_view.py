@@ -48,20 +48,23 @@ class _Roles(_Fixture):
 class PageTestCase(_Roles):
     def test_the_column_renders_both_guesses(self):
         html = self._page().content.decode("utf-8")
-        self.assertIn("<th>Role</th>", html)
-        self.assertIn("Contig (-c)", html)
-        self.assertIn("Reference (-r)", html)
+        self.assertIn("<th>Type</th>", html)
+        self.assertRegex(html, r'class="reference-role">\s*Contig\s*<')
+        self.assertRegex(html, r'class="reference-role">\s*Reference\s*<')
+        self.assertNotIn("(-c)", html)
 
     def test_a_guessed_role_says_so(self):
         """Nobody has set either of these, so both are suggestions and the page must not
         present them as answers."""
         html = self._page().content.decode("utf-8")
-        self.assertEqual(html.count("reference-role-guessed"), 2)
+        # The marker's class is shared with the Topology column, so count the role
+        # marker by its own title.
+        self.assertEqual(html.count("Suggested from the sequence name"), 2)
 
     def test_a_set_role_stops_being_marked_suggested(self):
         self._set(["NODE_1"], ROLE_REFERENCE)
         html = self._page().content.decode("utf-8")
-        self.assertEqual(html.count("reference-role-guessed"), 1)
+        self.assertEqual(html.count("Suggested from the sequence name"), 1)
 
     def test_a_writer_is_offered_the_control(self):
         html = self._page().content.decode("utf-8")
@@ -81,13 +84,13 @@ class PageTestCase(_Roles):
         self.client.force_login(reader)
 
         html = self._page().content.decode("utf-8")
-        self.assertIn("<th>Role</th>", html)
-        self.assertIn("Contig (-c)", html)
+        self.assertIn("<th>Type</th>", html)
+        self.assertIn("Contig", html)
         self.assertNotIn("reference-role-apply", html)
 
     def test_the_control_carries_its_own_csrf_token(self):
-        """The per-row accession forms are gone once every contig is verified, and this
-        control still has to work then -- so it must not borrow their token."""
+        """The NCBI match box is gone once every contig is verified, and this control
+        still has to work then -- so it must not borrow its token."""
         for entry in self.reference.seq_ids:
             DatabaseSequenceLink.objects.create(
                 sha256=entry["sha256"], length=entry["length"],
@@ -95,9 +98,7 @@ class PageTestCase(_Roles):
                 detail="matches", checked_at=timezone.now())
 
         html = self._page().content.decode("utf-8")
-        # The per-row *forms* are what carried the token, and they are gone. Their handler
-        # script still renders and is not what this is about.
-        self.assertNotIn('class="form-inline ncbi-check"', html)
+        self.assertNotIn('name="accessions"', html)
         self.assertIn("reference-role-apply", html)
         self.assertIn("csrfmiddlewaretoken", html)
 

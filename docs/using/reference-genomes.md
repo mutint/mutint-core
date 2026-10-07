@@ -59,7 +59,7 @@ genome onto a newer annotation of the same sequence.
 ### The NCBI link is recorded for you
 
 A contig that arrived this way is linked to the record it came from, and the **Reference** page
-shows it as confirmed with nobody having pressed *Check*. That is not a shortcut around the
+shows it as confirmed with nobody having pressed *Match NCBI record*. That is not a shortcut around the
 check that page offers: the bases came out of that record, which is stronger evidence than the
 accession somebody types beside a sequence that arrived some other way. Mutations on such a
 contig can be drawn in NCBI's own annotation immediately.
@@ -139,19 +139,19 @@ set or updated. On the Update Annotation tab, **Run annotators** runs the ticked
 the current reference with nothing uploaded. What each one does is described on its panel and
 in its component's own pages.
 
-## Draft assemblies, plasmids and transposons: the Role column
+## Draft assemblies, plasmids and transposons: the Type column
 
 breseq analyses a reference sequence differently depending on which of its three reference
-options the sequence arrives under, and the **Reference** page's Role column is where that is
+options the sequence arrives under, and the **Reference** page's Type column is where that is
 decided. Each contig is one of:
 
-| Role | breseq option | What it means |
+| Type | breseq option | What it means |
 |---|---|---|
-| **Reference (-r)** | `-r` | A coverage distribution is fitted to this sequence on its own. The default for anything that is not obviously an assembly contig. |
-| **Contig (-c)** | `-c` | **One** coverage distribution is fitted across *every* sequence marked this way. This is what the contigs of a single draft assembly want -- they are one chromosome at one copy number -- and it is what stops a short contig being fitted on its own, which is unreliable below about a thousand bases. |
-| **Junction-only (-s)** | `-s` | Used only for calling junctions against the other sequences. No coverage is fitted and no mutations are called on it. A transposon or a marker cassette that is not part of the reference genome is the usual case. |
+| **Reference** | `-r` | A coverage distribution is fitted to this sequence on its own. The default for anything that is not obviously an assembly contig. |
+| **Contig** | `-c` | **One** coverage distribution is fitted across *every* sequence marked this way. This is what the contigs of a single draft assembly want -- they are one chromosome at one copy number -- and it is what stops a short contig being fitted on its own, which is unreliable below about a thousand bases. |
+| **Junction-only** | `-s` | Used only for calling junctions against the other sequences. No coverage is fitted and no mutations are called on it. A transposon or a marker cassette that is not part of the reference genome is the usual case. |
 
-To change them: tick the sequences on the **Reference** page, choose a role from **Set role
+To change them: tick the sequences on the **Reference** page, choose a type from **Set type
 for selected**, and press Apply. **Reset to suggested** puts them back on the suggestion.
 Changing a role alters no sequence and no annotation, and re-runs nothing that has already
 been analysed -- it decides how the *next* breseq run launched from MutInt is invoked. You
@@ -160,8 +160,8 @@ need write access to the experiment, and the experiment must not be locked.
 ### Roles marked *suggested* were read from the name
 
 A contig whose name looks like an assembler's -- `NODE_1_length_…`, `contig_00007`,
-`scaffold12`, `k141_12345` -- is suggested as **Contig (-c)**; everything else is suggested
-as **Reference (-r)**. A suggestion is not an answer: it is shown as *suggested* precisely so
+`scaffold12`, `k141_12345` -- is suggested as **Contig**; everything else is suggested
+as **Reference**. A suggestion is not an answer: it is shown as *suggested* precisely so
 that a wrong one is visible and costs one click to fix. Check it on a draft assembly whose
 contigs are named something else, and on a finished genome that happens to be named like an
 assembly.
@@ -184,13 +184,30 @@ still matches the experiment's reference exactly.
 ### What this cannot express
 
 Two *separate* draft assemblies, each fitted its own shared coverage distribution, cannot be
-described: everything marked Contig (-c) is fitted together, as one group. A single assembly
+described: everything marked Contig is fitted together, as one group. A single assembly
 plus any number of individually-fitted replicons and junction-only sequences is the shape this
 covers.
 
 Sequences imported from a breseq run somebody else did are not affected by any of this -- the
 roles govern runs launched from MutInt, and the analysis in an uploaded results folder has
 already happened.
+
+## Circular or linear: the Topology column
+
+breseq treats a sequence as circular or linear according to what the reference file says --
+a GenBank LOCUS line, or a GFF3 `region` row's `Is_circular` -- and as linear when it says
+nothing, which is what a bare FASTA says. The **Reference** page's Topology column shows what
+MutInt recorded for each sequence when the reference was imported, and lets you correct it:
+tick the sequences, choose from **Set topology for selected**, and press Apply. **Reset to
+suggested** forgets what was set.
+
+A topology marked *suggested* is the default, linear, that nobody has confirmed: the file said
+nothing, or the reference was imported before MutInt recorded topology. A reference imported
+from a GenBank that states `circular` shows circular with no marker.
+
+Changing a topology alters no sequence and no annotation and re-analyses nothing. It changes
+the stored reference file that the next breseq run launched from MutInt is given, and what a
+GenBank download of the reference says in its LOCUS line.
 
 ## Downloading the reference
 

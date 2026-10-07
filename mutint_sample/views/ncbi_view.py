@@ -29,7 +29,8 @@ from mutint_experiment.permissions import (
     accessible_projects, can_edit_experiment, can_view_project,
 )
 from mutint_experiment.roles import ROLE_WRITE
-from mutint_import import reference_export, reference_roles
+from mutint_import import (accessions, import_lock, ncbi_fetch, reference_export,
+                           reference_roles, reference_topology)
 from mutint_sample import ncbi
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.locus import buffered_extent, mutation_extent
@@ -95,18 +96,28 @@ def ncbi_view(request):
 
 
 @require_POST
-def ncbi_check(request):
-    """Record an accession for one contig and verify it against NCBI.
+def ncbi_match(request):
+    """Match NCBI records against the experiment's reference, by sequence.
 
-    Keyed on `(experiment_id, seq_id)` rather than on a mutation, because an accession
-    is a property of the reference: the Reference page has no mutation to name, and the
-    mutation page knows both anyway. One endpoint, one contract.
+    Takes JSON -- `{"experiment_id": n, "accessions": "NC_000913.3 GCF_000005845.2"}` --
+    and is keyed on the experiment rather than on a contig, because the person need not
+    know which record is which contig: an assembly accession is every sequence NCBI lists
+    for it, and `ncbi.match_records` finds the contigs whose bases those records are. A
+    contig that no record matches stays as it was; nothing is written for it.
 
     Gated on `can_edit_experiment`, not `can_edit_project`: this writes, and a predicate
-    handed the project cannot see the lock that lives on the experiment.
+    handed the project cannot see the lock that lives on the experiment. The resolve sits
+    after that gate, or the endpoint is an open relay to NCBI for anybody signed in.
     """
     try:
-        experiment = Experiment.objects.get(pk=request.POST.get("experiment_id"))
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({"error": "Expected a JSON body."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "Expected a JSON object."}, status=400)
+
+    try:
+        experiment = Experiment.objects.get(pk=payload.get("experiment_id"))
     except (Experiment.DoesNotExist, ValueError, TypeError):
         raise Http404("No such experiment.")
 
@@ -117,26 +128,97 @@ def ncbi_check(request):
             {"error": "You need write access to this experiment, and it must not be locked."},
             status=403)
 
-    seq_id = (request.POST.get("seq_id") or "").strip()
-    contig = ncbi.contig_entry(experiment, seq_id)
-    if contig is None:
+    try:
+        tokens = accessions.parse(str(payload.get("accessions") or ""))
+    except accessions.AccessionError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    if not tokens:
+        return JsonResponse({"error": "Enter one or more NCBI accessions."}, status=400)
+    if not any(contig["checkable"] and not contig["is_verified"]
+               for contig in ncbi.contig_states(experiment)):
         return JsonResponse(
-            {"error": "This experiment has no stored reference sequence named %s."
-                      % (seq_id or "(none given)")}, status=400)
+            {"error": "Every sequence that can be checked is already matched."}, status=400)
 
-    accession = (request.POST.get("accession") or "").strip()
-    if not accession:
-        return JsonResponse({"error": "Enter an NCBI accession to check."}, status=400)
+    try:
+        plans = ncbi_fetch.resolve(tokens, check_ceiling=False)
+    except ncbi_fetch.FetchError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    records = [record for plan in plans for record in plan.records]
 
-    record = ncbi.check_and_store(contig["sha256"], contig["length"], accession,
-                                  user=request.user)
-    return JsonResponse({
-        "seq_id": seq_id,
-        "status": record.status,
-        "accession": record.accession,
-        "detail": record.detail,
-        "verified": record.is_verified,
-    })
+    result = ncbi.match_records(experiment, records, user=request.user)
+    result["message"] = _match_message(result)
+    return JsonResponse(result)
+
+
+def _match_message(result):
+    """One sentence saying what the match did, composed here so the page and the mutation
+    page cannot word it differently."""
+    matched = result["matched"]
+    unmatched = result["unmatched"]
+    parts = []
+    if matched:
+        parts.append("Matched %s." % ", ".join(
+            "%s to %s" % (hit["seq_id"], hit["accession"]) for hit in matched))
+    else:
+        parts.append("None of the records is the same length and sequence as an "
+                     "unmatched sequence of this reference.")
+    if unmatched:
+        parts.append("%d sequence%s still unmatched: %s."
+                     % (len(unmatched), "" if len(unmatched) == 1 else "s",
+                        ", ".join(unmatched)))
+    parts.extend(result["errors"])
+    return " ".join(parts)
+
+
+@require_POST
+def reference_topology_set(request):
+    """Set, or clear, whether one or more contigs of an experiment's reference are circular.
+
+    Takes JSON -- `{"experiment_id": n, "seq_ids": [...], "circular": true|false|null}` --
+    over the same checked rows as `reference_roles_set`, for the same reason. A null
+    `circular` clears the answer, putting those contigs back on the default the page marks
+    *suggested*.
+
+    Unlike a role, topology is also in the stored GFF3, which `set_topology` rewrites; the
+    import lock is held for that write, as any writer of the store holds it, and refused
+    with a 409 rather than waited for. See `mutint_import.reference_topology`.
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({"error": "Expected a JSON body."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "Expected a JSON object."}, status=400)
+
+    try:
+        experiment = Experiment.objects.get(pk=payload.get("experiment_id"))
+    except (Experiment.DoesNotExist, ValueError, TypeError):
+        raise Http404("No such experiment.")
+
+    if not _may_view(request.user, experiment):
+        return JsonResponse({"error": "You do not have access to this experiment."}, status=403)
+    if not _may_check(request.user, experiment):
+        return JsonResponse(
+            {"error": "You need write access to this experiment, and it must not be locked."},
+            status=403)
+
+    seq_ids = payload.get("seq_ids")
+    if not isinstance(seq_ids, list) or not seq_ids:
+        return JsonResponse({"error": "Select at least one sequence."}, status=400)
+    seq_ids = [str(seq_id) for seq_id in seq_ids]
+
+    try:
+        circular = reference_topology.parse(payload.get("circular"))
+    except ValueError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+
+    try:
+        with import_lock.hold():
+            changed = reference_topology.set_topology(
+                experiment, {seq_id: circular for seq_id in seq_ids})
+    except import_lock.ImportInProgress as error:
+        return JsonResponse({"error": str(error)}, status=409)
+    return JsonResponse({"changed": changed})
 
 
 @require_POST
@@ -152,7 +234,7 @@ def reference_roles_set(request):
     suggestion. That is a real operation rather than a tidy-up: it is how somebody undoes a
     mistake without having to know what the suggestion would have been.
 
-    Gated on `can_edit_experiment`, like `ncbi_check` and for the same reason -- it writes,
+    Gated on `can_edit_experiment`, like `ncbi_match` and for the same reason -- it writes,
     and a predicate handed the project cannot see the lock that lives on the experiment.
     The write is genuinely **shared**: it changes the command line of every future breseq
     run in this experiment, which is as shared as a write gets.
@@ -305,6 +387,13 @@ def reference_view(request):
         "total_length": format(sum(contig["length"] for contig in contigs), ",d"),
         "verified_count": sum(1 for contig in contigs if contig["is_verified"]),
         "may_check": _may_check(request.user, experiment),
+        # The match box is offered only while some contig could still be matched: once
+        # every checkable one is verified there is nothing a record could be matched to,
+        # and a box the endpoint would refuse is a dead end.
+        "has_matchable": any(contig["checkable"] and not contig["is_verified"]
+                             for contig in contigs),
+        "topologies": [{"key": "circular", "label": reference_topology.LABELS[True]},
+                       {"key": "linear", "label": reference_topology.LABELS[False]}],
         # One vocabulary for the Role column's menu and for what the endpoint accepts, so
         # the page cannot offer a role the server would refuse -- the rule the download
         # menu already follows.

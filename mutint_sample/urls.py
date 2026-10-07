@@ -36,21 +36,24 @@ urlpatterns = [
 
     # NCBI's Sequence Viewer at one mutation's locus, linked from the Reference Seq column.
     # A mutation rather than an observed one: this page draws no sample data, so the handle
-    # is the row the contig name belongs to. `check` states an accession and verifies it.
+    # is the row the contig name belongs to. `match` takes NCBI accessions and matches
+    # their records to whichever contigs of the reference they are, by sequence.
     re_path(r'^ncbi$', mutint_sample.views.ncbi_view.ncbi_view, name='ncbi_view'),
-    re_path(r'^ncbi/check$', mutint_sample.views.ncbi_view.ncbi_check, name='ncbi_check'),
+    re_path(r'^ncbi/match$', mutint_sample.views.ncbi_view.ncbi_match, name='ncbi_match'),
 
     # What reference genome this experiment is called against, and which NCBI record each
     # of its sequences is. `^reference$` does not collide with the `^reference/<id>/...`
     # file routes below, which all carry an id segment.
     re_path(r'^reference$', mutint_sample.views.ncbi_view.reference_view, name='reference_view'),
 
-    # Which breseq reference option each contig is passed under. A sibling of `ncbi/check`
-    # rather than part of it: both are per-contig state edited on that page, and neither is
-    # about the other. `^reference/roles$` carries no id segment, so it does not collide
-    # with the `^reference/<id>/...` file routes either.
+    # Which breseq reference option each contig is passed under, and whether it is
+    # circular. Siblings of `ncbi/match` rather than part of it: all three are per-contig
+    # state edited on that page, and none is about the others. Neither carries an id
+    # segment, so they do not collide with the `^reference/<id>/...` file routes either.
     re_path(r'^reference/roles$', mutint_sample.views.ncbi_view.reference_roles_set,
             name='reference_roles_set'),
+    re_path(r'^reference/topology$', mutint_sample.views.ncbi_view.reference_topology_set,
+            name='reference_topology_set'),
 
     # Managed-store files, addressed by primary key and streamed with Range support.
     re_path(r'^alignments/(?P<sample_id>\d+)/bam$',

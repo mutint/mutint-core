@@ -127,10 +127,16 @@ def to_genbank_records(references, definition=""):
     records = []
     for seq_id, _ in reference.sequences_of(references):
         contig = references[seq_id]
+        annotations = {"molecule_type": "DNA"}
+        if contig.circular is not None:
+            # Only when known: Biopython writes a blank LOCUS topology field for an
+            # absent key, and the GenBank loader reads that back as None, so an unknown
+            # topology survives a round trip rather than hardening into "linear".
+            annotations["topology"] = "circular" if contig.circular else "linear"
         record = SeqRecord(
             Seq(contig.sequence), id=seq_id, name=seq_id,
             description=definition or seq_id,
-            annotations={"molecule_type": "DNA"})
+            annotations=annotations)
         record.features = [_genbank_feature(feature)
                            for feature in contig.features if feature.locations]
         records.append(record)

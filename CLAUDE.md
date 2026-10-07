@@ -643,7 +643,7 @@ than the page makes.
 
 Both POSTs re-check `is_superuser` rather than trusting the page that offered them -- the gate
 on a write endpoint is not the gate on the page it came from, the same rule `job_cancel` and
-`ncbi_check` follow. The view is `update_page`, not `update`, because this module imports
+`ncbi_match` follow. The view is `update_page`, not `update`, because this module imports
 `mutint_common.update` and a view of that name would rebind it; the URL is still `update`.
 
 **A deployment can decline the whole thing** with `MUTINT_UPDATE_ENABLED = False`. The page
@@ -3380,6 +3380,19 @@ never leaves the deployment**: we send an accession and receive a genome. A BLAS
 lookup would be the other way round, which for an unpublished ALE reference is a different
 proposition entirely.
 
+**`match_records` is the same verification asked the other way round**, and it is what the
+Reference page runs. `verify` takes one contig and one claimed accession; `match_records`
+takes the *experiment* and a list of records -- `{accession, length}` as
+`ncbi_fetch.resolve` returns them, an assembly accession expanded to every sequence it
+lists -- and finds which unverified contig, if any, each record's bases are. Length first,
+so a record the length of no contig costs no download; then `_fetch_digest` **one accession
+at a time**, because `sequence_digest_stream` merges every record of one efetch into one
+digest, and a batch would hash a concatenation. A hit is `record_verified` under NCBI's
+accession. The difference that matters: **nothing in the input claims which contig a record
+was meant to be, so a record that matches nothing is unused and no MISMATCH is written.**
+`verify` and `check_and_store` stay for `./mutint ncbi_accessions`, which still names one
+contig.
+
 `sequence_digest_stream` is a **second implementation** of `reference.sequence_digest`,
 written so a genome is never held whole in memory. Two digest functions that can disagree
 would make every verdict meaningless while still looking like it worked, so their agreement
@@ -3538,8 +3551,9 @@ either way, and `docs/using/configuration.md` says so where an operator will rea
 #### The Reference page is where an accession is stated
 
 `/mutations/reference?experiment_id=<pk>` (`ncbi_view.reference_view`) lists every
-sequence in an experiment's reference -- name, length, the names it used to have, and which
-NCBI record it is -- and carries the box that records an accession. It has a **nav entry** in
+sequence in an experiment's reference -- name, length, topology, role, the names it used to
+have, and which NCBI record it is -- and carries **one box for the whole reference** that
+matches NCBI records to its sequences. It has a **nav entry** in
 `EXPERIMENT_SECTION` called **Reference**, registered by `mutint_sample` after Mutations. It
 led that section for a while, on the reading that an experiment goes top-down from what it was
 aligned to and then to what was found in it; what people actually open an experiment for is
@@ -3564,9 +3578,20 @@ The lesson worth keeping: **the states were each tested and the journey between 
 not.** `BootstrapJourneyTestCase` walks a fresh experiment from a table to a drawn viewer for
 that reason.
 
-`ncbi_check` is keyed on `(experiment_id, seq_id)`, not on a mutation: an accession
-belongs to the reference, the Reference page has no mutation to name, and the mutation page
-knows both anyway. One endpoint, one contract.
+**The box is one per reference, not one per row, and `ncbi_match` is keyed on the
+experiment.** It takes what the Import data page's accession box takes -- nucleotide
+accessions, assembly accessions, any number of them -- resolves them through
+`ncbi_fetch.resolve` (with `check_ceiling=False`: matching fetches only the records that
+are the length of an unmatched contig, so the import's whole-drop ceiling does not apply)
+and hands the records to `ncbi.match_records`, which says which contigs they turned out to
+be. The person need not know which record is which contig, and for a `GCF_` assembly of a
+chromosome and three plasmids they could not reasonably be asked to. It used to be a Check
+form per row, keyed on `(experiment_id, seq_id)`; that could not take an assembly at all.
+The answer is `{matched, unmatched, errors, message}`, the sentence composed on the server so
+this page and the mutation page -- whose own box posts to the same endpoint and reloads when
+its contig is among `matched` -- cannot word it differently. The box is rendered only while
+some contig is **checkable and unverified** (`has_matchable`), because once nothing is left to
+match the endpoint refuses, and a box the endpoint would refuse is a dead end.
 
 **It is also where the reference is downloaded**, one contig or any set of them, as FASTA,
 GFF3 or GenBank: a checkbox per row, a format menu and a Download button, at
@@ -3578,14 +3603,16 @@ than relied on, and is why there is no streaming shortcut for that case. Three t
 are worth knowing before touching it:
 
 - **The download form is a sibling of the table, not a wrapper round it**, and the
-  checkboxes reach it through the HTML5 `form=` attribute. Every contig row already holds the
-  NCBI check's own `<form>`, and a form inside a form is silently dropped by the parser --
-  every Check button would have submitted the download instead.
+  checkboxes reach it through the HTML5 `form=` attribute. An input may belong to only one
+  form, which is why the topology and role controls under the table are `div`s whose script
+  gathers the same checkboxes rather than forms of their own, and why the match box is a
+  form that names no checkbox.
 - **GenBank is the format the store never held.** The writer is Biopython's, fed from the
   same model the suite's GenBank *reader* fills, and the qualifier mapping is that reader's
   inverted; the test that matters is that `load_genbank` of what it wrote renders to the same
   canonical GFF3. It is a reduced GenBank by construction -- genes-only, no `/translation`,
-  no `source` -- and the page's footnote says so. `/gene` is deliberately omitted when the
+  no `source`; its LOCUS line carries the contig's topology where one is known.
+  `/gene` is deliberately omitted when the
   name would only repeat the locus tag, because the GFF3 loader names a nameless gene by its
   locus tag and writing that back as `/gene` would mint a gene symbol the annotation never
   had.
@@ -3654,14 +3681,20 @@ and the two mistakes do not cost the same -- a contig wrongly left `-r` is fitte
 coverage, while a sequence wrongly made junction-only has every mutation on it silently
 uncalled.
 
-**Two places carry the key across by hand**, both beside `aliases` and for the same reason --
-`sequence_entries` mints entries from the sequences alone, so anything recorded *about* a
-contig is lost unless carried. `reference_store._apply_sequence_fields` carries it by name,
-which is right for a rewrite where only the annotation moved;
+**Two places carry the key across by hand**, both beside `aliases` and `circular` and for
+the same reason -- `sequence_entries` mints entries from the sequences alone, so anything
+recorded *about* a contig is lost unless carried. `reference_store._apply_sequence_fields`
+carries it by name, which is right for a rewrite where only the annotation moved;
 `reference_rename._record_aliases` carries it under the **old** name through `plan.pairs`,
 because a rename changes what a contig is called and not what it is. A *guessed* role
 re-guesses against the new name, which is the answer somebody would get had the contigs been
 called that to begin with.
+
+**The page heads the column Type and calls the roles Reference, Contig and Junction-only**,
+with no flag in the label (the code keeps `role` throughout):
+`ROLE_LABELS` is what a person reads and `ROLE_FLAGS` is what breseq is given, and
+`describe()` -- the sentence the launcher shows about the command line it is about to run --
+is the one place the two are spelled together.
 
 **A junction-only sequence is a contig of the reference, imported normally and then
 flagged** -- not an extra file attached to one run. That is what keeps `breseq_folder`'s
@@ -3675,6 +3708,45 @@ fit, visible in the output.
 **There is deliberately no named-group model.** Three flat roles render to at most three
 files, so two draft assemblies fitted *separately* cannot be expressed. That is a real
 limitation and the docs say so; a group name would be a mechanism with no producer.
+
+### A contig has a topology, and it lives in two places that must agree
+
+breseq reads whether a sequence is circular off a GenBank LOCUS line or a GFF3 `region` row's
+`Is_circular`, and treats an unflagged sequence as linear. Nothing here recorded it, so every
+run launched from MutInt got a linear chromosome. `mutint_import/reference_topology.py` is
+the module, shaped like `reference_roles`: a `circular` key on the contig's `seq_ids` entry,
+**absent meaning linear, shown as *suggested***, with `set_topology` behind the Reference
+page's **Set topology for selected** control and `reference_topology_set` as the endpoint.
+
+**Unlike a role, it is also in the file, and the file is what breseq reads.** The stored GFF3
+is handed to breseq untouched when every contig shares a role (`mutint-breseq`'s
+`reference_arguments`) and is what every download and the GenBank export are rendered from.
+So the invariant is that `seq_ids[].circular` and the stored GFF3's `region` rows agree, and
+three things keep it:
+
+- **The loaders fill `AnnotatedSequence.circular`**, tri-state: `load_genbank` from
+  `record.annotations['topology']`, `load_gff3` from a `region` row's `Is_circular` (which
+  `_build_feature` drops, so a region row is never a feature). None for a file that said
+  nothing, and **the renderer writes nothing for None** -- one `region` row per contig whose
+  topology is known, as a block between the pragmas and the first feature, so a file that
+  said nothing does not come back saying linear. `reference.with_topology` rewrites that
+  block line-wise and is a fixed point of `render_breseq_gff3`.
+- **`reference_store` settles the file against the row before writing it.** A stored key
+  wins and the file fills gaps (`_settle_topology`): a replacement annotation cannot flip a
+  topology somebody set, and a GenBank that states one fills in a contig nobody has answered
+  for. The update-annotation branch settles *before* hashing, so `gff3_sha256` is of the text
+  written. A breseq folder's reference (`update_annotation=False`) neither fills nor
+  overrides -- that branch refreshes identity and nothing else. `write_topology` is the
+  other direction: the page changed the row, so rewrite the file's rows and `gff3_sha256`.
+- **Three keys are carried by hand**, `aliases`, `role` and `circular`, in
+  `_apply_sequence_fields` by name and in `_record_aliases` under the old name.
+
+Two things a region row broke, each with a test. `reference_rename.has_annotation` must skip
+it, or a GenBank stating `circular` and annotating nothing would be installed *as* annotation
+and wipe the gene table. And igv.js leaves only `chromosome` features out by default, so
+`browse.html`'s gene track sets `filterTypes: ["chromosome", "region"]`, without which a bar
+is painted across every contig. The GenBank export sets `annotations["topology"]` only where
+known, for the reason the renderer writes nothing for None.
 
 ### Django Apps
 

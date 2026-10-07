@@ -29,6 +29,7 @@ from django.db import transaction
 
 from mutint_common.plugin_registry import run_sequence_rename_hooks
 from mutint_import import reference as reference_io
+from mutint_import.annotate.gff3 import REGION_TYPE
 from mutint_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -427,6 +428,10 @@ def _record_aliases(reference, plan):
                 for entry in (reference.seq_ids or [])}
     roles = {entry["id"]: entry["role"]
              for entry in (reference.seq_ids or []) if entry.get("role")}
+    # Topology is carried under the old name for the same reason as the role: a rename
+    # changes what a contig is called, not whether it is circular.
+    circular = {entry["id"]: entry["circular"]
+                for entry in (reference.seq_ids or []) if "circular" in entry}
     mapping = plan.mapping
 
     entries = reference_io.sequence_entries(plan.sequences)
@@ -439,6 +444,8 @@ def _record_aliases(reference, plan):
             entry["aliases"] = aliases
         if old_name in roles:
             entry["role"] = roles[old_name]
+        if old_name in circular:
+            entry["circular"] = circular[old_name]
 
     reference.seq_ids = entries
     reference.total_length = sum(len(seq) for _seq_id, seq in plan.sequences)
@@ -454,12 +461,20 @@ def has_annotation(gff3_text):
     is a legitimate thing to upload -- it is how contigs get renamed without touching
     annotation -- but it must never be installed *as* annotation, or a rename by FASTA would
     silently replace a gene table with nothing.
+
+    A `region` row is topology, not annotation -- a GenBank stating `circular` and
+    annotating nothing renders to pragmas, a region row and the sequence, and must be
+    read as sequence-only here or a rename by such a file would wipe the gene table.
     """
     for line in gff3_text.splitlines():
         if line.startswith("##FASTA"):
             break
-        if line and not line.startswith("#"):
-            return True
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) >= 9 and parts[2] == REGION_TYPE:
+            continue
+        return True
     return False
 
 

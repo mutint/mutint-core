@@ -95,23 +95,21 @@
                 {% if may_check %}
                     <form id="ncbi-check-form" class="form-inline ncbi-check">
                         {% csrf_token %}
-                        <input type="hidden" name="experiment_id" value="{{ experiment_id }}">
-                        <input type="hidden" name="seq_id" value="{{ contig_name }}">
                         <label for="ncbi-accession">NCBI accession for {{ contig_name }}</label>
                         <input type="text" class="form-control" id="ncbi-accession"
-                               name="accession" value="{{ accession }}"
+                               name="accessions" value="{{ accession }}"
                                placeholder="e.g. NC_000913.3" autocomplete="off">
                         <button type="submit" class="btn btn-primary" id="ncbi-check-button">
-                            Check against NCBI
+                            Match NCBI record
                         </button>
                         <span id="ncbi-check-status" class="ncbi-check-status"></span>
                     </form>
                     <p class="ncbi-check-help">
-                        The accession is only a proposal: it is accepted only if NCBI's record
-                        for it is byte-for-byte this contig's sequence. Every sequence in this
-                        experiment's reference is listed on its
+                        The record is matched to this contig only if its sequence is exactly
+                        these bases. Every sequence in this experiment's reference is listed
+                        on its
                         <a href="/mutations/reference?experiment_id={{ experiment_id }}">Reference</a>
-                        page.
+                        page, where an assembly accession can match several at once.
                     </p>
                 {% else %}
                     <p class="ncbi-check-help">
@@ -137,21 +135,19 @@
 
     form.addEventListener("submit", function (event) {
         event.preventDefault();
-        // A verification is one esummary plus, if that passes, a whole genome -- seconds,
+        // A match is one lookup plus, if the length agrees, a whole genome -- seconds,
         // not milliseconds. Saying so beats a button that looks ignored.
         button.disabled = true;
         status.textContent = "Asking NCBI…";
 
-        fetch("{% url 'ncbi_check' %}", {
-            method: "POST",
-            body: new FormData(form),
-            credentials: "same-origin"
-        }).then(function (response) {
-            return response.json().then(function (data) {
-                return {ok: response.ok, data: data};
+        mutintPostJson("{% url 'ncbi_match' %}", {
+            experiment_id: {{ experiment_id }},
+            accessions: document.getElementById("ncbi-accession").value
+        }).then(function (data) {
+            var matched = (data.matched || []).some(function (hit) {
+                return hit.seq_id === "{{ contig_name|escapejs }}";
             });
-        }).then(function (result) {
-            if (result.data.verified) {
+            if (matched) {
                 // Reload rather than injecting the viewer: the whole page differs between
                 // the verified and unverified states, and rebuilding it here would be a
                 // second opinion about what the view already decides.
@@ -159,10 +155,10 @@
                 return;
             }
             button.disabled = false;
-            status.textContent = result.data.detail || result.data.error || "The check failed.";
-        }).catch(function () {
+            status.textContent = data.message || "Nothing matched.";
+        }).catch(function (error) {
             button.disabled = false;
-            status.textContent = "The check could not be sent.";
+            status.textContent = (error && error.message) || "The match could not be sent.";
         });
     });
 }());

@@ -318,16 +318,105 @@ def sequence_set_digest(sequences):
     return hashlib.sha256(joined.encode("ascii")).hexdigest()
 
 
-def sequence_entries(sequences):
+def sequence_entries(sequences, circular=None):
     """The `ReferenceSequences.seq_ids` value for `sequences`.
 
     One place, because it is written from two paths in `reference_store` and a rename
     rewrites it a third way -- and the per-sequence hash it carries is what a rename maps
     old names onto new ones by.
+
+    `circular` is `{seq_id: bool}` for the contigs whose topology the file stated
+    (`gff3_topologies`); an entry gets the `circular` key only when it is in there. An
+    absent key means nobody has said, which the Reference page shows as *linear,
+    suggested* -- breseq's own reading of an unflagged sequence.
     """
-    return [{"id": seq_id, "length": len(sequence),
-             "sha256": sequence_digest(sequence)}
-            for seq_id, sequence in sequences]
+    circular = circular or {}
+    entries = []
+    for seq_id, sequence in sequences:
+        entry = {"id": seq_id, "length": len(sequence),
+                 "sha256": sequence_digest(sequence)}
+        if seq_id in circular:
+            entry["circular"] = bool(circular[seq_id])
+        entries.append(entry)
+    return entries
+
+
+# --- topology ------------------------------------------------------------------------------
+#
+# A contig's topology lives in two places that must agree: the `circular` key on its
+# `seq_ids` entry, and the `region` row in the stored GFF3 -- the file breseq is handed
+# untouched when every contig shares a role, and the file every export is rendered from.
+# These three helpers are what keeps them agreeing: read the rows off canonical text, and
+# rewrite them to match what the entries say.
+
+def topologies_of(references):
+    """``{seq_id: bool}`` for the distinct contigs whose topology is known."""
+    found = {}
+    seen = set()
+    for seq_id in references.seq_ids():
+        contig = references[seq_id]
+        if id(contig) in seen:
+            continue
+        seen.add(id(contig))
+        if contig.circular is not None:
+            found[contig.seq_id] = bool(contig.circular)
+    return found
+
+
+def gff3_topologies(gff3_text):
+    """``{seq_id: bool}`` from the `region` rows of canonical GFF3 text.
+
+    Stops at `##FASTA`; a region row without `Is_circular` says nothing.
+    """
+    found = {}
+    for line in gff3_text.splitlines():
+        if line.startswith(FASTA_DIRECTIVE):
+            break
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 9 or parts[2] != annotate_gff3.REGION_TYPE:
+            continue
+        flag = _parse_gff_attributes(parts[8]).get(annotate_gff3.CIRCULAR_ATTRIBUTE)
+        if flag:
+            found[parts[0]] = flag.strip().lower() in ("true", "1", "yes")
+    return found
+
+
+def with_topology(gff3_text, circular):
+    """`gff3_text` with its `region` rows replaced by ones stating `circular`.
+
+    `circular` is `{seq_id: bool}`; a contig not in it gets no row. Every existing
+    region row goes, and the new block lands after the last `##sequence-region`
+    pragma, in the pragmas' order, with each contig's length read off its pragma --
+    exactly where and how `render_breseq_gff3` writes it, so this is a fixed point
+    of the renderer: `with_topology(render(refs), topologies_of(refs)) == render(refs)`.
+    """
+    lines = gff3_text.split("\n")
+    head, body = [], []
+    in_fasta = False
+    last_pragma = -1
+    lengths = []
+    for line in lines:
+        if not in_fasta and line.strip().upper() == FASTA_DIRECTIVE:
+            in_fasta = True
+        if in_fasta:
+            body.append(line)
+            continue
+        parts = line.split("\t")
+        if (len(parts) >= 9 and parts[2] == annotate_gff3.REGION_TYPE
+                and not line.startswith("#")):
+            continue
+        if line.startswith("##sequence-region"):
+            fields = line.split()
+            if len(fields) >= 4:
+                lengths.append((fields[1], fields[3]))
+            last_pragma = len(head)
+        head.append(line)
+    rows = annotate_gff3.region_rows(
+        (seq_id, length, circular.get(seq_id)) for seq_id, length in lengths)
+    head[last_pragma + 1:last_pragma + 1] = rows
+    return "\n".join(head + body)
 
 
 def render_fasta(sequences):
