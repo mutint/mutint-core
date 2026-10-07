@@ -1,11 +1,11 @@
 
     $(document).ready(function () {
+        // The table scrolls in a box DataTables draws round it (the `t` in dom), not
+        // through scrollY: see .mutint-scroll-table in common.css for why.
         var table = $('#exp_table').DataTable({
-            scrollY: '70vh',
-            scrollX: true,
             autoWidth: true,
             paging: false,
-            dom: 'Bfrt<<"pull-left"i><"pull-right"p>>',
+            dom: 'Bfr<"mutint-scroll-table"t><<"pull-left"i><"pull-right"p>>',
             deferRender: true,
             columnDefs: [
                 {

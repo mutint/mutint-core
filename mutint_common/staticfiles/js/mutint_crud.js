@@ -169,9 +169,12 @@
      *
      * The header checkbox replaces a Select menu holding Select all and Deselect all, and is
      * the access table's idiom on a DataTable. It is found by class and handled by
-     * delegation from the container, never by id: with scrollY DataTables moves the real
-     * header into a table of its own and leaves a hidden copy behind, so there are two of
-     * them, and a handler bound before the split lands on whichever one the page cannot see.
+     * delegation from the container, never by id: a DataTable may hold more than one copy
+     * of its header -- scrollY, which these pages used to set, moves the real header into a
+     * table of its own and leaves a hidden copy behind -- and a handler bound to one lands
+     * on whichever the page cannot see. The list pages scroll in a sticky-header box now
+     * (.mutint-scroll-table), so there is one header; the delegation costs nothing and
+     * keeps a page that does set scrollY working.
      * It selects the rows the search box has left, which is what "all" means to somebody
      * looking at a narrowed table with a Delete button beside it.
      */

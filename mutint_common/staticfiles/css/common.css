@@ -550,6 +550,32 @@ th.select-checkbox > input.mutint-select-all {
     vertical-align: middle;
 }
 
+/* A list table scrolls in a box of its own, with its header staying put. This was
+   DataTables' scrollY, which splits the header off into a table of its own and re-syncs
+   its column widths from a window-resize handler throttled to 200 ms -- so on a resize the
+   body tracked the window and the header caught up a fifth of a second later. One table
+   with a sticky thead resizes in a single layout pass. The header's own dark fill is what
+   makes it opaque over the rows scrolling under it. Horizontal overflow scrolls in the
+   same box, which is all scrollX did.
+   The box is drawn by DataTables itself, as `<"mutint-scroll-table"t>` in the page's dom
+   string, so it holds the table and nothing else: a div written round the <table> in the
+   template would end up round DataTables' whole wrapper, search band and row count
+   included, and the `>` below would match nothing. */
+.mutint-scroll-table {
+    overflow: auto;
+    max-height: 70vh;
+}
+
+.mutint-scroll-table > .table {
+    margin-bottom: 0;
+}
+
+.mutint-scroll-table > .table > thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
 .centered {
     text-align: center;
 }
