@@ -25,11 +25,11 @@ SQUARE = "square"                 # nonsynonymous base substitution
 TOMBSTONE = "tombstone"           # nonsense base substitution
 DIAMOND_DOWN = "diamond-down"     # intergenic base substitution
 DIAMOND = "diamond"               # base substitution in a non-coding gene or a pseudogene
-TRIANGLE = "triangle"             # small (<= 50 bp) deletion
-TRIANGLE_DOWN = "triangle-down"   # small (<= 50 bp) insertion
+TRIANGLE = "triangle"             # small (<= 50 bp) deletion: narrows upward
+TRIANGLE_DOWN = "triangle-down"   # small (<= 50 bp) insertion: widens upward
 BOWTIE = "bowtie"                 # mobile element insertion
-TRAPEZOID_DOWN = "trapezoid-down" # large (> 50 bp) deletion
-TRAPEZOID = "trapezoid"           # large (> 50 bp) insertion or amplification
+TRAPEZOID = "trapezoid"           # large (> 50 bp) deletion: narrows upward, as the triangle does
+TRAPEZOID_DOWN = "trapezoid-down" # large (> 50 bp) insertion or amplification: widens upward
 PARALLELOGRAM = "parallelogram"   # gene conversion or integration
 BARBELL = "barbell"               # inversion: two triangles pointing outward from a bar
 
@@ -43,8 +43,8 @@ GLYPHS = (
     (TRIANGLE, "small deletion (≤ 50 bp)"),
     (TRIANGLE_DOWN, "small insertion (≤ 50 bp)"),
     (BOWTIE, "mobile element insertion"),
-    (TRAPEZOID_DOWN, "large deletion (> 50 bp)"),
-    (TRAPEZOID, "large insertion or amplification (> 50 bp)"),
+    (TRAPEZOID, "large deletion (> 50 bp)"),
+    (TRAPEZOID_DOWN, "large insertion or amplification (> 50 bp)"),
     (PARALLELOGRAM, "gene conversion or integration"),
     (BARBELL, "inversion"),
 )
@@ -77,20 +77,24 @@ def glyph_for(mutation_type, snp_type, mutation_category, size_change=0):
     insertion, one that shortens it as a deletion, and one that replaces like with like as a
     multi-base substitution (the square). A SNP with no functional class -- imported before
     the reference was there -- is drawn as a square too, there being nothing better to say.
+
+    A deletion's shapes narrow upward at both sizes (triangle, trapezoid) and an
+    insertion's widen upward (inverted triangle, inverted trapezoid), so size changes the
+    shape's top and never its direction.
     """
     large = mutation_category in ("large_deletion", "large_insertion",
                                   "large_amplification", "large_substitution")
     if mutation_type == "SNP":
         return _SNP_GLYPHS.get(functional_change_bucket(snp_type), SQUARE)
     if mutation_type == "DEL":
-        return TRAPEZOID_DOWN if large else TRIANGLE
+        return TRAPEZOID if large else TRIANGLE
     if mutation_type in ("INS", "AMP"):
-        return TRAPEZOID if large else TRIANGLE_DOWN
+        return TRAPEZOID_DOWN if large else TRIANGLE_DOWN
     if mutation_type == "SUB":
         if size_change > 0:
-            return TRAPEZOID if large else TRIANGLE_DOWN
+            return TRAPEZOID_DOWN if large else TRIANGLE_DOWN
         if size_change < 0:
-            return TRAPEZOID_DOWN if large else TRIANGLE
+            return TRAPEZOID if large else TRIANGLE
         return SQUARE
     if mutation_type == "MOB":
         return BOWTIE
