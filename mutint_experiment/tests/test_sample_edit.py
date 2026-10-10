@@ -149,7 +149,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
                 self.assertEqual(403, self.client.get(url).status_code)
 
     def test_staff_may_view_but_not_edit(self):
-        """can_view_project lets every staff user through; can_edit_project does not."""
+        """A staff user with no grant is a stranger: neither page renders for them."""
         stranger = User.objects.create(
             username="stranger", email="s@e.com", is_active=True, is_staff=True)
         self.client.force_login(stranger)
@@ -161,7 +161,7 @@ class SampleEditPagesTestCase(SampleEditTestCase):
     def test_every_handler_guards_its_missing_control(self):
         for url, control in (("/sample/%d/edit/" % self.sample.pk, "se-save"),
                              ("/experiment/%d/samples/" % self.experiment.id,
-                              "sb-save")):
+                              "sb-page")):
             with self.subTest(url=url):
                 self.assertContains(
                     self.client.get(url),

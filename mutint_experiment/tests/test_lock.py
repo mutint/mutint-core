@@ -236,11 +236,19 @@ class EveryWritePathTestCase(LockTestCase):
     def test_the_edit_pages_refuse_as_well(self):
         """Not only the endpoints: a form you can fill in and never save is a dead end."""
         for url in ("/experiment/%d/edit/" % self.experiment.id,
-                    "/experiment/%d/samples/" % self.experiment.id,
                     "/sample/%d/edit/" % self.sample_a.id,
                     "/import/?experiment_id=%d" % self.experiment.id):
             with self.subTest(url=url):
                 self.assertEqual(403, self.client.get(url).status_code)
+
+    def test_the_samples_page_shows_the_table_and_no_edit_button(self):
+        """That page opens read-only for any reader, so a lock leaves the table and takes
+        away the Edit button rather than refusing the page."""
+        response = self.client.get("/experiment/%d/samples/" % self.experiment.id)
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, 'data-sample-id="%d"' % self.sample_a.id)
+        self.assertNotContains(response, 'id="sb-edit"')
+        self.assertNotContains(response, 'id="sb-save"')
 
     def test_the_engine_refuses_even_called_directly(self):
         """Defense in depth: `apply_edits` trusts no caller."""

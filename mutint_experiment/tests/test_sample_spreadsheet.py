@@ -59,12 +59,17 @@ class SpreadsheetTestCase(SampleEditTestCase):
         self.experiment.save(update_fields=["ancestor"])
         self.assertIsNotNone(metadata.parse(self.download().content).lookup("mix"))
 
-    def test_a_reader_cannot_download_or_upload(self):
+    def test_a_reader_may_download_and_not_upload(self):
+        """The file is the table a reader can already see; reading one back is editing."""
+        self.login_reader()
+        self.assertEqual(200, self.download().status_code)
+        self.assertEqual(403, self.upload("sample,population,time_point,data\n").status_code)
+
+    def login_reader(self):
         reader = User.objects.create(username="reader", email="r@e.com", is_active=True)
         grant_project_access(self.project, reader, ROLE_READ, granted_by=self.user)
         self.client.force_login(reader)
-        self.assertEqual(403, self.download().status_code)
-        self.assertEqual(403, self.upload("sample,population,time_point,data\n").status_code)
+        return reader
 
     # --- the upload -----------------------------------------------------------------------
 
@@ -118,9 +123,9 @@ class SpreadsheetTestCase(SampleEditTestCase):
         response = self.client.post("/experiment/%d/samples/metadata/" % self.experiment.id)
         self.assertEqual(400, response.status_code)
 
-    def test_a_locked_experiment_refuses(self):
+    def test_a_locked_experiment_refuses_the_upload_and_not_the_download(self):
         self.experiment.lock(self.user)
-        self.assertEqual(403, self.download().status_code)
+        self.assertEqual(200, self.download().status_code)
         self.assertEqual(403, self.upload("sample,population,time_point,data\n").status_code)
 
     # --- the page -------------------------------------------------------------------------
@@ -202,4 +207,66 @@ class SamplesNavTestCase(SampleEditTestCase):
         items = get_nav_items(EXPERIMENT_SECTION)
         labels = [item["label"] for item in items]
         self.assertLess(labels.index("Samples"), labels.index("Mutations"))
-        self.assertTrue(items[labels.index("Samples")]["requires_edit"])
+        # Not `requires_edit`: the page opens read-only for any reader and gates its own
+        # Edit button.
+        self.assertFalse(items[labels.index("Samples")]["requires_edit"])
+
+
+class ViewModeTestCase(SpreadsheetTestCase):
+    """The page opens read-only and Edit opens the boxes.
+
+    Both halves of every cell are server-rendered -- the value as text and as the box the
+    save script reads -- and a class the Edit button sets decides which shows. Nothing runs
+    the script here; what is pinned is that each mode has what it needs and that a reader
+    gets no control whose endpoint would refuse them.
+    """
+
+    def page(self):
+        return self.client.get("/experiment/%d/samples/" % self.experiment.id)
+
+    def test_an_editor_gets_the_edit_button_and_the_boxes(self):
+        body = self.page().content.decode()
+        self.assertIn('id="sb-edit"', body)
+        self.assertIn('id="sb-save"', body)
+        self.assertIn('id="sb-cancel"', body)
+        self.assertIn('id="sb-page" class="sb-can-edit"', body)
+        # The value as text, beside its box.
+        self.assertIn('<span class="sb-view">the clone</span>', body)
+        self.assertIn('<span class="sb-view">glucose</span>', body)
+        self.assertIn('<span class="sb-view">500</span>', body)
+        # A flag that is on is a tick; the clone's hypermutator flag is on and the mix's is not.
+        clone_row = body[body.index('data-sample-id="%d"' % self.clone.pk):]
+        clone_row = clone_row[:clone_row.index("</tr>")]
+        self.assertIn("&#10003;", clone_row)
+        self.assertIn('id="sb-hypermutator-%d"' % self.clone.pk, clone_row)
+
+    def test_the_boxes_and_the_select_column_are_edit_only(self):
+        body = self.page().content.decode()
+        table = body[body.index("<tbody>"):body.index("</tbody>")]
+        for tag in re.findall(r"<input\b[^>]*>", table):
+            # The row's select box sits in a cell that is edit-only as a whole.
+            if 'class="sb-select"' in tag:
+                continue
+            self.assertIn("sb-edit", tag, tag)
+        self.assertIn('<td class="sb-edit" style="text-align: center;">\n'
+                      '                        <input autocomplete="off" type="checkbox" class="sb-select"',
+                      table)
+
+    def test_a_reader_gets_the_table_and_nothing_to_press(self):
+        self.login_reader()
+        response = self.page()
+        self.assertEqual(200, response.status_code)
+        body = response.content.decode()
+        for sample in (self.clone, self.mix):
+            self.assertIn('data-sample-id="%d"' % sample.pk, body)
+        self.assertIn("/samples/metadata.csv", body)
+        self.assertNotIn('id="sb-edit"', body)
+        self.assertIn('id="sb-page" class=""', body)
+        for control in ("sb-save", "sb-cancel", "sb-upload", "sb-delete", "sb-ancestor",
+                        "sb-upload-file"):
+            self.assertNotIn('id="%s"' % control, body, control)
+        self.assertNotIn("Cells with changes will be highlighted", body)
+
+    def test_the_sizing_runs_for_a_reader_too(self):
+        self.login_reader()
+        self.assertContains(self.page(), 'if (!document.getElementById("sb-page")) { return; }')

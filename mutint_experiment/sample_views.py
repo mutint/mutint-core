@@ -25,7 +25,9 @@ from django.views.decorators.http import require_POST
 
 from mutint_common.util import get_user_context
 from mutint_experiment.models import Experiment
-from mutint_experiment.permissions import can_edit_experiment, experiment_lock_refusal
+from mutint_experiment.permissions import (
+    can_edit_experiment, can_view_project, experiment_lock_refusal,
+)
 from mutint_experiment.samples import (
     SampleEditError, apply_rows, coordinate_str, parse_rows, plan_moves,
     rebuild_after_structural_change, rows_are_structural, sample_coordinate,
@@ -142,15 +144,23 @@ def _treatment_names(experiment):
 
 @ensure_csrf_cookie
 def experiment_samples(request, pk):
-    """Every sample of one experiment, editable in a single save."""
+    """Every sample of one experiment: a read-only table for any reader, and for an editor
+    the same table with its boxes opened by an Edit button and written in a single save.
+
+    Gated on viewing, not editing: the page is the one listing of an experiment's samples
+    with their coordinates, treatments and flags, and a reader is as entitled to it as to the
+    Overview. `can_edit` decides whether the Edit button and the write controls render at all,
+    so on a locked experiment the table shows and nothing on it can be pressed.
+    """
     experiment = get_object_or_404(Experiment, pk=pk)
     context = get_user_context(request.user)
-    if not can_edit_experiment(request.user, experiment):
+    if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", context, status=403)
 
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
+        "can_edit": can_edit_experiment(request.user, experiment),
         "samples": [_row_context(sample) for sample in _experiment_samples(experiment)],
         # For the table's header row; each sample row carries its own resolved copy.
         "flags": FLAGS,
@@ -199,7 +209,9 @@ def experiment_samples_metadata(request, pk):
     from mutint_import.archive import slug
 
     experiment = get_object_or_404(Experiment, pk=pk)
-    if not can_edit_experiment(request.user, experiment):
+    # Viewing, not editing: the file is the table the reader can already see, and the
+    # read-only page offers it as its export. Reading one back stays an editor's.
+    if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", get_user_context(request.user), status=403)
 
     entries = []

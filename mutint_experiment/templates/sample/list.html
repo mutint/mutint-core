@@ -35,21 +35,40 @@
         /* The heading stays put while the rows scroll under it; z-index keeps the boxes
            from painting over it, and the row's own dark fill is what makes it opaque. */
         #mutint-content .sb-scroll .sb-table > thead > tr > th { position: sticky; top: 0; z-index: 1; }
+        /* Two modes, one table. Every cell carries the value as text (.sb-view) and as a
+           box (.sb-edit); `sb-editing` on #sb-page, which the Edit button sets, decides
+           which shows. The boxes are hidden rather than absent so the script binds to the
+           same DOM in both modes, and a page nobody can edit never shows them at all.
+           `display: none` in a rule and not the hidden attribute: Bootstrap's
+           `input[type=file] { display: block }` outranks `[hidden]`. */
+        #sb-page:not(.sb-editing) .sb-edit, #sb-page.sb-editing .sb-view { display: none; }
+        #sb-page:not(.sb-can-edit) .sb-edit { display: none !important; }
+        #mutint-content .sb-view { font-size: 12px; }
     </style>
     {% comment %} A plain table, deliberately not a DataTable. The Metadata page's table
        uses deferRender, which never builds the DOM for rows it has not drawn -- values
        typed into those rows would not exist to be read back on save. Experiments run to
        tens or a few hundred samples, so paging buys nothing here anyway. {% endcomment %}
-    <div>
+    <div id="sb-page" class="{% if can_edit %}sb-can-edit{% endif %}">
         {% csrf_token %}
 
-        <p style="color: #666;">
+        {% if samples %}
+        {% comment %} The page opens read-only: the table, Download CSV and -- for an editor --
+           Edit. The mode is a class the Edit button sets and nothing remembers, so every
+           reload lands here; Save, Delete selected and Designate ancestor all end in a reload,
+           which is what returns the page to the view, and Cancel reloads for the same reason.
+           The instructions are about the boxes, so they show with them. {% endcomment %}
+        <div class="btn-row sb-view" style="margin-bottom: 0.5em;">
+            {% if can_edit %}<button type="button" class="btn btn-primary" id="sb-edit">Edit</button>{% endif %}
+            <a class="btn btn-default" {% if can_edit %}style="margin-left: 15px;"{% endif %}
+               href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download CSV</a>
+        </div>
+        {% if can_edit %}
+        <p class="sb-edit" style="color: #666;">
             Samples are named on other pages using their <b>Label</b> (if set) or by concatenating 
             their <b>Population</b>, <b>Time point</b>, and <b>Sample ID</b> (otherwise). To change a sample's 
             <b>Source name</b>, which is assigned from and used when importing data, follow the link to the single sample edit page.
         </p>
-
-        {% if samples %}
         {% comment %} One row of controls above the table: Save and Cancel first, then the
            import's own metadata.csv, filled in with this table, and that file read back into
            the boxes. The upload fills the table and saves nothing: Save is still the one
@@ -60,10 +79,9 @@
            15px between groups, wider than the row's 5px between buttons, and 40px either side of
            the two that are easy to regret: Discard throws away what was typed, and Delete
            selected removes samples, so neither sits where a click aimed at its neighbour lands. {% endcomment %}
-        <div class="btn-row" style="margin-bottom: 0.5em;">
+        <div class="btn-row sb-edit" style="margin-bottom: 0.5em;">
             <button type="button" class="btn btn-primary" id="sb-save">Save</button>
-            <a class="btn btn-danger" style="margin-left: 40px;"
-               href="/stats?experiment_id={{ experiment.id }}">Discard changes</a>
+            <button type="button" class="btn btn-danger" style="margin-left: 40px;" id="sb-cancel">Cancel</button>
             <a class="btn btn-default" style="margin-left: 15px;"
                href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download CSV</a>
             <button type="button" class="btn btn-default" id="sb-upload">Upload CSV&hellip;</button>
@@ -81,9 +99,10 @@
                Choose File control then sat in the row beside the button that opens it. {% endcomment %}
             <input type="file" id="sb-upload-file" accept=".csv,text/csv" style="display: none;">
         </div>
-        <p style="color: #666;">
+        <p class="sb-edit" style="color: #666;">
             To make many changes, you can download the CSV, edit it, and upload the new CSV. Cells with changes will be highlighted. You must click <b>Save</b> to keep the new values.
         </p>
+        {% endif %}
         <div id="sb-upload-status" style="margin-bottom: 1em; white-space: pre-line;"></div>
         <div id="sb-error" style="color: #a00; margin-bottom: 1em; white-space: pre-line;"></div>
 
@@ -92,7 +111,7 @@
             <thead>
             <tr>
                 {% comment %} What Delete selected and Designate ancestor act on; the heading's box ticks every row. {% endcomment %}
-                <th width="30" style="text-align: center;"><input autocomplete="off" type="checkbox"
+                <th width="30" class="sb-edit" style="text-align: center;"><input autocomplete="off" type="checkbox"
                         id="sb-select-all" title="Select every sample"></th>
                 <th>Source Name</th>
                 <th title="The condition this sample was grown under: pick one already in use, or type a new one">Treatment</th>
@@ -125,7 +144,7 @@
             <tbody>
             {% for sample in samples %}
                 <tr data-sample-id="{{ sample.id }}">
-                    <td style="text-align: center;">
+                    <td class="sb-edit" style="text-align: center;">
                         <input autocomplete="off" type="checkbox" class="sb-select"
                                id="sb-select-{{ sample.id }}" value="{{ sample.id }}"
                                data-label="{{ sample.label }}"></td>
@@ -139,29 +158,41 @@
                         {% if sample.id == experiment.ancestor_id %}<span class="label label-danger sb-ancestor-badge"
                             title="The experiment's designated ancestor: excluded from every view and analysis, its mutations subtracted from every other sample">ancestor</span>{% endif %}
                     </td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-treatment" maxlength="100"
+                    {% comment %} Each value twice: as text, and as the box the save script reads
+                       by id. See the style block for which shows. {% endcomment %}
+                    <td><span class="sb-view">{{ sample.treatment }}</span>
+                        <input autocomplete="off" type="text" class="form-control input-sm sb-treatment sb-edit" maxlength="100"
                                id="sb-treatment-{{ sample.id }}" list="sb-treatments"
                                value="{{ sample.treatment }}"></td>
                     {% comment %} ALE and sample ID are text: a lineage is called `Ara-1`,
                        a clone `763A` and a replicate `1-2`, and `type="number"` refuses all
                        three -- silently, by sending an empty value. The time point is text
                        for the reason `sample_edit.html` gives. {% endcomment %}
-                    <td><input autocomplete="off" type="text" class="form-control input-sm" maxlength="100"
+                    <td><span class="sb-view">{{ sample.population }}</span>
+                        <input autocomplete="off" type="text" class="form-control input-sm sb-edit" maxlength="100"
                                id="sb-population-{{ sample.id }}" value="{{ sample.population }}"></td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-time-point"
+                    <td><span class="sb-view">{{ sample.time_point|default_if_none:'' }}</span>
+                        <input autocomplete="off" type="text" class="form-control input-sm sb-time-point sb-edit"
                                id="sb-time-point-{{ sample.id }}"
                                value="{{ sample.time_point|default_if_none:'' }}"></td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-label" maxlength="100"
+                    <td><span class="sb-view">{{ sample.name }}</span>
+                        <input autocomplete="off" type="text" class="form-control input-sm sb-label sb-edit" maxlength="100"
                                id="sb-sample-{{ sample.id }}" value="{{ sample.name }}"></td>
-                    <td><input autocomplete="off" type="text" class="form-control input-sm sb-description" maxlength="300"
+                    <td><span class="sb-view">{{ sample.description }}</span>
+                        <input autocomplete="off" type="text" class="form-control input-sm sb-description sb-edit" maxlength="300"
                                id="sb-description-{{ sample.id }}"
                                value="{{ sample.description }}"></td>
+                    {% comment %} A tick for a box that is on, nothing for one that is off: the
+                       box itself stays in the cell, so an upload's highlight still lands on the
+                       cell (setBox marks the box's parent). {% endcomment %}
                     <td style="text-align: center;">
-                        <input autocomplete="off" type="checkbox" id="sb-mixed-{{ sample.id }}"
+                        <span class="sb-view">{% if sample.is_mixed %}&#10003;{% endif %}</span>
+                        <input autocomplete="off" type="checkbox" class="sb-edit" id="sb-mixed-{{ sample.id }}"
                                {% if sample.is_mixed %}checked{% endif %}></td>
                     {% for flag in sample.flags %}
                     <td style="text-align: center;">
-                        <input autocomplete="off" type="checkbox" id="sb-{{ flag.key }}-{{ sample.id }}"
+                        <span class="sb-view">{% if flag.on %}&#10003;{% endif %}</span>
+                        <input autocomplete="off" type="checkbox" class="sb-edit" id="sb-{{ flag.key }}-{{ sample.id }}"
                                data-flag="{{ flag.field }}" {% if flag.on %}checked{% endif %}></td>
                     {% endfor %}
                 </tr>
@@ -170,8 +201,8 @@
         </table>
         </div>
         {% else %}
-        <p>This experiment has no samples yet.
-           <a href="/import/?experiment_id={{ experiment.id }}">Import</a>.</p>
+        <p>This experiment has no samples yet.{% if can_edit %}
+           <a href="/import/?experiment_id={{ experiment.id }}">Import</a>.{% endif %}</p>
         <div style="margin-top: 1.5em;">
             <a class="btn btn-default"
                href="/stats?experiment_id={{ experiment.id }}">Cancel</a>
@@ -182,7 +213,7 @@
 <script type="text/javascript">
 (function () {
     "use strict";
-    if (!document.getElementById("sb-save")) { return; }
+    if (!document.getElementById("sb-page")) { return; }
 
     // --- the scroll box: down to the bottom of the window ---
 
@@ -211,6 +242,24 @@
         // The upload status and the error line grow and shrink under and above the box.
         new ResizeObserver(function () { sizeScrollBox(); }).observe(document.body);
     }
+
+    // --- the two modes ---
+
+    // Edit opens the boxes; Cancel reloads, which is also how Save, Delete selected and
+    // Designate ancestor return to the view. The buttons render for an editor only, so
+    // everything below the sizing is bound only where there is a Save button to bind.
+    var page = document.getElementById("sb-page");
+    var editButton = document.getElementById("sb-edit");
+    if (editButton) {
+        editButton.addEventListener("click", function () {
+            page.classList.add("sb-editing");
+            sizeScrollBox();
+        });
+        document.getElementById("sb-cancel").addEventListener("click", function () {
+            window.location.reload();
+        });
+    }
+    if (!document.getElementById("sb-save")) { return; }
 
     function value(prefix, id) {
         var field = document.getElementById("sb-" + prefix + "-" + id);

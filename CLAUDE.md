@@ -1686,7 +1686,7 @@ id observed in one experiment's ancestor cannot appear in another's samples.
   sample, because this view reads as "what evolved in this sample" and the one sample whose
   answer is "nothing, by definition" is a poor first thing to show. Its scoped fallback stays,
   for the population and sample-type filters, which can still legitimately drop a requested id.
-- **The mutation editor and the Edit-samples page** pass `include_ancestor=True` everywhere.
+- **The mutation editor and the Samples page** pass `include_ancestor=True` everywhere.
   They curate; they must be able to change what they are hiding.
 - **The genome browser** keeps it, because the ancestor's own evidence link lands there and
   `is_current` would match nothing.
@@ -1796,8 +1796,8 @@ writing to the experiment being looked at.
 `/project/<pk>/edit/`, `/experiment/<pk>/edit/` and `/sample/<pk>/edit/`, plus
 `/experiment/<pk>/samples/` for the whole experiment at once. Same split as creating: a
 GET page that checks permission itself, a `@require_POST` JSON endpoint that checks again.
-All four gate on `can_edit_project` -- `Project.user` or a superuser -- so staff, who may
-*view* every project, cannot edit one they do not own.
+The three edit pages gate on `can_edit_experiment`; the Samples page gates on *viewing* and
+renders its controls for editors only (below). Every write endpoint checks for itself.
 
 The project summary on `project/detail.html` **stays read-only**; editing did not go
 back into it. It shows `description` and `status` as well: a save has to be visible somewhere
@@ -1838,6 +1838,21 @@ nothing about a renumber changes a mutation count, and paying for the whole data
 rename is what would make this feel broken in production. A descriptive-only save rebuilds
 nothing.
 
+**The Samples page opens read-only, and Edit opens the boxes.** Any reader who can view the
+experiment gets the table -- coordinates, treatments, flags as ticks -- with Download CSV
+beside it; an editor also gets **Edit**, which shows the boxes, the instructions and the
+control row (Save, Cancel, Upload CSV, Designate ancestor, Delete selected). Every cell is
+server-rendered twice, the value as text (`.sb-view`) and as the box the save script reads
+(`.sb-edit`), and the `sb-editing` class on `#sb-page` decides which shows -- so a reader with
+no JavaScript sees the table, and the tests that read ids off the rendered HTML read the same
+HTML in both modes. **The mode is not remembered**: every load is the view, which is how Save,
+Delete selected and Designate ancestor -- all of which reload -- return to it, and Cancel
+simply reloads. Not a preference, because which mode you are in is a state of one visit. A
+locked experiment shows the table with no Edit button, where it used to 403; a page nobody can
+edit renders no control whose endpoint would refuse them (`sb-can-edit` is absent and the
+boxes stay hidden whatever the script does). Upload CSV keeps the page in edit mode, so the
+view never shows unsaved values.
+
 **The bulk page reads and writes the import's `metadata.csv`.** *Download CSV* is
 `metadata.write` over the table, with `data` set to each sample's source name; *Upload
 CSV* is `metadata.parse` plus `Metadata.lookup` per sample, which is the import's
@@ -1849,7 +1864,9 @@ column the file lacks, leaves that box alone.
 
 **The sidebar's Samples entry is `/experiment/samples/?experiment_id=`, which redirects
 here.** Every experiment-section link is its url with `?experiment_id=` appended, and this
-page names the experiment in its path. `requires_edit`, since the page refuses anyone else.
+page names the experiment in its path. Not `requires_edit`: the page renders for any reader and
+gates its own Edit button. Download CSV is gated on viewing for the same reason; the upload,
+which exists only to fill boxes an editor will save, stays an editor's.
 
 **Its save script reads each box by id, and no test runs the script.** The endpoint tests
 post directly, so a script reading an id the page does not render passes all of them while
@@ -3571,7 +3588,7 @@ matches NCBI records to its sequences. It has a **nav entry** in
 led that section for a while, on the reading that an experiment goes top-down from what it was
 aligned to and then to what was found in it; what people actually open an experiment for is
 its mutations, and a section whose first row is the thing nobody came for costs every reader a
-click. The order in that section now is Samples (`mutint_experiment`, for editors only),
+click. The order in that section now is Samples (`mutint_experiment`),
 Mutations, Reference, Import, Curate, then the plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
 always. There is still no `order=`.
 

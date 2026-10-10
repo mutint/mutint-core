@@ -15,11 +15,11 @@ class ExperimentConfig(AppConfig):
         register_nav_item('Experiments', url='/experiment/', section=MAIN_SECTION,
                           key='experiments')
         # First in the experiment section, ahead of mutint_sample's Mutations, because this
-        # app is ahead of that one in INSTALLED_APPS. `requires_edit`: the page edits, and
-        # refuses a reader who cannot. The url redirects to `/experiment/<pk>/samples/`,
-        # since every entry in this section is its url with `?experiment_id=` appended.
-        register_nav_item('Samples', url='/experiment/samples/', section=EXPERIMENT_SECTION,
-                          requires_edit=True)
+        # app is ahead of that one in INSTALLED_APPS. Not `requires_edit`: the page opens as
+        # a read-only table for any reader and gates its Edit button itself. The url
+        # redirects to `/experiment/<pk>/samples/`, since every entry in this section is its
+        # url with `?experiment_id=` appended.
+        register_nav_item('Samples', url='/experiment/samples/', section=EXPERIMENT_SECTION)
         # Groups is deliberately not registered. It is a per-user thing -- the groups you own
         # or belong to -- so it lives in base.html's account block beside Jobs and Change
         # Password, where `{% if user.is_authenticated %}` already governs it. Registered here
