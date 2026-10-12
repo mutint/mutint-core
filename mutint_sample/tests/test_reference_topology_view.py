@@ -48,13 +48,13 @@ class PageTestCase(_Topology):
         html = self._page().content.decode("utf-8")
         self.assertIn("<th>Topology</th>", html)
         self.assertEqual(html.count("The file this reference came from did not say"), 2)
-        self.assertRegex(html, r'class="reference-topology">\s*linear\s*<')
+        self.assertRegex(html, r'class="reference-topology">\s*Linear\s*<')
 
     def test_a_set_topology_stops_being_marked_suggested(self):
         self._set(["test_ref"], "circular")
         html = self._page().content.decode("utf-8")
         self.assertEqual(html.count("The file this reference came from did not say"), 1)
-        self.assertRegex(html, r'class="reference-topology">\s*circular\s*<')
+        self.assertRegex(html, r'class="reference-topology">\s*Circular\s*<')
 
     def test_a_writer_is_offered_the_control(self):
         html = self._page().content.decode("utf-8")

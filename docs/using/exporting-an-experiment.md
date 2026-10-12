@@ -7,8 +7,8 @@ treatment and description, the publications, and which sample is the ancestor.
 
 ## Getting the archive
 
-**Export experiment** is on the experiment's **Reference** page, beside the reference
-download, and the Import page links to it under the tab strip. Either gives a zip named
+**Export experiment** is a button on the experiment's **Overview**, beside Edit samples,
+and the Import page links to it under the tab strip. Either gives a zip named
 for the experiment. Anyone who can view the experiment can take it.
 
 On an installation that publishes the API, a public experiment's archive is also at

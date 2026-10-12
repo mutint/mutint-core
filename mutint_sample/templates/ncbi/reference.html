@@ -18,48 +18,6 @@
                 page.
             </div>
         {% else %}
-            <p class="ncbi-summary">
-                {{ contigs|length }} sequence{{ contigs|length|pluralize }},
-                {{ total_length }} bases in total.
-                {% if verified_count %}
-                    {{ verified_count }} confirmed against NCBI.
-                {% endif %}
-            </p>
-
-            {% if can_create_experiment %}
-                {% comment %} The other thing you can do with a reference, beside download it:
-                   start an experiment from it. A plain link -- the picker on
-                   `/experiment/new/` arrives with this experiment chosen, and the copy itself
-                   happens in `experiment_create`. Gated on having somewhere to create rather
-                   than on `may_check`, which asks about writing to *this* experiment. {% endcomment %}
-                <div class="btn-row">
-                    <a class="btn btn-default"
-                       href="/experiment/new/?reference={{ experiment_id }}">Create new
-                        experiment with this reference</a>
-                </div>
-            {% endif %}
-
-            {% comment %} A sibling of the table, not a wrapper: the row checkboxes reach it
-               through `form=`, so it works with no script, and the controls under the table
-               gather the same checkboxes rather than owning them -- an input may belong to
-               only one form. {% endcomment %}
-            <form id="reference-download" class="btn-row reference-download" method="get"
-                  action="{% url 'reference_download' experiment_id %}">
-                <label for="reference-format">Download selected as</label>
-                <select id="reference-format" name="format" class="form-control input-sm">
-                    {% for fmt in download_formats %}
-                    <option value="{{ fmt.key }}"{% if fmt.key == default_format %} selected{% endif %}>{{ fmt.label }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-default btn-sm" id="reference-download-button">Download</button>
-                {% comment %} The whole experiment -- this reference, every sample's
-                   mutations and the experiment's details -- as one zip that the MutInt
-                   Archive tab of any MutInt reads back. See mutint_import/archive.py. {% endcomment %}
-                <a class="btn btn-default btn-sm" id="archive-export-button"
-                   href="{% url 'archive_export' experiment_id %}"
-                   title="Download the reference, every sample's mutations and the experiment's details as one zip, for import into another MutInt">Export experiment</a>
-            </form>
-
             <table class="table table-condensed reference-table">
                 <thead>
                     <tr>
@@ -127,7 +85,35 @@
                     </tr>
                 {% endfor %}
                 </tbody>
+                <tfoot>
+                    {% comment %} The summary is the table's last row rather than a sentence
+                       above it: it totals the column it sits under. {% endcomment %}
+                    <tr class="reference-summary">
+                        <td class="reference-select"></td>
+                        <td>{{ contigs|length }} sequence{{ contigs|length|pluralize }}</td>
+                        <td class="reference-length">{{ total_length }} bases in total</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>{% if verified_count %}{{ verified_count }} confirmed against NCBI{% endif %}</td>
+                    </tr>
+                </tfoot>
             </table>
+
+            {% comment %} A sibling of the table, not a wrapper: the row checkboxes reach it
+               through `form=`, so it works with no script, and the controls under the table
+               gather the same checkboxes rather than owning them -- an input may belong to
+               only one form. {% endcomment %}
+            <form id="reference-download" class="btn-row reference-download" method="get"
+                  action="{% url 'reference_download' experiment_id %}">
+                <label for="reference-format">Download selected as</label>
+                <select id="reference-format" name="format" class="form-control input-sm">
+                    {% for fmt in download_formats %}
+                    <option value="{{ fmt.key }}"{% if fmt.key == default_format %} selected{% endif %}>{{ fmt.label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-default btn-sm" id="reference-download-button">Download</button>
+            </form>
 
             {% if may_check %}
                 {% comment %} Not forms: the row checkboxes already belong to
@@ -181,7 +167,7 @@
             {% endif %}
 
             <div class="ncbi-footnote">
-                <p>The <b>type</b> controls how the sequence is used by plugins that call mutations:</p>
+                <p>The <b>Type</b> controls how the sequence is used by plugins that call mutations:</p>
                 <ul>
                     <li><b>Reference</b> &ndash; Mutations are called in this completely assembled
                         chromosome or plasmid.</li>
@@ -209,6 +195,21 @@
                 </p>
                 {% endif %}
             </div>
+
+            {% if can_create_experiment %}
+                {% comment %} The other thing you can do with a reference, beside download it:
+                   start an experiment from it. A plain link -- the picker on
+                   `/experiment/new/` arrives with this experiment chosen, and the copy itself
+                   happens in `experiment_create`. Gated on having somewhere to create rather
+                   than on `may_check`, which asks about writing to *this* experiment. Last on
+                   the page, green and with a `+`, as the list pages' "+ New" buttons are: it
+                   starts something rather than acting on the table above. {% endcomment %}
+                <div class="btn-row reference-create">
+                    <a class="btn btn-success"
+                       href="/experiment/new/?reference={{ experiment_id }}">+ Create new
+                        experiment with this reference</a>
+                </div>
+            {% endif %}
         {% endif %}
     </div>
 </div>

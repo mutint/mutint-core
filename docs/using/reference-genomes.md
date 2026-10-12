@@ -238,6 +238,6 @@ The download is a plain address, so a script can fetch it with the same access a
 
 `format` is `fasta`, `gff3` or `genbank`, and leaving out every `seq_id` means every contig.
 
-Beside the download is **Export experiment**, which takes the whole experiment -- this
-reference, every sample's mutations and the experiment's own details -- as one zip for
-another MutInt to import. See *Exporting an experiment*.
+The whole experiment -- this reference, every sample's mutations and the experiment's own
+details -- goes as one zip for another MutInt to import through **Export experiment** on
+the experiment's Overview. See *Exporting an experiment*.

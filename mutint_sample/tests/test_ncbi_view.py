@@ -375,7 +375,7 @@ class ReferencePageTestCase(_Fixture):
         the default and says it is one."""
         html = self._get_ref().content.decode("utf-8")
         self.assertIn("<th>Topology</th>", html)
-        self.assertIn("linear", html)
+        self.assertIn("Linear", html)
         self.assertIn("reference-topology-apply", html)
         self.assertIn("/mutations/reference/topology", html)
 
@@ -396,11 +396,26 @@ class ReferencePageTestCase(_Fixture):
         self.assertIn('<form id="reference-download"', html)
         self.assertIn('method="get"', html)
         self.assertIn('action="/mutations/reference/%d/download"' % self.experiment.id, html)
-        self.assertLess(html.index("</form>"), html.index("<table"))
+        # Under the table it acts on, before the bulk controls that read the same boxes.
+        self.assertLess(html.index("</table>"), html.index('<form id="reference-download"'))
+        self.assertLess(html.index("</form>"), html.index('id="reference-topology"'))
         self.assertIn('name="seq_id" value="%s"' % self.entry["id"], html)
         self.assertIn('form="reference-download" checked', html)
         self.assertEqual(html.count('form="reference-download" checked'),
                          len(self.reference.seq_ids))
+
+    def test_the_summary_is_the_table_s_last_row(self):
+        """One sequence, its length: totalled under the columns they sum, not in a
+        sentence above the table."""
+        html = self._get_ref().content.decode("utf-8")
+        self.assertNotIn('class="ncbi-summary"', html)
+        foot = html.split("<tfoot>", 1)[1].split("</tfoot>", 1)[0]
+        self.assertIn('class="reference-summary"', foot)
+        self.assertIn("1 sequence", foot)
+        self.assertNotIn("1 sequences", foot)
+        self.assertIn("%s bases in total" % format(self.entry["length"], ",d"), foot)
+        self.assertNotIn("confirmed against NCBI", foot)
+        self.assertLess(html.index("</tbody>"), html.index("<tfoot>"))
 
     def test_the_format_menu_is_the_endpoint_s_table(self):
         html = self._get_ref().content.decode("utf-8")
@@ -571,7 +586,16 @@ class StartAnExperimentFromThisReferenceTestCase(_Fixture):
     def test_the_button_links_to_the_create_page_with_this_reference_chosen(self):
         html = self._get_ref().content.decode("utf-8")
         self.assertIn('href="/experiment/new/?reference=%d"' % self.experiment.id, html)
-        self.assertIn("Create new", html)
+        self.assertRegex(html, r">\+ Create new\s+experiment with this reference<")
+
+    def test_the_button_is_green_and_last_on_the_page(self):
+        """It starts something rather than acting on the table, so it sits under the help
+        text, after every control, in the list pages' "+ New" green."""
+        html = self._get_ref().content.decode("utf-8")
+        button = html.index("/experiment/new/?reference=")
+        self.assertIn("btn-success", html[button - 200:button])
+        self.assertLess(html.index('class="ncbi-footnote"'), button)
+        self.assertLess(html.index('id="reference-download"'), button)
 
     def test_an_anonymous_reader_is_offered_nothing(self):
         """A public project is readable signed out, and `/experiment/new/` 403s -- so the

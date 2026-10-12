@@ -3584,13 +3584,15 @@ either way, and `docs/using/configuration.md` says so where an operator will rea
 sequence in an experiment's reference -- name, length, topology, role, the names it used to
 have, and which NCBI record it is -- and carries **one box for the whole reference** that
 matches NCBI records to its sequences. It has a **nav entry** in
-`EXPERIMENT_SECTION` called **Reference**, registered by `mutint_sample` after Mutations. It
-led that section for a while, on the reading that an experiment goes top-down from what it was
-aligned to and then to what was found in it; what people actually open an experiment for is
-its mutations, and a section whose first row is the thing nobody came for costs every reader a
-click. The order in that section now is Samples (`mutint_experiment`),
-Mutations, Reference, Import, Curate, then the plugins' -- and that is INSTALLED_APPS order and `register_nav_item` order within an app, as
-always. There is still no `order=`.
+`EXPERIMENT_SECTION` called **Reference**, registered by **`mutint_import`** though the view
+is `mutint_sample`'s. The section reads **Import, Reference, Samples, Mutations, Curate**,
+then the plugins': set-up first, then what the experiment holds. That is INSTALLED_APPS
+order (`mutint_import` precedes `mutint_experiment` and `mutint_sample`) and
+`register_nav_item` order within an app, as always, and there is still no `order=` -- which
+is exactly why Reference cannot be registered beside Mutations: an entry that has to land
+between two other apps' entries is registered by the app whose position that is. (For a
+while the order was Samples, Mutations, Reference, Import, on the reading that people open an
+experiment for its mutations.)
 
 **The nav entry is not decoration, and neither is linking every contig.** A viewer link gated
 on the contig already being verified would leave the only page carrying the accession box
@@ -4280,7 +4282,7 @@ matching one:
 `mutint_import/archive.py` writes an experiment as one zip and reads it back: `mutint.json`
 (the manifest), `metadata.csv`, the stored reference pair byte for byte, and one `.gd` or
 VCF per sample -- VCF where the sample arrived as one, since that export is verbatim.
-**Export experiment** on the Reference page and a link on the Import data page serve it
+**Export experiment** on the Overview and a link on the Import data page serve it
 (`/import/archive/<id>/export`, `can_view_project`, 404 without a reference); mutint-api
 serves the same bytes for a public experiment. It carries mutations and the reference and
 nothing derived from reads: alignments, coverage and the report are gigabytes, and every

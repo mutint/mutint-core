@@ -42,11 +42,23 @@
     margin-left: 10px;
 }
 
-/* The Reference page's download row: a format menu and a button above the contig table.
+/* The Reference page's download row: a format menu and a button under the contig table.
    `form-control` is 100% wide in Bootstrap and would take the whole flex row for itself. */
 .reference-download {
     margin-bottom: 10px;
     align-items: center;
+}
+
+/* The table's last row totals it: a medium grey, darker than Bootstrap's `.active`
+   stripe so it reads as a summary rather than a selected row. */
+.reference-table tfoot tr.reference-summary > td {
+    background-color: #d9d9d9;
+    font-weight: bold;
+}
+
+/* The create button is last on the page, under the grey help text, and needs room from it. */
+.reference-create {
+    margin-top: 15px;
 }
 
 .reference-download select.form-control {

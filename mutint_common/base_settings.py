@@ -206,10 +206,13 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             # selected experiment's pages. Its position here no longer decides that.
             'mutint_dashboard',       # nav: none (the sidebar's brand links to it)
             'mutint_search',          # nav: Search
+            # Import leads the experiment section: Import and Reference are how an
+            # experiment is set up, Samples and Mutations are what it holds. It registers
+            # nothing in MAIN_SECTION, so Projects and Experiments are unmoved.
+            'mutint_import',          # nav: Import, Reference
             'mutint_experiment',      # nav: Projects, Experiments, Samples (Groups is an account entry)
-            'mutint_sample',          # nav: Mutations, Reference
+            'mutint_sample',          # nav: Mutations
             'mutint_filter',          # nav: none (installed for its template tags)
-            'mutint_import',          # nav: Import
             'mutint_curate',          # nav: Curate
             'mutint_stats',           # nav: none (Overview is the header button bar's)
             # nav: none. /jobs/ is reached from the sidebar's account block, which is written

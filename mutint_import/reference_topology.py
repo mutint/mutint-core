@@ -20,7 +20,7 @@ role, and what every download and the GenBank export are rendered from. So
 the file's region rows to match. No rebuild and no reannotation: nothing derived reads it.
 """
 
-LABELS = {True: "circular", False: "linear"}
+LABELS = {True: "Circular", False: "Linear"}
 
 #: What an entry with no `circular` key is taken to be, and shown as *suggested*.
 DEFAULT_CIRCULAR = False

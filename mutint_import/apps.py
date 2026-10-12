@@ -15,6 +15,15 @@ class ImportConfig(AppConfig):
         # codebase raises against every nav entry that 403s.
         register_nav_item('Import', url='/import/', section=EXPERIMENT_SECTION,
                           requires_edit=True)
+        # The Reference page is mutint_sample's view, registered here so it follows Import:
+        # the two are how an experiment is set up, and the section runs set-up first, then
+        # Samples and Mutations, which are what it holds. A literal URL, as every core
+        # entry's is, so nothing here imports mutint_sample. The page is the only one that
+        # says what genome the experiment is called against and the only place an NCBI
+        # accession is recorded, which is why it has an entry rather than a link that
+        # appears once an accession has been.
+        register_nav_item('Reference', url='/mutations/reference',
+                          section=EXPERIMENT_SECTION)
 
         # The tabs core ships, in the order the page shows them. Core is a caller of the tab
         # registry like any plugin; a plugin's tab lands after these, and may be a page of its

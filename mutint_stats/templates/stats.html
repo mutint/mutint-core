@@ -92,11 +92,17 @@
                href="/experiment/{{ experiment_id }}/edit/">Edit experiment</a>
             <a class="btn btn-default"
                href="/experiment/{{ experiment_id }}/samples/">Edit samples</a>
-            {% comment %} A link rather than a button with a handler: it opens a page that
-               explains what designating does before anything is written, which is the whole
-               reason it is a page. {% endcomment %}
-            <a class="btn btn-default"
-               href="/experiment/{{ experiment_id }}/ancestor/">{% if experiment.has_ancestor %}Ancestor: {{ experiment.ancestor.label }}{% else %}Designate ancestor{% endif %}</a>
+        {% endif %}
+        {% if experiment.reference %}
+            {% comment %} The whole experiment -- its reference, every sample's mutations and
+               its details -- as one zip that the MutInt Archive tab of any MutInt reads
+               back (mutint_import/archive.py). Outside the `can_edit` block because the
+               endpoint asks only `can_view_project`, and absent without a reference
+               because the endpoint 404s then. The ancestor is designated from the Samples
+               page and a sample's own page, which is where the samples are. {% endcomment %}
+            <a class="btn btn-default" id="archive-export-button"
+               href="{% url 'archive_export' experiment_id %}"
+               title="Download the reference, every sample's mutations and the experiment's details as one zip, for import into another MutInt">Export experiment</a>
         {% endif %}
         {% if can_lock %}
             {% if experiment.is_locked %}

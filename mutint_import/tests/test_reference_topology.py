@@ -69,7 +69,7 @@ class EntryTestCase(SimpleTestCase):
         entry = {"id": "chr"}
         self.assertFalse(reference_topology.entry_circular(entry))
         self.assertTrue(reference_topology.entry_is_guessed(entry))
-        self.assertEqual(reference_topology.label_for(False), "linear")
+        self.assertEqual(reference_topology.label_for(False), "Linear")
 
     def test_a_stored_answer_is_not_a_suggestion(self):
         for value in (True, False):
@@ -244,9 +244,9 @@ class StoreTestCase(_Reference):
         self.assertIs(entries["pKD46"]["circular"], True)
         self.assertNotIn("circular", entries["NODE_2"])
         states = reference_topology.states_for(self._refresh())
-        self.assertEqual(states["chr"], {"circular": True, "label": "circular",
+        self.assertEqual(states["chr"], {"circular": True, "label": "Circular",
                                          "guessed": False})
-        self.assertEqual(states["NODE_2"], {"circular": False, "label": "linear",
+        self.assertEqual(states["NODE_2"], {"circular": False, "label": "Linear",
                                             "guessed": True})
 
     def test_setting_writes_the_row_and_the_file(self):
