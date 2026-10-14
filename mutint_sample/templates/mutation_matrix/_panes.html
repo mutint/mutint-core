@@ -1,6 +1,6 @@
 {% load sample_flags %}
 {% comment %} The mutation matrix's own client-side tabs -- Samples, Mutations, References,
-   Columns, Frequencies, Sets (when the matrix has sets), Export -- as panes of one `.tab-content`
+   Columns, Frequencies, Filter, Sets (when the matrix has sets), Export -- as panes of one `.tab-content`
    (control_tabs.html says why they must share one). Rendered by mutation_matrix/page.html beside
    its own panes, and by the mutation_matrix tag's partial for a page that renders the tag alone.
    Takes `matrix`, `page` and `active`; `sample_types` adds the Sample types menu,
@@ -156,6 +156,14 @@
         <div class="text-danger" data-role="filter-error" style="margin: 4px 0;" hidden></div>
         <div class="mutation-matrix-summary" data-role="filter-summary"></div>
     {% endif %}
+</div>
+{% comment %} The Filter tab: rules over the descriptive columns, AND-ed, drawn and applied
+   by mutint_match_rules.js through the matrix's search hook, and remembered per experiment
+   under a key the per-sample Mutations page shares. One partial for both tables. {% endcomment %}
+<div class="tab-pane{% if active == "match" %} active{% endif %}" id="{{ page }}-pane-match">
+    <div class="mutation-matrix-controls">
+        {% include "mutation_matrix/_match_rules.html" with columns=matrix.columns seq_lengths=matrix.seq_lengths seq_ids=matrix.seq_ids %}
+    </div>
 </div>
 {% comment %} Export CSV and Export SVG. The buttons are DataTables' own (the Buttons
    extension makes them), so the script moves their container in here once the table is

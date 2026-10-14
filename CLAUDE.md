@@ -95,7 +95,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 3246 run, 0 failures** standalone (2026-10-14); **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 3289 run, 0 failures** standalone (2026-10-14); **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -819,12 +819,26 @@ need it, because deciding that per page is what went wrong.
 the script in their *rendered* HTML, since a `<script>` outside a `{% block %}` is discarded
 silently.
 
-**Its controls are four tabs of the matrix's strip** -- Sample (the picker and the
+**Its controls are five tabs of the matrix's strip** -- Sample (the picker and the
 crosslinks), Mutations (the reader's filter form and the summary line with the ancestral
-toggle), References (the References menu) and Columns (the Columns menu), the names Compare
-gives the same controls -- from `control_tabs.html`, remembered as
-`breseq_table.tab`; the view embeds that key beside the References and Columns choices. The
-ancestor banner stays above the strip: it is a warning, not a control.
+toggle), References (the References menu), Columns (the Columns menu) and Filter (rules
+over the columns), the names Compare gives the same controls -- from `control_tabs.html`,
+remembered as `breseq_table.tab`; the view embeds that key beside the References, Filter
+and Columns choices. The ancestor banner stays above the strip: it is a warning, not a
+control.
+
+**Its Filter tab is the matrix's, over this table's server-rendered rows.** The same
+partial (`mutation_matrix/_match_rules.html`), the same rules module and the same key
+(`mutation_matrix.filter.<exp>`), so a rule typed on Compare is in force here and back --
+which is why the columns it offers are the matrix's `DESCRIPTIVE` list and not this
+table's: a `freq` rule stored here would name a column Compare does not have, be dropped
+there, and be lost on the next write-back. Each row carries its start position as
+`data-position` beside `data-seq-id`, and the cells' text is read off the DOM.
+`js/breseq_match.js` is the page's side of it, and it owns no row: **`breseq_references.js`
+is the one script that hides rows and re-stripes them**, and the Filter tab hands it a
+predicate through `addPredicate` rather than setting `hidden` itself. Two scripts each
+hiding rows would re-stripe against each other's result and each want an empty row of
+its own; so the match script loads after the references script, and a test holds the order.
 
 **Its Columns menu is the matrix's partial over this table's columns**
 (`mutation_matrix/_columns_menu.html`): breseq's own, shown, and the gene lists, hidden
@@ -2215,10 +2229,12 @@ the same key, so a plasmid hidden on Compare is hidden there and back -- see **T
 mutation page**.
 
 **The controls are tabs -- on Compare Treatments, Populations, Samples, Time Points,
-Mutations, References, Columns, Frequencies, Sets, Export; on Search the matrix's own six,
-Samples, Mutations, References, Columns, Frequencies, Export -- and the page owns the
-strip.** Mutations is the mutation-type menu (tab key `types`); the per-sample page's
-Mutations tab is the reader's filter (key `filter`), and the two never share a strip. `mutint_common/templates/control_tabs.html` is the Import data page's strip made
+Mutations, References, Columns, Frequencies, Filter, Sets, Export; on Search the matrix's
+own seven, Samples, Mutations, References, Columns, Frequencies, Filter, Export -- and the
+page owns the strip.** Mutations is the mutation-type menu (tab key `types`); the
+per-sample page's Mutations tab is the reader's filter (key `filter`), and the two never
+share a strip. Filter is keyed `match` for that reason: `filter` was taken, and so were the
+`filter-*` roles in the script. `mutint_common/templates/control_tabs.html` is the Import data page's strip made
 client-side: Bootstrap's tab plugin switches the panes (it arrives inside the DataTables
 bundle at the end of body; `bootstrap.min.js` on its own would bind every handler twice), and
 `mutint_control_tabs.js` restores and remembers the tab as `<page>.tab` through the
@@ -2240,13 +2256,42 @@ Compare's ten on one row from about 1200px wide with the sidebar open, measured.
 script finds
 its menus through `[data-mutation-matrix-controls="<table id>"]`, wherever the page put the
 `.tab-content`. The DataTables toolbar -- one row, the pager at the left, then length and
-the count, and the search box pushed to the far right -- sits under the strip on every tab;
-the Frequency display menu is in the Frequencies pane and the Cell padding switch in the
-Columns pane, not in that toolbar. **Export CSV and Export SVG are the Export tab**: the
+the count -- sits under the strip on every tab; the Frequency display menu is in the
+Frequencies pane and the Cell padding switch in the Columns pane, not in that toolbar.
+**There is no search box**: `dom` has no `f`. It matched every column at once, was
+remembered nowhere, and could not say "position between" at all; the Filter tab is what
+replaced it. **Export CSV and Export SVG are the Export tab**: the
 Buttons extension makes them only where `B` sits in `dom`, which is a toolbar, so the script
 moves their container into the pane once the table is drawn. DataTables' empty count line
 is overridden to *Showing 0 entries*, since its own *Showing 0 to 0 of 0 entries*, followed
 by the filtered-from suffix, read as three zeros in a row on an empty Search.
+
+**Filter is rules over the columns, AND-ed, and both tables share them.** The Filter tab
+(`mutation_matrix/_match_rules.html`, one partial for the matrix and the per-sample page)
+holds one row per rule: a column menu over the descriptive columns -- the `DESCRIPTIVE`
+list, Curate left out as no data -- and what the cell must hold. A text column takes a
+value matched as a substring of the cell's plain text (tags stripped; a gene list's
+`<key>_text`; a collapsed list's Show button not counted), case-folded unless **Match
+case**, and only where no letter, digit or underscore sits at either end of the match
+under **Whole word** -- so `mut` finds `mut` and `yjjA/mut` and not `mutT`. Position, the
+one position column, takes a reference sequence (every contig of the stored reference,
+`contig_lengths`, each length the upper bound's placeholder; the rows' bare names where
+there is no experiment, as on Search) and two bounds, either open. Add rule, remove,
+Clear; a rule takes effect on a box's change or Enter, not per keystroke. Stored as
+`mutation_matrix.filter.<exp>` -- `{"rules": [{"column": "gene", "text": "mut", "whole":
+false, "case": false}, {"column": "position", "seq_id": "REL606", "min": 1, "max":
+500000}]}` -- per experiment and shared with the per-sample Mutations page the way the
+References choice is; transient on Search. **`js/mutint_match_rules.js` is the one reader
+of that shape and the one matcher**, loaded from `base.html`, exported for node, and
+forgiving: a rule naming a column the page does not offer is dropped, a bound that is not
+a number is open, inverted bounds are swapped. It matches over an adapter
+(`{text(key), seqId, position}`) rather than a row, because the matrix holds rows as
+objects of HTML strings and the per-sample page as `<tr>`s. On the matrix the test runs in
+the search hook beside the Types and References menus, so a rule redraws (`dt.draw()`), is
+counted by the pager line, is what Export's "Filtered mutations" exports, and **leaves the
+row sets alone**, exactly as hiding a type does. A sentence under the controls says what
+the rules keep. `mutint_common/tests/test_match_rules_js.py` runs the module under node
+and is the only test of what a rule means; nothing on the server reads one.
 
 **A collapse bar under the panes folds away everything above it** -- the panes, the strip,
 and the page header with its button bar -- to give the table the height, and remembers it
@@ -2292,9 +2337,9 @@ min-content alone.
 **The collapse bar runs edge to edge and, folded, sits at the top of the window**, through
 `#mutint-content`'s 25px of padding on both sides and, with the `folded` class the script
 sets, the top -- a strip of the frame, the way the sidebar's runs the window's height.
-"Show [100] entries" and "Search:" are Bootstrap labels, whose 5px bottom margin put their
-text above the pager's middle in a centered row; the toolbar zeroes it and makes each label
-a centered row of its own. The bar is 10px tall, the width of the sidebar's strip, whose arrow lost a 3px border in the strip's own grey and a rounded corner that showed as a notch beside the glyph under the hover gradient.
+"Show [100] entries" is a Bootstrap label, whose 5px bottom margin put its text above the
+pager's middle in a centered row; the toolbar zeroes it and makes the label a centered row
+of its own. The bar is 10px tall, the width of the sidebar's strip, whose arrow lost a 3px border in the strip's own grey and a rounded corner that showed as a notch beside the glyph under the hover gradient.
 
 **Only as many leading columns are pinned as leave room for the samples.** Pinned columns
 adding up to the box's width left nothing that moves in view, so scrolling sideways looked
@@ -2322,7 +2367,7 @@ the script filters through the same search hook the samples and types use, and r
 choice as `mutation_matrix.show`, falling back to All on a table that does not offer the
 remembered set. The matrix asks nothing about what a set means. mutint-compare's Convergent
 and Fixed are the client sets there are. **Export CSV is a menu** -- the rows showing (after
-every menu and the search box, `search: "applied"`) or every row the table holds -- so
+every menu and the Filter tab's rules, `search: "applied"`) or every row the table holds -- so
 "export what I am looking at" and "export the experiment" are both one click and neither is
 a page. `page.html` has two blocks on its Sets tab, `matrix_controls` (beside the Show
 menu) and `matrix_summary` (under the sets' sentences, which the script writes), so such a
@@ -2496,10 +2541,11 @@ sample's header is a link to that sample's Mutations page (`SampleColumn.url`) i
 **Choices are remembered per person, not per browser.** `mutint_common.preferences` (below)
 holds `mutation_matrix.columns`, `mutation_matrix.types`, `mutation_matrix.frequency`,
 `mutation_matrix.view` and `mutation_matrix.page_length` (Show N entries, All included) for the
-reader everywhere, and `mutation_matrix.samples.<exp>` and
-`mutation_matrix.references.<exp>` per experiment -- a sample id or a contig name means
-something only within one experiment; Search has no experiment and both selections are
-transient there. The store's client half is `js/mutint_preferences.js`, loaded from
+reader everywhere, and `mutation_matrix.samples.<exp>`, `mutation_matrix.references.<exp>`
+and `mutation_matrix.filter.<exp>` per experiment -- a sample id, a contig name or a rule
+over an experiment's columns means something only within one experiment; Search has no
+experiment and all three are transient there. The last two are read and written by the
+per-sample Mutations page as well. The store's client half is `js/mutint_preferences.js`, loaded from
 `base.html`, so the second page that remembers something did not need a copy of it. Samples,
 types and references are stored as the *hidden* set, so one that did not exist when the
 choice was made shows by default. **Columns are stored as both sets**, `{hidden, shown}`,

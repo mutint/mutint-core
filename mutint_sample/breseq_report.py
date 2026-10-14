@@ -168,6 +168,9 @@ def build_rows(mutation_calls, browse_url=None, *, ancestral_mutation_ids=frozen
         # The plain name, for the row's `data-seq-id`: `seq_id` above is breseq's HTML of it,
         # with hyphens rewritten as non-breaking ones.
         row["seq_id_text"] = call.mutation.seq_id or ""
+        # The bare start position, for the row's `data-position`: `position` above is
+        # breseq's HTML of it, commified. What the Filter tab's position rule reads.
+        row["position_sort"] = call.mutation.start_position
         row["mutation_id"] = call.mutation_id
         # The call, not the mutation: the editor addresses rows by what it deletes,
         # and one mutation is observed in many samples. Unused by the read-only tables.

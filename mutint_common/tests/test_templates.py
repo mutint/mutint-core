@@ -328,7 +328,7 @@ class PreferencesScriptTestCase(unittest.TestCase):
     STATIC = os.path.join(CORE, "mutint_common", "staticfiles", "js")
     STORE = "mutint_preferences.js"
     CALLERS = ("mutation_matrix.js", "breseq_references.js", "breseq_columns.js",
-               "mutint_control_tabs.js")
+               "mutint_control_tabs.js", "breseq_match.js")
     #: The two Columns menus, which must read and write a column choice the same way.
     COLUMN_CALLERS = ("mutation_matrix.js", "breseq_columns.js")
 
@@ -388,6 +388,33 @@ class AssetVersionTestCase(unittest.TestCase):
             names.update(found)
         self.assertGreater(users, 1, "expected several templates to version their assets")
         self.assertEqual({"asset_version"}, names)
+
+
+class MatchRulesScriptTestCase(unittest.TestCase):
+    """The Filter tab's rules are one module, `mutint_match_rules.js`, and the two tables
+    that offer the tab call it rather than matching for themselves -- which is what lets
+    them share one remembered rule list. It replaced DataTables' search box on the matrix."""
+
+    def read(self, *parts):
+        with open(os.path.join(CORE, *parts)) as handle:
+            return handle.read()
+
+    def test_base_loads_the_module(self):
+        base = self.read("mutint_common", "templates", "base.html")
+        self.assertIn('mutint_match_rules.js" %}?v={{ asset_version }}', base)
+
+    def test_both_tables_match_through_it(self):
+        for name in ("mutation_matrix.js", "breseq_match.js"):
+            script = self.read("mutint_common", "staticfiles", "js", name)
+            self.assertIn("mutintMatchRules", script, name)
+            self.assertNotIn("new RegExp", script, "%s matches for itself" % name)
+
+    def test_the_matrix_has_no_search_box(self):
+        script = self.read("mutint_common", "staticfiles", "js", "mutation_matrix.js")
+        self.assertIn('dom: \'<"mutation-matrix-toolbar"pliB>', script)
+        self.assertNotIn("plifB", script)
+        css = self.read("mutint_common", "staticfiles", "css", "breseq_table.css")
+        self.assertNotIn("dataTables_filter", css)
 
 
 class ControlTabsScriptTestCase(unittest.TestCase):

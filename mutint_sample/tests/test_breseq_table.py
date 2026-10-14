@@ -336,16 +336,17 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         start = content.index('id="breseq_table-pane-%s"' % key)
         return content[start:content.index(next_marker, start)]
 
-    def test_four_tabs_in_order(self):
-        """Sample, Mutations, References, Columns -- the same names Compare gives the same
-        controls."""
+    def test_five_tabs_in_order(self):
+        """Sample, Mutations, References, Columns, Filter -- the same names Compare gives
+        the same controls."""
         content = self.content()
         self.assertIn('data-control-tabs="breseq_table"', content)
         self.assertIn('data-prefs-id="breseq-references-prefs"', content)
-        self.assertEqual(["samples", "filter", "references", "columns"],
+        self.assertEqual(["samples", "filter", "references", "columns", "match"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', content))
         self.assertIn('href="#breseq_table-pane-references">References</a>', content)
         self.assertIn('href="#breseq_table-pane-columns">Columns</a>', content)
+        self.assertIn('href="#breseq_table-pane-match">Filter</a>', content)
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="filter"', content)
 
     def test_the_picker_is_singular_here(self):
@@ -367,7 +368,9 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
                       self.pane(content, "samples", 'id="breseq_table-pane-references"'))
         self.assertIn("data-breseq-references",
                       self.pane(content, "references", 'id="breseq_table-pane-columns"'))
-        self.assertIn("data-breseq-columns", self.pane(content, "columns", "<table"))
+        self.assertIn("data-breseq-columns",
+                      self.pane(content, "columns", 'id="breseq_table-pane-match"'))
+        self.assertIn("data-breseq-match", self.pane(content, "match", "<table"))
 
     def test_a_signed_in_readers_tab_is_embedded(self):
         from mutint_common.preferences import set_preference
@@ -381,6 +384,50 @@ class ControlTabsTestCase(BreseqTablePageTestCase):
         content = self.content()
         self.assertEqual(["samples"], re.findall(r'data-toggle="tab" data-tab="(\w+)"', content))
         self.assertIn("This experiment has no samples to show.", content)
+
+
+class MatchTabTestCase(BreseqTablePageTestCase):
+    """The Filter tab: the matrix's rules over the columns, on this page's server-rendered
+    rows, remembering the matrix's own key so Compare and this page agree."""
+
+    KEY = "mutation_matrix.filter.%d"
+
+    def test_every_row_carries_its_position_as_a_number(self):
+        """`data-position` is what the position rule reads: the bare start position, not
+        breseq's commified HTML of it."""
+        content = self.content()
+        positions = re.findall(r'<tr class="[^"]*" data-seq-id="[^"]*" data-position="(\d+)"', content)
+        self.assertEqual(len(positions), content.count("<tr class="))
+        self.assertEqual(sorted(str(m.start_position) for m in Mutation.objects.all()),
+                         sorted(positions))
+
+    def test_the_pane_offers_the_matrix_columns_and_the_contigs(self):
+        content = self.content()
+        pane = content[content.index('id="breseq_table-pane-match"'):content.index("<table")]
+        self.assertIn('data-experiment-id="%d"' % self.experiment.id, pane)
+        self.assertIn('data-preferences-url="/preferences/"', pane)
+        self.assertIn('<template data-role="match-rule">', pane)
+        # The matrix's descriptive columns, not this table's: no Freq, so a rule stored by
+        # either page names a column the other offers.
+        self.assertIn('<option value="gene">Gene</option>', pane)
+        self.assertIn('<option value="position" data-kind="position">Position</option>', pane)
+        self.assertNotIn('<option value="freq"', pane)
+        length = self.experiment.reference.seq_ids[0]["length"]
+        self.assertIn('<option value="SYN001" data-length="%d">SYN001</option>' % length, pane)
+
+    def test_the_script_loads_after_the_references_script(self):
+        """breseq_references.js owns hiding the rows; the Filter tab hands it a predicate,
+        so it has to be there first."""
+        content = self.content()
+        self.assertLess(content.index("js/breseq_references.js"), content.index("js/breseq_match.js"))
+
+    def test_a_signed_in_readers_rules_are_embedded(self):
+        from mutint_common.preferences import set_preference
+        key = self.KEY % self.experiment.id
+        set_preference(self.user, key, {"rules": [{"column": "gene", "text": "thr"}]})
+        content = self.content()
+        self.assertIn(key, content)
+        self.assertIn('"text": "thr"', content)
 
 
 class ColumnsMenuTestCase(BreseqTablePageTestCase):

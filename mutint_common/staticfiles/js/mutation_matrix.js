@@ -13,10 +13,11 @@
  *     when the sample does not carry the mutation; the Frequency display menu only changes
  *     the table's `freq-<format>` class, and the stylesheet draws the number, a bar, a heat
  *     map or both from that one markup -- no redraw of a thousand rows;
- *   - a row whose mutation is in no *shown* sample, whose type or reference is hidden, or
- *     outside the row set the Show menu has chosen, is filtered out through DataTables' own
- *     search hook rather than by hiding row nodes -- so paging and the row count stay honest,
- *     and so Export's "Showing" is exactly what is on the screen;
+ *   - a row whose mutation is in no *shown* sample, whose type or reference is hidden,
+ *     outside the row set the Show menu has chosen, or failing a rule on the Filter tab, is
+ *     filtered out through DataTables' own search hook rather than by hiding row nodes -- so
+ *     paging and the row count stay honest, and so Export's "Showing" is exactly what is on
+ *     the screen;
  *   - the Columns, Samples, Types and References menus are mutintSelectList in toggle mode,
  *     the genome browser's sample menu four times over, and every change is saved back where
  *     it was read from (the store itself is mutint_preferences.js);
@@ -25,11 +26,14 @@
  *   - on Compare (mutation_matrix/page.html), everything else is decided here as well -- see
  *     "Compare decides in the browser" below;
  *   - the menus sit in a tab strip above the table (on Compare: Treatments, Populations,
- *     Samples, Time Points, Mutations, References, Columns, Frequencies, Sets, Export;
- *     Search has the matrix's own six),
+ *     Samples, Time Points, Mutations, References, Columns, Frequencies, Filter, Sets,
+ *     Export; Search has the matrix's own seven),
  *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
- *     the DataTables toolbar -- length, search, count, pager, in one row -- stays under the
- *     strip on every tab, and the Export buttons are moved into the Export pane;
+ *     the DataTables toolbar -- pager, length, count, in one row -- stays under the strip
+ *     on every tab, and the Export buttons are moved into the Export pane;
+ *   - the Filter tab's rules -- a column and text, or a position range on a reference --
+ *     are mutint_match_rules.js's, applied in the search hook and remembered per experiment
+ *     as `mutation_matrix.filter.<exp>`, the key the per-sample Mutations page shares;
  *   - a collapse bar under the panes, the sidebar's strip laid flat, folds away everything
  *     above it -- the panes, the strip, the page header -- and remembers that it did
  *     (`mutation_matrix.options`); shown unless told otherwise;
@@ -112,6 +116,8 @@
     // Per experiment, like samples: a contig name means something only within one reference
     // genome. Shared with the per-sample Mutations page (breseq_references.js).
     var REFERENCES_KEY_PREFIX = "mutation_matrix.references.";
+    // The Filter tab's rules, per experiment and shared the same way (breseq_match.js).
+    var FILTER_KEY_PREFIX = "mutation_matrix.filter.";
     // Compare's layers over the samples, and its row sets' parameters: per experiment, since a
     // population, a treatment or a time point means something only within one.
     var POPULATIONS_KEY_PREFIX = "mutation_matrix.populations.";
@@ -192,6 +198,7 @@
         function perExperiment(prefix) { return experimentId ? prefix + experimentId : null; }
         var samplesKey = perExperiment(SAMPLES_KEY_PREFIX);
         var referencesKey = perExperiment(REFERENCES_KEY_PREFIX);
+        var filterKey = perExperiment(FILTER_KEY_PREFIX);
         var populationsKey = perExperiment(POPULATIONS_KEY_PREFIX);
         var treatmentsKey = perExperiment(TREATMENTS_KEY_PREFIX);
         var sampleTypesKey = perExperiment(SAMPLE_TYPES_KEY_PREFIX);
@@ -235,6 +242,37 @@
         };
         var hiddenTypes = hiddenSet(prefs.get(TYPES_KEY, null));
         var hiddenReferences = referencesKey ? hiddenSet(prefs.get(referencesKey, null)) : {};
+        /* The Filter tab's rules, read before the first draw like every other choice, and
+           compiled to one test over a row. The adapter reads a row's HTML cells as plain
+           text once each, lazily: the rows are the same objects through every refresh, so
+           the cache lives as long as the page. */
+        var matchRules = window.mutintMatchRules;
+        var matchBox = controls.querySelector('[data-role="match"]');
+        var matchKeys = matchBox ? matchRules.columnsOf(matchBox).map(function (c) { return c.key; }) : [];
+        var matchStored = filterKey ? prefs.get(filterKey, null) : null;
+        var matchTest = matchRules.compile(matchRules.normalize(matchStored, matchKeys));
+        var matchScratch = document.createElement("div");
+        function matchView(row) {
+            if (!row._match) {
+                var plain = {};
+                row._match = {
+                    seqId: row.seq_id_text || "",
+                    position: typeof row.position_sort === "number" ? row.position_sort : null,
+                    text: function (column) {
+                        if (!Object.prototype.hasOwnProperty.call(plain, column)) {
+                            var text = row[column + "_text"];
+                            if (typeof text !== "string") {
+                                matchScratch.innerHTML = row[column] == null ? "" : String(row[column]);
+                                text = matchRules.plainText(matchScratch);
+                            }
+                            plain[column] = text;
+                        }
+                        return plain[column];
+                    }
+                };
+            }
+            return row._match;
+        }
         var stored = prefs.get(FREQUENCY_KEY, null);
         var format = stored && FORMATS[stored.format] ? stored.format : "number";
         table.classList.add("freq-" + format);
@@ -488,6 +526,7 @@
             if (hiddenTypes[rowData.type]) { return false; }
             if (hiddenReferences[rowData.seq_id_text]) { return false; }
             if (shownSet && (rowData.sets || []).indexOf(shownSet) < 0) { return false; }
+            if (!matchTest(matchView(rowData))) { return false; }
             var cells = rowData.samples || [];
             for (var i = 0; i < cells.length; i++) {
                 if (cells[i] && shownSampleIndexes[i]) { return true; }
@@ -517,15 +556,15 @@
             // header follows its link instead.
             ordering: false,
             // One row of controls above the table -- the pager at the left, then length and
-            // the count, and the search box at the far right (the stylesheet pushes it) --
-            // and the table alone in the box that scrolls. The box itself is DataTables'
-            // doing, so that it wraps only the table. `B` is where Buttons makes the two
-            // Export buttons; they are moved into the Export tab's pane below, so the row
-            // never shows them.
-            dom: '<"mutation-matrix-toolbar"plifB>r<"mutation-matrix-scroll"t>',
+            // the count; no search box, the Filter tab's rules being the way to narrow the
+            // rows by what they say -- and the table alone in the box that scrolls. The box
+            // itself is DataTables' doing, so that it wraps only the table. `B` is where
+            // Buttons makes the two Export buttons; they are moved into the Export tab's
+            // pane below, so the row never shows them.
+            dom: '<"mutation-matrix-toolbar"pliB>r<"mutation-matrix-scroll"t>',
             // Export is a menu of two: the rows showing -- after the Show menu, the hidden
-            // samples and types, and the search box, which is what `search: "applied"` means
-            // -- or every row the server produced. Visible columns only, either way. Ancestral
+            // samples and types, and the Filter tab's rules, which is what `search: "applied"`
+            // means -- or every row the server produced. Visible columns only, either way. Ancestral
             // rows the reader asked to see are rows the server produced, so both include them;
             // they are in no row set, so choosing one in the Show menu drops them. Cells are
             // exported through the `export` rendering, which is the displayed one except for
@@ -1293,6 +1332,22 @@
             });
         });
 
+        /* The Filter tab: its rules redraw through the search hook, as the Types and
+           References menus do, so the sets are untouched; the preference and the sentence
+           under the controls follow. */
+        var matchUi = null;
+        if (matchBox) {
+            matchUi = matchRules.mount(matchBox, {
+                rules: (matchStored || {}).rules || [],
+                onChange: function (rules) {
+                    matchTest = matchRules.compile(rules);
+                    if (filterKey) { prefs.set(filterKey, { rules: rules }); }
+                    dt.draw();
+                    pinColumns();
+                }
+            });
+        }
+
         // The first refresh: the sets need the table, and the summary needs the sets.
         if (decidesHere) { refresh(false); }
 
@@ -1314,7 +1369,8 @@
 
         // For a harness or a console: the DataTable behind the container.
         container.mutationMatrix = { table: dt, columns: columnPicker, samples: samplePicker, types: typePicker, references: referencePicker, frequency: frequencyPicker, show: showPicker,
-                                     populations: populationPicker, treatments: treatmentPicker, sampleTypes: sampleTypePicker };
+                                     populations: populationPicker, treatments: treatmentPicker, sampleTypes: sampleTypePicker,
+                                     match: matchUi };
     }
 
     $(function () {

@@ -432,13 +432,13 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 }
 
 /* DataTables' own controls, in one row above the box, outside anything that scrolls: the
-   pager at the left, then the length menu and the count, and the search box pushed to the
-   far right (the Export buttons are made here too and moved into the Export tab's pane).
-   The length menu is
-   given the search box's size rather than the theme's 75px, and both the page's 14px type
-   rather than Bootstrap's 12px for a small input, which read as two sizes side by side. The
-   row gap is the one every wrapping control row has (.btn-row), so a narrow window stacks
-   them with air between. */
+   pager at the left, then the length menu and the count (the Export buttons are made here
+   too and moved into the Export tab's pane). No search box: narrowing the rows by what
+   they say is the Filter tab's, whose rules name a column. The length menu is given a
+   10em width rather than the theme's 75px, and the page's 14px type rather than
+   Bootstrap's 12px for a small input, which read as two sizes side by side. The row gap is
+   the one every wrapping control row has (.btn-row), so a narrow window stacks them with
+   air between. */
 .mutation-matrix-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -447,20 +447,31 @@ table.dataTable.breseq-table thead .sorting_desc:after {
     margin-bottom: 0.5em;
 }
 
-.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_filter {
-    margin-left: auto;
-}
-
-/* "Show [100] entries" and "Search: [ ]" are each a Bootstrap <label> round an input, and a
-   label carries a 5px bottom margin meant for a stacked form: the row centers the label's
-   margin box, so its text sat above the pager's and the count's. No margin, and the label
-   is itself a centered row so the text and the input share a middle. */
-.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_length label,
-.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_filter label {
+/* "Show [100] entries" is a Bootstrap <label> round an input, and a label carries a 5px
+   bottom margin meant for a stacked form: the row centers the label's margin box, so its
+   text sat above the pager's and the count's. No margin, and the label is itself a
+   centered row so the text and the input share a middle. */
+.mutation-matrix div.dataTables_wrapper .mutation-matrix-toolbar div.dataTables_length label {
     display: inline-flex;
     align-items: center;
     gap: 0.4em;
     margin-bottom: 0;
+}
+
+/* The Filter tab's rules, one row each: the column menu, then the value it must hold --
+   a text box with its two options, or a reference menu and two bounds -- and a remove
+   link, wrapping on a narrow window. The checkboxes take the row's gap rather than
+   Bootstrap's 10px left margin, which stacked oddly once the row wrapped. */
+.mutation-matrix-match-rule {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.mutation-matrix-match-rule .checkbox-inline {
+    margin-left: 0;
 }
 
 /* What the collapse bar folded: the strip, its panes, and everything above them on the
@@ -471,8 +482,7 @@ table.dataTable.breseq-table thead .sorting_desc:after {
     display: none !important;
 }
 
-.mutation-matrix div.dataTables_wrapper div.dataTables_length select,
-.mutation-matrix div.dataTables_wrapper div.dataTables_filter input {
+.mutation-matrix div.dataTables_wrapper div.dataTables_length select {
     width: 10em;
     height: 30px;
     font-size: 14px;

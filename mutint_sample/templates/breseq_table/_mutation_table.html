@@ -33,8 +33,9 @@
     <tbody>
     {% for row in rows %}
         {% comment %} `data-seq-id` is what the Mutations page's References menu hides rows
-           by (breseq_references.js); the browser and NCBI pages render it and ignore it. {% endcomment %}
-        <tr class="{{ row.row_class }}{% if row.ancestral %} ancestral_table_row{% endif %}" data-seq-id="{{ row.seq_id_text }}">
+           by (breseq_references.js), and `data-position` what its Filter tab's position rule
+           reads (breseq_match.js); the browser and NCBI pages render both and ignore them. {% endcomment %}
+        <tr class="{{ row.row_class }}{% if row.ancestral %} ancestral_table_row{% endif %}" data-seq-id="{{ row.seq_id_text }}" data-position="{{ row.position_sort|default_if_none:'' }}">
             <td class="breseq-evidence" data-column="type">
                 {% if row.evidence_url %}
                     <a href="{{ row.evidence_url }}"

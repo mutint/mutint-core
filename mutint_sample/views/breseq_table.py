@@ -28,8 +28,9 @@ from mutint_filter.util import filter_mutation_calls
 from mutint_filter.view_filter import get_view_filter
 from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.models import ReferenceSequences, MutationCall
-from mutint_sample.mutation_matrix import (GENE_LIST_COLUMNS, REFERENCES_PREFERENCE_PREFIX,
-                                           Column)
+from mutint_sample.mutation_matrix import (DESCRIPTIVE, FILTER_PREFERENCE_PREFIX,
+                                           GENE_LIST_COLUMNS, REFERENCES_PREFERENCE_PREFIX,
+                                           Column, contig_lengths)
 from mutint_experiment.ancestor import (ancestral_mutation_ids, ancestral_shown,
                                         describe_ancestor)
 from mutint_sample.util import get_ordered_sample_dict
@@ -71,6 +72,7 @@ def breseq_table(request):
                       show_ancestral=shown or is_ancestor)
             if sample is not None else ([], 0))
 
+        reference = _reference(experiment)
         context.update(experiment.experiment_context())
         context.update({
             "population_names": mutint_sample.views.common.get_population_names(experiment.id),
@@ -101,7 +103,12 @@ def breseq_table(request):
             "table_columns": _columns(is_mixed(sample)),
             "gene_list_columns": GENE_LIST_COLUMNS,
             "preferences_url": reverse("preferences"),
-            "reference": _reference(experiment),
+            "reference": reference,
+            # The Filter tab: the matrix's descriptive columns, exactly, so a rule stored
+            # by either page names a column the other offers; and every contig with its
+            # length for the position rule.
+            "match_columns": DESCRIPTIVE,
+            "seq_lengths": contig_lengths(reference),
             "title": "%s mutations" % experiment.name,
             "template_header": "Mutations",
             # Whether to offer the breseq report links. The flag rather than a stat: this renders
@@ -164,7 +171,8 @@ def _embedded_preferences(user, experiment_id):
     if not getattr(user, "is_authenticated", False):
         return {}
     embedded = {}
-    for key in (REFERENCES_PREFERENCE_PREFIX + str(experiment_id), TAB_PREFERENCE_KEY,
+    for key in (REFERENCES_PREFERENCE_PREFIX + str(experiment_id),
+                FILTER_PREFERENCE_PREFIX + str(experiment_id), TAB_PREFERENCE_KEY,
                 COLUMNS_PREFERENCE_KEY):
         stored = get_preference(user, key)
         if stored is not None:

@@ -1,9 +1,10 @@
 {% comment %} The tab strip above a mutation table, in this order: Mutations (the reader's
    filter, key `filter`), Treatments, Populations, Samples, Time Points, Mutations (the
-   mutation types, key `types`), References, Columns, Frequencies, Sets, Export -- and a page
-   passes only the ones it has content for. The two Mutations never share a strip: the
-   per-sample page has the first, and Compare and Search the second. Compare passes most of
-   them (mutation_matrix/page.html), Search the matrix's own six, the per-sample page four.
+   mutation types, key `types`), References, Columns, Frequencies, Filter (rules over the
+   columns, key `match` -- `filter` was taken, above), Sets, Export -- and a page passes only
+   the ones it has content for. The two Mutations never share a strip: the per-sample page
+   has the first, and Compare and Search the second. Compare passes most of them
+   (mutation_matrix/page.html), Search the matrix's own seven, the per-sample page five.
 
    **`single_sample` changes two things at once, and they are one fact.** Where the picker
    chooses exactly one sample -- the per-sample Mutations page, whose whole subject is that
@@ -34,6 +35,7 @@
     {% if references %}<li{% if active == "references" %} class="active"{% endif %}><a data-toggle="tab" data-tab="references" href="#{{ page }}-pane-references">References</a></li>{% endif %}
     {% if columns %}<li{% if active == "columns" %} class="active"{% endif %}><a data-toggle="tab" data-tab="columns" href="#{{ page }}-pane-columns">Columns</a></li>{% endif %}
     {% if frequency %}<li{% if active == "frequency" %} class="active"{% endif %}><a data-toggle="tab" data-tab="frequency" href="#{{ page }}-pane-frequency">Frequencies</a></li>{% endif %}
+    {% if match %}<li{% if active == "match" %} class="active"{% endif %}><a data-toggle="tab" data-tab="match" href="#{{ page }}-pane-match">Filter</a></li>{% endif %}
     {% if sets %}<li{% if active == "sets" %} class="active"{% endif %}><a data-toggle="tab" data-tab="sets" href="#{{ page }}-pane-sets">Sets</a></li>{% endif %}
     {% if export %}<li{% if active == "export" %} class="active"{% endif %}><a data-toggle="tab" data-tab="export" href="#{{ page }}-pane-export">Export</a></li>{% endif %}
 </ul>

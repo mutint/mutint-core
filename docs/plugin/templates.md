@@ -86,22 +86,26 @@ A page rendering the tag links three assets, and a core test checks that they tr
 `css/breseq_table.css`, `js/breseq_table.js` and `js/mutation_matrix.js`. DataTables and
 `mutint_select_list.js` come from `base.html`.
 
-The tag alone draws six tabs above the table -- Samples, Mutations (the mutation types),
+The tag alone draws seven tabs above the table -- Samples, Mutations (the mutation types),
 References, Columns (descriptive columns and cell padding), Frequencies (how a cell shows
-its frequency), Sets when the matrix has row sets, and Export -- from `control_tabs.html`. `mutation_matrix/page.html` renders its own strip and passes
+its frequency), Filter (rules over the descriptive columns: text a column must contain,
+whole-word or case-sensitive on request, or a position range on a reference sequence,
+several rules AND-ed), Sets when the matrix has row sets, and Export -- from
+`control_tabs.html`. `mutation_matrix/page.html` renders its own strip and passes
 `controls=False`; see below for what it adds. The menus let the reader show and
 hide descriptive columns, samples, mutation types and reference sequences. Those choices are remembered for a signed-in reader through
 `mutint_common.preferences` — keys `mutation_matrix.columns`, `mutation_matrix.types`,
 `mutation_matrix.frequency` (how a cell shows its frequency: number, bars, heat map, or both),
 `mutation_matrix.page_length` (Show N entries, All included),
 `mutation_matrix.view` (Normal or Condensed cell padding) and `mutation_matrix.show` (which row
-set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>` and
-`mutation_matrix.references.<experiment_id>` (shared by every matrix page of that experiment,
-the second by the per-sample Mutations page as well) — and in the browser's localStorage
-otherwise. The store's client half is `js/mutint_preferences.js`, loaded from `base.html`, and
+set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>`,
+`mutation_matrix.references.<experiment_id>` and `mutation_matrix.filter.<experiment_id>`
+(shared by every matrix page of that experiment, the last two by the per-sample Mutations
+page as well) — and in the browser's localStorage otherwise. There is no DataTables search
+box; the Filter tab is how a reader narrows the rows by what they say. The store's client half is `js/mutint_preferences.js`, loaded from `base.html`, and
 a page of your own may call `window.mutintPreferences(...)` the same way. The Export tab
-holds Export CSV, a menu of two — the rows showing, after every menu and the search box, or
-every row the server produced; visible columns only, either way — and Export SVG.
+holds Export CSV, a menu of two — the rows showing, after every menu and the Filter tab's
+rules, or every row the server produced; visible columns only, either way — and Export SVG.
 
 **Row sets** are how a page offers a subset of its rows without being a second page. Hand
 `build_matrix` `sets=(RowSet("fixed", "Fixed", mutation_ids), ...)`: each row is annotated

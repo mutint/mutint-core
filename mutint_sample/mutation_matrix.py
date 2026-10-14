@@ -27,6 +27,7 @@ the column; they are edited on the sample's own page.
 from dataclasses import dataclass, field
 from typing import Optional
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse
 
 from mutint_common.util import get_gene_list
@@ -111,6 +112,26 @@ class RowSet:
 #: writes this one key too, so hiding a contig on either page hides it on both.
 REFERENCES_PREFERENCE_PREFIX = "mutation_matrix.references."
 
+#: The Filter tab's rules, per experiment: `<prefix><experiment_id>` -> `{"rules": [...]}`.
+#: Shared with the per-sample Mutations page for the References menu's reason: a rule over
+#: the mutations' columns means the same thing on both tables. The shape of a rule is
+#: mutint_match_rules.js's business; the server stores and embeds it, and reads nothing.
+FILTER_PREFERENCE_PREFIX = "mutation_matrix.filter."
+
+
+def contig_lengths(reference):
+    """`((seq_id, length), ...)` for the stored reference's contigs, in its own order; `()`
+    with no reference.
+
+    What the Filter tab's position rule offers: the contigs to choose between, each length
+    the placeholder of the upper bound. The name and the length only -- the digests beside
+    them in `seq_ids` are identity material and stay out of the page.
+    """
+    if reference is None:
+        return ()
+    return tuple((entry.get("id") or "", int(entry.get("length") or 0))
+                 for entry in (reference.seq_ids or []) if entry.get("id"))
+
 
 @dataclass(frozen=True)
 class ClientSet:
@@ -135,6 +156,10 @@ class MutationMatrix:
     types: tuple = ()
     #: The reference sequences the rows are on, sorted, for the References menu.
     seq_ids: tuple = ()
+    #: Every contig of the experiment's reference with its length, for the Filter tab's
+    #: position rule (`contig_lengths`); empty with no experiment, as on Search, where the
+    #: pane offers `seq_ids` with no lengths instead.
+    seq_lengths: tuple = ()
     #: The `RowSet`s the Show menu offers, each with the count of rows it holds. Empty for a
     #: page with nothing to offer, and then the menu is not rendered.
     sets: tuple = ()
@@ -376,11 +401,18 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
             populations.append((sample.population_id, sample.population))
     curating = curate and experiment is not None
     columns = ([CURATE_COLUMN] if curating else []) + list(DESCRIPTIVE)
+    seq_lengths = ()
+    if experiment is not None:
+        try:
+            seq_lengths = contig_lengths(experiment.reference)
+        except ObjectDoesNotExist:
+            seq_lengths = ()
     return MutationMatrix(columns=columns, samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,
                           types=tuple(sorted({row["type"] for row in rows if row["type"]})),
                           seq_ids=tuple(sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]})),
+                          seq_lengths=seq_lengths,
                           sets=sets, client_sets=tuple(client_sets),
                           populations=tuple(populations),
                           treatments=tuple(sorted({s.treatment for s in samples if s.treatment})),

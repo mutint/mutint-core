@@ -288,6 +288,27 @@ class RowsTestCase(_Fixture):
     def test_the_types_are_the_rows_types_sorted(self):
         self.assertEqual(("AMP", "SNP"), self.matrix().types)
 
+    def test_the_contig_lengths_come_from_the_reference(self):
+        """Every contig with its length, for the Filter tab's position rule -- the stored
+        reference's, not the rows' -- and nothing without an experiment, as on Search."""
+        entry = self.experiment.reference.seq_ids[0]
+        self.assertEqual((("test_ref", entry["length"]),), self.matrix().seq_lengths)
+        self.assertGreater(entry["length"], 0)
+        self.assertEqual((), mutation_matrix.build_matrix(self.calls, self.sample_dict).seq_lengths)
+        self.assertEqual((), mutation_matrix.contig_lengths(None))
+
+    def test_without_lengths_the_rule_offers_the_rows_references_bare(self):
+        """Search's fallback: the contig names the rows are on, with no length to offer."""
+        from django.template import engines
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        SessionMiddleware(lambda r: None).process_request(request)
+        html = engines["django"].from_string(
+            "{% load mutation_matrix %}{% mutation_matrix matrix %}").render(
+            {"matrix": mutation_matrix.build_matrix(self.calls, self.sample_dict)}, request)
+        self.assertIn('<option value="test_ref">test_ref</option>', html)
+        self.assertNotIn("data-length=", html)
+
     def test_the_references_are_the_rows_seq_ids_sorted(self):
         """For the References menu: the contigs the rows are on, an empty name left out."""
         self.assertEqual(("test_ref",), self.matrix().seq_ids)
@@ -452,11 +473,11 @@ class PartialTestCase(_Fixture):
         self.assertIn('class="nav nav-tabs"', html)
         self.assertIn('data-control-tabs="mutation_matrix"', html)
         keys = ["populations", "samples", "time", "types", "references", "columns",
-                "frequency", "export"]
+                "frequency", "match", "export"]
         self.assertEqual(keys, re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
         for key, label in (("time", "Time Points"), ("types", "Mutations"),
                            ("references", "References"), ("columns", "Columns"),
-                           ("frequency", "Frequencies")):
+                           ("frequency", "Frequencies"), ("match", "Filter")):
             self.assertIn('data-tab="%s" href="#mutation_matrix-pane-%s">%s</a>' % (key, key, label), html)
         for key in keys:
             self.assertIn('id="mutation_matrix-pane-%s"' % key, html)
@@ -502,10 +523,36 @@ class PartialTestCase(_Fixture):
             self.assertIn('data-role="%s"' % role, frequency)
         # The ignored-genes box is not offered, so the script applies no gene list here.
         self.assertNotIn('data-role="filter-genes"', html)
+        # The Filter tab: rules the script draws from a template naming every descriptive
+        # column -- Position as the one position column -- and the experiment's contigs
+        # with their lengths for the position rule.
+        match = pane("match")
+        self.assertIn('data-role="match"', match)
+        self.assertIn('data-role="match-rules"', match)
+        self.assertIn('<template data-role="match-rule">', match)
+        for role in ("match-column", "match-text", "match-whole", "match-case", "match-seq-id",
+                     "match-min", "match-max", "match-add", "match-clear", "match-remove",
+                     "match-summary"):
+            self.assertIn('data-role="%s"' % role, match)
+        self.assertEqual([c.key for c in mutation_matrix.DESCRIPTIVE],
+                         re.findall(r'<option value="(\w+)"(?: data-kind="position")?>', match))
+        self.assertIn('<option value="position" data-kind="position">Position</option>', match)
+        self.assertEqual(1, match.count("data-kind="))
+        length = self.experiment.reference.seq_ids[0]["length"]
+        self.assertIn('<option value="test_ref" data-length="%d">test_ref</option>' % length, match)
+        self.assertIn("Whole word", match)
+        self.assertIn("Match case", match)
         # Empty until the script moves DataTables' Export buttons into it.
         self.assertIn('data-role="export"', pane("export"))
         # The page rendered the panes; the tag did not render them again.
         self.assertEqual(1, html.count('data-role="columns"'))
+        self.assertEqual(1, html.count('data-role="match"'))
+
+    def test_the_curate_column_is_no_rule(self):
+        """It holds a menu, not data."""
+        html = self._render(matrix=self.matrix(curate=True))
+        self.assertNotIn('<option value="curate"', html)
+        self.assertIn('<option value="type">', html)
 
     def test_the_tag_alone_renders_the_matrix_tabs(self):
         """Search renders the tag with no page around it and still gets a strip -- the
@@ -517,10 +564,12 @@ class PartialTestCase(_Fixture):
         html = engines["django"].from_string(
             "{% load mutation_matrix %}{% mutation_matrix matrix %}").render(
             {"matrix": self.matrix()}, request)
-        self.assertEqual(["samples", "types", "references", "columns", "frequency", "export"],
+        self.assertEqual(["samples", "types", "references", "columns", "frequency", "match",
+                          "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
         self.assertIn('<li class="active"><a data-toggle="tab" data-tab="samples"', html)
         self.assertNotIn("pane-filter", html)
+        self.assertIn('id="mutation_matrix-pane-match"', html)
         self.assertNotIn('data-role="view-filter"', html)
         self.assertNotIn('data-role="color-by"', html)
         self.assertIn('data-mutation-matrix-controls="mutation-matrix"', html)
@@ -554,7 +603,7 @@ class PartialTestCase(_Fixture):
         self.sample_dict = {s.id: s for s in samples}
         html = self._render()
         self.assertEqual(["treatments", "populations", "samples", "time", "types",
-                          "references", "columns", "frequency", "export"],
+                          "references", "columns", "frequency", "match", "export"],
                          re.findall(r'data-toggle="tab" data-tab="(\w+)"', html))
         # Treatments leads now, and the Color samples by menu offers it.
         self.assertIn('class="tab-pane active" id="mutation_matrix-pane-treatments"', html)
@@ -587,6 +636,14 @@ class PartialTestCase(_Fixture):
         self.assertIn('data-experiment-id="%d"' % self.experiment.id, html)
         for asset in ("css/breseq_table.css", "js/breseq_table.js", "js/mutation_matrix.js"):
             self.assertIn(asset, html)
+
+    def test_a_signed_in_readers_rules_are_embedded(self):
+        from mutint_common.preferences import set_preference
+        key = mutation_matrix.FILTER_PREFERENCE_PREFIX + str(self.experiment.id)
+        set_preference(self.user, key, {"rules": [{"column": "gene", "text": "thr"}]})
+        html = self._render(user=self.user)
+        self.assertIn(key, html)
+        self.assertIn('"text": "thr"', html)
 
     def test_preferences_are_embedded_only_for_a_signed_in_reader(self):
         from mutint_common.preferences import set_preference

@@ -1,0 +1,42 @@
+{% comment %} The Filter tab's rules: which column to match and what it must hold. One
+   partial for the two tables that offer it -- the mutation matrix (Compare, Search) and the
+   per-sample Mutations page -- so the two cannot drift, and so a rule stored by either page
+   names a column the other offers (`columns` is the matrix's descriptive list on both).
+
+   The rows themselves are drawn by mutint_match_rules.js, one clone of the <template> per
+   rule, from the remembered `mutation_matrix.filter.<experiment>`; the server renders the
+   template and knows nothing of what is stored. A text column takes a value, matched as a
+   substring of the cell's plain text, with Whole word and Match case as options; Position
+   takes a reference sequence and two bounds, either of them open. Takes `columns`
+   (Column objects; Curate is skipped, being no data), `seq_lengths` (`(id, length)` pairs
+   from the stored reference, the length being the upper bound's placeholder) and `seq_ids`
+   (the names alone, offered where there are no lengths -- Search has no experiment). {% endcomment %}
+<div class="mutation-matrix-match" data-role="match">
+    <div data-role="match-rules"></div>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-default" data-role="match-add">Add rule</button>
+        <button type="button" class="btn btn-default" data-role="match-clear">Clear</button>
+    </div>
+    <template data-role="match-rule">
+        <div class="form-inline mutation-matrix-match-rule">
+            <select class="form-control" data-role="match-column" aria-label="Column" title="The column the rule reads">
+                {% for column in columns %}{% if column.key != "curate" %}<option value="{{ column.key }}"{% if column.key == "position" %} data-kind="position"{% endif %}>{{ column.title }}</option>{% endif %}{% endfor %}
+            </select>
+            <span class="view-filter-field" data-role="match-text-field">contains
+                <input type="text" class="form-control" size="14" data-role="match-text" aria-label="Text to match"/>
+                <label class="checkbox-inline" title="Match only where the text is not part of a longer word: mut matches mut, not mutT"><input type="checkbox" data-role="match-whole"/> Whole word</label>
+                <label class="checkbox-inline" title="Upper and lower case must match"><input type="checkbox" data-role="match-case"/> Match case</label>
+            </span>
+            <span class="view-filter-field" data-role="match-position-fields" hidden>
+                on <select class="form-control" data-role="match-seq-id" aria-label="Reference sequence">
+                    <option value="">any reference</option>
+                    {% for id, length in seq_lengths %}<option value="{{ id }}" data-length="{{ length }}">{{ id }}</option>{% empty %}{% for id in seq_ids %}<option value="{{ id }}">{{ id }}</option>{% endfor %}{% endfor %}
+                </select>
+                from <input type="text" class="form-control" size="9" data-role="match-min" placeholder="1" aria-label="Lowest position"/>
+                to <input type="text" class="form-control" size="9" data-role="match-max" aria-label="Highest position"/>
+            </span>
+            <button type="button" class="btn btn-link btn-sm" data-role="match-remove">remove</button>
+        </div>
+    </template>
+</div>
+<div class="mutation-matrix-summary" data-role="match-summary"></div>

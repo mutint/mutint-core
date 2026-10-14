@@ -91,6 +91,8 @@
     <script src="{% static "js/mutint_preferences.js" %}?v={{ asset_version }}"></script>
     <!-- The tab strip above a mutation table: restores and remembers the tab, through the store above. -->
     <script src="{% static "js/mutint_control_tabs.js" %}?v={{ asset_version }}"></script>
+    <!-- The Filter tab's rules over a mutation table's columns, for the two tables that offer it. -->
+    <script src="{% static "js/mutint_match_rules.js" %}?v={{ asset_version }}"></script>
 
     {% block scripts_and_style %}{% endblock %}
 </head>

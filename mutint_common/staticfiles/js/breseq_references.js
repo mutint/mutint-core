@@ -16,6 +16,11 @@
  * on every page that renders a breseq row, three of which have no menu. This needs a
  * configured container, and a whole table to re-stripe.
  *
+ * It is the one owner of which rows show. The Filter tab (breseq_match.js) hides rows too,
+ * and hands its test in through `addPredicate` rather than setting `hidden` itself: two
+ * scripts each hiding rows would re-stripe against each other's result, and each would
+ * need an empty row of its own.
+ *
  * `hidden` is the plain attribute, as breseq_table.js uses, not Bootstrap's .hidden.
  */
 (function () {
@@ -38,6 +43,8 @@
             embedded: window.mutintPreferences.embedded("breseq-references-prefs")
         });
         var hidden = key ? window.mutintPreferences.hiddenSet(prefs.get(key, null)) : {};
+        // Other reasons a row is hidden, each a `fn(tr) -> bool` (true keeps the row).
+        var predicates = [];
 
         // The row that says nothing is showing, made here rather than in the shared table
         // partial, which three other pages render without this menu.
@@ -53,7 +60,8 @@
         function apply() {
             var shown = 0;
             rows.forEach(function (tr) {
-                var on = !hidden[tr.getAttribute("data-seq-id")];
+                var on = !hidden[tr.getAttribute("data-seq-id")] &&
+                         predicates.every(function (keep) { return keep(tr); });
                 tr.hidden = !on;
                 if (!on) { return; }
                 tr.classList.remove(STRIPES[0], STRIPES[1]);
@@ -89,7 +97,10 @@
             });
         });
         apply();
-        container.breseqReferences = { references: picker, apply: apply };
+        container.breseqReferences = {
+            references: picker, apply: apply,
+            addPredicate: function (keep) { predicates.push(keep); apply(); }
+        };
     }
 
     document.addEventListener("DOMContentLoaded", function () {

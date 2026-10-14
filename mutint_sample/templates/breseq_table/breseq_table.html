@@ -18,6 +18,9 @@
     {% comment %} So is the Columns menu, which hides a column by setting `hidden` on every
        cell carrying its `data-column`. {% endcomment %}
     <script src="{% static 'js/breseq_columns.js' %}?v={{ asset_version }}"></script>
+    {% comment %} And the Filter tab, which hands breseq_references.js a predicate over the
+       rows -- that script owns hiding and re-striping them, so this one loads after it. {% endcomment %}
+    <script src="{% static 'js/breseq_match.js' %}?v={{ asset_version }}"></script>
 {% endblock %}
 {% block header %}{% include "experiment_header.html" with page=template_header %}{% endblock %}
 
@@ -40,13 +43,14 @@
     {% if selected_sample %}
         {% include "sample/_inputs.html" with sample=selected_sample %}
     {% endif %}
-    {% comment %} The same strip as Compare's, minus Export: Sample for the picker, Filter
-       for the reader's own filter, Rows for the References menu, Display for the Columns menu. `single_sample` puts the
+    {% comment %} The same strip as Compare's, minus Export: Sample for the picker, Mutations
+       for the reader's own filter, References, Columns, and Filter for rules over the
+       columns (remembered under the matrix's key, like References). `single_sample` puts the
        picker first and names it in the singular -- this page shows one sample and the tab
        that chooses it decides what everything else is about. The chosen tab is remembered as
        `breseq_table.tab`, embedded beside the References choice in the json_script below.
        {% endcomment %}
-    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True references=selected_sample columns=selected_sample %}
+    {% include "control_tabs.html" with page="breseq_table" active=selected_sample|yesno:"filter,samples" prefs_id="breseq-references-prefs" authenticated=user.is_authenticated preferences_url=preferences_url filter=selected_sample samples=True single_sample=True references=selected_sample columns=selected_sample match=selected_sample %}
     <div class="tab-content">
     {% if selected_sample %}
     <div class="tab-pane active" id="breseq_table-pane-filter">
@@ -142,7 +146,7 @@
                   data-experiment-id="{{ experiment_id }}"
                   data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
                   data-preferences-url="{{ preferences_url }}"
-                  data-empty-message="No mutations on the references shown.">
+                  data-empty-message="No mutations on the references shown that match the filter rules.">
                 {% csrf_token %}
                 {% include "mutation_matrix/_reference_menu.html" with seq_ids=seq_ids %}
                 {% if user.is_authenticated %}{{ embedded_preferences|json_script:"breseq-references-prefs" }}{% endif %}
@@ -159,6 +163,21 @@
                   data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
                   data-preferences-url="{{ preferences_url }}">
                 {% include "mutation_matrix/_columns_menu.html" with columns=table_columns %}
+            </span>
+        </div>
+    </div>
+    <div class="tab-pane" id="breseq_table-pane-match">
+        <div class="mutation-matrix-controls">
+            {% comment %} Rules over the columns: the matrix's Filter tab, remembering the
+               matrix's key for this experiment (`mutation_matrix.filter.<exp>`, embedded in
+               the json_script above), so a rule typed on Compare is in force here and back.
+               The columns are the matrix's own list rather than this table's, for that
+               reason: a rule has to name a column both pages offer. {% endcomment %}
+            <span data-breseq-match
+                  data-experiment-id="{{ experiment_id }}"
+                  data-authenticated="{% if user.is_authenticated %}1{% else %}0{% endif %}"
+                  data-preferences-url="{{ preferences_url }}">
+                {% include "mutation_matrix/_match_rules.html" with columns=match_columns seq_lengths=seq_lengths seq_ids=seq_ids %}
             </span>
         </div>
     </div>
