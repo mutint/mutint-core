@@ -169,6 +169,12 @@ class Sample(SupplementalDataMixin):
     #: second exists: a sample can have its reads and not its report, because a `.gd` drop
     #: carries no report at all and a hand-assembled `data/` folder need not either.
     report_stored = models.BooleanField(default=False)
+    #: Whether a *second* report is in the store, at `store.sample_report_dir(pk, "check")`:
+    #: the output of a curation check, breseq re-run with the sample's curated mutations
+    #: applied (mutint-breseq). A flag of its own because the two reports have separate
+    #: lives -- a check can be run on a sample whose import brought no report at all -- and
+    #: because the storage kinds measure from rows, never from a directory listing.
+    check_report_stored = models.BooleanField(default=False)
 
     # Shortcuts up the chain, for the call sites that want one field from it and not the
     # rows in between. They were `experiments`, `ale_id` and `time_point`.
@@ -454,8 +460,16 @@ class Mutation(SupplementalDataMixin):
         return u"%d %s" % (self.start_position,
                            self.sequence_change)
 
-    def to_gd_line(self, frequency=None) -> str:
+    def to_gd_line(self, frequency=None, entry_id=None) -> str:
         """Reconstruct this mutation's GenomeDiff line (for gdtools APPLY).
+
+        **`entry_id` replaces the record's own id**, and a file of several lines wants it to.
+        The record keeps the id its mutation had in whichever file wrote it first, and a
+        sample's export draws rows that arrived from several files -- so two of its lines can
+        say `1`, and breseq's reader refuses a file whose ids are not unique
+        (*ID for this entry is not unique*). `export_gd_text` passes the row's own pk, which
+        is unique in the experiment and names the row the line came from; a line asked for
+        on its own keeps the record's id, so a fresh import still reads back as it was.
 
         Prefers the verbatim record; falls back to a best-effort line built from the scalar
         columns for legacy rows that have none (that fallback is not guaranteed
@@ -481,6 +495,8 @@ class Mutation(SupplementalDataMixin):
             data = dict(record)
             record_type = data.pop('type', self.mutation_type)
             record_id = data.pop('id', self.id)
+            if entry_id is not None:
+                record_id = entry_id
             parent_ids = data.pop('parent_ids', None)
             _override_frequency(data, frequency)
             return str(Record(record_type, record_id, parent_ids=parent_ids, **data))

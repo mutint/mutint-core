@@ -860,6 +860,34 @@ class ExportHeaderTestCase(GdImportTestCase):
         self.assertNotIn("0.42", first)
         self.assertIn("frequency=0.42", second.splitlines()[-1])
 
+    def test_an_export_numbers_its_lines_by_mutation_so_no_two_share_an_id(self):
+        """The record keeps the id its mutation had in the file that wrote it first, and a
+        sample's export draws rows that arrived from several files -- so two lines could both
+        say `1`, and `gdtools APPLY` refuses a file whose ids are not unique. Found by
+        applying a real export."""
+        header = "#=GENOME_DIFF\t1.0\n#=REFSEQ\tREL606\n"
+        self._ensure_reference()
+        gd_import.import_gd_files(
+            [SimpleUploadedFile("1-100-1-1.gd",
+                                (header + "SNP\t1\t.\tREL606\t100\tA\n").encode())],
+            project_name="gd project", experiment_name="gd exp", owner_name="tester")
+        # The second sample's own line 1 is a different mutation, and its line 2 is the first
+        # sample's mutation -- whose stored record says 1.
+        gd_import.import_gd_files(
+            [SimpleUploadedFile("1-200-1-1.gd",
+                                (header + "SNP\t1\t.\tREL606\t300\tT\n"
+                                 "SNP\t2\t.\tREL606\t100\tA\n").encode())],
+            project_name="gd project", experiment_name="gd exp", owner_name="tester")
+
+        sample = Sample.objects.get(time_point=200)
+        lines = [line.split("\t") for line in gd_import.export_gd_text(sample).splitlines()
+                 if not line.startswith("#")]
+        ids = [line[1] for line in lines]
+        self.assertEqual(2, len(ids))
+        self.assertEqual(len(set(ids)), len(ids), ids)
+        expected = {str(call.mutation_id) for call in MutationCall.objects.filter(sample=sample)}
+        self.assertEqual(expected, set(ids))
+
     def test_a_call_with_no_frequency_in_the_record_gets_one_when_it_is_not_clonal(self):
         self._import(CLEAN_GD)
         call = MutationCall.objects.select_related("mutation").first()

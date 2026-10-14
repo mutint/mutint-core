@@ -128,6 +128,17 @@ class PageTestCase(EditorTestCase):
         self.assertEqual(1, len(found), "expected exactly one active tab, got %r" % found)
         return found[0]
 
+    def test_the_add_page_preselects_the_sample_it_was_opened_from(self):
+        rendered = self.get(ADD, sample_id=self.sample_b.id).content.decode()
+        self.assertIn('<li data-value="%d" class="active">' % self.sample_b.id, rendered)
+        self.assertNotIn('<li data-value="%d" class="active">' % self.sample_a.id, rendered)
+        self.assertIn('<span id="target-count">1</span>', rendered)
+
+    def test_the_add_page_preselects_nothing_by_default(self):
+        rendered = self.get(ADD).content.decode()
+        self.assertNotIn('class="active"><a href="#">', rendered)
+        self.assertIn('<span id="target-count">0</span>', rendered)
+
     # --- the copy page --------------------------------------------------------------------
 
     def test_the_copy_page_offers_the_other_samples_as_targets(self):

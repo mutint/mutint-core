@@ -129,3 +129,47 @@ class ClearTestCase(StoredSampleTestCase):
         out = StringIO()
         call_command("coverage", str(self.experiment.id), "--dry-run", stdout=out)
         self.assertNotIn("s1", out.getvalue())
+
+
+class CheckReportStorageTestCase(StoredSampleTestCase):
+    """The report kind counts and clears a curation check's tree beside the import's."""
+
+    def _write_check(self):
+        root = store.sample_report_dir(self.sample.id, "check")
+        os.makedirs(root)
+        with open(os.path.join(root, "index.html"), "wb") as handle:
+            handle.write(b"c" * 70)
+        self.sample.check_report_stored = True
+        self.sample.save(update_fields=["check_report_stored"])
+
+    def test_the_check_report_is_counted_with_the_imports(self):
+        before = storage.measure_report(self.experiment)
+        self._write_check()
+        self.assertEqual(before + 70, storage.measure_report(self.experiment))
+
+    def test_clearing_the_report_clears_both_trees_and_both_flags(self):
+        self._write_check()
+        storage.clear_report(self.experiment)
+        self.sample.refresh_from_db()
+        self.assertFalse(self.sample.report_stored)
+        self.assertFalse(self.sample.check_report_stored)
+        self.assertFalse(os.path.exists(store.sample_report_dir(self.sample.id)))
+        self.assertFalse(os.path.exists(store.sample_report_dir(self.sample.id, "check")))
+
+    def test_store_report_puts_a_tree_under_the_kind_and_sets_its_flag(self):
+        source = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, source, True)
+        with open(os.path.join(source, "index.html"), "w") as handle:
+            handle.write("checked")
+        self.sample.check_report_stored = False
+
+        self.assertTrue(storage.store_report(self.sample, source, "check"))
+
+        self.assertTrue(self.sample.check_report_stored)
+        with open(os.path.join(store.sample_report_dir(self.sample.id, "check"),
+                               "index.html")) as handle:
+            self.assertEqual("checked", handle.read())
+
+    def test_store_report_answers_false_for_a_missing_source(self):
+        self.assertFalse(storage.store_report(self.sample, "/no/such/dir", "check"))
+        self.assertFalse(self.sample.check_report_stored)

@@ -1,0 +1,12 @@
+{% comment %} The Curate strip, from mutint_common.curate_tab_registry: core's five tabs and
+   any page a plugin registered. `?experiment_id=` is carried on every link: there is no
+   session state holding the current experiment, and a link that dropped it lands on the
+   "pick an experiment first" page. {% endcomment %}
+{% if tabs %}
+<ul class="nav nav-tabs" style="margin-bottom: 16px;">
+    {% for tab in tabs %}
+        <li{% if tab.key == active %} class="active"{% endif %}>
+            <a href="{{ tab.url }}">{{ tab.label }}</a></li>
+    {% endfor %}
+</ul>
+{% endif %}

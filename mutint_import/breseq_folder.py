@@ -13,8 +13,9 @@ Per sample::
     <sample>/data/reference.bam         copied into the store
     <sample>/data/reference.bam.bai     copied into the store
 
-``output/`` is not consulted. A stock breseq run writes its .gd there, but the trees being
-imported are curated ones that keep only ``data/``.
+``output/`` -- breseq's HTML report -- is kept whole under the sample when it is there
+(`mutint_sample.storage.store_report`) and never parsed; a tree that keeps only ``data/``
+imports without one.
 
 Every sample in an experiment must agree on the reference. The first one establishes it;
 a later mismatch rejects that sample and the batch continues, matching how the bare-.gd
@@ -38,6 +39,7 @@ from mutint_import import tasks
 from mutint_jobs import jobs
 from mutint_import import reference as reference_io
 from mutint_import.breseq_summary import read_breseq_summary
+from mutint_sample import storage
 from mutint_sample.models import Sample
 from mutint_import import reference_store
 from mutint_sample import inputs
@@ -324,8 +326,11 @@ def _import_one_sample(sample_dir, sample_name, context):
     seq_experiment.bam_stored = True
     updated = ["bam_stored"]
 
-    if _store_report(sample_dir, seq_experiment.id):
-        seq_experiment.report_stored = True
+    # Best-effort and deliberately after the files that matter: a sample keeps its mutations
+    # whether or not its report stores. `store_report` sets the flag without saving; the
+    # write below carries it.
+    if storage.store_report(seq_experiment,
+                            os.path.join(sample_dir, REPORT_RELATIVE_PATH)):
         updated.append("report_stored")
 
     # data/summary.json is optional -- a drop without it still imports, just with zeroed
@@ -395,22 +400,6 @@ def _validated_sequences(gff3_path, fasta_path):
     return fasta_sequences
 
 
-def _store_report(sample_dir, sample_id):
-    """Copy breseq's `output/` into the sample's store. Returns whether one was kept.
-
-    **Best-effort, and deliberately last.** A sample keeps its mutations whether or not its
-    report stores -- the same posture coverage takes, and for the same reason: the mutations
-    are the data and the report is a way of looking at them. A folder assembled by hand from a
-    `data/` directory has no `output/` at all and imports perfectly without one.
-
-    Copied whole rather than file by file. What breseq writes in there is breseq's business:
-    0.50 writes one self-contained `evidence.html` with the whole evidence tree zipped inside
-    it, older releases write an `evidence/` directory of pages and PNGs, and a rule here naming
-    either would quietly drop the other.
-    """
-    source = os.path.join(sample_dir, REPORT_RELATIVE_PATH)
-    if not os.path.isdir(source):
-        return False
 
     destination = store.sample_report_dir(sample_id)
     try:

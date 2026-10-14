@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}breseq report — {{ sample_label }}{% endblock %}
+{% block title %}{{ report_label }} — {{ sample_label }}{% endblock %}
 
-{% block header %}{% with "breseq report for "|add:sample_label as page %}{% include "experiment_header.html" with page=page %}{% endwith %}{% endblock %}
+{% block header %}{% with report_label|add:" for "|add:sample_label as page %}{% include "experiment_header.html" with page=page %}{% endwith %}{% endblock %}
 
 {% block content %}
 <div id="report-bar" class="report-bar">
@@ -13,6 +13,11 @@
             <a href="?page={{ page.file }}">{{ page.label }}</a>
         {% endif %}
         {% if not forloop.last %}&nbsp;|&nbsp;{% endif %}
+    {% endfor %}
+    {% comment %} The sample's other report, where it has one: a curation check's beside
+       the import's and back. Each is its own tree with its own token prefix. {% endcomment %}
+    {% for other in other_reports %}
+        &nbsp;|&nbsp;<a href="{{ other.url }}">{{ other.label }}</a>
     {% endfor %}
     <span class="report-bar-right">
         <a href="/mutations/breseq?experiment_id={{ experiment_id }}&amp;sample_id={{ sample.id }}">&laquo;

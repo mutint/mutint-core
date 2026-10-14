@@ -4,6 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 _sequence_rename_hooks = []
+_sample_import_hooks = []
 _plugin_urlpatterns = []
 _export_handlers = {}
 _export_labels = {}
@@ -109,6 +110,41 @@ def run_sequence_rename_hooks(experiment_id, renames):
         except Exception:  # noqa: BLE001
             logger.exception("sequence rename hook %r failed for experiment %s",
                              getattr(fn, "__name__", fn), experiment_id)
+
+
+def register_sample_import_hook(fn):
+    """Register fn(sample, document) for when a sample's GenomeDiff has been imported.
+
+    Called once per sample, after its calls are written and before the import's own
+    post-processing, with the parsed `genomediff.GenomeDiff` the sample came from. Core
+    reads two things out of that document -- the mutations, and the MC evidence it keeps as
+    `UncalledRegion` -- and throws the rest away. A plugin that wants anything else breseq
+    wrote beside the mutations (mutint-breseq keeps the evidence no mutation accounts for)
+    reads it here, from the same parse, rather than re-opening a file core may not have kept.
+
+    Every `.gd`-shaped import reaches it: a dropped `.gd`, a breseq folder, and a run the
+    breseq plugin made. The VCF path hands over a document with no evidence, which is the
+    honest answer for a file that has none.
+
+    Distinct from `register_post_experiment_hook`, which is per experiment, carries no
+    document, and runs once per drop rather than once per sample.
+    """
+    _sample_import_hooks.append(fn)
+
+
+def run_sample_import_hooks(sample, document):
+    """Fire every sample-import hook, isolating failures.
+
+    The sample's calls are already written by the time this runs, so a plugin raising must
+    not fail the import -- what it leaves behind is a plugin's rows missing, which is
+    recoverable by re-importing, where a failed import over committed mutations is not.
+    """
+    for fn in _sample_import_hooks:
+        try:
+            fn(sample, document)
+        except Exception:  # noqa: BLE001
+            logger.exception("sample import hook %r failed for sample %s",
+                             getattr(fn, "__name__", fn), getattr(sample, "pk", sample))
 
 
 def register_plugin_urlpatterns(patterns):

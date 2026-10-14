@@ -95,7 +95,7 @@ things cause it:
    of the command currently running it, so it kills itself and exits 144. If you want to clear
    a genuinely orphaned run, match on the Python process (`pkill -f "django test"`) instead.
 
-**Baseline: 3014 run, 0 failures** standalone; **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
+**Baseline: 3246 run, 0 failures** standalone (2026-10-14); **3601** assembled (mutint-fastqc included), measured with `PYTHONPATH`
 pointed at the root checkouts (`mutint/`'s copies are submodule clones of the last commit).
 The suite is green; treat *any* failure as yours. **Re-measure rather than adjusting these by
 what you think you added**: every figure here that was arithmetic instead of a run was later
@@ -1444,6 +1444,36 @@ the per-field error display. `select_list.html` is shared too: both pages pick a
 Change's "Change in" are the same control over different lists.
 Add and Change differ only in what they post. A field added to
 `genomediff.schema.TYPE_SPECIFIC_FIELDS` should need one edit, not two.
+
+### The Curate strip is a registry, and a sample's GenomeDiff reaches plugins
+
+Two seams exist for mutint-breseq's Evidence tab -- the evidence breseq could not assign to a
+mutation, kept per sample and resolved by curating -- and neither is about breseq.
+
+**`mutint_common/curate_tab_registry.py` is the fourteenth registry**, `import_tab_registry`'s
+page-of-its-own form exactly: `register_curate_tab(key, label, url_name=...)` puts a tab in
+Curate's strip, reversed at render time with `?experiment_id=` appended, skipped when the
+route will not reverse, in `INSTALLED_APPS` order with History `last=True`. Core's five are
+registered from `mutint_curate`'s `ready()`, `_toolbar.html` is now one line that renders
+`{% curate_tabs active %}`, and a plugin page renders the same tag to wear the strip. There is
+deliberately no visibility flag: every tab of this strip is about editing an experiment's
+mutations, the Curate sidebar entry already carries `requires_edit`, and a plugin's tab
+refuses its own writes as core's do.
+
+**`register_sample_import_hook(fn)`** in `plugin_registry` calls `fn(sample, document)` at the
+end of `_database_gd_mutations`, with the parsed `GenomeDiff`, once per sample on every
+`.gd`-shaped import -- a drop, a breseq folder, a run the plugin made. Core keeps the mutations
+and the MC regions out of a `.gd` and nothing else, and a plugin that wants the rest reads it
+here, from the one parse, rather than re-opening a file core may not have kept (a bare `.gd`
+drop stores no file). Failures are isolated per hook, the rename hook's posture: the calls
+are committed by then, and a plugin's rows missing is recoverable by re-importing where a
+failed import over committed mutations is not.
+
+**And `add/apply` answers `mutation_id`**, on the all-skipped path too (looked up by the six
+`MUTATION_KEY_FIELDS`), so a page that adds a mutation through core's form can link something
+of its own to the row it minted -- the Evidence tab resolves a row against it -- without a
+second lookup or a second opinion about what identifies a mutation. `?sample_id=` on the Add
+page preselects that one target, the way `/curate/edit`'s `_initial_selection` does.
 
 ### breseq's own field guards, and where we are stricter
 
@@ -2989,6 +3019,13 @@ nothing is still the parser's to judge.
 `/mutations/browse?mutation_call_id=<pk>`, linked from every mutation-table frequency cell whose
 sample has `bam_stored`.
 
+**It also opens at a bare position**: `?sample_id=<pk>&locus=<contig>:<start>-<end>` is the
+third spelling, for a place no mutation names -- what a link from evidence breseq could not
+assign to a mutation needs (mutint-breseq's Evidence tab). The page then draws no row at the
+top, the Samples menu has no `*`, and the contig is checked against the reference's own
+`seq_ids` so a mistyped one is a 404 here rather than igv quietly showing nothing.
+`locus.parse_locus` reads the spelling igv takes, thousands separators included.
+
 Two things are easy to get wrong and fail *silently* — an empty track, no error:
 
 - **Every track needs an explicit `format:`.** The routes end `/bam`, `/fasta`, `/gff3` and
@@ -4032,7 +4069,7 @@ ancestor already, and the ancestor's row carries a red *ancestor* badge by its s
 
 ### Import types are pluggable
 
-`mutint_common/import_registry.py` is one of thirteen registries in `mutint_common/` -- alongside
+`mutint_common/import_registry.py` is one of fourteen registries in `mutint_common/` -- alongside
 `import_tab_registry`, `plugin_registry`, `nav_registry`, `about_registry`, `context_registry`,
 `example_registry`, `panel_registry`, `annotator_registry`, `storage_registry`,
 `rebuild_registry`, `read_step_registry` and `sample_link_registry`. An app registers what it can
@@ -4062,9 +4099,13 @@ anything uploads — so a plugin gets both of those by registering, with no edit
 be thrown away, a `clear(experiment)`. Core registers two from `mutint_sample/storage.py` --
 **alignments** (`aligned.bam`, its index and `coverage.bw`, one unit because the BigWig is
 derived from the BAM and cannot be rebuilt without it) and the breseq **report** tree -- both
-clearable. `sample.gd` and the reference are not kinds: the mutations are the data. No plugin
-registers one yet -- mutint-breseq was going to, for failed runs' reads, and instead made a
-failed run clean up the way a successful one does, so there was nothing left to count.
+clearable. `sample.gd` and the reference are not kinds: the mutations are the data. The
+**report** kind covers both reports a sample may carry -- the import's at `report/` and a
+curation check's at `report-check/` (`store.sample_report_dir(pk, "check")`, flagged by
+`Sample.check_report_stored`) -- and `mutint_sample.storage.store_report` is the one writer
+of either, used by the importer and by mutint-breseq alike. Two plugins register kinds of
+their own: mutint-fastqc its reports, and mutint-breseq the **read files** it keeps under
+each sample (`store.sample_reads_dir`) so a curation check can analyse them again.
 
 **Sizes are stored rows, and that is the whole reason it is a registry and not a walk.**
 `StorageUsage` (in `mutint_common`, beside `DerivedDataState`, because the kinds are any
@@ -4163,6 +4204,19 @@ whether or not its report stores, and a `.gd` drop has no report at all.
 a suffix -- breseq chooses the filenames and they differ between releases. It matters on the
 *client* as much as the server, because the Import data page decides what to upload from these
 declarations before a byte is sent.
+
+**A sample may carry a second report, at a `check/` path segment.** mutint-breseq's curation
+check re-runs breseq with the sample's curated mutations applied, and its HTML report is worth
+reading beside the import's rather than instead of it. So `store.sample_report_dir` takes a
+`kind` (`store.REPORT_KINDS`, which is `("check",)`), the routes are
+`^report/<id>/(?:(?P<kind>check)/)?...`, and the viewer, `_contained_html`, `report_file` and
+its top-level redirect all carry the segment. **A segment, not a query**, for the reason the
+token is one: the report's own relative links resolve against the prefix and a query would be
+gone on the first `breseq_icon.png`. The gate is the kind's own flag
+(`Sample.check_report_stored`, `REPORT_FLAGS`), since a check can be run on a sample whose
+import brought no report at all; the bar cross-links the other report where both exist. The
+sandbox is the same string in the same two places -- nothing about the posture changed, which
+is the point of serving it here rather than from the plugin.
 
 ### Reading VCF, and why it is not a second kind of mutation
 
@@ -4268,7 +4322,11 @@ matching one:
 - **`Mutation.to_gd_line(frequency=)`** puts the call's own frequency on the line. The record
   is shared and holds whichever file wrote it first, so a mixed sample's line carried another
   sample's number. An equal value keeps the record's spelling, so a fresh import still
-  exports the line it was read from.
+  exports the line it was read from -- **up to the id**: `export_gd_text` passes
+  `entry_id=mutation.pk`, because the record's own id is the id its mutation had in the file
+  that wrote it first, two rows of one sample can therefore both say `1`, and breseq's reader
+  refuses a file whose ids are not unique. Found by `gdtools APPLY`ing a real export, which
+  is the check `breseq --apply-check` runs on every curation check.
 - **The VCF export upserts one `##SAMPLE=<ID=<column>,sample=,population=,time_point=,
   sample_type=>` line** for the sample's column -- the spec's own per-column metadata and the
   line `vcf_import.metadata_for` reads first. Rewritten in place when the file already has

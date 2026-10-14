@@ -76,12 +76,12 @@
                 <div class="btn-group" id="target-menu">
                     <button type="button" class="btn btn-default dropdown-toggle"
                             data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        Add to (<span id="target-count">0</span> of {{ targets|length }})
+                        Add to (<span id="target-count">{{ selected_ids|length }}</span> of {{ targets|length }})
                         <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu mutint-menu mutint-select-list" id="me-targets">
                         {% for sample in targets %}
-                            <li data-value="{{ sample.id }}"><a href="#">{{ sample.label }}</a></li>
+                            <li data-value="{{ sample.id }}"{% if sample.id in selected_ids %} class="active"{% endif %}><a href="#">{{ sample.label }}</a></li>
                         {% endfor %}
                     </ul>
                 </div>

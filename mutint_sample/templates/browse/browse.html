@@ -29,7 +29,10 @@
            breseq_table.js delegates from the document, so the Show button on a wide
            deletion's gene list keeps working with nothing to re-bind. {% endcomment %}
         <div id="mutation-row">
-            {% include "breseq_table/_mutation_table.html" %}
+            {% comment %} Empty when the page was opened at a locus rather than a mutation
+               (`?locus=`): there is no row to describe, and an empty table would say
+               "no mutations" about a place nobody claimed had one. {% endcomment %}
+            {% if rows %}{% include "breseq_table/_mutation_table.html" %}{% endif %}
         </div>
 
         {% if not reference %}

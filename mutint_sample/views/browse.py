@@ -24,7 +24,7 @@ from django.utils.http import urlencode
 from mutint_common.util import get_user_context
 from mutint_experiment.permissions import can_view_project
 from mutint_sample.breseq_report import build_rows, is_mixed
-from mutint_sample.locus import LOCUS_BUFFER_BASES, mutation_extent
+from mutint_sample.locus import LOCUS_BUFFER_BASES, format_locus, mutation_extent, parse_locus
 from mutint_sample.tracks import MUTATION_TRACK_ID, database_tracks
 from mutint_sample.models import (ReferenceSequences, Mutation, MutationCall,
                               Sample)
@@ -54,6 +54,19 @@ def _resolve(request):
     which would render a row about a locus the reads cannot contain.
     """
     call_id = request.GET.get("mutation_call_id")
+    if request.GET.get("locus") and not call_id and not request.GET.get("mutation_id"):
+        # The third spelling: a *position* in a sample rather than a mutation in one. What
+        # a link from evidence no mutation accounts for needs -- there is no row to name,
+        # only where in the reads to look. Mutation and call are both None, and the page
+        # draws no row at the top.
+        try:
+            sample = (Sample.objects
+                      .select_related(paths.to_experiment())
+                      .get(pk=request.GET.get("sample_id")))
+        except (Sample.DoesNotExist, ValueError, TypeError):
+            raise Http404("No such sample.")
+        return sample, None, None
+
     if call_id:
         try:
             call = (MutationCall.objects
@@ -132,10 +145,26 @@ def browse_mutation(request):
             loader.get_template("403.html").render(get_user_context(request.user), request),
             status=403)
 
+    if mutation is None:
+        # `?locus=`: a position, checked against the reference's own contig names so a
+        # mistyped one is a 404 here rather than igv quietly showing nothing.
+        contig, start, end = _requested_locus(request, experiment)
+        locus = format_locus(contig, start, end)
+        title = "%s %s:%d" % (experiment.name, contig, start)
+        rows = []
+    else:
+        contig = mutation.seq_id
+        locus = _locus(mutation)
+        title = "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.start_position)
+        # The mutation is described by breseq's own table rather than by a sentence of this
+        # page's own, so the row reads exactly as it does on the Samples page. One row, and
+        # no evidence link -- its destination is the page you are already on.
+        rows = build_rows([_row_call(sample, mutation, call)], refseq_url=_ncbi_url())
+
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
     context.update({
-        "title": "%s %s:%s" % (experiment.name, mutation.seq_id, mutation.start_position),
+        "title": title,
         "template_header": "Alignments",
         "mutation": mutation,
         "mutation_call": call,
@@ -146,16 +175,12 @@ def browse_mutation(request):
         # For the way back: the per-sample page, on the sample this browser is showing,
         # rather than the cross-experiment comparison it used to land on.
         "sample_id": sample.id,
-        # The mutation is described by breseq's own table rather than by a sentence of this
-        # page's own, so the row reads exactly as it does on the Samples page. One row, and
-        # no evidence link -- its destination is the page you are already on.
-        "rows": build_rows([_row_call(sample, mutation, call)],
-                           refseq_url=_ncbi_url()),
+        "rows": rows,
         # Which samples call it, for the menu's `*` -- and read back by the switch endpoint,
         # so the flags mean the same thing after a click as they did on load.
         "calling": sorted(_samples_calling(mutation)),
         "is_mixed": is_mixed(sample),
-        "locus": _locus(mutation),
+        "locus": locus,
         # Each state the template renders is decided here rather than in the template, so the
         # reasons stay next to the data that determines them.
         "has_alignment": bool(sample.bam_stored),
@@ -164,7 +189,7 @@ def browse_mutation(request):
         # this existed igv was handed `tracks: []` and the only thing the database
         # contributed was the locus string -- so the page drew the reads and the reference
         # but not the calls the reads were opened to look at.
-        "db_tracks": database_tracks(experiment.id, mutation.seq_id),
+        "db_tracks": database_tracks(experiment.id, contig),
         # Named here rather than written out in the template, so the click handler and the
         # track config cannot come to disagree about which track is the clickable one.
         "mutations_track_id": MUTATION_TRACK_ID,
@@ -337,6 +362,25 @@ def _sample_tracks(experiment, mutation, current_id, show_mutant=False):
                 experiment.id, include_ancestor=True).filter(bam_stored=True)]
 
 
+def _requested_locus(request, experiment):
+    """`(contig, start, end)` from `?locus=`, refused unless the contig is the reference's.
+
+    A 404 rather than a 400: the address names a place that does not exist in this
+    experiment, which is the same answer an unknown mutation gets.
+    """
+    try:
+        contig, start, end = parse_locus(request.GET.get("locus"))
+    except ValueError as bad:
+        raise Http404(str(bad))
+    try:
+        known = {entry["id"] for entry in experiment.reference.seq_ids}
+    except ReferenceSequences.DoesNotExist:
+        known = set()
+    if contig not in known:
+        raise Http404("%s is not a sequence of this experiment's reference." % contig)
+    return contig, start, end
+
+
 def _samples_calling(mutation):
     """Ids of the samples this mutation is recorded in.
 
@@ -347,6 +391,8 @@ def _samples_calling(mutation):
     mutation was looked for in that sample and found absent, and one with `present` null
     records nothing either way.
     """
+    if mutation is None:
+        return set()
     return set(MutationCall.objects
                .filter(mutation=mutation, present=True)
                .values_list("sample_id", flat=True))

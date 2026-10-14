@@ -54,6 +54,19 @@ class AddTestCase(EditorTestCase):
         self.assertEqual("NC_000913", mutation.seq_id)
         self.assertIn(mutation.id, self.call_ids(self.sample_a))
 
+    def test_the_response_names_the_mutation(self):
+        # What a caller linking something to "the mutation this added" needs -- a plugin
+        # resolving evidence against it, say -- without a second lookup.
+        body = self.snp().json()
+        self.assertEqual(Mutation.objects.get(start_position=5000).pk, body["mutation_id"])
+
+    def test_the_mutation_is_named_even_when_every_sample_already_had_it(self):
+        first = self.snp().json()
+        again = self.snp().json()
+        self.assertEqual(0, again["added"])
+        self.assertIsNone(again["edit_set_id"])
+        self.assertEqual(first["mutation_id"], again["mutation_id"])
+
     def test_it_is_scoped_to_the_experiment(self):
         self.snp()
         self.assertEqual(self.experiment, Mutation.objects.get(start_position=5000).experiment)

@@ -448,3 +448,47 @@ class SwitchingMutationTestCase(TestCase):
             "/mutations/browse", {"mutation_call_id": self.call.id}).content.decode()
         self.assertIn(MUTATION_TRACK_ID, html)
         self.assertIn("trackclick", html)
+
+
+class BrowseAtLocusTestCase(BrowseMutationTestCase):
+    """`?sample_id=&locus=` opens the browser at a position no mutation names."""
+
+    def _locus(self, locus):
+        return self.client.get("/mutations/browse",
+                               {"sample_id": self.sample.id, "locus": locus})
+
+    def test_it_renders_at_the_locus_with_no_mutation_row(self):
+        contig = self.call.mutation.seq_id
+        response = self._locus("%s:1000-1200" % contig)
+        self.assertEqual(200, response.status_code)
+        html = response.content.decode()
+        # `escapejs` writes the hyphen as \u002D.
+        self.assertIn('locus: "%s:800\\u002D1400"' % contig, html)
+        self.assertIn("/mutations/alignments/%d/bam" % self.sample.id, html)
+        self.assertNotIn("breseq-table", html)
+
+    def test_an_end_may_be_omitted(self):
+        contig = self.call.mutation.seq_id
+        self.assertEqual(200, self._locus("%s:1000" % contig).status_code)
+
+    def test_a_contig_the_reference_does_not_have_is_a_404(self):
+        self.assertEqual(404, self._locus("nowhere:1000-1200").status_code)
+
+    def test_a_malformed_locus_is_a_404(self):
+        self.assertEqual(404, self._locus("not a locus").status_code)
+
+    def test_an_unknown_sample_is_a_404(self):
+        response = self.client.get("/mutations/browse", {"sample_id": 9999, "locus": "x:1"})
+        self.assertEqual(404, response.status_code)
+
+
+class ParseLocusTestCase(TestCase):
+
+    def test_the_spellings(self):
+        from mutint_sample.locus import parse_locus
+        self.assertEqual(("REL606", 10, 20), parse_locus("REL606:10-20"))
+        self.assertEqual(("REL606", 10, 10), parse_locus("REL606:10"))
+        self.assertEqual(("a:b", 1000, 2000), parse_locus("a:b:1,000-2,000"))
+        for bad in ("", "REL606", ":10-20", "REL606:0-5", "REL606:20-10", "REL606:x"):
+            with self.assertRaises(ValueError, msg=bad):
+                parse_locus(bad)

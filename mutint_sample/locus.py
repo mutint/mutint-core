@@ -49,3 +49,29 @@ def buffered_extent(mutation, contig_length=None, buffer_bases=LOCUS_BUFFER_BASE
         high = min(high, contig_length)
         low = min(low, contig_length)
     return low, high
+
+
+def parse_locus(text):
+    """`"contig:start-end"` -> `(contig, start, end)`, 1-based inclusive, or `ValueError`.
+
+    The spelling igv itself takes, with the thousands separators it tolerates stripped. The
+    end may be omitted (`contig:start`) and is then the start. Nothing here knows the
+    reference; a caller checks the contig against it.
+    """
+    contig, sep, span = (text or "").strip().rpartition(":")
+    if not sep or not contig:
+        raise ValueError("a locus is spelled contig:start-end")
+    first, _, last = span.replace(",", "").partition("-")
+    try:
+        start = int(first)
+        end = int(last) if last else start
+    except ValueError:
+        raise ValueError("a locus is spelled contig:start-end") from None
+    if start < 1 or end < start:
+        raise ValueError("a locus runs from 1 and ends at or after it starts")
+    return contig, start, end
+
+
+def format_locus(contig, start, end, buffer_bases=LOCUS_BUFFER_BASES):
+    """`contig:start-end` widened by `buffer_bases`, as the browser is handed it."""
+    return "%s:%d-%d" % (contig, max(1, start - buffer_bases), end + buffer_bases)

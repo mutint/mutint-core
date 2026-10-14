@@ -422,7 +422,7 @@ class ReportStoredTestCase(TestCase):
     def test_a_report_that_cannot_be_stored_does_not_fail_the_sample(self):
         # Best-effort, the posture coverage takes: the mutations are the data.
         root = self._drop()
-        with mock.patch("mutint_import.breseq_folder.shutil.copytree",
+        with mock.patch("mutint_sample.storage.shutil.copytree",
                         side_effect=OSError("disk full")):
             summary = breseq_folder.import_samples_into(self.experiment, root)
 

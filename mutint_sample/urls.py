@@ -19,13 +19,15 @@ urlpatterns = [
     # client-named path because breseq's report links to whatever it wrote, and it is
     # contained by a realpath check rather than by a narrower pattern. Everything it serves is
     # sandboxed by a response header as well as by the frame -- see views/report.py.
-    re_path(r'^report/(?P<sample_id>\d+)/$', mutint_sample.views.report.report,
-            name='sample_report'),
+    # An optional kind segment names a second report of the sample -- `check/`, a curation
+    # check's -- and sits before the token for the reason the token sits before the file.
+    re_path(r'^report/(?P<sample_id>\d+)/(?:(?P<kind>check)/)?$',
+            mutint_sample.views.report.report, name='sample_report'),
     # The token is a path *segment* and must sit before the filename, so the report's own
     # relative links keep it: `breseq_icon.png` beside `index.html` resolves to the same
     # prefix. It is what authorises the request -- a sandboxed frame has an opaque origin and
     # never gets the session cookie. See views/report.py.
-    re_path(r'^report/(?P<sample_id>\d+)/files/(?P<token>[^/]+)/(?P<path>.*)$',
+    re_path(r'^report/(?P<sample_id>\d+)/(?:(?P<kind>check)/)?files/(?P<token>[^/]+)/(?P<path>.*)$',
             mutint_sample.views.report.report_file, name='sample_report_file'),
 
     # igv.js at one mutation call's position, linked from the mutation table's cells.

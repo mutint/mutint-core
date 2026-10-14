@@ -363,3 +363,76 @@ class LinkBarTestCase(TestCase):
         response = self._page()
         self.assertEqual(200, response.status_code)
         self.assertNotIn("/mutations/report/", response.content.decode())
+
+
+class CheckReportTestCase(ReportTestCase):
+    """A second report per sample -- a curation check's -- at a `check/` path segment.
+
+    The segment rather than a query for the reason the token is one: the report's own
+    relative links resolve against the prefix. The flag that gates it is its own, since a
+    check can be run on a sample whose import brought no report at all.
+    """
+
+    def _write_check_report(self):
+        root = store.ensure_dir(store.sample_report_dir(self.sample.pk, "check"))
+        for name, body in (("index.html", "<html><body>check index</body></html>"),
+                           ("summary.html", "<html><body>check summary</body></html>"),
+                           ("evidence.html", "<html><body>check evidence</body></html>")):
+            with open(os.path.join(root, name), "w") as handle:
+                handle.write(body)
+        self.sample.check_report_stored = True
+        self.sample.save(update_fields=["check_report_stored"])
+
+    def test_without_the_flag_the_check_viewer_is_a_404(self):
+        # The import's report is there and flagged; the check's is not.
+        self.assertEqual(
+            404, self.client.get("/mutations/report/%d/check/" % self.sample.pk).status_code)
+
+    def test_the_viewer_frames_the_check_report_under_its_own_prefix(self):
+        self._write_check_report()
+        response = self.client.get("/mutations/report/%d/check/" % self.sample.pk)
+        rendered = response.content.decode()
+        self.assertEqual(200, response.status_code)
+        self.assertIn('src="/mutations/report/%d/check/files/' % self.sample.pk, rendered)
+        self.assertIn("curation check report", rendered)
+
+    def test_the_file_route_serves_the_check_tree_not_the_imports(self):
+        self._write_check_report()
+        token = report_views.sign_sample(self.sample.pk)
+        response = self.client.get(
+            "/mutations/report/%d/check/files/%s/index.html" % (self.sample.pk, token))
+        self.assertEqual(200, response.status_code)
+        self.assertIn(b"check index", b"".join(response.streaming_content))
+        self.assertEqual("sandbox %s" % report_views.SANDBOX_FLAGS,
+                         response["Content-Security-Policy"])
+
+    def test_a_top_level_navigation_goes_back_into_the_check_viewer(self):
+        self._write_check_report()
+        token = report_views.sign_sample(self.sample.pk)
+        response = self.client.get(
+            "/mutations/report/%d/check/files/%s/summary.html" % (self.sample.pk, token),
+            HTTP_SEC_FETCH_DEST="document")
+        self.assertEqual(302, response.status_code)
+        self.assertEqual("/mutations/report/%d/check/?page=summary.html" % self.sample.pk,
+                         response["Location"])
+
+    def test_the_two_reports_cross_link_where_both_exist(self):
+        self._write_check_report()
+        on_import = self.client.get("/mutations/report/%d/" % self.sample.pk).content.decode()
+        on_check = self.client.get(
+            "/mutations/report/%d/check/" % self.sample.pk).content.decode()
+        self.assertIn('href="/mutations/report/%d/check/">curation check report'
+                      % self.sample.pk, on_import)
+        self.assertIn('href="/mutations/report/%d/">breseq report' % self.sample.pk, on_check)
+
+    def test_a_check_without_an_import_report_links_nowhere(self):
+        self._write_check_report()
+        self.sample.report_stored = False
+        self.sample.save(update_fields=["report_stored"])
+        rendered = self.client.get(
+            "/mutations/report/%d/check/" % self.sample.pk).content.decode()
+        self.assertNotIn('>breseq report</a>', rendered)
+
+    def test_the_store_refuses_a_kind_it_does_not_know(self):
+        with self.assertRaises(ValueError):
+            store.sample_report_dir(self.sample.pk, "other")

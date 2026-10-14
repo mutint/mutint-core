@@ -105,6 +105,7 @@ nav:
           - nav_registry: reference/nav_registry.md
           - import_registry: reference/import_registry.md
           - import_tab_registry: reference/import_tab_registry.md
+          - curate_tab_registry: reference/curate_tab_registry.md
           - about_registry: reference/about_registry.md
           - example_registry: reference/example_registry.md
           - context_registry: reference/context_registry.md

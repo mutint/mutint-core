@@ -18,6 +18,7 @@ holds core's five import types. A plugin is just another caller.
 | [`nav_registry`](../reference/nav_registry.md) | a label and a URL | draws a sidebar entry |
 | [`import_registry`](../reference/import_registry.md) | a file type and a handler | routes drops of that type to it |
 | [`import_tab_registry`](../reference/import_tab_registry.md) | a label and an import type, or a page of your own | draws a tab on the Import page |
+| [`curate_tab_registry`](../reference/curate_tab_registry.md) | a label and a page of your own | draws a tab on the Curate page, beside Edit, Delete, Add, Copy and History |
 | [`about_registry`](../reference/about_registry.md) | a template | gives your component a section on `/about` |
 | [`example_registry`](../reference/example_registry.md) | a directory of data | loads it with `./mutint load_example` |
 | [`context_registry`](../reference/context_registry.md) | a callable | adds to the experiment views' context |

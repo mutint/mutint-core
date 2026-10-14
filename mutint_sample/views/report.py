@@ -129,7 +129,25 @@ REPORT_PAGES = (
 )
 
 
-def _contained_html(sample, page):
+#: Which flag says a report of each kind is in the store. None is the import's own report;
+#: `check` is a curation check's (mutint-breseq), kept beside it at `report-check/`.
+REPORT_FLAGS = {None: "report_stored", "check": "check_report_stored"}
+
+#: What the bar calls each report, where a sample has both and the bar crosslinks them.
+REPORT_LABELS = {None: "breseq report", "check": "curation check report"}
+
+
+def _prefix(sample_id, kind):
+    """`/mutations/report/<id>/` or `/mutations/report/<id>/<kind>/`.
+
+    The kind is a path *segment* for the reason the token is: the report's own relative
+    links resolve against the prefix, and a query string would be gone on the first hop.
+    """
+    base = "/mutations/report/%d/" % int(sample_id)
+    return base + ("%s/" % kind if kind else "")
+
+
+def _contained_html(sample, page, kind=None):
     """`page` if it names an `.html` inside this sample's report, else None.
 
     The viewer takes any page of the report, not only the three the bar offers, because the
@@ -139,7 +157,7 @@ def _contained_html(sample, page):
     """
     if not page or not page.lower().endswith(".html"):
         return None
-    root = os.path.realpath(store.sample_report_dir(sample.pk))
+    root = os.path.realpath(store.sample_report_dir(sample.pk, kind))
     candidate = os.path.realpath(os.path.join(root, page))
     if not candidate.startswith(root + os.sep) or not os.path.isfile(candidate):
         return None
@@ -155,8 +173,8 @@ def _is_top_level_navigation(request):
     return request.headers.get("Sec-Fetch-Dest", "").lower() == "document"
 
 
-def _sample_or_404(request, sample_id):
-    """The sample, if this reader may see it and it has a report.
+def _sample_or_404(request, sample_id, kind=None):
+    """The sample, if this reader may see it and it has a report of this kind.
 
     404 rather than 403 for a sample somebody may not read, so the route cannot be used to
     find out which sample ids exist -- the posture `job_cancel` and the VCF export take.
@@ -165,7 +183,7 @@ def _sample_or_404(request, sample_id):
               .filter(pk=sample_id)
               .select_related("population__experiment__project")
               .first())
-    if sample is None or not sample.report_stored:
+    if sample is None or not getattr(sample, REPORT_FLAGS[kind]):
         raise Http404("No breseq report for that sample.")
 
     experiment = getattr(getattr(sample, "population", None), "experiment", None)
@@ -174,14 +192,18 @@ def _sample_or_404(request, sample_id):
     return sample
 
 
-def report(request, sample_id):
-    """The viewer: MutInt's chrome, a link bar, and the report in a sandboxed frame."""
-    sample = _sample_or_404(request, sample_id)
+def report(request, sample_id, kind=None):
+    """The viewer: MutInt's chrome, a link bar, and the report in a sandboxed frame.
+
+    `kind` is the second report a sample may carry (`store.REPORT_KINDS`), from the URL's own
+    segment; None is the one its import brought.
+    """
+    sample = _sample_or_404(request, sample_id, kind)
     experiment = sample.population.experiment
 
     # Any .html the report holds, contained to its directory; anything else is the index. The
     # bar marks only its own three, so an evidence page shows with nothing bold.
-    page = _contained_html(sample, request.GET.get("page")) or "index.html"
+    page = _contained_html(sample, request.GET.get("page"), kind) or "index.html"
 
     context = get_user_context(request.user)
     context.update(experiment.experiment_context())
@@ -190,22 +212,28 @@ def report(request, sample_id):
         "experiment_id": experiment.id,
         "sample": sample,
         "sample_label": sample.label,
+        "kind": kind,
+        "report_label": REPORT_LABELS[kind],
         "pages": [{"file": name, "label": label, "current": name == page}
-                  for name, label in REPORT_PAGES if _has(sample, name)],
+                  for name, label in REPORT_PAGES if _has(sample, name, kind)],
+        # The sample's other reports, for the bar to cross-link: the import's from a
+        # check's and back, each only where it exists.
+        "other_reports": [{"url": _prefix(sample.pk, other), "label": REPORT_LABELS[other]}
+                          for other in REPORT_FLAGS
+                          if other != kind and getattr(sample, REPORT_FLAGS[other])],
         "page": page,
         # The token sits in a path *segment*, so the report's own relative links keep it:
         # `breseq_icon.png` beside `index.html` resolves to the same prefix. Putting it in a
         # query string would be lost the moment the report linked to anything.
-        "frame_url": "/mutations/report/%d/files/%s/%s" % (
-            sample.pk, sign_sample(sample.pk), page),
+        "frame_url": "%sfiles/%s/%s" % (_prefix(sample.pk, kind), sign_sample(sample.pk), page),
         # What "open in new tab" opens: this viewer, on this page, rather than the bare file.
-        "viewer_url": "/mutations/report/%d/?page=%s" % (sample.pk, quote(page)),
+        "viewer_url": "%s?page=%s" % (_prefix(sample.pk, kind), quote(page)),
         "sandbox_flags": SANDBOX_FLAGS,
     })
     return render(request, "report/report.html", context)
 
 
-def report_file(request, sample_id, token, path):
+def report_file(request, sample_id, token, path, kind=None):
     """One file out of the report, contained and sandboxed.
 
     **Authorised by the signed token, not by the session**, for the reason `sign_sample`
@@ -222,11 +250,11 @@ def report_file(request, sample_id, token, path):
         # Same answer for a forged token, an expired one, and one minted for another sample.
         raise Http404("No breseq report for that sample.")
 
-    sample = (Sample.objects.filter(pk=sample_id, report_stored=True).first())
+    sample = (Sample.objects.filter(pk=sample_id, **{REPORT_FLAGS[kind]: True}).first())
     if sample is None:
         raise Http404("No breseq report for that sample.")
 
-    root = os.path.realpath(store.sample_report_dir(sample.pk))
+    root = os.path.realpath(store.sample_report_dir(sample.pk, kind))
     candidate = os.path.realpath(os.path.join(root, path))
     if candidate != root and not candidate.startswith(root + os.sep):
         raise Http404("No such file.")
@@ -236,13 +264,13 @@ def report_file(request, sample_id, token, path):
     # docstring. The fragment, which names the evidence page, survives the redirect in the
     # browser. Only .html: a click on `output.gd` is a navigation too, and it wants the file.
     if candidate.lower().endswith(".html") and _is_top_level_navigation(request):
-        return HttpResponseRedirect("/mutations/report/%d/?page=%s" % (
-            sample.pk, quote(os.path.relpath(candidate, root))))
+        return HttpResponseRedirect("%s?page=%s" % (
+            _prefix(sample.pk, kind), quote(os.path.relpath(candidate, root))))
 
     return serve_file(request, candidate, os.path.basename(candidate),
                       headers=REPORT_HEADERS)
 
 
-def _has(sample, name):
-    return os.path.isfile(os.path.join(store.sample_report_dir(sample.pk), name))
+def _has(sample, name, kind=None):
+    return os.path.isfile(os.path.join(store.sample_report_dir(sample.pk, kind), name))
 

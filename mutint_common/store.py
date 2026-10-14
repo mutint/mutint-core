@@ -67,7 +67,13 @@ def sample_path(sample_id, filename):
     return os.path.join(sample_dir(sample_id), filename)
 
 
-def sample_report_dir(sample_id):
+#: The kinds of report a sample may carry beside the one its import brought. `check` is the
+#: report of a curation check -- breseq re-run with the sample's curated mutations applied
+#: (mutint-breseq) -- kept apart from the import's because both are worth reading.
+REPORT_KINDS = ("check",)
+
+
+def sample_report_dir(sample_id, kind=None):
     """breseq's own HTML report for a sample, as it wrote it.
 
     A *tree* rather than an artifact, so it has no entry in `sample_path`'s whitelist -- what
@@ -77,8 +83,28 @@ def sample_report_dir(sample_id):
     Inside the sample's own directory deliberately: `purge_deleted` already rmtrees
     `sample_dir`, so this is reaped along with the BAM and the `.gd` and there is no second
     lifecycle to forget about.
+
+    `kind` names a second report of the sample -- one of `REPORT_KINDS` -- at `report-<kind>`
+    beside the import's own. Checked against that tuple rather than a pattern, because a kind
+    is a thing core serves and names, not a free string.
     """
-    return os.path.join(sample_dir(sample_id), "report")
+    if kind is None:
+        return os.path.join(sample_dir(sample_id), "report")
+    if kind not in REPORT_KINDS:
+        raise ValueError("unknown report kind: %r" % (kind,))
+    return os.path.join(sample_dir(sample_id), "report-%s" % kind)
+
+
+def sample_reads_dir(sample_id):
+    """The read files a sample was analysed from, where a component keeps them.
+
+    Core stores no reads itself -- a breseq folder arrives without them -- but a component
+    that ran the analysis may keep what it was handed, so the sample can be analysed again:
+    mutint-breseq keeps them for its curation check. A tree, like the report, for the same
+    reasons: the filenames are the uploader's, and the sample's own directory is what
+    `purge_deleted` reaps.
+    """
+    return os.path.join(sample_dir(sample_id), "reads")
 
 
 def staging_dir(upload_session_id):

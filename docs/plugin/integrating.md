@@ -331,3 +331,36 @@ leave every stored index off by some amount. A single-contig experiment is unaff
 is exactly what makes it the kind of bug that ships.
 
 Failures are isolated per hook, so yours raising cannot undo a rename that is already true.
+
+## A tab on the Curate page
+
+```python
+from mutint_common.curate_tab_registry import register_curate_tab
+
+register_curate_tab("evidence", "Evidence", url_name="breseq_evidence")
+```
+
+Curate is one strip of tabs -- Edit, Delete, Add, Copy, History -- and a page of yours that
+belongs to the same task sits in it with `register_curate_tab`: the tab links to your route
+with `?experiment_id=` appended, and your page renders `{% load curate_tabs %}{% curate_tabs
+"evidence" %}` to wear the strip. A `url_name` that will not reverse is skipped. History is
+`last`, so a plugin's tab lands before it. See `mutint-breseq`'s Evidence tab.
+
+## When a sample's GenomeDiff has been imported
+
+```python
+from mutint_common.plugin_registry import register_sample_import_hook
+
+register_sample_import_hook(keep_unassigned_evidence)
+```
+
+Called as `fn(sample, document)` once per sample, after its mutation calls are written, with
+the parsed `genomediff.GenomeDiff` the sample came from. Core keeps the mutations and the MC
+evidence out of a `.gd` and nothing else; if you want anything else breseq wrote beside the
+mutations -- `mutint-breseq` keeps the evidence no mutation accounts for -- read it here, from
+the same parse, rather than re-opening a file core may not have kept. A dropped `.gd`, a
+breseq folder and a run the breseq plugin made all reach it; the VCF path hands over a
+document with no evidence.
+
+Failures are isolated per hook: the sample's calls are already committed, and your rows
+missing is recoverable by re-importing where a failed import over committed mutations is not.

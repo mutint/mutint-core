@@ -29,6 +29,7 @@ from mutint_experiment.models import (
     Population,
     Project,
 )
+from mutint_common.plugin_registry import run_sample_import_hooks
 from mutint_import import annotation
 from mutint_import import metadata as sample_metadata
 from mutint_import import sniff
@@ -716,6 +717,9 @@ def _database_gd_mutations(seq_experiment, document, experiment=None):
 
     MutationCall.objects.bulk_create(mutation_calls)
     _database_uncalled_regions(seq_experiment, document)
+    # Whatever else a component wants out of this document -- the evidence no mutation
+    # accounts for, say -- it reads here, from the one parse, after the calls are written.
+    run_sample_import_hooks(seq_experiment, document)
     return len(mutation_calls)
 
 
@@ -768,7 +772,10 @@ def export_gd_text(seq_experiment):
                 .select_related("mutation")
                 .order_by("mutation__start_position"))
     for mutation_call in calls:
-        gd_line = mutation_call.mutation.to_gd_line(frequency=mutation_call.frequency)
+        # The row's pk as the line's id: unique in the file, which breseq's reader insists
+        # on, and the stored record's own id is not -- see `Mutation.to_gd_line`.
+        gd_line = mutation_call.mutation.to_gd_line(frequency=mutation_call.frequency,
+                                                    entry_id=mutation_call.mutation_id)
         if gd_line:
             lines.append(gd_line)
     return "\n".join(lines) + "\n"

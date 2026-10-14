@@ -18,6 +18,18 @@ class CurateConfig(AppConfig):
         register_nav_item('Curate', url='/curate/',
                           section=EXPERIMENT_SECTION, requires_edit=True)
 
+        # The strip those pages share, in the order it reads. Registered rather than written
+        # into the toolbar template so a plugin can put a page of its own in it -- History is
+        # `last` so it stays the tail whatever is registered after this app. Literal paths,
+        # as the nav entry's is: `^$` is the Edit tab, and reversing adds nothing.
+        from mutint_common.curate_tab_registry import register_curate_tab
+
+        register_curate_tab("edit", "Edit", url="/curate/")
+        register_curate_tab("delete", "Delete", url="/curate/delete")
+        register_curate_tab("add", "Add", url="/curate/add")
+        register_curate_tab("copy", "Copy", url="/curate/copy")
+        register_curate_tab("history", "History", url="/curate/history", last=True)
+
         # Deliberately no register_about_section() here. About entries are keyed by the
         # *component directory* an app belongs to, so a second registration from mutint-core
         # would replace mutint_common's entry for the whole checkout rather than adding one.

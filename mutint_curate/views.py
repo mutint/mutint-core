@@ -416,6 +416,9 @@ def mutation_add(request):
         context = _page_context(request, experiment)
         context.update({
             "targets": list(sample_dict.values()),
+            # `?sample_id=` opens with that one sample ticked -- a link from one sample's
+            # page means "add it here" -- and anything else opens with none, as before.
+            "selected_ids": _preselected_target(request, sample_dict),
             "schema": validation.form_schema(),
             # The contigs a position can be on. Offered as a dropdown when they are known,
             # because a mistyped contig name is refused by an exact match with no near-miss
@@ -460,6 +463,15 @@ def mutation_edit(request):
         return render(request, "curate/edit.html", context)
     except _NotForYou as refusal:
         return refusal.response
+
+
+def _preselected_target(request, sample_dict):
+    """The one sample `?sample_id=` names, as a list for `selected_ids`, or none."""
+    try:
+        chosen = int(request.GET.get(REQUEST_SAMPLE_ID))
+    except (TypeError, ValueError):
+        return []
+    return [chosen] if chosen in sample_dict else []
 
 
 def _initial_selection(request, carrying):
@@ -805,13 +817,22 @@ def mutation_add_apply(request):
         # The promoted annotation columns are not part of the identity, so the row `apply_edits`
         # minted has them null until this runs -- and would render through the unannotated
         # fallback. Same call `gd_import` makes after its own get_or_create.
-        record_builder.apply_annotation(edit_set.edits.first().mutation, annotated_record)
+        mutation = edit_set.edits.first().mutation
+        record_builder.apply_annotation(mutation, annotated_record)
         history.rebuild_after_edit(experiment)
+    else:
+        # Every chosen sample already carried it, so nothing was written -- but the row the
+        # form described exists, and a caller linking something to "the mutation this added"
+        # (a plugin resolving evidence against it) wants its id either way.
+        mutation = Mutation.objects.filter(
+            experiment=experiment,
+            **{field: identity.get(field) for field in history.MUTATION_KEY_FIELDS}).first()
 
     logger.info("mutation added", extra=user_extra(request))
     return JsonResponse({"experiment_id": experiment.id,
                          "added": len(additions),
                          "already": already,
+                         "mutation_id": mutation.pk if mutation is not None else None,
                          "edit_set_id": edit_set.pk if edit_set else None})
 
 
