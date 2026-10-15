@@ -9,6 +9,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
 
+from mutint_common import browser
+
 # Django's autoreloader does not swap code into the running process -- it
 # re-executes the whole command line in a loop (see
 # django.utils.autoreload.restart_with_reloader), respawning the child every time
@@ -249,12 +251,19 @@ class Command(BaseCommand):
             # MutInt in a window that is polling for the server to come back, and `open`
             # navigates it to the site root instead -- so pressing Restart on /update/ took
             # them away from the page that said it would reload. See `update.note_restart`.
+            no_browser = False
             if not _asked_for_this_restart():
-                threading.Timer(1.0, lambda: subprocess.run(
-                    ['open', url], capture_output=True
-                )).start()
+                # Which command, and whether there is one, is `mutint_common.browser`'s:
+                # `open` here is a Mac's, and under WSL the browser to open is Windows'.
+                if browser.browser_command(url) is None:
+                    no_browser = True
+                else:
+                    threading.Timer(1.0, lambda: browser.open_browser(url)).start()
 
             self.stdout.write(f'\nStarting MutInt at {url}')
+            if no_browser:
+                self.stdout.write('  No way to open a browser was found on this machine: '
+                                  'open that address yourself.')
             self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)')
             if worker is not None:
                 process, count = worker

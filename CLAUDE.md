@@ -4961,6 +4961,16 @@ signal, because `runner.py` deliberately put it in a session of its own. Saving 
 saturate the machine indefinitely. The cost is that the worker runs the code as of launch,
 which the startup banner says out loud.
 
+**The browser is opened through `mutint_common.browser`, which decides per platform.**
+`start.py` ran macOS's `open` and nothing else, so under WSL and on Linux no browser appeared
+and -- with the output captured -- nothing said why. `browser_command(url)` answers `open` on
+a Mac; under WSL, detected from `microsoft` in `/proc/sys/kernel/osrelease`, `wslview` (wslu,
+on the Ubuntu images) or PowerShell's `Start-Process` over the interop PATH, because the
+browser to open is Windows'; `xdg-open` where it exists and `DISPLAY` or `WAYLAND_DISPLAY` is
+set; and None otherwise, which the banner turns into "open that address yourself". **Not the
+stdlib `webbrowser` module**: headless, it falls back to `lynx` or `w3m` and would start one in
+the terminal running the server. `test_browser.py` pins the table.
+
 #### The deadman pipe
 
 `atexit` covers more than it looks like -- `run_with_reloader` installs `SIGTERM ->

@@ -47,6 +47,7 @@ class StartCommandTestCase(TestCase):
         command.stdout = StringIO()
         with mock.patch.dict(os.environ, env, clear=True), \
                 mock.patch.object(start, "call_command") as call, \
+                mock.patch.object(start.browser, "browser_command", return_value=["open"]), \
                 mock.patch.object(start.threading, "Timer") as timer:
             command.handle()
         return [c.args[0] for c in call.call_args_list], timer.call_count
@@ -55,6 +56,19 @@ class StartCommandTestCase(TestCase):
         commands, timers = self._run({})
         self.assertIn("migrate", commands)
         self.assertEqual(1, timers)
+
+    def test_a_machine_with_no_browser_command_is_told_so(self):
+        """A headless Linux box, or WSL with interop off. `open` was hardcoded and failed
+        silently there; now the banner says to open the address yourself."""
+        command = start.Command()
+        command.stdout = StringIO()
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(start, "call_command"), \
+                mock.patch.object(start.browser, "browser_command", return_value=None), \
+                mock.patch.object(start.threading, "Timer") as timer:
+            command.handle()
+        self.assertEqual(0, timer.call_count)
+        self.assertIn("open that address yourself", command.stdout.getvalue())
 
     def test_a_restart_from_the_page_opens_no_browser_and_still_migrates(self):
         """Pressing Restart on /update/ is how a staged update gets applied, so the migrate
@@ -66,6 +80,7 @@ class StartCommandTestCase(TestCase):
         with mock.patch.dict(os.environ, {}, clear=True), \
                 mock.patch.object(start, "call_command") as call, \
                 mock.patch.object(start, "_asked_for_this_restart", return_value=True), \
+                mock.patch.object(start.browser, "browser_command", return_value=["open"]), \
                 mock.patch.object(start.threading, "Timer") as timer:
             command.handle()
 
