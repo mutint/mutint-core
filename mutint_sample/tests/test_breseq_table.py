@@ -409,7 +409,7 @@ class MatchTabTestCase(BreseqTablePageTestCase):
         self.assertIn('<template data-role="match-rule">', pane)
         # The matrix's descriptive columns, not this table's: no Freq, so a rule stored by
         # either page names a column the other offers.
-        self.assertIn('<option value="gene">Gene</option>', pane)
+        self.assertIn('<option value="gene" selected>Gene</option>', pane)
         self.assertIn('<option value="position" data-kind="position">Position</option>', pane)
         self.assertNotIn('<option value="freq"', pane)
         length = self.experiment.reference.seq_ids[0]["length"]

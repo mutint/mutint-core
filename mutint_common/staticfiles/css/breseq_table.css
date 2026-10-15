@@ -459,9 +459,11 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 }
 
 /* The Filter tab's rules, one row each: the column menu, then the value it must hold --
-   a text box with its two options, or a reference menu and two bounds -- and a remove
-   link, wrapping on a narrow window. The checkboxes take the row's gap rather than
-   Bootstrap's 10px left margin, which stacked oddly once the row wrapped. */
+   contains or not, a text box and its two options; or a reference menu, between or not,
+   and two bounds -- and the row's button, "+ Add filter" on the row being typed and
+   "– Remove filter" on a rule in force, whose controls are locked and read greyed. The
+   row wraps on a narrow window. The checkboxes take the row's gap rather than Bootstrap's
+   10px left margin, which stacked oddly once the row wrapped. */
 .mutation-matrix-match-rule {
     display: flex;
     flex-wrap: wrap;
@@ -472,6 +474,10 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 
 .mutation-matrix-match-rule .checkbox-inline {
     margin-left: 0;
+}
+
+.mutation-matrix-match [data-role="match-clear"] {
+    margin-bottom: 0.5em;
 }
 
 /* What the collapse bar folded: the strip, its panes, and everything above them on the

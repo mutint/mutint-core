@@ -530,12 +530,23 @@ class PartialTestCase(_Fixture):
         self.assertIn('data-role="match"', match)
         self.assertIn('data-role="match-rules"', match)
         self.assertIn('<template data-role="match-rule">', match)
-        for role in ("match-column", "match-text", "match-whole", "match-case", "match-seq-id",
-                     "match-min", "match-max", "match-add", "match-clear", "match-remove",
-                     "match-summary"):
+        for role in ("match-column", "match-not", "match-text", "match-whole", "match-case",
+                     "match-seq-id", "match-min", "match-max", "match-add", "match-clear"):
             self.assertIn('data-role="%s"' % role, match)
+        # Each kind of rule can be inverted; a row's button adds it, and the script turns the
+        # button into the rule's Remove once it is in force. Remove all is hidden until the
+        # script finds two or more in force. No sentence describes the rules.
+        self.assertIn("does not contain", match)
+        self.assertIn("not between", match)
+        self.assertIn(">+ Add filter</button>", match)
+        self.assertIn('data-role="match-clear" hidden>Remove all filters</button>', match)
+        self.assertNotIn("match-summary", match)
+        column_menu = match[match.index('data-role="match-column"'):]
+        column_menu = column_menu[:column_menu.index("</select>")]
         self.assertEqual([c.key for c in mutation_matrix.DESCRIPTIVE],
-                         re.findall(r'<option value="(\w+)"(?: data-kind="position")?>', match))
+                         re.findall(r'<option value="(\w+)"(?: data-kind="position")?(?: selected)?>', column_menu))
+        # A blank row opens on Gene.
+        self.assertEqual(['gene'], re.findall(r'<option value="(\w+)" selected>', column_menu))
         self.assertIn('<option value="position" data-kind="position">Position</option>', match)
         self.assertEqual(1, match.count("data-kind="))
         length = self.experiment.reference.seq_ids[0]["length"]

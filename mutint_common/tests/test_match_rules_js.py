@@ -1,8 +1,8 @@
 """The Filter tab's rules, run under node.
 
 `mutint_match_rules.js` decides whether a row matches -- a substring of a column's text,
-whole-word or case-sensitive on request, or a position range on a reference -- and both
-mutation tables apply it in the browser. Nothing on the server reads a rule, so this is
+whole-word or case-sensitive on request, or a position range on a reference, either of
+them inverted on request -- and both mutation tables apply it in the browser. Nothing on the server reads a rule, so this is
 the only test of what one means. Skipped, saying why, where node is not installed.
 """
 
@@ -28,7 +28,6 @@ process.stdin.on("end", () => {
     const job = JSON.parse(input);
     const out = job.calls.map(call => {
         const rules = api.normalize({rules: call.rules}, call.columns);
-        if (call.describe) { return {text: api.describe(rules, call.titles || {})}; }
         if (call.normalize) { return {rules: rules}; }
         const test = api.compile(rules);
         return {matches: call.rows.map(row => test({
@@ -95,14 +94,32 @@ class MatchRulesTestCase(unittest.TestCase):
                          self.matches([{"column": "position", "seq_id": "pLA"}],
                                       [row("x", 1, seq_id="pLA"), row("x", 1)]))
 
+    def test_not_inverts_a_rule_of_either_kind(self):
+        """Does not contain, and not between: the same rule, the other rows."""
+        self.assertEqual([False, False, True],
+                         self.matches([{"column": "gene", "text": "MUT", "not": True}],
+                                      [row("mutT"), row("Smut"), row("thrA")]))
+        self.assertEqual([False, True, True, True],
+                         self.matches([{"column": "position", "seq_id": "REL606", "min": 10, "max": 20,
+                                        "not": True}],
+                                      [row("x", 15), row("x", 25), row("x", 5),
+                                       row("x", 15, seq_id="pLA")]))
+        self.assertEqual([False, True],
+                         self.matches([{"column": "position", "seq_id": "pLA", "not": True}],
+                                      [row("x", 1, seq_id="pLA"), row("x", 1)]))
+
     def test_rules_are_anded(self):
         rules = [{"column": "gene", "text": "thr"}, {"column": "position", "max": 20}]
         self.assertEqual([True, False, False],
                          self.matches(rules, [row("thrA", 10), row("thrA", 30), row("araA", 10)]))
 
     def test_an_empty_rule_keeps_everything(self):
+        """Inverted too: "does not contain nothing" is a rule still being typed, not a rule
+        that hides every row."""
         self.assertEqual([True], self.matches([{"column": "gene", "text": ""}], [row("x")]))
+        self.assertEqual([True], self.matches([{"column": "gene", "text": "", "not": True}], [row("x")]))
         self.assertEqual([True], self.matches([{"column": "position"}], [row("x")]))
+        self.assertEqual([True], self.matches([{"column": "position", "not": True}], [row("x")]))
         self.assertEqual([True], self.matches([], [row("x")]))
 
     def test_normalize_drops_what_this_page_cannot_apply(self):
@@ -111,26 +128,10 @@ class MatchRulesTestCase(unittest.TestCase):
         rules = [{"column": "freq", "text": "1"}, "junk", None,
                  {"column": "position", "min": "abc", "max": "500", "seq_id": 3},
                  {"column": "position", "min": 30, "max": 20},
-                 {"column": "gene", "text": "thr", "whole": 1}]
+                 {"column": "gene", "text": "thr", "whole": 1, "not": "yes"}]
         got = run([{"rules": rules, "columns": COLUMNS, "normalize": True}])[0]["rules"]
-        self.assertEqual([{"column": "position", "seq_id": "", "min": None, "max": 500},
-                          {"column": "position", "seq_id": "", "min": 20, "max": 30},
-                          {"column": "gene", "text": "thr", "whole": True, "case": False}], got)
+        self.assertEqual([{"column": "position", "seq_id": "", "min": None, "max": 500, "not": False},
+                          {"column": "position", "seq_id": "", "min": 20, "max": 30, "not": False},
+                          {"column": "gene", "text": "thr", "whole": True, "case": False, "not": True}],
+                         got)
         self.assertEqual([], run([{"rules": "nope", "columns": COLUMNS, "normalize": True}])[0]["rules"])
-
-    def test_describe_says_what_is_kept(self):
-        titles = {"gene": "Gene", "position": "Position"}
-        def describe(rules):
-            return run([{"rules": rules, "columns": COLUMNS, "describe": True, "titles": titles}])[0]["text"]
-        self.assertEqual("Every mutation is shown.", describe([]))
-        self.assertEqual("Every mutation is shown.", describe([{"column": "gene", "text": ""}]))
-        self.assertEqual("Showing mutations whose Gene contains “thr”.",
-                         describe([{"column": "gene", "text": "thr"}]))
-        self.assertEqual("Showing mutations whose Gene contains the word “mut” (matching case) "
-                         "and whose Position on REL606 is 1–500,000.",
-                         describe([{"column": "gene", "text": "mut", "whole": True, "case": True},
-                                   {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000}]))
-        self.assertEqual("Showing mutations whose Position is at most 9.",
-                         describe([{"column": "position", "max": 9}]))
-        self.assertEqual("Showing mutations on pLA.",
-                         describe([{"column": "position", "seq_id": "pLA"}]))

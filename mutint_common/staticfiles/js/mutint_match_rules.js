@@ -8,10 +8,11 @@
  * text, case-folded unless `case`, and only where no word character (a letter, a digit or
  * an underscore) sits at either end of the match when `whole`, so `mut` finds mut, and
  * mut/yjjA, and not mutT -- or, for Position, a reference sequence and two bounds, either
- * open. Several rules are AND-ed. The stored shape:
+ * open. `not` inverts a rule of either kind: does not contain, or not between. Several
+ * rules are AND-ed. The stored shape:
  *
- *   {"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false},
- *              {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000}]}
+ *   {"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not": false},
+ *              {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not": true}]}
  *
  * `normalize` is the one reader of that shape, and it is forgiving: a rule naming a column
  * the page does not offer is dropped, a bound that is not a number is open. Matching is a
@@ -19,15 +20,20 @@
  * differently -- the matrix as objects of HTML strings, the per-sample page as `<tr>`s --
  * and each supplies `{text(key), seqId, position}` for its own.
  *
- * `mount` draws one clone of the pane's <template> per rule, and the page hands it the
- * store: this module saves nothing itself. Exported for node too, so a test can run the
- * rules outside a browser (the same guard compare_sets.js uses).
+ * `mount` draws one clone of the pane's <template> per rule in force, locked, and one more
+ * being typed: a rule takes effect when its "+ Add filter" button is pressed (or Enter in
+ * one of its boxes), never as it is typed, and a rule in force is only ever removed. The
+ * page hands it the store: this module saves nothing itself. Exported for node too, so a
+ * test can run the rules outside a browser (the same guard compare_sets.js uses).
  */
 (function () {
     "use strict";
 
     var WORD = "[\\p{L}\\p{N}_]";
     var POSITION = "position";
+    var ROW = ".mutation-matrix-match-rule";
+    var ADD_LABEL = "+ Add filter";
+    var REMOVE_LABEL = "– Remove filter";
 
     function escapeRegExp(text) {
         // Only the syntax characters: under the `u` flag, escaping anything else is an error.
@@ -51,17 +57,17 @@
                 var min = finite(rule.min), max = finite(rule.max);
                 if (min !== null && max !== null && min > max) { var t = min; min = max; max = t; }
                 rules.push({ column: POSITION, seq_id: typeof rule.seq_id === "string" ? rule.seq_id : "",
-                             min: min, max: max });
+                             min: min, max: max, not: !!rule.not });
             } else {
                 rules.push({ column: rule.column, text: typeof rule.text === "string" ? rule.text : "",
-                             whole: !!rule.whole, "case": !!rule["case"] });
+                             whole: !!rule.whole, "case": !!rule["case"], not: !!rule.not });
             }
         });
         return rules;
     }
 
-    /* Whether a rule narrows anything: an empty text box, or a position rule with no
-       reference and no bound, is a rule still being typed. */
+    /* Whether a rule says anything: an empty text box, or a position rule with no
+       reference and no bound, is a rule still being typed -- inverted or not. */
     function effective(rule) {
         if (rule.column === POSITION) { return !!rule.seq_id || rule.min !== null || rule.max !== null; }
         return rule.text !== "";
@@ -73,21 +79,26 @@
         return new RegExp(body, rule["case"] ? "u" : "iu");
     }
 
+    function positive(rule) {
+        if (rule.column === POSITION) {
+            return function (row) {
+                if (rule.seq_id && row.seqId !== rule.seq_id) { return false; }
+                var at = row.position;
+                if (typeof at !== "number" || isNaN(at)) { return rule.min === null && rule.max === null; }
+                if (rule.min !== null && at < rule.min) { return false; }
+                if (rule.max !== null && at > rule.max) { return false; }
+                return true;
+            };
+        }
+        var re = pattern(rule);
+        return function (row) { return re.test(row.text(rule.column) || ""); };
+    }
+
     /* `fn(row)` over `{text(key) -> string, seqId, position}`: true when every rule holds. */
     function compile(rules) {
         var tests = rules.filter(effective).map(function (rule) {
-            if (rule.column === POSITION) {
-                return function (row) {
-                    if (rule.seq_id && row.seqId !== rule.seq_id) { return false; }
-                    var at = row.position;
-                    if (typeof at !== "number" || isNaN(at)) { return rule.min === null && rule.max === null; }
-                    if (rule.min !== null && at < rule.min) { return false; }
-                    if (rule.max !== null && at > rule.max) { return false; }
-                    return true;
-                };
-            }
-            var re = pattern(rule);
-            return function (row) { return re.test(row.text(rule.column) || ""); };
+            var holds = positive(rule);
+            return rule.not ? function (row) { return !holds(row); } : holds;
         });
         return function (row) {
             for (var i = 0; i < tests.length; i++) { if (!tests[i](row)) { return false; } }
@@ -107,27 +118,7 @@
         return out.replace(/\s+/g, " ").trim();
     }
 
-    function quote(text) { return "“" + text + "”"; }
     function number(value) { return value.toLocaleString("en-US"); }
-
-    /* One sentence saying what the rules keep, or that they keep everything. */
-    function describe(rules, titles) {
-        titles = titles || {};
-        var parts = rules.filter(effective).map(function (rule) {
-            var title = titles[rule.column] || rule.column;
-            if (rule.column === POSITION) {
-                var where = "whose " + title + (rule.seq_id ? " on " + rule.seq_id : "");
-                if (rule.min !== null && rule.max !== null) { return where + " is " + number(rule.min) + "–" + number(rule.max); }
-                if (rule.min !== null) { return where + " is at least " + number(rule.min); }
-                if (rule.max !== null) { return where + " is at most " + number(rule.max); }
-                return where.replace("whose " + title + " on ", "on ");
-            }
-            return "whose " + title + " contains " + (rule.whole ? "the word " : "") + quote(rule.text) +
-                   (rule["case"] ? " (matching case)" : "");
-        });
-        if (!parts.length) { return "Every mutation is shown."; }
-        return "Showing mutations " + parts.join(" and ") + ".";
-    }
 
     /* The columns the pane's template offers: `[{key, title, kind}]`. */
     function columnsOf(box) {
@@ -139,42 +130,48 @@
         });
     }
 
-    /* Draw `rules` in `box` and call `onChange(rules)` -- normalized -- whenever the reader
-       changes one: on a text box's change or Enter, a menu or a checkbox, and at once on
-       add, remove and Clear. Returns `{rules(), set(rules)}`. */
+    /* Draw `rules` in `box`, each locked with a Remove button, and one blank row under
+       them being typed; call `onChange(rules)` -- normalized, the rules in force -- when a
+       typed row is added, a rule removed, or every rule removed. Returns `{rules(), set(rules)}`. */
     function mount(box, options) {
         var template = box.querySelector('template[data-role="match-rule"]');
         var list = box.querySelector('[data-role="match-rules"]');
+        var clear = box.querySelector('[data-role="match-clear"]');
         var columns = columnsOf(box);
         var keys = columns.map(function (c) { return c.key; });
-        var titles = {};
-        columns.forEach(function (c) { titles[c.key] = c.title; });
-        var summary = box.parentNode.querySelector('[data-role="match-summary"]') ||
-                      document.querySelector('[data-role="match-summary"]');
 
+        function field(row, role) {
+            // The two field sets each carry a `match-not` menu; take the one that shows.
+            var holder = row.querySelector('[data-role="match-column"]').value === POSITION ?
+                '[data-role="match-position-fields"]' : '[data-role="match-text-field"]';
+            return row.querySelector(holder + ' [data-role="' + role + '"]');
+        }
+
+        function readRow(row) {
+            var column = row.querySelector('[data-role="match-column"]').value;
+            var not = field(row, "match-not").value === "1";
+            if (column === POSITION) {
+                return { column: column, not: not,
+                         seq_id: row.querySelector('[data-role="match-seq-id"]').value,
+                         min: row.querySelector('[data-role="match-min"]').value,
+                         max: row.querySelector('[data-role="match-max"]').value };
+            }
+            return { column: column, not: not,
+                     text: row.querySelector('[data-role="match-text"]').value,
+                     whole: row.querySelector('[data-role="match-whole"]').checked,
+                     "case": row.querySelector('[data-role="match-case"]').checked };
+        }
+
+        function inForce() { return list.querySelectorAll(ROW + ".committed"); }
+
+        /* The rules in force: the locked rows, never the one being typed. */
         function read() {
-            var rules = [];
-            Array.prototype.forEach.call(list.querySelectorAll(".mutation-matrix-match-rule"), function (row) {
-                var column = row.querySelector('[data-role="match-column"]').value;
-                if (column === POSITION) {
-                    rules.push({ column: column,
-                                 seq_id: row.querySelector('[data-role="match-seq-id"]').value,
-                                 min: row.querySelector('[data-role="match-min"]').value,
-                                 max: row.querySelector('[data-role="match-max"]').value });
-                } else {
-                    rules.push({ column: column,
-                                 text: row.querySelector('[data-role="match-text"]').value,
-                                 whole: row.querySelector('[data-role="match-whole"]').checked,
-                                 "case": row.querySelector('[data-role="match-case"]').checked });
-                }
-            });
-            return normalize({ rules: rules }, keys);
+            return normalize({ rules: Array.prototype.map.call(inForce(), readRow) }, keys);
         }
 
         function announce() {
-            var rules = read();
-            if (summary) { summary.textContent = describe(rules, titles); }
-            if (options.onChange) { options.onChange(rules); }
+            clear.hidden = inForce().length < 2;
+            if (options.onChange) { options.onChange(read()); }
         }
 
         function showFields(row) {
@@ -188,7 +185,32 @@
                 chosen && chosen.getAttribute("data-length") ? number(parseInt(chosen.getAttribute("data-length"), 10)) : "";
         }
 
-        function addRow(rule) {
+        function lock(row) {
+            row.classList.add("committed");
+            Array.prototype.forEach.call(row.querySelectorAll("select, input"), function (control) {
+                control.disabled = true;
+            });
+            var button = row.querySelector('[data-role="match-add"]');
+            button.setAttribute("data-role", "match-remove");
+            button.textContent = REMOVE_LABEL;
+        }
+
+        function focusDraft(row) {
+            (row.querySelector('[data-role="match-column"]').value === POSITION ?
+                row.querySelector('[data-role="match-min"]') : row.querySelector('[data-role="match-text"]')).focus();
+        }
+
+        /* The typed row becomes a rule in force, if it says anything, and a blank row
+           follows it. */
+        function commit(row) {
+            var rule = normalize({ rules: [readRow(row)] }, keys)[0];
+            if (!rule || !effective(rule)) { focusDraft(row); return; }
+            lock(row);
+            focusDraft(addRow(null, false));
+            announce();
+        }
+
+        function addRow(rule, committed) {
             var row = template.content.firstElementChild.cloneNode(true);
             var select = row.querySelector('[data-role="match-column"]');
             if (rule) {
@@ -202,47 +224,45 @@
                     row.querySelector('[data-role="match-whole"]').checked = rule.whole;
                     row.querySelector('[data-role="match-case"]').checked = rule["case"];
                 }
+                field(row, "match-not").value = rule.not ? "1" : "";
             }
             showFields(row);
-            select.addEventListener("change", function () { showFields(row); announce(); });
-            row.querySelector('[data-role="match-seq-id"]').addEventListener("change", function () { showFields(row); announce(); });
+            select.addEventListener("change", function () { showFields(row); });
+            row.querySelector('[data-role="match-seq-id"]').addEventListener("change", function () { showFields(row); });
             Array.prototype.forEach.call(row.querySelectorAll('input[type="text"]'), function (input) {
-                input.addEventListener("change", announce);
                 input.addEventListener("keydown", function (event) {
-                    if (event.key === "Enter") { event.preventDefault(); announce(); }
+                    if (event.key === "Enter") { event.preventDefault(); commit(row); }
                 });
             });
-            Array.prototype.forEach.call(row.querySelectorAll('input[type="checkbox"]'), function (input) {
-                input.addEventListener("change", announce);
-            });
-            row.querySelector('[data-role="match-remove"]').addEventListener("click", function () {
-                row.remove();
-                if (!list.children.length) { addRow(null); }
-                announce();
+            row.querySelector('[data-role="match-add"]').addEventListener("click", function () {
+                if (row.classList.contains("committed")) {
+                    row.remove();
+                    announce();
+                } else {
+                    commit(row);
+                }
             });
             list.appendChild(row);
+            if (committed) { lock(row); }
             return row;
         }
 
         function set(rules) {
             list.textContent = "";
-            rules.forEach(addRow);
-            if (!rules.length) { addRow(null); }
-            if (summary) { summary.textContent = describe(read(), titles); }
+            rules.forEach(function (rule) { addRow(rule, true); });
+            addRow(null, false);
+            clear.hidden = inForce().length < 2;
         }
 
-        box.querySelector('[data-role="match-add"]').addEventListener("click", function () {
-            addRow(null).querySelector('[data-role="match-text"]').focus();
-        });
-        box.querySelector('[data-role="match-clear"]').addEventListener("click", function () {
+        clear.addEventListener("click", function () {
             set([]);
             announce();
         });
         set(normalize({ rules: options.rules || [] }, keys));
-        return { rules: read, set: set, columns: columns, titles: titles };
+        return { rules: read, set: set, columns: columns };
     }
 
-    var api = { normalize: normalize, compile: compile, describe: describe, mount: mount,
+    var api = { normalize: normalize, compile: compile, mount: mount,
                 columnsOf: columnsOf, plainText: plainText, effective: effective };
     if (typeof window !== "undefined") { window.mutintMatchRules = api; }
     if (typeof module !== "undefined" && module.exports) { module.exports = api; }

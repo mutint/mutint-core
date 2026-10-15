@@ -1333,8 +1333,7 @@
         });
 
         /* The Filter tab: its rules redraw through the search hook, as the Types and
-           References menus do, so the sets are untouched; the preference and the sentence
-           under the controls follow. */
+           References menus do, so the sets are untouched; the preference follows. */
         var matchUi = null;
         if (matchBox) {
             matchUi = matchRules.mount(matchBox, {

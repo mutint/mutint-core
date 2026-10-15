@@ -2270,18 +2270,24 @@ by the filtered-from suffix, read as three zeros in a row on an empty Search.
 (`mutation_matrix/_match_rules.html`, one partial for the matrix and the per-sample page)
 holds one row per rule: a column menu over the descriptive columns -- the `DESCRIPTIVE`
 list, Curate left out as no data -- and what the cell must hold. A text column takes a
-value matched as a substring of the cell's plain text (tags stripped; a gene list's
-`<key>_text`; a collapsed list's Show button not counted), case-folded unless **Match
-case**, and only where no letter, digit or underscore sits at either end of the match
-under **Whole word** -- so `mut` finds `mut` and `yjjA/mut` and not `mutT`. Position, the
-one position column, takes a reference sequence (every contig of the stored reference,
-`contig_lengths`, each length the upper bound's placeholder; the rows' bare names where
-there is no experiment, as on Search) and two bounds, either open. Add rule, remove,
-Clear; a rule takes effect on a box's change or Enter, not per keystroke. Stored as
-`mutation_matrix.filter.<exp>` -- `{"rules": [{"column": "gene", "text": "mut", "whole":
-false, "case": false}, {"column": "position", "seq_id": "REL606", "min": 1, "max":
-500000}]}` -- per experiment and shared with the per-sample Mutations page the way the
-References choice is; transient on Search. **`js/mutint_match_rules.js` is the one reader
+value the cell's plain text (tags stripped; a gene list's `<key>_text`; a collapsed
+list's Show button not counted) **contains** or **does not contain**, case-folded unless
+**Match case**, and only where no letter, digit or underscore sits at either end of the
+match under **Whole word** -- so `mut` finds `mut` and `yjjA/mut` and not `mutT`.
+Position, the one position column, takes a reference sequence (every contig of the stored
+reference, `contig_lengths`, each length the upper bound's placeholder; the rows' bare
+names where there is no experiment, as on Search) and two bounds, either open, the
+position must lie **between** or **not between**. **Nothing filters until it is added**:
+the last row is always the one being typed, opening on Gene, and its **+ Add filter** button (or Enter in
+one of its boxes) is what puts the rule in force -- the row locks, its button becomes
+**– Remove filter**, and a blank row is drawn under it. A rule in force is only ever
+removed, never edited in place; **Remove all filters** shows only with two or more in
+force; and a row that says nothing -- an empty box, a position rule with neither contig
+nor bound, inverted or not -- is not added. Stored as `mutation_matrix.filter.<exp>` --
+`{"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not":
+false}, {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not":
+true}]}`, the rules in force and never the row being typed -- per experiment and shared
+with the per-sample Mutations page the way the References choice is; transient on Search. **`js/mutint_match_rules.js` is the one reader
 of that shape and the one matcher**, loaded from `base.html`, exported for node, and
 forgiving: a rule naming a column the page does not offer is dropped, a bound that is not
 a number is open, inverted bounds are swapped. It matches over an adapter
@@ -2289,9 +2295,10 @@ a number is open, inverted bounds are swapped. It matches over an adapter
 objects of HTML strings and the per-sample page as `<tr>`s. On the matrix the test runs in
 the search hook beside the Types and References menus, so a rule redraws (`dt.draw()`), is
 counted by the pager line, is what Export's "Filtered mutations" exports, and **leaves the
-row sets alone**, exactly as hiding a type does. A sentence under the controls says what
-the rules keep. `mutint_common/tests/test_match_rules_js.py` runs the module under node
-and is the only test of what a rule means; nothing on the server reads one.
+row sets alone**, exactly as hiding a type does. No sentence describes the rules: the
+locked rows are the description. `mutint_common/tests/test_match_rules_js.py` runs the
+module under node and is the only test of what a rule means; nothing on the server reads
+one.
 
 **A collapse bar under the panes folds away everything above it** -- the panes, the strip,
 and the page header with its button bar -- to give the table the height, and remembers it
