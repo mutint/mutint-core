@@ -210,6 +210,7 @@ def _data_name(sample):
 def experiment_samples_metadata(request, pk):
     """The experiment's samples as a `metadata.csv`, filled in with what is stored now."""
     from django.http import HttpResponse
+    from mutint_common.spreadsheet import for_spreadsheet
     from mutint_import import metadata
     from mutint_import.archive import slug
 
@@ -232,7 +233,10 @@ def experiment_samples_metadata(request, pk):
             "flags": {field: bool(getattr(sample, field)) for field in FLAG_FIELDS},
             "data": _data_name(sample),
         })
-    response = HttpResponse(metadata.write(entries), content_type="text/csv; charset=utf-8")
+    # The mark in front is what makes Excel read the arrows and accents as UTF-8; the
+    # page's own Upload CSV strips it in `metadata.parse`.
+    response = HttpResponse(for_spreadsheet(metadata.write(entries)),
+                            content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = (
         'attachment; filename="%s_metadata.csv"' % slug(experiment.name or "experiment"))
     return response

@@ -569,17 +569,21 @@
             // they are in no row set, so choosing one in the Show menu drops them. Cells are
             // exported through the `export` rendering, which is the displayed one except for
             // a gene list, whose whole plain list is exported rather than its Show button.
+            // `bom`: the UTF-8 byte-order mark in front, without which Excel reads the
+            // arrows and check marks in the file's legacy code page as nonsense.
             buttons: [{
                 extend: "collection",
                 text: "Export CSV",
                 autoClose: true,
                 buttons: [{
                     extend: "csv",
+                    bom: true,
                     text: "Filtered mutations",
                     title: (container.getAttribute("data-csv-title") || "mutations") + "_showing",
                     exportOptions: { columns: ":visible:not(.breseq-curate)", orthogonal: "export", modifier: { search: "applied" } }
                 }, {
                     extend: "csv",
+                    bom: true,
                     text: "All mutations",
                     title: container.getAttribute("data-csv-title") || "mutations",
                     exportOptions: { columns: ":visible:not(.breseq-curate)", orthogonal: "export", modifier: { search: "none" } }

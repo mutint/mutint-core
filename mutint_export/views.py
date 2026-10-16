@@ -15,6 +15,7 @@ from tempfile import NamedTemporaryFile
 from django.http import FileResponse
 import os
 import zipfile
+from mutint_common.spreadsheet import csv_response, for_spreadsheet
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def export(request):
                                     break
                                 filename = f"{stem}_{n}_{mut_type_str}.csv"
                             taken.add(filename)
-                            zf.writestr(filename, csv_buffer.getvalue())
+                            zf.writestr(filename, for_spreadsheet(csv_buffer.getvalue()))
                             logger.info(f"Added {filename} to zip", extra=user_extra(request))
 
                     tmp_file.seek(0)
@@ -114,8 +115,7 @@ def export_experiment_index(request):
             exp_id_set = set(exp_id_str.split(','))
             exp_list = [exp for exp in experiments if str(exp.id) in exp_id_set]
             if len(exp_list) > 0:
-                response = HttpResponse(content_type='text/csv')
-                response['Content-Disposition'] = 'attachment; filename="experiment_index.csv"'
+                response = csv_response("experiment_index.csv")
                 writer = csv.writer(response)
                 writer.writerow(['ale_id', 'experiment_name', 'project_id', 'project_name', 'is_public', 'date'])
                 for e in sorted(exp_list, key=lambda x: x.id):

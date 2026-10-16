@@ -54,7 +54,11 @@ class ExportViewTestCase(TestCase):
 
         self.assertEqual(200, response.status_code)
         self.assertEqual("application/zip", response["Content-Type"])
-        self.assertEqual(1, len(self._zip(response).namelist()))
+        archive = self._zip(response)
+        self.assertEqual(1, len(archive.namelist()))
+        # Each member starts with the UTF-8 mark, so the gene column's arrows and the
+        # check marks survive Excel.
+        self.assertTrue(archive.read(archive.namelist()[0]).startswith(b"\xef\xbb\xbf"))
 
     def test_the_mutation_csv_keeps_its_header(self):
         """The header is a contract with whoever scripts against the file; it used to be
@@ -98,9 +102,12 @@ class ExportViewTestCase(TestCase):
             % (self.project.id, self.experiment.id))
 
         self.assertEqual(200, response.status_code)
-        self.assertEqual("text/csv", response["Content-Type"])
+        self.assertEqual("text/csv; charset=utf-8", response["Content-Type"])
+        # The UTF-8 mark in front is what makes Excel read the file as UTF-8.
+        self.assertTrue(response.content.startswith("\ufeff".encode("utf-8")))
 
-        rows = list(csv.reader(io.StringIO(response.content.decode())))
+        rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
+        self.assertEqual("ale_id", rows[0][0])
         self.assertEqual(2, len(rows), "a header and one experiment")
         # The first column is the experiment's primary key. Its *header* still reads
         # `ale_id`, which is the name that column had before the rename; changing a

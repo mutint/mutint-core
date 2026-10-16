@@ -43,6 +43,8 @@ class SpreadsheetTestCase(SampleEditTestCase):
         self.assertEqual(200, response.status_code)
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertIn("_metadata.csv", response["Content-Disposition"])
+        # The UTF-8 mark in front, so Excel opens it as UTF-8; `parse` strips it.
+        self.assertTrue(response.content.startswith("\ufeff".encode("utf-8")))
         parsed = metadata.parse(response.content)
         clone = parsed.lookup("Ara-2_500gen_763A")
         self.assertEqual(("763A", "Ara-2", 500, True, "the clone", "glucose"),

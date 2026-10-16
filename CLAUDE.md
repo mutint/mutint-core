@@ -2586,6 +2586,15 @@ The CSV export (`mutint_export/util.py`) used to borrow the table's header and c
 carries its own `CSV_MUTATION_HEADER` now, byte-identical, and writes `✓` where `strip_tags` had
 left the `&#10003;` entity in the file.
 
+**Every CSV written for a spreadsheet starts with the UTF-8 byte-order mark**, through
+`mutint_common/spreadsheet.py` (`csv_response`, `for_spreadsheet`) on the server -- the
+`/export/` zip's members, the experiment index, the Samples page's `metadata.csv`,
+mutint-specificity's two tables -- and DataTables' `bom: true` on the matrix's Export CSV.
+Excel opens a `.csv` in the system's legacy code page unless the mark is there, so the gene
+column's arrows and that `✓` came out as nonsense in files that were correct UTF-8. The mark
+is written at the HTTP boundary only: `metadata.write` and the archive's `metadata.csv` are
+MutInt's own interchange text, read back by `metadata.parse`, and stay plain.
+
 ### Sample flags
 
 `Sample.is_hypermutator`, `is_contaminated`, `is_low_coverage`: three booleans, described once in
