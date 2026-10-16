@@ -288,3 +288,69 @@ class PseudoMobileElementTest(SimpleTestCase):
         # Only the complete copy, 200 bases, is a candidate; the partial one is 100.
         self.assertEqual(200, len(references.repeat_family_sequence('IS3', 1)))
 
+
+
+GENBANK_WITH_REPEATED_NAMES = """\
+LOCUS       c1                       300 bp    DNA     linear   UNK 01-JAN-1980
+DEFINITION  c1.
+ACCESSION   c1
+VERSION     c1
+FEATURES             Location/Qualifiers
+     CDS             10..60
+                     /product="first protein"
+     CDS             complement(100..150)
+                     /product="second protein"
+     CDS             200..250
+                     /gene="insA"
+     CDS             260..290
+                     /gene="insA"
+     CDS             join(292..294,296..298)
+                     /locus_tag="b0005"
+ORIGIN
+        1 acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt
+       61 acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt
+      121 acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt
+      181 acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt
+      241 acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt acgtacgtac gtacgtacgt
+//
+"""
+
+
+class RowIdsAreUniqueTest(SimpleTestCase):
+    """The renderer's `ID` is what the reader merges rows on, so two genes must never
+    share one. A genome annotated with `/product` alone loads every gene as `unknown`,
+    and written under that one ID a whole contig came back as a single CDS with every
+    gene as a sublocation; two `insA` copies with no locus tags merged the same way."""
+
+    def setUp(self):
+        import tempfile
+        from mutint_import.annotate.genbank import load_genbank
+        from mutint_import.annotate.gff3 import render_breseq_gff3
+
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        source = os.path.join(self.tmp, 'two.gbk')
+        with open(source, 'w') as handle:
+            handle.write(GENBANK_WITH_REPEATED_NAMES)
+        self.text = render_breseq_gff3(load_genbank(source))
+        self.rendered = os.path.join(self.tmp, 'two.gff3')
+        with open(self.rendered, 'w') as handle:
+            handle.write(self.text)
+
+    def _ids(self):
+        import re
+        return re.findall(r'(?:\t|;)ID=([^;]*)', self.text)
+
+    def test_every_gene_gets_its_own_id_and_a_spliced_one_keeps_its_rows(self):
+        self.assertEqual(['feature1', 'feature2', 'insA_3', 'insA_4', 'b0005', 'b0005'], self._ids())
+
+    def test_every_gene_comes_back(self):
+        genes = [(f.name, f.get_locus_tag(), len(f.locations))
+                 for f in load_gff3(self.rendered).sequences['c1'].features]
+        self.assertEqual([('unknown', '', 1), ('unknown', '', 1), ('insA', '', 1), ('insA', '', 1),
+                          ('b0005', 'b0005', 2)], genes)
+
+    def test_a_unique_locus_tag_or_name_is_still_the_id(self):
+        """So a stored GFF3 of an ordinarily annotated genome renders the same bytes."""
+        self.assertIn('ID=b0005;', self.text)
+        self.assertNotIn('ID=b0005_', self.text)

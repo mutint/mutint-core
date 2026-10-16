@@ -3956,7 +3956,14 @@ All apps use the `mutint_*` namespace. Key apps:
     before being stored or hashed. Without it a GenBank and the GFF3 breseq derived from the
     same genome would hash differently and the shared-reference check would reject valid data.
     GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
-    Biopython has no GFF3 parser. Alignments are served with HTTP range support by
+    Biopython has no GFF3 parser.
+    **The GFF3 a reference is stored as must give every gene a unique `ID`**, because
+    the reader -- this one and breseq's -- merges every row sharing an ID into one spliced
+    feature. `gff3._feature_ids` takes the locus tag, else the name, and falls back to
+    `feature<n>` for a nameless gene and `<name>_<n>` for a name two genes share. It was
+    the bare locus-tag-or-name, and a genome annotated with `/product` alone loaded every
+    gene as `unknown`, was written under that one ID, and came back from the store as a
+    single CDS per contig with every gene as a sublocation. Alignments are served with HTTP range support by
     `mutint_sample/views/alignments.py`.
     Sample identity comes from the filename, through `sample_names.parse_sample_identity`
     and nowhere else -- see **Reading a sample's identity out of its filename** below.

@@ -342,12 +342,34 @@ def escape(value):
     return value
 
 
-def _feature_id(feature, index):
-    """A stable identifier, shared by every row of a spliced feature."""
-    return feature.get_locus_tag() or feature.name or 'feature%d' % index
+def _feature_ids(features):
+    """One `ID` per feature, unique within the contig: the locus tag, else the name, else
+    `feature<n>`; a locus tag or name that two features share takes `_<n>` after it.
+
+    Unique because the reader -- this module's, and breseq's -- merges every row sharing
+    an ID into one spliced feature. A genome whose genes carry only `/product` loads every
+    one as `unknown`, and written under that one ID the whole contig came back as a single
+    CDS with hundreds of sublocations; two copies of `insA` with no locus tags merged the
+    same way. `n` is the feature's position in the contig's sorted order, so the same
+    annotation renders the same bytes every time.
+    """
+    wanted = []
+    for feature in features:
+        name = feature.name if feature.name and feature.name != 'unknown' else ''
+        wanted.append(feature.get_locus_tag() or name)
+    shared = {value for value in wanted if wanted.count(value) > 1}
+    ids, used = [], set()
+    for index, value in enumerate(wanted, start=1):
+        candidate = value if value and value not in shared else (
+            '%s_%d' % (value, index) if value else 'feature%d' % index)
+        while candidate in used:
+            candidate += '_'
+        used.add(candidate)
+        ids.append(candidate)
+    return ids
 
 
-def _feature_rows(seq_id, feature, index):
+def _feature_rows(seq_id, feature, feature_id):
     attributes = {}
     if not feature.is_repeat():
         # Rows of one feature are grouped on reload by shared ID, which is how a
@@ -355,7 +377,7 @@ def _feature_rows(seq_id, feature, index):
         # -- breseq does not give them one, and every copy of an IS family shares
         # a name, so an ID would merge them into one multi-location feature and
         # update_feature_lists() drops those.
-        attributes['ID'] = _feature_id(feature, index)
+        attributes['ID'] = feature_id
         if feature.get_locus_tag():
             attributes['Alias'] = feature.get_locus_tag()
     if feature.name:
@@ -445,8 +467,8 @@ def render_breseq_gff3(references, line_length=70):
     for contig in contigs:
         features = [f for f in contig.features if f.locations]
         features.sort(key=_sort_key)
-        for index, feature in enumerate(features, start=1):
-            lines.extend(_feature_rows(contig.seq_id, feature, index))
+        for feature, feature_id in zip(features, _feature_ids(features)):
+            lines.extend(_feature_rows(contig.seq_id, feature, feature_id))
 
     lines.append('##FASTA')
     for contig in contigs:
