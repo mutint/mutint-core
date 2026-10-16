@@ -9,7 +9,7 @@
  * an underscore) sits at either end of the match when `whole`, so `mut` finds mut, and
  * mut/yjjA, and not mutT -- or, for Position, a reference sequence and two bounds, either
  * open. `not` inverts a rule of either kind: does not contain, or not between. Several
- * rules are AND-ed. The stored shape:
+ * rules are OR-ed: a row shows when any one of them holds. The stored shape:
  *
  *   {"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not": false},
  *              {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not": true}]}
@@ -23,7 +23,9 @@
  * `mount` draws one clone of the pane's <template> per rule in force, locked, and one more
  * being typed: a rule takes effect when its "+ Add filter" button is pressed (or Enter in
  * one of its boxes), never as it is typed, and a rule in force is only ever removed. The
- * page hands it the store: this module saves nothing itself. Exported for node too, so a
+ * first row is led by "Show mutations where:" and every later one by "or", so the page
+ * says how the rules combine without a sentence. The page hands it the store: this module
+ * saves nothing itself. Exported for node too, so a
  * test can run the rules outside a browser (the same guard compare_sets.js uses).
  */
 (function () {
@@ -34,6 +36,8 @@
     var ROW = ".mutation-matrix-match-rule";
     var ADD_LABEL = "+ Add filter";
     var REMOVE_LABEL = "– Remove filter";
+    var FIRST_LEAD = "Show mutations where:";
+    var NEXT_LEAD = "or";
 
     function escapeRegExp(text) {
         // Only the syntax characters: under the `u` flag, escaping anything else is an error.
@@ -94,15 +98,17 @@
         return function (row) { return re.test(row.text(rule.column) || ""); };
     }
 
-    /* `fn(row)` over `{text(key) -> string, seqId, position}`: true when every rule holds. */
+    /* `fn(row)` over `{text(key) -> string, seqId, position}`: true when any rule holds,
+       and true of every row when no rule says anything. */
     function compile(rules) {
         var tests = rules.filter(effective).map(function (rule) {
             var holds = positive(rule);
             return rule.not ? function (row) { return !holds(row); } : holds;
         });
+        if (tests.length === 0) { return function () { return true; }; }
         return function (row) {
-            for (var i = 0; i < tests.length; i++) { if (!tests[i](row)) { return false; } }
-            return true;
+            for (var i = 0; i < tests.length; i++) { if (tests[i](row)) { return true; } }
+            return false;
         };
     }
 
@@ -169,8 +175,17 @@
             return normalize({ rules: Array.prototype.map.call(inForce(), readRow) }, keys);
         }
 
+        /* The first row is led by "Show mutations where:" and every later one, the row
+           being typed included, by "or". */
+        function relabel() {
+            Array.prototype.forEach.call(list.querySelectorAll(ROW), function (row, i) {
+                row.querySelector('[data-role="match-lead"]').textContent = i === 0 ? FIRST_LEAD : NEXT_LEAD;
+            });
+        }
+
         function announce() {
             clear.hidden = inForce().length < 2;
+            relabel();
             if (options.onChange) { options.onChange(read()); }
         }
 
@@ -192,6 +207,8 @@
             });
             var button = row.querySelector('[data-role="match-add"]');
             button.setAttribute("data-role", "match-remove");
+            button.classList.remove("btn-primary");
+            button.classList.add("btn-danger");
             button.textContent = REMOVE_LABEL;
         }
 
@@ -252,6 +269,7 @@
             rules.forEach(function (rule) { addRow(rule, true); });
             addRow(null, false);
             clear.hidden = inForce().length < 2;
+            relabel();
         }
 
         clear.addEventListener("click", function () {

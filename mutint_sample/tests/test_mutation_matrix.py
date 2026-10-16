@@ -530,16 +530,19 @@ class PartialTestCase(_Fixture):
         self.assertIn('data-role="match"', match)
         self.assertIn('data-role="match-rules"', match)
         self.assertIn('<template data-role="match-rule">', match)
-        for role in ("match-column", "match-not", "match-text", "match-whole", "match-case",
-                     "match-seq-id", "match-min", "match-max", "match-add", "match-clear"):
+        for role in ("match-lead", "match-column", "match-not", "match-text", "match-whole",
+                     "match-case", "match-seq-id", "match-min", "match-max", "match-add",
+                     "match-clear"):
             self.assertIn('data-role="%s"' % role, match)
-        # Each kind of rule can be inverted; a row's button adds it, and the script turns the
-        # button into the rule's Remove once it is in force. Remove all is hidden until the
-        # script finds two or more in force. No sentence describes the rules.
+        # Each kind of rule can be inverted; a row's blue button adds it, and the script turns
+        # the button into the rule's red Remove once it is in force. Remove all is red and
+        # hidden until the script finds two or more in force. No sentence describes the
+        # rules: the script leads the rows with "Show mutations where:" and "or".
         self.assertIn("does not contain", match)
         self.assertIn("not between", match)
-        self.assertIn(">+ Add filter</button>", match)
-        self.assertIn('data-role="match-clear" hidden>Remove all filters</button>', match)
+        self.assertIn('class="btn btn-primary" data-role="match-add">+ Add filter</button>', match)
+        self.assertIn('class="btn btn-danger" data-role="match-clear" hidden>Remove all filters</button>', match)
+        self.assertNotIn("btn-sm", match)
         self.assertNotIn("match-summary", match)
         column_menu = match[match.index('data-role="match-column"'):]
         column_menu = column_menu[:column_menu.index("</select>")]

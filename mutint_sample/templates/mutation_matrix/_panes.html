@@ -157,7 +157,7 @@
         <div class="mutation-matrix-summary" data-role="filter-summary"></div>
     {% endif %}
 </div>
-{% comment %} The Filter tab: rules over the descriptive columns, AND-ed, drawn and applied
+{% comment %} The Filter tab: rules over the descriptive columns, OR-ed, drawn and applied
    by mutint_match_rules.js through the matrix's search hook, and remembered per experiment
    under a key the per-sample Mutations page shares. One partial for both tables. {% endcomment %}
 <div class="tab-pane{% if active == "match" %} active{% endif %}" id="{{ page }}-pane-match">

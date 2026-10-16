@@ -108,10 +108,12 @@ class MatchRulesTestCase(unittest.TestCase):
                          self.matches([{"column": "position", "seq_id": "pLA", "not": True}],
                                       [row("x", 1, seq_id="pLA"), row("x", 1)]))
 
-    def test_rules_are_anded(self):
+    def test_rules_are_ored(self):
+        """A row shows when any rule in force holds."""
         rules = [{"column": "gene", "text": "thr"}, {"column": "position", "max": 20}]
-        self.assertEqual([True, False, False],
-                         self.matches(rules, [row("thrA", 10), row("thrA", 30), row("araA", 10)]))
+        self.assertEqual([True, True, True, False],
+                         self.matches(rules, [row("thrA", 10), row("thrA", 30), row("araA", 10),
+                                              row("araA", 30)]))
 
     def test_an_empty_rule_keeps_everything(self):
         """Inverted too: "does not contain nothing" is a rule still being typed, not a rule

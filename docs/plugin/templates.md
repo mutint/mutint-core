@@ -91,7 +91,7 @@ References, Columns (descriptive columns and cell padding), Frequencies (how a c
 its frequency), Filter (rules over the descriptive columns: text a column must contain
 or must not, whole-word or case-sensitive on request, or a position range on a reference
 sequence the position must lie in or out of; each put in force by its own Add button,
-several AND-ed), Sets when the matrix has row sets, and Export -- from
+a row showing when any one of several holds), Sets when the matrix has row sets, and Export -- from
 `control_tabs.html`. `mutation_matrix/page.html` renders its own strip and passes
 `controls=False`; see below for what it adds. The menus let the reader show and
 hide descriptive columns, samples, mutation types and reference sequences. Those choices are remembered for a signed-in reader through

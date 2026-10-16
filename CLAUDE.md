@@ -2272,7 +2272,7 @@ moves their container into the pane once the table is drawn. DataTables' empty c
 is overridden to *Showing 0 entries*, since its own *Showing 0 to 0 of 0 entries*, followed
 by the filtered-from suffix, read as three zeros in a row on an empty Search.
 
-**Filter is rules over the columns, AND-ed, and both tables share them.** The Filter tab
+**Filter is rules over the columns, OR-ed, and both tables share them.** The Filter tab
 (`mutation_matrix/_match_rules.html`, one partial for the matrix and the per-sample page)
 holds one row per rule: a column menu over the descriptive columns -- the `DESCRIPTIVE`
 list, Curate left out as no data -- and what the cell must hold. A text column takes a
@@ -2283,12 +2283,17 @@ match under **Whole word** -- so `mut` finds `mut` and `yjjA/mut` and not `mutT`
 Position, the one position column, takes a reference sequence (every contig of the stored
 reference, `contig_lengths`, each length the upper bound's placeholder; the rows' bare
 names where there is no experiment, as on Search) and two bounds, either open, the
-position must lie **between** or **not between**. **Nothing filters until it is added**:
-the last row is always the one being typed, opening on Gene, and its **+ Add filter** button (or Enter in
-one of its boxes) is what puts the rule in force -- the row locks, its button becomes
-**– Remove filter**, and a blank row is drawn under it. A rule in force is only ever
-removed, never edited in place; **Remove all filters** shows only with two or more in
-force; and a row that says nothing -- an empty box, a position rule with neither contig
+position must lie **between** or **not between**. **A row shows when any rule in force
+holds**, and the page says so by leading the rows rather than by a sentence: the first row
+reads **Show mutations where:** and every later one, the row being typed included, reads
+**or**, right-aligned in a label column of the pane's two-column grid so every row's menus
+start at the same edge (the rows contribute their two cells through `display: contents`).
+**Nothing filters until it is added**:
+the last row is always the one being typed, opening on Gene, and its blue **+ Add filter**
+button (or Enter in one of its boxes) is what puts the rule in force -- the row locks, its
+button becomes a red **– Remove filter**, and a blank row is drawn under it. A rule in
+force is only ever removed, never edited in place; the red **Remove all filters** shows
+only with two or more in force; the buttons are full-size `btn`s, as the other panes' are; and a row that says nothing -- an empty box, a position rule with neither contig
 nor bound, inverted or not -- is not added. Stored as `mutation_matrix.filter.<exp>` --
 `{"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not":
 false}, {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not":

@@ -7,8 +7,11 @@
    rule, from the remembered `mutation_matrix.filter.<experiment>`; the server renders the
    template and knows nothing of what is stored. The last row is always the one being typed:
    nothing in it filters until its "+ Add filter" button is pressed, at which point the row
-   locks, its button becomes "– Remove filter" and a fresh row is drawn under it. "Remove all
-   filters" shows only when two or more are in force. A text column takes a value the cell's
+   locks, its button becomes "– Remove filter" and a fresh row is drawn under it. The rules
+   are OR-ed -- a row shows when any one holds -- and the page says so without a sentence:
+   the script leads the first row with "Show mutations where:" and every later one with
+   "or", in a label column that keeps the rows' menus aligned. "Remove all filters" shows
+   only when two or more are in force. A text column takes a value the cell's
    plain text must contain -- or must not -- with Whole word and Match case as options;
    Position takes a reference sequence and two bounds, either of them open, that the
    position must lie between -- or not. Takes `columns` (Column objects; Curate is skipped,
@@ -18,9 +21,11 @@
    rules are about. {% endcomment %}
 <div class="mutation-matrix-match" data-role="match">
     <div data-role="match-rules"></div>
-    <button type="button" class="btn btn-default btn-sm" data-role="match-clear" hidden>Remove all filters</button>
+    <button type="button" class="btn btn-danger" data-role="match-clear" hidden>Remove all filters</button>
     <template data-role="match-rule">
-        <div class="form-inline mutation-matrix-match-rule">
+        <div class="mutation-matrix-match-rule">
+            <span class="mutation-matrix-match-lead" data-role="match-lead"></span>
+            <div class="form-inline mutation-matrix-match-fields">
             <select class="form-control" data-role="match-column" aria-label="Column" title="The column the rule reads">
                 {% for column in columns %}{% if column.key != "curate" %}<option value="{{ column.key }}"{% if column.key == "position" %} data-kind="position"{% endif %}{% if column.key == "gene" %} selected{% endif %}>{{ column.title }}</option>{% endif %}{% endfor %}
             </select>
@@ -45,7 +50,8 @@
                 <input type="text" class="form-control" size="9" data-role="match-min" placeholder="1" aria-label="Lowest position"/>
                 and <input type="text" class="form-control" size="9" data-role="match-max" aria-label="Highest position"/>
             </span>
-            <button type="button" class="btn btn-default btn-sm" data-role="match-add">+ Add filter</button>
+            <button type="button" class="btn btn-primary" data-role="match-add">+ Add filter</button>
+            </div>
         </div>
     </template>
 </div>
