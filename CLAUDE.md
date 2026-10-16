@@ -1891,7 +1891,13 @@ server-rendered twice, the value as text (`.sb-view`) and as the box the save sc
 no JavaScript sees the table, and the tests that read ids off the rendered HTML read the same
 HTML in both modes. **The mode is not remembered**: every load is the view, which is how Save,
 Delete selected and Designate ancestor -- all of which reload -- return to it, and Cancel
-simply reloads. Not a preference, because which mode you are in is a state of one visit. A
+simply reloads. Not a preference, because which mode you are in is a state of one visit.
+**`?edit=` is the one other way into the mode**, and it is what the Edit samples buttons on
+the Overview and the experiment's edit page link to: a button called Edit samples should not
+land on a table with a second Edit button to press. The view sets `sb-editing` for an editor
+only -- a reader or a locked experiment gets the plain table whatever the address says -- and
+the script takes the parameter off the address with `replaceState` on load, so every reload
+above still lands on the view. A
 locked experiment shows the table with no Edit button, where it used to 403; a page nobody can
 edit renders no control whose endpoint would refuse them (`sb-can-edit` is absent and the
 boxes stay hidden whatever the script does). Upload CSV keeps the page in edit mode, so the

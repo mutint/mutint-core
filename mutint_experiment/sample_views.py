@@ -157,10 +157,15 @@ def experiment_samples(request, pk):
     if not can_view_project(request.user, experiment.project):
         return render(request, "403.html", context, status=403)
 
+    can_edit = can_edit_experiment(request.user, experiment)
     context.update(experiment.experiment_context())
     context.update({
         "experiment": experiment,
-        "can_edit": can_edit_experiment(request.user, experiment),
+        "can_edit": can_edit,
+        # `?edit=` opens the boxes on load, for an editor only: it is what the Overview's and
+        # the edit page's Edit samples buttons link to. Presence, not truthiness, as the
+        # session filter's parameters are read.
+        "start_editing": can_edit and "edit" in request.GET,
         "samples": [_row_context(sample) for sample in _experiment_samples(experiment)],
         # For the table's header row; each sample row carries its own resolved copy.
         "flags": FLAGS,

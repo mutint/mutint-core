@@ -920,7 +920,8 @@ class ExperimentEditTestCase(TestCase):
         url = "/stats?experiment_id=%d" % self.experiment.id
         html = self.client.get(url, follow=True).content.decode()
         self.assertIn('href="/experiment/%d/edit/"' % self.experiment.id, html)
-        self.assertIn('href="/experiment/%d/samples/"' % self.experiment.id, html)
+        # Edit samples opens the Samples page with its boxes already open.
+        self.assertIn('href="/experiment/%d/samples/?edit=1"' % self.experiment.id, html)
         self.assertIn('id="delete-experiment"', html)
 
         stranger = User.objects.create(
@@ -929,6 +930,7 @@ class ExperimentEditTestCase(TestCase):
         html = self.client.get(url, follow=True).content.decode()
         self.assertNotIn('id="delete-experiment"', html)
         self.assertNotIn("/edit/", html)
+        self.assertNotIn("/samples/?edit=1", html)
 
 
 class ExperimentFromExistingReferenceTestCase(TestCase):

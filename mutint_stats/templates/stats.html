@@ -91,7 +91,7 @@
             <a class="btn btn-default"
                href="/experiment/{{ experiment_id }}/edit/">Edit experiment</a>
             <a class="btn btn-default"
-               href="/experiment/{{ experiment_id }}/samples/">Edit samples</a>
+               href="/experiment/{{ experiment_id }}/samples/?edit=1">Edit samples</a>
         {% endif %}
         {% if experiment.reference %}
             {% comment %} The whole experiment -- its reference, every sample's mutations and

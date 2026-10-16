@@ -49,7 +49,7 @@
        uses deferRender, which never builds the DOM for rows it has not drawn -- values
        typed into those rows would not exist to be read back on save. Experiments run to
        tens or a few hundred samples, so paging buys nothing here anyway. {% endcomment %}
-    <div id="sb-page" class="{% if can_edit %}sb-can-edit{% endif %}">
+    <div id="sb-page" class="{% if can_edit %}sb-can-edit{% if start_editing %} sb-editing{% endif %}{% endif %}">
         {% csrf_token %}
 
         {% if samples %}
@@ -57,6 +57,9 @@
            Edit. The mode is a class the Edit button sets and nothing remembers, so every
            reload lands here; Save, Delete selected and Designate ancestor all end in a reload,
            which is what returns the page to the view, and Cancel reloads for the same reason.
+           The one way in besides the button is `?edit=`, which the Edit samples buttons on the
+           Overview and the edit page carry: the view sets the class for an editor and the
+           script drops the parameter from the address, so those reloads still land on the view.
            The instructions are about the boxes, so they show with them. {% endcomment %}
         <div class="btn-row sb-view" style="margin-bottom: 0.5em;">
             {% if can_edit %}<button type="button" class="btn btn-primary" id="sb-edit">Edit</button>{% endif %}
@@ -250,6 +253,11 @@
     // everything below the sizing is bound only where there is a Save button to bind.
     var page = document.getElementById("sb-page");
     var editButton = document.getElementById("sb-edit");
+    if (page.classList.contains("sb-editing")) {
+        // Opened by `?edit=`. Take it off the address so the reloads below return to the view.
+        sizeScrollBox();
+        window.history.replaceState(null, "", window.location.pathname);
+    }
     if (editButton) {
         editButton.addEventListener("click", function () {
             page.classList.add("sb-editing");

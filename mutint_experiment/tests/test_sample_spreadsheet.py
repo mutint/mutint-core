@@ -267,6 +267,35 @@ class ViewModeTestCase(SpreadsheetTestCase):
             self.assertNotIn('id="%s"' % control, body, control)
         self.assertNotIn("Cells with changes will be highlighted", body)
 
+    def test_edit_in_the_query_opens_the_boxes_for_an_editor(self):
+        """`?edit=` is what the Overview's and the edit page's Edit samples buttons carry.
+
+        The class is server-rendered so the boxes are open on the first paint, and the
+        script takes the parameter off the address so the reloads that Save, Cancel and
+        the rest end in return to the view as they always have.
+        """
+        body = self.client.get("/experiment/%d/samples/?edit=1" % self.experiment.id
+                               ).content.decode()
+        self.assertIn('id="sb-page" class="sb-can-edit sb-editing"', body)
+        self.assertIn('window.history.replaceState(null, "", window.location.pathname)', body)
+        # The edit page's link carries it too.
+        edit_page = self.client.get("/experiment/%d/edit/" % self.experiment.id).content.decode()
+        self.assertIn('href="/experiment/%d/samples/?edit=1"' % self.experiment.id, edit_page)
+
+    def test_edit_in_the_query_opens_nothing_for_a_reader_or_on_a_locked_experiment(self):
+        url = "/experiment/%d/samples/?edit=1" % self.experiment.id
+        self.experiment.lock(self.user)
+        # The class attribute, not the word: the stylesheet and the script name the class
+        # on every render, and what is being asserted is that nothing carries it.
+        body = self.client.get(url).content.decode()
+        self.assertIn('id="sb-page" class=""', body)
+        self.assertNotIn('id="sb-edit"', body)
+        self.experiment.unlock()
+        self.login_reader()
+        body = self.client.get(url).content.decode()
+        self.assertIn('id="sb-page" class=""', body)
+        self.assertNotIn('id="sb-edit"', body)
+
     def test_the_sizing_runs_for_a_reader_too(self):
         self.login_reader()
         self.assertContains(self.page(), 'if (!document.getElementById("sb-page")) { return; }')
