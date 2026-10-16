@@ -20,6 +20,14 @@ class SampleConfig(AppConfig):
         register_nav_item('Mutations', url='/mutations/breseq',
                           section=EXPERIMENT_SECTION)
 
+        # breseq's report, and a curation check's, as links in the sample box at the top
+        # of the Mutations page -- through the same registry a plugin's FastQC link uses,
+        # so everything kept about a sample is linked from one place.
+        from mutint_common.sample_link_registry import register_sample_link
+        from mutint_sample.sample_links import breseq_report_links
+
+        register_sample_link(self, 'breseq_report', breseq_report_links)
+
         # The two kinds of stored data core owns per sample and will clear: the alignment
         # files, and breseq's HTML report. `sample.gd` and the reference are deliberately
         # not kinds -- the mutations are the data. See mutint_sample/storage.py.

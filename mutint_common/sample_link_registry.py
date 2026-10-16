@@ -7,8 +7,8 @@ callables return for that sample. The thirteenth registry.
 **Why this exists.** Something a component keeps *about one sample* -- a FastQC report on the
 reads it was made from is the first -- had nowhere to be linked from. `panel_registry` is the
 experiment's Overview, and `context_registry` hands a view context some core template must
-already be written to render. The breseq report's link is written into the page directly
-because core keeps that report; a plugin's cannot be.
+already be written to render. Core registers the breseq report's own links through it too
+(`mutint_sample.sample_links`), so everything kept about a sample is linked from one box.
 
 **Links, not panels.** A sample's page is its mutations, and what a component adds there is a
 way to something else rather than content of its own. A callable returns

@@ -133,6 +133,20 @@ def contig_lengths(reference):
                  for entry in (reference.seq_ids or []) if entry.get("id"))
 
 
+def reference_names(reference, rows):
+    """`(seq_id, ...)` for the References menu: every contig of the stored reference, in
+    its own order, mutations on it or not, then any name the rows carry that the reference
+    does not, sorted; the rows' names alone, sorted, with no reference (Search).
+
+    Every contig rather than only the ones with rows, because a menu that lists two of a
+    reference's four sequences reads as the other two having gone missing, when the truth
+    is that nothing was called on them.
+    """
+    named = [seq_id for seq_id, _ in contig_lengths(reference)]
+    extra = sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]} - set(named))
+    return tuple(named + extra)
+
+
 @dataclass(frozen=True)
 class ClientSet:
     """A row set the *browser* decides: the Show menu offers it, and a script registered
@@ -401,17 +415,18 @@ def build_matrix(mutation_calls, sample_dict, *, experiment=None, labels="plain"
             populations.append((sample.population_id, sample.population))
     curating = curate and experiment is not None
     columns = ([CURATE_COLUMN] if curating else []) + list(DESCRIPTIVE)
-    seq_lengths = ()
+    reference = None
     if experiment is not None:
         try:
-            seq_lengths = contig_lengths(experiment.reference)
+            reference = experiment.reference
         except ObjectDoesNotExist:
-            seq_lengths = ()
+            reference = None
+    seq_lengths = contig_lengths(reference)
     return MutationMatrix(columns=columns, samples=samples, rows=rows,
                           experiment_id=experiment.id if experiment is not None else None,
                           dom_id=dom_id, csv_title=csv_title,
                           types=tuple(sorted({row["type"] for row in rows if row["type"]})),
-                          seq_ids=tuple(sorted({row["seq_id_text"] for row in rows if row["seq_id_text"]})),
+                          seq_ids=reference_names(reference, rows),
                           seq_lengths=seq_lengths,
                           sets=sets, client_sets=tuple(client_sets),
                           populations=tuple(populations),

@@ -309,9 +309,16 @@ class RowsTestCase(_Fixture):
         self.assertIn('<option value="test_ref">test_ref</option>', html)
         self.assertNotIn("data-length=", html)
 
-    def test_the_references_are_the_rows_seq_ids_sorted(self):
-        """For the References menu: the contigs the rows are on, an empty name left out."""
+    def test_the_references_are_every_contig_of_the_reference(self):
+        """For the References menu: the stored reference's contigs in its own order, rows
+        on them or not; a name the rows carry that the reference does not comes after,
+        sorted; an empty name is left out."""
         self.assertEqual(("test_ref",), self.matrix().seq_ids)
+        reference = self.experiment.reference
+        reference.seq_ids = list(reference.seq_ids) + [{"id": "z_plasmid", "length": 5}]
+        reference.save(update_fields=["seq_ids"])
+        self.experiment = type(self.experiment).objects.get(pk=self.experiment.pk)
+        self.assertEqual(("test_ref", "z_plasmid"), self.matrix().seq_ids)
         first = list(self.sample_dict.values())[0]
         for seq_id, position in (("a_plasmid", 7), ("", 8)):
             mutation = Mutation.objects.create(
@@ -320,7 +327,11 @@ class RowsTestCase(_Fixture):
             MutationCall.objects.create(sample=first, mutation=mutation, present=True,
                                         frequency=1.0)
         self.calls = get_all_calls_filtered(self.experiment.id)
-        self.assertEqual(("a_plasmid", "test_ref"), self.matrix().seq_ids)
+        self.assertEqual(("test_ref", "z_plasmid", "a_plasmid"), self.matrix().seq_ids)
+
+    def test_with_no_experiment_the_references_are_the_rows_seq_ids_sorted(self):
+        matrix = mutation_matrix.build_matrix(self.calls, self.sample_dict)
+        self.assertEqual(("test_ref",), matrix.seq_ids)
 
     def test_no_experiment_means_no_experiment_id(self):
         matrix = mutation_matrix.build_matrix(self.calls, self.sample_dict)

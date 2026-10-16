@@ -2225,7 +2225,9 @@ definitions from those attributes. Rows travel as `json_script`.
 .mutint-menu.mutint-select-list` driven by `mutintSelectList` in toggle mode, `active` being
 shown. Columns lists the descriptive columns (Description and the eight gene-list fields off by
 default: prose, the widest column, and lists as long as a deletion is wide); Samples lists the samples, Mutation Types the types the rows hold and
-References the reference sequences they are on, each with Show all / Hide all beside it. A row
+References every contig of the stored reference, rows on it or not (`reference_names`; a
+menu listing two of four contigs read as the other two having gone missing), each with
+Show all / Hide all beside it. A row
 whose type or reference is hidden, or whose mutation is in no shown sample, leaves the table
 through `$.fn.dataTable.ext.search`, so paging and the count describe what is visible, and the
 striping is redone per displayed row the way breseq stripes. The page length menu ends in All.
@@ -4585,8 +4587,9 @@ Four things about it are load-bearing:
 url, title)]` is drawn by `{% sample_links sample %}` in `sample/_inputs.html`, which is the
 box at the top of the Mutations page and the sample edit page. A sample's page is its
 mutations, and a component adds a way to something else. A provider that raises is dropped
-with a logged warning, the posture `panel_registry` takes. The breseq report's own link stays
-hardcoded, because core keeps that report.
+with a logged warning, the posture `panel_registry` takes. Core registers through it too:
+`mutint_sample.sample_links` puts breseq's report, its summary and a curation check's report
+in that box, which is why the Mutations page's crosslink row no longer carries them.
 
 **`tools.tool_environment()` is the one environment every component runs a tool under** --
 breseq, fastp, ISEScan, sendsketch and FastQC alike. It puts `<tools>/bin` first on PATH and,
