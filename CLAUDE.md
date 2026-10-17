@@ -3074,6 +3074,13 @@ from the feature rows with none, and `VerifySequenceFeatureMatch` refused the wh
 with *No sequence found*. breseq never meets this with its own output, whose writer only ever
 writes names it already rewrote; MutInt's writer did not.
 
+breseq's own loader sanitizes feature rows too since October 2026, and
+`breseq CONVERT-REFERENCE --list-seq-ids` prints each sequence's name in the file beside the
+id breseq uses; `BreseqConformanceTestCase` runs it where breseq is installed and holds the
+port to the answer, skipping standalone. The set is ASCII only on both sides: breseq's
+carried a Unicode minus sign for years, which as a byte set let other characters sharing
+one of its bytes through half-rewritten.
+
 `annotate.model.safe_seq_id` is the port, applied at every point a name enters the model --
 the GenBank loader's LOCUS name and VERSION alias, `load_gff3`'s FASTA ids and feature rows,
 and `reference.parse_fasta` for a bare FASTA -- so no stored id is one breseq would alter. A

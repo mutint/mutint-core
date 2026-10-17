@@ -43,10 +43,11 @@ def make_safe(name):
     return name
 
 
-# reference_sequence.h `safe_seq_id_name_characters`: the only characters breseq keeps in
-# a seq id. U+2212 (a true minus sign) is on breseq's list and so is on this one.
+# reference_sequence.cpp `safe_seq_id_name_characters`: the only characters breseq keeps in
+# a seq id. ASCII only, as breseq's is: it carried a Unicode minus sign for years, and as a
+# byte set that admitted other characters sharing one of its bytes, half-rewritten.
 SAFE_SEQ_ID_CHARACTERS = frozenset(
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890._-+\u2212')
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890._-+')
 
 
 def safe_seq_id(name):
@@ -54,13 +55,16 @@ def safe_seq_id(name):
 
     breseq rewrites every seq id it loads: a character outside `SAFE_SEQ_ID_CHARACTERS`
     becomes `_`, runs of `__` collapse to one (they are its junction divider), and leading
-    and trailing `_` are dropped. It applies that to `##sequence-region` lines and FASTA
-    headers but **not** to column 1 of a GFF3 feature row, so a stored GFF3 naming a contig
-    `P-Ant1_(_ColE1` verbatim makes breseq register two contigs, one of them with no
-    sequence, and refuse the reference. Storing the safe form is what keeps the stored
-    GFF3 loadable and the seq ids in breseq's own `.gd` output equal to the stored ones.
+    and trailing `_` are dropped. Releases before the fix in October 2026 applied that to
+    `##sequence-region` lines and FASTA headers but **not** to column 1 of a GFF3 feature
+    row, so a stored GFF3 naming a contig `P-Ant1_(_ColE1` verbatim made breseq register
+    two contigs, one of them with no sequence, and refuse the reference. Storing the safe
+    form keeps the stored GFF3 loadable by every release and the seq ids in breseq's own
+    `.gd` output equal to the stored ones.
 
-    Raises ValueError where breseq asserts: a name with no valid character at all.
+    `breseq CONVERT-REFERENCE --list-seq-ids` prints breseq's own answer, and
+    `test_safe_seq_id.BreseqConformanceTestCase` holds this port to it wherever breseq is
+    installed. Raises ValueError where breseq asserts: a name with no valid character.
     """
     safe = ''.join(c if c in SAFE_SEQ_ID_CHARACTERS else '_' for c in name)
     while '__' in safe:
