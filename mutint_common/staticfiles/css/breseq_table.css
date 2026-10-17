@@ -459,13 +459,14 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 }
 
 /* The Filter tab's rules, one row each: a lead -- "Show mutations where:" on the first row,
-   "or" on every later one -- then the column menu and the value it must hold (contains or
+   an and/or menu on every later one -- then the column menu and the value it must hold (contains or
    not, a text box and its two options; or a reference menu, between or not, and two
    bounds) and the row's button, "+ Add filter" in blue on the row being typed and
    "– Remove filter" in red on a rule in force, whose controls are locked and read greyed.
    The pane is a two-column grid, lead then fields, with the rows contributing their two
    cells through `display: contents`, so every row's lead shares one width and every row's
-   menus start at the same edge; Remove all sits in the fields column. The fields wrap on a
+   menus start at the same edge, the leads set against that edge; Remove all sits in the
+   fields column. The fields wrap on a
    narrow window. The checkboxes take the row's gap rather than Bootstrap's 10px left
    margin, which stacked oddly once the row wrapped. */
 .mutation-matrix-match {
@@ -482,6 +483,7 @@ table.dataTable.breseq-table thead .sorting_desc:after {
 }
 
 .mutation-matrix-match-lead {
+    justify-self: end;
     text-align: right;
     white-space: nowrap;
 }

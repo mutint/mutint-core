@@ -541,14 +541,18 @@ class PartialTestCase(_Fixture):
         self.assertIn('data-role="match"', match)
         self.assertIn('data-role="match-rules"', match)
         self.assertIn('<template data-role="match-rule">', match)
-        for role in ("match-lead", "match-column", "match-not", "match-text", "match-whole",
-                     "match-case", "match-seq-id", "match-min", "match-max", "match-add",
-                     "match-clear"):
+        for role in ("match-lead", "match-lead-text", "match-join", "match-column", "match-not",
+                     "match-text", "match-whole", "match-case", "match-seq-id", "match-min",
+                     "match-max", "match-add", "match-clear"):
             self.assertIn('data-role="%s"' % role, match)
         # Each kind of rule can be inverted; a row's blue button adds it, and the script turns
         # the button into the rule's red Remove once it is in force. Remove all is red and
         # hidden until the script finds two or more in force. No sentence describes the
-        # rules: the script leads the rows with "Show mutations where:" and "or".
+        # rules: the script leads the first row with "Show mutations where:" and every later
+        # one with its and/or menu, or first so it is the default.
+        self.assertIn('<option value="or">or</option>', match)
+        self.assertIn('<option value="and">and</option>', match)
+        self.assertLess(match.index('<option value="or">'), match.index('<option value="and">'))
         self.assertIn("does not contain", match)
         self.assertIn("not between", match)
         self.assertIn('class="btn btn-primary" data-role="match-add">+ Add filter</button>', match)

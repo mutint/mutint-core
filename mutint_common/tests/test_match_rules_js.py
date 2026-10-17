@@ -2,7 +2,8 @@
 
 `mutint_match_rules.js` decides whether a row matches -- a substring of a column's text,
 whole-word or case-sensitive on request, or a position range on a reference, either of
-them inverted on request -- and both mutation tables apply it in the browser. Nothing on the server reads a rule, so this is
+them inverted on request, the rules joined by and/or with and binding tighter -- and both
+mutation tables apply it in the browser. Nothing on the server reads a rule, so this is
 the only test of what one means. Skipped, saying why, where node is not installed.
 """
 
@@ -109,11 +110,41 @@ class MatchRulesTestCase(unittest.TestCase):
                                       [row("x", 1, seq_id="pLA"), row("x", 1)]))
 
     def test_rules_are_ored(self):
-        """A row shows when any rule in force holds."""
+        """A rule that names no join is "or": a row shows when any rule in force holds."""
         rules = [{"column": "gene", "text": "thr"}, {"column": "position", "max": 20}]
         self.assertEqual([True, True, True, False],
                          self.matches(rules, [row("thrA", 10), row("thrA", 30), row("araA", 10),
                                               row("araA", 30)]))
+
+    def test_and_binds_tighter_than_or(self):
+        """thr, and at most 20, or a DEL: (thr and <= 20) or DEL."""
+        rules = [{"column": "gene", "text": "thr"},
+                 {"column": "position", "max": 20, "join": "and"},
+                 {"column": "type", "text": "DEL", "join": "or"}]
+        rows = [row("thrA", 10), row("thrA", 30), row("araA", 10), row("araA", 30)]
+        rows[3]["cells"]["type"] = "DEL"
+        self.assertEqual([True, False, False, True], self.matches(rules, rows))
+        # and alone: every rule must hold.
+        self.assertEqual([True, False, False, False], self.matches(rules[:2], rows))
+
+    def test_the_first_rules_join_is_ignored(self):
+        rules = [{"column": "gene", "text": "thr", "join": "and"},
+                 {"column": "position", "max": 20}]
+        self.assertEqual([True, True, True, False],
+                         self.matches(rules, [row("thrA", 10), row("thrA", 30), row("araA", 10),
+                                              row("araA", 30)]))
+
+    def test_an_empty_rule_leaves_its_group(self):
+        """A rule still being typed says nothing, wherever it sits: the rules it is joined
+        to by "and" are left to decide, and a group of nothing but such rules is dropped."""
+        rows = [row("thrA"), row("araA")]
+        self.assertEqual([True, False], self.matches(
+            [{"column": "gene", "text": "thr"}, {"column": "gene", "text": "", "join": "and"}], rows))
+        self.assertEqual([True, False], self.matches(
+            [{"column": "gene", "text": ""}, {"column": "gene", "text": "thr", "join": "and"}], rows))
+        self.assertEqual([True, False], self.matches(
+            [{"column": "gene", "text": "thr"}, {"column": "position", "join": "or"},
+             {"column": "gene", "text": "", "join": "and"}], rows))
 
     def test_an_empty_rule_keeps_everything(self):
         """Inverted too: "does not contain nothing" is a rule still being typed, not a rule
@@ -129,11 +160,14 @@ class MatchRulesTestCase(unittest.TestCase):
         a number; and inverted bounds are put the right way round."""
         rules = [{"column": "freq", "text": "1"}, "junk", None,
                  {"column": "position", "min": "abc", "max": "500", "seq_id": 3},
-                 {"column": "position", "min": 30, "max": 20},
-                 {"column": "gene", "text": "thr", "whole": 1, "not": "yes"}]
+                 {"column": "position", "min": 30, "max": 20, "join": "AND"},
+                 {"column": "gene", "text": "thr", "whole": 1, "not": "yes", "join": "and"}]
         got = run([{"rules": rules, "columns": COLUMNS, "normalize": True}])[0]["rules"]
-        self.assertEqual([{"column": "position", "seq_id": "", "min": None, "max": 500, "not": False},
-                          {"column": "position", "seq_id": "", "min": 20, "max": 30, "not": False},
-                          {"column": "gene", "text": "thr", "whole": True, "case": False, "not": True}],
+        self.assertEqual([{"column": "position", "seq_id": "", "min": None, "max": 500, "not": False,
+                           "join": "or"},
+                          {"column": "position", "seq_id": "", "min": 20, "max": 30, "not": False,
+                           "join": "or"},
+                          {"column": "gene", "text": "thr", "whole": True, "case": False, "not": True,
+                           "join": "and"}],
                          got)
         self.assertEqual([], run([{"rules": "nope", "columns": COLUMNS, "normalize": True}])[0]["rules"])

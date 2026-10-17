@@ -1,4 +1,4 @@
-/* The Filter tab on the per-sample Mutations page: rules over the columns, OR-ed.
+/* The Filter tab on the per-sample Mutations page: rules over the columns, joined by and/or.
  *
  * The same tab the mutation matrix has, remembering the same choice --
  * `mutation_matrix.filter.<experiment>` -- so a rule typed on Compare is in force here and

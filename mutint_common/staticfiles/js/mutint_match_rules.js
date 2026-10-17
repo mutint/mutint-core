@@ -8,14 +8,19 @@
  * text, case-folded unless `case`, and only where no word character (a letter, a digit or
  * an underscore) sits at either end of the match when `whole`, so `mut` finds mut, and
  * mut/yjjA, and not mutT -- or, for Position, a reference sequence and two bounds, either
- * open. `not` inverts a rule of either kind: does not contain, or not between. Several
- * rules are OR-ed: a row shows when any one of them holds. The stored shape:
+ * open. `not` inverts a rule of either kind: does not contain, or not between. Each rule
+ * after the first says how it joins the rules above it, `join`: "and" binds tighter than
+ * "or", so the rules form or-separated groups, each the and of its rules, and a row shows
+ * when any group holds in full. The first rule's `join` is ignored. The stored shape:
  *
- *   {"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not": false},
- *              {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not": true}]}
+ *   {"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not": false,
+ *               "join": "or"},
+ *              {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not": true,
+ *               "join": "and"}]}
  *
  * `normalize` is the one reader of that shape, and it is forgiving: a rule naming a column
- * the page does not offer is dropped, a bound that is not a number is open. Matching is a
+ * the page does not offer is dropped, a bound that is not a number is open, a `join` that
+ * is not "and" is "or". Matching is a
  * function over an adapter rather than over a row, because the two tables hold their rows
  * differently -- the matrix as objects of HTML strings, the per-sample page as `<tr>`s --
  * and each supplies `{text(key), seqId, position}` for its own.
@@ -23,8 +28,8 @@
  * `mount` draws one clone of the pane's <template> per rule in force, locked, and one more
  * being typed: a rule takes effect when its "+ Add filter" button is pressed (or Enter in
  * one of its boxes), never as it is typed, and a rule in force is only ever removed. The
- * first row is led by "Show mutations where:" and every later one by "or", so the page
- * says how the rules combine without a sentence. The page hands it the store: this module
+ * first row is led by "Show mutations where:" and every later one by its and/or menu, so
+ * the page says how the rules combine without a sentence. The page hands it the store: this module
  * saves nothing itself. Exported for node too, so a
  * test can run the rules outside a browser (the same guard compare_sets.js uses).
  */
@@ -37,7 +42,6 @@
     var ADD_LABEL = "+ Add filter";
     var REMOVE_LABEL = "– Remove filter";
     var FIRST_LEAD = "Show mutations where:";
-    var NEXT_LEAD = "or";
 
     function escapeRegExp(text) {
         // Only the syntax characters: under the `u` flag, escaping anything else is an error.
@@ -57,14 +61,15 @@
         var rules = [];
         list.forEach(function (rule) {
             if (!rule || typeof rule !== "object" || !offered[rule.column]) { return; }
+            var join = rule.join === "and" ? "and" : "or";
             if (rule.column === POSITION) {
                 var min = finite(rule.min), max = finite(rule.max);
                 if (min !== null && max !== null && min > max) { var t = min; min = max; max = t; }
                 rules.push({ column: POSITION, seq_id: typeof rule.seq_id === "string" ? rule.seq_id : "",
-                             min: min, max: max, not: !!rule.not });
+                             min: min, max: max, not: !!rule.not, join: join });
             } else {
                 rules.push({ column: rule.column, text: typeof rule.text === "string" ? rule.text : "",
-                             whole: !!rule.whole, "case": !!rule["case"], not: !!rule.not });
+                             whole: !!rule.whole, "case": !!rule["case"], not: !!rule.not, join: join });
             }
         });
         return rules;
@@ -98,17 +103,26 @@
         return function (row) { return re.test(row.text(rule.column) || ""); };
     }
 
-    /* `fn(row)` over `{text(key) -> string, seqId, position}`: true when any rule holds,
-       and true of every row when no rule says anything. */
+    function test(rule) {
+        var holds = positive(rule);
+        return rule.not ? function (row) { return !holds(row); } : holds;
+    }
+
+    /* `fn(row)` over `{text(key) -> string, seqId, position}`: true when every rule of any
+       group holds, a group being a first or "or" rule and the "and" rules after it; a rule
+       that says nothing leaves its group, and a row is true when no group is left. */
     function compile(rules) {
-        var tests = rules.filter(effective).map(function (rule) {
-            var holds = positive(rule);
-            return rule.not ? function (row) { return !holds(row); } : holds;
+        var groups = [];
+        rules.forEach(function (rule, i) {
+            if (i === 0 || rule.join !== "and") { groups.push([]); }
+            if (effective(rule)) { groups[groups.length - 1].push(test(rule)); }
         });
-        if (tests.length === 0) { return function () { return true; }; }
+        groups = groups.filter(function (group) { return group.length > 0; });
+        if (groups.length === 0) { return function () { return true; }; }
         return function (row) {
-            for (var i = 0; i < tests.length; i++) { if (tests[i](row)) { return true; } }
-            return false;
+            return groups.some(function (group) {
+                return group.every(function (holds) { return holds(row); });
+            });
         };
     }
 
@@ -156,13 +170,14 @@
         function readRow(row) {
             var column = row.querySelector('[data-role="match-column"]').value;
             var not = field(row, "match-not").value === "1";
+            var join = row.querySelector('[data-role="match-join"]').value;
             if (column === POSITION) {
-                return { column: column, not: not,
+                return { column: column, not: not, join: join,
                          seq_id: row.querySelector('[data-role="match-seq-id"]').value,
                          min: row.querySelector('[data-role="match-min"]').value,
                          max: row.querySelector('[data-role="match-max"]').value };
             }
-            return { column: column, not: not,
+            return { column: column, not: not, join: join,
                      text: row.querySelector('[data-role="match-text"]').value,
                      whole: row.querySelector('[data-role="match-whole"]').checked,
                      "case": row.querySelector('[data-role="match-case"]').checked };
@@ -176,10 +191,13 @@
         }
 
         /* The first row is led by "Show mutations where:" and every later one, the row
-           being typed included, by "or". */
+           being typed included, by its and/or menu. */
         function relabel() {
             Array.prototype.forEach.call(list.querySelectorAll(ROW), function (row, i) {
-                row.querySelector('[data-role="match-lead"]').textContent = i === 0 ? FIRST_LEAD : NEXT_LEAD;
+                var text = row.querySelector('[data-role="match-lead-text"]');
+                text.textContent = i === 0 ? FIRST_LEAD : "";
+                text.hidden = i !== 0;
+                row.querySelector('[data-role="match-join"]').hidden = i === 0;
             });
         }
 
@@ -242,6 +260,7 @@
                     row.querySelector('[data-role="match-case"]').checked = rule["case"];
                 }
                 field(row, "match-not").value = rule.not ? "1" : "";
+                row.querySelector('[data-role="match-join"]').value = rule.join;
             }
             showFields(row);
             select.addEventListener("change", function () { showFields(row); });

@@ -2274,7 +2274,7 @@ moves their container into the pane once the table is drawn. DataTables' empty c
 is overridden to *Showing 0 entries*, since its own *Showing 0 to 0 of 0 entries*, followed
 by the filtered-from suffix, read as three zeros in a row on an empty Search.
 
-**Filter is rules over the columns, OR-ed, and both tables share them.** The Filter tab
+**Filter is rules over the columns, joined by and/or, and both tables share them.** The Filter tab
 (`mutation_matrix/_match_rules.html`, one partial for the matrix and the per-sample page)
 holds one row per rule: a column menu over the descriptive columns -- the `DESCRIPTIVE`
 list, Curate left out as no data -- and what the cell must hold. A text column takes a
@@ -2285,11 +2285,16 @@ match under **Whole word** -- so `mut` finds `mut` and `yjjA/mut` and not `mutT`
 Position, the one position column, takes a reference sequence (every contig of the stored
 reference, `contig_lengths`, each length the upper bound's placeholder; the rows' bare
 names where there is no experiment, as on Search) and two bounds, either open, the
-position must lie **between** or **not between**. **A row shows when any rule in force
-holds**, and the page says so by leading the rows rather than by a sentence: the first row
-reads **Show mutations where:** and every later one, the row being typed included, reads
-**or**, right-aligned in a label column of the pane's two-column grid so every row's menus
-start at the same edge (the rows contribute their two cells through `display: contents`).
+position must lie **between** or **not between**. **Each rule after the first opens with
+an and/or menu, or by default, and and binds tighter**: the rules form or-separated
+groups, each the and of its rows, and a row shows when every rule of any group holds --
+`mut`, and not `mutT`, or `DEL`. A rule that says nothing leaves its group to the rest.
+The page says how the rules combine by leading the rows rather than by a sentence: the
+first row reads **Show mutations where:** and every later one, the row being typed
+included, carries the menu, set against the fields in a label column of the pane's
+two-column grid so every row's menus start at the same edge (the rows contribute their two
+cells through `display: contents`). The first rule's join is stored and ignored, which is
+what lets removing a group's first rule promote the next without bookkeeping.
 **Nothing filters until it is added**:
 the last row is always the one being typed, opening on Gene, and its blue **+ Add filter**
 button (or Enter in one of its boxes) is what puts the rule in force -- the row locks, its
@@ -2298,12 +2303,12 @@ force is only ever removed, never edited in place; the red **Remove all filters*
 only with two or more in force; the buttons are full-size `btn`s, as the other panes' are; and a row that says nothing -- an empty box, a position rule with neither contig
 nor bound, inverted or not -- is not added. Stored as `mutation_matrix.filter.<exp>` --
 `{"rules": [{"column": "gene", "text": "mut", "whole": false, "case": false, "not":
-false}, {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000, "not":
-true}]}`, the rules in force and never the row being typed -- per experiment and shared
+false, "join": "or"}, {"column": "position", "seq_id": "REL606", "min": 1, "max": 500000,
+"not": true, "join": "and"}]}`, the rules in force and never the row being typed -- per experiment and shared
 with the per-sample Mutations page the way the References choice is; transient on Search. **`js/mutint_match_rules.js` is the one reader
 of that shape and the one matcher**, loaded from `base.html`, exported for node, and
 forgiving: a rule naming a column the page does not offer is dropped, a bound that is not
-a number is open, inverted bounds are swapped. It matches over an adapter
+a number is open, inverted bounds are swapped, a join that is not and is or. It matches over an adapter
 (`{text(key), seqId, position}`) rather than a row, because the matrix holds rows as
 objects of HTML strings and the per-sample page as `<tr>`s. On the matrix the test runs in
 the search hook beside the Types and References menus, so a rule redraws (`dt.draw()`), is
