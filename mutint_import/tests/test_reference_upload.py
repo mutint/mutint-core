@@ -124,7 +124,10 @@ class NormalizationTestCase(TestCase):
         self.assertEqual(duplicates, [])
         self.assertEqual([(r.original, r.safe, r.file) for r in renames],
                          [("P-Ant1_(_ColE1", "P-Ant1_ColE1", "plasmid.gbk")])
-        self.assertIn("breseq", str(renames[0]))
+        self.assertEqual(
+            str(renames[0]),
+            "Sequence `P-Ant1_(_ColE1` renamed to `P-Ant1_ColE1` to remove nonstandard "
+            "characters")
 
     def test_a_bare_fasta_header_is_made_breseq_safe_too(self):
         path = self._write("ref.fasta", ">chr(1) a plasmid\nACGT\n")

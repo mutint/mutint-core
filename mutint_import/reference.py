@@ -290,10 +290,10 @@ class RenamedContig(collections.namedtuple("RenamedContig", "original safe file"
     """A contig stored under breseq's safe spelling of the name its file gave it."""
 
     def __str__(self):
-        return ("contig %r in %s is stored as %r: breseq allows only letters, digits, "
-                "periods, dashes, plus and minus signs and single underscores in a "
-                "sequence name, and would rename it itself"
-                % (self.original, self.file, self.safe))
+        # Names the result and not the tool: the rule is breseq's, but a person reading an
+        # upload summary wants to know what their sequence is called now and why.
+        return ("Sequence `%s` renamed to `%s` to remove nonstandard characters"
+                % (self.original, self.safe))
 
 
 def _renamed_contigs(pairs, display_name):

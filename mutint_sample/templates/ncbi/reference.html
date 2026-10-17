@@ -62,9 +62,11 @@
                         </td>
                         <td>
                             {% if contig.is_verified %}
+                                {% comment %} An entry here is the confirmation: a record is
+                                   written only once NCBI's bases matched the stored ones, so
+                                   a marker saying so beside it said it twice. {% endcomment %}
                                 <a href="https://www.ncbi.nlm.nih.gov/nuccore/{{ contig.accession }}"
-                                   target="_blank" rel="noopener">{{ contig.accession }}</a>
-                                <span class="reference-ok" title="{{ contig.detail }}">&#10003; sequence confirmed</span>
+                                   target="_blank" rel="noopener" title="{{ contig.detail }}">{{ contig.accession }}</a>
                             {% elif not contig.checkable %}
                                 {% comment %} No per-sequence digest: established before
                                    hashing, so there is nothing to compare a record against
