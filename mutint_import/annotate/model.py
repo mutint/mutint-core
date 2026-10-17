@@ -43,6 +43,34 @@ def make_safe(name):
     return name
 
 
+# reference_sequence.h `safe_seq_id_name_characters`: the only characters breseq keeps in
+# a seq id. U+2212 (a true minus sign) is on breseq's list and so is on this one.
+SAFE_SEQ_ID_CHARACTERS = frozenset(
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890._-+\u2212')
+
+
+def safe_seq_id(name):
+    """reference_sequence.h `safe_seq_id_name` -- the seq id breseq will call this contig.
+
+    breseq rewrites every seq id it loads: a character outside `SAFE_SEQ_ID_CHARACTERS`
+    becomes `_`, runs of `__` collapse to one (they are its junction divider), and leading
+    and trailing `_` are dropped. It applies that to `##sequence-region` lines and FASTA
+    headers but **not** to column 1 of a GFF3 feature row, so a stored GFF3 naming a contig
+    `P-Ant1_(_ColE1` verbatim makes breseq register two contigs, one of them with no
+    sequence, and refuse the reference. Storing the safe form is what keeps the stored
+    GFF3 loadable and the seq ids in breseq's own `.gd` output equal to the stored ones.
+
+    Raises ValueError where breseq asserts: a name with no valid character at all.
+    """
+    safe = ''.join(c if c in SAFE_SEQ_ID_CHARACTERS else '_' for c in name)
+    while '__' in safe:
+        safe = safe.replace('__', '_')
+    safe = safe.strip('_')
+    if not safe:
+        raise ValueError('Seq id %r contains no valid characters' % (name,))
+    return safe
+
+
 def trim_repeat_name(name):
     """
     E. coli mobile_element names carry a prefix and a copy suffix that breseq
@@ -243,9 +271,27 @@ class LoadedReferenceSequences(object):
 
     def __init__(self):
         self.sequences = {}
+        # `(original, safe)` for every contig whose name `safe_seq_id` changed on loading,
+        # so the caller can tell the uploader. Empty for a file breseq would load as is.
+        self.renamed = []
 
     def __contains__(self, seq_id):
         return seq_id in self.sequences
+
+    def breseq_name(self, original):
+        """`safe_seq_id(original)`, recorded on `renamed` when it differs.
+
+        Two contigs of one file collapsing onto one safe name is refused rather than
+        merged: `a(b` and `a)b` are two sequences, and `add` would keep only the second.
+        """
+        safe = safe_seq_id(original)
+        if safe != original:
+            if safe in self.sequences:
+                raise ValueError(
+                    'Seq ids %r and %r are both %r once made safe for breseq; rename '
+                    'one of them' % (original, self.sequences[safe].seq_id, safe))
+            self.renamed.append((original, safe))
+        return safe
 
     def __getitem__(self, seq_id):
         return self.sequences[seq_id]

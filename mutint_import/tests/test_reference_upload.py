@@ -104,6 +104,38 @@ class NormalizationTestCase(TestCase):
         self.assertIn("##sequence-region\ttest_ref\t", gff3_text)
         self.assertNotIn("test_ref.3", gff3_text)
 
+    def test_genbank_seq_ids_are_breseq_safe(self):
+        """breseq rewrites a seq id it would not keep -- `(` becomes `_`, `__` collapses --
+        on `##sequence-region` lines and FASTA headers but not on GFF3 feature rows, so a
+        stored GFF3 naming the contig verbatim made it register a second, sequence-less
+        contig and refuse the reference. The stored name is breseq's own spelling, and the
+        upload says so."""
+        path = os.path.join(self.tmp, "plasmid.gbk")
+        write_genbank(path, [("P-Ant1_(_ColE1", breseq_fixture.SEQUENCE_A)])
+
+        gff3_text, sequences, duplicates, renames = reference_io.normalize_references(
+            [(path, "plasmid.gbk")])
+
+        self.assertEqual([seq_id for seq_id, _ in sequences], ["P-Ant1_ColE1"])
+        self.assertNotIn("P-Ant1_(", gff3_text)
+        self.assertIn("##sequence-region\tP-Ant1_ColE1\t", gff3_text)
+        self.assertIn("\nP-Ant1_ColE1\t", gff3_text)   # a feature row
+        self.assertIn("\n>P-Ant1_ColE1\n", gff3_text)
+        self.assertEqual(duplicates, [])
+        self.assertEqual([(r.original, r.safe, r.file) for r in renames],
+                         [("P-Ant1_(_ColE1", "P-Ant1_ColE1", "plasmid.gbk")])
+        self.assertIn("breseq", str(renames[0]))
+
+    def test_a_bare_fasta_header_is_made_breseq_safe_too(self):
+        path = self._write("ref.fasta", ">chr(1) a plasmid\nACGT\n")
+
+        gff3_text, sequences, _duplicates, renames = reference_io.normalize_references(
+            [(path, "ref.fasta")])
+
+        self.assertEqual(sequences, [("chr_1", "ACGT")])
+        self.assertIn("\n>chr_1\n", gff3_text)
+        self.assertEqual([(r.original, r.safe) for r in renames], [("chr(1)", "chr_1")])
+
     def test_the_versioned_accession_still_resolves(self):
         """Kept as an alias, so a GFF3 or .gd spelling it `test_ref.3` still finds the
         contig; only the canonical name changed."""
@@ -215,7 +247,7 @@ class NormalizationTestCase(TestCase):
         """The hash must not depend on how the genome was split into files."""
         both = write_genbank(os.path.join(self.tmp, "both.gbk"), SEQUENCES + self.PLASMID)
 
-        gff3_text, sequences, duplicates = reference_io.normalize_references(
+        gff3_text, sequences, duplicates, _renames = reference_io.normalize_references(
             self._chromosome_and_plasmid())
 
         self.assertEqual((gff3_text, sequences), reference_io.normalize_reference(both))
@@ -226,7 +258,7 @@ class NormalizationTestCase(TestCase):
         chromosome = write_genbank(os.path.join(self.tmp, "chr.gbk"))
         plasmid = self._write("plasmid.fasta", breseq_fixture.fasta_text(self.PLASMID))
 
-        gff3_text, sequences, _ = reference_io.normalize_references(
+        gff3_text, sequences, _, _ = reference_io.normalize_references(
             [(chromosome, "chr.gbk"), (plasmid, "plasmid.fasta")])
 
         self.assertEqual(sequences, self.PLASMID + SEQUENCES)
@@ -245,7 +277,7 @@ class NormalizationTestCase(TestCase):
         plasmid_sequences = [("plasmid", "TTGA" * 40)]
         plasmid = self._write("plasmid.gff3", breseq_fixture.gff3_text(plasmid_sequences))
 
-        _, sequences, _ = reference_io.normalize_references(
+        _, sequences, _, _ = reference_io.normalize_references(
             [(chromosome, "chr.gbk"), (plasmid, "plasmid.gff3")])
 
         self.assertEqual(sequences, plasmid_sequences + SEQUENCES)
@@ -257,7 +289,7 @@ class NormalizationTestCase(TestCase):
             [("chr", breseq_fixture.SEQUENCE_A)]))
         annotated = write_genbank(os.path.join(self.tmp, "ref.gbk"))
 
-        gff3_text, sequences, duplicates = reference_io.normalize_references(
+        gff3_text, sequences, duplicates, _renames = reference_io.normalize_references(
             [(copy, "a.fasta"), (annotated, "ref.gbk")])
 
         self.assertEqual(sequences, SEQUENCES)
@@ -274,7 +306,7 @@ class NormalizationTestCase(TestCase):
         second = self._write("second.fasta", breseq_fixture.fasta_text(
             [("chr2", breseq_fixture.SEQUENCE_A)]))
 
-        _, sequences, duplicates = reference_io.normalize_references(
+        _, sequences, duplicates, _renames = reference_io.normalize_references(
             [(first, "first.fasta"), (second, "second.fasta")])
 
         self.assertEqual(sequences, [("chr1", breseq_fixture.SEQUENCE_A)])
@@ -284,7 +316,7 @@ class NormalizationTestCase(TestCase):
         annotated = write_genbank(os.path.join(self.tmp, "ref.gbk"))
         plain = self._write("ref.fasta", breseq_fixture.fasta_text(SEQUENCES))
 
-        gff3_text, sequences, duplicates = reference_io.normalize_references(
+        gff3_text, sequences, duplicates, _renames = reference_io.normalize_references(
             [(annotated, "ref.gbk"), (plain, "ref.fasta")])
 
         self.assertEqual(sequences, SEQUENCES)
@@ -312,7 +344,7 @@ class NormalizationTestCase(TestCase):
         plasmids = [("p1", breseq_fixture.SEQUENCE_B), ("p2", breseq_fixture.SEQUENCE_B)]
         twice = self._write("plasmids.fasta", breseq_fixture.fasta_text(plasmids))
 
-        _, sequences, duplicates = reference_io.normalize_references(
+        _, sequences, duplicates, _renames = reference_io.normalize_references(
             [(chromosome, "chr.gbk"), (twice, "plasmids.fasta")])
 
         self.assertEqual([seq_id for seq_id, _ in sequences], ["p1", "p2", "test_ref"])
@@ -335,7 +367,7 @@ class NormalizationTestCase(TestCase):
 
         self.assertEqual(
             reference_io.normalize_references([(path, "ref.fasta")]),
-            reference_io.normalize_reference(path, "ref.fasta") + ([],))
+            reference_io.normalize_reference(path, "ref.fasta") + ([], []))
 
 
 

@@ -124,11 +124,11 @@ class Command(BaseCommand):
         names = ", ".join(name for _path, name in files)
 
         try:
-            gff3_text, sequences, duplicates = reference_io.normalize_references(files)
+            gff3_text, sequences, duplicates, renames = reference_io.normalize_references(files)
         except reference_io.ReferenceFormatError as error:
             raise CommandError(str(error))
-        for duplicate in duplicates:
-            self.stdout.write(self.style.WARNING("  %s" % (duplicate,)))
+        for notice in duplicates + renames:
+            self.stdout.write(self.style.WARNING("  %s" % (notice,)))
 
         before = ReferenceSequences.objects.filter(
             experiment=experiment).values_list("gff3_sha256", flat=True).first()
@@ -139,7 +139,7 @@ class Command(BaseCommand):
             # merges, so the two cannot disagree about what the reference is.
             self.stdout.write("Would establish %s and re-annotate %r."
                               % (names, experiment.name))
-            references, _duplicates = reference_io.load_references(files)
+            references, _duplicates, _renames = reference_io.load_references(files)
             return references
 
         try:

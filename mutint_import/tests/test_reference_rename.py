@@ -186,6 +186,19 @@ class RenamePlanningTestCase(TestCase):
         with self.assertRaises(reference_rename.InvalidSequenceName):
             reference_rename.plan_rename(reference, [("a:b", "ACGT")])
 
+    def test_a_name_breseq_would_rewrite_is_refused_naming_the_safe_form(self):
+        """breseq keeps only letters, digits, `.`, `_`, `-`, `+` and the minus sign in a seq
+        id and rewrites the rest; a .gd it wrote would then name a contig this experiment
+        does not have."""
+        reference = self._reference([self._entry("x", "ACGT")])
+
+        with self.assertRaises(reference_rename.InvalidSequenceName) as caught:
+            reference_rename.plan_rename(reference, [("p(1)", "ACGT")])
+        self.assertIn("'p_1'", str(caught.exception))
+
+        with self.assertRaises(reference_rename.InvalidSequenceName):
+            reference_rename.plan_rename(reference, [("()", "ACGT")])
+
     def test_a_name_too_long_for_the_column_is_refused(self):
         reference = self._reference([self._entry("x", "ACGT")])
 

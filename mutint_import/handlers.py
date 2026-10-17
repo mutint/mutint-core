@@ -571,15 +571,17 @@ def _ingest_reference(experiment, staged_root, paths, annotation_only, options=N
     error = None
     warnings = {relative: [] for relative in paths}
     try:
-        gff3_text, sequences, duplicates = reference_io.normalize_references(
+        gff3_text, sequences, duplicates, renames = reference_io.normalize_references(
             [(os.path.join(staged_root, relative), os.path.basename(relative))
              for relative in paths])
-        for duplicate in duplicates:
-            # On the row of the file whose contig was skipped, by basename -- which is the
-            # name normalize_references was given for it.
+        # On the row of the file concerned, by basename -- which is the name
+        # normalize_references was given for it.
+        notices = ([(duplicate.skipped_file, duplicate) for duplicate in duplicates]
+                   + [(rename.file, rename) for rename in renames])
+        for file_name, notice in notices:
             for relative in paths:
-                if os.path.basename(relative) == duplicate.skipped_file:
-                    warnings[relative].append(str(duplicate))
+                if os.path.basename(relative) == file_name:
+                    warnings[relative].append(str(notice))
         # Through `install_annotation`, not `establish_or_check` directly: a replaced
         # annotation re-annotates every mutation and rebuilds what derives from them, which a
         # plain replace used to leave stale until `./mutint reannotate`. On a first reference

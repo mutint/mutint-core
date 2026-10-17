@@ -19,15 +19,18 @@ import os
 from mutint_import import sniff
 from mutint_import.annotate import gff3 as annotate_gff3
 from mutint_import.annotate import loader as annotate_loader
+from mutint_import.annotate.model import safe_seq_id
 
 FASTA_DIRECTIVE = "##FASTA"
 
 
-def parse_fasta(handle):
+def parse_fasta(handle, renamed=None):
     """Yield ``(seq_id, sequence)`` from an open text FASTA handle.
 
     The id is the first whitespace-delimited token of the header, matching how samtools and
-    breseq name sequences.
+    breseq name sequences -- and then made safe the way breseq makes it
+    (``annotate.model.safe_seq_id``), so what is yielded is what breseq will call the
+    contig. ``renamed``, when given, collects ``(original, safe)`` for every id that changed.
     """
     seq_id = None
     chunks = []
@@ -37,6 +40,11 @@ def parse_fasta(handle):
             if seq_id is not None:
                 yield seq_id, "".join(chunks)
             seq_id = line[1:].split()[0] if line[1:].strip() else ""
+            if seq_id:
+                safe = safe_seq_id(seq_id)
+                if safe != seq_id and renamed is not None:
+                    renamed.append((seq_id, safe))
+                seq_id = safe
             chunks = []
         elif line:
             chunks.append(line.strip())
@@ -238,18 +246,30 @@ def normalize_reference(path, original_name=None):
     It is produced by loading the reference into the annotation feature model and
     rendering it back out, so both input formats go through exactly one code path
     and a GenBank and breseq's GFF3 of the same genome necessarily agree.
+
+    Contig names come out in breseq's safe form (``annotate.model.safe_seq_id``); the
+    renames that took are reported by ``normalize_references``, which this is the
+    one-file form of.
     """
+    gff3_text, sequences, _renamed = _normalize_reference(path, original_name)
+    return gff3_text, sequences
+
+
+def _normalize_reference(path, original_name=None):
+    """``normalize_reference`` plus the ``RenamedContig`` list the load produced."""
+    display_name = original_name or os.path.basename(path)
     fmt = detect_format(path, original_name)
 
     if fmt == FORMAT_FASTA:
         # No features to model; a bare FASTA is sequence only.
+        renamed = []
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             sequences = [(seq_id, sequence.upper())
-                         for seq_id, sequence in parse_fasta(handle)]
+                         for seq_id, sequence in parse_fasta(handle, renamed)]
         if not sequences:
-            raise ReferenceFormatError(
-                "%s carries no sequence" % (original_name or os.path.basename(path),))
-        return _render_sequence_only_gff3(sequences), sequences
+            raise ReferenceFormatError("%s carries no sequence" % (display_name,))
+        return (_render_sequence_only_gff3(sequences), sequences,
+                _renamed_contigs(renamed, display_name))
 
     try:
         references = annotate_loader.load_reference(path, original_name=original_name)
@@ -260,9 +280,24 @@ def normalize_reference(path, original_name=None):
     if not sequences:
         raise ReferenceFormatError(
             "%s carries no sequence; a GFF3 needs an inline ##FASTA section"
-            % (original_name or os.path.basename(path),))
+            % (display_name,))
 
-    return annotate_gff3.render_breseq_gff3(references), sequences
+    return (annotate_gff3.render_breseq_gff3(references), sequences,
+            _renamed_contigs(references.renamed, display_name))
+
+
+class RenamedContig(collections.namedtuple("RenamedContig", "original safe file")):
+    """A contig stored under breseq's safe spelling of the name its file gave it."""
+
+    def __str__(self):
+        return ("contig %r in %s is stored as %r: breseq allows only letters, digits, "
+                "periods, dashes, plus and minus signs and single underscores in a "
+                "sequence name, and would rename it itself"
+                % (self.original, self.file, self.safe))
+
+
+def _renamed_contigs(pairs, display_name):
+    return [RenamedContig(original, safe, display_name) for original, safe in pairs]
 
 
 def sequences_of(references):
@@ -452,7 +487,8 @@ DuplicateContig.__str__ = lambda self: (
 def load_references(files):
     """Load ``[(path, original_name), ...]`` into one ``LoadedReferenceSequences``.
 
-    Returns ``(references, duplicates)``, the second a list of ``DuplicateContig``. Each file is loaded on its own -- a bare FASTA into
+    Returns ``(references, duplicates, renames)``, the second a list of ``DuplicateContig``
+    and the third of ``RenamedContig``. Each file is loaded on its own -- a bare FASTA into
     feature-less contigs, GenBank and GFF3 through the annotation loader -- so formats may be
     mixed across files even though one load of the annotation loader refuses to mix them.
 
@@ -475,10 +511,12 @@ def load_references(files):
     # every key registered on `merged` -> file it came from; how a name clash is described.
     key_owner = {}
     duplicates = []
+    renames = []
 
     for path, original_name in files:
         display_name = original_name or os.path.basename(path)
         loaded = _load_one(path, display_name)
+        renames.extend(_renamed_contigs(loaded.renamed, display_name))
         # Indexed only once the whole file is in, so two identical contigs *within* a file
         # are never read as one duplicating the other.
         this_file = []
@@ -510,15 +548,16 @@ def load_references(files):
         for contig in this_file:
             by_digest[sequence_digest(contig.sequence)] = (contig, display_name)
 
-    return merged, duplicates
+    return merged, duplicates, renames
 
 
 def normalize_references(files):
-    """``[(path, original_name), ...]`` -> ``(gff3_text, sequences, duplicates)``.
+    """``[(path, original_name), ...]`` -> ``(gff3_text, sequences, duplicates, renames)``.
 
     The several-file form of ``normalize_reference``: the genome the files make up together,
     in the same canonical form. ``duplicates`` lists every contig skipped as a duplicate of
-    one in another file, as ``DuplicateContig`` (see ``load_references``).
+    one in another file, as ``DuplicateContig`` (see ``load_references``); ``renames`` every
+    contig stored under a name other than the one its file gave it, as ``RenamedContig``.
 
     One file delegates to ``normalize_reference`` outright, so a single file normalizes to
     exactly the bytes it always has -- a multi-record bare FASTA keeps its file order there,
@@ -527,14 +566,14 @@ def normalize_references(files):
     files = list(files)
     if len(files) == 1:
         path, original_name = files[0]
-        gff3_text, sequences = normalize_reference(path, original_name)
-        return gff3_text, sequences, []
+        gff3_text, sequences, renames = _normalize_reference(path, original_name)
+        return gff3_text, sequences, [], renames
 
-    references, duplicates = load_references(files)
+    references, duplicates, renames = load_references(files)
     sequences = sequences_of(references)
     if not sequences:
         raise ReferenceFormatError("the files carry no sequence")
-    return annotate_gff3.render_breseq_gff3(references), sequences, duplicates
+    return annotate_gff3.render_breseq_gff3(references), sequences, duplicates, renames
 
 
 def _load_one(path, display_name):
@@ -550,7 +589,7 @@ def _load_one(path, display_name):
 
     references = LoadedReferenceSequences()
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        for seq_id, sequence in parse_fasta(handle):
+        for seq_id, sequence in parse_fasta(handle, references.renamed):
             contig = AnnotatedSequence(seq_id, sequence.upper())
             contig.update_feature_lists()
             references.add(contig)

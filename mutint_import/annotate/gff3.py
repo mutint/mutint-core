@@ -252,9 +252,17 @@ def load_gff3(*paths):
             raise ValueError(
                 '%s carries no sequence; annotation needs the inline ##FASTA section' % path)
 
+        # Feature rows name the contig as the file spells it; `names` maps that spelling
+        # onto the one breseq would store, so a row still finds its contig after the
+        # rename. breseq's own GFF3 is already safe and maps every name onto itself.
+        names = {}
         contigs = {}
         for seq_id, sequence in sequences:
-            contigs[seq_id] = AnnotatedSequence(seq_id, sequence.upper())
+            safe = references.breseq_name(seq_id)
+            names[seq_id] = safe
+            contigs[safe] = AnnotatedSequence(safe, sequence.upper())
+        for row in rows:
+            row['seq_id'] = names.get(row['seq_id'], row['seq_id'])
 
         # breseq writes one `region` row per sequence carrying `Is_circular`, and so does
         # the renderer below. It is topology, not a feature: `_build_feature` drops the

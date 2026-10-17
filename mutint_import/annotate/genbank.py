@@ -23,6 +23,7 @@ from mutint_import.annotate.model import (
     Feature,
     FeatureLocation,
     LoadedReferenceSequences,
+    safe_seq_id,
     make_safe,
     trim_repeat_name,
 )
@@ -198,7 +199,7 @@ def load_genbank(*paths):
 
     for path in paths:
         for record in parse_records(path):
-            seq_id = _record_seq_id(record)
+            seq_id = references.breseq_name(_record_seq_id(record))
             annotated = AnnotatedSequence(seq_id, str(record.seq).upper(),
                                           circular=_record_topology(record))
             labels = _gene_feature_labels(record.features)
@@ -222,9 +223,10 @@ def load_genbank(*paths):
             # that spells the contig `NC_000913.3` still finds it. Alias only: the
             # rendered GFF3 and the stored seq_ids come from `annotated.seq_id`.
             version = record.id
-            if (version and not version.startswith('<unknown')
-                    and version not in references.sequences):
-                references.sequences[version] = annotated
+            if version and not version.startswith('<unknown'):
+                version = safe_seq_id(version)
+                if version not in references.sequences:
+                    references.sequences[version] = annotated
 
     if not references.sequences:
         raise ValueError('No GenBank records found in: %s' % ', '.join(paths))
@@ -232,8 +234,8 @@ def load_genbank(*paths):
 
 
 def read_seq_ids(path):
-    """Just the contig ids a GenBank file defines."""
-    return [_record_seq_id(record) for record in parse_records(path)]
+    """Just the contig ids a GenBank file defines, as `load_genbank` would store them."""
+    return [safe_seq_id(_record_seq_id(record)) for record in parse_records(path)]
 
 
 def looks_like_genbank(path):

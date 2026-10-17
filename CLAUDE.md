@@ -3062,6 +3062,30 @@ GenBank re-imported through `replace_annotation` against a reference established
 rule renames its contigs, which is exactly the case `reference_rename` asks about before
 proceeding.
 
+### A contig's name is stored in breseq's safe spelling
+
+breseq rewrites every seq id it loads (`reference_sequence.h` `safe_seq_id_name`): only
+letters, digits, `.`, `_`, `-`, `+` and U+2212 are kept, anything else becomes `_`, runs of
+`__` collapse to one (its junction divider), and leading and trailing `_` go. It applies that
+to `##sequence-region` lines and FASTA headers -- **and not to column 1 of a GFF3 feature
+row**, which it reads verbatim. So a stored GFF3 naming a plasmid `P-Ant1_(_ColE1` everywhere
+made breseq register `P-Ant1_ColE1` with the sequence and a second contig under the raw name
+from the feature rows with none, and `VerifySequenceFeatureMatch` refused the whole reference
+with *No sequence found*. breseq never meets this with its own output, whose writer only ever
+writes names it already rewrote; MutInt's writer did not.
+
+`annotate.model.safe_seq_id` is the port, applied at every point a name enters the model --
+the GenBank loader's LOCUS name and VERSION alias, `load_gff3`'s FASTA ids and feature rows,
+and `reference.parse_fasta` for a bare FASTA -- so no stored id is one breseq would alter. A
+second reason is the `.gd`: breseq names contigs in its output by the rewritten form, and
+`known_seq_ids` compares exactly, so a raw stored name would refuse breseq's own calls
+against it. `LoadedReferenceSequences.renamed` records each `(original, safe)`,
+`normalize_references` returns them as `RenamedContig` beside the duplicates, and the Import
+data page shows one on the file's row; two names of one file collapsing onto one safe name are
+refused rather than merged. `reference_rename._validate_name` refuses a rename to a name
+breseq would rewrite, naming the safe form, which is also the way out for an experiment that
+already holds a raw name: `./mutint rename_contigs` to that spelling.
+
 ### Telling someone they picked the wrong type
 
 The one mistake worth engineering for is a `.gd` chosen as a reference genome, or the reverse:

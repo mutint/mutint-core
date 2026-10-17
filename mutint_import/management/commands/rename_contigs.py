@@ -60,12 +60,12 @@ class Command(BaseCommand):
                 raise CommandError("No such file: %s" % path)
 
         try:
-            gff3_text, sequences, duplicates = reference_io.normalize_references(
+            gff3_text, sequences, duplicates, renames = reference_io.normalize_references(
                 [(path, os.path.basename(path)) for path in options["reference_paths"]])
         except reference_io.ReferenceFormatError as error:
             raise CommandError(str(error))
-        for duplicate in duplicates:
-            self.stdout.write(self.style.WARNING("  %s" % (duplicate,)))
+        for notice in duplicates + renames:
+            self.stdout.write(self.style.WARNING("  %s" % (notice,)))
 
         try:
             plan = reference_rename.plan_rename(reference, sequences)

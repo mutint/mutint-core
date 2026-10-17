@@ -30,6 +30,7 @@ from django.db import transaction
 from mutint_common.plugin_registry import run_sequence_rename_hooks
 from mutint_import import reference as reference_io
 from mutint_import.annotate.gff3 import REGION_TYPE
+from mutint_import.annotate.model import safe_seq_id
 from mutint_experiment import paths
 
 logger = logging.getLogger(__name__)
@@ -296,6 +297,21 @@ def _validate_name(name):
                 "The sequence name %r contains %r. Contig names are written into "
                 "tab-separated files and into `sequence:start-end` region values, so they "
                 "cannot contain tabs, newlines, spaces or colons." % (name, character))
+    # breseq rewrites a name it would not keep (`annotate.model.safe_seq_id`), and a .gd it
+    # then writes names the contig by the rewritten form, which this experiment would not
+    # recognize. Refusing here is what keeps a stored name one breseq will leave alone.
+    try:
+        safe = safe_seq_id(name)
+    except ValueError:
+        raise InvalidSequenceName(
+            "The sequence name %r has no character breseq allows in a sequence name "
+            "(letters, digits, periods, dashes, plus and minus signs and single "
+            "underscores)." % (name,))
+    if safe != name:
+        raise InvalidSequenceName(
+            "The sequence name %r is not one breseq would keep: it allows only letters, "
+            "digits, periods, dashes, plus and minus signs and single underscores, and "
+            "would rename it %r. Use that name instead." % (name, safe))
 
 
 def _check_bijection(pairs):
