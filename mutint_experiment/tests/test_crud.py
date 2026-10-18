@@ -582,6 +582,40 @@ class PurgeDeletedTestCase(TestCase):
                          "stored files should not outlive the experiment")
 
 
+class ListControlsTestCase(TestCase):
+    """The list tables are paged, 100 rows by default with All on the menu, and DataTables'
+    controls are one row above the table, under the page's own buttons.
+
+    The inits are template text, so this reads the options off the page rather than
+    running them; what it pins is the two drifting apart, and the buttons' row dropping
+    below the table's.
+    """
+
+    TABLES = {"/project/": 'id="project_table"', "/experiment/": 'id="exp_table"'}
+
+    def setUp(self):
+        owner = User.objects.create(username="owner", email="o@e.com", is_active=True)
+        self.client.force_login(owner)
+        self.client.post("/project/create/", {"name": "P", "experiment": "first"})
+
+    def test_both_tables_page_at_100_with_all_on_the_menu(self):
+        for url in self.TABLES:
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                self.assertIn("paging: true", html)
+                self.assertIn("pageLength: 100", html)
+                self.assertIn("lengthMenu: [[100, 500, 1000, -1], [100, 500, 1000, 'All']]", html)
+                self.assertNotIn("paging: false", html)
+
+    def test_the_controls_are_one_row_inside_the_wrapper_and_the_buttons_above(self):
+        for url, table in self.TABLES.items():
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                self.assertIn('dom: \'<"dt-controls"lip<"dt-controls-end"', html)
+                self.assertIn("window.mutintListToolbar(table);", html)
+                self.assertLess(html.index('id="list-toolbar"'), html.index(table))
+
+
 class SignedOutControlsTestCase(TestCase):
     """Signed out, the create/delete controls are not offered at all.
 
@@ -627,6 +661,13 @@ class SignedOutControlsTestCase(TestCase):
         for url in ("/project/", "/experiment/"):
             with self.subTest(url=url):
                 self.assertEqual(200, self.client.get(url).status_code)
+
+    def test_the_empty_button_row_goes_with_them(self):
+        """The row held the search box once; that is DataTables' own now, in its control
+        row, so a row with no button in it is a margin and nothing else."""
+        for url in ("/project/", "/experiment/"):
+            with self.subTest(url=url):
+                self.assertNotIn('id="list-toolbar"', self._html(url))
 
     def test_every_handler_guards_its_missing_control(self):
         for url in ("/project/", "/experiment/"):

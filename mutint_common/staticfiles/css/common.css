@@ -539,6 +539,43 @@ table.dataTable thead .sorting_desc:after {
     width: 75px;
 }
 
+/* A list page's table (Projects, Experiments, a project's experiments) carries DataTables'
+   own control row above it -- length menu, Showing text, pager, then Export and the search
+   box at the far end -- built by `dom` inside the wrapper, so DataTables' Bootstrap rules
+   for each control still apply and only the row needs stating: one flex line that wraps,
+   the end group pushed right. The page's "+ New" and Delete sit in their own .btn-row
+   above this one. The info line and the pager carry a top margin meant for a row under
+   the table, dropped here so they centre with the menus. */
+.dt-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 1.5em;
+    margin-bottom: 1em;
+}
+
+.dt-controls-end {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+}
+
+.dt-controls .dataTables_length label,
+.dt-controls .dataTables_filter label {
+    margin-bottom: 0;
+}
+
+/* Both carry the wrapper in their selector: DataTables' own rules do, and lose otherwise. */
+.dataTables_wrapper .dt-controls .dataTables_info {
+    padding-top: 0;
+}
+
+.dataTables_wrapper .dt-controls .dataTables_paginate ul.pagination {
+    margin: 0;
+}
+
 /* The checkbox heading a Select column stands over the ones under it, which the Select
    extension draws at the cell's center. */
 .table > thead > tr > th.select-checkbox {

@@ -1,11 +1,18 @@
 
     $(document).ready(function () {
         // The table scrolls in a box DataTables draws round it (the `t` in dom), not
-        // through scrollY: see .mutint-scroll-table in common.css for why.
+        // through scrollY: see .mutint-scroll-table in common.css for why. Its controls
+        // -- length menu, Showing text, pager, then the Export menu and the search box at
+        // the far end -- are one row above it, built by dom inside DataTables' own
+        // wrapper (.dt-controls in common.css), under the page's row of buttons.
         var table = $('#exp_table').DataTable({
             autoWidth: true,
-            paging: false,
-            dom: 'Bfr<"mutint-scroll-table"t><<"pull-left"i><"pull-right"p>>',
+            paging: true,
+            pagingType: 'full_numbers',
+            pageLength: 100,
+            lengthMenu: [[100, 500, 1000, -1], [100, 500, 1000, 'All']],
+            language: { infoEmpty: 'Showing 0 entries' },
+            dom: '<"dt-controls"lip<"dt-controls-end"Bf>>r<"mutint-scroll-table"t>',
             deferRender: true,
             columnDefs: [
                 {
@@ -48,7 +55,7 @@
                 },
             ],
         });
-        window.mutintListToolbar(table, 'list-toolbar');
+        window.mutintListToolbar(table);
 
     });
 

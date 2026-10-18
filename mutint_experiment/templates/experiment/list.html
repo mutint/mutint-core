@@ -17,25 +17,26 @@
 {% block title %}Experiment List{% endblock %}
 {% block header %}Experiment List{% endblock %}
 {% block content %}
+    {% comment %} The row sits above the table's own control row (length menu, Showing,
+       pager, Export, search -- DataTables' own, in its wrapper) and renders only for a
+       signed-in reader, who is the only one it holds a button for. {% endcomment %}
+    {% if user.is_authenticated %}
     <div class="btn-row" id="list-toolbar" style="margin-bottom: 1em;">
         {% comment %} Was a link to /project/, which dead-ended: that page can only create an
            experiment alongside a *new* project, so there was no way to add one to a project
            that already existed. The endpoint always existed; nothing called it. {% endcomment %}
         {% if editable_projects %}
             <a class="btn btn-primary" href="/experiment/new/">+ New experiment</a>
-        {% elif user.is_authenticated %}
+        {% else %}
             {% comment %} Signed in with nothing to add to. The project list is where that
                starts, and it will offer the button once they get there. {% endcomment %}
             <a class="btn btn-primary" href="/project/new/">+ New project</a>
             <small style="color: #666; margin-left: 0.5em;">An experiment needs a project to live in.</small>
         {% endif %}
-        {% if user.is_authenticated %}
         <button type="button" class="btn btn-danger" id="delete-selected">
             &minus; Delete selected</button>
-        {% endif %}
     </div>
-    {% if user.is_authenticated %}
-        <div id="del-error" style="color: #a00; margin-top: 0.5em; margin-bottom: 1em;"></div>
+    <div id="del-error" style="color: #a00; margin-top: 0.5em; margin-bottom: 1em;"></div>
     {% endif %}
 
     <div id='loadingmessage' style='display:none'>

@@ -157,15 +157,17 @@
             + "and their mutations stay. Type CLEAR to confirm.", "Clear", "CLEAR");
     };
 
-    /* The list pages' one row of controls, and the checkbox that heads their first column.
+    /* A row of controls over a DataTable, and the checkbox that heads its first column.
      *
      * DataTables draws its search box and its Buttons in a band of its own above the table,
-     * which on a page that already has a row of "+ New" and Delete made two rows of controls
-     * for one table. This moves both into the page's own .btn-row -- Buttons beside the
-     * page's, the search box pushed to the far end -- so the band it leaves is empty. A
-     * paged table's length menu goes with them, or it would be left holding that band open
-     * by itself. With no toolbarId nothing moves and only the checkbox is wired, for a table
-     * that is one column of a wider page and has no row of its own to move into.
+     * which on a page that already has a row of "+ New" and Delete makes two rows of
+     * controls for one table. Given a toolbarId this moves both into that .btn-row --
+     * Buttons beside the page's, the search box pushed to the far end -- so the band it
+     * leaves is empty, and a paged table's length menu goes with them, or it would be left
+     * holding that band open by itself; the curate tabs use it so. With no toolbarId
+     * nothing moves and only the checkbox is wired: the list pages, whose dom builds
+     * DataTables' control row under the page's buttons (.dt-controls), and a table that
+     * is one column of a wider page with no row of its own.
      *
      * The header checkbox replaces a Select menu holding Select all and Deselect all, and is
      * the access table's idiom on a DataTable. It is found by class and handled by

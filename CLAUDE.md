@@ -4077,21 +4077,25 @@ Creation and deletion are nested under the objects they act on:
   the whole gather-confirm-post-reload routine. A page using `mutintPost` must
   render `{% csrf_token %}` somewhere: that is what sets the cookie it reads. Both confirms
   call `swal()`, which `base.html` does **not** load — pull sweetalert in per template.
-- **Each list page has one row of controls, and `mutintListToolbar(table, toolbarId)` is what
-  makes it one.** It moves the DataTable's search box and its Buttons (the experiment
-  tables' **Export** menu) into the page's own `.btn-row` beside "+ New" and Delete, and
-  wires the `input.mutint-select-all` checkbox in the first column's header: checked selects
-  every row the search box has left, and it goes indeterminate on a partial selection. Two
-  things about it were found by measuring. The checkbox is found by class and handled by
-  delegation, because under `scrollY` DataTables splits the header into a table of its own
-  and leaves a hidden copy, so there are two of them. And **every DataTables rule for the
-  search box is scoped to `div.dataTables_wrapper`**, so a box moved out of the wrapper
-  falls back to `.form-control`'s block layout and sits 10px below the buttons;
-  `common.css` restates them for `.btn-row > .dataTables_filter`. The row renders for a
-  reader who can create nothing, since searching and exporting need no write access.
-  The mutation editor's **Delete** tab uses it too, and being paged it hands over its length
-  menu as well, whose rules are wrapper-scoped the same way; the checkbox reaches every
-  page, not only the one drawn. The **Copy** tab does the same, beside its Copy to menu.
+- **Each list page is two rows over its table: the page's buttons, then DataTables' own
+  control row.** The three tables (Projects, Experiments, a project's experiments) are
+  paged at **100** rows with 500, 1000 and All on the length menu, and `dom` builds one
+  row above the table -- length menu, **Showing x to y of z**, a full pager, then the
+  experiment tables' **Export** menu and the search box at the far end -- *inside*
+  DataTables' wrapper (`.dt-controls` in `common.css`), which matters because **every
+  DataTables rule for those controls is scoped to `div.dataTables_wrapper`**: a control
+  moved out of it falls back to `.form-control`'s block layout and sits 10px below its
+  neighbours. "+ New" and Delete sit in their own `.btn-row` above that, rendered only
+  when it holds a button -- a reader gets the control row alone, since searching and
+  exporting need no write access. `mutintListToolbar(table)` wires the
+  `input.mutint-select-all` checkbox in the first column's header: checked selects every
+  row the search box has left, on every page, and it goes indeterminate on a partial
+  selection; found by class and handled by delegation, because under `scrollY` DataTables
+  splits the header into a table of its own and leaves a hidden copy. Given a `toolbarId`
+  it instead moves the search box, the Buttons and a paged table's length menu into that
+  `.btn-row`, with `common.css` restating the wrapper-scoped rules for
+  `.btn-row > .dataTables_filter` and `.dataTables_length`: that is the mutation editor's
+  **Delete** and **Copy** tabs, whose one row holds the page's buttons and the table's.
 - **Which confirm dialog a control gets is decided by whether the person can undo it
   themselves.** `mutintConfirm(title, text, verb)` is a plain accept and is what a removal
   they can put back from the page gets: revoking a grant, removing a group member, and the

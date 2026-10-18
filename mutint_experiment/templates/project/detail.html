@@ -69,17 +69,16 @@
            exactly one. An experiment that is *locked* still refuses from the endpoint and
            is named in #del-error, because the lock lives on the experiment and only the
            experiment can answer for it. {% endcomment %}
-        {% comment %} The row renders for a reader too: mutintListToolbar moves the
-           table's Export menu and search box into it, and neither needs write access. {% endcomment %}
+        {% comment %} The row sits above the table's own control row (DataTables' Export
+           menu and search box among it, which a reader gets) and renders only for someone
+           who can edit, the only reader it holds a button for. {% endcomment %}
+        {% if can_edit %}
         <div class="btn-row" id="list-toolbar" style="margin-bottom: 1em;">
-            {% if can_edit %}
             <a class="btn btn-primary"
                href="/experiment/new/?project={{ project.id }}">+ New experiment</a>
             <button type="button" class="btn btn-danger" id="delete-selected">
                 &minus; Delete selected</button>
-            {% endif %}
         </div>
-        {% if can_edit %}
         <div id="del-error" style="color: #a00; margin-bottom: 1em;"></div>
         {% endif %}
 
