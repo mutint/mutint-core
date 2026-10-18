@@ -17,6 +17,9 @@ from mutint_experiment.sample_views import (
     experiment_samples, experiment_samples_metadata, experiment_samples_read_metadata,
     experiment_samples_delete, experiment_samples_selected, experiment_samples_update,
 )
+from mutint_experiment.shared_ancestor import (
+    experiment_ancestor_shared, experiment_ancestor_shared_apply,
+)
 from mutint_experiment.storage_views import experiment_storage_clear
 from mutint_experiment.views import (
     experiment_ancestor, experiment_ancestor_apply, experiment_create, experiment_delete,
@@ -73,4 +76,10 @@ urlpatterns = [
     re_path(r'^(?P<pk>[0-9]+)/ancestor/$', experiment_ancestor, name="experiment_ancestor"),
     re_path(r'^(?P<pk>[0-9]+)/ancestor/apply/$',
             experiment_ancestor_apply, name="experiment_ancestor_apply"),
+    # Building an ancestor from the mutations the samples share, when none was sequenced:
+    # the same page-and-apply pairing, landing on the Samples page like the picker.
+    re_path(r'^(?P<pk>[0-9]+)/ancestor/shared/$',
+            experiment_ancestor_shared, name="experiment_ancestor_shared"),
+    re_path(r'^(?P<pk>[0-9]+)/ancestor/shared/apply/$',
+            experiment_ancestor_shared_apply, name="experiment_ancestor_shared_apply"),
 ]

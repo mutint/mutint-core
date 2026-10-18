@@ -229,6 +229,12 @@ class ViewModeTestCase(SpreadsheetTestCase):
     def test_an_editor_gets_the_edit_button_and_the_boxes(self):
         body = self.page().content.decode()
         self.assertIn('id="sb-edit"', body)
+        # Designate ancestor is a link beside Edit, in the view row, to the picker page --
+        # not a button acting on a ticked row in the edit row, which it used to be.
+        self.assertIn('<a class="btn btn-default" id="sb-ancestor"\n'
+                      '               href="/experiment/%d/ancestor/">Designate ancestor</a>'
+                      % self.experiment.id, body)
+        self.assertNotIn("data-ancestor-id=", body)
         self.assertIn('id="sb-save"', body)
         self.assertIn('id="sb-cancel"', body)
         self.assertIn('id="sb-page" class="sb-can-edit"', body)

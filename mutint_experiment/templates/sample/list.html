@@ -54,15 +54,20 @@
 
         {% if samples %}
         {% comment %} The page opens read-only: the table, Download CSV and -- for an editor --
-           Edit. The mode is a class the Edit button sets and nothing remembers, so every
-           reload lands here; Save, Delete selected and Designate ancestor all end in a reload,
+           Edit and Designate ancestor, the latter a link to the picker page, which lands back
+           here. The mode is a class the Edit button sets and nothing remembers, so every
+           reload lands here; Save and Delete selected both end in a reload,
            which is what returns the page to the view, and Cancel reloads for the same reason.
            The one way in besides the button is `?edit=`, which the Edit samples buttons on the
            Overview and the edit page carry: the view sets the class for an editor and the
            script drops the parameter from the address, so those reloads still land on the view.
            The instructions are about the boxes, so they show with them. {% endcomment %}
         <div class="btn-row sb-view" style="margin-bottom: 0.5em;">
-            {% if can_edit %}<button type="button" class="btn btn-primary" id="sb-edit">Edit</button>{% endif %}
+            {% if can_edit %}<button type="button" class="btn btn-primary" id="sb-edit">Edit</button>
+            {% comment %} A link rather than a button acting on a ticked row: designating is not a
+               value in a box, and the picker page says what it does before it is chosen. {% endcomment %}
+            <a class="btn btn-default" id="sb-ancestor"
+               href="/experiment/{{ experiment.id }}/ancestor/">Designate ancestor</a>{% endif %}
             <a class="btn btn-default" {% if can_edit %}style="margin-left: 15px;"{% endif %}
                href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download CSV</a>
         </div>
@@ -78,7 +83,7 @@
            write, through the same validation as anything typed. The row is above the table
            rather than under it so that nothing sits below the scroll box, which then reaches
            the window's edge and keeps its scrollbars on screen however many rows there are. {% endcomment %}
-        {% comment %} Save and Discard changes; the CSV pair; Designate ancestor; Delete selected --
+        {% comment %} Save and Discard changes; the CSV pair; Delete selected --
            15px between groups, wider than the row's 5px between buttons, and 40px either side of
            the two that are easy to regret: Discard throws away what was typed, and Delete
            selected removes samples, so neither sits where a click aimed at its neighbour lands. {% endcomment %}
@@ -88,14 +93,9 @@
             <a class="btn btn-default" style="margin-left: 15px;"
                href="/experiment/{{ experiment.id }}/samples/metadata.csv">Download CSV</a>
             <button type="button" class="btn btn-default" id="sb-upload">Upload CSV&hellip;</button>
-            {% comment %} Both act on the ticked rows at once rather than at Save: neither is a
-               value in a box, and the reload afterwards discards whatever was typed, which
-               each confirm says. Designate ancestor takes exactly one row, and on the ancestor
-               itself it offers to remove the designation. {% endcomment %}
-            <button type="button" class="btn btn-default" id="sb-ancestor"
-                    style="margin-left: 15px;"
-                    data-ancestor-id="{{ experiment.ancestor_id|default_if_none:'' }}"
-                    data-ancestor-label="{{ experiment.ancestor.label|default_if_none:'' }}">Designate ancestor</button>
+            {% comment %} Acts on the ticked rows at once rather than at Save: it is not a value
+               in a box, and the reload afterwards discards whatever was typed, which the
+               confirm says. {% endcomment %}
             <button type="button" class="btn btn-danger" id="sb-delete" style="margin-left: 40px;">Delete selected</button>
             {% comment %} display: none inline rather than the hidden attribute: Bootstrap's
                `input[type=file] { display: block }` outranks `[hidden]`, and the browser's own
@@ -113,7 +113,7 @@
         <table class="table table-striped table-bordered sb-table" style="width: 100%;">
             <thead>
             <tr>
-                {% comment %} What Delete selected and Designate ancestor act on; the heading's box ticks every row. {% endcomment %}
+                {% comment %} What Delete selected acts on; the heading's box ticks every row. {% endcomment %}
                 <th width="30" class="sb-edit" style="text-align: center;"><input autocomplete="off" type="checkbox"
                         id="sb-select-all" title="Select every sample"></th>
                 <th>Source Name</th>
@@ -248,8 +248,8 @@
 
     // --- the two modes ---
 
-    // Edit opens the boxes; Cancel reloads, which is also how Save, Delete selected and
-    // Designate ancestor return to the view. The buttons render for an editor only, so
+    // Edit opens the boxes; Cancel reloads, which is also how Save and Delete selected
+    // return to the view. The buttons render for an editor only, so
     // everything below the sizing is bound only where there is a Save button to bind.
     var page = document.getElementById("sb-page");
     var editButton = document.getElementById("sb-edit");
@@ -406,43 +406,6 @@
                 }).then(function () { window.location.reload(); });
             }).catch(function (err) {
                 error.textContent = (err && err.message) || "The delete failed.";
-            });
-    });
-
-    // --- designating the ticked sample as the ancestor ---
-
-    // The confirm's words are the Designate ancestor page's, so every place that sets the one
-    // setting that changes what everyone sees says the same thing about it.
-    var ancestorButton = document.getElementById("sb-ancestor");
-    ancestorButton.addEventListener("click", function () {
-        var error = document.getElementById("sb-error");
-        error.textContent = "";
-        var ticked = selectBoxes().filter(function (box) { return box.checked; });
-        if (ticked.length !== 1) {
-            error.textContent = "Tick exactly one sample to designate as the ancestor.";
-            return;
-        }
-        var box = ticked[0];
-        var current = ancestorButton.getAttribute("data-ancestor-id");
-        var clearing = box.value === current;
-        var question = clearing ? "Remove the designation?"
-                                : "Designate " + box.getAttribute("data-label") + " as the ancestor?";
-        var detail = clearing
-            ? "Every sample will be shown and analyzed again, including the mutations "
-              + "currently subtracted. Everyone sees this change."
-            : "This sample will be excluded from every view and analysis, and its mutations "
-              + "subtracted from every other sample. Everyone sees this change."
-              + (current ? " It replaces " + ancestorButton.getAttribute("data-ancestor-label")
-                           + ", the current ancestor." : "");
-        swal({title: question, text: detail + " Unsaved changes in the table are discarded.",
-              icon: "warning", buttons: true})
-            .then(function (confirmed) {
-                if (!confirmed) { return; }
-                return window.mutintPost("/experiment/{{ experiment.id }}/ancestor/apply/",
-                                         clearing ? {} : {sample_id: box.value})
-                    .then(function () { window.location.reload(); });
-            }).catch(function (err) {
-                error.textContent = (err && err.message) || "Could not save the ancestor.";
             });
     });
 

@@ -1742,6 +1742,36 @@ id observed in one experiment's ancestor cannot appear in another's samples.
 `can_edit_experiment`, so a locked experiment refuses it -- including refusing to *clear* it.
 This is the only setting in the product that changes what everyone sees.
 
+**It is designated from the Samples page.** **Designate ancestor** sits beside Edit in that
+page's view row and leads to `/experiment/<pk>/ancestor/`: one radio per sample, the current
+ancestor checked, **Save** and **No ancestor**, each confirmed and each landing back on the
+Samples page, where the badge beside the row is the read-back. It is a link to a page rather
+than a button in the edit row acting on a ticked row, because designating is not a value in a
+box and the page says what it does before it is chosen. The single-sample edit page keeps its
+own Ancestor section, which links here for the full list.
+
+**An ancestor can be built when none was sequenced.** The picker's third button, **Create
+ancestor from shared mutations**, is `/experiment/<pk>/ancestor/shared/`
+(`mutint_experiment/shared_ancestor.py`): two sliders -- the minimum number of populations
+whose samples carry a mutation, and the minimum fraction of all samples -- over a table of
+the mutations meeting both, every row ticked by default with Select all / Deselect all, a
+name box opening on *Shared ancestor*, and **Create ancestor**. Both sliders default to
+*all*: "in every population and every sample" has no false positives and the sliders only
+relax it, where a looser default would quietly put evolved mutations into the ancestor -- the
+invisible kind of wrong. The rule runs in the browser over every (mutation, sample) presence
+pair the page carries, as Compare decides its sets, so moving a slider recounts without a
+round trip; a mutation entering the set arrives ticked and one the reader unticked stays so
+while it shows. **It reads raw calls, the fifth stated exception**: `calls_for_samples`
+would subtract the current ancestor's mutations, which are exactly the ones the page exists
+to find when an ancestor is being replaced. The ancestor *sample* is still left out, so it
+neither counts as a population nor inflates the denominator. Creating makes a clonal sample
+under `Unspecified` with no time point -- the autonumbered import's coordinate for a sample
+with no place -- labelled by the typed name through `description`, copies one existing call
+per ticked mutation onto it at frequency 1 through `apply_edits(KIND_COPY)` (one edit set,
+in the Curate history, restorable like any copy), designates it, and runs the picker's
+rebuild pair once. One transaction around the sample, the copy and the designation, so a
+refusal cannot leave a sample with no calls behind.
+
 Deleting the designated sample is the quiet failure: `SET_NULL` clears the column and the
 derived data does not notice. `ancestor.note_sample_deleted` is a `pre_delete` receiver --
 `pre`, because afterwards there is no way left to tell it was the ancestor -- and it marks

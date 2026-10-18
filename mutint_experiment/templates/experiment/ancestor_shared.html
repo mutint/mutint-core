@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+{% load static %}
+{% comment %}
+Build an ancestor from the mutations the samples share. See `shared_ancestor.py` for the
+design; this file is the page.
+
+The whole dataset rides in the page as JSON (`sa-data`) and the script decides which
+mutations meet the two sliders, so moving one recounts without a round trip -- the shape
+Compare takes with its sets. The table is rebuilt from that JSON on every change; the ticks
+live in a Set of mutation ids rather than in the boxes, so a row that drops out of the set
+and comes back keeps its state, and a row entering the set arrives ticked.
+
+DataTables is used for sorting alone, with no paging and without the Select extension:
+every row is in the DOM and every row carries a real checkbox, which Select's cell-click
+selection would fight. Initialized in `$(document).ready`, because base.html loads
+DataTables after this block.
+{% endcomment %}
+{% block title %}{{ title }}{% endblock %}
+{% block scripts_and_style %}
+    {% comment %} breseq's cell styling, so the rows read as the Mutations page's do. {% endcomment %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/breseq_table.css' %}?v={{ asset_version }}"/>
+    <script src="{% static 'js/breseq_table.js' %}?v={{ asset_version }}"></script>
+    {% comment %} base.html does not load sweetalert; every page that confirms something has
+       to pull it in. {% endcomment %}
+    <script src="{% static "vendor/sweetalert-2.1.2/sweetalert.min.js" %}"></script>
+    <style>
+        .sa-controls { display: flex; flex-wrap: wrap; align-items: center; column-gap: 28px; row-gap: 8px; margin: 1em 0; }
+        .sa-controls label { font-weight: normal; margin: 0; }
+        .sa-controls input[type="range"] { width: 180px; vertical-align: middle; margin: 0 6px; }
+        .sa-controls input[type="number"] { width: 5em; display: inline-block; }
+        .sa-controls .sa-of { color: #666; }
+        .sa-count { margin: 0 0 0.5em; color: #555; }
+        .sa-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 1.5em; }
+        .sa-name input { width: 24em; display: inline-block; }
+        #sa-table td.sa-pick, #sa-table th.sa-pick { text-align: center; width: 30px; }
+        #sa-table td.sa-pick input { margin: 0; }
+        #sa-table td.sa-count-cell { text-align: right; white-space: nowrap; }
+    </style>
+{% endblock %}
+{% block header %}{% include "experiment_header.html" with page=template_header %}{% endblock %}
+{% block content %}
+    {% comment %} No `.container`: its fixed width at wide windows runs the table past the
+       content area. The explanation caps its own width; the table takes what there is. {% endcomment %}
+    <div>
+        {% csrf_token %}
+        {{ payload|json_script:"sa-data" }}
+
+        <div class="alert alert-info" style="max-width: 60em;">
+            <p><strong>An experiment whose ancestor was never sequenced still has one.</strong>
+                The mutations present in every population and every sample are its starting
+                line rather than evolution. This page finds them, lets you choose which to keep,
+                and makes a sample carrying them that becomes the experiment's ancestor: excluded
+                from every view and analysis, its mutations subtracted from every other sample.</p>
+            <p style="margin-bottom: 0;">The sliders relax the rule. A mutation is <em>shared</em>
+                when samples from at least the chosen number of populations carry it <em>and</em>
+                at least the chosen fraction of all samples do. Each copied mutation is recorded
+                as fixed in the new sample, and the copy appears in the Curate history, where it
+                can be undone.</p>
+        </div>
+
+        {% if lock_refusal %}
+            <div class="alert alert-warning">{{ lock_refusal }}</div>
+        {% elif not can_edit %}
+            <div class="alert alert-warning">
+                You do not have permission to change this experiment.
+            </div>
+        {% endif %}
+
+        {% if sample_count %}
+        <div class="sa-controls">
+            <label>Minimum populations
+                <input type="range" min="1" max="{{ population_count }}" step="1"
+                       value="{{ population_count }}" data-role="pop-slider"
+                       aria-label="Minimum number of populations whose samples carry the mutation"/>
+                <input type="number" class="form-control" min="1" max="{{ population_count }}"
+                       value="{{ population_count }}" data-role="pop-box"
+                       aria-label="Minimum number of populations whose samples carry the mutation"/>
+                <span class="sa-of">of {{ population_count }}</span>
+            </label>
+            <label>Minimum fraction of samples
+                <input type="range" min="0" max="100" step="1" value="100" data-role="frac-slider"
+                       aria-label="Minimum percentage of samples carrying the mutation"/>
+                <input type="number" class="form-control" min="0" max="100" value="100" data-role="frac-box"
+                       aria-label="Minimum percentage of samples carrying the mutation"/>
+                <span class="sa-of">% of {{ sample_count }}</span>
+            </label>
+        </div>
+
+        <div class="btn-row" style="margin-bottom: 0.5em;">
+            <button type="button" class="btn btn-default btn-xs" data-role="select-all">Select all</button>
+            <button type="button" class="btn btn-default btn-xs" data-role="select-none">Deselect all</button>
+            <span class="sa-count" data-role="count"></span>
+        </div>
+
+        <table class="table table-striped table-bordered breseq-table" id="sa-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th class="sa-pick"><input type="checkbox" class="mutint-select-all"
+                                               data-role="select-all-box"
+                                               title="Select every mutation showing"></th>
+                    <th class="breseq-evidence">Type</th>
+                    <th class="breseq-seq-id">Reference</th>
+                    <th class="breseq-position">Position</th>
+                    <th class="breseq-mutation">Mutation</th>
+                    <th class="breseq-annotation">Annotation</th>
+                    <th class="breseq-gene">Gene</th>
+                    <th class="breseq-description">Description</th>
+                    <th title="How many populations have a sample carrying it">Populations</th>
+                    <th title="How many samples carry it">Samples</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        {% if can_edit %}
+        <div class="sa-name">
+            <label for="sa-name">Name of the ancestor sample</label>
+            <input type="text" class="form-control" id="sa-name" maxlength="200"
+                   value="{{ default_name }}" aria-label="Name of the ancestor sample"/>
+            <button type="button" class="btn btn-primary" id="sa-create">Create ancestor</button>
+            <a class="btn btn-default" style="margin-left: 15px;"
+               href="/experiment/{{ experiment.id }}/ancestor/">Back to Designate ancestor</a>
+        </div>
+        {% else %}
+        <div class="btn-row" style="margin-top: 1.5em;">
+            <a class="btn btn-default" href="/experiment/{{ experiment.id }}/ancestor/">Back to Designate ancestor</a>
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color: #666;">This experiment has no samples to find shared mutations in.</p>
+        <div class="btn-row" style="margin-top: 1.5em;">
+            <a class="btn btn-default" href="/experiment/{{ experiment.id }}/ancestor/">Back to Designate ancestor</a>
+        </div>
+        {% endif %}
+        <div id="sa-error" style="color: #a00; margin-top: 1em; white-space: pre-line;"></div>
+    </div>
+
+<script type="text/javascript">
+$(document).ready(function () {
+    "use strict";
+    var dataNode = document.getElementById("sa-data");
+    var tableNode = document.getElementById("sa-table");
+    if (!dataNode || !tableNode) { return; }
+    var data = JSON.parse(dataNode.textContent);
+    var error = document.getElementById("sa-error");
+
+    var populationOf = {};
+    data.samples.forEach(function (sample) { populationOf[sample.id] = sample.population_id; });
+    data.mutations.forEach(function (mutation) {
+        var populations = {};
+        mutation.sample_ids.forEach(function (id) { populations[populationOf[id]] = true; });
+        mutation.population_count = Object.keys(populations).length;
+        mutation.sample_count = mutation.sample_ids.length;
+    });
+
+    function control(role) { return document.querySelector('[data-role="' + role + '"]'); }
+    var popSlider = control("pop-slider"), popBox = control("pop-box");
+    var fracSlider = control("frac-slider"), fracBox = control("frac-box");
+
+    // Integer arithmetic for the fraction: n * 100 >= F * total, so 100% means every sample
+    // exactly rather than within a rounding error of it.
+    function shared(mutation) {
+        var minPopulations = parseInt(popSlider.value, 10);
+        var minPercent = parseInt(fracSlider.value, 10);
+        return mutation.population_count >= minPopulations
+            && mutation.sample_count * 100 >= minPercent * data.sample_count;
+    }
+
+    // The ticks. Every mutation that meets the sliders starts ticked, a mutation entering the
+    // set arrives ticked, and one the reader unticked stays unticked while it is showing.
+    // `seen` is what tells "entering" from "still here".
+    var ticked = {};
+    var seen = {};
+
+    var table = $(tableNode).DataTable({
+        paging: false,
+        info: false,
+        searching: true,
+        order: [[2, "asc"], [3, "asc"]],
+        columnDefs: [
+            { targets: 0, orderable: false, className: "sa-pick" },
+            { targets: 3, type: "num", render: { _: "display", sort: "sort" } },
+            { targets: [8, 9], className: "sa-count-cell" }
+        ],
+        dom: 'frt'
+    });
+
+    function checkbox(mutation) {
+        return '<input type="checkbox" class="sa-pick-box" data-mutation-id="' + mutation.id + '"'
+            + (ticked[mutation.id] ? ' checked' : '') + '>';
+    }
+
+    function redraw() {
+        var rows = [];
+        var showing = {};
+        data.mutations.forEach(function (mutation) {
+            if (!shared(mutation)) { return; }
+            showing[mutation.id] = true;
+            if (!seen[mutation.id]) { seen[mutation.id] = true; ticked[mutation.id] = true; }
+            rows.push([
+                checkbox(mutation),
+                mutation.type,
+                mutation.seq_id,
+                { display: mutation.position, sort: mutation.position_sort },
+                mutation.mutation,
+                mutation.annotation,
+                mutation.gene,
+                mutation.description,
+                mutation.population_count + " / " + data.population_count,
+                mutation.sample_count + " / " + data.sample_count
+            ]);
+        });
+        // A row that left the set is forgotten, so it arrives ticked again if it returns.
+        Object.keys(seen).forEach(function (id) { if (!showing[id]) { delete seen[id]; } });
+        table.clear().rows.add(rows).draw();
+        count();
+    }
+
+    function showingIds() {
+        var ids = [];
+        table.rows({search: "applied"}).every(function () {
+            var box = this.node().querySelector("input.sa-pick-box");
+            if (box) { ids.push(box.getAttribute("data-mutation-id")); }
+        });
+        return ids;
+    }
+
+    function tickedIds() {
+        return showingIds().filter(function (id) { return ticked[id]; });
+    }
+
+    function count() {
+        var shown = showingIds().length;
+        var picked = tickedIds().length;
+        control("count").textContent = shown === 1
+            ? "1 mutation meets the criterion; " + picked + " selected."
+            : shown + " mutations meet the criterion; " + picked + " selected.";
+        var all = control("select-all-box");
+        all.checked = shown > 0 && picked === shown;
+        all.indeterminate = picked > 0 && picked < shown;
+    }
+
+    function setAll(on) {
+        showingIds().forEach(function (id) { ticked[id] = on; });
+        $(tableNode).find("input.sa-pick-box").each(function () { this.checked = on; });
+        count();
+    }
+
+    $(tableNode).on("change", "input.sa-pick-box", function () {
+        ticked[this.getAttribute("data-mutation-id")] = this.checked;
+        count();
+    });
+    control("select-all").addEventListener("click", function () { setAll(true); });
+    control("select-none").addEventListener("click", function () { setAll(false); });
+    control("select-all-box").addEventListener("change", function () { setAll(this.checked); });
+    table.on("search.dt", count);
+
+    function pair(slider, box) {
+        slider.addEventListener("input", function () { box.value = slider.value; redraw(); });
+        box.addEventListener("change", function () {
+            var value = Math.min(Math.max(parseInt(box.value, 10) || 0, parseInt(slider.min, 10)),
+                                 parseInt(slider.max, 10));
+            box.value = value;
+            slider.value = value;
+            redraw();
+        });
+    }
+    pair(popSlider, popBox);
+    pair(fracSlider, fracBox);
+    redraw();
+
+    var create = document.getElementById("sa-create");
+    if (!create) { return; }
+    create.addEventListener("click", function () {
+        error.textContent = "";
+        var name = document.getElementById("sa-name").value.trim();
+        if (!name) { error.textContent = "Name the ancestor sample."; return; }
+        var ids = tickedIds().map(function (id) { return parseInt(id, 10); });
+        if (!ids.length) { error.textContent = "Select at least one mutation."; return; }
+        // sweetalert 2: `icon` / `buttons` and a promise, as the picker page uses.
+        swal({title: "Create " + name + " as the ancestor?",
+              text: "A new sample carrying the " + ids.length + " selected mutation(s) is created "
+                    + "under the Unspecified population and designated as the ancestor. It will "
+                    + "be excluded from every view and analysis, and its mutations subtracted "
+                    + "from every other sample. Everyone sees this change.",
+              icon: "warning", buttons: true})
+            .then(function (confirmed) {
+                if (!confirmed) { return; }
+                error.textContent = "Creating…";
+                return window.mutintPost(
+                    "/experiment/{{ experiment.id }}/ancestor/shared/apply/",
+                    {name: name, mutation_ids: JSON.stringify(ids)}
+                ).then(function () {
+                    // Back to the Samples page, where the new row wears the ancestor badge.
+                    window.location.href = "/experiment/{{ experiment.id }}/samples/";
+                });
+            })
+            .catch(function (err) {
+                error.textContent = (err && err.message) || "Could not create the ancestor.";
+            });
+    });
+});
+</script>
+{% endblock %}

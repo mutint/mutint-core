@@ -184,16 +184,18 @@ class SampleAncestorButtonTestCase(SampleEditTestCase):
         response = self.page(self.sample)
         self.assertContains(response, "This replaces <b>%s</b>" % self.other.label)
 
-    def test_the_table_offers_it_and_marks_the_current_ancestor(self):
+    def test_the_table_links_the_picker_and_marks_the_current_ancestor(self):
+        """The Samples page's Designate ancestor is a link to the picker page, beside Edit;
+        the write happens there. The badge is the table's own read-back."""
         url = "/experiment/%d/samples/" % self.experiment.id
         response = self.client.get(url)
         self.assertContains(response, 'id="sb-ancestor"')
-        self.assertContains(response, "/experiment/%d/ancestor/apply/" % self.experiment.id)
+        self.assertContains(response, 'href="/experiment/%d/ancestor/"' % self.experiment.id)
+        self.assertNotContains(response, "/experiment/%d/ancestor/apply/" % self.experiment.id)
         self.assertNotContains(response, 'class="label label-danger sb-ancestor-badge"')
 
         self.experiment.set_ancestor(self.other, self.user)
         html = self.client.get(url).content.decode()
-        self.assertIn('data-ancestor-id="%d"' % self.other.pk, html)
         row = html[html.index('<tr data-sample-id="%d"' % self.other.pk):]
         self.assertIn("sb-ancestor-badge", row[:row.index("</tr>")])
         row = html[html.index('<tr data-sample-id="%d"' % self.sample.pk):]

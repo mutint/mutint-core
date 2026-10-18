@@ -372,7 +372,6 @@ def experiment_ancestor(request, pk):
     context.update({
         "experiment": experiment,
         "samples": samples,
-        "selected_ids": [experiment.ancestor_id] if experiment.ancestor_id else [],
         "can_edit": can_edit_experiment(request.user, experiment),
         "lock_refusal": experiment_lock_refusal(experiment),
         "title": "%s ancestor" % experiment.name,

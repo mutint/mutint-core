@@ -87,6 +87,10 @@ mutation tables. Search says so too, because it spans experiments and no one fil
     to see the subtracted rows shaded red; nothing counted or computed changes, and the choice
     is remembered for you per experiment.
 
+    An editor designates the ancestor from the Samples page (**Designate ancestor**), or --
+    when the ancestor was never sequenced -- builds one there from the mutations shared
+    across the experiment's populations and samples, choosing which to keep.
+
 Filtering is not deleting. A filtered mutation is still stored and comes back when the filter
 changes; a deleted one is removed from the sample, recorded against whoever did it, and
 restorable from the mutation editor's history. The two were once the same mechanism and that
