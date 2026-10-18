@@ -488,6 +488,14 @@ table.dataTable.breseq-table thead .sorting_desc:after {
     white-space: nowrap;
 }
 
+/* The first row's and/or menu is hidden by the script with the `hidden` attribute, and
+   Bootstrap's `.form-control { display: block }` outranks the attribute's `display: none`
+   (same specificity, later in its sheet) -- so without this the first row led with an
+   "or" menu instead of "Show mutations where:". */
+.mutation-matrix-match-lead [data-role="match-join"][hidden] {
+    display: none;
+}
+
 .mutation-matrix-match-fields {
     display: flex;
     flex-wrap: wrap;
