@@ -683,49 +683,49 @@ things about it are load-bearing:
   is staged in the words that offered it, so the banner never names a branch; it renders in
   the status box under the channel menu and the buttons, with the list of what would move
   still beneath it.
-- **Nothing in core knows what launched MutInt.** The launcher exports
-  `MUTINT_RELAUNCH_COMMAND`; where nothing did, there is no button and the endpoint refuses.
-  MutInt.app sets it to an `open` of its own bundle and a systemd unit could set
-  `systemctl restart mutint`, which is why the seam is an environment variable rather than
-  anything about macOS. From a terminal nothing sets it -- correctly, because the process that
-  would run the command is the one being killed.
 - **A view cannot stop MutInt by stopping itself.** Under `runserver` the reloader parent and
   the child serving requests are two processes and views run in the child, so a view that
   exits is restarted a moment later by the reloader. `server_pid` tells them apart on
   `RUN_MAIN`, which Django sets in the child and nowhere else, and answers the parent -- or
   ourselves where `DEBUG` is false and there is no reloader at all.
-- **A detached helper does the work**, in its own session (`start_new_session`) so it sits
-  outside the process group the deadman supervisor tears down. It waits before signalling, so
-  the response reaches the browser that asked; polls `kill -0` until the process is gone rather
-  than waiting on the port, since `runserver` sets SO_REUSEADDR and what actually needs the
-  window is the supervisor stopping the worker and the cluster; insists with SIGKILL past a
-  bound, because an update half-applied by something ignoring SIGTERM is worse than an
-  ungraceful stop; and **unsets `RUN_MAIN` before the relaunch**, which is the subtlest line
-  in the file.
+- **The parent restarts itself in place, and nothing has to know what launched it.** The
+  process `./mutint start` becomes -- the entry script `os.execv`s into the venv and keeps its
+  pid -- owns the cluster, holds the terminal and is the reloader's parent. `start.py` calls
+  `restart.arm()` on a first launch: a `SIGUSR1` handler that raises `SystemExit(0)` (the
+  exit Ctrl-C produces; raised inside Django's reloader loop it unwinds `subprocess.run`,
+  which kills the serving child on the way), an `atexit` hook that `execve`s a fresh
+  `./mutint start` over the same pid when that signal was the reason, and
+  `MUTINT_RESTART_ARMED=1` in the environment so the child can offer the button. The view
+  writes the no-browser note, waits `RESPONSE_GRACE_SECONDS` for its response to leave, and
+  signals `server_pid()`. So the button works from a terminal on WSL or Linux, from
+  `MutInt.app` (whose captured pid is still the server's) and under systemd (`MainPID`
+  unchanged) alike; the one copy with no button is one not started through `./mutint start`
+  -- a bare `runserver`, a WSGI server -- and the endpoint says so with a 409.
+- **`arm()` runs before the worker is spawned, and that order is load-bearing.** `atexit` is
+  LIFO: the entry script registers the cluster's `stop_if_owned` first, `arm()` its exec hook
+  second, `start.py` the worker hook last -- so on a requested restart the workers stop, the
+  exec happens, and the cluster hook is never reached. The cluster stays up under the same
+  owning pid, the new image's `_ensure_database()` finds a live owner (itself) and leaves it
+  alone, and **`update.backup()` actually dumps** -- it dumps only from a running cluster,
+  and a restart that stopped it first skipped the pre-update backup on every staged update
+  while the docs said otherwise. On Ctrl-C the flag is unset, the hook returns, and the
+  cluster hook runs as before. `test_start_command` pins the order.
+- **The relaunch is decided at `arm()` time**: `env/python/bin/python3` where the entry script
+  has provisioned one (what `Start MutInt.command` already prefers; the host `python3` the
+  shebang names may be a stub), else the script through its shebang, with this launch's own
+  arguments so `--workers N` survives. Its environment is this process's minus `RUN_MAIN`
+  (the parent never has it; belt to that braces) and minus what the entry script exports
+  about the cluster, which the exec'd entry script re-derives.
 
-**That last one was a bug for as long as the button existed, and the shape of it is worth
-more than the fix.** Everything downstream of the helper inherits this process's environment
--- and `man open` says so in as many words: *"opened applications inherit environment
-variables just as if you had launched the application directly through its full path."* View
-code is always the reloader's *child*, so `RUN_MAIN=true` rode `open` into the applet, through
-`Start MutInt.command`, and into the new `./mutint start`, where `is_first_launch()` read it
-and concluded it was not a first launch. The entire block behind that gate was skipped: the
-migration guard, `migrate --run-syncdb`, the superuser check, **the worker pool**, and the
-banner -- plus, in the entry script, the cluster's `atexit` shutdown hook, which reads the same
-variable. So Restart brought MutInt up on the new code against the old schema with no workers,
-and the one line that would have said so is inside the block that did not run. What it looks
-like in `data/server.log`: `Starting WSGI development server` and `You have 1 unapplied
-migration(s)`, with no `Operations to perform`, no `Starting worker`, no `Starting MutInt at`.
-
-Two things about where the fix goes. **Not in the entry script**, which is the obvious place
-and is wrong: `restart_with_reloader` re-runs `[sys.executable] + sys.argv` -- the entry script
-itself -- with `RUN_MAIN` set, so stripping it there makes every autoreload a first launch and
-migrates on every file save. And **in the helper's shell, not as `env=` on the `Popen`**: the
-helper is `/bin/sh -c` whatever the relaunch command is, so one `unset` line covers `open` and
-`systemctl` alike; it sits beside the command it protects; it subtracts one name where a
-rebuilt environment is a standing invitation to drop something the relaunch needed
-(`MUTINT_RELAUNCH_COMMAND` above all -- scrub that and Restart works exactly once); and it is
-readable in `_script`, which is where `test_restart.py` says the helper's decisions live.
+**This replaced a detached helper and a launcher-exported `MUTINT_RELAUNCH_COMMAND`**, which
+only `MutInt.app` ever set, so from a terminal there was no button at all -- on the reasoning
+that the shell which would relaunch MutInt was the one being killed. The premise was wrong:
+the process to restart is the server's own parent and it can exec over itself. The helper
+also had to `unset RUN_MAIN` before relaunching, because view code is the reloader's child
+and `open` hands the child's environment on; a relaunch that inherited it skipped the whole
+first-launch block -- no migrate, no workers -- on the one launch meant to apply an update.
+The in-place design cannot meet that bug, and `test_restart.RelaunchHookTestCase` still
+asserts the flag is absent from the exec'd environment.
 
 The page polls **twice**: for the server to go down, then to come back. A poll that only asked
 "is it back" would be answered yes by the server that has not stopped yet.
@@ -745,7 +745,7 @@ one.
 
 Two traps in testing it, both found by it happening. `start.py` must **still migrate** on such a
 launch -- applying a staged update is the whole point of the restart, and for a long time that
-was written here and nothing enforced it; `ScriptTestCase` does now. And a test that reaches
+was written here and nothing enforced it; `test_start_command` does now. And a test that reaches
 `request_restart` without patching `update.project_root` writes that note into *this
 checkout's* `data/update.json`, where another test reads and clears it: an order-dependent
 failure in a different test, with nothing pointing at the cause.

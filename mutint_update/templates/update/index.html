@@ -92,11 +92,12 @@
             <button type="button" class="btn btn-default" id="update-check">
                 Check for updates</button>
             {% comment %} One of two buttons, decided by whether anything can start MutInt
-               again -- see `restart`. Where something can, staging and restarting are one
-               click, because staging is only ever a step towards the restart that applies
-               it. From a terminal nothing can, and a Restart button there would offer to
-               kill the server and nothing else: Install stages, and the box below says to
-               quit and start again. The labels are fixed -- the sentence in the status box
+               again -- see `restart`. Wherever `./mutint start` is what is running, it
+               can, and staging and restarting are one click, because staging is only ever
+               a step towards the restart that applies it. A copy started some other way
+               cannot, and a Restart button there would offer to stop the server and nothing
+               else: Install stages, and the box below says to quit and start again. The
+               labels are fixed -- the sentence in the status box
                names the version, and a button that changes its label is one the eye has to
                re-read. {% endcomment %}
             {% if can_restart %}
@@ -311,11 +312,11 @@
         var tries = 0;
         var timer = setInterval(function () {
             tries += 1;
-            if (tries > 240) {          // four minutes; a first launch after an update
-                clearInterval(timer);   // installs dependencies and migrates
+            if (tries > 900) {          // fifteen minutes; a first launch after an update
+                clearInterval(timer);   // may rebuild its whole environment, then migrates
                 say("warning", "MutInt has not come back yet. It may still be installing " +
-                               "this version's dependencies; the window showing its log will " +
-                               "say. Reload this page to check.");
+                               "this version's dependencies; the terminal or log window " +
+                               "running MutInt will say. Reload this page to check.");
                 return;
             }
             fetch(window.location.pathname, {method: "HEAD", cache: "no-store"})

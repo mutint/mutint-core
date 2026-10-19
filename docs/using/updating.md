@@ -27,17 +27,19 @@ and the git revision it is at. Under the table is the channel menu and two butto
     timestamp is usually the thing that tells you whether this is the change you are waiting
     for.
 
-- **Restart to install updates** appears beside it once there is an update to install, when
-  MutInt was started by something that can start it again -- `MutInt.app` on a Mac. One click
-  stages the version the check found, stops the server and starts it, and the page you are on
-  reloads itself when it is back.
+- **Restart to install updates** appears beside it once there is an update to install. One
+  click stages the version the check found, stops the server and starts it again, and the page
+  you are on reloads itself when it is back. It works wherever MutInt was started with
+  `./mutint start` -- in a terminal on Linux or Windows under WSL, from `MutInt.app` on a Mac,
+  under systemd -- because the server restarts itself in place: the terminal you started it in
+  shows the new launch, and Ctrl-C still stops it afterwards.
 
 MutInt has to be started again because the update is applied *before* the server comes up: a
 running MutInt cannot safely replace the code it is executing.
 
-- From a terminal -- where the process that would have to run the command is the one being
-  stopped -- the button is **Install update** instead. It stages the version, and the page then
-  says to **quit MutInt and start it again** by hand: Ctrl-C and `./mutint start`.
+- A copy of MutInt that was started some other way -- a bare `runserver`, a WSGI server --
+  cannot start itself again, and there the button is **Install update** instead. It stages the
+  version, and the page then says to **quit MutInt and start it again** by hand.
 
 Either way that one launch does everything: it moves the working tree, installs any
 dependencies the new version added, installs any new external tools, and applies any new

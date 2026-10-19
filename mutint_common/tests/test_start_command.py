@@ -47,6 +47,7 @@ class StartCommandTestCase(TestCase):
         command.stdout = StringIO()
         with mock.patch.dict(os.environ, env, clear=True), \
                 mock.patch.object(start, "call_command") as call, \
+                mock.patch.object(start.restart, "arm"), \
                 mock.patch.object(start.browser, "browser_command", return_value=["open"]), \
                 mock.patch.object(start.threading, "Timer") as timer:
             command.handle()
@@ -126,6 +127,7 @@ class WorkerSpawnTestCase(TestCase):
         command.stdout = StringIO()
         with mock.patch.dict(os.environ, env, clear=True), \
                 mock.patch.object(start, "call_command") as call, \
+                mock.patch.object(start.restart, "arm"), \
                 mock.patch.object(start.threading, "Timer"), \
                 mock.patch.object(start.threading, "Thread"), \
                 mock.patch.object(start, "atexit") as at_exit, \
@@ -287,6 +289,43 @@ class WorkerSpawnTestCase(TestCase):
                  if name in ("call", "popen")]
         self.assertEqual(["call", "popen"], names[:2])
         self.assertEqual("migrate", parent.mock_calls[0].args[0])
+
+    def test_arming_the_restart_comes_after_migrating_and_before_spawning(self):
+        """`restart.arm()` registers the atexit hook that execs a fresh `./mutint start`
+        over this process, and atexit is LIFO: registered before the worker hook, it runs
+        after the workers have stopped and before the entry script's cluster hook would --
+        so the cluster stays up, under the same pid, for the launch that follows. After
+        `migrate`, because arming a launch the guard is about to refuse would be odd, and
+        because the worker's own reason for following migrate applies to anything it
+        follows."""
+        parent = mock.Mock()
+        command = start.Command()
+        command.stdout = StringIO()
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch.object(start.threading, "Timer"), \
+                mock.patch.object(start.threading, "Thread"), \
+                mock.patch.object(start, "atexit"):
+            parent.attach_mock(mock.patch.object(start, "call_command").start(), "call")
+            parent.attach_mock(mock.patch.object(start.restart, "arm").start(), "arm")
+            parent.attach_mock(mock.patch.object(start.subprocess, "Popen").start(), "popen")
+            self.addCleanup(mock.patch.stopall)
+            command.handle()
+
+        names = [name for name, args, _kwargs in parent.mock_calls
+                 if name in ("call", "arm", "popen")]
+        self.assertEqual(["call", "arm", "popen"], names[:3])
+        self.assertEqual("migrate", parent.mock_calls[0].args[0])
+
+    def test_a_reload_does_not_arm_again(self):
+        """The child inherits the mark; arming there would install a handler in a process
+        the reloader throws away, and a hook that would exec the child over itself."""
+        command = start.Command()
+        command.stdout = StringIO()
+        with mock.patch.dict(os.environ, {"RUN_MAIN": "true"}, clear=True), \
+                mock.patch.object(start, "call_command"), \
+                mock.patch.object(start.restart, "arm") as arm:
+            command.handle()
+        arm.assert_not_called()
 
     def test_the_shutdown_hook_is_registered_on_a_launch_only(self):
         self.assertEqual(1, self._run({})[2].register.call_count)

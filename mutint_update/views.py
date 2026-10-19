@@ -128,10 +128,11 @@ def update_page(request):
         "requested": state.get("requested"),
         "staged_summary": _staged_summary(state),
         "blockers": update.blockers(base_dir) if base_dir else [],
-        # Only where something said how to start MutInt again -- see `restart`. From a
-        # terminal nothing does, and a Restart button there would offer to kill the
+        # Only where this MutInt can start itself again -- wherever `./mutint start` is what
+        # is running, see `restart`. A copy started some other way (a bare `runserver`, a
+        # WSGI server) gets Install alone: a Restart button there would offer to stop the
         # server and nothing else.
-        "can_restart": restart.relaunch_command() is not None,
+        "can_restart": restart.armed(),
     })
     return render(request, "update/index.html", context)
 
@@ -258,10 +259,11 @@ def update_restart(request):
     if not _enabled():
         return JsonResponse({"error": "Updates are not enabled on this deployment."},
                             status=409)
-    if restart.relaunch_command() is None:
+    if not restart.armed():
         return JsonResponse(
-            {"error": "This copy of MutInt was not started by anything that can start it "
-                      "again, so it can only be stopped from where it was started."},
+            {"error": "This copy of MutInt was not started by `./mutint start`, so it "
+                      "cannot start itself again: stop it and start it again from where "
+                      "it was started."},
             status=409)
 
     pid = restart.request_restart()

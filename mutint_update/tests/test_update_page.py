@@ -254,7 +254,7 @@ class UpdatePageTestCase(TestCase):
         self._write_available()
         self.client.force_login(self.superuser)
 
-        with mock.patch("mutint_update.views.restart.relaunch_command", return_value="x"):
+        with mock.patch("mutint_update.views.restart.armed", return_value=True):
             body = self.client.get(reverse("update")).content.decode()
 
         self.assertIn("Restart to install updates", body)
@@ -262,12 +262,13 @@ class UpdatePageTestCase(TestCase):
         self.assertNotIn('id="update-install"', body)
         self.assertLess(body.index('id="update-check"'), body.index('id="update-restart"'))
 
-    def test_from_a_terminal_install_is_offered_and_restart_is_not(self):
-        """Nothing can start MutInt again there, so a Restart button would only stop it."""
+    def test_a_copy_not_started_by_the_entry_script_is_offered_install_and_not_restart(self):
+        """A bare `runserver` or a WSGI server cannot start itself again, so a Restart
+        button there would only stop it."""
         self._write_available()
         self.client.force_login(self.superuser)
 
-        with mock.patch("mutint_update.views.restart.relaunch_command", return_value=None):
+        with mock.patch("mutint_update.views.restart.armed", return_value=False):
             body = self.client.get(reverse("update")).content.decode()
 
         self.assertIn('id="update-install"', body)

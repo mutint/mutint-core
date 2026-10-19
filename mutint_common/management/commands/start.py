@@ -10,6 +10,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
 
 from mutint_common import browser
+from mutint_update import restart
 
 # Django's autoreloader does not swap code into the running process -- it
 # re-executes the whole command line in a loop (see
@@ -243,6 +244,14 @@ class Command(BaseCommand):
                 self.stdout.write('Created superuser: admin / admin')
             else:
                 self.stdout.write('Superuser already exists')
+
+            # **Before the worker, and the order is load-bearing.** `arm()` registers the
+            # atexit hook that execs a fresh `./mutint start` over this process when /update/
+            # asks for a restart; atexit is LIFO, so registering it before the worker hook
+            # means workers stop first and the exec happens before the entry script's cluster
+            # hook -- the cluster stays up, under the same owning pid, for the launch that
+            # follows. See mutint_update/restart.py.
+            restart.arm()
 
             worker = self._start_worker(options.get('no_worker'), options.get('workers'))
 

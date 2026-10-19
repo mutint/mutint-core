@@ -2,74 +2,90 @@
 
 `/update/` stages a version and the next launch applies it, so the last step of an update
 has always been an instruction somebody has to follow: quit MutInt, start it again. This is
-that step as a button.
+that step as a button, and it works wherever `./mutint start` is what is running -- a
+terminal on WSL or Linux, `MutInt.app`, a systemd unit -- because the process that command
+becomes restarts **itself, in place**.
 
-**Nothing here knows what launched MutInt.** The launcher says how to start it again by
-exporting `MUTINT_RELAUNCH_COMMAND`, and when nothing exported one there is no button --
-which is the honest answer from a terminal, where the process that would have to run the
-command is the one being killed. MutInt.app sets it to an `open` of its own bundle; a
-deployment under systemd could set `systemctl restart mutint` and get the same page. That is
-why the seam is an environment variable rather than anything about macOS: core has no
-business knowing which of those it is.
+**The process to restart is `./mutint start`'s own, and it can exec over itself.** The entry
+script `os.execv`s into the venv's Python and keeps its pid, and under `runserver` that
+process is the reloader's *parent*: it owns the PostgreSQL cluster (`env/pg-owner` names its
+pid), it holds the terminal, and it registered the shutdown hooks. Views run in the
+reloader's child, which Django marks with `RUN_MAIN` and restarts whenever it dies -- so a
+view cannot stop MutInt by stopping itself (`server_pid` is the whole of telling the two
+apart). What the view does instead is signal the parent, and the parent exits exactly the
+way Ctrl-C exits it -- `SystemExit` out of Django's reloader loop, whose `subprocess.run`
+kills the child on the way, then `atexit` -- except that the last `atexit` hook, when a
+restart was asked for, `execve`s a fresh `./mutint start` over the same pid.
 
-**A view cannot stop MutInt by stopping itself.** Under `runserver` the reloader parent and
-the child that serves requests are two processes, and view code runs in the child -- so a
-view that exits, or kills its own pid, is simply restarted by the reloader a moment later.
-What has to be signalled is the parent, and `server_pid` is the whole of telling them apart:
-Django sets `RUN_MAIN` in the child and nowhere else. With the reloader off -- `DEBUG` false,
-which is what an installed deployment runs -- there is only one process and it is us.
+Three things fall out of exec rather than exit-and-relaunch, and each is why this is the
+design rather than a launcher that knows how to start MutInt again:
 
-**And the work is done by a detached helper, not here.** Two reasons, and neither is
-squeamishness: the response has to reach the browser before the process serving it dies, and
-whatever relaunches MutInt has to outlive everything this one is about to kill. The helper
-gets its own session (`start_new_session`), which is what puts it outside the process group
-the deadman supervisor tears down -- the same group membership that makes `kill -9` on the
-app clean up the runserver child.
+- **Same pid, so the cluster is never stopped.** `atexit` is LIFO: the entry script
+  registers the cluster's `stop_if_owned` first, `arm()` registers the exec hook after it,
+  and `start.py` registers the worker hook last -- so on exit the workers stop, then this
+  hook execs and the cluster hook is never reached. The new image's `_ensure_database()`
+  finds the cluster running with a live owner, itself, and leaves it alone. That is also
+  what makes the pre-update `pg_dump` real: `update.backup` dumps only from a running
+  cluster, and a restart that stopped it first skipped the backup on every staged update.
+  **`arm()` therefore has to run before the worker is spawned**, and `start.py` does.
+- **Same terminal.** The relaunched server writes to the window `./mutint start` was typed
+  in and Ctrl-C still stops it, which is the whole of what a WSL or Linux user needs and
+  what a detached helper could not give them. Under `MutInt.app` the pid the applet
+  captured is still the server's, so its Quit and its deadman keep working.
+- **No `RUN_MAIN`.** Django sets it in the child only, so the parent's environment is a
+  first launch's: the new start migrates, spawns workers and prints its banner with no
+  `unset` anywhere. (The detached helper this replaced had to strip it, because view code
+  is always the child and `open` handed the child's environment on.)
 
-**What the relaunch must not inherit is our `RUN_MAIN`, and that is subtler than it sounds.**
-Everything downstream inherits this process's environment -- the helper from us, and the app
-the helper starts from the helper, which `man open` states in as many words -- so the flag
-that marks us as the reloader's *child* reached the new `./mutint start` and told it it was
-not a first launch. It came up on the new code without migrating and without workers, which
-is the state an update exists to avoid. `_script` unsets it, and says why there.
+**What launched MutInt no longer matters, and nothing exports anything.** `arm()` marks the
+environment so the child can tell the page a restart is possible; the one case left without
+a button is a copy not started through `./mutint start` at all -- a bare `runserver`, or a
+WSGI server -- which can only be stopped and started from where it was started, and the
+endpoint says so with a 409.
 
-**Not in the entry script**, which is the tempting place: Django's `restart_with_reloader`
-re-runs `[sys.executable] + sys.argv` -- the entry script itself -- with `RUN_MAIN` set, so
-stripping it there would make every autoreload a first launch and `migrate` on every file
-save. Here is the one place that knows it is about to start a genuinely new MutInt.
+**The signal is sent after a pause**, because the response to the request asking for the
+restart has to reach the browser before the process serving it is killed.
 """
 
+import atexit
 import os
-import subprocess
+import signal
+import sys
+import threading
 
-#: What the launcher exports to say it can start MutInt again. Absent means it cannot, which
-#: is a state the page renders rather than an error it raises.
-RELAUNCH_ENV = 'MUTINT_RELAUNCH_COMMAND'
+#: Set in the environment by `arm()`, in the process that will exec itself, and inherited by
+#: the reloader's child -- so a view can answer "can this MutInt restart itself". Absent means
+#: it cannot, which is a state the page renders rather than an error it raises.
+ARMED_ENV = 'MUTINT_RESTART_ARMED'
 
 #: Django sets this in the reloader's *child* and nowhere else -- the same fact
 #: `start.py`'s `is_first_launch` reads, spelled here because importing a management
 #: command from a view to get at one string is worse than repeating it.
 RELOADER_CHILD_ENV = 'RUN_MAIN'
 
+#: What the child sends its parent. Nothing else in the process uses it: Django's reloader
+#: takes SIGTERM, the entry script SIGTERM and SIGHUP.
+RESTART_SIGNAL = signal.SIGUSR1
+
 #: Long enough for the response to this request to be written and read. It is not a race in
 #: any meaningful sense -- the browser is on the same machine -- but the cost of being wrong
 #: is a page that reports a failure while the restart it asked for succeeds behind it.
 RESPONSE_GRACE_SECONDS = 2
 
-#: After the server's process is gone, before starting one again. The listening socket is
-#: released when the process exits and `runserver` sets SO_REUSEADDR, so this is not about
-#: the port; it is about the deadman supervisor, which is stopping the worker and the
-#: PostgreSQL cluster in that window and whose work the next launch would otherwise race.
-SETTLE_SECONDS = 3
+#: Exported by the entry script before it execs, and re-exported by the one it execs into:
+#: dropped from the relaunch's environment so the new launch derives them afresh rather
+#: than inheriting a stale answer.
+_ENTRY_SCRIPT_EXPORTS = ('MUTINT_DB_HOST', 'MUTINT_DB_PORT', 'MUTINT_DB_NAME',
+                         'MUTINT_DB_USER', 'MUTINT_DB_MANAGED')
 
-#: How long to wait for a polite exit before insisting. Generous: what it is waiting for is
-#: `atexit` stopping a database cluster.
-STOP_TIMEOUT_SECONDS = 60
+_requested = False
+_relaunch = None
 
 
-def relaunch_command():
-    """The command that starts MutInt again, or None if nothing said how."""
-    return (os.environ.get(RELAUNCH_ENV) or '').strip() or None
+def armed():
+    """Whether this MutInt can start itself again -- whether `arm()` ran in the process that
+    would do it."""
+    return os.environ.get(ARMED_ENV) == '1'
 
 
 def server_pid():
@@ -83,43 +99,83 @@ def server_pid():
     return os.getpid()
 
 
-def _script(pid, command):
-    """The helper, as shell.
+def relaunch_argv(argv=None, project_root=None):
+    """The command that starts MutInt again: the managed interpreter where the entry script
+    has provisioned one, else the entry script itself through its shebang, with the same
+    arguments (`--workers N`, `--no-worker`) this launch was given.
 
-    `kill -0` is the poll: it tests that the pid can be signalled without signalling it. The
-    loop is bounded so a process that will not die cannot leave the helper running for ever,
-    and past the bound it stops being polite -- an update that half-happened because
-    something ignored SIGTERM is worse than an ungraceful stop.
-
-    The last decision is the `unset` below, and it is here rather than an `env=` on the
-    `Popen` for the reason this docstring exists: the helper is shell and this is where its
-    decisions can be read. It also sits beside the command it protects rather than thirty
-    lines away in another language, and it *subtracts* one name where a rebuilt environment
-    is a standing invitation to drop something `open` or `systemctl` needs.
+    `env/python/bin/python3` first because it is what the entry script would choose for
+    itself, and exists after any first run; the host `python3` the shebang names may be a
+    stub (a Mac with no developer tools) or may have changed since this process started.
     """
-    return "\n".join([
-        "sleep %d" % RESPONSE_GRACE_SECONDS,
-        "kill -TERM %d 2>/dev/null" % pid,
-        "waited=0",
-        "while kill -0 %d 2>/dev/null && [ $waited -lt %d ]; do" % (
-            pid, STOP_TIMEOUT_SECONDS * 2),
-        "    sleep 0.5",
-        "    waited=$((waited + 1))",
-        "done",
-        "kill -0 %d 2>/dev/null && kill -KILL %d 2>/dev/null" % (pid, pid),
-        "sleep %d" % SETTLE_SECONDS,
-        # **The relaunched MutInt must not be told it is a reloader child.** We are one --
-        # view code always is -- and everything below inherits our environment: the helper
-        # from us, and whatever `command` starts from the helper. `man open` is explicit that
-        # *"opened applications inherit environment variables just as if you had launched the
-        # application directly through its full path"*, so the flag rode `open` -> applet ->
-        # `Start MutInt.command` -> `./mutint start`, where `is_first_launch()` read it and
-        # skipped the entire launch block: no migration guard, no `migrate --run-syncdb`, no
-        # worker pool, no banner -- on the one launch whose whole purpose is to apply a
-        # staged update. Unset where it is known to be a lie about the process to come.
-        "unset %s" % RELOADER_CHILD_ENV,
-        command,
-    ])
+    argv = list(sys.argv if argv is None else argv)
+    script = os.path.abspath(argv[0])
+    if project_root is None:
+        project_root = _project_root(script)
+    managed = os.path.join(project_root, 'env', 'python', 'bin', 'python3')
+    if os.path.isfile(managed) and os.access(managed, os.X_OK):
+        return [managed, script] + argv[1:]
+    return [script] + argv[1:]
+
+
+def _project_root(script):
+    try:
+        from mutint_common import update
+        root = update.project_root()
+    except Exception:
+        root = None
+    return root or os.path.dirname(script)
+
+
+def arm():
+    """Make this process able to restart itself: call once, in the process that
+    `./mutint start` became, **before the worker is spawned** (see the module docstring for
+    why the order is load-bearing).
+
+    Installs the signal handler that turns `RESTART_SIGNAL` into the exit Ctrl-C produces,
+    registers the `atexit` hook that execs a fresh start when that signal was the reason for
+    exiting, and marks the environment so the reloader's child -- which inherits it -- can
+    offer the button.
+    """
+    global _relaunch
+    _relaunch = relaunch_argv()
+    signal.signal(RESTART_SIGNAL, _on_restart_signal)
+    atexit.register(_relaunch_if_requested)
+    os.environ[ARMED_ENV] = '1'
+    return _relaunch
+
+
+def _on_restart_signal(signum, frame):
+    """Exit the way Ctrl-C does, remembering why. Raised inside Django's reloader loop this
+    unwinds `subprocess.run`, which kills the serving child on its way out; without the
+    reloader it unwinds the server itself. Either way `atexit` runs next."""
+    global _requested
+    _requested = True
+    raise SystemExit(0)
+
+
+def _relaunch_if_requested():
+    """The last `atexit` hook that matters: exec `./mutint start` over this process.
+
+    Only when the signal asked for it -- on Ctrl-C and every other exit this returns and the
+    cluster's own hook runs after it as before. `execve` never returns on success; on failure
+    the reason is printed and the process finishes exiting as a plain stop, which leaves the
+    staged update to the next `./mutint start` by hand.
+    """
+    if not _requested or not _relaunch:
+        return
+    env = {key: value for key, value in os.environ.items()
+           if key != RELOADER_CHILD_ENV and key not in _ENTRY_SCRIPT_EXPORTS}
+    env.pop(ARMED_ENV, None)
+    sys.stdout.write('\nRestarting MutInt...\n')
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        os.execve(_relaunch[0], _relaunch, env)
+    except OSError as error:
+        sys.stderr.write('Could not start MutInt again (%s): run `%s` yourself.\n'
+                         % (error, ' '.join(_relaunch)))
+        sys.stderr.flush()
 
 
 def _note_restart():
@@ -136,10 +192,12 @@ def _note_restart():
         pass
 
 
-def _spawn(script):
-    """Run the helper, detached. Separated so tests can watch it without one running."""
-    subprocess.Popen(["/bin/sh", "-c", script], start_new_session=True,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def _signal_later(pid):
+    """Send the restart signal after the response has had time to leave. Separated so tests
+    can watch it without one being sent."""
+    timer = threading.Timer(RESPONSE_GRACE_SECONDS, os.kill, (pid, RESTART_SIGNAL))
+    timer.daemon = True
+    timer.start()
 
 
 def request_restart():
@@ -148,16 +206,13 @@ def request_restart():
     Returns rather than waits: by the time anything could be observed here, the process
     observing it is gone.
     """
-    command = relaunch_command()
-    if not command:
-        raise RuntimeError("Nothing told MutInt how to start itself again.")
+    if not armed():
+        raise RuntimeError("This MutInt was not started by `./mutint start`, "
+                           "so it cannot start itself again.")
     pid = server_pid()
-    # Before spawning, so it is on disk whatever happens next. A state file rather than an
-    # environment variable because the note outlives the environment that would have carried
-    # it -- the launch is started by a detached helper, and on a relaunch that fails or is
-    # retried the note is still there to be taken once. (It used to say an environment
-    # variable *could not* reach that launch, which is simply untrue: `open` hands the whole
-    # environment on, which is the bug the `unset` in `_script` exists to undo.)
+    # Before signalling, so it is on disk whatever happens next. A state file rather than an
+    # environment variable because the launch that reads it is a different image of this
+    # process, and a relaunch that fails or is retried still finds the note to take once.
     _note_restart()
-    _spawn(_script(pid, command))
+    _signal_later(pid)
     return pid
