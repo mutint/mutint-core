@@ -152,7 +152,7 @@ class CurateColumnTestCase(_Fixture):
 class ColumnsTestCase(_Fixture):
     def test_the_descriptive_columns_are_the_per_sample_tables_minus_freq(self):
         keys = [c.key for c in self.matrix().columns]
-        self.assertEqual(["type", "seq_id", "position", "mutation", "annotation", "gene",
+        self.assertEqual(["type", "seq_id", "position", "mutation", "snp_type", "annotation", "gene",
                           "description", "genes_inactivated", "genes_overlapping",
                           "genes_promoter", "locus_tags_inactivated", "locus_tags_overlapping",
                           "locus_tags_promoter", "single_gene_affected",

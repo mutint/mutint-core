@@ -30,7 +30,8 @@ from mutint_sample.breseq_report import build_rows, is_mixed
 from mutint_sample.models import ReferenceSequences, MutationCall
 from mutint_sample.mutation_matrix import (DESCRIPTIVE, FILTER_PREFERENCE_PREFIX,
                                            GENE_LIST_COLUMNS, REFERENCES_PREFERENCE_PREFIX,
-                                           Column, contig_lengths, reference_names)
+                                           SNP_TYPE_COLUMN, Column, contig_lengths,
+                                           reference_names)
 from mutint_experiment.ancestor import (ancestral_mutation_ids, ancestral_shown,
                                         describe_ancestor)
 from mutint_sample.util import get_ordered_sample_dict
@@ -151,6 +152,7 @@ def _columns(mixed):
     if mixed:
         columns.append(Column("freq", "Freq", "breseq-freq"))
     columns += [
+        SNP_TYPE_COLUMN,
         Column("annotation", "Annotation", "breseq-annotation"),
         Column("gene", "Gene", "breseq-gene"),
         Column("description", "Description", "breseq-description"),

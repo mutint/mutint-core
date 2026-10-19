@@ -11,7 +11,10 @@ from. Those fall back to the flat columns the ordinary mutation table uses -- th
 same information, without breseq's markup.
 """
 
-from mutint_import.annotate.display import (add_html_fields, commify, gene_list_names,
+from django.utils.html import escape
+
+from mutint_import.annotate.display import (CODING_SNP_TYPES, MULTIPLE_SEPARATOR,
+                                             add_html_fields, commify, gene_list_names,
                                              html_gene_list)
 
 #: The gene-association fields, as `(key, title, italic)`: the genes a mutation is predicted
@@ -46,6 +49,25 @@ def _gene_list_cells(annotation):
         cells[key] = html_gene_list((annotation or {}).get(key), italic=italic)
         cells[key + "_text"] = gene_list_text(annotation, key)
     return cells
+
+
+def snp_type_cells(value):
+    """breseq's `snp_type` as the SNP type cell: markup and a `snp_type_text` twin.
+
+    The value is one token per overlapping gene joined by `|` -- `nonsynonymous|synonymous`
+    is one base in two reading frames -- and empty for every non-SNP. The cell reads the
+    tokens in breseq's own words joined by `, `, each coding one in the colour the Annotation
+    cell gives the amino-acid change (`snp_type_<token>`, `breseq_table.css`). The plain twin
+    is what the Filter tab matches and the CSV carries, so a rule on `synonymous` is not met
+    by `nonsynonymous`'s class attribute.
+    """
+    tokens = [token for token in str(value or "").split(MULTIPLE_SEPARATOR) if token]
+    html = []
+    for token in tokens:
+        text = escape(token)
+        html.append('<span class="snp_type_%s">%s</span>' % (text, text)
+                    if token in CODING_SNP_TYPES else text)
+    return {"snp_type": ", ".join(html), "snp_type_text": ", ".join(tokens)}
 
 
 def is_mixed(sample):
@@ -87,6 +109,7 @@ def _annotated_row(entry):
         "description": entry.get("html_gene_product", ""),
         "annotated": True,
     }
+    row.update(snp_type_cells(entry.get("snp_type")))
     row.update(_gene_list_cells(entry))
     return row
 
@@ -106,6 +129,7 @@ def _plain_row(mutation):
         "description": mutation.product or "",
         "annotated": False,
     }
+    row.update(snp_type_cells(mutation.snp_type))
     row.update(_gene_list_cells(mutation.annotation))
     return row
 

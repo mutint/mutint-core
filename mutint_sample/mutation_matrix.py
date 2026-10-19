@@ -224,6 +224,10 @@ GENE_LIST_COLUMNS = tuple(Column(key, title, GENE_LIST_CSS_CLASS, default_visibl
 #: experiment. First, and with no header so it stays slim; see `build_matrix(curate=)`.
 CURATE_COLUMN = Column("curate", "Curate", "breseq-curate", header="")
 
+#: breseq's `snp_type`, in its words and the Annotation cell's colours, blank for a non-SNP;
+#: `breseq_report.snp_type_cells` writes it and its `_text` twin. Both tables carry it.
+SNP_TYPE_COLUMN = Column("snp_type", "SNP type", "breseq-snp-type")
+
 #: The per-sample table's columns, minus Freq. Description is hidden until asked for: it is
 #: prose, and the widest column by far.
 DESCRIPTIVE = (
@@ -231,6 +235,7 @@ DESCRIPTIVE = (
     Column("seq_id", "Reference", "breseq-seq-id"),
     Column("position", "Position", "breseq-position"),
     Column("mutation", "Mutation", "breseq-mutation"),
+    SNP_TYPE_COLUMN,
     Column("annotation", "Annotation", "breseq-annotation"),
     Column("gene", "Gene", "breseq-gene"),
     Column("description", "Description", "breseq-description", default_visible=False),

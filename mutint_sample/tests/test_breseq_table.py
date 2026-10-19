@@ -97,7 +97,7 @@ class BreseqTablePageTestCase(TestCase):
         only checks header text, which is how the two drifted apart.
         """
         content = self.content()
-        for column in ("evidence", "seq-id", "position", "mutation", "annotation",
+        for column in ("evidence", "seq-id", "position", "mutation", "snp-type", "annotation",
                        "gene", "description"):
             self.assertIn('<th class="breseq-%s" data-column=' % column, content)
             self.assertIn('<td class="breseq-%s" data-column=' % column, content)
@@ -166,13 +166,13 @@ class BreseqTablePageTestCase(TestCase):
         This was assertNotIn("<th>freq</th>"), which after the headers were
         renamed passed for a population sample too -- green while testing nothing.
         """
-        self.assertEqual(7 + len(GENE_LIST_COLUMNS), self.content().count("<th "))
+        self.assertEqual(8 + len(GENE_LIST_COLUMNS), self.content().count("<th "))
         self.assertNotIn("Freq", self.content())
 
     def test_a_population_sample_has_one(self):
         self._make_population()
         content = self.content()
-        self.assertEqual(8 + len(GENE_LIST_COLUMNS), content.count("<th "))
+        self.assertEqual(9 + len(GENE_LIST_COLUMNS), content.count("<th "))
         self.assertIn('<th class="breseq-freq" data-column="freq">Freq</th>', content)
         self.assertIn("100%", content)
 
@@ -441,6 +441,7 @@ class ColumnsMenuTestCase(BreseqTablePageTestCase):
         self.assertIn("data-breseq-columns", content)
         self.assertIn('<li data-value="description" class="active">', content)
         self.assertIn('<li data-value="type" class="active">', content)
+        self.assertIn('<li data-value="snp_type" class="active">', content)
         for column in GENE_LIST_COLUMNS:
             self.assertIn('<li data-value="%s">' % column.key, content)
         self.assertNotIn('<li data-value="freq"', content, "a clonal sample has no Freq")
@@ -493,4 +494,4 @@ class ColumnsMenuTestCase(BreseqTablePageTestCase):
         html = loader.get_template("breseq_table/_mutation_table.html").render(
             {"rows": rows, "empty_message": "Nothing."})
         self.assertNotIn("breseq-gene-list", html)
-        self.assertEqual(7, html.count("<th "))
+        self.assertEqual(8, html.count("<th "))

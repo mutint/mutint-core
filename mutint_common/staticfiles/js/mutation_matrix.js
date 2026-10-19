@@ -153,13 +153,16 @@
         return { hidden: hidden, shown: hidden.indexOf("description") < 0 ? ["description"] : [] };
     }
 
-    /* A gene-list column (genes_inactivated and the rest, GENE_LIST_FIELDS): the markup to
-       display, and the plain list -- which the server sends beside it as `<key>_text` -- for
-       searching and exporting, since a long list is collapsed behind a Show button. */
-    function renderGeneList(key) {
+    /* A column the server sends a plain twin for, as `<key>_text`: the markup to display,
+       and the twin for searching and exporting. The gene lists (genes_inactivated and the
+       rest, GENE_LIST_FIELDS), whose long lists are collapsed behind a Show button, and SNP
+       type, whose coloured words carry their class in the markup. A row without the twin
+       falls back to the markup, which the CSV export strips of tags. */
+    function renderWithText(key) {
         return function (data, type, row) {
             if (type === "display") { return renderHtml(data); }
-            return renderHtml(row[key + "_text"]);
+            var text = row[key + "_text"];
+            return renderHtml(typeof text === "string" ? text : data);
         };
     }
 
@@ -423,7 +426,7 @@
                 defaultContent: "",
                 className: th.className,
                 visible: !hiddenColumns[key],
-                render: th.classList.contains("breseq-gene-list") ? renderGeneList(key) : renderHtml
+                render: renderWithText(key)
             };
             // The Type cell links into the genome browser with every sample carrying the
             // mutation shown -- the per-sample table's Type link, for a row that is a mutation.

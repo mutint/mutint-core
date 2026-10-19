@@ -82,6 +82,8 @@
 .breseq-table td.breseq-seq-id,
 .breseq-table th.breseq-mutation,
 .breseq-table td.breseq-mutation,
+.breseq-table th.breseq-snp-type,
+.breseq-table td.breseq-snp-type,
 .breseq-table th.breseq-annotation,
 .breseq-table td.breseq-annotation,
 .breseq-table th.breseq-gene,
@@ -94,6 +96,7 @@
    start wrapping mid-value without it. */
 .breseq-table .breseq-position,
 .breseq-table .breseq-mutation,
+.breseq-table .breseq-snp-type,
 .breseq-table .breseq-freq,
 .breseq-table .breseq-seq-id,
 .breseq-table .breseq-gene,

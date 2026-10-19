@@ -1242,7 +1242,8 @@ promote one.
 to an indexed column, and it is the column functional change is classified from. Not
 `protein_change`: that is a *display* string, `I34S (ATC→AGC)`, containing neither
 "synonymous" nor "nonsynonymous", and classifying by substring-matching it buckets nearly
-everything as `unannotated`. `FUNCTIONAL_CHANGE_TYPE_LIST` is `snp_type`'s vocabulary.
+everything as `unannotated`. `FUNCTIONAL_CHANGE_TYPE_LIST` is `snp_type`'s vocabulary, and
+the mutation tables' SNP type column shows the raw value the buckets are counted from.
 
 `mutint_sample/functional_change.py` owns the vocabulary and the rule; `mutint_sample/views/common.py`
 re-exports both so no importer changed. Four things about it are load-bearing:
@@ -2244,6 +2245,19 @@ row is a mutation rather than one sample's call: `type_url` is the leftmost link
 cell's URL plus `samples=mutant`, so the browser opens with every sample carrying it shown.
 Derived from the cells, so a caller's `browse_url` is honoured, and absent when no carrying
 sample has reads.
+
+**SNP type is a column of both tables, after Mutation.** It is breseq's `snp_type` in breseq's
+own words -- `synonymous`, `nonsynonymous`, `nonsense`, `noncoding`, `pseudogene`,
+`intergenic` -- the coding three in the colour the Annotation cell already gives the
+amino-acid change (`snp_type_<token>`), a compound value as `nonsynonymous, synonymous`, and
+blank for every non-SNP, since breseq assigns the field to SNPs alone.
+`breseq_report.snp_type_cells` is the one writer and the row carries a `snp_type_text` twin
+beside the markup, the gene lists' convention, which the Filter tab matches and the CSV carries
+-- so a rule on `synonymous` is not met by `nonsynonymous`'s class attribute. It is on the
+per-sample table as well (`SNP_TYPE_COLUMN`, in `_columns()` and the shared partial, so the
+genome browser's and the NCBI page's one-row tables carry it too) because the Filter tab's rules
+are shared between the two pages and offer `DESCRIPTIVE`'s keys: a column one table lacked
+would read `""` there and a *contains* rule on it would hide every row.
 
 **Rows are objects and DataTables reads cells by name** (`data: "gene"`, `data: "samples.3"`),
 which is what makes hiding a column, or adding one later, move no index anywhere. The header is
