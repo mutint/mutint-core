@@ -2489,8 +2489,8 @@ mutations, the default -- the rows showing after every menu and the Filter tab's
 `search: "applied"` -- or All mutations, every row the table holds), **Columns** (Visible
 columns, the default -- after the Columns menu and the sample layers -- or All columns, every
 descriptive column and every sample, hidden or not; Curate is never exported) and **Format**
-(Machine-readable table (CSV), Formatted table (HTML), Graphical table (SVG)), then
-**Export** at the row's right edge. The three are remembered together as
+(Text table (CSV), Formatted table (HTML), Graphical table (SVG)), then **Export**,
+right after them; the fields sit a little further apart than the menus inside each. The three are remembered together as
 `mutation_matrix.export`, each value checked against its menu. `js/mutation_matrix_export.js`
 -- the fifth asset every page rendering the tag links, which `test_templates` enforces --
 builds the file from DataTables' data, never the DOM (`deferRender` leaves only the current

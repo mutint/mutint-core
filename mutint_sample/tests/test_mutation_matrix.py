@@ -577,7 +577,7 @@ class PartialTestCase(_Fixture):
         for role, default, labels in (
                 ("rows", "filtered", ["Filtered mutations", "All mutations"]),
                 ("columns", "visible", ["Visible columns", "All columns"]),
-                ("format", "csv", ["Machine-readable table (CSV)", "Formatted table (HTML)",
+                ("format", "csv", ["Text table (CSV)", "Formatted table (HTML)",
                                    "Graphical table (SVG)"])):
             with self.subTest(menu=role):
                 self.assertIn('<select class="form-control" data-role="export-%s">' % role, export)

@@ -722,7 +722,9 @@ table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
 .mutation-matrix-color select { display: inline-block; width: auto; }
 .mutation-matrix-color { white-space: nowrap; }
 
-/* The Export tab: three labelled menus in a row, the button at its right edge. */
+/* The Export tab: three labelled menus in a row, then the button. A field is a label and
+   its menu close together, and the fields a little further apart, so each label reads
+   with its own menu rather than with the menu before it. */
 .mutation-matrix-export { align-items: center; }
 .mutation-matrix-export-field {
     display: inline-flex;
@@ -731,8 +733,8 @@ table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
     font-weight: normal;
     white-space: nowrap;
 }
+.mutation-matrix-export-field + .mutation-matrix-export-field { margin-left: 0.75em; }
 .mutation-matrix-export-field select { display: inline-block; width: auto; }
-.mutation-matrix-export-go { margin-left: auto; }
 
 table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     background-color: var(--sample-color, #337ab7);
