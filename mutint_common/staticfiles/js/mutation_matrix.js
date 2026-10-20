@@ -16,8 +16,8 @@
  *   - a row whose mutation is in no *shown* sample, whose type or reference is hidden,
  *     outside the row set the Show menu has chosen, or failing a rule on the Filter tab, is
  *     filtered out through DataTables' own search hook rather than by hiding row nodes -- so
- *     paging and the row count stay honest, and so Export's "Showing" is exactly what is on
- *     the screen;
+ *     paging and the row count stay honest, and so Export's "Filtered mutations" is exactly
+ *     what is on the screen;
  *   - the Columns, Samples, Types and References menus are mutintSelectList in toggle mode,
  *     the genome browser's sample menu four times over, and every change is saved back where
  *     it was read from (the store itself is mutint_preferences.js);
@@ -30,7 +30,10 @@
  *     Export; Search has the matrix's own seven),
  *     found through `[data-mutation-matrix-controls]` because the page may own the strip;
  *     the DataTables toolbar -- pager, length, count, in one row -- stays under the strip
- *     on every tab, and the Export buttons are moved into the Export pane;
+ *     on every tab;
+ *   - the Export tab is three menus and a button -- the rows (filtered or all), the columns
+ *     (visible or all) and the format (CSV, a styled HTML table, SVG) -- remembered as
+ *     `mutation_matrix.export`; mutation_matrix_export.js builds and downloads the file;
  *   - the Filter tab's rules -- a column and text, or a position range on a reference --
  *     are mutint_match_rules.js's, applied in the search hook and remembered per experiment
  *     as `mutation_matrix.filter.<exp>`, the key the per-sample Mutations page shares;
@@ -100,6 +103,9 @@
     var FREQUENCY_KEY = "mutation_matrix.frequency";
     var VIEW_KEY = "mutation_matrix.view";
     var SHOW_KEY = "mutation_matrix.show";
+    var EXPORT_KEY = "mutation_matrix.export";
+    var EXPORT_CHOICES = { rows: ["filtered", "all"], columns: ["visible", "all"],
+                           format: ["csv", "html", "svg"] };
     var OPTIONS_KEY = "mutation_matrix.options";
     var WIDTHS_KEY = "mutation_matrix.widths";
     // How many rows a page shows -- "Show N entries" -- remembered like every other choice, so
@@ -561,51 +567,9 @@
             // One row of controls above the table -- the pager at the left, then length and
             // the count; no search box, the Filter tab's rules being the way to narrow the
             // rows by what they say -- and the table alone in the box that scrolls. The box
-            // itself is DataTables' doing, so that it wraps only the table. `B` is where
-            // Buttons makes the two Export buttons; they are moved into the Export tab's
-            // pane below, so the row never shows them.
-            dom: '<"mutation-matrix-toolbar"pliB>r<"mutation-matrix-scroll"t>',
-            // Export is a menu of two: the rows showing -- after the Show menu, the hidden
-            // samples and types, and the Filter tab's rules, which is what `search: "applied"`
-            // means -- or every row the server produced. Visible columns only, either way. Ancestral
-            // rows the reader asked to see are rows the server produced, so both include them;
-            // they are in no row set, so choosing one in the Show menu drops them. Cells are
-            // exported through the `export` rendering, which is the displayed one except for
-            // a gene list, whose whole plain list is exported rather than its Show button.
-            // `bom`: the UTF-8 byte-order mark in front, without which Excel reads the
-            // arrows and check marks in the file's legacy code page as nonsense.
-            buttons: [{
-                extend: "collection",
-                text: "Export CSV",
-                autoClose: true,
-                buttons: [{
-                    extend: "csv",
-                    bom: true,
-                    text: "Filtered mutations",
-                    title: (container.getAttribute("data-csv-title") || "mutations") + "_showing",
-                    exportOptions: { columns: ":visible:not(.breseq-curate)", orthogonal: "export", modifier: { search: "applied" } }
-                }, {
-                    extend: "csv",
-                    bom: true,
-                    text: "All mutations",
-                    title: container.getAttribute("data-csv-title") || "mutations",
-                    exportOptions: { columns: ":visible:not(.breseq-curate)", orthogonal: "export", modifier: { search: "none" } }
-                }]
-            }, {
-                // A vector drawing of the filtered rows, as the Display settings show them;
-                // mutation_matrix_svg.js builds it from the data rather than the DOM.
-                text: "Export SVG",
-                action: function (e, api) {
-                    var svg = window.mutationMatrixSvg(api, table);
-                    var link = document.createElement("a");
-                    link.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-                    link.download = (container.getAttribute("data-csv-title") || "mutations") + ".svg";
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    setTimeout(function () { URL.revokeObjectURL(link.href); }, 0);
-                }
-            }],
+            // itself is DataTables' doing, so that it wraps only the table. No Buttons: the
+            // Export tab's controls are the pane's own, below.
+            dom: '<"mutation-matrix-toolbar"pli>r<"mutation-matrix-scroll"t>',
             language: {
                 emptyTable: container.getAttribute("data-empty-message") || "No mutations to show.",
                 // DataTables' own empty-count line is "Showing 0 to 0 of 0 entries", which
@@ -625,11 +589,35 @@
             drawCallback: function () { if (dt) { pinColumns(); } }
         });
 
-        /* Export CSV and Export SVG live in the Export tab. Buttons makes them where `B` is
-           in `dom`, which is always a DataTables toolbar; their container is moved into the
-           pane once they exist. */
+        /* The Export tab: rows, columns and format, remembered together, and the button that
+           builds the file from the table's data (mutation_matrix_export.js). Each stored
+           value is checked against its menu, so a stale or foreign value reads as the
+           default -- filtered rows, visible columns, CSV. */
         var exportPane = controls.querySelector('[data-role="export"]');
-        if (exportPane) { dt.buttons().container().appendTo(exportPane); }
+        if (exportPane && window.mutationMatrixExport) {
+            var exportMenus = {};
+            var storedExport = prefs.get(EXPORT_KEY, null) || {};
+            var exportChoice = {};
+            Object.keys(EXPORT_CHOICES).forEach(function (name) {
+                var menu = exportPane.querySelector('[data-role="export-' + name + '"]');
+                var allowed = EXPORT_CHOICES[name];
+                exportChoice[name] = allowed.indexOf(storedExport[name]) >= 0 ? storedExport[name] : allowed[0];
+                if (menu) {
+                    menu.value = exportChoice[name];
+                    exportMenus[name] = menu;
+                    menu.addEventListener("change", function () {
+                        exportChoice[name] = allowed.indexOf(menu.value) >= 0 ? menu.value : allowed[0];
+                        prefs.set(EXPORT_KEY, exportChoice);
+                    });
+                }
+            });
+            var exportButton = exportPane.querySelector('[data-role="export-go"]');
+            if (exportButton) {
+                exportButton.addEventListener("click", function () {
+                    window.mutationMatrixExport.run(dt, table, container, exportChoice);
+                });
+            }
+        }
 
         /* The collapse bar sits directly under the panes, the sidebar's strip laid flat: a
            full-width bar with a chevron, clicked to fold away everything above it -- the

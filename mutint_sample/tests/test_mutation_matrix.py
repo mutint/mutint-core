@@ -571,8 +571,23 @@ class PartialTestCase(_Fixture):
         self.assertIn('<option value="test_ref" data-length="%d">test_ref</option>' % length, match)
         self.assertIn("Whole word", match)
         self.assertIn("Match case", match)
-        # Empty until the script moves DataTables' Export buttons into it.
-        self.assertIn('data-role="export"', pane("export"))
+        # The Export tab: three menus opening on the defaults, and the button.
+        export = pane("export")
+        self.assertIn('data-role="export"', export)
+        for role, default, labels in (
+                ("rows", "filtered", ["Filtered mutations", "All mutations"]),
+                ("columns", "visible", ["Visible columns", "All columns"]),
+                ("format", "csv", ["Machine-readable table (CSV)", "Formatted table (HTML)",
+                                   "Graphical table (SVG)"])):
+            with self.subTest(menu=role):
+                self.assertIn('<select class="form-control" data-role="export-%s">' % role, export)
+                self.assertIn('<option value="%s" selected>' % default, export)
+                for label in labels:
+                    self.assertIn(">%s</option>" % label, label and export)
+        self.assertIn('data-role="export-go">Export</button>', export)
+        # The DataTables Buttons the tab used to hold are gone, markup and words alike.
+        self.assertNotIn("Export CSV", html)
+        self.assertNotIn("Export SVG", html)
         # The page rendered the panes; the tag did not render them again.
         self.assertEqual(1, html.count('data-role="columns"'))
         self.assertEqual(1, html.count('data-role="match"'))

@@ -722,6 +722,18 @@ table.dataTable.mutation-matrix-table thead > tr > th.descriptive.resized {
 .mutation-matrix-color select { display: inline-block; width: auto; }
 .mutation-matrix-color { white-space: nowrap; }
 
+/* The Export tab: three labelled menus in a row, the button at its right edge. */
+.mutation-matrix-export { align-items: center; }
+.mutation-matrix-export-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-weight: normal;
+    white-space: nowrap;
+}
+.mutation-matrix-export-field select { display: inline-block; width: auto; }
+.mutation-matrix-export-go { margin-left: auto; }
+
 table.dataTable.mutation-matrix-table thead > tr > th.breseq-sample {
     background-color: var(--sample-color, #337ab7);
 }

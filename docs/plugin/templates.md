@@ -105,8 +105,11 @@ set, below) (everywhere), and `mutation_matrix.samples.<experiment_id>`,
 page as well) — and in the browser's localStorage otherwise. There is no DataTables search
 box; the Filter tab is how a reader narrows the rows by what they say. The store's client half is `js/mutint_preferences.js`, loaded from `base.html`, and
 a page of your own may call `window.mutintPreferences(...)` the same way. The Export tab
-holds Export CSV, a menu of two — the rows showing, after every menu and the Filter tab's
-rules, or every row the server produced; visible columns only, either way — and Export SVG.
+is three menus and a button: the rows (the ones showing, after every menu and the Filter
+tab's rules, or every row the table holds), the columns (the ones showing, or every column
+and sample), and the format — CSV, a standalone HTML table styled as the page styles it, or
+an SVG drawing — then Export. `js/mutation_matrix_export.js` is the fifth asset a matrix page
+links.
 
 **Row sets** are how a page offers a subset of its rows without being a second page. Hand
 `build_matrix` `sets=(RowSet("fixed", "Fixed", mutation_ids), ...)`: each row is annotated

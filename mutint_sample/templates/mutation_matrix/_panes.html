@@ -165,9 +165,32 @@
         {% include "mutation_matrix/_match_rules.html" with columns=matrix.columns seq_lengths=matrix.seq_lengths seq_ids=matrix.seq_ids %}
     </div>
 </div>
-{% comment %} Export CSV and Export SVG. The buttons are DataTables' own (the Buttons
-   extension makes them), so the script moves their container in here once the table is
-   drawn; the pane is empty until then. {% endcomment %}
+{% comment %} The Export tab: which rows, which columns, which format, and the button.
+   The three menus are remembered per reader (`mutation_matrix.export`); the script
+   (mutation_matrix_export.js, driven from mutation_matrix.js) builds the file from the
+   table's data and downloads it. Filtered rows and visible columns are the defaults because
+   "what I am looking at" is what somebody exporting usually means. {% endcomment %}
 <div class="tab-pane{% if active == "export" %} active{% endif %}" id="{{ page }}-pane-export">
-    <div class="mutation-matrix-controls" data-role="export"></div>
+    <div class="mutation-matrix-controls mutation-matrix-export" data-role="export">
+        <label class="view-filter-field mutation-matrix-export-field" title="Filtered: the rows showing, after every menu and the Filter tab. All: every row the table holds.">Rows:
+            <select class="form-control" data-role="export-rows">
+                <option value="filtered" selected>Filtered mutations</option>
+                <option value="all">All mutations</option>
+            </select>
+        </label>
+        <label class="view-filter-field mutation-matrix-export-field" title="Visible: the columns and samples showing. All: every column and every sample, hidden or not.">Columns:
+            <select class="form-control" data-role="export-columns">
+                <option value="visible" selected>Visible columns</option>
+                <option value="all">All columns</option>
+            </select>
+        </label>
+        <label class="view-filter-field mutation-matrix-export-field" title="CSV for a spreadsheet or a script; HTML as the table looks on this page; SVG as a figure.">Format:
+            <select class="form-control" data-role="export-format">
+                <option value="csv" selected>Machine-readable table (CSV)</option>
+                <option value="html">Formatted table (HTML)</option>
+                <option value="svg">Graphical table (SVG)</option>
+            </select>
+        </label>
+        <button type="button" class="btn btn-primary mutation-matrix-export-go" data-role="export-go">Export</button>
+    </div>
 </div>

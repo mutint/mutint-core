@@ -8,7 +8,8 @@ without an import dialog, and every other spreadsheet reads it fine.
 **Written at the HTTP boundary only.** `metadata.write` and the archive's `metadata.csv`
 stay plain: they are MutInt's own interchange text, read back by `metadata.parse` (which
 tolerates a mark but need not meet one), and their first line is pinned by tests. The
-mutation matrix's client-side Export CSV sets DataTables' `bom: true` for the same effect.
+mutation matrix's client-side CSV (`mutation_matrix_export.js`) writes `\ufeff` first for the
+same effect.
 """
 
 from django.http import HttpResponse

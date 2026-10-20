@@ -1226,7 +1226,7 @@ escaped -- they are a reference's text, with none of breseq's markup in them -- 
 behind the Description column's Show button past 15 and a count past `GENE_LIST_LIMIT`.
 
 **Each row carries a `<key>_text` twin**, the plain list, and the matrix's CSV export reads it
-through DataTables' `export` rendering, so a collapsed list exports whole rather than as its
+(`mutation_matrix_export.cellText`), so a collapsed list exports whole rather than as its
 button. The server `mut` CSV carries all eight after "Details", which moved every sample
 column eight places right -- a script reading samples by header name is unaffected, one reading
 by position is not.
@@ -2312,9 +2312,8 @@ the count -- sits under the strip on every tab; the Frequency display menu is in
 Frequencies pane and the Cell padding switch in the Columns pane, not in that toolbar.
 **There is no search box**: `dom` has no `f`. It matched every column at once, was
 remembered nowhere, and could not say "position between" at all; the Filter tab is what
-replaced it. **Export CSV and Export SVG are the Export tab**: the
-Buttons extension makes them only where `B` sits in `dom`, which is a toolbar, so the script
-moves their container into the pane once the table is drawn. DataTables' empty count line
+replaced it. **The Export tab is three menus and a button** (below); DataTables' Buttons
+extension is no longer used, and `dom` has no `B`. DataTables' empty count line
 is overridden to *Showing 0 entries*, since its own *Showing 0 to 0 of 0 entries*, followed
 by the filtered-from suffix, read as three zeros in a row on an empty Search.
 
@@ -2435,10 +2434,7 @@ way `_panes.html` renders a **Show** menu -- All, then one entry per set with it
 the script filters through the same search hook the samples and types use, and remembers the
 choice as `mutation_matrix.show`, falling back to All on a table that does not offer the
 remembered set. The matrix asks nothing about what a set means. mutint-compare's Convergent
-and Fixed are the client sets there are. **Export CSV is a menu** -- the rows showing (after
-every menu and the Filter tab's rules, `search: "applied"`) or every row the table holds -- so
-"export what I am looking at" and "export the experiment" are both one click and neither is
-a page. `page.html` has two blocks on its Sets tab, `matrix_controls` (beside the Show
+and Fixed are the client sets there are. `page.html` has two blocks on its Sets tab, `matrix_controls` (beside the Show
 menu) and `matrix_summary` (under the sets' sentences, which the script writes), so such a
 page can extend it rather than copy it.
 
@@ -2488,12 +2484,36 @@ added later is in. The table follows when a handle is let go, not during the dra
 only with two time points to choose between (`MutationMatrix.offers_time`), and Treatments
 only when some sample carries one.
 
-**Export SVG draws the table for a figure**, from `js/mutation_matrix_svg.js` -- the fourth
-asset every page rendering the tag links, which `test_templates` enforces. It builds the
+**The Export tab is three menus and a button**, in `_panes.html`: **Rows** (Filtered
+mutations, the default -- the rows showing after every menu and the Filter tab's rules,
+`search: "applied"` -- or All mutations, every row the table holds), **Columns** (Visible
+columns, the default -- after the Columns menu and the sample layers -- or All columns, every
+descriptive column and every sample, hidden or not; Curate is never exported) and **Format**
+(Machine-readable table (CSV), Formatted table (HTML), Graphical table (SVG)), then
+**Export** at the row's right edge. The three are remembered together as
+`mutation_matrix.export`, each value checked against its menu. `js/mutation_matrix_export.js`
+-- the fifth asset every page rendering the tag links, which `test_templates` enforces --
+builds the file from DataTables' data, never the DOM (`deferRender` leaves only the current
+page in the document, and a hidden column's cells are not in it at all): `collect` interprets
+the two choices once for every format, `csv` writes the UTF-8 byte-order mark then RFC-4180
+fields with `\r\n` ends, a text cell's `<key>_text` twin where the server wrote one and the
+markup's words (buttons dropped, hidden halves kept) otherwise, a sample cell the bare number
+it shows; `html` writes a standalone document whose `<style>` is **the matrix's own
+stylesheet read back from `document.styleSheets`** -- `breseq_table.css`, same origin, so its
+rules are readable and nothing is kept in step by hand -- around a table wearing the page's
+`freq-`, `view-` and `color-` classes, so the population colours, the bars or heat map and
+the vertical sample names come out as the page draws them, with every link unwrapped (they
+point into this server) and every collapsed gene list opened (there is no script in the
+file). `mutint_common/tests/test_matrix_export_js.py` runs `csv` and `html` under node over a
+hand-built collection; `collect` and the download need a browser. Filenames keep the CSV's
+old rule: `data-csv-title`, `_showing` added for filtered rows, then the format's extension.
+
+**Export SVG draws the table for a figure**, from `js/mutation_matrix_svg.js`, which takes
+the same two choices (`mutationMatrixSvg(dt, table, {rows, columns})`). It builds the
 drawing from DataTables' data, not the DOM: `deferRender` leaves only the current page in the
-document, and it exports the rows "Filtered mutations" does, every page of them; and an HTML
+document; and an HTML
 table inside `<foreignObject>` is not vector to anything that edits figures. So it is plain
-`<rect>`/`<text>`/`<line>` in sRGB hex, in the visible columns and samples, the current
+`<rect>`/`<text>`/`<line>` in sRGB hex, in the chosen columns and samples, the current
 Frequency display and view. The population colors are read back as each header's
 `--sample-color`, so the CSS stays the one palette; the heat map is re-mixed in oklab in
 JS because its CSS `color-mix` means nothing to an SVG reader. Headers come from
@@ -2516,7 +2536,7 @@ mutation is then subtracted from every sample and every set. The menu is a Boots
 the script fixes to the window when it opens, because the scroll box is `overflow: auto`
 and would clip it, and raises its cell over the pinned cells around it; scrolling the box
 closes it. Copy to ancestor's reload returns the reader to the page and scroll position they
-left, through a one-time `mutation_matrix.return` entry in session storage. CSV and SVG exports leave the column out.
+left, through a one-time `mutation_matrix.return` entry in session storage. Every export leaves the column out.
 
 **Ancestral rows are marked, not filtered.** `build_matrix(ancestral_mutation_ids=...)` puts
 `ancestral: true|false` on each row, `rowCallback` toggles `ancestral_table_row` from it on
@@ -2524,8 +2544,8 @@ every draw (toggled, because `deferRender` reuses row nodes), and a rule after t
 stripe rule paints the pinned cells the same red -- a positioned cell inherits nothing from
 its row, the reason the stripe grey is written twice in `breseq_table.css`, and the two
 copies of that grey (`rgb(245, 245, 245)`, a shade off white) move together. Such a row is
-in no row set, so choosing one in the Show menu drops it, and both Export CSV entries include
-it while it is drawn. Compare is the producer: it always sends them, and the script drops
+in no row set, so choosing one in the Show menu drops it, and an export of either rows choice
+includes it while it is drawn. Compare is the producer: it always sends them, and the script drops
 them unless the reader asked -- the Show/Hide button on the Mutations tab (no count and no
 sentence: the rows it draws are tinted and say what they are), the
 `ancestral_shown` session choice the per-sample page reads too.
@@ -2638,7 +2658,7 @@ left the `&#10003;` entity in the file.
 **Every CSV written for a spreadsheet starts with the UTF-8 byte-order mark**, through
 `mutint_common/spreadsheet.py` (`csv_response`, `for_spreadsheet`) on the server -- the
 `/export/` zip's members, the experiment index, the Samples page's `metadata.csv`,
-mutint-specificity's two tables -- and DataTables' `bom: true` on the matrix's Export CSV.
+mutint-specificity's two tables -- and `mutation_matrix_export.js`'s `csv`, which writes it first.
 Excel opens a `.csv` in the system's legacy code page unless the mark is there, so the gene
 column's arrows and that `✓` came out as nonsense in files that were correct UTF-8. The mark
 is written at the HTTP boundary only: `metadata.write` and the archive's `metadata.csv` are

@@ -2,19 +2,20 @@
  *
  * Built from the table's data rather than copied from its DOM, for two reasons: the DOM
  * holds only the page on screen (`deferRender`), and the export is every row the menus and
- * the search box leave -- the rows "Filtered mutations" writes to CSV -- across every page;
+ * the Filter tab leave -- or every row -- across every page;
  * and an HTML table wrapped in <foreignObject> is not a vector drawing to anything that
  * edits figures. So this writes plain <rect>, <text> and <line> in sRGB hex, which
  * Illustrator, Inkscape and browsers all read the same way.
  *
- * It follows what the reader chose: the visible columns and samples in table order, the
+ * It follows what the reader chose: the rows and columns the Export tab asked for (filtered
+ * or all; visible or all, in table order), the
  * Frequency display format and the vertical padding (Normal or Condensed). Colors come from the page --
  * each sample header's `--sample-color` is read back from the stylesheet, so the CSS stays
  * the one palette -- except the heat map, whose CSS is a `color-mix(in oklab ...)` no SVG
  * reader understands; it is mixed here in oklab the same way, so the file matches the screen.
  *
- * `window.mutationMatrixSvg(dt, table)` returns the SVG as a string; mutation_matrix.js
- * owns the button and the download.
+ * `window.mutationMatrixSvg(dt, table, {rows, columns})` returns the SVG as a string;
+ * mutation_matrix_export.js owns the button and the download.
  */
 (function () {
     "use strict";
@@ -133,20 +134,21 @@
         return fallback;
     }
 
-    function mutationMatrixSvg(dt, table) {
+    function mutationMatrixSvg(dt, table, options) {
+        options = options || {};
         var format = currentClass(table, "freq-", "number");
         var normal = currentClass(table, "view-", "condensed") === "normal";
         var rowHeight = normal ? 38 : 22;
         var barHeight = normal ? 34 : 20;
 
-        var rows = dt.rows({ search: "applied" }).data().toArray();
+        var rows = dt.rows({ search: options.rows === "all" ? "none" : "applied" }).data().toArray();
 
-        // The visible columns, in table order, each with what it needs to draw. Headers come
+        // The columns asked for, in table order, each with what it needs to draw. Headers come
         // from DataTables rather than the DOM: a hidden column's <th> is taken out of the
         // document, so a fresh querySelectorAll would be short and every index after it off.
         var columns = [];
         dt.columns().indexes().toArray().forEach(function (i) {
-            if (!dt.column(i).visible()) { return; }
+            if (options.columns !== "all" && !dt.column(i).visible()) { return; }
             var th = dt.column(i).header();
             // The Curate column is buttons, not data.
             if (th.getAttribute("data-key") === "curate") { return; }

@@ -97,7 +97,7 @@ class BreseqTableAssetsTravelTogetherTestCase(unittest.TestCase):
 
 
 class MutationMatrixAssetsTestCase(unittest.TestCase):
-    """A page that renders `{% mutation_matrix %}` needs four assets, not one.
+    """A page that renders `{% mutation_matrix %}` needs five assets, not one.
 
     The partial itself emits no <link> or <script>: the page owns its head. So a page that
     uses the tag and forgets the script gets a header and two menus that do nothing, and no
@@ -105,9 +105,9 @@ class MutationMatrixAssetsTestCase(unittest.TestCase):
     """
 
     ASSETS = ("css/breseq_table.css", "js/breseq_table.js", "js/mutation_matrix.js",
-              "js/mutation_matrix_svg.js")
+              "js/mutation_matrix_svg.js", "js/mutation_matrix_export.js")
 
-    def test_every_template_using_the_tag_links_all_four(self):
+    def test_every_template_using_the_tag_links_all_five(self):
         users, missing = 0, []
         for path in _templates():
             with open(path, errors="ignore") as handle:
@@ -411,8 +411,8 @@ class MatchRulesScriptTestCase(unittest.TestCase):
 
     def test_the_matrix_has_no_search_box(self):
         script = self.read("mutint_common", "staticfiles", "js", "mutation_matrix.js")
-        self.assertIn('dom: \'<"mutation-matrix-toolbar"pliB>', script)
-        self.assertNotIn("plifB", script)
+        self.assertIn('dom: \'<"mutation-matrix-toolbar"pli>', script)
+        self.assertNotIn("plif", script)
         css = self.read("mutint_common", "staticfiles", "css", "breseq_table.css")
         self.assertNotIn("dataTables_filter", css)
 
