@@ -33,8 +33,11 @@
     var BASELINE = "#c8c8c8";
     var HEAT = ["#ffffd4", "#41b6c4", "#253494"];
 
-    var measurer = document.createElement("canvas").getContext("2d");
+    // Made on first use rather than at load, so the module loads under node -- the export
+    // module's tests require it for its colours.
+    var measurer = null;
     function textWidth(text, size, bold) {
+        if (!measurer) { measurer = document.createElement("canvas").getContext("2d"); }
         measurer.font = (bold ? "bold " : "") + size + "px " + FONT;
         return measurer.measureText(text).width;
     }
@@ -86,6 +89,16 @@
     function mix(a, b, t) {
         var x = hexToOklab(a), y = hexToOklab(b);
         return oklabToHex([0, 1, 2].map(function (i) { return x[i] + (y[i] - x[i]) * t; }));
+    }
+    /* A plain sRGB mix, which is the bar's polymorphic half tone (`color-mix(in srgb ...)`
+       in the stylesheet) and the HTML export's tint of a population colour by frequency. */
+    function mixSrgb(a, b, t) {
+        var out = "#";
+        for (var i = 1; i < 7; i += 2) {
+            var v = Math.round(parseInt(a.substr(i, 2), 16) * (1 - t) + parseInt(b.substr(i, 2), 16) * t);
+            out += (v < 16 ? "0" : "") + v.toString(16);
+        }
+        return out;
     }
     /* The stylesheet's two mixes: yellow to teal over the first half, teal to blue over
        the second. */
@@ -222,7 +235,7 @@
                 var f = typeof cell.s === "number" ? cell.s : 1;
                 var cellTop = middle - barHeight / 2;
                 if (format === "bars") {
-                    var fill = cell.p ? mix("#ffffff", c.color, 0.5) : c.color;
+                    var fill = cell.p ? mixSrgb("#ffffff", c.color, 0.5) : c.color;
                     var h = f * barHeight;
                     out.push('<rect x="' + (c.x + 5) + '" y="' + (cellTop + barHeight - h) +
                              '" width="' + (c.width - 10) + '" height="' + h + '" fill="' + fill + '"/>');
@@ -250,5 +263,12 @@
         return out.join("\n");
     }
 
-    window.mutationMatrixSvg = mutationMatrixSvg;
+    // The colours and mixes the HTML export shares, so the two files cannot disagree about
+    // what a frequency looks like.
+    mutationMatrixSvg.heatColor = heatColor;
+    mutationMatrixSvg.mix = mix;
+    mutationMatrixSvg.mixSrgb = mixSrgb;
+    mutationMatrixSvg.colors = { header: HEADER_GREY, stripe: STRIPE, ancestral: ANCESTRAL };
+    if (typeof window !== "undefined") { window.mutationMatrixSvg = mutationMatrixSvg; }
+    if (typeof module !== "undefined" && module.exports) { module.exports = mutationMatrixSvg; }
 })();

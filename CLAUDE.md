@@ -2498,13 +2498,20 @@ page in the document, and a hidden column's cells are not in it at all): `collec
 the two choices once for every format, `csv` writes the UTF-8 byte-order mark then RFC-4180
 fields with `\r\n` ends, a text cell's `<key>_text` twin where the server wrote one and the
 markup's words (buttons dropped, hidden halves kept) otherwise, a sample cell the bare number
-it shows; `html` writes a standalone document whose `<style>` is **the matrix's own
-stylesheet read back from `document.styleSheets`** -- `breseq_table.css`, same origin, so its
-rules are readable and nothing is kept in step by hand -- around a table wearing the page's
-`freq-`, `view-` and `color-` classes, so the population colours, the bars or heat map and
-the vertical sample names come out as the page draws them, with every link unwrapped (they
-point into this server) and every collapsed gene list opened (there is no script in the
-file). `mutint_common/tests/test_matrix_export_js.py` runs `csv` and `html` under node over a
+it shows; `html` writes a standalone document **with every cell's formatting inline**,
+because that is all Excel's HTML importer reads -- inline `style`, `<i>`, simple colours and
+its own `mso-rotate` for the vertical sample names, and nothing of the custom properties,
+`::before` bars, `color-mix()` heat map and `writing-mode` the page draws with (opened in
+Excel, the first version kept the text and lost every colour). Each `th` carries its grey or
+population colour, each `td` its row's ground (stripe, ancestral pink, white), each SNP span
+its colour, and a frequency cell is **a number on a shaded cell** in every viewer -- the heat
+colour (white digits once dark), or for the Bars format the population colour tinted by
+frequency, since a spreadsheet cannot draw a bar; the SVG is the figure. The colours and
+mixes are the SVG module's own (`mutationMatrixSvg.heatColor`, `mixSrgb`, `colors`), exported
+on the function and loadable under node for the test, so the two files cannot disagree. The
+matrix's stylesheet is still read back from `document.styleSheets` and carried for the fonts,
+padding and vertical header a browser draws from it, with every link unwrapped (they point
+into this server) and every collapsed gene list opened (there is no script in the file). `mutint_common/tests/test_matrix_export_js.py` runs `csv` and `html` under node over a
 hand-built collection; `collect` and the download need a browser. Filenames keep the CSV's
 old rule: `data-csv-title`, `_showing` added for filtered rows, then the format's extension.
 
