@@ -117,10 +117,10 @@
             </div>
             <ul class="nav in" id="side-menu">
                 {% if user.is_authenticated %}
-                    {% comment %} The account block: a row naming who you are -- **User
-                       <name>**, in the logo's orange, a label rather than a link -- and under
-                       it **Manage**, the submenu of the things you can do about that: sign
-                       out, change a password or email, your jobs, your groups.
+                    {% comment %} The account block: two submenus. **User: <name>**, in the
+                       logo's orange, opens what is about your own account -- sign out, change
+                       a password or email -- and **Manage** under it opens the rest: your
+                       jobs, your groups, and for a superuser Update and Django admin.
                        Written into base.html rather than registered, because `nav_registry`
                        has no per-user visibility concept and every one of these leads to a
                        403, or to a login page, for an anonymous visitor.
@@ -142,14 +142,12 @@
                        with Logout behind it. And `sb-admin-2.min.js` opens the block when the
                        current page is one of these, by walking up from the matching link.
                        {% endcomment %}
-                    {% comment %} No href: it keeps `.nav > li > a`'s box, so it lines up with
-                       the rows around it, without being a link that goes nowhere. The <ul>
-                       below must stay inside Manage's <li> -- metisMenu binds `li:has(ul) > a`.
-                       {% endcomment %}
-                    <li class="mutint-sidebar-user"><a>User <b>{{ user.username }}</b></a></li>
-                    <li>
+                    {% comment %} Each <ul> must stay inside its own <li> -- metisMenu binds
+                       `li:has(ul) > a` -- and metisMenu opens one at a time, so opening Manage
+                       closes User and back. {% endcomment %}
+                    <li class="mutint-sidebar-user">
                         <a href="#">
-                            Manage
+                            User: <b>{{ user.username }}</b>
                             <span class="fa arrow"></span>
                         </a>
                         <ul class="nav nav-second-level">
@@ -180,6 +178,14 @@
                                    is. {% endcomment %}
                                 <a href="{% url 'accounts:email_change' %}">Change Email</a>
                             </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#">
+                            Manage
+                            <span class="fa arrow"></span>
+                        </a>
+                        <ul class="nav nav-second-level">
                             <li>
                                 {% comment %} These are the jobs *you* asked for, the way this
                                    is the password *you* change. A superuser sees everyone's on

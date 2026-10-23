@@ -64,7 +64,7 @@ class PageLoadTestCase(TestCase):
 
     def test_the_sidebar_names_the_user(self):
         html = self.client.get("/").content.decode()
-        self.assertIn("User <b>admin</b>", html)
+        self.assertIn("User: <b>admin</b>", html)
         self.assertNotIn(">Login<", html)
 
     def test_a_second_user_leaves_the_visitor_anonymous(self):

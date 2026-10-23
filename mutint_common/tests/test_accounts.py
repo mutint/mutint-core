@@ -419,7 +419,16 @@ class SidebarAccountBlockTestCase(TestCase):
         self.assertNotIn("/jobs/", html)
         self.assertNotIn("Change Password", html)
 
-    def test_the_entries_are_a_submenu_of_manage(self):
+    def _submenu(self, html, opener):
+        """The <ul class="nav nav-second-level"> right under `opener`'s <a>, as text."""
+        block = html[html.index("side-menu"):]
+        block = block[block.index(opener):]
+        # metisMenu binds `li:has(ul) > a`: the <ul> must come before the opener's <li> closes.
+        self.assertLess(block.index('class="nav nav-second-level"'), block.index("</li>"))
+        block = block[block.index('class="nav nav-second-level"'):]
+        return block[:block.index("</ul>")]
+
+    def test_the_account_entries_are_a_submenu_of_the_user_row(self):
         """metisMenu collapses a nested <ul> and binds the <a> beside it -- see base.html.
 
         Asserted on the shape rather than on the collapsing, which is the plugin's and is
@@ -427,23 +436,25 @@ class SidebarAccountBlockTestCase(TestCase):
         move the <ul> out of that <li>, or into a second one, and the theme's mechanism
         silently stops applying while every link still renders.
         """
+        menu = self._submenu(self.sidebar(self.user), "User: <b>reader</b>")
+        for entry in ("Logout", "Change Password", "Change Email"):
+            self.assertIn(entry, menu)
+        for entry in ("Jobs", "/group/", "Manage"):
+            self.assertNotIn(entry, menu)
+
+    def test_the_rest_are_a_submenu_of_manage(self):
+        menu = self._submenu(self.sidebar(self.superuser), "Manage")
+        for entry in ("Jobs", "/group/", "Update", "Django admin"):
+            self.assertIn(entry, menu)
+        for entry in ("Logout", "Change Password", "Change Email"):
+            self.assertNotIn(entry, menu)
+
+    def test_the_user_row_precedes_manage(self):
         html = self.sidebar(self.user)
         block = html[html.index("side-menu"):]
-        block = block[block.index("Manage"):]
-
-        self.assertLess(block.index('class="nav nav-second-level"'), block.index("</li>"))
-
-    def test_the_user_row_precedes_manage_and_holds_no_submenu(self):
-        """**User <name>** is a label in its own <li>, above Manage; the submenu is Manage's."""
-        html = self.sidebar(self.user)
-        block = html[html.index("side-menu"):]
-
-        user_row = block.index("User <b>reader</b>")
+        user_row = block.index("User: <b>reader</b>")
         self.assertLess(block.index("mutint-sidebar-user"), user_row)
         self.assertLess(user_row, block.index("Manage"))
-        row = block[block.rindex("<li", 0, user_row):block.index("</li>", user_row)]
-        self.assertNotIn("nav-second-level", row)
-        self.assertNotIn("href", row)
 
     def test_the_entries_are_sized_like_every_other_sidebar_row(self):
         """They carried Bootstrap's `.small` -- 85%, so 11.9px against the sidebar's 14px.
@@ -453,12 +464,13 @@ class SidebarAccountBlockTestCase(TestCase):
         make here beyond the class's absence.
         """
         html = self.sidebar(self.superuser)
-        block = html[html.index('class="nav nav-second-level"'):]
-        block = block[:block.index("</ul>")]
+        user_menu = self._submenu(html, "User: <b>root</b>")
+        manage_menu = self._submenu(html, "Manage")
 
-        self.assertIn("Logout", block)
-        self.assertIn("Django admin", block)
-        self.assertNotIn('class="small"', block)
+        self.assertIn("Logout", user_menu)
+        self.assertIn("Django admin", manage_menu)
+        self.assertNotIn('class="small"', user_menu)
+        self.assertNotIn('class="small"', manage_menu)
 
     def test_the_sidebar_is_balanced_markup(self):
         """The username's <li> was left open and a stray </li> closed it two entries later; a

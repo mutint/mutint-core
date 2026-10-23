@@ -225,18 +225,31 @@ a.mutint-experiment-name:hover, a.mutint-experiment-name:focus {
     padding-left: 37px;
 }
 
-/* The account block's first row, **User <name>**, in the logo's orange: a label naming who
-   is signed in, above the Manage submenu. It is an <a> with no href for the row's box, so
-   it is not a control and does not light up like one. */
+/* The account block's first row, **User: <name>**, in the logo's orange: it opens the
+   submenu of what is about your own account, the way Manage opens the rest, so it keeps
+   the hover gradient every opener has; only the colour is its own, and the chevron takes it
+   by inheritance. */
 .sidebar .nav > li.mutint-sidebar-user > a {
     color: var(--mutint-user);
-    cursor: default;
 }
 
 .sidebar .nav > li.mutint-sidebar-user > a:hover,
 .sidebar .nav > li.mutint-sidebar-user > a:focus {
-    background-image: none;
+    color: color-mix(in srgb, var(--mutint-user) 80%, black);
+}
+
+/* And its entries wear the same orange, so the block reads as one thing: the links, and the
+   Logout <button>, which gets no colour from the `a` rules and has its own below. */
+.sidebar .nav > li.mutint-sidebar-user .nav-second-level > li > a,
+.sidebar .nav > li.mutint-sidebar-user .mutint-logout button {
     color: var(--mutint-user);
+}
+
+.sidebar .nav > li.mutint-sidebar-user .nav-second-level > li > a:hover,
+.sidebar .nav > li.mutint-sidebar-user .nav-second-level > li > a:focus,
+.sidebar .nav > li.mutint-sidebar-user .mutint-logout button:hover,
+.sidebar .nav > li.mutint-sidebar-user .mutint-logout button:focus {
+    color: color-mix(in srgb, var(--mutint-user) 80%, black);
 }
 
 .nav > li > a:focus, .nav > li > a:hover {

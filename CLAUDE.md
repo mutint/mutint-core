@@ -396,10 +396,10 @@ password nobody types until they log out. Three things about it are easy to lose
   anonymously would silently become a signed-in superuser. `test_auto_login.py` turns it
   back on for itself, which is also why the real behaviour is checked by running `start`.
 
-**The sidebar's account block is the shell's own, not a nav entry.** A **User \<name\>** row
-in the logo's orange (`--mutint-user`, a label: an `<a>` with no href, for the row's box),
-and under it **Manage**, the submenu holding
-Logout, Change Password, Change Email, Jobs, Groups and -- for a superuser -- Django admin. It is written into
+**The sidebar's account block is the shell's own, not a nav entry.** Two submenus: **User:
+\<name\>**, in the logo's orange (`--mutint-user`, the opener and its entries alike), holding
+what is about your own account -- Logout, Change Password, Change Email -- and under it
+**Manage**, holding Jobs, Groups and -- for a superuser -- Update and Django admin. It is written into
 `base.html` rather than registered, because `nav_registry`'s one per-user gate --
 `requires_edit`, write access to the selected experiment's project -- is not the question any
 of these asks, and `base.html` already has `user`. A `visible_to=` predicate for one entry
@@ -410,8 +410,8 @@ and Curate both wanted exactly the same gate.
 `visible_groups(user)` -- the groups you own or belong to, the way this is the password *you*
 change -- and a registered entry would render for anonymous visitors too, who can see none.
 
-**It collapses behind Manage, and the mechanism is metisMenu's, not ours.** A nested
-`<ul class="nav nav-second-level">` inside Manage's `<li>` is sb-admin-2's own sidebar
+**Each half collapses behind its opener, and the mechanism is metisMenu's, not ours.** A nested
+`<ul class="nav nav-second-level">` inside the opener's `<li>` is sb-admin-2's own sidebar
 submenu shape, and `sb-admin-2.min.js` already calls `$("#side-menu").metisMenu()` -- so the
 collapsing, the `active` class that flips the chevron (`.sidebar .active > a > .fa.arrow`) and
 the 37px indent on the nested links are all borrowed. A hand-rolled toggle setting `hidden`
@@ -425,9 +425,10 @@ Three consequences worth knowing before moving anything in that block:
   such a reader looking at a name that does nothing, with Logout behind it.
 - **`sb-admin-2.min.js` opens the block when you are on one of its pages**, by walking up from
   the link whose href matches the location and adding `in`. Nothing here arranges that.
-- **The `<ul>` must stay inside that `<li>`.** metisMenu binds `li:has(ul) > a`; move it into a
-  second `<li>` and every link still renders while the mechanism silently stops applying.
-  `test_accounts.test_the_entries_are_a_submenu_of_the_username` is what notices.
+- **Each `<ul>` must stay inside its opener's `<li>`.** metisMenu binds `li:has(ul) > a`; move
+  one into a second `<li>` and every link still renders while the mechanism silently stops
+  applying. `test_accounts._submenu` is what notices, for both halves. metisMenu also opens
+  one submenu at a time, so opening Manage closes User and back.
 
 **The admin link is gated on `is_superuser`, not `is_staff`, and the difference is not
 pedantic.** Django's admin admits anyone with `is_staff`, so a staff gate would be the one that
@@ -456,8 +457,8 @@ selected is not something an app can register in `ready()`.
 **A project is purple and an experiment is green, everywhere one is named.** The two are
 the logo's colors, defined once as `--mutint-project` (`#7c4bd3`) and `--mutint-experiment`
 (`#2f9e5f`) on `:root` in `common.css` -- the first custom properties there, beside
-`--mutint-user` (`#d18b1e`), the logo's orange, which only the account block's User row
-wears -- and worn
+`--mutint-user` (`#d18b1e`), the logo's orange, which only the account block's User
+submenu wears -- and worn
 through two classes, `mutint-project-name` and `mutint-experiment-name`: by the sidebar's
 selection (`li.mutint-sidebar-project` and `li.mutint-sidebar-experiment`, so the pages read
 as belonging to the experiment named above them), by the page header, by the button bar
