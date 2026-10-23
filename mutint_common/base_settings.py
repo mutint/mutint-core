@@ -129,6 +129,12 @@ def get_base_settings(base_dir, mutint_core_dir=None):
         # assign the setting straight into its own settings dict and never pass through here.
         'MUTINT_WORKERS': default_workers(),
 
+        # Whether an anonymous page load from this machine is signed in as the admin, while
+        # the admin is the only account. True is right for anything installed from the
+        # public repository; a hosted deployment sets it False, as ALEdb does. The rule
+        # itself -- one user, a superuser, loopback, GET only -- is mutint_common.auto_login.
+        'MUTINT_AUTO_LOGIN': True,
+
         # `MUTINT_UPDATE_ENABLED` -- whether /update/ offers to move this installation onto a
         # newer version -- is deliberately *not* defaulted here. Absent means True, which is
         # right for anything installed from a public repository; ALEdb sets it False in its
@@ -281,6 +287,12 @@ def get_base_settings(base_dir, mutint_core_dir=None):
             'mutint_common.session_middleware.SkipSaveSessionMiddleware',
             'django.middleware.csrf.CsrfViewMiddleware',
             'django.contrib.auth.middleware.AuthenticationMiddleware',
+            # Signs an anonymous loopback page load in as the one admin a local install
+            # has, while it is the only account; MUTINT_AUTO_LOGIN below turns it off.
+            # After AuthenticationMiddleware, which it reads, and before anything a
+            # deployment appends (settings_private adds LoginRequiredMiddleware at the
+            # end, so this still runs first there). See mutint_common.auto_login.
+            'mutint_common.auto_login.AutoLoginMiddleware',
             'django.contrib.messages.middleware.MessageMiddleware',
         ],
 

@@ -58,6 +58,32 @@ class StartCommandTestCase(TestCase):
         self.assertIn("migrate", commands)
         self.assertEqual(1, timers)
 
+    def _banner(self, env=None):
+        command = start.Command()
+        command.stdout = StringIO()
+        with mock.patch.dict(os.environ, env or {}, clear=True), \
+                mock.patch.object(start, "call_command"), \
+                mock.patch.object(start.restart, "arm"), \
+                mock.patch.object(start.browser, "browser_command", return_value=["open"]), \
+                mock.patch.object(start.threading, "Timer"):
+            command.handle()
+        return command.stdout.getvalue()
+
+    @override_settings(MUTINT_AUTO_LOGIN=True)
+    def test_the_banner_says_the_browser_lands_signed_in(self):
+        """`handle()` has just created `admin` as the only account, so the page the browser
+        opens is signed in, and the banner says so rather than quoting a password the person
+        will not be asked for. See mutint_common.auto_login."""
+        banner = self._banner()
+        self.assertIn("Signed in automatically as admin", banner)
+        self.assertNotIn("(login: admin / admin)", banner)
+
+    def test_the_banner_quotes_the_password_when_sign_in_is_off(self):
+        """The runner leaves MUTINT_AUTO_LOGIN off, which is the deployment's case."""
+        banner = self._banner()
+        self.assertIn("(login: admin / admin)", banner)
+        self.assertNotIn("Signed in automatically", banner)
+
     def test_a_machine_with_no_browser_command_is_told_so(self):
         """A headless Linux box, or WSL with interop off. `open` was hardcoded and failed
         silently there; now the banner says to open the address yourself."""

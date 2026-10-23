@@ -33,6 +33,15 @@ Pluggable by changing `INSTALLED_APPS`. Any app with `auth_app = True` on its `A
 
 - `mutint_accounts` — the only one shipped. Django's built-in login, nothing enforced.
 
+**A local install signs itself in.** While the `admin` user `./mutint start` creates is the
+only account, an anonymous page load from the same machine is signed in as it, so the
+browser `start` opens lands signed in and nobody types `admin` / `admin`. Three things bound
+it: the setting `MUTINT_AUTO_LOGIN` (absent means on; a hosted deployment sets it `False`),
+the request coming from loopback, and there being exactly one user, a superuser. Create a
+second user in Django admin and the login page is what everyone meets. **Logout** still
+works: it is remembered for that browser session, and the login page then takes any
+account; close the browser and the next visit is signed in again.
+
 The routes and templates live in `mutint_common`, not in the app, so a replacement inherits
 login, logout and change-password rather than restating them. **MutInt ships no brute-force
 protection**; an app that adds it is the intended way to have it.

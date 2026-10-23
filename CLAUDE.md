@@ -376,7 +376,29 @@ nothing. Signed-in only, redirecting to login as the password page does; saving 
 the page with a line rather than landing on a done page, because nothing about it needs
 explaining afterwards.
 
-**The sidebar's account block is the shell's own, not a nav entry.** Username, and under it
+**A local install signs itself in.** `mutint_common/auto_login.py` is a middleware directly
+after `AuthenticationMiddleware`: an anonymous **GET or HEAD** from **loopback**, while
+`MUTINT_AUTO_LOGIN` is on (the default; ALEdb sets it False) and there is **exactly one user
+and it is a superuser**, is signed in as that user and the request carries on. Counting is
+the whole switch -- a second account made in Django admin turns it off, no username or
+password is checked -- and it is what makes the `admin` / `admin` that `start` creates a
+password nobody types until they log out. Three things about it are easy to lose:
+
+- **GET only, because `auth.login` rotates the CSRF token** and `CsrfViewMiddleware` checks
+  a POST in `process_view`, after every middleware's pre-phase: a POST signed in here would
+  fail its own check.
+- **Logout has to stick, or the button lands you straight back in.** The logout route is
+  `DecliningLogoutView`, Django's with one key left in the fresh session `auth.logout`
+  creates; the middleware honours it. Sessions expire at browser close, so the next visit
+  signs in again.
+- **The test runner turns it off for the whole suite** (`MutintTestRunner`), because the
+  test client's `REMOTE_ADDR` is loopback and a test with one superuser probing a page
+  anonymously would silently become a signed-in superuser. `test_auto_login.py` turns it
+  back on for itself, which is also why the real behaviour is checked by running `start`.
+
+**The sidebar's account block is the shell's own, not a nav entry.** A **User \<name\>** row
+in the logo's orange (`--mutint-user`, a label: an `<a>` with no href, for the row's box),
+and under it **Manage**, the submenu holding
 Logout, Change Password, Change Email, Jobs, Groups and -- for a superuser -- Django admin. It is written into
 `base.html` rather than registered, because `nav_registry`'s one per-user gate --
 `requires_edit`, write access to the selected experiment's project -- is not the question any
@@ -388,8 +410,8 @@ and Curate both wanted exactly the same gate.
 `visible_groups(user)` -- the groups you own or belong to, the way this is the password *you*
 change -- and a registered entry would render for anonymous visitors too, who can see none.
 
-**It collapses behind the username, and the mechanism is metisMenu's, not ours.** A nested
-`<ul class="nav nav-second-level">` inside the username's `<li>` is sb-admin-2's own sidebar
+**It collapses behind Manage, and the mechanism is metisMenu's, not ours.** A nested
+`<ul class="nav nav-second-level">` inside Manage's `<li>` is sb-admin-2's own sidebar
 submenu shape, and `sb-admin-2.min.js` already calls `$("#side-menu").metisMenu()` -- so the
 collapsing, the `active` class that flips the chevron (`.sidebar .active > a > .fa.arrow`) and
 the 37px indent on the nested links are all borrowed. A hand-rolled toggle setting `hidden`
@@ -433,7 +455,9 @@ selected is not something an app can register in `ready()`.
 
 **A project is purple and an experiment is green, everywhere one is named.** The two are
 the logo's colors, defined once as `--mutint-project` (`#7c4bd3`) and `--mutint-experiment`
-(`#2f9e5f`) on `:root` in `common.css` -- the first custom properties there -- and worn
+(`#2f9e5f`) on `:root` in `common.css` -- the first custom properties there, beside
+`--mutint-user` (`#d18b1e`), the logo's orange, which only the account block's User row
+wears -- and worn
 through two classes, `mutint-project-name` and `mutint-experiment-name`: by the sidebar's
 selection (`li.mutint-sidebar-project` and `li.mutint-sidebar-experiment`, so the pages read
 as belonging to the experiment named above them), by the page header, by the button bar

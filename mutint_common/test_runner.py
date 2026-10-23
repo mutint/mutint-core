@@ -66,6 +66,12 @@ class MutintTestRunner(DiscoverRunner):
         super().setup_test_environment(**kwargs)
         self._tasks_override = override_settings(TASKS=self.TASKS)
         self._tasks_override.enable()
+        # Off for the whole suite. The test client's REMOTE_ADDR is loopback, so any test
+        # that creates one superuser and then probes a page anonymously would otherwise
+        # become a signed-in superuser without saying so. The feature is a property of a
+        # launched install, not of the suite; test_auto_login.py turns it back on.
+        self._auto_login_override = override_settings(MUTINT_AUTO_LOGIN=False)
+        self._auto_login_override.enable()
         # Held on the runner rather than module state: `teardown_test_environment` is the
         # only thing that needs it back, and it is the same instance.
         self._store_dir = tempfile.mkdtemp(prefix="mutint-test-store-")
@@ -84,6 +90,10 @@ class MutintTestRunner(DiscoverRunner):
         if store_dir is not None:
             shutil.rmtree(store_dir, ignore_errors=True)
             self._store_dir = None
+        auto_login = getattr(self, "_auto_login_override", None)
+        if auto_login is not None:
+            auto_login.disable()
+            self._auto_login_override = None
         tasks = getattr(self, "_tasks_override", None)
         if tasks is not None:
             tasks.disable()

@@ -23,13 +23,13 @@ cd mutint-core
 2. Start a private PostgreSQL server and create the database
 3. Run database migrations
 4. Create a default admin user (`admin` / `admin`)
-5. Open your browser to `http://127.0.0.1:8000`
+5. Open your browser to `http://127.0.0.1:8000`, signed in as `admin`
 
 **Nothing has to be installed first, and nothing is installed outside this directory** --
 not Python, not PostgreSQL. The database listens on a unix socket inside `env/`, not on the
 network, so several checkouts never collide.
 
-The admin interface is at `http://127.0.0.1:8000/admin/`. Log in with `admin` / `admin` and change the password immediately.
+While `admin` is the only account, a page opened from this machine is signed in as it automatically (`MUTINT_AUTO_LOGIN`; see `docs/using/configuration.md`). The password `admin` is what you type after logging out, and the automatic sign-in stops once a second user exists. The admin interface is at `http://127.0.0.1:8000/admin/`.
 
 The app starts empty — no experiments loaded. See [Loading data](#loading-data) below.
 

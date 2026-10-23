@@ -167,13 +167,15 @@
     overflow-wrap: break-word;
 }
 
-/* The two colors a project and an experiment wear everywhere one is named -- the sidebar's
-   selection, the page header, the button bar under it, the list pages, a page's prose -- are
-   the logo's purple and green, defined once here. The first custom properties on :root in
-   this stylesheet; a deployment's own stylesheet may redefine them. */
+/* The three colors of the logo, defined once here: the purple a project and the green an
+   experiment wear everywhere one is named -- the sidebar's selection, the page header, the
+   button bar under it, the list pages, a page's prose -- and the orange of the sidebar's
+   User row. The first custom properties on :root in this stylesheet; a deployment's own
+   stylesheet may redefine them. */
 :root {
     --mutint-project: #7c4bd3;
     --mutint-experiment: #2f9e5f;
+    --mutint-user: #d18b1e;
 }
 
 .mutint-project-name, a.mutint-project-name { color: var(--mutint-project); }
@@ -221,6 +223,20 @@ a.mutint-experiment-name:hover, a.mutint-experiment-name:focus {
 
 .sidebar .nav > li.mutint-sidebar-page > a {
     padding-left: 37px;
+}
+
+/* The account block's first row, **User <name>**, in the logo's orange: a label naming who
+   is signed in, above the Manage submenu. It is an <a> with no href for the row's box, so
+   it is not a control and does not light up like one. */
+.sidebar .nav > li.mutint-sidebar-user > a {
+    color: var(--mutint-user);
+    cursor: default;
+}
+
+.sidebar .nav > li.mutint-sidebar-user > a:hover,
+.sidebar .nav > li.mutint-sidebar-user > a:focus {
+    background-image: none;
+    color: var(--mutint-user);
 }
 
 .nav > li > a:focus, .nav > li > a:hover {

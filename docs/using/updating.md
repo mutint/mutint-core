@@ -10,7 +10,7 @@ files alone, which is the whole reason this works.
 
 ## From the sidebar
 
-Click your username, then **Update**. The page is superusers-only.
+Click **Manage** in the sidebar, then **Update**. The page is superusers-only.
 
 It lists the installation itself and then every component it is made of, each with its version
 and the git revision it is at. Under the table is the channel menu and two buttons:

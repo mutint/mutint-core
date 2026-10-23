@@ -117,8 +117,10 @@
             </div>
             <ul class="nav in" id="side-menu">
                 {% if user.is_authenticated %}
-                    {% comment %} The account block: who you are, and the things you can do
-                       about that -- sign out, change a password, your jobs, your groups.
+                    {% comment %} The account block: a row naming who you are -- **User
+                       <name>**, in the logo's orange, a label rather than a link -- and under
+                       it **Manage**, the submenu of the things you can do about that: sign
+                       out, change a password or email, your jobs, your groups.
                        Written into base.html rather than registered, because `nav_registry`
                        has no per-user visibility concept and every one of these leads to a
                        403, or to a login page, for an anonymous visitor.
@@ -140,9 +142,14 @@
                        with Logout behind it. And `sb-admin-2.min.js` opens the block when the
                        current page is one of these, by walking up from the matching link.
                        {% endcomment %}
+                    {% comment %} No href: it keeps `.nav > li > a`'s box, so it lines up with
+                       the rows around it, without being a link that goes nowhere. The <ul>
+                       below must stay inside Manage's <li> -- metisMenu binds `li:has(ul) > a`.
+                       {% endcomment %}
+                    <li class="mutint-sidebar-user"><a>User <b>{{ user.username }}</b></a></li>
                     <li>
                         <a href="#">
-                            <b>{{ user.username }}</b>
+                            Manage
                             <span class="fa arrow"></span>
                         </a>
                         <ul class="nav nav-second-level">

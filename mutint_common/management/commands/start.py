@@ -245,6 +245,11 @@ class Command(BaseCommand):
             else:
                 self.stdout.write('Superuser already exists')
 
+            # Whether the browser about to open lands signed in: the one admin, on this
+            # machine, while it is the only account. See mutint_common.auto_login.
+            from mutint_common import auto_login
+            auto_user = auto_login.lone_admin() if auto_login.enabled() else None
+
             # **Before the worker, and the order is load-bearing.** `arm()` registers the
             # atexit hook that execs a fresh `./mutint start` over this process when /update/
             # asks for a restart; atexit is LIFO, so registering it before the worker hook
@@ -273,7 +278,14 @@ class Command(BaseCommand):
             if no_browser:
                 self.stdout.write('  No way to open a browser was found on this machine: '
                                   'open that address yourself.')
-            self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)')
+            if auto_user is not None:
+                self.stdout.write(
+                    f'  Signed in automatically as {auto_user.username} (the only account).\n'
+                    '  Password: admin / admin, for after you log out. Create a second user\n'
+                    '  in Django admin to require a password.')
+                self.stdout.write(f'  Admin interface: {url}/admin/')
+            else:
+                self.stdout.write(f'  Admin interface: {url}/admin/  (login: admin / admin)')
             if worker is not None:
                 process, count = worker
                 if count == 1:

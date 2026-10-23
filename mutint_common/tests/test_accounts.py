@@ -414,11 +414,12 @@ class SidebarAccountBlockTestCase(TestCase):
         """The other half of the reason they are not nav entries."""
         html = self.client.get("/accounts/login/").content.decode()
 
+        self.assertNotIn("Manage", html)
         self.assertNotIn("/group/", html)
         self.assertNotIn("/jobs/", html)
         self.assertNotIn("Change Password", html)
 
-    def test_the_entries_are_a_submenu_of_the_username(self):
+    def test_the_entries_are_a_submenu_of_manage(self):
         """metisMenu collapses a nested <ul> and binds the <a> beside it -- see base.html.
 
         Asserted on the shape rather than on the collapsing, which is the plugin's and is
@@ -428,9 +429,21 @@ class SidebarAccountBlockTestCase(TestCase):
         """
         html = self.sidebar(self.user)
         block = html[html.index("side-menu"):]
-        block = block[block.index("reader"):]
+        block = block[block.index("Manage"):]
 
         self.assertLess(block.index('class="nav nav-second-level"'), block.index("</li>"))
+
+    def test_the_user_row_precedes_manage_and_holds_no_submenu(self):
+        """**User <name>** is a label in its own <li>, above Manage; the submenu is Manage's."""
+        html = self.sidebar(self.user)
+        block = html[html.index("side-menu"):]
+
+        user_row = block.index("User <b>reader</b>")
+        self.assertLess(block.index("mutint-sidebar-user"), user_row)
+        self.assertLess(user_row, block.index("Manage"))
+        row = block[block.rindex("<li", 0, user_row):block.index("</li>", user_row)]
+        self.assertNotIn("nav-second-level", row)
+        self.assertNotIn("href", row)
 
     def test_the_entries_are_sized_like_every_other_sidebar_row(self):
         """They carried Bootstrap's `.small` -- 85%, so 11.9px against the sidebar's 14px.

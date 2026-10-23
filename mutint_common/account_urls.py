@@ -40,7 +40,7 @@ both. Changing that is a behavior change and not this module's business.
 
 from django.contrib.auth import views as auth_views
 
-from mutint_common import account_views
+from mutint_common import account_views, auto_login
 from django.urls import re_path, reverse_lazy
 
 account_urlpatterns = [
@@ -50,7 +50,10 @@ account_urlpatterns = [
                 next_page='/'),
             name='login'),
     re_path(r'^logout/$',
-            auth_views.LogoutView.as_view(next_page='/'),
+            # Django's logout plus a note in the fresh session that this browser chose to
+            # leave, or a local install's automatic sign-in puts you straight back. See
+            # mutint_common.auto_login.
+            auto_login.DecliningLogoutView.as_view(next_page='/'),
             name='logout'),
     re_path(r'^password/$',
             auth_views.PasswordChangeView.as_view(
