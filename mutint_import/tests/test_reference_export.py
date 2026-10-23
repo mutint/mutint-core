@@ -234,3 +234,96 @@ class FilenameTestCase(SimpleTestCase):
         self.assertEqual(
             reference_export.filename("LTEE Ara-1 / 2000 gen", ["a"], "fasta", True),
             "LTEE_Ara-1_2000_gen_reference.fasta")
+
+
+# One contig of 400 bases with the four shapes of a partial gene, each as GenBank writes it.
+# The marker is a fact about the *coordinate* -- `<` on the low end, `>` on the high end --
+# whatever the strand, and the stored GFF3 must say the same thing breseq would.
+PARTIAL_GENBANK = "\n".join(
+    ["LOCUS       %s %d bp DNA linear BCT 01-JAN-2026" % (CHROMOSOME, len(SEQUENCE_A)),
+     "DEFINITION  partial genes.",
+     "FEATURES             Location/Qualifiers",
+     "     CDS             <10..60",
+     '                     /locus_tag="lowPlus"',
+     '                     /transl_table=11',
+     "     CDS             complement(70..>120)",
+     '                     /locus_tag="highMinus"',
+     '                     /transl_table=11',
+     "     CDS             complement(<130..>180)",
+     '                     /locus_tag="bothMinus"',
+     '                     /transl_table=11',
+     "     CDS             200..>250",
+     '                     /locus_tag="highPlus"',
+     '                     /transl_table=11',
+     "ORIGIN"]
+    + ["%9d %s" % (offset + 1, " ".join(
+        SEQUENCE_A[offset + i:offset + i + 10].lower() for i in range(0, 60, 10)))
+       for offset in range(0, len(SEQUENCE_A), 60)]
+    + ["//", ""])
+
+PARTIAL_LOCATIONS = ["<10..60", "complement(70..>120)", "complement(<130..>180)",
+                     "200..>250"]
+
+
+class PartialEndsTestCase(_Loaded):
+    """The `<`/`>` markers survive GenBank -> stored GFF3 -> GenBank unmoved.
+
+    The failure this pins: a minus-strand gene's marker came back on the other end, and a
+    gene partial at both ends came back with none, because the GFF3 writer named the ends
+    by strand while everything that reads the flags names them by coordinate, and escaped
+    the comma between `start` and `end` into a value that matched neither.
+    """
+
+    def _rows(self, text):
+        return [line for line in text.splitlines()
+                if "\t" in line and not line.startswith("#")]
+
+    def _gbk_locations(self, text):
+        return [line.split()[1] for line in text.splitlines()
+                if line.startswith("     CDS ")]
+
+    def test_the_markers_round_trip_through_the_stored_gff3(self):
+        refs = genbank.load_genbank(self._write("partial.gbk", PARTIAL_GENBANK))
+        reloaded = gff3.load_gff3(self._write("stored.gff3", gff3.render_breseq_gff3(refs)))
+        text = reference_export.render(reloaded, "genbank")
+        self.assertEqual(self._gbk_locations(text), PARTIAL_LOCATIONS)
+
+    def test_the_stored_gff3_names_the_end_by_coordinate_as_breseq_does(self):
+        refs = genbank.load_genbank(self._write("partial.gbk", PARTIAL_GENBANK))
+        flags = {}
+        for row in self._rows(gff3.render_breseq_gff3(refs)):
+            attributes = gff3.parse_attributes(row.split("\t")[8])
+            if "Alias" in attributes:  # the LOCUS line's topology is a `region` row too
+                flags[attributes["Alias"][0]] = attributes.get("indeterminate_coordinate")
+        self.assertEqual(flags, {"lowPlus": ["start"], "highMinus": ["end"],
+                                 "bothMinus": ["start", "end"], "highPlus": ["end"]})
+
+    def test_both_ends_are_two_values_and_not_one_escaped_one(self):
+        refs = genbank.load_genbank(self._write("partial.gbk", PARTIAL_GENBANK))
+        text = gff3.render_breseq_gff3(refs)
+        self.assertIn("indeterminate_coordinate=start,end", text)
+        self.assertNotIn("%2C", text)
+
+    def test_a_both_ends_partial_gene_is_pseudo_and_stays_partial(self):
+        # breseq flags such a gene pseudo; that must not cost it its markers on reload.
+        refs = genbank.load_genbank(self._write("partial.gbk", PARTIAL_GENBANK))
+        reloaded = gff3.load_gff3(self._write("stored.gff3", gff3.render_breseq_gff3(refs)))
+        feature = next(f for f in reloaded[CHROMOSOME].features if f.locus_tag == "bothMinus")
+        self.assertTrue(feature.pseudogene)
+        self.assertTrue(feature.start_is_indeterminate())
+        self.assertTrue(feature.end_is_indeterminate())
+
+    def test_every_sublocation_of_a_spliced_gene_carries_its_own_flag(self):
+        # breseq writes the flag per row, not only on the feature's outermost ends.
+        rows = [row for row in self._rows(gff3.render_breseq_gff3(self.refs))
+                if "ID=b0004" in row]
+        self.assertEqual(len(rows), 2)
+        by_start = {row.split("\t")[3]: row for row in rows}
+        self.assertIn("indeterminate_coordinate=start", by_start["200"])
+        self.assertNotIn("indeterminate_coordinate", by_start["250"])
+
+    def test_the_fixture_is_a_fixed_point_of_the_renderer(self):
+        # The stored form reloads and re-renders to itself, partial ends included.
+        text = gff3.render_breseq_gff3(self.refs)
+        reloaded = gff3.load_gff3(self._write("again.gff3", text))
+        self.assertEqual(gff3.render_breseq_gff3(reloaded), text)

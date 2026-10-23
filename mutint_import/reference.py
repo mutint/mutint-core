@@ -419,19 +419,21 @@ def gff3_topologies(gff3_text):
 
 
 def with_topology(gff3_text, circular):
-    """`gff3_text` with its `region` rows replaced by ones stating `circular`.
+    """`gff3_text` with its `region` rows made to state `circular`.
 
-    `circular` is `{seq_id: bool}`; a contig not in it gets no row. Every existing
-    region row goes, and the new block lands after the last `##sequence-region`
-    pragma, in the pragmas' order, with each contig's length read off its pragma --
-    exactly where and how `render_breseq_gff3` writes it, so this is a fixed point
-    of the renderer: `with_topology(render(refs), topologies_of(refs)) == render(refs)`.
+    `circular` is `{seq_id: bool}`; a contig not in it gets no `Is_circular`. Every
+    existing region row is re-rendered with its other attributes -- the record's
+    metadata -- kept, and the block lands after the last `##sequence-region` pragma, in
+    the pragmas' order, with each contig's length read off its pragma -- exactly where
+    and how `render_breseq_gff3` writes it, so this is a fixed point of the renderer:
+    `with_topology(render(refs), topologies_of(refs)) == render(refs)`.
     """
     lines = gff3_text.split("\n")
     head, body = [], []
     in_fasta = False
     last_pragma = -1
     lengths = []
+    metadata = {}
     for line in lines:
         if not in_fasta and line.strip().upper() == FASTA_DIRECTIVE:
             in_fasta = True
@@ -441,6 +443,10 @@ def with_topology(gff3_text, circular):
         parts = line.split("\t")
         if (len(parts) >= 9 and parts[2] == annotate_gff3.REGION_TYPE
                 and not line.startswith("#")):
+            kept = metadata.setdefault(parts[0], {})
+            for key, values in annotate_gff3.parse_attributes(parts[8]).items():
+                if key not in (annotate_gff3.CIRCULAR_ATTRIBUTE, "ID") and key not in kept:
+                    kept[key] = values
             continue
         if line.startswith("##sequence-region"):
             fields = line.split()
@@ -449,7 +455,8 @@ def with_topology(gff3_text, circular):
             last_pragma = len(head)
         head.append(line)
     rows = annotate_gff3.region_rows(
-        (seq_id, length, circular.get(seq_id)) for seq_id, length in lengths)
+        (seq_id, length, circular.get(seq_id), metadata.get(seq_id))
+        for seq_id, length in lengths)
     head[last_pragma + 1:last_pragma + 1] = rows
     return "\n".join(head + body)
 

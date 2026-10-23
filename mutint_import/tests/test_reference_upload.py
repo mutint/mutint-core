@@ -14,8 +14,13 @@ from mutint_sample.models import ReferenceSequences
 SEQUENCES = [("test_ref", breseq_fixture.SEQUENCE_A)]
 
 
-def write_genbank(path, sequences=SEQUENCES, with_features=True):
-    """Write a real GenBank file with Biopython, so the parser is exercised for real."""
+def write_genbank(path, sequences=SEQUENCES, with_features=True, description=""):
+    """Write a real GenBank file with Biopython, so the parser is exercised for real.
+
+    No DEFINITION by default: the stored GFF3 keeps a record's header on its `region`
+    row, so a GenBank that says something breseq's own GFF3 of the genome does not renders
+    one more row than it. The tests comparing the two formats want files that agree.
+    """
     from Bio import SeqIO
     from Bio.Seq import Seq
     from Bio.SeqFeature import SeqFeature, FeatureLocation
@@ -23,7 +28,7 @@ def write_genbank(path, sequences=SEQUENCES, with_features=True):
 
     records = []
     for seq_id, sequence in sequences:
-        record = SeqRecord(Seq(sequence), id=seq_id, name=seq_id, description="test")
+        record = SeqRecord(Seq(sequence), id=seq_id, name=seq_id, description=description)
         record.annotations["molecule_type"] = "DNA"
         if with_features:
             # Biopython locations are 0-based half-open, so this is GFF3 50..150.
@@ -148,6 +153,27 @@ class NormalizationTestCase(TestCase):
 
         self.assertIs(references["test_ref.3"], references["test_ref"])
         self.assertEqual(genbank.read_seq_ids(self._versioned_genbank()), ["test_ref"])
+
+    def test_a_genbank_header_is_the_one_difference_from_breseqs_gff3(self):
+        """What the two formats share -- the bases, the genes -- still renders alike; what
+        only the GenBank says, its DEFINITION, is one `region` row the GFF3 has no words
+        for. The import's identity is the sequence digest, which is untouched."""
+        gbk = write_genbank(os.path.join(self.tmp, "ref.gbk"), description="E. coli test")
+        gff = self._write("ref.gff3", breseq_fixture.gff3_text(SEQUENCES))
+
+        from_gbk = reference_io.normalize_reference(gbk)
+        from_gff = reference_io.normalize_reference(gff)
+
+        self.assertEqual(from_gbk[1], from_gff[1], "normalized sequences differ")
+        self.assertNotEqual(from_gbk[0], from_gff[0])
+        gbk_rows = [line for line in from_gbk[0].split("##FASTA")[0].splitlines()
+                    if line and not line.startswith("#")]
+        gff_rows = [line for line in from_gff[0].split("##FASTA")[0].splitlines()
+                    if line and not line.startswith("#")]
+        self.assertEqual([row for row in gbk_rows if "\tregion\t" not in row], gff_rows)
+        self.assertEqual([row for row in gbk_rows if "\tregion\t" in row],
+                         ["test_ref\tmutint\tregion\t1\t%d\t.\t+\t.\tNote=E. coli test"
+                          % len(breseq_fixture.SEQUENCE_A)])
 
     def test_a_versioned_genbank_still_matches_breseqs_gff3(self):
         """The same property as above, now that the two spell the accession differently

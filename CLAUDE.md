@@ -3886,8 +3886,11 @@ are worth knowing before touching it:
 - **GenBank is the format the store never held.** The writer is Biopython's, fed from the
   same model the suite's GenBank *reader* fills, and the qualifier mapping is that reader's
   inverted; the test that matters is that `load_genbank` of what it wrote renders to the same
-  canonical GFF3. It is a reduced GenBank by construction -- genes-only, no `/translation`,
-  no `source`; its LOCUS line carries the contig's topology where one is known.
+  canonical GFF3. It carries what the stored GFF3 carries -- which, since the stored form
+  keeps a file's qualifiers, other feature types and header, is most of what the file had
+  (see **The stored GFF3 keeps what a GenBank said** below); its LOCUS line carries the
+  contig's topology where one is known, `/translation` is regenerated, and a `gene` is
+  written over every locus.
   `/gene` is deliberately omitted when the
   name would only repeat the locus tag, because the GFF3 loader names a nameless gene by its
   locus tag and writing that back as `/gene` would mint a gene symbol the annotation never
@@ -4093,9 +4096,10 @@ All apps use the `mutint_*` namespace. Key apps:
     `establish_or_check(..., replace=True)`, which overwrites a *different* genome, is
     deliberately reachable from the shell only.
   - **Normalization is the linchpin** (`reference.py`, `reference_store.py`): every reference,
-    however it arrives, is converted to one canonical pair — a genes-only GFF3 plus a FASTA —
-    before being stored or hashed. Without it a GenBank and the GFF3 breseq derived from the
-    same genome would hash differently and the shared-reference check would reject valid data.
+    however it arrives, is converted to one canonical pair — a breseq-dialect GFF3 plus a
+    FASTA — before being stored or hashed. The shared-reference check compares the
+    sequence digest, so a GenBank and the GFF3 breseq derived from the same genome are one
+    reference however their annotation differs.
     GenBank and FASTA go through Biopython; GFF3 uses the small in-repo reader, since
     Biopython has no GFF3 parser.
     **The GFF3 a reference is stored as must give every gene a unique `ID`**, because
@@ -4699,6 +4703,73 @@ came back whole on reload and joined the vote. The GFF3 loader and renderer and 
 loader carry it for `mobile_element` now, never for `repeat_region` (`NEVER_PSEUDO_TYPES`).
 A stored GFF3 whose GenBank had `/pseudo` on a `mobile_element` renders differently and its
 `gff3_sha256` changes; that column only decides "same annotation, skip".
+
+**A partial end is named by coordinate, not by strand, in the model and in the stored GFF3.**
+`FeatureLocation.start_is_indeterminate` is the low coordinate's `<` and `end_is_indeterminate`
+the high coordinate's `>`, whatever the strand -- breseq's `cLocation`, its GenBank reader, its
+GFF3 writer and `ReadGFF` all agree on that, and so do the GenBank loader, `_location_for` and
+the GenBank export here. `render_breseq_gff3` writes `indeterminate_coordinate` the same way,
+on every sublocation, with `start,end` as two values joined by an **unescaped** comma: the
+loader splits on `,` before unescaping, breseq's rule, so `start%2Cend` is one value that
+matches neither word. The `stranded_*` accessors are the annotator's question -- which end is
+5' -- and are not the file's. `PartialEndsTestCase` holds the markers through GenBank ->
+stored GFF3 -> GenBank. The writer named the ends by strand and escaped the comma until
+October 2026, so a reference stored before then has minus-strand partial genes flagged at the
+wrong end and both-ends genes flagged at neither; it is repaired by installing the original
+annotation again (Update Annotation, or `./mutint reannotate --ref`), which the changed
+`gff3_sha256` lets through rather than skipping.
+
+**The stored GFF3 keeps what a GenBank said, not only what breseq annotates from.** The
+model (`annotate/model.py`) has `Feature.attributes` -- `{key: [values]}`, every qualifier
+that fed no field: `old_locus_tag`, `db_xref`, `protein_id`, `EC_number`, `GO_*`,
+`inference`, `note`, `codon_start`, a bare `/ribosomal_slippage` as an empty value -- and
+`AnnotatedSequence.metadata`, the record's DEFINITION (as `Note`, which is what breseq reads
+a region row's Note as), organism, taxonomy, comment, date and the `source` feature's
+qualifiers. Every feature type the file carries is loaded -- `regulatory`, `misc_feature`,
+a `gene` with nothing under it -- kept in `features` and never in `gene_locations` or
+`repeat_locations`, so the
+annotator and every plugin that reads those lists see nothing new; the four places that walk
+`features` unfiltered were checked, and mutint-isescan's `infer_strand` now takes genes only.
+`render_breseq_gff3` writes the extras after `ATTRIBUTE_ORDER`, sorted by key, comma-joined
+through `_escape_value`; the record level goes on the contig's `region` row, which is
+written whenever topology *or* metadata is known, and `reference.with_topology` rewrites
+only `Is_circular` and keeps the rest. breseq's `ReadGFF` keeps every attribute and writes
+it back, and has no feature-type filter, so the file is still what a run is handed
+untouched (verified with `CONVERT-REFERENCE`). Values are kept on one line: breseq's escape
+table has no `%0A`, so a newline would come back from it as `%250A`.
+
+Four rules make the round trip exact, and `test_reference_qualifiers.py` holds each:
+
+- **`UNSTORABLE_ATTRIBUTES`** (in the model, applied by both loaders) are never kept as
+  extras, because a loader -- ours or breseq's -- interprets them: `accession`,
+  `locus_tag`, `gene`, `product`, the `ATTRIBUTE_ORDER` keys, `Is_circular`, and
+  `translation`, which the export regenerates from the sequence, the table and
+  `codon_start` and withholds where the reading has a stop inside it. Measured on a 3.3 Mb
+  NCBI-annotated genome: all 3029 translations reproduced exactly, 42 slippage CDS included.
+- **A `gene` is folded, not stored.** `fold_gene_features` puts a GenBank gene's symbol,
+  locus tag and the qualifiers its child lacks onto the CDS or RNA at the same span and
+  drops the row -- so the stored form still has one row per locus and
+  `test_reference_upload`'s "no `gene` row" holds -- and keeps a gene with no feature under
+  it as a `gene` row. The export writes a `gene` back over every feature with a locus tag
+  (not a repeat, a regulatory element or a misc_feature), skipping a locus whose kept gene
+  row already says so. That is NCBI's shape and an approximation of the file's own gene set,
+  and the docs say so.
+- **A GenBank and breseq's GFF3 of one genome no longer render byte-identically** when the
+  GenBank has a header: the region row is the difference. The import's identity was never
+  that -- it is `sequence_sha256` -- and `test_reference_upload` asserts the property that
+  is load-bearing: same sequences, same feature rows, the header the one extra row.
+  `write_genbank` in those tests writes no DEFINITION by default for that reason.
+- **The loaders agree on fallbacks.** A repeat named only by breseq's own `/name` (what its
+  GenBank writer emits for an ISEScan element) takes it, trimmed as the GFF3 loader trims a
+  `Name`, so `IS3_176` is `IS3` both ways; a feature of any other type takes a name only
+  from `gene`/`locus_tag` and a product only from `product`, with no `note` fallback,
+  because that is what the stored row can say back.
+
+A reference stored before this keeps its old, qualifier-less GFF3 until its annotation is
+installed again, which the changed `gff3_sha256` lets through rather than skipping. The seam
+for a view or an analysis that wants one of these fields is the loaded model, through
+`annotation.reference_sequences_for(experiment)`; igv's gene track shows every attribute in
+its popup with no further work.
 
 ### Steps on a sample's reads, and links from its page
 

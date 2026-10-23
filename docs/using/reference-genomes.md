@@ -96,9 +96,11 @@ nothing in one to install.
 
 ## Normalization
 
-Whatever arrives is converted to one canonical pair before being stored or hashed — a GFF3 of
-genes only, plus a FASTA. Without that step a GenBank and the GFF3 breseq derived from the same
-genome would hash differently and the shared-reference check would reject perfectly good data.
+Whatever arrives is converted to one canonical pair before being stored or hashed — a GFF3 in
+breseq's dialect with the sequence inline, plus a FASTA. The GFF3 carries the features breseq
+annotates against and, as extra attributes breseq keeps and passes through, everything else
+the file said about them; the shared-reference check compares the **sequence**, so two files
+of one genome that differ only in annotation are the same reference.
 
 !!! note "Contig names come from LOCUS, not VERSION"
 
@@ -222,13 +224,20 @@ Three formats are offered:
 |---|---|
 | **FASTA** | the sequence alone, one record per contig |
 | **GFF3** | breseq's own dialect, gene and repeat features with the sequence inline under `##FASTA` — the form the store keeps, and the one breseq and `./mutint reannotate` read directly |
-| **GenBank** | the same features as GenBank records, one per contig |
+| **GenBank** | the same features as GenBank records, one per contig, with the header and the qualifiers the file arrived with |
 
 What every format carries is the **stored** reference, described under *Normalization*
-above: the sequence, and the CDS, RNA and repeat features breseq annotates against, with
-their names, locus tags and products. The file the reference was imported from is not kept,
-so a GenBank download is generated from that, not returned from it. It has no `/translation`,
-no `source` feature and no organism, and its date is a placeholder.
+above. The file the reference was imported from is not kept, so a GenBank download is
+generated from the stored form, not returned from it -- and the stored form keeps what that
+file said: every feature type it had (a riboswitch, a `misc_feature`), every
+qualifier on each feature (`old_locus_tag`, `db_xref`, `protein_id`, `EC_number`, GO terms,
+`inference`, notes, `codon_start`), and the record's DEFINITION, ORGANISM, COMMENT, date and
+`source` feature. Two things are rebuilt rather than kept: the `gene` feature over each locus
+(written over every feature with a locus tag, which is NCBI's shape but may not be exactly
+the set the file had), and `/translation`, which is translated afresh from the stored
+sequence and left out of a CDS whose reading has a stop inside it, such as one with
+ribosomal slippage. A reference imported as a bare FASTA, or as breseq's own GFF3, has none
+of this to give back, and its GenBank is genes, locus tags and products alone.
 
 The download is a plain address, so a script can fetch it with the same access a browser has:
 

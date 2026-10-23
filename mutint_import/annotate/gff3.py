@@ -8,9 +8,14 @@ It is therefore the natural annotation input for a breseq folder import -- no
 GenBank required.
 
 Ported from cReferenceSequences::ReadGFF (reference_sequence.cpp:1490-1660).
-Note this is a *different* reader from `mutint_import.reference.read_gff3`, which
-exists to derive the normalized genes-only reference the store hashes. That one
-deliberately flattens everything annotation depends on.
+Note this is a *different* reader from `mutint_import.reference.read_gff3`, which reads
+rows and sequences as text for the store's checks and builds no model.
+
+What the model does not interpret is kept rather than dropped -- a row's other attributes
+in `Feature.attributes`, a row of any other type as a feature of that type, a `region` row's
+other attributes as the contig's `metadata` -- and `render_breseq_gff3` writes it all back,
+so the stored form loses nothing a GenBank said. breseq's own reader keeps and rewrites
+every attribute too (reference_sequence.cpp:1570-1586, :1758-1771).
 """
 
 from mutint_import.annotate.model import (
@@ -20,10 +25,13 @@ from mutint_import.annotate.model import (
     MULTIPLE_SEPARATOR,
     NEVER_PSEUDO_TYPES,
     REPEAT_TYPES,
+    ATTRIBUTE_RENAMES,
+    UNSTORABLE_ATTRIBUTES,
     AnnotatedSequence,
     Feature,
     FeatureLocation,
     LoadedReferenceSequences,
+    fold_gene_features,
     make_safe,
     trim_repeat_name,
 )
@@ -40,6 +48,7 @@ PSEUDO_CDS_TYPE = 'fCDS'
 REGION_TYPE = 'region'
 CIRCULAR_ATTRIBUTE = 'Is_circular'
 REGION_SOURCE = 'mutint'
+
 
 GFF3_ESCAPES = (
     ('%3B', ';'), ('%3D', '='), ('%26', '&'), ('%2C', ','),
@@ -170,6 +179,17 @@ def _parse_fasta(lines):
     return sequences
 
 
+def _extra_attributes(attributes):
+    """The row's attributes the model does not interpret, under their stored names."""
+    extras = {}
+    for key, values in attributes.items():
+        key = ATTRIBUTE_RENAMES.get(key, key)
+        if key in UNSTORABLE_ATTRIBUTES:
+            continue
+        extras[key] = list(values)  # `key=` is a bare GenBank qualifier, kept as ['']
+    return extras
+
+
 def _build_feature(row, promote_gene_rows=False):
     attributes = row['attributes']
     feature_type = row['type']
@@ -183,9 +203,9 @@ def _build_feature(row, promote_gene_rows=False):
         # has nothing else to offer, so treat them as coding rather than
         # returning no genes at all. breseq's own GFF3 never needs this: it
         # always writes CDS/tRNA/fCDS.
-        feature_type = 'CDS' 
+        feature_type = 'CDS'
 
-    if feature_type not in GENE_TYPES and feature_type not in REPEAT_TYPES:
+    if feature_type == REGION_TYPE:
         return None
 
     accession = _accession(attributes)
@@ -205,7 +225,7 @@ def _build_feature(row, promote_gene_rows=False):
         if feature_type not in NEVER_PSEUDO_TYPES:
             feature.pseudogene = _is_true(_first(attributes, 'Pseudo')) \
                 or _is_true(_first(attributes, 'pseudo'))
-    else:
+    elif feature.is_gene():
         feature.name = name or 'unknown'
         feature.locus_tag = accession
         feature.pseudogene = pseudo or _is_true(_first(attributes, 'Pseudo')) \
@@ -216,10 +236,23 @@ def _build_feature(row, promote_gene_rows=False):
                 feature.translation_table = int(transl_table)
             except ValueError:
                 pass
+    else:
+        # Any other type is kept for the file and never annotated against, so it takes
+        # no fallbacks: a name only where the row names one, a product only from
+        # `product`/`Note`. The GenBank loader builds these the same way.
+        feature.name = _joined(attributes, 'Name') if attributes.get('Name') else (
+            _joined(attributes, 'gene') if attributes.get('gene') else accession)
+        feature.locus_tag = accession
+        feature.product = _joined(attributes, 'product') if attributes.get('product') else (
+            _joined(attributes, 'Note') if attributes.get('Note') else '')
+        if feature_type not in NEVER_PSEUDO_TYPES:
+            feature.pseudogene = _is_true(_first(attributes, 'Pseudo')) \
+                or _is_true(_first(attributes, 'pseudo'))
 
     feature.name = make_safe(feature.name)
     feature.locus_tag = make_safe(feature.locus_tag)
     feature.product = feature.product.replace(MULTIPLE_SEPARATOR, ';')
+    feature.attributes = _extra_attributes(attributes)
     return feature
 
 
@@ -268,13 +301,23 @@ def load_gff3(*paths):
         # the renderer below. It is topology, not a feature: `_build_feature` drops the
         # row, and this is the one thing read off it. A region row with no `Is_circular`
         # leaves the contig at None, the same as no region row at all.
+        # Every other attribute of the region row is the record's own -- its DEFINITION
+        # as `Note`, organism, strain, comment -- and goes to `metadata`.
         for row in rows:
             if row['type'] != REGION_TYPE:
                 continue
             contig = contigs.get(row['seq_id'])
+            if contig is None:
+                continue
             flag = _first(row['attributes'], CIRCULAR_ATTRIBUTE)
-            if contig is not None and flag:
+            if flag:
                 contig.circular = _is_true(flag)
+            for key, values in row['attributes'].items():
+                if key in (CIRCULAR_ATTRIBUTE, 'ID'):
+                    continue
+                values = [value for value in values if value != '']
+                if values and key not in contig.metadata:
+                    contig.metadata[key] = values
 
         promote_gene_rows = not any(
             row['type'] in GENE_TYPES or row['type'] == PSEUDO_CDS_TYPE for row in rows)
@@ -302,6 +345,7 @@ def load_gff3(*paths):
             contig.features.append(feature)
 
         for contig in contigs.values():
+            contig.features = fold_gene_features(contig.features)
             contig.update_feature_lists()
             references.add(contig)
 
@@ -348,6 +392,23 @@ def escape(value):
     for plain, encoded in GFF3_ATTRIBUTE_ESCAPES:
         value = value.replace(plain, encoded)
     return value
+
+
+def _extra_keys(attributes):
+    """The storable keys of a `Feature.attributes` / `metadata` dict, sorted."""
+    return sorted(key for key in attributes
+                  if key not in UNSTORABLE_ATTRIBUTES and _is_attribute_key(key))
+
+
+def _is_attribute_key(key):
+    return bool(key) and not any(c in key for c in ';=,\t\n\r ') and not key.startswith('#')
+
+
+def _escape_value(value):
+    """An attribute value: a list is several values joined by an unescaped comma."""
+    if isinstance(value, (list, tuple)):
+        return ','.join(escape(part) for part in value)
+    return escape(value)
 
 
 def _feature_ids(features):
@@ -404,21 +465,33 @@ def _feature_rows(seq_id, feature, feature_id):
     if not feature.is_repeat() and feature_type in ('CDS', PSEUDO_CDS_TYPE):
         attributes['transl_table'] = str(feature.translation_table)
 
+    # What the model does not interpret, after what it does, sorted so two files that
+    # agree on content agree byte for byte. breseq keeps and rewrites every one of them.
+    for key in _extra_keys(feature.attributes):
+        attributes[key] = list(feature.attributes[key])
+
     rows = []
-    for position, location in enumerate(feature.locations):
+    for location in feature.locations:
         row_attributes = dict(attributes)
-        # Only the outermost ends of the feature can be indeterminate.
+        # Positional, per sublocation, as breseq writes and reads it
+        # (reference_sequence.cpp, the GFF3 writer and ReadGFF): `start` is the low
+        # coordinate whatever the strand, which is also what the model's flags, the GenBank
+        # loader and the GenBank export all mean. The stranded accessors are the
+        # annotator's question (which end is 5'), not the file's. A list, so the comma
+        # between the two words is a GFF3 value separator and not escaped: the loader
+        # splits on `,` before unescaping, and `start%2Cend` would match neither word.
         indeterminate = []
-        if position == 0 and location.stranded_start_is_indeterminate():
+        if location.start_is_indeterminate:
             indeterminate.append('start')
-        if position == len(feature.locations) - 1 and location.stranded_end_is_indeterminate():
+        if location.end_is_indeterminate:
             indeterminate.append('end')
         if indeterminate:
-            row_attributes['indeterminate_coordinate'] = ','.join(indeterminate)
+            row_attributes['indeterminate_coordinate'] = indeterminate
 
         rendered = ';'.join(
-            '%s=%s' % (key, escape(row_attributes[key]))
-            for key in ATTRIBUTE_ORDER if key in row_attributes)
+            '%s=%s' % (key, _escape_value(row_attributes[key]))
+            for key in list(ATTRIBUTE_ORDER) + _extra_keys(feature.attributes)
+            if key in row_attributes)
         rows.append('\t'.join([
             seq_id, 'mutint', feature_type, str(location.start_1), str(location.end_1),
             '.', '+' if location.strand == 1 else '-', '0', rendered]))
@@ -431,19 +504,32 @@ def _sort_key(feature):
             feature.get_locus_tag())
 
 
-def region_rows(topologies):
-    """The `region` rows for ``[(seq_id, length, circular), ...]``, skipping None.
+def region_rows(regions):
+    """The `region` rows for ``[(seq_id, length, circular[, metadata]), ...]``.
 
-    One shape, used by the renderer and by `reference.with_topology`, so the stored
-    file and a rewrite of it cannot spell the row two ways.
+    One per contig that has something to say -- a known topology, or any record-level
+    metadata -- and nothing for one with neither. `Is_circular` first, where known, then
+    `Note` (the DEFINITION, which is what breseq reads a region row's Note as), then the
+    rest of `metadata` sorted by key. One shape, used by the renderer and by
+    `reference.with_topology`, so the stored file and a rewrite of it cannot spell the row
+    two ways.
     """
     rows = []
-    for seq_id, length, circular in topologies:
-        if circular is None:
+    for entry in regions:
+        seq_id, length, circular = entry[:3]
+        metadata = entry[3] if len(entry) > 3 and entry[3] else {}
+        attributes = []
+        if circular is not None:
+            attributes.append((CIRCULAR_ATTRIBUTE, 'true' if circular else 'false'))
+        if metadata.get('Note'):
+            attributes.append(('Note', list(metadata['Note'])))
+        for key in _extra_keys(metadata):
+            attributes.append((key, list(metadata[key])))
+        if not attributes:
             continue
         rows.append('\t'.join((
             seq_id, REGION_SOURCE, REGION_TYPE, '1', str(length), '.', '+', '.',
-            '%s=%s' % (CIRCULAR_ATTRIBUTE, 'true' if circular else 'false'))))
+            ';'.join('%s=%s' % (key, _escape_value(value)) for key, value in attributes))))
     return rows
 
 
@@ -466,11 +552,12 @@ def render_breseq_gff3(references, line_length=70):
     lines = ['##gff-version 3']
     for contig in contigs:
         lines.append('##sequence-region\t%s\t1\t%d' % (contig.seq_id, len(contig)))
-    # The topology block: one row per contig whose topology is known, straight after
-    # the pragmas and before any feature, so `reference.with_topology` can rewrite it
-    # line-wise and reproduce these bytes exactly. Nothing for an unknown topology.
+    # The region block: one row per contig with a known topology or any record-level
+    # metadata, straight after the pragmas and before any feature, so
+    # `reference.with_topology` can rewrite it line-wise and reproduce these bytes
+    # exactly. Nothing for a contig with neither.
     lines.extend(region_rows(
-        (contig.seq_id, len(contig), contig.circular) for contig in contigs))
+        (contig.seq_id, len(contig), contig.circular, contig.metadata) for contig in contigs))
 
     for contig in contigs:
         features = [f for f in contig.features if f.locations]
